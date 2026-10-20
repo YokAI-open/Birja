@@ -69,6 +69,10 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 | Resend for one-time-code email | Free tier, simple API | — Pending |
 | v1 done = deployed for friends | Real use by real people is the validation | — Pending |
 | `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | — Pending |
+| Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | — Pending |
+| Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | — Pending |
+| One simple scheduler-loop container for prices; OTP email via FastAPI BackgroundTasks | Fewest dependencies; Celery has no declared Python 3.14 support; a lost email just means re-requesting | — Pending |
+| "$ amount" on buys = total cash spent including fee | Cash drops by exactly what the user typed | — Pending |
 
 ## Evolution
 
