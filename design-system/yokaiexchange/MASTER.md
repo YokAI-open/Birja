@@ -104,7 +104,7 @@ font-optical-sizing: auto;
 | `caption` | 12/16 | 400 | 0 | "as of 14:02:31", helper text (never below 12px) |
 
 - Use the light-grey "faded value" style from the reference only on decorative or comparison numbers, and only with `--muted-foreground`. The original's #C8C8C8 is not used.
-- **Money formatting:** done in the UI only, from server strings. Use `Intl.NumberFormat` with `currency: "USD"`. Show USD to 2 decimals. Show coin quantities with up to 8 decimals, trimming trailing zeros (minimum 2 shown). Never use JS `number` arithmetic on money; use `decimal.js` if the UI must compute.
+- **Money formatting:** done in the UI only, from server strings. Use `Intl.NumberFormat` with `currency: "USD"`. Show cash amounts (balances, totals, fees, P/L) to 2 decimals. Show unit prices to 2 decimals when ≥ $1 and to 4 significant digits below $1 (e.g. `$0.1287`, `$0.5821`), so cheap coins don't look frozen. Show coin quantities with up to 8 decimals, trimming trailing zeros (minimum 2 shown). Never use JS `number` arithmetic on money; use `decimal.js` if the UI must compute.
 - Gains get a `+` prefix; losses use a real minus sign (`−`, U+2212), not a hyphen.
 
 ---
