@@ -8,6 +8,15 @@ Build the smallest working version first, then grow it in steps. Never build the
 - **Stack grows with need**: the tech stack below is the target, not a day-one checklist. Add a component (e.g. RabbitMQ/Celery, nginx tuning) in the step that first needs it, and say why when you add it.
 - When planning (e.g. `/gsd-new-project`, `/gsd-plan-phase`), push back on bloated v1 scope and propose what can move to v2.
 
+# Current project: v1 scope
+
+Planning lives in `.planning/` (GSD): `PROJECT.md` (scope + key decisions), `REQUIREMENTS.md` (REQ-IDs), `ROADMAP.md` (6 phases), `STATE.md` (where we are). Read them before planning or building.
+
+- **v1 = crypto only**, ~10–20 curated coins, market orders (by $ incl. fee, or by quantity), fixed % simulated spread + fee, $10k start with no reset, portfolio + trade history, deployed for a few friends. Everything else is v2 (see `REQUIREMENTS.md`).
+- **Prices**: Kraken public Ticker, polled every ~60s by **one simple scheduler-loop container** (no Celery/arq in v1). Holdings are valued at **mid** price.
+- **Email**: Resend for one-time codes, sent via FastAPI `BackgroundTasks`; console backend in dev.
+- **Branches**: the repo's `main` plays the `master` role below; `develop` was created from it.
+
 # Tech stack
 
 - **Backend**: FastAPI on Python 3.14, SQLAlchemy 2.0 (async) + `asyncpg`, Alembic migrations, Pydantic v2. Dependencies and virtualenv managed with `uv` (`pyproject.toml` + committed `uv.lock`). Never `pip install` into the project directly.
