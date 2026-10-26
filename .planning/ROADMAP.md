@@ -28,7 +28,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
   3. The backend image builds from `uv.lock` on Python 3.14 and a smoke test (import app, asyncpg query, Pydantic Decimal round-trip) passes in CI
   4. The test stack (`docker-compose.test.yml`) runs backend tests against an isolated Postgres and Redis
 
-**Plans:** 1/7 plans executed
+**Plans:** 3/7 plans executed
 
 Plans:
 **Wave 1**
@@ -37,8 +37,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Backend health slice: create_app, GET /api/v1/health (DB + Redis), isolated test stack, smoke tests
-- [ ] 01-04-PLAN.md — Frontend toolchain: Vite/TS 6, ESLint/Prettier/Vitest, Tailwind 4 + MASTER.md tokens, shadcn card/badge/button
+- [x] 01-02-PLAN.md — Backend health slice: create_app, GET /api/v1/health (DB + Redis), isolated test stack, smoke tests
+- [x] 01-04-PLAN.md — Frontend toolchain: Vite/TS 6, ESLint/Prettier/Vitest, Tailwind 4 + MASTER.md tokens, shadcn card/badge/button
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton and CI | 1/7 | In Progress|  |
+| 1. Skeleton and CI | 3/7 | In Progress|  |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
