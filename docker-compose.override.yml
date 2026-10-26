@@ -1,5 +1,11 @@
 # Dev override, loaded automatically by `docker compose up`.
 services:
+  frontend:
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
   backend:
     ports:
       - "127.0.0.1:8000:8000"
