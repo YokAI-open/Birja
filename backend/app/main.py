@@ -1,0 +1,54 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.api.v1.router import api_router
+from app.core.config import Settings, get_settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings: Settings = app.state.settings
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={
+            "timeout": 5,
+            "server_settings": {
+                "statement_timeout": "30000",
+                "idle_in_transaction_session_timeout": "30000",
+            },
+        },
+    )
+    redis = Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+    app.state.engine = engine
+    app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    app.state.redis = redis
+    try:
+        yield
+    finally:
+        await redis.aclose()
+        await engine.dispose()
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+    is_prod = settings.env == "prod"
+    app = FastAPI(
+        title="YokaiExchange API",
+        lifespan=lifespan,
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
+        openapi_url=None if is_prod else "/openapi.json",
+    )
+    app.state.settings = settings
+    app.include_router(api_router, prefix="/api/v1")
+    return app
