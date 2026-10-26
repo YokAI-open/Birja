@@ -6,7 +6,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 
 ## Phases
 
-- [ ] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR
+- [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
 - [ ] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once
 - [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
@@ -28,7 +28,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
   3. The backend image builds from `uv.lock` on Python 3.14 and a smoke test (import app, asyncpg query, Pydantic Decimal round-trip) passes in CI
   4. The test stack (`docker-compose.test.yml`) runs backend tests against an isolated Postgres and Redis
 
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 **Wave 1**
@@ -51,7 +51,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-07-PLAN.md — GitHub Actions CI with aggregate ci-pass, docs/commands update, D-01 branch-protection decision + PR into develop
+- [x] 01-07-PLAN.md — GitHub Actions CI with aggregate ci-pass, docs/commands update, D-01 branch-protection decision + PR into develop
 
 **UI hint**: yes
 
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton and CI | 6/7 | In Progress|  |
+| 1. Skeleton and CI | 7/7 | Complete   | 2026-10-26 |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
