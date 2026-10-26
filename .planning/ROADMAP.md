@@ -28,7 +28,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
   3. The backend image builds from `uv.lock` on Python 3.14 and a smoke test (import app, asyncpg query, Pydantic Decimal round-trip) passes in CI
   4. The test stack (`docker-compose.test.yml`) runs backend tests against an isolated Postgres and Redis
 
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -47,7 +47,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-06-PLAN.md — Full stack in Compose + the single Playwright e2e test (D-03)
+- [x] 01-06-PLAN.md — Full stack in Compose + the single Playwright e2e test (D-03)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton and CI | 5/7 | In Progress|  |
+| 1. Skeleton and CI | 6/7 | In Progress|  |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
