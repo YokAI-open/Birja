@@ -9,8 +9,8 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Foundation
 
-- [ ] **FOUND-01**: Developer can start the full stack locally with one `docker compose up` and see the frontend talk to the backend
-- [ ] **FOUND-02**: Every PR into `develop`/`main` runs lint, type checks and tests in GitHub Actions, and a failure blocks the merge
+- [x] **FOUND-01**: Developer can start the full stack locally with one `docker compose up` and see the frontend talk to the backend
+- [x] **FOUND-02**: Every PR into `develop`/`main` runs lint, type checks and tests in GitHub Actions, and a failure blocks the merge
 
 ### Authentication
 
@@ -114,8 +114,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
-| FOUND-02 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
+| FOUND-02 | Phase 1 | Complete |
 | AUTH-01 | Phase 2 | Pending |
 | AUTH-02 | Phase 2 | Pending |
 | AUTH-03 | Phase 2 | Pending |
