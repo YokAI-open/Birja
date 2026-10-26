@@ -6,7 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
+    # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
+    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
     env: Literal["dev", "test", "prod"] = "dev"
     database_url: str = Field(repr=False)
