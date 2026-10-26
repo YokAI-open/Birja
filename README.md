@@ -29,3 +29,16 @@ Most of us know too little about investing, and the usual way to learn it is to 
    - how your portfolio's value has changed over time
 
 There's no time travel or hindsight. Like real investing, you make a decision today and find out in the weeks and months after.
+
+## Run locally
+
+Prerequisites: Docker with Compose v2+. uv and Node 24 are only needed to run lint and tests outside containers.
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Open http://localhost:5173 and expect API, Database and Redis to show "Connected". For tests, lint and migrations see "Common commands" in [CLAUDE.md](CLAUDE.md).
+
+CI runs on every PR into `develop`/`main`; the `ci-pass` check must be green before merging.
