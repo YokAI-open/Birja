@@ -18,8 +18,7 @@ def test_python_314() -> None:
 def test_app_imports_and_has_health_route() -> None:
     from app.main import create_app
 
-    paths = {getattr(r, "path", None) for r in create_app().routes}
-    assert "/api/v1/health" in paths
+    assert "/api/v1/health" in create_app().openapi()["paths"]
 
 
 async def test_asyncpg_returns_decimal(engine: AsyncEngine) -> None:

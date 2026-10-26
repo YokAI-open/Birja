@@ -29,35 +29,35 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="session")
-def settings() -> "Settings":
+def settings() -> Settings:
     from app.core.config import Settings
 
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
 
 
 @pytest_asyncio.fixture(scope="session")
-async def engine(settings: "Settings") -> AsyncIterator[AsyncEngine]:
+async def engine(settings: Settings) -> AsyncIterator[AsyncEngine]:
     eng = create_async_engine(settings.database_url)
     yield eng
     await eng.dispose()
 
 
 @pytest_asyncio.fixture(scope="session")
-async def redis_client(settings: "Settings") -> AsyncIterator[Redis]:
+async def redis_client(settings: Settings) -> AsyncIterator[Redis]:
     client = Redis.from_url(settings.redis_url, decode_responses=True)
     yield client
     await client.aclose()
 
 
 @pytest.fixture(scope="session")
-def app(settings: "Settings") -> "FastAPI":
+def app(settings: Settings) -> FastAPI:
     from app.main import create_app
 
     return create_app(settings)
 
 
 @pytest_asyncio.fixture(scope="session")
-async def client(app: "FastAPI") -> AsyncIterator[httpx.AsyncClient]:
+async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     async with (
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
