@@ -1,2 +1,14 @@
 __pycache__/
 *.pyc
+.env
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+node_modules/
+dist/
+playwright-report/
+test-results/
