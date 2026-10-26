@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchHealth, isHealth } from "./health";
 
 function respond(body: unknown, status = 200) {
-  return vi.fn((_url: string, _init?: RequestInit) =>
+  return vi.fn<typeof fetch>(() =>
     Promise.resolve(
       new Response(JSON.stringify(body), {
         status,
