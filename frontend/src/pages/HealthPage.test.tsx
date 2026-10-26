@@ -53,6 +53,24 @@ describe("HealthPage", () => {
     expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
   });
 
+  it("stops showing connected when a later check fails", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ok", db: "ok", redis: "ok" }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    const { user } = renderWithClient(<HealthPage />);
+    await screen.findByText("All systems operational");
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the backend");
+    expect(rows()).toEqual(["APIUnavailable", "DatabaseUnknown", "RedisUnknown"]);
+    expect(screen.queryByText("All systems operational")).not.toBeInTheDocument();
+  });
+
   it("shows skeleton rows while loading", () => {
     vi.stubGlobal(
       "fetch",

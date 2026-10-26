@@ -14,15 +14,20 @@ const fromState = (state: "ok" | "error"): Label => (state === "ok" ? "Connected
 function HealthPage() {
   const { data, isError, isPending, isFetching, dataUpdatedAt, refetch } = useHealth();
 
+  // TanStack Query keeps the last good data when a refetch fails, so an error wins over it.
+  const live = isError ? undefined : data;
+
   const services: { name: string; label: Label }[] = [
-    { name: "API", label: data ? "Connected" : "Unavailable" },
-    { name: "Database", label: data ? fromState(data.db) : "Unknown" },
-    { name: "Redis", label: data ? fromState(data.redis) : "Unknown" },
+    { name: "API", label: live ? "Connected" : "Unavailable" },
+    { name: "Database", label: live ? fromState(live.db) : "Unknown" },
+    { name: "Redis", label: live ? fromState(live.redis) : "Unknown" },
   ];
 
   let summary = "Checking services…";
-  if (data) {
-    summary = data.status === "ok" ? "All systems operational" : "Some services are unavailable";
+  if (live) {
+    summary = live.status === "ok" ? "All systems operational" : "Some services are unavailable";
+  } else if (isError) {
+    summary = "Some services are unavailable";
   }
 
   return (
