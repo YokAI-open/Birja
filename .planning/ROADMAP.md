@@ -28,7 +28,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
   3. The backend image builds from `uv.lock` on Python 3.14 and a smoke test (import app, asyncpg query, Pydantic Decimal round-trip) passes in CI
   4. The test stack (`docker-compose.test.yml`) runs backend tests against an isolated Postgres and Redis
 
-**Plans:** 3/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -42,8 +42,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-PLAN.md — Backend in Compose: Alembic async baseline, Dockerfile (uv.lock, py3.14, non-root), compose + dev override
-- [ ] 01-05-PLAN.md — Health page: API client, TanStack Query hook, page + provider, tests for ok/degraded/error/loading
+- [x] 01-03-PLAN.md — Backend in Compose: Alembic async baseline, Dockerfile (uv.lock, py3.14, non-root), compose + dev override
+- [x] 01-05-PLAN.md — Health page: API client, TanStack Query hook, page + provider, tests for ok/degraded/error/loading
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton and CI | 3/7 | In Progress|  |
+| 1. Skeleton and CI | 5/7 | In Progress|  |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
