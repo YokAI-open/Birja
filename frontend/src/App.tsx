@@ -1,3 +1,5 @@
+import HealthPage from "@/pages/HealthPage";
+
 function App() {
   return (
     <>
@@ -5,7 +7,9 @@ function App() {
         <span aria-hidden="true" className="size-8 rounded-control bg-brand" />
         <span className="text-xl font-semibold tracking-[-0.01em]">YokaiExchange</span>
       </header>
-      <main className="mx-auto max-w-[1440px] px-4 md:px-8" />
+      <main className="mx-auto max-w-[1440px] px-4 md:px-8">
+        <HealthPage />
+      </main>
     </>
   );
 }
