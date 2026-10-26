@@ -28,12 +28,12 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
   3. The backend image builds from `uv.lock` on Python 3.14 and a smoke test (import app, asyncpg query, Pydantic Decimal round-trip) passes in CI
   4. The test stack (`docker-compose.test.yml`) runs backend tests against an isolated Postgres and Redis
 
-**Plans:** 7 plans
+**Plans:** 1/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Feature branch + prerequisites gate: create feature/phase-01-skeleton-and-ci, install uv + Node 24, confirm package legitimacy
+- [x] 01-01-PLAN.md — Feature branch + prerequisites gate: create feature/phase-01-skeleton-and-ci, install uv + Node 24, confirm package legitimacy
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -142,7 +142,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton and CI | 0/7 | Planned | - |
+| 1. Skeleton and CI | 1/7 | In Progress|  |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
