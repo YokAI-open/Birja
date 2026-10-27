@@ -138,7 +138,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02.1-05-PLAN.md — Token checkpoint, cert re-issued once via dns_cf + renewal neutralised + dates recorded (SC4), nginx enabled
+- [ ] 02.1-05-PLAN.md — D-08: token-free repo + manual DNS two-step renew-cert.sh, cert renewed via user-added TXT records (SC4), runbook dates, nginx enabled
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -154,7 +154,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 02.1-09-PLAN.md — First deploy from main (twice), proxied DNS record, public smoke + CSP
+- [ ] 02.1-09-PLAN.md — First deploy from main (twice), user creates the proxied DNS record by hand (D-08), DoH + public smoke + CSP
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
