@@ -2,7 +2,7 @@
 # Install the Birja nginx config. Writes only birja-* paths; never edits the
 # nist.one, lib.nist.one or default sites. Restores backups if nginx -t fails.
 # Run from the dev tree or /srv/birja.
-# Undo: rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf && nginx -t && systemctl reload nginx
+# Undo: rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf /etc/nginx/conf.d/birja-default-tls.conf && nginx -t && systemctl reload nginx
 # To also stop serving nist.one again: systemctl disable --now nginx
 set -Eeuo pipefail
 
@@ -25,12 +25,14 @@ SRCS=(
     "$SRC/snippets/birja-security-headers.conf"
     "$SRC/snippets/birja-proxy.conf"
     "$SRC/conf.d/birja-zones.conf"
+    "$SRC/conf.d/birja-default-tls.conf"
 )
 TARGETS=(
     /etc/nginx/sites-available/birja.nist.one
     /etc/nginx/snippets/birja-security-headers.conf
     /etc/nginx/snippets/birja-proxy.conf
     /etc/nginx/conf.d/birja-zones.conf
+    /etc/nginx/conf.d/birja-default-tls.conf
 )
 LINK=/etc/nginx/sites-enabled/birja.nist.one
 

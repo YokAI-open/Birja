@@ -9,7 +9,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/snippets" "$TMP/conf.d" "$TMP/certs" "$TMP/sites"
 cp "$SRC/snippets/"*.conf "$TMP/snippets/"
-cp "$SRC/conf.d/birja-zones.conf" "$TMP/conf.d/"
+cp "$SRC/conf.d/"*.conf "$TMP/conf.d/"
 sed -e "s#/etc/nginx/snippets/#$TMP/snippets/#g" \
     -e "s#/etc/nginx/certs/nist.one/#$TMP/certs/#g" \
     -e "s#/etc/nginx/conf.d/#$TMP/conf.d/#g" \
@@ -30,7 +30,7 @@ error_log stderr;
 events {}
 http {
     include /etc/nginx/mime.types;
-    include $TMP/conf.d/birja-zones.conf;
+    include $TMP/conf.d/*.conf;
     include $TMP/sites/birja.nist.one;
 }
 CONF
