@@ -35,6 +35,7 @@ HOST=birja.nist.one                         # public host name
 CERT=/etc/nginx/certs/nist.one/fullchain.pem  # installed origin certificate
 NODE_IMAGE=node:24.22.1-trixie-slim         # same pin as frontend/Dockerfile
 KEEP_RELEASES=3                             # static releases kept on disk
+BUILD_UID=1000                              # unprivileged uid for the npm build (node in the image)
 REF="${DEPLOY_REF:-main}"                   # D-05: ref override
 
 STEP="startup"
@@ -58,6 +59,7 @@ USAGE
 on_err() {
   local rc=$?
   echo "FAILED at step: $STEP (exit $rc)" >&2
+  if [ -n "${BUILD_TMP:-}" ]; then rm -rf -- "$BUILD_TMP" || true; fi
   echo "--- last 50 backend log lines (redacted) ---" >&2
   dc logs --no-color --tail 50 backend 2>&1 \
     | sed -E 's/code=[0-9]{6}/code=******/g; s/to=[^ ]+/to=***/g' >&2 || true
@@ -105,17 +107,35 @@ health_check() {
   return 1
 }
 
+# The frontend is built from a clean `git archive` copy, as an unprivileged
+# user, without npm lifecycle scripts (WR-06: a hostile dependency must not
+# get host root). Only regular files from dist/ are copied out, by root;
+# nothing else the container wrote is used or executed.
 build_frontend_release() {
   STEP="frontend build"
-  docker run --rm -v "$APP_DIR/frontend":/app -w /app "$NODE_IMAGE" sh -c 'npm ci && npm run build'
+  local sha ts rel dist
+  BUILD_TMP=$(mktemp -d)                    # root 700: host users cannot reach inside
+  git -C "$APP_DIR" archive HEAD frontend | tar -x -C "$BUILD_TMP"
+  chown -R "$BUILD_UID:$BUILD_UID" "$BUILD_TMP/frontend"
+  docker run --rm --user "$BUILD_UID:$BUILD_UID" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+    -v "$BUILD_TMP/frontend":/app -w /app "$NODE_IMAGE" \
+    sh -c 'npm ci --ignore-scripts && npm run build'
   STEP="frontend release"
-  local sha ts rel
+  dist="$BUILD_TMP/frontend/dist"
+  [ -f "$dist/index.html" ] || { echo "build produced no dist/index.html" >&2; return 1; }
+  if [ -n "$(find "$dist" ! -type f ! -type d -print -quit)" ]; then
+    echo "dist/ contains links or special files, refusing" >&2
+    return 1
+  fi
   sha=$(git -C "$APP_DIR" rev-parse --short HEAD)
   ts=$(date -u +%Y%m%dT%H%M%SZ)
   rel="$WEB_ROOT/releases/$sha-$ts"
   install -d "$rel"
-  cp -a "$APP_DIR/frontend/dist/." "$rel/"
-  chmod -R a+rX "$rel"
+  cp -R --no-preserve=all "$dist/." "$rel/"
+  chown -R root:root "$rel"
+  chmod -R u=rwX,go=rX "$rel"
+  rm -rf -- "$BUILD_TMP"
+  BUILD_TMP=""
   RELEASE_DIR="$rel"
 }
 
@@ -270,6 +290,7 @@ main() {
   esac
   trap on_err ERR
   RELEASE_DIR=""
+  BUILD_TMP=""
   preflight
   if [ "$MODE" = rollback ]; then do_rollback; else do_deploy; fi
 }

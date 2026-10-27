@@ -38,6 +38,8 @@ DEPLOY_REF=v0.1.0 /srv/birja/deploy/deploy.sh     # a tag, branch or SHA
 
 Run as root. The script fetches and checks out the ref, then prepares everything before changing anything live: it builds the backend image, builds the frontend into a new release directory (not yet served) and tests the repo's nginx config offline (`check-nginx-config.sh`). Only when all of that passes does it go live: start postgres and redis, run migrations, start the new backend, switch the `current` link, install the nginx config and run the health check. Finally it records the deploy in `/var/lib/birja/deploys.log`.
 
+The frontend is built from a clean `git archive` copy in a root-only temp dir, in the Node container as uid 1000 with `npm ci --ignore-scripts` (no dependency lifecycle scripts run; none are needed for this lockfile), and only regular files from `dist/` are copied into the release by root. `/srv/birja/frontend` is not written by the build.
+
 A failure during preparation (npm, image build, nginx config) leaves the running backend, schema, served frontend and nginx config untouched; only the checkout has moved, and `--rollback` (or a fixed re-deploy) puts it back.
 
 If it fails, it prints the failing step and the last redacted backend log lines. Fix the cause and re-run, or roll back.
