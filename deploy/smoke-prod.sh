@@ -82,6 +82,24 @@ health_ok() {
     | python3 -I -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status")=="ok" else 1)' 2>/dev/null
 }
 
+# API docs must not be reachable through nginx. Only /api/ reaches the app,
+# so /docs etc. must come back as the SPA's index.html (not Swagger/ReDoc/
+# schema JSON), and the /api/ variants must not return 200.
+docs_not_exposed() {
+  local p body code bad=""
+  for p in /docs /redoc /openapi.json; do
+    body=$(curlq "https://$H$p")
+    if ! grep -q 'id="root"' <<<"$body" || grep -qiE 'swagger-ui|redoc|"openapi"' <<<"$body"; then
+      bad="$bad $p"
+    fi
+  done
+  for p in /api/docs /api/redoc /api/openapi.json /api/v1/docs /api/v1/redoc /api/v1/openapi.json; do
+    code=$(curlq -o /dev/null -w '%{http_code}' "https://$H$p")
+    [ "$code" = 404 ] || bad="$bad $p($code)"
+  done
+  if [ -z "$bad" ]; then pass "API docs/schema not exposed via nginx"; else fail "API docs/schema check failed:$bad"; fi
+}
+
 # ---------------------------------------------------------------- public mode
 if [ "$MODE" = public ]; then
   A=$(curl -sS --max-time 15 -H 'accept: application/dns-json' \
@@ -110,11 +128,7 @@ print(" ".join(a["data"] for a in d.get("Answer",[]) if a.get("type")==1))' 2>/d
   check_headers "/" "https://$H/"
   if health_ok; then pass "health ok"; else fail "health not ok"; fi
 
-  if curl -sS --max-time 15 "https://$H/openapi.json" | grep -q '"openapi"'; then
-    fail "openapi.json is exposed"
-  else
-    pass "openapi.json not exposed"
-  fi
+  docs_not_exposed
 
   if [ "$FAILED" -eq 0 ]; then echo "SMOKE OK ($TOTAL checks)"; exit 0; fi
   echo "SMOKE FAILED ($FAILED of $TOTAL)"; exit 1
@@ -136,6 +150,15 @@ if openssl x509 -in "$CERT" -noout -ext subjectAltName 2>/dev/null | grep -q '\*
 else
   fail "cert SAN lacks *.nist.one"
 fi
+tls_ok() { openssl s_client -connect 127.0.0.1:443 -servername "$1" </dev/null >/dev/null 2>&1; }
+if tls_ok evil.example; then
+  fail "unknown SNI completes the TLS handshake (catch-all 443 missing)"
+else
+  pass "unknown SNI is rejected at the TLS handshake"
+fi
+for sni in "$H" nist.one; do
+  if tls_ok "$sni"; then pass "TLS handshake for $sni"; else fail "TLS handshake for $sni failed"; fi
+done
 if openssl x509 -in "$CERT" -noout -checkend $((30 * 86400)) >/dev/null; then
   pass "cert valid for more than 30 days"
 elif openssl x509 -in "$CERT" -noout -checkend 0 >/dev/null; then
@@ -181,6 +204,8 @@ for p in /docs /redoc /openapi.json; do
   if [ "$CODE" = 404 ]; then pass "$p is 404 on the app"; else fail "$p returned $CODE"; fi
 done
 
+docs_not_exposed
+
 # 7. SC2 ENV
 BACKEND=$(container backend)
 REDIS=$(container redis)
@@ -193,13 +218,27 @@ else
   fail "ENV is not prod in backend"
 fi
 
-# 8. SC2 placeholders refused
-if docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps \
-     -e OTP_HMAC_SECRET=change-me-placeholder-0123456789abcdefghij backend \
-     python -c "from app.core.config import Settings; Settings()" >/dev/null 2>&1; then
-  fail "placeholder secret was accepted"
+# 8. SC2 placeholders refused. The positive control proves the command itself
+# runs (image, env file, compose, imports); the refusal must be the specific
+# validation error, not any failure. Output is matched, never printed.
+settings_run() {
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps "$@" backend \
+    python -c "from app.core.config import Settings; Settings()" 2>&1
+}
+if ! settings_run >/dev/null; then
+  fail "placeholder check: Settings() fails even with the real env (compose/docker/config error)"
 else
-  pass "placeholder secret refused"
+  OUT=$(settings_run -e OTP_HMAC_SECRET=change-me-placeholder-0123456789abcdefghij)
+  RC=$?
+  if [ "$RC" -ne 0 ] && grep -q 'ValidationError' <<<"$OUT" \
+     && grep -q 'otp_hmac_secret is still a placeholder' <<<"$OUT"; then
+    pass "placeholder secret refused"
+  elif [ "$RC" -eq 0 ]; then
+    fail "placeholder secret was accepted"
+  else
+    fail "placeholder check failed for another reason (exit $RC)"
+  fi
+  unset OUT
 fi
 
 # 9. SC2 exposure

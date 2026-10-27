@@ -7,6 +7,8 @@
 #      (the owner adds them in the Cloudflare dashboard, DNS only)
 #   2. renew-cert.sh check [--wait] confirm the TXT value(s) over public DoH
 #   3. renew-cert.sh finish         validate the same order, install the cert
+# If Let's Encrypt still holds valid authorizations, `start` gets the cert at
+# once and writes no pending file; `finish` then only installs it (no DNS step).
 # Run `start` exactly once per renewal: it saves the pending order inside
 # acme.sh, and re-running it would consume that order.
 # The existing acme.sh cron line stays untouched (D-06). In manual DNS mode it
@@ -29,6 +31,7 @@ usage: deploy/renew-cert.sh start | check [--wait] | finish | --help
   check         confirm the pending TXT value(s) are visible over DoH
   check --wait  same, retrying every 15 s for up to 10 minutes
   finish        validate, install to /etc/nginx/certs/nist.one, print dates
+                (with no pending challenge: only install the issued cert)
 EOF
 }
 
@@ -135,10 +138,17 @@ cmd_check() {
 }
 
 cmd_finish() {
-    cmd_check || { echo "TXT record(s) not visible yet; not finishing" >&2; exit 1; }
-    if ! "$ACME" --renew -d '*.nist.one' --ecc --force --server letsencrypt "$MANUAL"; then
-        echo "step 2 failed; keeping $PENDING. Re-check DNS and retry 'finish' once; never re-run 'start' automatically" >&2
-        exit 1
+    if [ -f "$PENDING" ]; then
+        cmd_check || { echo "TXT record(s) not visible yet; not finishing" >&2; exit 1; }
+        if ! "$ACME" --renew -d '*.nist.one' --ecc --force --server letsencrypt "$MANUAL"; then
+            echo "step 2 failed; keeping $PENDING. Re-check DNS and retry 'finish' once; never re-run 'start' automatically" >&2
+            exit 1
+        fi
+    else
+        # `start` got the cert straight away (valid cached authorizations), so
+        # there is no challenge to validate: only install what acme.sh holds.
+        [ -f "$CONF" ] || { echo "no pending challenge and no acme.sh cert; run 'start' first" >&2; exit 1; }
+        echo "no pending challenge: installing the cert acme.sh already issued"
     fi
     install -d -m 750 "$OUT_DIR"
     "$ACME" --install-cert --ecc -d '*.nist.one' \
