@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
 
+    # Email: console logs codes (dev/test only); resend sends real mail (D-01).
+    # The key lives only in the local git-ignored .env (D-02).
+    email_backend: Literal["console", "resend"] = "console"
+    resend_api_key: SecretStr | None = Field(default=None, repr=False)
+    email_from: str | None = None
+
     # Rate limits (fixed windows, seconds). Per-IP defaults are loosened in dev only,
     # because all local browser traffic shares the Vite proxy's single IP.
     rl_request_email_limit: int = 5
@@ -48,6 +54,12 @@ class Settings(BaseSettings):
             raise ValueError(f"{info.field_name} must be >= 1")
         return v
 
+    @field_validator("resend_api_key", "email_from", mode="before")
+    @classmethod
+    def _empty_to_none(cls, v: object) -> object:
+        # docker compose passes "" for unset optional variables
+        return None if v == "" else v
+
     @field_validator("database_url")
     @classmethod
     def _check_database_url(cls, v: str) -> str:
@@ -71,6 +83,19 @@ class Settings(BaseSettings):
                 self.rl_request_ip_limit = 200
             if "rl_verify_ip_limit" not in self.model_fields_set:
                 self.rl_verify_ip_limit = 300
+        return self
+
+    @model_validator(mode="after")
+    def _check_email(self) -> Settings:
+        if self.email_backend == "resend":
+            if self.resend_api_key is None:
+                raise ValueError("resend_api_key is required when email_backend is 'resend'")
+            if self.email_from is None or "@" not in self.email_from:
+                raise ValueError(
+                    "email_from must contain an address when email_backend is 'resend'"
+                )
+        if self.env == "prod" and self.email_backend != "resend":
+            raise ValueError("email_backend must be 'resend' in prod (console would log codes)")
         return self
 
     @model_validator(mode="after")
