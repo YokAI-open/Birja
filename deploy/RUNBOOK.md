@@ -19,15 +19,15 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 
 ## First-time setup (order matters)
 
-1. The owner creates `/root/.secrets/cloudflare.env` with the variables `CF_Token=` and `CF_Zone_ID=`. Directory mode 700, file mode 600. The token needs Zone:DNS:Edit and Zone:Zone:Read on nist.one only.
-2. `deploy/renew-cert.sh` issues the certificate.
-3. `deploy/install-nginx.sh` installs the nginx site.
-4. `deploy/init-prod-env.sh` creates `/etc/birja/prod.env`. Then the owner adds `RESEND_API_KEY`.
-5. `git clone https://github.com/YokAI-open/Birja.git /srv/birja`
-6. `/srv/birja/deploy/deploy.sh`
-7. `/srv/birja/deploy/smoke-prod.sh`
-8. `/srv/birja/deploy/cloudflare-dns.sh ensure`
-9. `/srv/birja/deploy/smoke-prod.sh --public`
+1. Certificate, manual DNS two-step (D-08, no API token):
+   `deploy/renew-cert.sh start` prints the `_acme-challenge` TXT record(s). The owner adds them in Cloudflare (DNS only). Then `deploy/renew-cert.sh check --wait`, then `deploy/renew-cert.sh finish`.
+2. `deploy/install-nginx.sh` installs the nginx site.
+3. `deploy/init-prod-env.sh` creates `/etc/birja/prod.env`. Then the owner adds `RESEND_API_KEY`.
+4. `git clone https://github.com/YokAI-open/Birja.git /srv/birja`
+5. `/srv/birja/deploy/deploy.sh`
+6. `/srv/birja/deploy/smoke-prod.sh`
+7. The owner adds the DNS record in Cloudflare: Type A, Name `birja`, IPv4 151.243.171.52, Proxy status Proxied (D-08).
+8. `/srv/birja/deploy/smoke-prod.sh --public`
 
 ## Deploy (one command)
 
@@ -50,19 +50,22 @@ Releases reach `main` only through `release-*` or `hotfix-*` PRs (git-flow in CL
 
 This redeploys the previous entry of `deploys.log`. Migrations are not undone. There are no backups until Phase 6.
 
-## Certificate renewal (manual, D-07)
+## Certificate renewal (manual, D-07, D-08)
 
-Nothing renews automatically. The cert was removed from acme.sh's renewal list and saved Cloudflare credentials were stripped. The existing acme.sh cron line was left unchanged (D-06); it has nothing to renew.
+There is no API token. The cert stays in acme.sh's list in manual DNS mode, and renewal is a two-step run by hand. The existing acme.sh cron line is unchanged (D-06); in manual mode it cannot renew this cert and only logs a failure (its output goes to /dev/null).
 
 Next certificate expiry: <filled in by 02.1-05>
 Renew by (30 days before): <filled in by 02.1-05>
 
 Procedure:
 
-1. Check that `/root/.secrets/cloudflare.env` exists and the token is not revoked. Recreate it if needed.
-2. `cd /srv/birja && deploy/renew-cert.sh`
-3. `deploy/smoke-prod.sh`
-4. Update the two date lines above through a normal feature branch.
+1. `cd /srv/birja && deploy/renew-cert.sh start` (run once; it prints the TXT name and value(s)).
+2. In the Cloudflare dashboard (nist.one, DNS, Records) add each `_acme-challenge` TXT record, Proxy status DNS only, TTL Auto. With two values there are two records with the same name.
+3. `deploy/renew-cert.sh check --wait`
+4. `deploy/renew-cert.sh finish`
+5. `deploy/smoke-prod.sh`
+6. Delete the TXT records in the dashboard.
+7. Update the two date lines above through a normal feature branch.
 
 Cloudflare error cheat sheet:
 
@@ -92,13 +95,13 @@ Never run `compose config` without `-q`, never read container env with `docker i
 
 ## Undo (every host change in phase 02.1)
 
-- DNS record: delete it in the Cloudflare dashboard (DNS, Records, birja), or see the header of `deploy/cloudflare-dns.sh`.
+- DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).
 - nginx site: `rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf && nginx -t && systemctl reload nginx`. `systemctl disable --now nginx` also stops serving nist.one, which was brought online by this phase.
-- Certificate: `rm -r /etc/nginx/certs/nist.one`. The acme.sh conf rename is reversible by moving `*.nist.one.conf.removed` back to `.conf` in the cert dir (not wanted per D-07).
+- Certificate: `rm -r /etc/nginx/certs/nist.one`.
 - Prod env: `rm -r /etc/birja` (only while the stack is down; the Postgres volume keeps the old password).
 - Checkout, releases and history: `rm -rf /srv/birja /var/www/birja /var/lib/birja`.
 - Prod stack: `docker compose -p birja-prod down` keeps the data; `down -v` destroys it.
-- Token: delete `/root/.secrets/cloudflare.env` and revoke the token in Cloudflare (My Profile, API Tokens).
+- TXT challenge records: delete the `_acme-challenge` records in the dashboard after issuance.
 
 ## Out of scope here
 
