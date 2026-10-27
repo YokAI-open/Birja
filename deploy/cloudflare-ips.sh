@@ -2,7 +2,7 @@
 # Generate /etc/nginx/snippets/birja-cloudflare-realip.conf from Cloudflare's
 # published ranges. Manual refresh (D-06, no cron):
 #   /srv/birja/deploy/cloudflare-ips.sh [--no-reload]
-# ufw is never modified; drift is only reported.
+# ufw is never modified; drift is only reported (--check-ufw: report only).
 # Undo: restore /var/lib/birja/nginx-prev/birja-cloudflare-realip.conf.prev
 # (if present) to the target path and reload nginx.
 set -Eeuo pipefail
@@ -43,6 +43,43 @@ check "$TMP/v6" '^[0-9a-f:]+/[0-9]{1,3}$' 3
     echo "real_ip_recursive off;"
 } > "$TMP/out"
 
+# Read-only ufw drift report (D-06: ufw is never modified). A range counts as
+# present when ufw allows it for both 80 and 443, either as separate
+# "80/tcp" + "443/tcp" rules or as one combined "80,443/tcp" rule.
+ufw_drift() {
+    local out cidr missing=()
+    out="$(ufw status 2>/dev/null)" && [ -n "$out" ] || return 0
+    has_port() { # cidr port
+        awk -v c="$1" -v p="$2" '
+            $0 ~ /ALLOW/ {
+                src = ""; for (i = 1; i <= NF; i++) if ($i == c) src = c
+                if (src == "") next
+                n = split($1, a, "/"); if (a[2] != "tcp" && n == 2) next
+                m = split(a[1], ports, ",")
+                for (j = 1; j <= m; j++) if (ports[j] == p) found = 1
+            }
+            END { exit found ? 0 : 1 }' <<<"$out"
+    }
+    while IFS= read -r cidr; do
+        [ -z "$cidr" ] && continue
+        has_port "$cidr" 80 && has_port "$cidr" 443 || missing+=("$cidr")
+    done < <({ cat "$TMP/v4"; echo; cat "$TMP/v6"; echo; })
+    if [ "${#missing[@]}" -gt 0 ]; then
+        echo "WARNING: Cloudflare ranges missing from ufw (need 80 and 443/tcp):"
+        printf '  %s\n' "${missing[@]}"
+        echo "Updating ufw is a manual decision. Documented command per range:"
+        echo "  ufw allow proto tcp from <cidr> to any port 80,443"
+    else
+        echo "ufw: all Cloudflare ranges allowed on 80 and 443"
+    fi
+}
+
+# --check-ufw: only report ufw drift; touch nothing, no reload.
+if [ "${1:-}" = "--check-ufw" ]; then
+    ufw_drift
+    exit 0
+fi
+
 # --print: show the generated snippet on stdout, touch nothing (static checks).
 if [ "${1:-}" = "--print" ]; then
     cat "$TMP/out"
@@ -73,16 +110,4 @@ if [ "$RELOAD" = 1 ]; then
 fi
 echo "wrote $TARGET"
 
-# Read-only ufw drift warning (D-06: ufw is never modified).
-if UFW_OUT="$(ufw status 2>/dev/null)" && [ -n "$UFW_OUT" ]; then
-    MISSING=""
-    while IFS= read -r cidr; do
-        [ -z "$cidr" ] && continue
-        grep -qF -- "$cidr" <<<"$UFW_OUT" || MISSING="$MISSING $cidr"
-    done < <(cat "$TMP/v4" "$TMP/v6")
-    if [ -n "$MISSING" ]; then
-        echo "WARNING: Cloudflare ranges missing from ufw:$MISSING"
-        echo "Updating ufw is a manual decision. Documented command per range:"
-        echo "  ufw allow proto tcp from <cidr> to any port 80,443"
-    fi
-fi
+ufw_drift
