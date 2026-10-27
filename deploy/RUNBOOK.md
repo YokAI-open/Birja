@@ -21,7 +21,7 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 
 1. Certificate, manual DNS two-step (D-08, no API token):
    `deploy/renew-cert.sh start` prints the `_acme-challenge` TXT record(s). The owner adds them in Cloudflare (DNS only). Then `deploy/renew-cert.sh check --wait`, then `deploy/renew-cert.sh finish`.
-2. `deploy/install-nginx.sh` installs the nginx site.
+2. `deploy/install-nginx.sh` installs the nginx site and a catch-all 443 server (`conf.d/birja-default-tls.conf`, `ssl_reject_handshake on`): a TLS handshake with an unknown or missing SNI fails, so no foreign domain pointed at this origin gets the Birja app. Port 80 keeps the stock `default` site as its `default_server` (it already holds it; a second one would fail `nginx -t`), which serves only the local placeholder page.
 3. `deploy/init-prod-env.sh` creates `/etc/birja/prod.env`. Then the owner adds `RESEND_API_KEY`.
 4. `git clone https://github.com/YokAI-open/Birja.git /srv/birja`
 5. `/srv/birja/deploy/deploy.sh`
@@ -36,7 +36,11 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 DEPLOY_REF=v0.1.0 /srv/birja/deploy/deploy.sh     # a tag, branch or SHA
 ```
 
-Run as root. The script fetches the ref, builds the frontend into a new release, starts the stack, runs migrations, switches the `current` link and records the deploy in `/var/lib/birja/deploys.log`.
+Run as root. The script fetches and checks out the ref, then prepares everything before changing anything live: it builds the backend image, builds the frontend into a new release directory (not yet served) and tests the repo's nginx config offline (`check-nginx-config.sh`). Only when all of that passes does it go live: start postgres and redis, run migrations, start the new backend, switch the `current` link, install the nginx config and run the health check. Finally it records the deploy in `/var/lib/birja/deploys.log`.
+
+The frontend is built from a clean `git archive` copy in a root-only temp dir, in the Node container as uid 1000 with `npm ci --ignore-scripts` (no dependency lifecycle scripts run; none are needed for this lockfile), and only regular files from `dist/` are copied into the release by root. `/srv/birja/frontend` is not written by the build.
+
+A failure during preparation (npm, image build, nginx config) leaves the running backend, schema, served frontend and nginx config untouched; only the checkout has moved, and `--rollback` (or a fixed re-deploy) puts it back.
 
 If it fails, it prints the failing step and the last redacted backend log lines. Fix the cause and re-run, or roll back.
 
@@ -48,7 +52,18 @@ Releases reach `main` only through `release-*` or `hotfix-*` PRs (git-flow in CL
 /srv/birja/deploy/deploy.sh --rollback
 ```
 
-This redeploys the previous entry of `deploys.log`. Migrations are not undone. There are no backups until Phase 6.
+This returns to the release that was live before the current one. It prints the target SHA and release before acting. Migrations are not undone. There are no backups until Phase 6.
+
+How the target is chosen (`/var/lib/birja/deploys.log`, one line per successful deploy or rollback, `time sha release ref`, ref `rollback` for rollbacks):
+
+- The log is replayed as a stack of live releases. A deploy pushes its line. A rollback line pops lines until its own SHA is on top, so a release that was rolled back away from is never picked again; a second rollback goes one further back instead of re-deploying the bad release.
+- Normally the target is the newest stack entry below the top with a different SHA, so repeated deploys of the same SHA are skipped (no silent no-op).
+- A failed deploy is never logged. While a deploy runs, `/var/lib/birja/deploy.pending` exists; it is removed only when the deploy is recorded. If it is still there (or the checkout's HEAD differs from the top SHA), the last deploy failed, and the target is the top entry itself: the last good release.
+- If there is no earlier release with a different SHA, it refuses ("nothing to roll back to").
+
+The selection logic is tested offline by `deploy/tests/test-rollback-target.sh`.
+
+What it does: checks out the target SHA, rebuilds the backend image, reuses the target's frontend release (or rebuilds it if pruned), tests that release's nginx config offline, restarts the backend, switches `current`, and reinstalls the nginx config from the rolled-back release with its own `install-nginx.sh` (so its CSP and limits match its frontend; birja-* files that release does not know, such as `birja-default-tls.conf`, stay installed). The health check passes only if the API is healthy and nginx serves exactly that release's `index.html` (it names the hashed assets), for deploys and rollbacks alike.
 
 ## Certificate renewal (manual, D-07, D-08)
 
@@ -62,6 +77,7 @@ The CA is Let's Encrypt (ECC, `*.nist.one` + `nist.one`, 90 days). On 2026-10-27
 Procedure:
 
 1. `cd /srv/birja && deploy/renew-cert.sh start` (run once; it prints the TXT name and value(s)).
+   If it says "no challenge needed" (Let's Encrypt reused valid authorizations and issued at once), skip steps 2, 3 and 6 and run `finish` directly: without a pending file it only installs the issued cert and prints the dates.
 2. In the Cloudflare dashboard (nist.one, DNS, Records) add each `_acme-challenge` TXT record, Proxy status DNS only, TTL Auto. With two values there are two records with the same name.
 3. `deploy/renew-cert.sh check --wait`
 4. `deploy/renew-cert.sh finish`
@@ -98,7 +114,7 @@ Never run `compose config` without `-q`, never read container env with `docker i
 ## Undo (every host change in phase 02.1)
 
 - DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).
-- nginx site: `rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf && nginx -t && systemctl reload nginx`. `systemctl disable --now nginx` also stops serving nist.one, which was brought online by this phase.
+- nginx site: `rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf /etc/nginx/conf.d/birja-default-tls.conf && nginx -t && systemctl reload nginx`. `systemctl disable --now nginx` also stops serving nist.one, which was brought online by this phase.
 - Certificate: `rm -r /etc/nginx/certs/nist.one`.
 - Prod env: `rm -r /etc/birja` (only while the stack is down; the Postgres volume keeps the old password).
 - Checkout, releases and history: `rm -rf /srv/birja /var/www/birja /var/lib/birja`.
