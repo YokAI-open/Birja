@@ -58,8 +58,18 @@ def app(settings: Settings) -> FastAPI:
     return create_app(settings)
 
 
+@pytest.fixture(scope="session")
+def migrated() -> None:
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    command.upgrade(Config(str(Path(__file__).resolve().parent.parent / "alembic.ini")), "head")
+
+
 @pytest_asyncio.fixture(scope="session")
-async def running_app(app: FastAPI) -> AsyncIterator[FastAPI]:
+async def running_app(app: FastAPI, migrated: None) -> AsyncIterator[FastAPI]:
     async with app.router.lifespan_context(app):
         yield app
 

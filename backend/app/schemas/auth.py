@@ -1,6 +1,7 @@
+from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RequestCodeIn(BaseModel):
@@ -21,3 +22,12 @@ class RequestCodeIn(BaseModel):
 
 class CodeSentOut(BaseModel):
     status: Literal["code_sent"]
+
+
+class VerifyCodeIn(RequestCodeIn):
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class MeOut(BaseModel):
+    email: str
+    cash_usd: Decimal = Field(description="USD cash balance, serialized as a decimal string")
