@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
     model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
-    env: Literal["dev", "test", "prod"] = "dev"
+    env: Literal["dev", "test", "prod"]
     database_url: str = Field(repr=False)
     redis_url: str = Field(repr=False)
     otp_hmac_secret: SecretStr = Field(repr=False)

@@ -66,7 +66,8 @@ cd frontend && npm run lint && npm run typecheck && npx prettier --check .
 cd backend
 export DATABASE_URL=postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test
 export REDIS_URL=redis://:test@127.0.0.1:56379/0
-# alembic/env.py loads Settings, which requires both secrets (test-only dummies):
+# alembic/env.py loads Settings, which requires ENV and both secrets (test-only dummies):
+export ENV=test
 export OTP_HMAC_SECRET=test-only-otp-secret-not-for-prod-000000
 export JWT_SECRET=test-only-jwt-secret-not-for-prod-000000
 uv run alembic upgrade head
