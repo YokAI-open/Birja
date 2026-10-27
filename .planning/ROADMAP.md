@@ -71,7 +71,7 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans:** 1/9 plans executed
+**Plans:** 2/9 plans executed
 
 Plans:
 **Wave 1**
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Request a code: OTP store (HMAC, single-use, 5 attempts), CSRF, POST /auth/request-code, console sender
+- [x] 02-02-PLAN.md — Request a code: OTP store (HMAC, single-use, 5 attempts), CSRF, POST /auth/request-code, console sender
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -175,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 1/9 | In Progress|  |
+| 2. Authentication | 2/9 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
