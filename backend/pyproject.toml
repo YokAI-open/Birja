@@ -1,0 +1,64 @@
+[project]
+name = "birja-backend"
+version = "0.1.0"
+description = "Birja backend"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "alembic==1.20.1",
+    "asyncpg==0.32.0",
+    "fastapi==0.162.0",
+    "pydantic[email]==2.14.1",
+    "pydantic-settings==2.16.1",
+    "pyjwt==2.15.1",
+    "redis==8.1.0",
+    "sqlalchemy[asyncio]>=2.0.55,<2.1",
+    "uvicorn[standard]==0.54.0",
+    "httpx==0.28.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "SIM"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+plugins = ["pydantic.mypy"]
+
+[dependency-groups]
+dev = [
+    "mypy==2.4.0",
+    "pip-audit>=2.10.1",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.1",
+    "pytest-cov==7.1.0",
+    "respx==0.23.1",
+    "ruff==0.17.2",
+]
