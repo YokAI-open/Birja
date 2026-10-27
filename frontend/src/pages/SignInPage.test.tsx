@@ -162,6 +162,7 @@ describe("SignInPage code step", () => {
     await view.user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("$10,000.00")).toBeVisible();
     const meCalls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/me");
-    expect(meCalls).toHaveLength(1);
+    // The signed-out /me is tried twice (401, silent refresh, retry); sign-in adds none.
+    expect(meCalls).toHaveLength(2);
   });
 });

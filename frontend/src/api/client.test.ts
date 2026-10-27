@@ -99,3 +99,79 @@ describe("apiFetch", () => {
     expect(error).toMatchObject({ status: 503, code: null, retryAfter: null });
   });
 });
+
+describe("apiFetch silent refresh", () => {
+  const unauthorized = () => new Response("{}", { status: 401 });
+
+  it("refreshes once on 401 and retries the original request", async () => {
+    document.cookie = "yk_csrf=tok; path=/";
+    let meCalls = 0;
+    const fetchMock = vi.fn((url: string) => {
+      if (url === "/api/v1/auth/refresh")
+        return Promise.resolve(new Response(null, { status: 204 }));
+      meCalls += 1;
+      return Promise.resolve(meCalls === 1 ? unauthorized() : json({ ok: 1 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await apiFetch("/api/v1/me")).toEqual({ ok: 1 });
+    const urls = fetchMock.mock.calls.map((c) => (c as unknown as [string])[0]);
+    expect(urls).toEqual(["/api/v1/me", "/api/v1/auth/refresh", "/api/v1/me"]);
+    const refreshInit = (fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1];
+    expect(refreshInit.method).toBe("POST");
+    expect(new Headers(refreshInit.headers).get("X-CSRF-Token")).toBe("tok");
+  });
+
+  it("shares one refresh between concurrent 401s and retries both", async () => {
+    document.cookie = "yk_csrf=tok; path=/";
+    let release: (r: Response) => void = () => {};
+    const seen: Record<string, number> = {};
+    const fetchMock = vi.fn((url: string) => {
+      seen[url] = (seen[url] ?? 0) + 1;
+      if (url === "/api/v1/auth/refresh") {
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      }
+      return Promise.resolve(seen[url] === 1 ? unauthorized() : json({ url }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const both = Promise.all([apiFetch("/api/v1/a"), apiFetch("/api/v1/b")]);
+    await vi.waitFor(() => expect(seen["/api/v1/auth/refresh"]).toBe(1));
+    await new Promise((r) => setTimeout(r, 0));
+    release(new Response(null, { status: 204 }));
+    expect(await both).toEqual([{ url: "/api/v1/a" }, { url: "/api/v1/b" }]);
+    expect(seen["/api/v1/auth/refresh"]).toBe(1);
+  });
+
+  it("never refreshes for /api/v1/auth/ paths", async () => {
+    document.cookie = "yk_csrf=tok; path=/";
+    const fetchMock = vi.fn(() => Promise.resolve(unauthorized()));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(apiFetch("/api/v1/auth/refresh", { method: "POST" })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws 401 when the retry is still unauthorized, and survives a failed refresh", async () => {
+    document.cookie = "yk_csrf=tok; path=/";
+    const fetchMock = vi.fn((url: string) =>
+      url === "/api/v1/auth/refresh"
+        ? Promise.reject(new TypeError("network"))
+        : Promise.resolve(unauthorized()),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(apiFetch("/api/v1/me")).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("treats a non-204 refresh as failure but still retries once", async () => {
+    document.cookie = "yk_csrf=tok; path=/";
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(url === "/api/v1/auth/refresh" ? unauthorized() : unauthorized()),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(apiFetch("/api/v1/me")).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});

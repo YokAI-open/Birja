@@ -11,7 +11,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
  * Dev email backend prints "DEV EMAIL to=<email> code=<6 digits>" to the backend log.
  * Reading it with a fixed-argv docker call is the only retrieval path: no debug route exists.
  */
-async function readCodeFromLogs(email: string): Promise<string> {
+async function readCodeFromLogs(email: string, previous?: string): Promise<string> {
   const pattern = new RegExp(`DEV EMAIL to=${escapeRegExp(email)} code=(\\d{6})`, "g");
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -24,7 +24,7 @@ async function readCodeFromLogs(email: string): Promise<string> {
       },
     );
     const last = [...logs.matchAll(pattern)].at(-1);
-    if (last?.[1]) {
+    if (last?.[1] && last[1] !== previous) {
       return last[1];
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -32,7 +32,10 @@ async function readCodeFromLogs(email: string): Promise<string> {
   throw new Error(`No sign-in code found in backend logs for ${email}`);
 }
 
-test("a new user signs in with an emailed code", async ({ page }) => {
+test("a new user signs in, stays signed in, signs out and signs in again", async ({
+  page,
+  context,
+}) => {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 
   await page.goto("/");
@@ -49,4 +52,22 @@ test("a new user signs in with an emailed code", async ({ page }) => {
   await page.reload();
   await expect(page.getByText("$10,000.00")).toBeVisible();
   await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
+
+  // Access cookie gone: the app refreshes silently and stays signed in.
+  await context.clearCookies({ name: "yk_access" });
+  await page.reload();
+  await expect(page.getByText("$10,000.00")).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+
+  // Signing in again never adds cash.
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Send code" }).click();
+  const code2 = await readCodeFromLogs(email, code);
+  await page.getByLabel("6-digit code").fill(code2);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("$10,000.00")).toBeVisible();
 });

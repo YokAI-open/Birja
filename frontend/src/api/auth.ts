@@ -44,3 +44,7 @@ export async function verifyCode(email: string, code: string): Promise<Me> {
     }),
   );
 }
+
+export async function logout(): Promise<void> {
+  await apiFetch("/api/v1/auth/logout", { method: "POST" });
+}

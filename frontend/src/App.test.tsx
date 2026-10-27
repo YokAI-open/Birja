@@ -70,4 +70,55 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("$1.00")).toBeVisible();
   });
+
+  describe("sign out", () => {
+    const meOk = () =>
+      new Response(JSON.stringify({ email: "a@example.com", cash_usd: "10000.00000000" }), {
+        status: 200,
+      });
+
+    it("signs out and shows the sign-in card", async () => {
+      document.cookie = "yk_csrf=tok; path=/";
+      let resolveLogout: (r: Response) => void = () => {};
+      const fetchMock = vi.fn((url: string) => {
+        if (url === "/api/v1/auth/logout") {
+          return new Promise<Response>((resolve) => {
+            resolveLogout = resolve;
+          });
+        }
+        return Promise.resolve(url === "/api/v1/me" ? meOk() : health());
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const { user } = renderWithClient(<App />);
+      await user.click(await screen.findByRole("button", { name: "Sign out" }));
+      expect(await screen.findByRole("button", { name: "Signing out…" })).toBeDisabled();
+      const call = fetchMock.mock.calls.find(([u]) => u === "/api/v1/auth/logout") as unknown as [
+        string,
+        RequestInit,
+      ];
+      expect(new Headers(call[1].headers).get("X-CSRF-Token")).toBe("tok");
+      resolveLogout(new Response(null, { status: 204 }));
+      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+      expect(screen.queryByText("$10,000.00")).toBeNull();
+      document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    });
+
+    it("keeps the account view and shows an error when sign-out fails", async () => {
+      document.cookie = "yk_csrf=tok; path=/";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (url === "/api/v1/auth/logout") {
+            return Promise.resolve(new Response("{}", { status: 500 }));
+          }
+          return Promise.resolve(url === "/api/v1/me" ? meOk() : health());
+        }),
+      );
+      const { user } = renderWithClient(<App />);
+      await user.click(await screen.findByRole("button", { name: "Sign out" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't sign out. Try again.");
+      expect(screen.getByText("$10,000.00")).toBeVisible();
+      document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    });
+  });
 });

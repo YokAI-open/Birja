@@ -54,8 +54,32 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, code, message, retryAfter);
 }
 
-/** The only place that calls fetch for /api. Returns parsed JSON, or null for 204. */
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** One refresh at a time: concurrent 401s share a single in-flight request. */
+function refreshSession(): Promise<boolean> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
+    try {
+      const token = await ensureCsrfToken();
+      const headers = new Headers({ Accept: "application/json" });
+      if (token) {
+        headers.set("X-CSRF-Token", token);
+      }
+      const response = await fetch("/api/v1/auth/refresh", { method: "POST", headers });
+      return response.status === 204;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function send(path: string, init: RequestInit): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -68,7 +92,16 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<un
       headers.set("X-CSRF-Token", token);
     }
   }
-  const response = await fetch(path, { ...init, method, headers });
+  return fetch(path, { ...init, method, headers });
+}
+
+/** The only place that calls fetch for /api. Returns parsed JSON, or null for 204. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
+  let response = await send(path, init);
+  if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
+    await refreshSession();
+    response = await send(path, init);
+  }
   if (!response.ok) {
     throw await toApiError(response);
   }
