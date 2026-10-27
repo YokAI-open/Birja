@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Manual renewal of the *.nist.one + nist.one ZeroSSL ECC cert (D-03, D-07, D-08).
+# Manual renewal of the *.nist.one + nist.one Let's Encrypt ECC cert (D-03, D-07, D-08).
+# The CA is Let's Encrypt: ZeroSSL's newNonce endpoint returned 502 on 2026-10-27.
 # No API token is used: DNS-01 validation is done by hand in acme.sh's manual
 # DNS mode, as a two-step procedure:
 #   1. renew-cert.sh start          order the cert, print the TXT record(s)
@@ -48,9 +49,9 @@ cmd_start() {
     trap "rm -f '$out'" EXIT
     set +e
     if [ -f "$CONF" ]; then
-        "$ACME" --renew -d '*.nist.one' --ecc --force "$MANUAL" 2>&1 | tee "$out"
+        "$ACME" --renew -d '*.nist.one' --ecc --force --server letsencrypt "$MANUAL" 2>&1 | tee "$out"
     else
-        "$ACME" --issue --dns -d '*.nist.one' -d nist.one --keylength ec-256 --server zerossl "$MANUAL" 2>&1 | tee "$out"
+        "$ACME" --issue --dns -d '*.nist.one' -d nist.one --keylength ec-256 --server letsencrypt "$MANUAL" 2>&1 | tee "$out"
     fi
     rc="${PIPESTATUS[0]}"
     set -e
@@ -135,7 +136,7 @@ cmd_check() {
 
 cmd_finish() {
     cmd_check || { echo "TXT record(s) not visible yet; not finishing" >&2; exit 1; }
-    if ! "$ACME" --renew -d '*.nist.one' --ecc --force "$MANUAL"; then
+    if ! "$ACME" --renew -d '*.nist.one' --ecc --force --server letsencrypt "$MANUAL"; then
         echo "step 2 failed; keeping $PENDING. Re-check DNS and retry 'finish' once; never re-run 'start' automatically" >&2
         exit 1
     fi

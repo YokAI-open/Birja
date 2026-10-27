@@ -54,8 +54,10 @@ This redeploys the previous entry of `deploys.log`. Migrations are not undone. T
 
 There is no API token. The cert stays in acme.sh's list in manual DNS mode, and renewal is a two-step run by hand. The existing acme.sh cron line is unchanged (D-06); in manual mode it cannot renew this cert and only logs a failure (its output goes to /dev/null).
 
-Next certificate expiry: <filled in by 02.1-05>
-Renew by (30 days before): <filled in by 02.1-05>
+Next certificate expiry: 2027-01-25
+Renew by (30 days before): 2026-12-26
+
+The CA is Let's Encrypt (ECC, `*.nist.one` + `nist.one`, 90 days). On 2026-10-27 ZeroSSL's ACME endpoint returned 502, so the CA was switched to Let's Encrypt and the cert was issued by hand in manual DNS mode; `renew-cert.sh` uses the same commands with `--server letsencrypt`. The first Let's Encrypt cert was installed directly with `acme.sh --install-cert` (no pending file existed).
 
 Procedure:
 
@@ -73,7 +75,7 @@ Cloudflare error cheat sheet:
 - 525: TLS handshake with the origin failed
 - 526: origin certificate invalid or expired
 
-Fallback if ZeroSSL refuses to issue: a Cloudflare Origin CA certificate (see RESEARCH alternatives). That needs a decision from the owner.
+Fallback if Let's Encrypt refuses to issue: a Cloudflare Origin CA certificate (see RESEARCH alternatives). That needs a decision from the owner.
 
 ## Cloudflare IP ranges (manual, D-06)
 
