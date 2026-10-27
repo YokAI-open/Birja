@@ -109,6 +109,12 @@ async def verify_code(
         settings.rl_verify_email_limit,
         settings.rl_verify_email_window,
     )
+    await enforce(
+        redis,
+        f"sim:rl:ver:email-day:{otp.email_key(email)}",
+        settings.rl_verify_email_daily_limit,
+        settings.rl_verify_email_daily_window,
+    )
     if not await otp.verify(email, code):
         raise InvalidCode
     user_id, _ = await accounts.get_or_create_user(db, email)

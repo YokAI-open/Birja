@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     rl_request_ip_window: int = 3600
     rl_verify_email_limit: int = 10
     rl_verify_email_window: int = 600
+    # Long-horizon cap so slow, steady guessing against one email stays bounded.
+    rl_verify_email_daily_limit: int = 30
+    rl_verify_email_daily_window: int = 86400
     rl_verify_ip_limit: int = 30
     rl_verify_ip_window: int = 600
     # Global send cap: a cost guard. A short window keeps recovery quick if abuse trips it.
@@ -44,6 +47,8 @@ class Settings(BaseSettings):
         "rl_request_ip_window",
         "rl_verify_email_limit",
         "rl_verify_email_window",
+        "rl_verify_email_daily_limit",
+        "rl_verify_email_daily_window",
         "rl_verify_ip_limit",
         "rl_verify_ip_window",
         "rl_send_global_limit",

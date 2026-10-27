@@ -140,6 +140,28 @@ async def test_verify_limit_is_per_email(
     assert int(resp.headers["Retry-After"]) > 0
 
 
+async def test_verify_daily_cap_per_email(redis_client: Redis) -> None:
+    email = unique_email()
+    async with _custom_app(rl_verify_email_daily_limit=3) as (app, _):  # noqa: SIM117
+        async with _client(app) as c:
+            for _ in range(3):
+                resp = await _post(c, VER, {"email": email, "code": "000000"})
+                assert resp.status_code == 400
+            resp = await _post(c, VER, {"email": email, "code": "000000"})
+            assert resp.status_code == 429
+            assert resp.json() == {
+                "detail": {"code": "rate_limited", "message": "Too many requests. Try again later."}
+            }
+            assert 600 < int(resp.headers["Retry-After"]) <= 86400
+            # The cap is per email: another address is unaffected.
+            resp = await _post(c, VER, {"email": unique_email(), "code": "000000"})
+            assert resp.status_code == 400
+        key = f"sim:rl:ver:email-day:{app.state.otp_store.email_key(email)}"
+    assert await redis_client.get(key) == "4"
+    assert 86000 < await redis_client.ttl(key) <= 86400
+    assert email not in key
+
+
 async def test_verify_limit_is_per_ip() -> None:
     async with _custom_app(rl_verify_ip_limit=2) as (app, _):  # noqa: SIM117
         async with _client(app, "203.0.113.9") as a, _client(app, "198.51.100.7") as b:
