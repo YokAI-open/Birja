@@ -49,7 +49,7 @@ services:
       target: runtime
     restart: unless-stopped
     environment:
-      ENV: ${ENV:-dev}
+      ENV: ${ENV:?set it in .env (cp .env.example .env)}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set it in .env (cp .env.example .env)}

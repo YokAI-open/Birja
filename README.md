@@ -42,3 +42,7 @@ docker compose up --build
 Open http://localhost:5173 and expect API, Database and Redis to show "Connected". For tests, lint and migrations see "Common commands" in [CLAUDE.md](CLAUDE.md).
 
 CI runs on every PR into `develop`/`main`; the `ci-pass` check must be green before merging.
+
+## Deploying
+
+Production runs at https://birja.nist.one. Deploy from `main` on the server with `/srv/birja/deploy/deploy.sh` (as root). Setup, rollback, certificate renewal and undo steps are in [deploy/RUNBOOK.md](deploy/RUNBOOK.md).

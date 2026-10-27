@@ -153,3 +153,24 @@ def test_prod_with_resend_is_valid_and_hides_key() -> None:
     )
     assert s.email_backend == "resend"
     assert FAKE_KEY not in repr(s)
+
+
+def test_env_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ENV", raising=False)
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(database_url=DB, redis_url=REDIS, otp_hmac_secret=VALID_SECRET, jwt_secret=JWT)
+
+    assert "env" in str(exc_info.value).lower()
+
+
+def test_env_explicit_dev_still_works() -> None:
+    s = Settings(
+        env="dev",
+        database_url=DB,
+        redis_url=REDIS,
+        otp_hmac_secret=VALID_SECRET,
+        jwt_secret=JWT,
+    )
+
+    assert s.env == "dev"
+    assert s.rl_request_ip_limit == 200
