@@ -136,6 +136,15 @@ if openssl x509 -in "$CERT" -noout -ext subjectAltName 2>/dev/null | grep -q '\*
 else
   fail "cert SAN lacks *.nist.one"
 fi
+tls_ok() { openssl s_client -connect 127.0.0.1:443 -servername "$1" </dev/null >/dev/null 2>&1; }
+if tls_ok evil.example; then
+  fail "unknown SNI completes the TLS handshake (catch-all 443 missing)"
+else
+  pass "unknown SNI is rejected at the TLS handshake"
+fi
+for sni in "$H" nist.one; do
+  if tls_ok "$sni"; then pass "TLS handshake for $sni"; else fail "TLS handshake for $sni failed"; fi
+done
 if openssl x509 -in "$CERT" -noout -checkend $((30 * 86400)) >/dev/null; then
   pass "cert valid for more than 30 days"
 elif openssl x509 -in "$CERT" -noout -checkend 0 >/dev/null; then

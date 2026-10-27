@@ -21,7 +21,7 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 
 1. Certificate, manual DNS two-step (D-08, no API token):
    `deploy/renew-cert.sh start` prints the `_acme-challenge` TXT record(s). The owner adds them in Cloudflare (DNS only). Then `deploy/renew-cert.sh check --wait`, then `deploy/renew-cert.sh finish`.
-2. `deploy/install-nginx.sh` installs the nginx site.
+2. `deploy/install-nginx.sh` installs the nginx site and a catch-all 443 server (`conf.d/birja-default-tls.conf`, `ssl_reject_handshake on`): a TLS handshake with an unknown or missing SNI fails, so no foreign domain pointed at this origin gets the Birja app. Port 80 keeps the stock `default` site as its `default_server` (it already holds it; a second one would fail `nginx -t`), which serves only the local placeholder page.
 3. `deploy/init-prod-env.sh` creates `/etc/birja/prod.env`. Then the owner adds `RESEND_API_KEY`.
 4. `git clone https://github.com/YokAI-open/Birja.git /srv/birja`
 5. `/srv/birja/deploy/deploy.sh`
@@ -107,7 +107,7 @@ Never run `compose config` without `-q`, never read container env with `docker i
 ## Undo (every host change in phase 02.1)
 
 - DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).
-- nginx site: `rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf && nginx -t && systemctl reload nginx`. `systemctl disable --now nginx` also stops serving nist.one, which was brought online by this phase.
+- nginx site: `rm /etc/nginx/sites-enabled/birja.nist.one /etc/nginx/sites-available/birja.nist.one /etc/nginx/snippets/birja-*.conf /etc/nginx/conf.d/birja-zones.conf /etc/nginx/conf.d/birja-default-tls.conf && nginx -t && systemctl reload nginx`. `systemctl disable --now nginx` also stops serving nist.one, which was brought online by this phase.
 - Certificate: `rm -r /etc/nginx/certs/nist.one`.
 - Prod env: `rm -r /etc/birja` (only while the stack is down; the Postgres volume keeps the old password).
 - Checkout, releases and history: `rm -rf /srv/birja /var/www/birja /var/lib/birja`.
