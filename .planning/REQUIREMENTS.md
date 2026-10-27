@@ -19,7 +19,7 @@ Requirements for the initial release. Each maps to a roadmap phase.
 - [ ] **AUTH-03**: Code requests and verification attempts are rate-limited per email and per IP
 - [ ] **AUTH-04**: User stays signed in across browser refreshes and restarts, up to about 30 days, without re-entering a code
 - [ ] **AUTH-05**: User can sign out, which ends the session server-side
-- [x] **AUTH-06**: Sign-in codes arrive by real email (Resend, from a verified domain). In local dev they are logged to the console instead.
+- [ ] **AUTH-06**: Sign-in codes arrive by real email (Resend, from a verified domain). In local dev they are logged to the console instead.
 
 ### Account
 
@@ -121,7 +121,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-03 | Phase 2 | Pending |
 | AUTH-04 | Phase 2 | Pending |
 | AUTH-05 | Phase 2 | Pending |
-| AUTH-06 | Phase 2 | Complete |
+| AUTH-06 | Phase 2 | Pending |
 | ACCT-01 | Phase 2 | Pending |
 | ACCT-02 | Phase 2 | Pending |
 | PRICE-01 | Phase 3 | Pending |
