@@ -120,7 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
-**Plans:** 5/10 plans executed
+**Plans:** 6/10 plans executed
 
 Plans:
 **Wave 1**
@@ -142,7 +142,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02.1-06-PLAN.md — prod.env + Resend key checkpoint, /srv/birja, loopback-only rehearsal (smoke, client IP, CSP, idempotency, rollback)
+- [x] 02.1-06-PLAN.md — prod.env + Resend key checkpoint, /srv/birja, loopback-only rehearsal (smoke, client IP, CSP, idempotency, rollback)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -230,7 +230,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
-| 2.1. Deploy to nist.one | 5/10 | In Progress|  |
+| 2.1. Deploy to nist.one | 6/10 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
