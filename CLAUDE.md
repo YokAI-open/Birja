@@ -56,6 +56,11 @@ cd frontend && npm run test -- --coverage   # Vitest
 docker compose up --build -d --wait
 cd frontend && npx playwright test
 
+# Production (on the server, as root). Details: deploy/RUNBOOK.md
+/srv/birja/deploy/deploy.sh                 # deploy main (DEPLOY_REF=<ref> for another ref)
+/srv/birja/deploy/deploy.sh --rollback      # back to the previous deploy
+/srv/birja/deploy/smoke-prod.sh [--public]  # success-criteria checks
+
 # Lint, format, types
 cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy app
 cd frontend && npm run lint && npm run typecheck && npx prettier --check .
