@@ -143,7 +143,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-05 | Phase 5 | Pending |
 | HIST-01 | Phase 5 | Pending |
 | HIST-02 | Phase 5 | Pending |
-| DEPL-01 | Phase 6 | Pending |
+| DEPL-01 | Phase 6 | Pending (partly delivered in Phase 2.1: public HTTPS + sign-in) |
 | DEPL-02 | Phase 6 | Pending |
 
 **Coverage:**
