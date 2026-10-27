@@ -8,10 +8,11 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 
 - [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
+- [ ] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate
 - [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
-- [ ] **Phase 6: Deploy** - Public domain over HTTPS with backups, so friends can sign up and trade
+- [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
 
 ## Phase Details
 
@@ -106,6 +107,59 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 02.1: Deploy to nist.one (INSERTED)
+
+**Goal**: Friends can open https://birja.nist.one and sign in with an emailed code, served by a production build
+**Mode:** mvp
+**Depends on**: Phase 2
+**Requirements**: DEPL-01 (partial: public HTTPS + sign-up; trading on the live site is verified in Phase 6)
+**Success Criteria** (what must be TRUE):
+
+  1. https://birja.nist.one serves the production frontend build through nginx, HTTP redirects to HTTPS, and the TLS chain is valid end to end through Cloudflare (SSL mode Full, strict)
+  2. The backend runs with `ENV=prod` and real secrets (startup refuses placeholders), `/docs`/`/redoc`/OpenAPI are off, and only nginx is reachable from the internet (Postgres, Redis and the backend publish no ports)
+  3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
+  4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
+  5. Redeploying from `main` is one documented command
+**Plans:** 10 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02.1-01-PLAN.md — Branch feature/deploy-nist-one (D-05), IN-04 (ENV required), IN-03 (redacted CI logs), Playwright browser cache
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02.1-02-PLAN.md — Prod compose (birja-prod, 127.0.0.1:18000, pinned subnet), init-prod-env.sh, deploy.sh (main default, DEPLOY_REF, --rollback; D-02)
+- [ ] 02.1-03-PLAN.md — nginx site + headers/real-IP/limit_req, install/check scripts, cloudflare-ips.sh (manual, D-06), cloudflare-dns.sh (D-04), renew-cert.sh (D-07)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02.1-04-PLAN.md — smoke-prod.sh (local/--public), CSP Playwright spec, deploy/RUNBOOK.md (renewal, undo), README/CLAUDE.md deploy docs
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02.1-05-PLAN.md — Token checkpoint, cert re-issued once via dns_cf + renewal neutralised + dates recorded (SC4), nginx enabled
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02.1-06-PLAN.md — prod.env + Resend key checkpoint, /srv/birja, loopback-only rehearsal (smoke, client IP, CSP, idempotency, rollback)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 02.1-07-PLAN.md — Full local suite, push gate, PR into develop (user merges)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 02.1-08-PLAN.md — release-0.1 -> PR into main, tag v0.1.0, back-merge into develop (all user-approved)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 02.1-09-PLAN.md — First deploy from main (twice), proxied DNS record, public smoke + CSP
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 02.1-10-PLAN.md — Real-email sign-in checkpoint, real-IP/log checks, closeout push gate
+
 ### Phase 3: Prices
 
 **Goal**: Users can see current prices for a curated coin list, always with how old each price is
@@ -157,16 +211,16 @@ Plans:
 
 ### Phase 6: Deploy
 
-**Goal**: Friends can open the app on a public domain over HTTPS, sign up and trade, with data safely backed up
+**Goal**: Friends can sign up and trade on the live site, with data safely backed up
 **Mode:** mvp
-**Depends on**: Phase 5
+**Depends on**: Phase 5 (public hosting itself is done in Phase 2.1)
 **Requirements**: DEPL-01, DEPL-02
 **Success Criteria** (what must be TRUE):
 
-  1. A friend opens the public domain over HTTPS, requests a code that arrives in a real inbox (Gmail and Outlook), signs up and completes a trade
-  2. Only nginx is reachable from the internet (no published Postgres or Redis ports), HTTP redirects to HTTPS, and `/docs` is off in production
-  3. Production data is backed up nightly off the server, and a restore has been performed once successfully
-  4. Certificate renewal works (`renew --dry-run` passes) and a Playwright happy-path e2e runs in CI
+  1. A friend opens https://birja.nist.one, requests a code that arrives in a real inbox (Gmail and Outlook), signs up and completes a trade
+  2. Production data is backed up nightly off the server, and a restore has been performed once successfully
+  3. The Playwright e2e in CI covers the trading happy path
+  4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
 **Plans**: TBD
 
@@ -176,6 +230,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
+| 2.1. Deploy to nist.one | 0/10 | Planned | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
