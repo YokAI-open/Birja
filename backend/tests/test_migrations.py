@@ -1,13 +1,12 @@
 import asyncio
 from pathlib import Path
 
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine
-
-from alembic import command
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
