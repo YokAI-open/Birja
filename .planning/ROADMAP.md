@@ -71,12 +71,12 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans:** 9 plans
+**Plans:** 1/9 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Branch gate (after PR #2 merges) + package legitimacy gate + Phase 1 review fixes WR-02/WR-04/WR-05
+- [x] 02-01-PLAN.md — Branch gate (after PR #2 merges) + package legitimacy gate + Phase 1 review fixes WR-02/WR-04/WR-05
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -175,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 0/9 | Planned | - |
+| 2. Authentication | 1/9 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
