@@ -71,7 +71,39 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans**: TBD
+**Plans:** 9 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Branch gate (after PR #2 merges) + package legitimacy gate + Phase 1 review fixes WR-02/WR-04/WR-05
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Request a code: OTP store (HMAC, single-use, 5 attempts), CSRF, POST /auth/request-code, console sender
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md — Verify a code: users/accounts (migration 0002), $10,000 exactly once, POST /auth/verify-code
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-04-PLAN.md — Sessions: auth_sessions/refresh_tokens (0003), JWT + cookies on sign-in, GET /me
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 02-05-PLAN.md — Sign-in UI (no router, D-03): apiFetch + CSRF, sign-in card, account view, e2e from compose logs
+- [ ] 02-06-PLAN.md — Rate limits per email, IP and global (429 + Retry-After)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 02-07-PLAN.md — Stay signed in + sign out: refresh rotation with reuse detection, logout, single-flight refresh, e2e
+- [ ] 02-08-PLAN.md — Resend sender over httpx (D-01), email settings, prod guard, respx tests (D-02)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 02-09-PLAN.md — CI critical-path coverage gate, full suite, real-email checkpoint (D-01/D-02), push gate
+
 **UI hint**: yes
 
 ### Phase 3: Prices
@@ -143,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 0/TBD | Not started | - |
+| 2. Authentication | 0/9 | Planned | - |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
