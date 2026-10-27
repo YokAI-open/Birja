@@ -25,3 +25,13 @@ async def request_and_get_code(client: httpx.AsyncClient, outbox: OutboxSender, 
     resp = await client.post("/api/v1/auth/request-code", json={"email": email}, headers=headers)
     assert resp.status_code == 202
     return [code for to, code in outbox.messages if to == email][-1]
+
+
+async def sign_in(client: httpx.AsyncClient, outbox: OutboxSender, email: str) -> httpx.Response:
+    code = await request_and_get_code(client, outbox, email)
+    headers = {"X-CSRF-Token": client.cookies["yk_csrf"]}
+    resp = await client.post(
+        "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
+    )
+    assert resp.status_code == 200
+    return resp

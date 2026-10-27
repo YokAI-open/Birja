@@ -1,5 +1,16 @@
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
+from app.core.security import (
+    REFRESH_TOKEN_TTL_SECONDS,
+    create_access_token,
+    new_csrf_token,
+    new_refresh_token,
+)
+from app.models.auth import AuthSession, RefreshToken
 from app.schemas.auth import MeOut
 from app.services import accounts
 from app.services.otp import OtpStore
@@ -15,10 +26,37 @@ async def request_code(otp: OtpStore, email: str) -> str:
     return await otp.issue(email)
 
 
-async def verify_code(db: AsyncSession, otp: OtpStore, email: str, code: str) -> MeOut:
+@dataclass(frozen=True)
+class IssuedSession:
+    access: str
+    refresh: str
+    csrf: str
+
+
+async def start_session(db: AsyncSession, user_id: int, settings: Settings) -> IssuedSession:
+    """Open a server-side session and its first refresh token. Does not commit."""
+    session = AuthSession(user_id=user_id)
+    db.add(session)
+    await db.flush()
+    raw, digest = new_refresh_token()
+    db.add(
+        RefreshToken(
+            session_id=session.id,
+            token_hash=digest,
+            expires_at=datetime.now(UTC) + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+        )
+    )
+    access = create_access_token(user_id, session.id, settings.jwt_secret)
+    return IssuedSession(access=access, refresh=raw, csrf=new_csrf_token())
+
+
+async def verify_code(
+    db: AsyncSession, otp: OtpStore, settings: Settings, email: str, code: str
+) -> tuple[MeOut, IssuedSession]:
     if not await otp.verify(email, code):
         raise InvalidCode
     user_id, _ = await accounts.get_or_create_user(db, email)
     me = await accounts.get_me(db, user_id)
+    issued = await start_session(db, user_id, settings)
     await db.commit()
-    return me
+    return me, issued

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 
-from app.core.deps import DbDep, EmailSenderDep, OtpStoreDep, verify_csrf
-from app.core.security import CSRF_COOKIE, new_csrf_token, set_csrf_cookie
+from app.core.deps import DbDep, EmailSenderDep, OtpStoreDep, SettingsDep, verify_csrf
+from app.core.security import CSRF_COOKIE, new_csrf_token, set_csrf_cookie, set_session_cookies
 from app.schemas.auth import CodeSentOut, MeOut, RequestCodeIn, VerifyCodeIn
 from app.services import auth as auth_service
 from app.services.auth import InvalidCode
@@ -55,11 +55,13 @@ async def request_code(
 )
 async def verify_code(
     body: VerifyCodeIn,
+    response: Response,
     db: DbDep,
     otp: OtpStoreDep,
+    settings: SettingsDep,
 ) -> MeOut:
     try:
-        return await auth_service.verify_code(db, otp, body.email, body.code)
+        me, issued = await auth_service.verify_code(db, otp, settings, body.email, body.code)
     except InvalidCode:
         raise HTTPException(
             status_code=400,
@@ -68,3 +70,5 @@ async def verify_code(
                 "message": "That code is wrong or has expired. Check it or request a new code.",
             },
         ) from None
+    set_session_cookies(response, issued.access, issued.refresh, issued.csrf)
+    return me
