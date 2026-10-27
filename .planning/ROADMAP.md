@@ -71,7 +71,7 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans:** 4/9 plans executed
+**Plans:** 6/9 plans executed
 
 Plans:
 **Wave 1**
@@ -92,8 +92,8 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 02-05-PLAN.md — Sign-in UI (no router, D-03): apiFetch + CSRF, sign-in card, account view, e2e from compose logs
-- [ ] 02-06-PLAN.md — Rate limits per email, IP and global (429 + Retry-After)
+- [x] 02-05-PLAN.md — Sign-in UI (no router, D-03): apiFetch + CSRF, sign-in card, account view, e2e from compose logs
+- [x] 02-06-PLAN.md — Rate limits per email, IP and global (429 + Retry-After)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -175,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 4/9 | In Progress|  |
+| 2. Authentication | 6/9 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
