@@ -71,6 +71,7 @@ The CA is Let's Encrypt (ECC, `*.nist.one` + `nist.one`, 90 days). On 2026-10-27
 Procedure:
 
 1. `cd /srv/birja && deploy/renew-cert.sh start` (run once; it prints the TXT name and value(s)).
+   If it says "no challenge needed" (Let's Encrypt reused valid authorizations and issued at once), skip steps 2, 3 and 6 and run `finish` directly: without a pending file it only installs the issued cert and prints the dates.
 2. In the Cloudflare dashboard (nist.one, DNS, Records) add each `_acme-challenge` TXT record, Proxy status DNS only, TTL Auto. With two values there are two records with the same name.
 3. `deploy/renew-cert.sh check --wait`
 4. `deploy/renew-cert.sh finish`
