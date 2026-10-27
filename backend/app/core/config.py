@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     rl_verify_email_window: int = 600
     rl_verify_ip_limit: int = 30
     rl_verify_ip_window: int = 600
-    rl_send_global_limit: int = 500
-    rl_send_global_window: int = 86400
+    # Global send cap: a cost guard. A short window keeps recovery quick if abuse trips it.
+    rl_send_global_limit: int = 100
+    rl_send_global_window: int = 3600
 
     @field_validator(
         "rl_request_email_limit",

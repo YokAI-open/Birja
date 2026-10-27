@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ from redis.asyncio import Redis
 
 from app.core.config import Settings
 from app.main import create_app
-from app.services.ratelimit import RateLimited, enforce, hit
+from app.services.ratelimit import RateLimited, enforce, hit, ip_bucket
 from tests.helpers import OutboxSender, csrf_headers, request_and_get_code, unique_email
 
 REQ = "/api/v1/auth/request-code"
@@ -59,6 +60,21 @@ async def test_enforce_raises_with_retry_after_and_returns_none_on_allow(
     with pytest.raises(RateLimited) as exc_info:
         await enforce(redis_client, key, 1, 60)
     assert 1 <= exc_info.value.retry_after <= 60
+
+
+@pytest.mark.parametrize(
+    ("host", "bucket"),
+    [
+        ("203.0.113.9", "203.0.113.9"),
+        ("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64"),
+        ("2001:db8:1:2::1", "2001:db8:1:2::/64"),
+        ("2001:db8:1:3::1", "2001:db8:1:3::/64"),
+        ("::ffff:198.51.100.7", "198.51.100.7"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_ip_bucket_groups_ipv6_by_64(host: str, bucket: str) -> None:
+    assert ip_bucket(host) == bucket
 
 
 # ---- API ----------------------------------------------------------------------
@@ -172,6 +188,46 @@ async def test_global_send_cap() -> None:
             assert (await _post(c, REQ, {"email": unique_email()})).status_code == 202
             assert (await _post(c, REQ, {"email": unique_email()})).status_code == 429
         assert len(outbox.messages) == 2
+
+
+async def test_global_send_cap_window_is_one_hour_and_logs_warning(
+    redis_client: Redis, caplog: pytest.LogCaptureFixture
+) -> None:
+    async with _custom_app(rl_send_global_limit=1) as (app, _):  # noqa: SIM117
+        async with _client(app) as c:
+            assert (await _post(c, REQ, {"email": unique_email()})).status_code == 202
+            ttl = await redis_client.ttl("sim:rl:req:global")
+            assert 3500 < ttl <= 3600
+            email = unique_email()
+            with caplog.at_level(logging.WARNING, logger="app"):
+                resp = await _post(c, REQ, {"email": email})
+            assert resp.status_code == 429
+            assert 0 < int(resp.headers["Retry-After"]) <= 3600
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert warnings[0].name.startswith("app.")
+    msg = warnings[0].getMessage()
+    assert "Global request-code cap reached" in msg
+    assert email not in msg
+    assert "127.0.0.1" not in msg
+
+
+async def test_ipv6_clients_in_one_64_share_a_bucket(redis_client: Redis) -> None:
+    async with _custom_app(rl_request_ip_limit=2, rl_verify_ip_limit=1) as (app, _):  # noqa: SIM117
+        async with (
+            _client(app, "2001:db8:1:2::1") as a,
+            _client(app, "2001:db8:1:2:ffff::9") as b,
+            _client(app, "2001:db8:1:3::1") as other,
+        ):
+            assert (await _post(a, REQ, {"email": unique_email()})).status_code == 202
+            assert (await _post(b, REQ, {"email": unique_email()})).status_code == 202
+            assert (await _post(b, REQ, {"email": unique_email()})).status_code == 429
+            assert (await _post(other, REQ, {"email": unique_email()})).status_code == 202
+            body = {"email": unique_email(), "code": "000000"}
+            assert (await _post(a, VER, body)).status_code == 400
+            assert (await _post(b, VER, body)).status_code == 429
+    assert await redis_client.get("sim:rl:req:ip:2001:db8:1:2::/64") == "3"
+    assert await redis_client.get("sim:rl:ver:ip:2001:db8:1:2::/64") == "2"
 
 
 async def test_every_rate_limit_key_has_a_ttl(

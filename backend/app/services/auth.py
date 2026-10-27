@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -19,7 +20,9 @@ from app.models.auth import AuthSession, RefreshToken
 from app.schemas.auth import MeOut
 from app.services import accounts
 from app.services.otp import OtpStore
-from app.services.ratelimit import enforce
+from app.services.ratelimit import RateLimited, enforce, ip_bucket
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidCode(Exception):
@@ -32,7 +35,10 @@ async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: s
     first so a refused request issues and sends nothing (AUTH-03). The per-IP limit
     goes first, so a throttled IP can no longer charge a victim's per-email bucket."""
     await enforce(
-        redis, f"sim:rl:req:ip:{ip}", settings.rl_request_ip_limit, settings.rl_request_ip_window
+        redis,
+        f"sim:rl:req:ip:{ip_bucket(ip)}",
+        settings.rl_request_ip_limit,
+        settings.rl_request_ip_window,
     )
     await enforce(
         redis,
@@ -40,9 +46,20 @@ async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: s
         settings.rl_request_email_limit,
         settings.rl_request_email_window,
     )
-    await enforce(
-        redis, "sim:rl:req:global", settings.rl_send_global_limit, settings.rl_send_global_window
-    )
+    try:
+        await enforce(
+            redis,
+            "sim:rl:req:global",
+            settings.rl_send_global_limit,
+            settings.rl_send_global_window,
+        )
+    except RateLimited as exc:
+        # No email or IP here: the operator only needs to know sign-in is blocked.
+        logger.warning(
+            "Global request-code cap reached; all code requests refused for %ss",
+            exc.retry_after,
+        )
+        raise
     return await otp.issue(email)
 
 
@@ -81,7 +98,10 @@ async def verify_code(
 ) -> tuple[MeOut, IssuedSession]:
     # IP first: attempts the per-IP limit refuses never touch per-email state.
     await enforce(
-        redis, f"sim:rl:ver:ip:{ip}", settings.rl_verify_ip_limit, settings.rl_verify_ip_window
+        redis,
+        f"sim:rl:ver:ip:{ip_bucket(ip)}",
+        settings.rl_verify_ip_limit,
+        settings.rl_verify_ip_window,
     )
     await enforce(
         redis,

@@ -24,7 +24,7 @@ def test_rate_limit_defaults_strict_outside_dev() -> None:
     assert (s.rl_request_email_limit, s.rl_request_email_window) == (5, 600)
     assert (s.rl_request_ip_limit, s.rl_request_ip_window) == (20, 3600)
     assert (s.rl_verify_email_limit, s.rl_verify_ip_limit) == (10, 30)
-    assert (s.rl_send_global_limit, s.rl_send_global_window) == (500, 86400)
+    assert (s.rl_send_global_limit, s.rl_send_global_window) == (100, 3600)
 
 
 def test_dev_loosens_ip_limits_unless_set_explicitly() -> None:
