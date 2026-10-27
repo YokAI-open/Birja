@@ -150,7 +150,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02.1-08-PLAN.md — release-0.1 -> PR into main, tag v0.1.0, back-merge into develop (all user-approved)
+- [x] 02.1-08-PLAN.md — release-0.1 -> PR into main, tag v0.1.0, back-merge into develop (all user-approved)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
