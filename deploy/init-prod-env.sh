@@ -34,7 +34,7 @@ jwt=$(openssl rand -hex 32)
   printf 'REDIS_PASSWORD=%s\n' "$redis"
   printf 'OTP_HMAC_SECRET=%s\n' "$otp"
   printf 'JWT_SECRET=%s\n' "$jwt"
-  printf 'EMAIL_FROM="Birja <noreply@nist.one>"\n'
+  printf 'EMAIL_FROM="Birja <birja@nist.one>"\n'
   printf '%s\n' '# Paste the Resend API key here yourself (nano /etc/birja/prod.env). Never paste it into chat.'
   printf 'RESEND_API_KEY=\n'
 } > "$tmp"
