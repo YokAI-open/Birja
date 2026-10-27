@@ -85,7 +85,7 @@ jobs:
           target: test-builder
           load: true
           push: false
-          tags: yokai-backend-test:ci
+          tags: birja-backend-test:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build runtime image
@@ -99,7 +99,7 @@ jobs:
       - name: Start test stack
         run: docker compose -f docker-compose.test.yml up -d --wait
       - name: In-image smoke test
-        run: docker run --rm --network host yokai-backend-test:ci pytest tests/test_smoke.py -q
+        run: docker run --rm --network host birja-backend-test:ci pytest tests/test_smoke.py -q
       - name: Stop test stack
         if: always()
         run: docker compose -f docker-compose.test.yml down -v

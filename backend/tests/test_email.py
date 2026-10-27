@@ -15,7 +15,7 @@ from app.services.email import (
 )
 
 KEY = "dummy-key-not-real"
-FROM = "YokaiExchange <login@example.com>"
+FROM = "Birja <login@example.com>"
 TO = "friend.user@example.org"
 CODE = "483920"
 
@@ -58,7 +58,7 @@ async def test_success_posts_expected_request(caplog: pytest.LogCaptureFixture) 
     body = json.loads(req.content)
     assert body["from"] == FROM
     assert body["to"] == [TO]
-    assert body["subject"] == "Your YokaiExchange sign-in code"
+    assert body["subject"] == "Your Birja sign-in code"
     assert CODE in body["text"]
     assert "10 minutes" in body["text"]
     _assert_clean(caplog)

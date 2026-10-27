@@ -44,7 +44,7 @@ def _rate_limited(exc: RateLimited) -> HTTPException:
     status_code=204,
     response_class=Response,
     summary="Get a CSRF token cookie",
-    description="Sets the yk_csrf cookie if the client does not have one yet.",
+    description="Sets the bj_csrf cookie if the client does not have one yet.",
 )
 async def get_csrf(request: Request) -> Response:
     response = Response(status_code=204)

@@ -54,7 +54,7 @@ test("a new user signs in, stays signed in, signs out and signs in again", async
   await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
 
   // Access cookie gone: the app refreshes silently and stays signed in.
-  await context.clearCookies({ name: "yk_access" });
+  await context.clearCookies({ name: "bj_access" });
   await page.reload();
   await expect(page.getByText("$10,000.00")).toBeVisible();
 

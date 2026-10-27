@@ -408,5 +408,5 @@ $10,000 credited on every OTP verify, or two concurrent first verifies create tw
 
 - PyPI JSON API for asyncpg, pydantic-core, uvloop, httptools, orjson, psycopg2-binary (queried 2026-10-20): cp314 wheels present. HIGH.
 - CoinGecko Demo plan summaries via web search (zuplo.com learning center, costbench, spark.money, python-coingecko docs): 10,000 calls/month cap consistent; per-minute limit and key requirement conflicting. MEDIUM for monthly cap, LOW for per-minute figure. Verify at https://www.coingecko.com/en/api/pricing.
-- Project files: /home/YokaiExchange/CLAUDE.md, /home/YokaiExchange/.planning/PROJECT.md.
+- Project files: /home/Birja/CLAUDE.md, /home/Birja/.planning/PROJECT.md.
 - Resend sender/domain behaviour, Docker/ufw iptables bypass, Let's Encrypt renewal and rate limits, Postgres row-locking semantics, PEP 649/749, OWASP session/CSRF guidance: established engineering knowledge, not re-verified in this session. MEDIUM.

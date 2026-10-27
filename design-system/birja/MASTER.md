@@ -1,6 +1,6 @@
-# YokaiExchange Design System (MASTER)
+# Birja Design System (MASTER)
 
-Global source of truth for how YokaiExchange looks. Page files in `pages/<page>.md`, if any, override this file for that page only.
+Global source of truth for how Birja looks. Page files in `pages/<page>.md`, if any, override this file for that page only.
 
 **Inspiration:** [Outcrowd, "Dashboard for payment and business analytics" (Dribbble)](https://dribbble.com/shots/26446179-Dashboard-for-payment-and-business-analytics). Colors below were sampled from that shot, then adjusted to meet WCAG AA contrast where the original fails. The original's light-grey labels are about 1.6:1 against the background, far below the 4.5:1 minimum.
 
@@ -143,7 +143,7 @@ font-optical-sizing: auto;
 ## 5. Layout
 
 - **App shell:** a top bar, no sidebar, following the reference. v1 has only a few pages, so a sidebar would be empty weight.
-  - Left: logo mark (`--brand` square) + "YokaiExchange" wordmark.
+  - Left: logo mark (`--brand` square) + "Birja" wordmark.
   - Center: pill nav with **Markets · Portfolio · History**. The active item uses the `--primary` black pill with `--shadow-pill`; inactive items are text-only, with a `--muted` fill on hover.
   - Right: cash balance chip (`Cash $8,214.55`), then an account icon button with a sign-out menu.
   - Below 768px the center nav becomes a bottom tab bar (3 items, icon + label, 56px tall plus safe area).

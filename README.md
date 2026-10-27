@@ -1,4 +1,4 @@
-# YokaiExchange
+# Birja
 
 ## The idea
 

@@ -64,7 +64,7 @@ cd frontend && npm run lint && npm run typecheck && npx prettier --check .
 # The dev Postgres publishes no host port, so run alembic on the host against the
 # test stack at head (docker compose -f docker-compose.test.yml up -d --wait first):
 cd backend
-export DATABASE_URL=postgresql+asyncpg://yokai_test:test@127.0.0.1:55432/yokai_test
+export DATABASE_URL=postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test
 export REDIS_URL=redis://:test@127.0.0.1:56379/0
 # alembic/env.py loads Settings, which requires both secrets (test-only dummies):
 export OTP_HMAC_SECRET=test-only-otp-secret-not-for-prod-000000

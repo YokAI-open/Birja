@@ -1,7 +1,7 @@
 import logging
 import sys
 
-_MARK = "_yokai_handler"
+_MARK = "_birja_handler"
 
 
 def configure_logging() -> None:

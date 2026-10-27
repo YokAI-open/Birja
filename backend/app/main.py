@@ -69,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     is_prod = settings.env == "prod"
     app = FastAPI(
-        title="YokaiExchange API",
+        title="Birja API",
         lifespan=lifespan,
         docs_url=None if is_prod else "/docs",
         redoc_url=None if is_prod else "/redoc",

@@ -26,8 +26,8 @@ def _claims(**over: object) -> dict[str, object]:
         "sid": 9,
         "iat": now,
         "exp": now + 900,
-        "iss": "yokai",
-        "aud": "yokai-web",
+        "iss": "birja",
+        "aud": "birja-web",
         "typ": "access",
     }
     base.update(over)
@@ -89,7 +89,7 @@ def test_set_and_clear_session_cookies() -> None:
     resp = Response()
     set_session_cookies(resp, "A", "R", "C")
     cookies = {h.split("=")[0]: h.lower() for h in resp.headers.getlist("set-cookie")}
-    access, refresh, csrf = cookies[ACCESS_COOKIE], cookies["yk_refresh"], cookies["yk_csrf"]
+    access, refresh, csrf = cookies[ACCESS_COOKIE], cookies["bj_refresh"], cookies["bj_csrf"]
     for c in (access, refresh, csrf):
         assert "secure" in c and "samesite=strict" in c and "max-age=2592000" in c
     assert "httponly" in access and "path=/api;" in access + ";"
@@ -133,17 +133,17 @@ async def test_sign_in_sets_three_cookies_and_rotates_csrf(
 ) -> None:
     email = unique_email()
     await csrf_headers(auth_client)
-    before = auth_client.cookies["yk_csrf"]
+    before = auth_client.cookies["bj_csrf"]
     resp = await sign_in(auth_client, outbox, email)
 
     cookies = _set_cookie_headers(resp)
-    assert set(cookies) == {"yk_access", "yk_refresh", "yk_csrf"}
-    assert "httponly" in cookies["yk_access"] and "path=/api;" in cookies["yk_access"] + ";"
-    assert "httponly" in cookies["yk_refresh"]
-    assert "path=/api/v1/auth/refresh" in cookies["yk_refresh"]
-    assert "max-age=2592000" in cookies["yk_refresh"]
-    assert "httponly" not in cookies["yk_csrf"]
-    assert auth_client.cookies["yk_csrf"] != before
+    assert set(cookies) == {"bj_access", "bj_refresh", "bj_csrf"}
+    assert "httponly" in cookies["bj_access"] and "path=/api;" in cookies["bj_access"] + ";"
+    assert "httponly" in cookies["bj_refresh"]
+    assert "path=/api/v1/auth/refresh" in cookies["bj_refresh"]
+    assert "max-age=2592000" in cookies["bj_refresh"]
+    assert "httponly" not in cookies["bj_csrf"]
+    assert auth_client.cookies["bj_csrf"] != before
     assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}
 
 
@@ -153,7 +153,7 @@ async def test_session_and_refresh_rows_store_only_hash(
     email = unique_email()
     resp = await sign_in(auth_client, outbox, email)
     raw = resp.headers.get_list("set-cookie")
-    raw_refresh = next(h for h in raw if h.startswith("yk_refresh=")).split(";")[0].split("=", 1)[1]
+    raw_refresh = next(h for h in raw if h.startswith("bj_refresh=")).split(";")[0].split("=", 1)[1]
     _, sid = await _ids(engine, email)
 
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -190,7 +190,7 @@ async def test_me_without_cookie_is_401(auth_client: httpx.AsyncClient) -> None:
 
 async def _me_with_token(client: httpx.AsyncClient, token: str) -> httpx.Response:
     client.cookies.clear()
-    return await client.get("/api/v1/me", headers={"Cookie": f"yk_access={token}"})
+    return await client.get("/api/v1/me", headers={"Cookie": f"bj_access={token}"})
 
 
 async def test_me_rejects_bad_tokens(
@@ -260,12 +260,12 @@ def _cookie(resp: httpx.Response, name: str) -> str:
 
 
 async def _refresh(client: httpx.AsyncClient, refresh_token: str | None = None) -> httpx.Response:
-    if "yk_csrf" not in client.cookies:
+    if "bj_csrf" not in client.cookies:
         await client.get("/api/v1/auth/csrf")
-    csrf = client.cookies["yk_csrf"]
+    csrf = client.cookies["bj_csrf"]
     headers = {"X-CSRF-Token": csrf}
     if refresh_token is not None:
-        headers["Cookie"] = f"yk_csrf={csrf}; yk_refresh={refresh_token}"
+        headers["Cookie"] = f"bj_csrf={csrf}; bj_refresh={refresh_token}"
         saved = list(client.cookies.jar)
         client.cookies.clear()
         try:
@@ -279,7 +279,7 @@ async def _refresh(client: httpx.AsyncClient, refresh_token: str | None = None) 
 async def _signed_in(client: httpx.AsyncClient, outbox: OutboxSender) -> tuple[str, str, str]:
     email = unique_email()
     resp = await sign_in(client, outbox, email)
-    return email, _cookie(resp, "yk_refresh"), _cookie(resp, "yk_access")
+    return email, _cookie(resp, "bj_refresh"), _cookie(resp, "bj_access")
 
 
 async def _db_update(engine: AsyncEngine, stmt) -> None:  # type: ignore[no-untyped-def]
@@ -297,10 +297,10 @@ async def test_refresh_rotates_tokens(
     resp = await _refresh(auth_client)
     assert resp.status_code == 204
     cookies = _set_cookie_headers(resp)
-    assert set(cookies) == {"yk_access", "yk_refresh", "yk_csrf"}
-    assert "httponly" in cookies["yk_access"] and "httponly" in cookies["yk_refresh"]
-    assert "path=/api/v1/auth/refresh" in cookies["yk_refresh"]
-    assert _cookie(resp, "yk_refresh") != old_refresh
+    assert set(cookies) == {"bj_access", "bj_refresh", "bj_csrf"}
+    assert "httponly" in cookies["bj_access"] and "httponly" in cookies["bj_refresh"]
+    assert "path=/api/v1/auth/refresh" in cookies["bj_refresh"]
+    assert _cookie(resp, "bj_refresh") != old_refresh
     assert (await auth_client.get("/api/v1/me")).status_code == 200
 
     sessions = async_sessionmaker(engine)
@@ -326,7 +326,7 @@ async def test_refresh_reuse_within_grace_keeps_newest_token_valid(
 ) -> None:
     _, old_refresh, _ = await _signed_in(auth_client, outbox)
     first = await _refresh(auth_client)
-    newest = _cookie(first, "yk_refresh")
+    newest = _cookie(first, "bj_refresh")
     _assert_401(await _refresh(auth_client, old_refresh))
     assert (await _refresh(auth_client, newest)).status_code == 204
 
@@ -337,8 +337,8 @@ async def test_refresh_reuse_after_grace_revokes_session(
     email, old_refresh, _ = await _signed_in(auth_client, outbox)
     _, sid = await _ids(engine, email)
     first = await _refresh(auth_client)
-    newest = _cookie(first, "yk_refresh")
-    access = _cookie(first, "yk_access")
+    newest = _cookie(first, "bj_refresh")
+    access = _cookie(first, "bj_access")
     await _db_update(
         engine,
         update(RefreshToken)
@@ -347,7 +347,7 @@ async def test_refresh_reuse_after_grace_revokes_session(
     )
     resp = await _refresh(auth_client, old_refresh)
     _assert_401(resp)
-    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+    assert "max-age=0" in _set_cookie_headers(resp)["bj_refresh"]
     sessions = async_sessionmaker(engine)
     async with sessions() as db:
         revoked = (
@@ -370,10 +370,10 @@ async def test_concurrent_refresh_one_wins_without_revoke(
 
     async with await make() as a, await make() as b:
         email, refresh_token, _ = await _signed_in(a, outbox)
-        csrf = a.cookies["yk_csrf"]
+        csrf = a.cookies["bj_csrf"]
         headers = {
             "X-CSRF-Token": csrf,
-            "Cookie": f"yk_csrf={csrf}; yk_refresh={refresh_token}",
+            "Cookie": f"bj_csrf={csrf}; bj_refresh={refresh_token}",
         }
         r1, r2 = await asyncio.gather(
             a.post("/api/v1/auth/refresh", headers=headers),
@@ -395,7 +395,7 @@ async def test_refresh_without_cookie_or_unknown_token_is_401(
     headers = await csrf_headers(auth_client)
     resp = await auth_client.post("/api/v1/auth/refresh", headers=headers)
     _assert_401(resp)
-    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+    assert "max-age=0" in _set_cookie_headers(resp)["bj_refresh"]
     _assert_401(await _refresh(auth_client, "not-a-real-token"))
 
 
@@ -412,7 +412,7 @@ async def test_refresh_expired_or_revoked_session_is_401(
     )
     resp = await _refresh(auth_client, refresh_token)
     _assert_401(resp)
-    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+    assert "max-age=0" in _set_cookie_headers(resp)["bj_refresh"]
 
     email2, refresh2, _ = await _signed_in(auth_client, outbox)
     _, sid2 = await _ids(engine, email2)
@@ -436,15 +436,15 @@ async def test_logout_revokes_session_and_clears_cookies(
 ) -> None:
     email, refresh_token, access = await _signed_in(auth_client, outbox)
     _, sid = await _ids(engine, email)
-    headers = {"X-CSRF-Token": auth_client.cookies["yk_csrf"]}
+    headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
     resp = await auth_client.post("/api/v1/auth/logout", headers=headers)
     assert resp.status_code == 204
     cookies = _set_cookie_headers(resp)
-    assert set(cookies) == {"yk_access", "yk_refresh", "yk_csrf"}
+    assert set(cookies) == {"bj_access", "bj_refresh", "bj_csrf"}
     assert all("max-age=0" in v for v in cookies.values())
-    assert "path=/api;" in cookies["yk_access"] + ";"
-    assert "path=/api/v1/auth/refresh" in cookies["yk_refresh"]
-    assert "path=/;" in cookies["yk_csrf"] + ";"
+    assert "path=/api;" in cookies["bj_access"] + ";"
+    assert "path=/api/v1/auth/refresh" in cookies["bj_refresh"]
+    assert "path=/;" in cookies["bj_csrf"] + ";"
     sessions = async_sessionmaker(engine)
     async with sessions() as db:
         revoked = (
@@ -465,10 +465,10 @@ async def test_logout_with_expired_access_token_still_revokes(
     uid, sid = await _ids(engine, email)
     old = datetime.now(UTC) - timedelta(hours=2)
     expired = create_access_token(uid, sid, settings.jwt_secret, now=old)
-    csrf = auth_client.cookies["yk_csrf"]
+    csrf = auth_client.cookies["bj_csrf"]
     resp = await auth_client.post(
         "/api/v1/auth/logout",
-        headers={"X-CSRF-Token": csrf, "Cookie": f"yk_csrf={csrf}; yk_access={expired}"},
+        headers={"X-CSRF-Token": csrf, "Cookie": f"bj_csrf={csrf}; bj_access={expired}"},
     )
     assert resp.status_code == 204
     sessions = async_sessionmaker(engine)
@@ -484,13 +484,13 @@ async def test_logout_without_or_with_bad_token_revokes_nothing(
 ) -> None:
     email, _, access = await _signed_in(auth_client, outbox)
     _, sid = await _ids(engine, email)
-    csrf = auth_client.cookies["yk_csrf"]
-    for cookie in (f"yk_csrf={csrf}", f"yk_csrf={csrf}; yk_access={access[:-3]}abc"):
+    csrf = auth_client.cookies["bj_csrf"]
+    for cookie in (f"bj_csrf={csrf}", f"bj_csrf={csrf}; bj_access={access[:-3]}abc"):
         resp = await auth_client.post(
             "/api/v1/auth/logout", headers={"X-CSRF-Token": csrf, "Cookie": cookie}
         )
         assert resp.status_code == 204
-        assert "max-age=0" in _set_cookie_headers(resp)["yk_access"]
+        assert "max-age=0" in _set_cookie_headers(resp)["bj_access"]
     sessions = async_sessionmaker(engine)
     async with sessions() as db:
         revoked = (
@@ -503,7 +503,7 @@ async def test_sign_in_after_logout_keeps_cash_at_10000(
     auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
 ) -> None:
     email, _, _ = await _signed_in(auth_client, outbox)
-    headers = {"X-CSRF-Token": auth_client.cookies["yk_csrf"]}
+    headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
     assert (await auth_client.post("/api/v1/auth/logout", headers=headers)).status_code == 204
     resp = await sign_in(auth_client, outbox, email)
     assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}

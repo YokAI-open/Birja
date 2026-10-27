@@ -1,13 +1,13 @@
 # Project Research Summary
 
-**Project:** YokaiExchange
+**Project:** Birja
 **Domain:** Crypto paper-trading web app (virtual USD, real prices, market orders, small friends audience)
 **Researched:** 2026-10-20
 **Confidence:** MEDIUM-HIGH
 
 ## Executive Summary
 
-YokaiExchange is a small, correctness-critical web app. Users get $10,000 of virtual cash once, trade about 10-20 major coins at real prices with a simulated spread and fee, and see portfolio P/L. Experts build this as a modular monolith. Postgres holds the authoritative balances (`accounts.cash`, `holdings`), protected by `CHECK` constraints and row locks. An insert-only `trades` ledger is the audit trail. One pure, 100%-tested `Decimal` pricing module serves both the quote preview and execution. Prices come from one scheduled job, run in exactly one container. The job writes Postgres first and Redis second. Trades read only the Postgres price row and refuse it if it is older than the max age. The SPA and API share one origin (Vite proxy in dev, nginx in prod), so cookie auth and CSRF work without CORS.
+Birja is a small, correctness-critical web app. Users get $10,000 of virtual cash once, trade about 10-20 major coins at real prices with a simulated spread and fee, and see portfolio P/L. Experts build this as a modular monolith. Postgres holds the authoritative balances (`accounts.cash`, `holdings`), protected by `CHECK` constraints and row locks. An insert-only `trades` ledger is the audit trail. One pure, 100%-tested `Decimal` pricing module serves both the quote preview and execution. Prices come from one scheduled job, run in exactly one container. The job writes Postgres first and Redis second. Trades read only the Postgres price row and refuse it if it is older than the max age. The SPA and API share one origin (Vite proxy in dev, nginx in prod), so cookie auth and CSRF work without CORS.
 
 The recommended approach is vertical slices, each leaving the app runnable: skeleton + CI, auth, prices, trading, portfolio + history, deploy. Deploy is part of "done" because the definition of v1 is friends using it. Market data should come from the Kraken public Ticker (no key, verified live, true USD pairs). CoinGecko Demo is capped at 10k calls/month and cannot sustain a 60s poll (it would run out in about 7 days), so it is not primary. The OTP email provider is Resend, which needs a verified domain before anyone but the author can receive a code. That makes domain purchase and DNS verification an early external dependency with real wall-clock latency.
 

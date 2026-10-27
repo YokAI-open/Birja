@@ -274,6 +274,6 @@ Each slice ends runnable and tested. CI starts in slice 1. The stack grows only 
 
 ## Sources
 
-- /home/YokaiExchange/CLAUDE.md (fixed rules: layering, transactions, Redis, auth). HIGH.
-- /home/YokaiExchange/.planning/PROJECT.md (requirements and scope). HIGH.
+- /home/Birja/CLAUDE.md (fixed rules: layering, transactions, Redis, auth). HIGH.
+- /home/Birja/.planning/PROJECT.md (requirements and scope). HIGH.
 - Design patterns (ledger plus materialised balances, average-cost basis, idempotency keys, row-lock serialisation): established brokerage and accounting practice from training knowledge, not re-verified online. MEDIUM.

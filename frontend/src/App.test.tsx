@@ -25,7 +25,7 @@ describe("App", () => {
   it("shows a loading skeleton while /me is pending", async () => {
     stubApi(() => new Promise<Response>(() => {}));
     renderWithClient(<App />);
-    expect(screen.getByText("YokaiExchange")).toBeVisible();
+    expect(screen.getByText("Birja")).toBeVisible();
     const skeleton = screen.getByRole("status", { name: "Loading your account" });
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(screen.getByRole("heading", { name: "System status" })).toBeVisible();
@@ -63,9 +63,7 @@ describe("App", () => {
           });
     });
     const { user } = renderWithClient(<App />);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Can't reach YokaiExchange right now.",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach Birja right now.");
     expect(screen.getByRole("heading", { name: "System status" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("$1.00")).toBeVisible();
@@ -78,7 +76,7 @@ describe("App", () => {
       });
 
     it("signs out and shows the sign-in card", async () => {
-      document.cookie = "yk_csrf=tok; path=/";
+      document.cookie = "bj_csrf=tok; path=/";
       let resolveLogout: (r: Response) => void = () => {};
       const fetchMock = vi.fn((url: string) => {
         if (url === "/api/v1/auth/logout") {
@@ -100,11 +98,11 @@ describe("App", () => {
       resolveLogout(new Response(null, { status: 204 }));
       expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
       expect(screen.queryByText("$10,000.00")).toBeNull();
-      document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+      document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     });
 
     it("keeps the account view and shows an error when sign-out fails", async () => {
-      document.cookie = "yk_csrf=tok; path=/";
+      document.cookie = "bj_csrf=tok; path=/";
       vi.stubGlobal(
         "fetch",
         vi.fn((url: string) => {
@@ -118,7 +116,7 @@ describe("App", () => {
       await user.click(await screen.findByRole("button", { name: "Sign out" }));
       expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't sign out. Try again.");
       expect(screen.getByText("$10,000.00")).toBeVisible();
-      document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+      document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     });
   });
 });

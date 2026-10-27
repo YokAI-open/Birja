@@ -29,7 +29,7 @@ function AuthSwitch() {
       <Card className="mx-auto my-8 max-w-xl">
         <CardContent>
           <p role="alert" className="text-loss-text">
-            Can&apos;t reach YokaiExchange right now.
+            Can&apos;t reach Birja right now.
           </p>
           <Button variant="secondary" onClick={() => void refetch()}>
             Try again
@@ -46,7 +46,7 @@ function App() {
     <>
       <header className="mx-auto flex max-w-[1440px] items-center gap-3 px-4 py-4 md:px-8">
         <span aria-hidden="true" className="size-8 rounded-control bg-brand" />
-        <span className="text-xl font-semibold tracking-[-0.01em]">YokaiExchange</span>
+        <span className="text-xl font-semibold tracking-[-0.01em]">Birja</span>
       </header>
       <main className="mx-auto max-w-[1440px] px-4 md:px-8">
         <AuthSwitch />

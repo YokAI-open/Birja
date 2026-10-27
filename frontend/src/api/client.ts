@@ -12,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-const CSRF_COOKIE = "yk_csrf";
+const CSRF_COOKIE = "bj_csrf";
 
 export function readCookie(name: string): string | null {
   for (const part of document.cookie.split("; ")) {

@@ -50,7 +50,7 @@ class ResendSender:
         payload = {
             "from": self._sender,
             "to": [to],
-            "subject": "Your YokaiExchange sign-in code",
+            "subject": "Your Birja sign-in code",
             "text": f"Your sign-in code is {code}. It expires in 10 minutes.",
         }
         headers = {

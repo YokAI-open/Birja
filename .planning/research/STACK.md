@@ -3,7 +3,7 @@
 > **Superseded (2026-10-20):** the user chose one simple scheduler-loop container for the price job and FastAPI `BackgroundTasks` for OTP email instead of arq. See PROJECT.md Key Decisions.
 
 
-**Project:** YokaiExchange (crypto paper trading, virtual money, real prices)
+**Project:** Birja (crypto paper trading, virtual money, real prices)
 **Researched:** 2026-10-20
 **Scope:** The core stack is fixed by CLAUDE.md. This file pins current versions, picks the market-data and email providers, picks the scheduler, and fills gaps. Versions were read from PyPI/npm on 2026-10-20 (HIGH confidence).
 
