@@ -1,5 +1,5 @@
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING
 
 import httpx
@@ -21,11 +21,14 @@ ensure_test_stack(TEST_DATABASE_URL, TEST_REDIS_URL)
 os.environ["ENV"] = "test"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["REDIS_URL"] = TEST_REDIS_URL
+os.environ["OTP_HMAC_SECRET"] = "test-only-otp-hmac-secret-0123456789-abcdefghij"
+os.environ["JWT_SECRET"] = "test-only-jwt-secret-0123456789-klmnopqrstuvwx"
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from app.core.config import Settings
+    from tests.helpers import OutboxSender
 
 
 @pytest.fixture(scope="session")
@@ -56,10 +59,52 @@ def app(settings: Settings) -> FastAPI:
     return create_app(settings)
 
 
+@pytest.fixture(scope="session")
+def migrated() -> None:
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    command.upgrade(Config(str(Path(__file__).resolve().parent.parent / "alembic.ini")), "head")
+
+
 @pytest_asyncio.fixture(scope="session")
-async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
-    async with (
-        app.router.lifespan_context(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
-    ):
+async def running_app(app: FastAPI, migrated: None) -> AsyncIterator[FastAPI]:
+    async with app.router.lifespan_context(app):
+        yield app
+
+
+@pytest_asyncio.fixture(scope="session")
+async def client(running_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=running_app), base_url="http://test"
+    ) as c:
         yield c
+
+
+@pytest_asyncio.fixture
+async def auth_client(running_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    # https so the Secure CSRF cookie is kept; fresh cookie jar per test.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=running_app), base_url="https://test"
+    ) as c:
+        yield c
+
+
+@pytest.fixture
+def outbox(running_app: FastAPI) -> Iterator[OutboxSender]:
+    from tests.helpers import OutboxSender
+
+    original = running_app.state.email_sender
+    sender = OutboxSender()
+    running_app.state.email_sender = sender
+    yield sender
+    running_app.state.email_sender = original
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_auth_redis(redis_client: Redis) -> None:
+    for pattern in ("sim:otp:*", "sim:rl:*"):
+        async for key in redis_client.scan_iter(match=pattern):
+            await redis_client.delete(key)

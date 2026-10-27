@@ -20,9 +20,7 @@ async def _check_db(db: AsyncSession) -> CheckResult:
         async with asyncio.timeout(CHECK_TIMEOUT_SECONDS):
             await db.execute(text("SELECT 1"))
     except Exception as exc:
-        logger.warning(
-            "health check failed", extra={"dependency": "db", "error_type": type(exc).__name__}
-        )
+        logger.warning("health check failed: dependency=%s error_type=%s", "db", type(exc).__name__)
         return "error"
     return "ok"
 
@@ -33,7 +31,7 @@ async def _check_redis(redis: Redis) -> CheckResult:
             await redis.ping()
     except Exception as exc:
         logger.warning(
-            "health check failed", extra={"dependency": "redis", "error_type": type(exc).__name__}
+            "health check failed: dependency=%s error_type=%s", "redis", type(exc).__name__
         )
         return "error"
     return "ok"

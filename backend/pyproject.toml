@@ -7,11 +7,13 @@ dependencies = [
     "alembic==1.20.1",
     "asyncpg==0.32.0",
     "fastapi==0.162.0",
-    "pydantic==2.14.1",
+    "pydantic[email]==2.14.1",
     "pydantic-settings==2.16.1",
+    "pyjwt==2.15.1",
     "redis==8.1.0",
     "sqlalchemy[asyncio]>=2.0.55,<2.1",
     "uvicorn[standard]==0.54.0",
+    "httpx==0.28.1",
 ]
 
 [tool.uv]
@@ -39,6 +41,9 @@ target-version = "py314"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "SIM"]
 
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
 
@@ -49,11 +54,11 @@ plugins = ["pydantic.mypy"]
 
 [dependency-groups]
 dev = [
-    "httpx==0.28.1",
     "mypy==2.4.0",
     "pip-audit>=2.10.1",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.1",
     "pytest-cov==7.1.0",
+    "respx==0.23.1",
     "ruff==0.17.2",
 ]

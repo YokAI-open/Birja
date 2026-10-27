@@ -22,7 +22,7 @@ A developer runs `cp .env.example .env && docker compose up --build`, opens http
 | Frontend | React 19 + Vite 8 + TypeScript 6.0 (not 7.x), TanStack Query 5 for all server data, Tailwind 4 (CSS-first `@theme`) + shadcn/ui (`card`, `badge`, `button`) | CLAUDE.md stack; TS 7 is incompatible with typescript-eslint 8.72 |
 | Design system | Every token from `design-system/yokaiexchange/MASTER.md` as CSS variables mapped in `@theme inline`; Inter Variable self-hosted; light mode only; no raw hex in components | MASTER.md is the single source of colors/fonts |
 | Frontend -> backend | Relative `/api/...` URLs; Vite dev proxy to `VITE_PROXY_TARGET` (`http://backend:8000` in Compose). No CORS config | Same-origin in dev; nginx takes over the same role in Phase 6 |
-| Routing | Backend: URL-versioned `/api/v1/...`. Frontend: single page, no router yet | react-router arrives in Phase 2 with the first second page |
+| Routing | Backend: URL-versioned `/api/v1/...`. Frontend: single page, no router yet | react-router moved to Phase 3 per Phase 2 decision D-03 (Phase 2 uses one auth-state switch on `/me`) |
 | Auth | None in Phase 1 | Email one-time code + JWT/refresh cookies + CSRF arrive in Phase 2 |
 | Containers | Docker Compose: `postgres`, `redis`, `backend`, `frontend`, each with a healthcheck; backend runs as uid 1001, frontend as `node`; datastores only on an `internal: true` `data` network, no published ports; dev override publishes 8000/5173 on 127.0.0.1 only | CLAUDE.md infra/security rules |
 | Backend image | Multi-stage: `builder` (`uv sync --locked`, venv in `/opt/venv`), `test-builder` (adds dev group, used by CI smoke test), `runtime` (non-root) | `--locked` proves the image builds from `uv.lock` on 3.14; `/opt/venv` survives dev bind mounts |
@@ -60,8 +60,14 @@ A developer runs `cp .env.example .env && docker compose up --build`, opens http
 
 Each later phase adds one vertical slice on top of this skeleton without changing the decisions above:
 
-- Phase 2: A user signs in with an emailed one-time code, stays signed in, and gets a $10,000 account once (first models + migrations, auth cookies, CSRF, react-router)
+- Phase 2: A user signs in with an emailed one-time code, stays signed in, and gets a $10,000 account once (first models + migrations, auth cookies, CSRF; react-router moved to Phase 3 per D-03)
 - Phase 3: A user sees ~10-20 coins with live prices and "as of" ages, refreshed by one scheduler container
 - Phase 4: A user buys and sells at real prices with an itemized preview and a correct fill
 - Phase 5: A user sees portfolio value, P/L and paginated trade history
 - Phase 6: Friends use the app on a public HTTPS domain with nightly backups
+
+## Phase 2 additions
+
+- Auth cookies: yk_access, yk_refresh, yk_csrf; CSRF double-submit
+- Tables users/accounts/auth_sessions/refresh_tokens (migrations 0002, 0003)
+- Console and Resend email senders; rate limits; `app.state.http`

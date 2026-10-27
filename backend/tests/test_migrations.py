@@ -1,13 +1,17 @@
 import asyncio
 from pathlib import Path
 
+from alembic import command
+from alembic.autogenerate import compare_metadata
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from alembic import command
+import app.models  # noqa: F401
+from app.db.base import Base
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -30,15 +34,27 @@ async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0001"]
+    assert await _versions(engine) == ["0003"]
 
     await asyncio.to_thread(command.downgrade, cfg, "base")
     assert await _versions(engine) == []
 
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0001"]
+    assert await _versions(engine) == ["0003"]
 
 
 def test_baseline_is_head() -> None:
     script = ScriptDirectory.from_config(_config())
-    assert script.get_heads() == ["0001"]
+    assert script.get_heads() == ["0003"]
+
+
+async def test_models_match_schema(engine: AsyncEngine) -> None:
+    await asyncio.to_thread(command.upgrade, _config(), "head")
+
+    def _diff(sync_conn):  # type: ignore[no-untyped-def]
+        ctx = MigrationContext.configure(sync_conn, opts={"compare_type": True})
+        return compare_metadata(ctx, Base.metadata)
+
+    async with engine.connect() as conn:
+        diff = await conn.run_sync(_diff)
+    assert diff == []

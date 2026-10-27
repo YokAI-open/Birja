@@ -45,6 +45,8 @@ cd backend && uv add <pkg>                  # add a dependency (updates uv.lock)
 # Backend tests: against the isolated test stack, never the dev stack
 docker compose -f docker-compose.test.yml up -d --wait
 cd backend && uv run pytest --cov=app --cov-fail-under=80
+# critical paths: login/OTP, sessions, authz, money
+cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py --fail-under=100
 docker compose -f docker-compose.test.yml down -v
 
 # Frontend tests
@@ -64,6 +66,9 @@ cd frontend && npm run lint && npm run typecheck && npx prettier --check .
 cd backend
 export DATABASE_URL=postgresql+asyncpg://yokai_test:test@127.0.0.1:55432/yokai_test
 export REDIS_URL=redis://:test@127.0.0.1:56379/0
+# alembic/env.py loads Settings, which requires both secrets (test-only dummies):
+export OTP_HMAC_SECRET=test-only-otp-secret-not-for-prod-000000
+export JWT_SECRET=test-only-jwt-secret-not-for-prod-000000
 uv run alembic upgrade head
 uv run alembic revision --autogenerate -m "<message>"
 # The dev stack applies migrations on backend start, or manually:
