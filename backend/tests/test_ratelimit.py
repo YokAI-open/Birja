@@ -136,6 +136,35 @@ async def test_verify_limit_is_per_ip() -> None:
             assert resp.status_code == 400
 
 
+async def test_ip_limited_verify_does_not_charge_victim_email(redis_client: Redis) -> None:
+    victim = unique_email("victim")
+    async with _custom_app(rl_verify_ip_limit=2) as (app, _):
+        email_key = f"sim:rl:ver:email:{app.state.otp_store.email_key(victim)}"
+        async with _client(app, "203.0.113.9") as attacker:
+            for _ in range(2):
+                resp = await _post(attacker, VER, {"email": victim, "code": "000000"})
+                assert resp.status_code == 400
+            assert await redis_client.get(email_key) == "2"
+            for _ in range(5):
+                resp = await _post(attacker, VER, {"email": victim, "code": "000000"})
+                assert resp.status_code == 429
+        assert await redis_client.get(email_key) == "2"
+
+
+async def test_ip_limited_request_does_not_charge_victim_email(redis_client: Redis) -> None:
+    victim = unique_email("victim")
+    async with _custom_app(rl_request_ip_limit=1) as (app, _):
+        email_key = f"sim:rl:req:email:{app.state.otp_store.email_key(victim)}"
+        async with _client(app, "203.0.113.9") as attacker:
+            assert (await _post(attacker, REQ, {"email": victim})).status_code == 202
+            for _ in range(5):
+                assert (await _post(attacker, REQ, {"email": victim})).status_code == 429
+        assert await redis_client.get(email_key) == "1"
+        assert await redis_client.get("sim:rl:req:global") == "1"
+        async with _client(app, "198.51.100.7") as victim_client:
+            assert (await _post(victim_client, REQ, {"email": victim})).status_code == 202
+
+
 async def test_global_send_cap() -> None:
     async with _custom_app(rl_send_global_limit=2) as (app, outbox):
         async with _client(app) as c:

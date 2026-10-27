@@ -29,15 +29,16 @@ class InvalidCode(Exception):
 async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: str, ip: str) -> str:
     """Issue a one-time code. Deliberately no user lookup: the response must be
     identical whether or not the email has an account (AUTH-01). Limits are checked
-    first so a refused request issues and sends nothing (AUTH-03)."""
+    first so a refused request issues and sends nothing (AUTH-03). The per-IP limit
+    goes first, so a throttled IP can no longer charge a victim's per-email bucket."""
+    await enforce(
+        redis, f"sim:rl:req:ip:{ip}", settings.rl_request_ip_limit, settings.rl_request_ip_window
+    )
     await enforce(
         redis,
         f"sim:rl:req:email:{otp.email_key(email)}",
         settings.rl_request_email_limit,
         settings.rl_request_email_window,
-    )
-    await enforce(
-        redis, f"sim:rl:req:ip:{ip}", settings.rl_request_ip_limit, settings.rl_request_ip_window
     )
     await enforce(
         redis, "sim:rl:req:global", settings.rl_send_global_limit, settings.rl_send_global_window
@@ -78,14 +79,15 @@ async def verify_code(
     code: str,
     ip: str,
 ) -> tuple[MeOut, IssuedSession]:
+    # IP first: attempts the per-IP limit refuses never touch per-email state.
+    await enforce(
+        redis, f"sim:rl:ver:ip:{ip}", settings.rl_verify_ip_limit, settings.rl_verify_ip_window
+    )
     await enforce(
         redis,
         f"sim:rl:ver:email:{otp.email_key(email)}",
         settings.rl_verify_email_limit,
         settings.rl_verify_email_window,
-    )
-    await enforce(
-        redis, f"sim:rl:ver:ip:{ip}", settings.rl_verify_ip_limit, settings.rl_verify_ip_window
     )
     if not await otp.verify(email, code):
         raise InvalidCode
