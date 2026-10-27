@@ -202,13 +202,27 @@ else
   fail "ENV is not prod in backend"
 fi
 
-# 8. SC2 placeholders refused
-if docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps \
-     -e OTP_HMAC_SECRET=change-me-placeholder-0123456789abcdefghij backend \
-     python -c "from app.core.config import Settings; Settings()" >/dev/null 2>&1; then
-  fail "placeholder secret was accepted"
+# 8. SC2 placeholders refused. The positive control proves the command itself
+# runs (image, env file, compose, imports); the refusal must be the specific
+# validation error, not any failure. Output is matched, never printed.
+settings_run() {
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps "$@" backend \
+    python -c "from app.core.config import Settings; Settings()" 2>&1
+}
+if ! settings_run >/dev/null; then
+  fail "placeholder check: Settings() fails even with the real env (compose/docker/config error)"
 else
-  pass "placeholder secret refused"
+  OUT=$(settings_run -e OTP_HMAC_SECRET=change-me-placeholder-0123456789abcdefghij)
+  RC=$?
+  if [ "$RC" -ne 0 ] && grep -q 'ValidationError' <<<"$OUT" \
+     && grep -q 'otp_hmac_secret is still a placeholder' <<<"$OUT"; then
+    pass "placeholder secret refused"
+  elif [ "$RC" -eq 0 ]; then
+    fail "placeholder secret was accepted"
+  else
+    fail "placeholder check failed for another reason (exit $RC)"
+  fi
+  unset OUT
 fi
 
 # 9. SC2 exposure
