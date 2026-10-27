@@ -82,6 +82,24 @@ health_ok() {
     | python3 -I -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status")=="ok" else 1)' 2>/dev/null
 }
 
+# API docs must not be reachable through nginx. Only /api/ reaches the app,
+# so /docs etc. must come back as the SPA's index.html (not Swagger/ReDoc/
+# schema JSON), and the /api/ variants must not return 200.
+docs_not_exposed() {
+  local p body code bad=""
+  for p in /docs /redoc /openapi.json; do
+    body=$(curlq "https://$H$p")
+    if ! grep -q 'id="root"' <<<"$body" || grep -qiE 'swagger-ui|redoc|"openapi"' <<<"$body"; then
+      bad="$bad $p"
+    fi
+  done
+  for p in /api/docs /api/redoc /api/openapi.json /api/v1/docs /api/v1/redoc /api/v1/openapi.json; do
+    code=$(curlq -o /dev/null -w '%{http_code}' "https://$H$p")
+    [ "$code" = 404 ] || bad="$bad $p($code)"
+  done
+  if [ -z "$bad" ]; then pass "API docs/schema not exposed via nginx"; else fail "API docs/schema check failed:$bad"; fi
+}
+
 # ---------------------------------------------------------------- public mode
 if [ "$MODE" = public ]; then
   A=$(curl -sS --max-time 15 -H 'accept: application/dns-json' \
@@ -110,11 +128,7 @@ print(" ".join(a["data"] for a in d.get("Answer",[]) if a.get("type")==1))' 2>/d
   check_headers "/" "https://$H/"
   if health_ok; then pass "health ok"; else fail "health not ok"; fi
 
-  if curl -sS --max-time 15 "https://$H/openapi.json" | grep -q '"openapi"'; then
-    fail "openapi.json is exposed"
-  else
-    pass "openapi.json not exposed"
-  fi
+  docs_not_exposed
 
   if [ "$FAILED" -eq 0 ]; then echo "SMOKE OK ($TOTAL checks)"; exit 0; fi
   echo "SMOKE FAILED ($FAILED of $TOTAL)"; exit 1
@@ -189,6 +203,8 @@ for p in /docs /redoc /openapi.json; do
   CODE=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "http://127.0.0.1:18000$p")
   if [ "$CODE" = 404 ]; then pass "$p is 404 on the app"; else fail "$p returned $CODE"; fi
 done
+
+docs_not_exposed
 
 # 7. SC2 ENV
 BACKEND=$(container backend)
