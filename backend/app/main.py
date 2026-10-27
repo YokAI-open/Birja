@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.services.email import ConsoleSender
+from app.services.email import build_email_sender
 from app.services.otp import OtpStore
 
 
@@ -38,10 +39,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     app.state.redis = redis
     app.state.otp_store = OtpStore(redis, settings.otp_hmac_secret)
-    app.state.email_sender = ConsoleSender()
+    http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+    app.state.http = http
+    app.state.email_sender = build_email_sender(settings, http)
     try:
         yield
     finally:
+        await http.aclose()
         await redis.aclose()
         await engine.dispose()
 
