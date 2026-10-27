@@ -48,7 +48,16 @@ Releases reach `main` only through `release-*` or `hotfix-*` PRs (git-flow in CL
 /srv/birja/deploy/deploy.sh --rollback
 ```
 
-This redeploys the previous entry of `deploys.log`. Migrations are not undone. There are no backups until Phase 6.
+This returns to the release that was live before the current one. It prints the target SHA and release before acting. Migrations are not undone. There are no backups until Phase 6.
+
+How the target is chosen (`/var/lib/birja/deploys.log`, one line per successful deploy or rollback, `time sha release ref`, ref `rollback` for rollbacks):
+
+- The log is replayed as a stack of live releases. A deploy pushes its line. A rollback line pops lines until its own SHA is on top, so a release that was rolled back away from is never picked again; a second rollback goes one further back instead of re-deploying the bad release.
+- Normally the target is the newest stack entry below the top with a different SHA, so repeated deploys of the same SHA are skipped (no silent no-op).
+- A failed deploy is never logged. While a deploy runs, `/var/lib/birja/deploy.pending` exists; it is removed only when the deploy is recorded. If it is still there (or the checkout's HEAD differs from the top SHA), the last deploy failed, and the target is the top entry itself: the last good release.
+- If there is no earlier release with a different SHA, it refuses ("nothing to roll back to").
+
+The selection logic is tested offline by `deploy/tests/test-rollback-target.sh`.
 
 ## Certificate renewal (manual, D-07, D-08)
 
