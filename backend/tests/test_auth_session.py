@@ -245,3 +245,276 @@ async def test_me_rejects_mixed_user_and_session(
     _, sid_b = await _ids(engine, b)
     forged = create_access_token(uid_a, sid_b, settings.jwt_secret)
     _assert_401(await _me_with_token(auth_client, forged))
+
+
+# ---- refresh / logout section -----------------------------------------------
+
+import asyncio  # noqa: E402
+
+
+def _cookie(resp: httpx.Response, name: str) -> str:
+    for h in resp.headers.get_list("set-cookie"):
+        if h.startswith(f"{name}="):
+            return h.split(";")[0].split("=", 1)[1]
+    raise AssertionError(f"no {name} cookie")
+
+
+async def _refresh(client: httpx.AsyncClient, refresh_token: str | None = None) -> httpx.Response:
+    if "yk_csrf" not in client.cookies:
+        await client.get("/api/v1/auth/csrf")
+    csrf = client.cookies["yk_csrf"]
+    headers = {"X-CSRF-Token": csrf}
+    if refresh_token is not None:
+        headers["Cookie"] = f"yk_csrf={csrf}; yk_refresh={refresh_token}"
+        saved = list(client.cookies.jar)
+        client.cookies.clear()
+        try:
+            return await client.post("/api/v1/auth/refresh", headers=headers)
+        finally:
+            for c in saved:
+                client.cookies.jar.set_cookie(c)
+    return await client.post("/api/v1/auth/refresh", headers=headers)
+
+
+async def _signed_in(client: httpx.AsyncClient, outbox: OutboxSender) -> tuple[str, str, str]:
+    email = unique_email()
+    resp = await sign_in(client, outbox, email)
+    return email, _cookie(resp, "yk_refresh"), _cookie(resp, "yk_access")
+
+
+async def _db_update(engine: AsyncEngine, stmt) -> None:  # type: ignore[no-untyped-def]
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        await db.execute(stmt)
+        await db.commit()
+
+
+async def test_refresh_rotates_tokens(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, old_refresh, _ = await _signed_in(auth_client, outbox)
+    _, sid = await _ids(engine, email)
+    resp = await _refresh(auth_client)
+    assert resp.status_code == 204
+    cookies = _set_cookie_headers(resp)
+    assert set(cookies) == {"yk_access", "yk_refresh", "yk_csrf"}
+    assert "httponly" in cookies["yk_access"] and "httponly" in cookies["yk_refresh"]
+    assert "path=/api/v1/auth/refresh" in cookies["yk_refresh"]
+    assert _cookie(resp, "yk_refresh") != old_refresh
+    assert (await auth_client.get("/api/v1/me")).status_code == 200
+
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        rows = (
+            (
+                await db.execute(
+                    select(RefreshToken)
+                    .where(RefreshToken.session_id == sid)
+                    .order_by(RefreshToken.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(rows) == 2
+    assert rows[0].used_at is not None and rows[1].used_at is None
+    assert rows[1].expires_at - datetime.now(UTC) > timedelta(days=29)
+
+
+async def test_refresh_reuse_within_grace_keeps_newest_token_valid(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender
+) -> None:
+    _, old_refresh, _ = await _signed_in(auth_client, outbox)
+    first = await _refresh(auth_client)
+    newest = _cookie(first, "yk_refresh")
+    _assert_401(await _refresh(auth_client, old_refresh))
+    assert (await _refresh(auth_client, newest)).status_code == 204
+
+
+async def test_refresh_reuse_after_grace_revokes_session(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, old_refresh, _ = await _signed_in(auth_client, outbox)
+    _, sid = await _ids(engine, email)
+    first = await _refresh(auth_client)
+    newest = _cookie(first, "yk_refresh")
+    access = _cookie(first, "yk_access")
+    await _db_update(
+        engine,
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == hash_refresh_token(old_refresh))
+        .values(used_at=datetime.now(UTC) - timedelta(minutes=1)),
+    )
+    resp = await _refresh(auth_client, old_refresh)
+    _assert_401(resp)
+    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        revoked = (
+            await db.execute(select(AuthSession.revoked_at).where(AuthSession.id == sid))
+        ).scalar_one()
+    assert revoked is not None
+    _assert_401(await _refresh(auth_client, newest))
+    _assert_401(await _me_with_token(auth_client, access))
+
+
+async def test_concurrent_refresh_one_wins_without_revoke(
+    running_app,
+    outbox: OutboxSender,
+    engine: AsyncEngine,  # type: ignore[no-untyped-def]
+) -> None:
+    async def make() -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=running_app), base_url="https://test"
+        )
+
+    async with await make() as a, await make() as b:
+        email, refresh_token, _ = await _signed_in(a, outbox)
+        csrf = a.cookies["yk_csrf"]
+        headers = {
+            "X-CSRF-Token": csrf,
+            "Cookie": f"yk_csrf={csrf}; yk_refresh={refresh_token}",
+        }
+        r1, r2 = await asyncio.gather(
+            a.post("/api/v1/auth/refresh", headers=headers),
+            b.post("/api/v1/auth/refresh", headers=headers),
+        )
+    assert sorted([r1.status_code, r2.status_code]) == [204, 401]
+    _, sid = await _ids(engine, email)
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        revoked = (
+            await db.execute(select(AuthSession.revoked_at).where(AuthSession.id == sid))
+        ).scalar_one()
+    assert revoked is None
+
+
+async def test_refresh_without_cookie_or_unknown_token_is_401(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    headers = await csrf_headers(auth_client)
+    resp = await auth_client.post("/api/v1/auth/refresh", headers=headers)
+    _assert_401(resp)
+    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+    _assert_401(await _refresh(auth_client, "not-a-real-token"))
+
+
+async def test_refresh_expired_or_revoked_session_is_401(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, refresh_token, _ = await _signed_in(auth_client, outbox)
+    _, sid = await _ids(engine, email)
+    await _db_update(
+        engine,
+        update(RefreshToken)
+        .where(RefreshToken.session_id == sid)
+        .values(expires_at=datetime.now(UTC) - timedelta(seconds=1)),
+    )
+    resp = await _refresh(auth_client, refresh_token)
+    _assert_401(resp)
+    assert "max-age=0" in _set_cookie_headers(resp)["yk_refresh"]
+
+    email2, refresh2, _ = await _signed_in(auth_client, outbox)
+    _, sid2 = await _ids(engine, email2)
+    await _db_update(
+        engine,
+        update(AuthSession).where(AuthSession.id == sid2).values(revoked_at=datetime.now(UTC)),
+    )
+    _assert_401(await _refresh(auth_client, refresh2))
+
+
+async def test_refresh_and_logout_require_csrf(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender
+) -> None:
+    await _signed_in(auth_client, outbox)
+    assert (await auth_client.post("/api/v1/auth/refresh")).status_code == 403
+    assert (await auth_client.post("/api/v1/auth/logout")).status_code == 403
+
+
+async def test_logout_revokes_session_and_clears_cookies(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, refresh_token, access = await _signed_in(auth_client, outbox)
+    _, sid = await _ids(engine, email)
+    headers = {"X-CSRF-Token": auth_client.cookies["yk_csrf"]}
+    resp = await auth_client.post("/api/v1/auth/logout", headers=headers)
+    assert resp.status_code == 204
+    cookies = _set_cookie_headers(resp)
+    assert set(cookies) == {"yk_access", "yk_refresh", "yk_csrf"}
+    assert all("max-age=0" in v for v in cookies.values())
+    assert "path=/api;" in cookies["yk_access"] + ";"
+    assert "path=/api/v1/auth/refresh" in cookies["yk_refresh"]
+    assert "path=/;" in cookies["yk_csrf"] + ";"
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        revoked = (
+            await db.execute(select(AuthSession.revoked_at).where(AuthSession.id == sid))
+        ).scalar_one()
+    assert revoked is not None
+    _assert_401(await _me_with_token(auth_client, access))
+    _assert_401(await _refresh(auth_client, refresh_token))
+
+
+async def test_logout_with_expired_access_token_still_revokes(
+    auth_client: httpx.AsyncClient,
+    outbox: OutboxSender,
+    engine: AsyncEngine,
+    settings,  # type: ignore[no-untyped-def]
+) -> None:
+    email, _, _ = await _signed_in(auth_client, outbox)
+    uid, sid = await _ids(engine, email)
+    old = datetime.now(UTC) - timedelta(hours=2)
+    expired = create_access_token(uid, sid, settings.jwt_secret, now=old)
+    csrf = auth_client.cookies["yk_csrf"]
+    resp = await auth_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": csrf, "Cookie": f"yk_csrf={csrf}; yk_access={expired}"},
+    )
+    assert resp.status_code == 204
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        revoked = (
+            await db.execute(select(AuthSession.revoked_at).where(AuthSession.id == sid))
+        ).scalar_one()
+    assert revoked is not None
+
+
+async def test_logout_without_or_with_bad_token_revokes_nothing(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, _, access = await _signed_in(auth_client, outbox)
+    _, sid = await _ids(engine, email)
+    csrf = auth_client.cookies["yk_csrf"]
+    for cookie in (f"yk_csrf={csrf}", f"yk_csrf={csrf}; yk_access={access[:-3]}abc"):
+        resp = await auth_client.post(
+            "/api/v1/auth/logout", headers={"X-CSRF-Token": csrf, "Cookie": cookie}
+        )
+        assert resp.status_code == 204
+        assert "max-age=0" in _set_cookie_headers(resp)["yk_access"]
+    sessions = async_sessionmaker(engine)
+    async with sessions() as db:
+        revoked = (
+            await db.execute(select(AuthSession.revoked_at).where(AuthSession.id == sid))
+        ).scalar_one()
+    assert revoked is None
+
+
+async def test_sign_in_after_logout_keeps_cash_at_10000(
+    auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
+) -> None:
+    email, _, _ = await _signed_in(auth_client, outbox)
+    headers = {"X-CSRF-Token": auth_client.cookies["yk_csrf"]}
+    assert (await auth_client.post("/api/v1/auth/logout", headers=headers)).status_code == 204
+    resp = await sign_in(auth_client, outbox, email)
+    assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}
+    async with engine.connect() as conn:
+        n = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM accounts a JOIN users u ON u.id=a.user_id "
+                    "WHERE u.email=:e"
+                ),
+                {"e": email},
+            )
+        ).scalar_one()
+    assert n == 1
