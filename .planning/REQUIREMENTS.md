@@ -14,17 +14,17 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Authentication
 
-- [ ] **AUTH-01**: User can request a 6-digit sign-in code by entering their email. The response is identical whether or not the email has an account.
-- [ ] **AUTH-02**: User can sign in by entering the emailed code. The code is single-use, expires after about 10 minutes, and dies after 5 wrong attempts.
-- [ ] **AUTH-03**: Code requests and verification attempts are rate-limited per email and per IP
-- [ ] **AUTH-04**: User stays signed in across browser refreshes and restarts, up to about 30 days, without re-entering a code
-- [ ] **AUTH-05**: User can sign out, which ends the session server-side
-- [ ] **AUTH-06**: Sign-in codes arrive by real email (Resend, from a verified domain). In local dev they are logged to the console instead.
+- [x] **AUTH-01**: User can request a 6-digit sign-in code by entering their email. The response is identical whether or not the email has an account.
+- [x] **AUTH-02**: User can sign in by entering the emailed code. The code is single-use, expires after about 10 minutes, and dies after 5 wrong attempts.
+- [x] **AUTH-03**: Code requests and verification attempts are rate-limited per email and per IP
+- [x] **AUTH-04**: User stays signed in across browser refreshes and restarts, up to about 30 days, without re-entering a code
+- [x] **AUTH-05**: User can sign out, which ends the session server-side
+- [x] **AUTH-06**: Sign-in codes arrive by real email (Resend, from a verified domain). In local dev they are logged to the console instead.
 
 ### Account
 
-- [ ] **ACCT-01**: A new user starts with $10,000.00 of virtual cash, granted exactly once when their account is created
-- [ ] **ACCT-02**: User cannot reset their account or add cash
+- [x] **ACCT-01**: A new user starts with $10,000.00 of virtual cash, granted exactly once when their account is created
+- [x] **ACCT-02**: User cannot reset their account or add cash
 
 ### Prices
 
@@ -116,14 +116,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Complete |
-| AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
-| AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
-| AUTH-05 | Phase 2 | Pending |
-| AUTH-06 | Phase 2 | Pending |
-| ACCT-01 | Phase 2 | Pending |
-| ACCT-02 | Phase 2 | Pending |
+| AUTH-01 | Phase 2 | Complete |
+| AUTH-02 | Phase 2 | Complete |
+| AUTH-03 | Phase 2 | Complete |
+| AUTH-04 | Phase 2 | Complete |
+| AUTH-05 | Phase 2 | Complete |
+| AUTH-06 | Phase 2 | Complete |
+| ACCT-01 | Phase 2 | Complete |
+| ACCT-02 | Phase 2 | Complete |
 | PRICE-01 | Phase 3 | Pending |
 | PRICE-02 | Phase 3 | Pending |
 | PRICE-03 | Phase 3 | Pending |

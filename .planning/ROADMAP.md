@@ -7,7 +7,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 ## Phases
 
 - [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
-- [ ] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once
+- [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
 - [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
@@ -71,7 +71,7 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans:** 8/9 plans executed
+**Plans:** 9/9 plans complete
 
 Plans:
 **Wave 1**
@@ -102,7 +102,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02-09-PLAN.md — CI critical-path coverage gate, full suite, real-email checkpoint (D-01/D-02), push gate
+- [x] 02-09-PLAN.md — CI critical-path coverage gate, full suite, real-email checkpoint (D-01/D-02), push gate
 
 **UI hint**: yes
 
@@ -175,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 8/9 | In Progress|  |
+| 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
