@@ -31,32 +31,43 @@ Planning lives in `.planning/` (GSD): `PROJECT.md` (scope + key decisions), `REQ
 
 # Common commands
 
-These match the planned layout. Update this block whenever the real commands change.
+Update this block whenever the real commands change. CI runs the same commands.
 
 ```bash
-# Local dev, full stack
+# First run, then local dev (full stack). App: http://localhost:5173, API docs: http://127.0.0.1:8000/docs
+cp .env.example .env
 docker compose up --build
 
 # Backend deps
-cd backend && uv sync                       # install from uv.lock
+cd backend && uv sync --locked              # install from uv.lock
 cd backend && uv add <pkg>                  # add a dependency (updates uv.lock)
 
 # Backend tests: against the isolated test stack, never the dev stack
-docker compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d --wait
 cd backend && uv run pytest --cov=app --cov-fail-under=80
 docker compose -f docker-compose.test.yml down -v
 
 # Frontend tests
 cd frontend && npm run test -- --coverage   # Vitest
-cd frontend && npx playwright test          # e2e
+
+# e2e (needs the full stack running)
+docker compose up --build -d --wait
+cd frontend && npx playwright test
 
 # Lint, format, types
 cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy app
-cd frontend && npm run lint && npx prettier --check .
+cd frontend && npm run lint && npm run typecheck && npx prettier --check .
 
-# Migrations: autogenerate, then review the file (see Database migrations)
-cd backend && uv run alembic revision --autogenerate -m "<message>"
-cd backend && uv run alembic upgrade head
+# Migrations: autogenerate, then review the file (see Database migrations).
+# The dev Postgres publishes no host port, so run alembic on the host against the
+# test stack at head (docker compose -f docker-compose.test.yml up -d --wait first):
+cd backend
+export DATABASE_URL=postgresql+asyncpg://yokai_test:test@127.0.0.1:55432/yokai_test
+export REDIS_URL=redis://:test@127.0.0.1:56379/0
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "<message>"
+# The dev stack applies migrations on backend start, or manually:
+docker compose exec backend alembic upgrade head
 ```
 
 # Git workflow (git-flow)
@@ -176,7 +187,7 @@ Standard FastAPI + React + Docker Compose layout (e.g. tiangolo's full-stack-fas
 During the MVP, the async/no-blocking FastAPI rules, Redis TTLs and pagination always apply. Everything else here (worker sizing, PgBouncer, replicas, nginx tuning, horizontal scaling) is applied when deployment or profiling calls for it, not up front.
 
 - **nginx**: gzip/br + HTTP/2, `limit_req`/`limit_conn` rate limiting (stricter on `/login` etc.), immutable long-lived cache headers on Vite's hashed build output.
-- **FastAPI**: run with `uvicorn[standard]` (uvloop/httptools) using its own `--workers N` (or `fastapi run --workers N`), starting at one worker per CPU core; explicit timeouts at every hop; `async def` + async I/O (`asyncpg`, `httpx.AsyncClient`, `redis.asyncio`) for all network calls. Never block the event loop with sync libs (wrap unavoidable ones in `anyio.to_thread.run_sync`) or run CPU-bound work inline (push to Celery instead). Batch independent I/O with `asyncio.gather`. Eager-load SQLAlchemy relationships (`selectinload`/`joinedload`) to avoid `MissingGreenlet`. Set `default_response_class=ORJSONResponse`; keep response schemas and middleware minimal.
+- **FastAPI**: run with `uvicorn[standard]` (uvloop/httptools) using its own `--workers N` (or `fastapi run --workers N`), starting at one worker per CPU core; explicit timeouts at every hop; `async def` + async I/O (`asyncpg`, `httpx.AsyncClient`, `redis.asyncio`) for all network calls. Never block the event loop with sync libs (wrap unavoidable ones in `anyio.to_thread.run_sync`) or run CPU-bound work inline (push to Celery instead). Batch independent I/O with `asyncio.gather`. Eager-load SQLAlchemy relationships (`selectinload`/`joinedload`) to avoid `MissingGreenlet`. Return data via `response_model`/return types and let Pydantic serialize it (`ORJSONResponse` is deprecated in FastAPI, so don't add `orjson`); keep response schemas and middleware minimal.
 - **PostgreSQL**: tuned async pool (PgBouncer once process count grows); select only needed columns; batch writes. Indexes, pagination, timeouts and the scaling order are in "Data, caching & background jobs".
 - **Redis**: one pooled async connection per process. Keys, TTLs, locks and stampede protection are in "Data, caching & background jobs".
 - **RabbitMQ/Celery**: offload slow/non-critical work to idempotent tasks; bound prefetch/concurrency; scale `worker` independently of `backend`.
