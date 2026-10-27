@@ -54,3 +54,25 @@ async def test_valid_csrf_passes(auth_client: httpx.AsyncClient) -> None:
     headers = await csrf_headers(auth_client)
     r = await auth_client.post(REQ, json={"email": unique_email()}, headers=headers)
     assert r.status_code == 202
+
+
+async def test_non_ascii_header_is_403_not_500(auth_client: httpx.AsyncClient) -> None:
+    await auth_client.get(CSRF)
+    # Raw latin-1 byte 0xE9: Starlette decodes it to a non-ASCII str.
+    r = await auth_client.post(
+        REQ, json={"email": unique_email()}, headers={"X-CSRF-Token": b"tok\xe9n"}
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "csrf_failed"
+
+
+async def test_non_ascii_cookie_and_header_is_403_not_500(
+    auth_client: httpx.AsyncClient,
+) -> None:
+    r = await auth_client.post(
+        REQ,
+        json={"email": unique_email()},
+        headers={"Cookie": b"yk_csrf=\xe9\xe9", "X-CSRF-Token": b"\xe9x"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "csrf_failed"

@@ -45,7 +45,13 @@ def get_client_ip(request: Request) -> str:
 def verify_csrf(request: Request) -> None:
     cookie = request.cookies.get(CSRF_COOKIE)
     header = request.headers.get(CSRF_HEADER)
-    if not cookie or not header or not hmac.compare_digest(cookie, header):
+    # Compare bytes: compare_digest raises TypeError on non-ASCII str, and Starlette
+    # decodes headers as latin-1, so attacker input could otherwise cause a 500.
+    if (
+        not cookie
+        or not header
+        or not hmac.compare_digest(cookie.encode("utf-8"), header.encode("utf-8"))
+    ):
         raise HTTPException(
             status_code=403,
             detail={
