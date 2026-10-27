@@ -1,6 +1,7 @@
 import asyncio
 from decimal import Decimal
 
+import httpx
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.models.user import Account, User
 from app.services.accounts import STARTING_CASH, get_or_create_user
-from tests.helpers import unique_email
+from tests.helpers import OutboxSender, csrf_headers, request_and_get_code, unique_email
 
 
 @pytest.fixture
@@ -95,3 +96,44 @@ async def test_uppercase_email_rejected(sessions: async_sessionmaker) -> None:  
         db.add(User(email="Upper-" + unique_email()))
         with pytest.raises(IntegrityError):
             await db.flush()
+
+
+async def test_second_sign_in_keeps_cash(
+    auth_client: httpx.AsyncClient,
+    outbox: OutboxSender,
+    sessions: async_sessionmaker,  # type: ignore[type-arg]
+) -> None:
+    email = unique_email()
+    for _ in range(2):
+        code = await request_and_get_code(auth_client, outbox, email)
+        headers = await csrf_headers(auth_client)
+        resp = await auth_client.post(
+            "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert Decimal(resp.json()["cash_usd"]) == Decimal("10000.00")
+    async with sessions() as db:
+        n = (
+            await db.execute(
+                select(func.count()).select_from(Account).join(User).where(User.email == email)
+            )
+        ).scalar_one()
+    assert n == 1
+
+
+def test_route_allow_list_has_no_cash_mutation(running_app) -> None:  # type: ignore[no-untyped-def]
+    # FastAPI includes routers lazily, so read the generated OpenAPI paths.
+    routes = {
+        (method.upper(), path)
+        for path, ops in running_app.openapi()["paths"].items()
+        if path.startswith("/api/v1")
+        for method in ops
+    }
+    assert routes == {
+        ("GET", "/api/v1/health"),
+        ("GET", "/api/v1/auth/csrf"),
+        ("POST", "/api/v1/auth/request-code"),
+        ("POST", "/api/v1/auth/verify-code"),
+    }
+    for _, path in routes:
+        assert not any(w in path for w in ("reset", "deposit", "topup", "cash", "grant"))
