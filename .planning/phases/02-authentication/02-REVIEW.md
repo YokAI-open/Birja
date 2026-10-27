@@ -100,6 +100,8 @@ I found no BLOCKER. The warnings are about how the rate-limit keys and order mak
 
 ### WR-01: CSRF check raises 500 on non-ASCII cookie/header values
 
+**Status:** Fixed in `710e0a9`.
+
 **File:** `backend/app/core/deps.py:48`
 **Issue:** `hmac.compare_digest(cookie, header)` on `str` arguments raises `TypeError("comparing strings with non-ASCII characters is not supported")`. Starlette decodes headers as latin-1, so a request with byte `0xE9` in `yk_csrf` or `X-CSRF-Token` crashes the dependency. I confirmed it with an ASGI probe against `POST /api/v1/auth/logout`: a non-ASCII token returns `500 Internal Server Error`, and a mismatched ASCII token returns the expected 403 `csrf_failed`. It is not exploitable for a bypass. Still, attacker-controlled input produces unhandled exceptions and stack traces in logs on every state-changing route, and the status code is wrong.
 **Fix:**
@@ -118,6 +120,8 @@ Add a regression test that sends raw latin-1 header bytes and expects 403.
 
 ### WR-02: Per-email counters are charged before the per-IP limit, so one IP can lock any number of users out of sign-in
 
+**Status:** Fixed in `fe3cd88`.
+
 **File:** `backend/app/services/auth.py:33-44, 81-89`
 **Issue:** In both `request_code` and `verify_code`, the per-email `enforce` (INCR) runs before the per-IP `enforce`. Once an IP is over its own limit, each of its requests is still counted against the target email's bucket before the IP check rejects it. So the per-IP limit puts no ceiling on how many victims one IP can affect.
 - On verify, 10 junk `verify-code` calls per 10 minutes per victim keep the victim's `sim:rl:ver:email:*` bucket full. Their correct code then always gets 429.
@@ -132,6 +136,8 @@ await enforce(redis, f"sim:rl:ver:email:{otp.email_key(email)}", ...)
 Do the same in `request_code` (IP, then email, then global). Add a test that an IP-limited caller does not increment the email key. Separately, consider recording the trade-off that verify lockout of a victim is accepted, or mitigate it (for example, don't count verify attempts when no code is pending).
 
 ### WR-03: The global send cap is a cheap app-wide kill switch (24 h), and per-IP keys use the raw address
+
+**Status:** Fixed in `04304ef`.
 
 **File:** `backend/app/services/auth.py:39-44`, `backend/app/core/config.py:30-37`
 **Issue:**
@@ -150,6 +156,8 @@ This is not an enumeration leak, but for a friends-only app it turns the abuse p
 
 ### WR-04: No long-horizon cap on verify attempts per email (slow brute force)
 
+**Status:** Fixed in `1538f5a`.
+
 **File:** `backend/app/core/config.py:32-33`, `backend/app/services/auth.py:81-91`
 **Issue:**
 - An attacker can request codes for a victim (5 per 600 s) and guess against them (10 verifies per 600 s per email). That is 1 440 guesses a day against a 10^6 code space: about 0.14% success per day, about 4% over 30 days, about 40% over a year.
@@ -161,6 +169,8 @@ CLAUDE.md asks for limits that "block ... brute force". These windows only slow 
 
 ### WR-05: Non-atomic DEL after the 5th wrong attempt can delete a freshly issued code
 
+**Status:** Fixed in `1673e4e`.
+
 **File:** `backend/app/services/otp.py:76-77`
 **Issue:** When `attempts >= self._max`, `verify` runs a plain `DEL` in a separate round trip after the Lua attempt script. If `issue()` replaces the key between the two calls, which happens when the user clicks "Send a new code" right as a 5th wrong guess lands, the unconditional `DEL` removes the new code. The user then gets "wrong or expired" for a code that was just emailed. The rest of the store is carefully atomic (attempt script, compare-and-delete consume), and this one step is not.
 **Fix:** Delete only if the key still holds the MAC that was attempted, reusing the existing consume script:
@@ -169,6 +179,18 @@ if attempts >= self._max:
     await self._consume(keys=[key], args=[stored_mac])  # compare-and-delete
 ```
 Or move the "delete on the max-th wrong attempt" into a single Lua script that also receives the candidate MAC. The Redis-side equality check on HMAC values leaks nothing usable without the key.
+
+## Fix log
+
+All five warnings were fixed on 2026-10-27, one commit each. The Info items are not addressed.
+
+| Finding | Commit | Change |
+|---------|--------|--------|
+| WR-01 | `710e0a9` | `verify_csrf` compares cookie and header as UTF-8 bytes, so non-ASCII input returns 403 `csrf_failed`, not 500. Regression tests cover a non-ASCII header and cookie. |
+| WR-02 | `fe3cd88` | `request_code` checks IP, then email, then global; `verify_code` checks IP before email. Tests show an IP over its limit no longer increments a victim's per-email counter. |
+| WR-03 | `04304ef` | `ip_bucket()` in `ratelimit.py` groups IPv6 by /64 (IPv4 and IPv4-mapped addresses stay per address) and is used for every per-IP key. The global cap is now 100 per hour (`RL_SEND_GLOBAL_LIMIT` / `RL_SEND_GLOBAL_WINDOW`, existing names kept). Tripping it logs a WARNING under `app.*` with no email or IP. |
+| WR-04 | `1538f5a` | New per-email daily verify bucket `sim:rl:ver:email-day:<hmac>`, default 30 per 86 400 s (`RL_VERIFY_EMAIL_DAILY_LIMIT` / `RL_VERIFY_EMAIL_DAILY_WINDOW`). It returns the same generic 429 with Retry-After. |
+| WR-05 | `1673e4e` | The kill on the 5th wrong attempt reuses the compare-and-delete script with the attempted MAC. A regression test shows a code issued in between survives. |
 
 ## Info
 
