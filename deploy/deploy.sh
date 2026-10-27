@@ -91,14 +91,17 @@ preflight() {
   fi
 }
 
+# Passes only if the API is healthy and nginx serves this release's exact
+# index.html (it names the hashed assets, so it identifies the build).
 health_check() {
   STEP="health check"
   local i
   for i in $(seq 1 15); do
     if curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/v1/health" 2>/dev/null \
         | python3 -I -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status")=="ok" else 1)' 2>/dev/null \
-      && curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/" 2>/dev/null | grep -q 'id="root"'; then
-      echo "Health check passed"
+      && cmp -s "$RELEASE_DIR/index.html" \
+           <(curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/" 2>/dev/null); then
+      echo "Health check passed (serving $RELEASE_DIR)"
       return 0
     fi
     sleep 2
@@ -265,17 +268,27 @@ do_rollback() {
   STEP="rollback checkout"
   git -C "$APP_DIR" checkout --detach "$sha"
   echo "Rolling back to $(git -C "$APP_DIR" rev-parse --short HEAD)"
-  STEP="rollback backend"
+  STEP="rollback build backend"
   dc build backend
-  dc up -d --wait backend
-  echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
-  echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
   if [ -d "$rel" ]; then
     RELEASE_DIR="$rel"
   else
     build_frontend_release
   fi
+  # The rolled-back frontend gets the nginx config (CSP etc.) of its own
+  # release. Files that release does not know (e.g. newer birja-* confs)
+  # stay installed.
+  if [ -x "$APP_DIR/deploy/check-nginx-config.sh" ]; then
+    STEP="rollback nginx config check"
+    "$APP_DIR/deploy/check-nginx-config.sh"
+  fi
+  STEP="rollback backend"
+  dc up -d --wait backend
+  echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
+  echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
   swap_current "$RELEASE_DIR"
+  STEP="rollback nginx install"
+  "$APP_DIR/deploy/install-nginx.sh"
   health_check
   record rollback
 }

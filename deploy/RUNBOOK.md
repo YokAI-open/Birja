@@ -63,6 +63,8 @@ How the target is chosen (`/var/lib/birja/deploys.log`, one line per successful 
 
 The selection logic is tested offline by `deploy/tests/test-rollback-target.sh`.
 
+What it does: checks out the target SHA, rebuilds the backend image, reuses the target's frontend release (or rebuilds it if pruned), tests that release's nginx config offline, restarts the backend, switches `current`, and reinstalls the nginx config from the rolled-back release with its own `install-nginx.sh` (so its CSP and limits match its frontend; birja-* files that release does not know, such as `birja-default-tls.conf`, stay installed). The health check passes only if the API is healthy and nginx serves exactly that release's `index.html` (it names the hashed assets), for deploys and rollbacks alike.
+
 ## Certificate renewal (manual, D-07, D-08)
 
 There is no API token. The cert stays in acme.sh's list in manual DNS mode, and renewal is a two-step run by hand. The existing acme.sh cron line is unchanged (D-06); in manual mode it cannot renew this cert and only logs a failure (its output goes to /dev/null).
