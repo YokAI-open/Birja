@@ -12,7 +12,7 @@ async def test_csrf_sets_cookie_with_attributes(auth_client: httpx.AsyncClient) 
     cookies = r.headers.get_list("set-cookie")
     assert len(cookies) == 1
     c = cookies[0].lower()
-    assert c.startswith("yk_csrf=")
+    assert c.startswith("bj_csrf=")
     assert "secure" in c
     assert "samesite=strict" in c
     assert "path=/" in c
@@ -72,7 +72,7 @@ async def test_non_ascii_cookie_and_header_is_403_not_500(
     r = await auth_client.post(
         REQ,
         json={"email": unique_email()},
-        headers={"Cookie": b"yk_csrf=\xe9\xe9", "X-CSRF-Token": b"\xe9x"},
+        headers={"Cookie": b"bj_csrf=\xe9\xe9", "X-CSRF-Token": b"\xe9x"},
     )
     assert r.status_code == 403
     assert r.json()["detail"]["code"] == "csrf_failed"

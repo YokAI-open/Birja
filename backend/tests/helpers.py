@@ -13,7 +13,7 @@ class OutboxSender:
 
 async def csrf_headers(client: httpx.AsyncClient) -> dict[str, str]:
     await client.get("/api/v1/auth/csrf")
-    return {"X-CSRF-Token": client.cookies["yk_csrf"]}
+    return {"X-CSRF-Token": client.cookies["bj_csrf"]}
 
 
 def unique_email(prefix: str = "user") -> str:
@@ -29,7 +29,7 @@ async def request_and_get_code(client: httpx.AsyncClient, outbox: OutboxSender, 
 
 async def sign_in(client: httpx.AsyncClient, outbox: OutboxSender, email: str) -> httpx.Response:
     code = await request_and_get_code(client, outbox, email)
-    headers = {"X-CSRF-Token": client.cookies["yk_csrf"]}
+    headers = {"X-CSRF-Token": client.cookies["bj_csrf"]}
     resp = await client.post(
         "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
     )

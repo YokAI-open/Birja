@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-yokai}
+name: ${COMPOSE_PROJECT_NAME:-birja}
 
 networks:
   data:

@@ -6,7 +6,7 @@ import SignInPage from "./SignInPage";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 });
 
 type Handler = () => Response;
@@ -17,7 +17,7 @@ const errorResponse = (status: number, code: string, headers: Record<string, str
 const ok = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 function stubApi(routes: Routes) {
-  document.cookie = "yk_csrf=tok; path=/";
+  document.cookie = "bj_csrf=tok; path=/";
   const fetchMock = vi.fn((url: string) => {
     if (url === "/api/v1/auth/request-code") {
       return Promise.resolve((routes.request ?? (() => ok({ status: "code_sent" }, 202)))());

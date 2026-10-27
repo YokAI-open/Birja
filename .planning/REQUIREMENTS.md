@@ -1,4 +1,4 @@
-# Requirements: YokaiExchange
+# Requirements: Birja
 
 **Defined:** 2026-10-20
 **Core Value:** Making a trade at a real, recent market price and then seeing what it's worth now. "Buy at today's price, check back later, see real P/L" must work and must be correct to the cent.

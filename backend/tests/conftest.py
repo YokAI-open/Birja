@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from tests.guard import ensure_test_stack
 
 TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://yokai_test:test@127.0.0.1:55432/yokai_test"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test"
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://:test@127.0.0.1:56379/0")
 

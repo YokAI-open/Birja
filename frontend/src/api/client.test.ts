@@ -7,11 +7,11 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 const EXPIRE = "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 
 beforeEach(() => {
-  document.cookie = `yk_csrf${EXPIRE}`;
+  document.cookie = `bj_csrf${EXPIRE}`;
 });
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.cookie = `yk_csrf${EXPIRE}`;
+  document.cookie = `bj_csrf${EXPIRE}`;
 });
 
 function lastInit(mock: ReturnType<typeof vi.fn>, call = 0): RequestInit {
@@ -20,11 +20,11 @@ function lastInit(mock: ReturnType<typeof vi.fn>, call = 0): RequestInit {
 
 describe("readCookie", () => {
   it("reads a cookie by exact name", () => {
-    document.cookie = "yk_csrf_other=nope; path=/";
-    document.cookie = "yk_csrf=abc; path=/";
-    expect(readCookie("yk_csrf")).toBe("abc");
+    document.cookie = "bj_csrf_other=nope; path=/";
+    document.cookie = "bj_csrf=abc; path=/";
+    expect(readCookie("bj_csrf")).toBe("abc");
     expect(readCookie("missing")).toBeNull();
-    document.cookie = `yk_csrf_other${EXPIRE}`;
+    document.cookie = `bj_csrf_other${EXPIRE}`;
   });
 });
 
@@ -38,7 +38,7 @@ describe("apiFetch", () => {
   });
 
   it("sends the CSRF cookie value on POST", async () => {
-    document.cookie = "yk_csrf=tok123; path=/";
+    document.cookie = "bj_csrf=tok123; path=/";
     const fetchMock = vi.fn(() => Promise.resolve(json({ status: "code_sent" }, 202)));
     vi.stubGlobal("fetch", fetchMock);
     await apiFetch("/api/v1/x", { method: "POST", body: "{}" });
@@ -51,7 +51,7 @@ describe("apiFetch", () => {
   it("fetches a CSRF token first when the cookie is missing", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (url === "/api/v1/auth/csrf") {
-        document.cookie = "yk_csrf=fresh; path=/";
+        document.cookie = "bj_csrf=fresh; path=/";
         return Promise.resolve(new Response(null, { status: 204 }));
       }
       return Promise.resolve(json({}, 200));
@@ -104,7 +104,7 @@ describe("apiFetch silent refresh", () => {
   const unauthorized = () => new Response("{}", { status: 401 });
 
   it("refreshes once on 401 and retries the original request", async () => {
-    document.cookie = "yk_csrf=tok; path=/";
+    document.cookie = "bj_csrf=tok; path=/";
     let meCalls = 0;
     const fetchMock = vi.fn((url: string) => {
       if (url === "/api/v1/auth/refresh")
@@ -122,7 +122,7 @@ describe("apiFetch silent refresh", () => {
   });
 
   it("shares one refresh between concurrent 401s and retries both", async () => {
-    document.cookie = "yk_csrf=tok; path=/";
+    document.cookie = "bj_csrf=tok; path=/";
     let release: (r: Response) => void = () => {};
     const seen: Record<string, number> = {};
     const fetchMock = vi.fn((url: string) => {
@@ -144,7 +144,7 @@ describe("apiFetch silent refresh", () => {
   });
 
   it("never refreshes for /api/v1/auth/ paths", async () => {
-    document.cookie = "yk_csrf=tok; path=/";
+    document.cookie = "bj_csrf=tok; path=/";
     const fetchMock = vi.fn(() => Promise.resolve(unauthorized()));
     vi.stubGlobal("fetch", fetchMock);
     await expect(apiFetch("/api/v1/auth/refresh", { method: "POST" })).rejects.toMatchObject({
@@ -154,7 +154,7 @@ describe("apiFetch silent refresh", () => {
   });
 
   it("throws 401 when the retry is still unauthorized, and survives a failed refresh", async () => {
-    document.cookie = "yk_csrf=tok; path=/";
+    document.cookie = "bj_csrf=tok; path=/";
     const fetchMock = vi.fn((url: string) =>
       url === "/api/v1/auth/refresh"
         ? Promise.reject(new TypeError("network"))
@@ -166,7 +166,7 @@ describe("apiFetch silent refresh", () => {
   });
 
   it("treats a non-204 refresh as failure but still retries once", async () => {
-    document.cookie = "yk_csrf=tok; path=/";
+    document.cookie = "bj_csrf=tok; path=/";
     const fetchMock = vi.fn((url: string) =>
       Promise.resolve(url === "/api/v1/auth/refresh" ? unauthorized() : unauthorized()),
     );

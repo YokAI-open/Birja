@@ -8,7 +8,7 @@ JWT = "j" * 40
 DB = "postgresql+asyncpg://u:pw@h/db"
 REDIS = "redis://:pw@h:6379/0"
 FAKE_KEY = "dummy-key-not-real"
-FROM = "YokaiExchange <login@example.com>"
+FROM = "Birja <login@example.com>"
 
 
 def test_invalid_database_url_error_hides_password() -> None:

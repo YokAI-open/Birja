@@ -180,4 +180,4 @@ Push back on during requirements:
 - Training-data knowledge of Investopedia Stock Simulator, Binance spot and demo trading, eToro virtual portfolio, Wall Street Survivor, and Coinbase and Robinhood cost-basis display conventions. MEDIUM-LOW confidence, not re-verified online this session.
 - Weighted-average cost accounting and the realized/unrealized split are standard accounting conventions. MEDIUM-HIGH confidence.
 - Exchange minimum-notional and lot-size behavior (Binance exchange filters `MIN_NOTIONAL` and `LOT_SIZE`). MEDIUM confidence, and the exact values should be checked if per-coin rules are ever added.
-- Project constraints: `/home/YokaiExchange/.planning/PROJECT.md` and `/home/YokaiExchange/CLAUDE.md`.
+- Project constraints: `/home/Birja/.planning/PROJECT.md` and `/home/Birja/CLAUDE.md`.

@@ -16,7 +16,7 @@ def hmac_hex(secret: SecretStr, message: str) -> str:
     ).hexdigest()
 
 
-CSRF_COOKIE = "yk_csrf"
+CSRF_COOKIE = "bj_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 COOKIE_MAX_AGE_30D = 2592000
 
@@ -38,15 +38,15 @@ def set_csrf_cookie(response: Response, token: str) -> None:
     )
 
 
-ACCESS_COOKIE = "yk_access"
+ACCESS_COOKIE = "bj_access"
 ACCESS_COOKIE_PATH = "/api"
-REFRESH_COOKIE = "yk_refresh"
+REFRESH_COOKIE = "bj_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth/refresh"
 ACCESS_TOKEN_TTL_SECONDS = 900
 REFRESH_TOKEN_TTL_SECONDS = 2592000
 
-_JWT_ISSUER = "yokai"
-_JWT_AUDIENCE = "yokai-web"
+_JWT_ISSUER = "birja"
+_JWT_AUDIENCE = "birja-web"
 
 
 class InvalidToken(Exception):

@@ -6,7 +6,7 @@ const me = { email: "a@example.com", cash_usd: "10000.00000000" };
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.cookie = "yk_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
 });
 
 describe("isMe", () => {
@@ -44,7 +44,7 @@ describe("fetchMe", () => {
 
 describe("requestCode and verifyCode", () => {
   it("posts the email with a CSRF token", async () => {
-    document.cookie = "yk_csrf=t; path=/";
+    document.cookie = "bj_csrf=t; path=/";
     const fetchMock = vi.fn(() => Promise.resolve(json({ status: "code_sent" }, 202)));
     vi.stubGlobal("fetch", fetchMock);
     await requestCode("a@example.com");
@@ -54,7 +54,7 @@ describe("requestCode and verifyCode", () => {
   });
 
   it("verifyCode returns Me and rejects malformed bodies", async () => {
-    document.cookie = "yk_csrf=t; path=/";
+    document.cookie = "bj_csrf=t; path=/";
     vi.stubGlobal("fetch", () => Promise.resolve(json(me)));
     expect(await verifyCode("a@example.com", "123456")).toEqual(me);
     vi.stubGlobal("fetch", () => Promise.resolve(json({ nope: true })));

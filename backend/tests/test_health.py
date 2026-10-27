@@ -40,7 +40,7 @@ async def test_health_redis_down(settings: Settings, caplog: pytest.LogCaptureFi
 async def test_health_db_down(settings: Settings, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.WARNING, logger="app.services.health")
     broken = settings.model_copy(
-        update={"database_url": "postgresql+asyncpg://yokai_test:test@127.0.0.1:1/yokai_test"}
+        update={"database_url": "postgresql+asyncpg://birja_test:test@127.0.0.1:1/birja_test"}
     )
     async with _client_for(broken) as c:
         resp = await c.get("/api/v1/health")
