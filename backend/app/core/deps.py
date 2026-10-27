@@ -36,6 +36,12 @@ def get_redis(request: Request) -> Redis:
     return redis
 
 
+def get_client_ip(request: Request) -> str:
+    # Only the socket peer. uvicorn's --proxy-headers (trusting --forwarded-allow-ips
+    # only) rewrites it for trusted proxies; never parse the forwarding header here.
+    return request.client.host if request.client else "unknown"
+
+
 def verify_csrf(request: Request) -> None:
     cookie = request.cookies.get(CSRF_COOKIE)
     header = request.headers.get(CSRF_HEADER)
@@ -98,6 +104,7 @@ async def get_current_user(
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 RedisDep = Annotated[Redis, Depends(get_redis)]
+ClientIpDep = Annotated[str, Depends(get_client_ip)]
 CsrfDep = Annotated[None, Depends(verify_csrf)]
 OtpStoreDep = Annotated[OtpStore, Depends(get_otp_store)]
 EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]

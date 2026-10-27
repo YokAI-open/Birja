@@ -17,6 +17,37 @@ class Settings(BaseSettings):
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
 
+    # Rate limits (fixed windows, seconds). Per-IP defaults are loosened in dev only,
+    # because all local browser traffic shares the Vite proxy's single IP.
+    rl_request_email_limit: int = 5
+    rl_request_email_window: int = 600
+    rl_request_ip_limit: int = 20
+    rl_request_ip_window: int = 3600
+    rl_verify_email_limit: int = 10
+    rl_verify_email_window: int = 600
+    rl_verify_ip_limit: int = 30
+    rl_verify_ip_window: int = 600
+    rl_send_global_limit: int = 500
+    rl_send_global_window: int = 86400
+
+    @field_validator(
+        "rl_request_email_limit",
+        "rl_request_email_window",
+        "rl_request_ip_limit",
+        "rl_request_ip_window",
+        "rl_verify_email_limit",
+        "rl_verify_email_window",
+        "rl_verify_ip_limit",
+        "rl_verify_ip_window",
+        "rl_send_global_limit",
+        "rl_send_global_window",
+    )
+    @classmethod
+    def _check_positive(cls, v: int, info: ValidationInfo) -> int:
+        if v < 1:
+            raise ValueError(f"{info.field_name} must be >= 1")
+        return v
+
     @field_validator("database_url")
     @classmethod
     def _check_database_url(cls, v: str) -> str:
@@ -30,6 +61,17 @@ class Settings(BaseSettings):
         if len(v.get_secret_value()) < 32:
             raise ValueError(f"{info.field_name} must be at least 32 characters")
         return v
+
+    @model_validator(mode="after")
+    def _dev_ip_limits(self) -> Settings:
+        # Playwright and manual runs all come from one IP in dev; keep the strict
+        # defaults for test/prod and let an explicit env value win.
+        if self.env == "dev":
+            if "rl_request_ip_limit" not in self.model_fields_set:
+                self.rl_request_ip_limit = 200
+            if "rl_verify_ip_limit" not in self.model_fields_set:
+                self.rl_verify_ip_limit = 300
+        return self
 
     @model_validator(mode="after")
     def _check_secrets(self) -> Settings:
