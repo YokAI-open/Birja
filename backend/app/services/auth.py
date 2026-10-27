@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -14,15 +15,29 @@ from app.models.auth import AuthSession, RefreshToken
 from app.schemas.auth import MeOut
 from app.services import accounts
 from app.services.otp import OtpStore
+from app.services.ratelimit import enforce
 
 
 class InvalidCode(Exception):
     """Wrong, reused, expired, replaced or exhausted code: all look the same."""
 
 
-async def request_code(otp: OtpStore, email: str) -> str:
+async def request_code(redis: Redis, otp: OtpStore, settings: Settings, email: str, ip: str) -> str:
     """Issue a one-time code. Deliberately no user lookup: the response must be
-    identical whether or not the email has an account (AUTH-01)."""
+    identical whether or not the email has an account (AUTH-01). Limits are checked
+    first so a refused request issues and sends nothing (AUTH-03)."""
+    await enforce(
+        redis,
+        f"sim:rl:req:email:{otp.email_key(email)}",
+        settings.rl_request_email_limit,
+        settings.rl_request_email_window,
+    )
+    await enforce(
+        redis, f"sim:rl:req:ip:{ip}", settings.rl_request_ip_limit, settings.rl_request_ip_window
+    )
+    await enforce(
+        redis, "sim:rl:req:global", settings.rl_send_global_limit, settings.rl_send_global_window
+    )
     return await otp.issue(email)
 
 
@@ -51,8 +66,23 @@ async def start_session(db: AsyncSession, user_id: int, settings: Settings) -> I
 
 
 async def verify_code(
-    db: AsyncSession, otp: OtpStore, settings: Settings, email: str, code: str
+    db: AsyncSession,
+    redis: Redis,
+    otp: OtpStore,
+    settings: Settings,
+    email: str,
+    code: str,
+    ip: str,
 ) -> tuple[MeOut, IssuedSession]:
+    await enforce(
+        redis,
+        f"sim:rl:ver:email:{otp.email_key(email)}",
+        settings.rl_verify_email_limit,
+        settings.rl_verify_email_window,
+    )
+    await enforce(
+        redis, f"sim:rl:ver:ip:{ip}", settings.rl_verify_ip_limit, settings.rl_verify_ip_window
+    )
     if not await otp.verify(email, code):
         raise InvalidCode
     user_id, _ = await accounts.get_or_create_user(db, email)
