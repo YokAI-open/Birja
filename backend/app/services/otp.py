@@ -74,5 +74,6 @@ class OtpStore:
         if hmac.compare_digest(stored_mac, candidate):
             return bool(await self._consume(keys=[key], args=[candidate]) == 1)
         if attempts >= self._max:
-            await self._redis.delete(key)
+            # Compare-and-delete: a code issued since the attempt above must survive.
+            await self._consume(keys=[key], args=[stored_mac])
         return False

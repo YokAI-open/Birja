@@ -59,6 +59,33 @@ async def test_five_wrong_kills_code(store: OtpStore, redis_client: Redis) -> No
     assert await store.verify(email, code) is False
 
 
+async def test_kill_spares_code_issued_after_the_failed_check(
+    store: OtpStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    email = _email()
+    old = await store.issue(email)
+    wrong = "000000" if old != "000000" else "111111"
+    for _ in range(4):
+        assert await store.verify(email, wrong) is False
+
+    fresh: list[str] = []
+    real_attempt = store._attempt
+
+    async def attempt_then_reissue(**kwargs: object) -> object:
+        res = await real_attempt(**kwargs)
+        # "Send a new code" lands between the 5th wrong check and the kill.
+        code = await store.issue(email)
+        while code == old:
+            code = await store.issue(email)
+        fresh.append(code)
+        return res
+
+    monkeypatch.setattr(store, "_attempt", attempt_then_reissue)
+    assert await store.verify(email, wrong) is False
+    monkeypatch.undo()
+    assert await store.verify(email, fresh[0]) is True
+
+
 async def test_reissue_invalidates_old_code(store: OtpStore) -> None:
     email = _email()
     first = await store.issue(email)
