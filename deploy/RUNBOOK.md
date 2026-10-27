@@ -36,7 +36,9 @@ The dev stack (project `birja`) is separate. Never run `-f docker-compose.prod.y
 DEPLOY_REF=v0.1.0 /srv/birja/deploy/deploy.sh     # a tag, branch or SHA
 ```
 
-Run as root. The script fetches the ref, builds the frontend into a new release, starts the stack, runs migrations, switches the `current` link and records the deploy in `/var/lib/birja/deploys.log`.
+Run as root. The script fetches and checks out the ref, then prepares everything before changing anything live: it builds the backend image, builds the frontend into a new release directory (not yet served) and tests the repo's nginx config offline (`check-nginx-config.sh`). Only when all of that passes does it go live: start postgres and redis, run migrations, start the new backend, switch the `current` link, install the nginx config and run the health check. Finally it records the deploy in `/var/lib/birja/deploys.log`.
+
+A failure during preparation (npm, image build, nginx config) leaves the running backend, schema, served frontend and nginx config untouched; only the checkout has moved, and `--rollback` (or a fixed re-deploy) puts it back.
 
 If it fails, it prints the failing step and the last redacted backend log lines. Fix the cause and re-run, or roll back.
 

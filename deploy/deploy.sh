@@ -117,7 +117,6 @@ build_frontend_release() {
   cp -a "$APP_DIR/frontend/dist/." "$rel/"
   chmod -R a+rX "$rel"
   RELEASE_DIR="$rel"
-  swap_current "$rel"
 }
 
 swap_current() {
@@ -203,15 +202,22 @@ do_deploy() {
     exit 1
   fi
 
-  STEP="start postgres and redis"
-  dc up -d --wait postgres redis
+  # Prepare everything that is likely to fail first (image build, npm,
+  # nginx config test). Nothing live changes until all of it has passed.
   STEP="build backend"
   dc build backend
+  build_frontend_release
+  STEP="nginx config check"
+  "$APP_DIR/deploy/check-nginx-config.sh"
+
+  # Go live: schema, backend, static release, nginx.
+  STEP="start postgres and redis"
+  dc up -d --wait postgres redis
   STEP="migrate"
   dc run --rm --no-deps backend alembic upgrade head
   STEP="start backend"
   dc up -d --wait backend
-  build_frontend_release
+  swap_current "$RELEASE_DIR"
   STEP="nginx install"
   "$APP_DIR/deploy/install-nginx.sh"
   health_check
@@ -246,10 +252,10 @@ do_rollback() {
   echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
   if [ -d "$rel" ]; then
     RELEASE_DIR="$rel"
-    swap_current "$rel"
   else
     build_frontend_release
   fi
+  swap_current "$RELEASE_DIR"
   health_check
   record rollback
 }
