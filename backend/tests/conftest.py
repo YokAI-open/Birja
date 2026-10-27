@@ -22,6 +22,7 @@ os.environ["ENV"] = "test"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["REDIS_URL"] = TEST_REDIS_URL
 os.environ["OTP_HMAC_SECRET"] = "test-only-otp-hmac-secret-0123456789-abcdefghij"
+os.environ["JWT_SECRET"] = "test-only-jwt-secret-0123456789-klmnopqrstuvwx"
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
