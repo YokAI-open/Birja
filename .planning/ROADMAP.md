@@ -71,7 +71,7 @@ Plans:
   4. User stays signed in after a browser refresh and restart (up to about 30 days) and can sign out, after which the session no longer works
   5. A first-time user sees exactly $10,000.00 cash, signing in again never grants more, and there is no way to reset or add cash
 
-**Plans:** 6/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 **Wave 1**
@@ -98,7 +98,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 02-07-PLAN.md — Stay signed in + sign out: refresh rotation with reuse detection, logout, single-flight refresh, e2e
-- [ ] 02-08-PLAN.md — Resend sender over httpx (D-01), email settings, prod guard, respx tests (D-02)
+- [x] 02-08-PLAN.md — Resend sender over httpx (D-01), email settings, prod guard, respx tests (D-02)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -175,7 +175,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
-| 2. Authentication | 6/9 | In Progress|  |
+| 2. Authentication | 7/9 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
