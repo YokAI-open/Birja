@@ -8,7 +8,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 
 - [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
-- [ ] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate
+- [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
@@ -120,7 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -158,7 +158,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 02.1-10-PLAN.md — Real-email sign-in checkpoint, real-IP/log checks, closeout push gate
+- [x] 02.1-10-PLAN.md — Real-email sign-in checkpoint, real-IP/log checks, closeout push gate
 
 ### Phase 3: Prices
 
@@ -230,7 +230,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
-| 2.1. Deploy to nist.one | 9/10 | In Progress|  |
+| 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
