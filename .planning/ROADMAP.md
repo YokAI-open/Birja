@@ -120,7 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
-**Plans:** 3/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 **Wave 1**
@@ -134,7 +134,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02.1-04-PLAN.md — smoke-prod.sh (local/--public), CSP Playwright spec, deploy/RUNBOOK.md (renewal, undo), README/CLAUDE.md deploy docs
+- [x] 02.1-04-PLAN.md — smoke-prod.sh (local/--public), CSP Playwright spec, deploy/RUNBOOK.md (renewal, undo), README/CLAUDE.md deploy docs
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -230,7 +230,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
-| 2.1. Deploy to nist.one | 3/10 | In Progress|  |
+| 2.1. Deploy to nist.one | 4/10 | In Progress|  |
 | 3. Prices | 0/TBD | Not started | - |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
