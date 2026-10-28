@@ -28,10 +28,10 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Prices
 
-- [ ] **PRICE-01**: User can see a list of about 10–20 curated cryptocurrencies with their current USD price
-- [ ] **PRICE-02**: Every price shows how old it is ("as of" time) and whether it is fresh, aging or stale
-- [ ] **PRICE-03**: Prices refresh automatically about every 60 seconds from a free public market-data source, without the user reloading the page
-- [ ] **PRICE-04**: Invalid prices (zero, negative or implausible spikes) are rejected and the last good price is kept
+- [x] **PRICE-01**: User can see a list of about 10–20 curated cryptocurrencies with their current USD price
+- [x] **PRICE-02**: Every price shows how old it is ("as of" time) and whether it is fresh, aging or stale
+- [x] **PRICE-03**: Prices refresh automatically about every 60 seconds from a free public market-data source, without the user reloading the page
+- [x] **PRICE-04**: Invalid prices (zero, negative or implausible spikes) are rejected and the last good price is kept
 
 ### Trading
 
@@ -124,10 +124,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-06 | Phase 2 | Complete |
 | ACCT-01 | Phase 2 | Complete |
 | ACCT-02 | Phase 2 | Complete |
-| PRICE-01 | Phase 3 | Pending |
-| PRICE-02 | Phase 3 | Pending |
-| PRICE-03 | Phase 3 | Pending |
-| PRICE-04 | Phase 3 | Pending |
+| PRICE-01 | Phase 3 | Complete |
+| PRICE-02 | Phase 3 | Complete |
+| PRICE-03 | Phase 3 | Complete |
+| PRICE-04 | Phase 3 | Complete |
 | TRADE-01 | Phase 4 | Pending |
 | TRADE-02 | Phase 4 | Pending |
 | TRADE-03 | Phase 4 | Pending |
