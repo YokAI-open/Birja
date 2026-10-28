@@ -12,7 +12,12 @@ import respx
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import Settings
 from app.models.price import Coin, Price
@@ -259,6 +264,44 @@ async def test_per_coin_errors_reject_only_that_coin(
     assert result == CycleResult("ok", accepted=14, rejected=1)
     assert "symbol=BTC reason=invalid" in caplog.text
     assert "BTC" not in await _prices(sm)
+
+
+async def test_no_transaction_is_held_open_across_the_source_call(
+    clean_prices: None,
+    redis_client: Redis,
+    settings: Settings,
+) -> None:
+    import asyncio
+
+    # Same server settings as the scheduler engine, with a 200 ms idle-in-transaction
+    # limit: a transaction left open across the slow source call gets its connection
+    # terminated and the upsert fails.
+    engine = create_async_engine(
+        settings.database_url,
+        connect_args={"server_settings": {"idle_in_transaction_session_timeout": "200"}},
+    )
+    short_sm = async_sessionmaker(engine, expire_on_commit=False)
+    checked_out: list[int] = []
+
+    async def slow(pairs: Any) -> dict[str, Any]:
+        checked_out.append(engine.pool.checkedout())  # type: ignore[attr-defined]
+        await asyncio.sleep(0.6)
+        result: dict[str, Any] = _body()["result"]
+        return result
+
+    try:
+        result = await run_cycle(
+            sessionmaker=short_sm,
+            redis=redis_client,
+            source=slow,
+            settings=settings,
+            candidates={},
+            now=lambda: NOW,
+        )
+    finally:
+        await engine.dispose()
+    assert checked_out == [0]
+    assert result == CycleResult("ok", accepted=15, rejected=0)
 
 
 async def test_lock_held_makes_no_call_and_keeps_other_lock(

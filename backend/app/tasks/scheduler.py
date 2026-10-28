@@ -120,39 +120,42 @@ async def _refresh(
     candidates: dict[int, Candidate],
     now: Callable[[], datetime],
 ) -> CycleResult:
+    # Short read: the session (and its transaction) is closed before the source call,
+    # so no connection sits idle in a transaction while Kraken is slow.
     async with sessionmaker() as session:
         coins = await load_active_coins(session)
-        if not coins:
-            return CycleResult("ok")
+    if not coins:
+        return CycleResult("ok")
+    try:
+        async with asyncio.timeout(SOURCE_TIMEOUT_S):
+            result = await source([c.kraken_pair for c in coins])
+    except (KrakenError, httpx.HTTPError, TimeoutError) as exc:
+        logger.error("price source failed: %s", str(exc) or type(exc).__name__)
+        return CycleResult("source_error")
+    # Ticker carries no timestamp: the arrival time is the as_of.
+    observed_at = now()
+    accepted: list[AcceptedPrice] = []
+    rejected = 0
+    for coin in coins:
+        entry = result.get(coin.kraken_pair)
+        if entry is None:
+            rejected += 1
+            logger.warning("price rejected: symbol=%s reason=missing", coin.symbol)
+            continue
         try:
-            async with asyncio.timeout(SOURCE_TIMEOUT_S):
-                result = await source([c.kraken_pair for c in coins])
-        except (KrakenError, httpx.HTTPError, TimeoutError) as exc:
-            logger.error("price source failed: %s", str(exc) or type(exc).__name__)
-            return CycleResult("source_error")
-        # Ticker carries no timestamp: the arrival time is the as_of.
-        observed_at = now()
-        accepted: list[AcceptedPrice] = []
-        rejected = 0
-        for coin in coins:
-            entry = result.get(coin.kraken_pair)
-            if entry is None:
-                rejected += 1
-                logger.warning("price rejected: symbol=%s reason=missing", coin.symbol)
-                continue
-            try:
-                price = _evaluate_coin(coin, entry, settings, candidates, observed_at)
-            except ArithmeticError, ValueError:
-                # One coin's bad numbers (e.g. Decimal overflow) must not abort the cycle.
-                price = None
-                logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
-            if price is None:
-                rejected += 1
-            else:
-                accepted.append(price)
+            price = _evaluate_coin(coin, entry, settings, candidates, observed_at)
+        except ArithmeticError, ValueError:
+            # One coin's bad numbers (e.g. Decimal overflow) must not abort the cycle.
+            price = None
+            logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
+        if price is None:
+            rejected += 1
+        else:
+            accepted.append(price)
+    async with sessionmaker() as session:
         await upsert_prices(session, accepted, settings.price_source)
         await session.commit()
-        return CycleResult("ok", accepted=len(accepted), rejected=rejected)
+    return CycleResult("ok", accepted=len(accepted), rejected=rejected)
 
 
 async def run_cycle(
