@@ -108,4 +108,81 @@ describe("MarketsPage", () => {
     });
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
+
+  describe("freshness", () => {
+    const aged = (ages: [string, number, string][]) => ({
+      server_time: "2026-10-28T10:00:00Z",
+      fresh_seconds: 120,
+      stale_seconds: 300,
+      items: ages.map(([symbol, age, status]) => ({
+        symbol,
+        name: symbol,
+        price: "1.00000000",
+        as_of: "2026-10-28T09:59:50Z",
+        age_seconds: age,
+        status,
+      })),
+    });
+    const tick = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+
+    it("labels each row and shows the oldest age", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          ok(
+            aged([
+              ["BTC", 42, "fresh"],
+              ["DOGE", 150, "aging"],
+              ["ATOM", 420, "stale"],
+            ]),
+          ),
+        ),
+      );
+      renderWithClient(<MarketsPage />);
+      expect(await screen.findByText("Live · 42s ago")).toBeVisible();
+      expect(screen.getByText("Delayed · 2m ago")).toBeVisible();
+      expect(screen.getByText("Stale · 7m ago")).toBeVisible();
+      expect(screen.getByText("Oldest price 7m ago")).toBeVisible();
+    });
+
+    it("ticks ages and recomputes status from API thresholds", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          ok(
+            aged([
+              ["BTC", 42, "fresh"],
+              ["ETH", 115, "fresh"],
+            ]),
+          ),
+        ),
+      );
+      renderWithClient(<MarketsPage />);
+      await screen.findByText("Live · 42s ago");
+      await tick(10_000);
+      expect(screen.getByText("Live · 52s ago")).toBeVisible();
+      expect(screen.getByText("Delayed · 2m ago")).toBeVisible();
+    });
+
+    it("resets after a refetch", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      let calls = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => {
+          calls += 1;
+          return ok(aged([["BTC", calls === 1 ? 42 : 3, "fresh"]]));
+        }),
+      );
+      renderWithClient(<MarketsPage />);
+      await screen.findByText("Live · 42s ago");
+      await tick(30_000);
+      expect(await screen.findByText(/^Live · [0-9]s ago$/)).toBeVisible();
+    });
+  });
 });
