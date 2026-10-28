@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.core.config import get_settings
+from app.core.config import get_scheduler_settings
 from app.tasks import scheduler
 from app.tasks.scheduler import CycleResult, run
 
@@ -127,7 +127,7 @@ async def test_amain_runs_with_shared_candidates_and_closes_resources(
     monkeypatch.setenv("PRICE_SOURCE", "fake")
     monkeypatch.setattr(scheduler, "HEARTBEAT_PATH", tmp_path / "hb")
     monkeypatch.setattr(scheduler, "run", _with_heartbeat(scheduler.run, tmp_path / "hb"))
-    get_settings.cache_clear()
+    get_scheduler_settings.cache_clear()
     stop = asyncio.Event()
     seen: list[dict[int, Any]] = []
 
@@ -140,7 +140,7 @@ async def test_amain_runs_with_shared_candidates_and_closes_resources(
     try:
         await scheduler.amain(stop)
     finally:
-        get_settings.cache_clear()
+        get_scheduler_settings.cache_clear()
     assert len(seen) == 1
     assert (tmp_path / "hb").exists()
 
@@ -150,7 +150,7 @@ async def test_amain_real_cycle_against_test_stack(
 ) -> None:
     monkeypatch.setenv("PRICE_SOURCE", "fake")
     monkeypatch.setattr(scheduler, "run", _with_heartbeat(scheduler.run, tmp_path / "hb"))
-    get_settings.cache_clear()
+    get_scheduler_settings.cache_clear()
     stop = asyncio.Event()
     real = scheduler.run_cycle
 
@@ -164,7 +164,7 @@ async def test_amain_real_cycle_against_test_stack(
     try:
         await scheduler.amain(stop)
     finally:
-        get_settings.cache_clear()
+        get_scheduler_settings.cache_clear()
     assert (tmp_path / "hb").exists()
 
 
@@ -172,7 +172,7 @@ async def test_amain_installs_signal_handlers_when_no_stop_given(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("PRICE_SOURCE", "fake")
-    get_settings.cache_clear()
+    get_scheduler_settings.cache_clear()
     loop = asyncio.get_running_loop()
     handlers: dict[int, Any] = {}
     monkeypatch.setattr(loop, "add_signal_handler", lambda sig, cb: handlers.__setitem__(sig, cb))
@@ -185,7 +185,7 @@ async def test_amain_installs_signal_handlers_when_no_stop_given(
     try:
         await scheduler.amain()
     finally:
-        get_settings.cache_clear()
+        get_scheduler_settings.cache_clear()
     assert set(handlers) == {scheduler.signal.SIGTERM, scheduler.signal.SIGINT}
 
 
@@ -211,7 +211,10 @@ async def test_python_m_entrypoint_logs_cycles_to_stderr(
     clean_prices: None, tmp_path: Path
 ) -> None:
     """Runs the scheduler exactly like the container does and reads its stderr."""
-    env = {**os.environ, "PRICE_SOURCE": "fake", "TMPDIR": str(tmp_path)}
+    # Least privilege: the scheduler must start without any app secret (WR-06).
+    secrets = {"OTP_HMAC_SECRET", "JWT_SECRET", "RESEND_API_KEY", "EMAIL_FROM", "EMAIL_BACKEND"}
+    env = {k: v for k, v in os.environ.items() if k not in secrets}
+    env.update(PRICE_SOURCE="fake", TMPDIR=str(tmp_path))
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",

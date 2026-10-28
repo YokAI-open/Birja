@@ -23,7 +23,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import Settings, get_settings
+from app.core.config import SchedulerSettings, get_scheduler_settings
 from app.core.logging import configure_logging
 from app.services import kraken
 from app.services.fake_prices import make_fake_source
@@ -59,7 +59,7 @@ class CycleResult:
     rejected: int = 0
 
 
-def build_source(settings: Settings, http: httpx.AsyncClient) -> TickerSource:
+def build_source(settings: SchedulerSettings, http: httpx.AsyncClient) -> TickerSource:
     if settings.price_source == "fake":
         if settings.env == "prod":
             raise RuntimeError("price_source 'fake' is not allowed in prod")
@@ -81,7 +81,7 @@ async def _release(redis: Redis, token: str) -> None:
 def _evaluate_coin(
     coin: CoinState,
     entry: object,
-    settings: Settings,
+    settings: SchedulerSettings,
     candidates: dict[int, Candidate],
     observed_at: datetime,
 ) -> AcceptedPrice | None:
@@ -119,7 +119,7 @@ async def _refresh(
     *,
     sessionmaker: async_sessionmaker[AsyncSession],
     source: TickerSource,
-    settings: Settings,
+    settings: SchedulerSettings,
     candidates: dict[int, Candidate],
     now: Callable[[], datetime],
 ) -> CycleResult:
@@ -166,7 +166,7 @@ async def run_cycle(
     sessionmaker: async_sessionmaker[AsyncSession],
     redis: Redis,
     source: TickerSource,
-    settings: Settings,
+    settings: SchedulerSettings,
     candidates: dict[int, Candidate],
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> CycleResult:
@@ -263,7 +263,7 @@ async def run(
 
 async def amain(stop: asyncio.Event | None = None) -> None:
     configure_logging()
-    settings = get_settings()
+    settings = get_scheduler_settings()
     own_stop = stop is None
     stop = stop or asyncio.Event()
     if own_stop:
