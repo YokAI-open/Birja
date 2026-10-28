@@ -639,4 +639,3 @@ async def test_holding_quantity(
     with pytest.raises(TradeRefused) as exc:
         await holding_quantity(db, user_id=user_id, symbol="nope")
     assert exc.value.code == "unknown_coin"
-
