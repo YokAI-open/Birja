@@ -5,20 +5,26 @@ failures so the loop survives. Logs carry only symbols, reasons and counts.
 """
 
 import asyncio
+import contextlib
 import logging
 import secrets
-from collections.abc import Callable, Sequence
+import signal
+import tempfile
+import time
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Literal
 
 import httpx
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
+from app.core.logging import configure_logging
 from app.services import kraken
 from app.services.fake_prices import make_fake_source
 from app.services.kraken import KrakenError, TickerSource
@@ -167,3 +173,100 @@ async def run_cycle(
         outcome.rejected,
     )
     return outcome
+
+
+HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "birja-scheduler-heartbeat"
+
+
+def touch_heartbeat(path: Path) -> None:
+    path.touch()
+
+
+async def run(
+    *,
+    cycle: Callable[[], Awaitable[CycleResult]],
+    interval: float,
+    stop: asyncio.Event,
+    heartbeat: Path = HEARTBEAT_PATH,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> None:
+    """Run ``cycle`` now and then on a fixed schedule until ``stop`` is set.
+
+    The heartbeat is touched after every cycle, even failed ones, so an upstream outage
+    shows up as stale prices rather than as a restarting container.
+    """
+    next_tick = monotonic()
+    while not stop.is_set():
+        await cycle()
+        touch_heartbeat(heartbeat)
+        next_tick += interval
+        if next_tick - monotonic() < 0:
+            next_tick = monotonic() + interval
+        delay = max(0.0, next_tick - monotonic())
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=delay)
+
+
+async def amain(stop: asyncio.Event | None = None) -> None:
+    configure_logging()
+    settings = get_settings()
+    own_stop = stop is None
+    stop = stop or asyncio.Event()
+    if own_stop:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, stop.set)
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={
+            "timeout": 5,
+            "server_settings": {
+                "statement_timeout": "30000",
+                "idle_in_transaction_session_timeout": "30000",
+            },
+        },
+    )
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    redis = Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+    http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+    try:
+        source = build_source(settings, http)
+        candidates: dict[int, Candidate] = {}
+        logger.info(
+            "price scheduler started source=%s interval=%s",
+            settings.price_source,
+            settings.price_poll_interval_seconds,
+        )
+
+        async def cycle() -> CycleResult:
+            return await run_cycle(
+                sessionmaker=sessionmaker,
+                redis=redis,
+                source=source,
+                settings=settings,
+                candidates=candidates,
+            )
+
+        await run(
+            cycle=cycle,
+            interval=settings.price_poll_interval_seconds,
+            stop=stop,
+        )
+    finally:
+        await http.aclose()
+        await redis.aclose()
+        await engine.dispose()
+
+
+def main() -> None:
+    asyncio.run(amain())
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
