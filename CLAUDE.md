@@ -51,8 +51,8 @@ cd backend && uv add <pkg>                  # add a dependency (updates uv.lock)
 # Backend tests: against the isolated test stack, never the dev stack
 docker compose -f docker-compose.test.yml up -d --wait
 cd backend && uv run pytest --cov=app --cov-fail-under=80
-# critical paths: login/OTP, sessions, authz, money
-cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py --fail-under=100
+# critical paths: login/OTP, sessions, authz, money, trade execution
+cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py --fail-under=100
 docker compose -f docker-compose.test.yml down -v
 
 # Frontend tests

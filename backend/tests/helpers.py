@@ -1,6 +1,15 @@
 import uuid
+from datetime import datetime
+from decimal import Decimal
 
 import httpx
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from app.models.price import Coin, Price
+from app.models.trade import Holding, Trade
+from app.models.user import Account
 
 
 class OutboxSender:
@@ -35,3 +44,75 @@ async def sign_in(client: httpx.AsyncClient, outbox: OutboxSender, email: str) -
     )
     assert resp.status_code == 200
     return resp
+
+
+async def coin_id(engine: AsyncEngine, symbol: str) -> int:
+    async with engine.connect() as conn:
+        return (await conn.execute(select(Coin.id).where(Coin.symbol == symbol))).scalar_one()
+
+
+async def put_price(engine: AsyncEngine, symbol: str, mid: str, as_of: datetime) -> None:
+    cid = await coin_id(engine, symbol)
+    stmt = pg_insert(Price).values(coin_id=cid, mid=Decimal(mid), as_of=as_of, source="fake")
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Price.coin_id],
+        set_={"mid": stmt.excluded.mid, "as_of": stmt.excluded.as_of},
+    )
+    async with engine.begin() as conn:
+        await conn.execute(stmt)
+
+
+async def set_cash(engine: AsyncEngine, user_id: int, cash: str) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            update(Account).where(Account.user_id == user_id).values(cash=Decimal(cash))
+        )
+
+
+async def put_holding(
+    engine: AsyncEngine, user_id: int, symbol: str, quantity: str, cost_basis: str
+) -> None:
+    cid = await coin_id(engine, symbol)
+    async with engine.begin() as conn:
+        await conn.execute(
+            delete(Holding).where(Holding.user_id == user_id, Holding.coin_id == cid)
+        )
+        await conn.execute(
+            pg_insert(Holding).values(
+                user_id=user_id,
+                coin_id=cid,
+                quantity=Decimal(quantity),
+                cost_basis=Decimal(cost_basis),
+            )
+        )
+
+
+async def cash_of(engine: AsyncEngine, user_id: int) -> Decimal:
+    async with engine.connect() as conn:
+        return (
+            await conn.execute(select(Account.cash).where(Account.user_id == user_id))
+        ).scalar_one()
+
+
+async def holding_of(
+    engine: AsyncEngine, user_id: int, symbol: str
+) -> tuple[Decimal, Decimal] | None:
+    cid = await coin_id(engine, symbol)
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                select(Holding.quantity, Holding.cost_basis).where(
+                    Holding.user_id == user_id, Holding.coin_id == cid
+                )
+            )
+        ).first()
+    return None if row is None else (row[0], row[1])
+
+
+async def trade_count(engine: AsyncEngine, user_id: int) -> int:
+    async with engine.connect() as conn:
+        return (
+            await conn.execute(
+                select(func.count()).select_from(Trade).where(Trade.user_id == user_id)
+            )
+        ).scalar_one()
