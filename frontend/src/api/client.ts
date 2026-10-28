@@ -2,13 +2,22 @@ export class ApiError extends Error {
   status: number;
   code: string | null;
   retryAfter: number | null;
+  /** The parsed `detail` object of the error body (e.g. detail.quote on price_changed), else null. */
+  detail: Record<string, unknown> | null;
 
-  constructor(status: number, code: string | null, message: string, retryAfter: number | null) {
+  constructor(
+    status: number,
+    code: string | null,
+    message: string,
+    retryAfter: number | null,
+    detail: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.retryAfter = retryAfter;
+    this.detail = detail;
   }
 }
 
@@ -35,12 +44,14 @@ async function ensureCsrfToken(): Promise<string | null> {
 
 async function toApiError(response: Response): Promise<ApiError> {
   let code: string | null = null;
+  let detailObject: Record<string, unknown> | null = null;
   let message = `Request failed with status ${response.status}`;
   try {
     const body: unknown = await response.json();
     if (typeof body === "object" && body !== null && "detail" in body) {
       const detail = (body as { detail: unknown }).detail;
       if (typeof detail === "object" && detail !== null && !Array.isArray(detail)) {
+        detailObject = detail as Record<string, unknown>;
         const d = detail as { code?: unknown; message?: unknown };
         if (typeof d.code === "string") code = d.code;
         if (typeof d.message === "string") message = d.message;
@@ -51,7 +62,7 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
   const header = response.headers.get("Retry-After");
   const retryAfter = header !== null && /^\d+$/.test(header.trim()) ? Number(header.trim()) : null;
-  return new ApiError(response.status, code, message, retryAfter);
+  return new ApiError(response.status, code, message, retryAfter, detailObject);
 }
 
 let refreshInFlight: Promise<boolean> | null = null;

@@ -15,6 +15,16 @@ const UNIT_SMALL = new Intl.NumberFormat("en-US", {
   maximumSignificantDigits: 4,
 });
 
+const QUANTITY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 8, useGrouping: false });
+
+/** Coin quantity: up to 8 decimals, trailing zeros dropped, no grouping so it can be typed back. */
+export function formatQuantity(value: string): string {
+  if (!/^\d+(\.\d+)?$/.test(value)) {
+    throw new Error(`Not a non-negative decimal string: ${value}`);
+  }
+  return QUANTITY.format(value as `${number}`);
+}
+
 /** Unit price: 2 decimals at $1 or more, 4 significant digits below $1 (D-06). */
 export function formatUnitPrice(value: string): string {
   if (!/^\d+(\.\d+)?$/.test(value)) {
