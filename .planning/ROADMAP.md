@@ -223,12 +223,12 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 10 plans
+**Plans:** 1/10 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Branch feature/phase-04-trading (after PR #18 merged), RED trade e2e (buy $100 -> $9,900.00, sell all, price_changed tolerated)
+- [x] 04-01-PLAN.md — Branch feature/phase-04-trading (after PR #18 merged), RED trade e2e (buy $100 -> $9,900.00, sell all, price_changed tolerated)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 0/10 | Planned | - |
+| 4. Trading | 1/10 | In Progress|  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
