@@ -223,7 +223,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 1/10 plans executed
+**Plans:** 5/10 plans executed
 
 Plans:
 **Wave 1**
@@ -232,10 +232,10 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md — TDD trade_math.py: D-01 spread/fee settings, D-06 min fee + sell cap, D-02 exact $ buys, D-04 minimum, D-07 cost basis math, 100% coverage
-- [ ] 04-03-PLAN.md — holdings + trades schema (0006) and guarded accounts cents CHECK (0007), DB backstop tests
-- [ ] 04-04-PLAN.md — Frontend trade API contract (ApiError.detail, guards, formatQuantity) and TanStack hooks (debounced quote, trade, holding)
-- [ ] 04-05-PLAN.md — Prod smoke: trade endpoints 401/403 signed out (offline-tested), RUNBOOK "Trading (release 0.3)"
+- [x] 04-02-PLAN.md — TDD trade_math.py: D-01 spread/fee settings, D-06 min fee + sell cap, D-02 exact $ buys, D-04 minimum, D-07 cost basis math, 100% coverage
+- [x] 04-03-PLAN.md — holdings + trades schema (0006) and guarded accounts cents CHECK (0007), DB backstop tests
+- [x] 04-04-PLAN.md — Frontend trade API contract (ApiError.detail, guards, formatQuantity) and TanStack hooks (debounced quote, trade, holding)
+- [x] 04-05-PLAN.md — Prod smoke: trade endpoints 401/403 signed out (offline-tested), RUNBOOK "Trading (release 0.3)"
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 1/10 | In Progress|  |
+| 4. Trading | 5/10 | In Progress|  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
