@@ -16,6 +16,9 @@ from typing import Literal
 Decision = Literal["accept", "accept_confirmed", "reject_invalid", "reject_spike"]
 
 _MID_QUANTUM = Decimal("1e-8")
+# prices.mid is NUMERIC(20,8): 12 integer digits. A bigger mid would overflow the
+# single multi-row upsert and lose every other coin's price with it.
+MAX_MID = Decimal("1e12")
 
 
 @dataclass(frozen=True)
@@ -45,15 +48,16 @@ def _first(entry: dict[str, object], key: str) -> Decimal | None:
 
 
 def mid_from_ticker(entry: object) -> Decimal | None:
-    """Mid of best bid and ask, rounded half-even to 8 dp; None if unusable."""
+    """Mid of best bid and ask, rounded half-even to 8 dp; None if unusable or too big."""
     if not isinstance(entry, dict):
         return None
     bid = _first(entry, "b")
     ask = _first(entry, "a")
-    if bid is None or ask is None or bid > ask:
+    if bid is None or ask is None or bid > ask or ask >= MAX_MID:
         return None
     mid = ((bid + ask) / 2).quantize(_MID_QUANTUM, rounding=ROUND_HALF_EVEN)
-    if mid <= 0:
+    # Re-checked after rounding: 999999999999.999999999 rounds up to 1e12.
+    if mid <= 0 or mid >= MAX_MID:
         return None
     return mid
 

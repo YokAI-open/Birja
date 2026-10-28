@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from app.services.kraken import TICKER_URL, KrakenError, fetch_tickers
+from app.services.kraken import TICKER_URL, KrakenError, fetch_tickers, fetch_tickers_isolated
 from app.services.price_rules import mid_from_ticker
 
 FIXTURE = Path(__file__).parent / "fixtures" / "kraken_ticker_ok.json"
@@ -183,3 +183,74 @@ async def test_default_sleep_and_jitter_are_usable() -> None:
         async with httpx.AsyncClient() as http:
             result = await fetch_tickers(http, ["XXBTZUSD"])
     assert set(result) == RESPONSE_KEYS
+
+
+UNKNOWN = {"error": ["EQuery:Unknown asset pair"]}
+
+
+def _ticker_side_effect(bad: set[str], calls: list[str]) -> Any:
+    """Kraken-like: the batch fails if any pair is unknown, single pairs answer alone."""
+    full = _ok_body()["result"]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        pairs = request.url.params["pair"].split(",")
+        calls.append(request.url.params["pair"])
+        if bad & set(pairs):
+            return httpx.Response(200, json=UNKNOWN)
+        return httpx.Response(200, json={"error": [], "result": {p: full[p] for p in pairs}})
+
+    return respond
+
+
+async def _isolated(pairs: list[str]) -> dict[str, Any]:
+    async with httpx.AsyncClient() as http:
+        return await fetch_tickers_isolated(http, pairs, sleep=Sleeper(), jitter=_half)
+
+
+async def test_isolated_one_unknown_pair_keeps_the_others(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    pairs = sorted(RESPONSE_KEYS)
+    calls: list[str] = []
+    with _router() as router:
+        router.get(TICKER_URL).mock(side_effect=_ticker_side_effect({"DOTUSD"}, calls))
+        with caplog.at_level("WARNING", logger="app.services.kraken"):
+            result = await _isolated(pairs)
+    assert set(result) == RESPONSE_KEYS - {"DOTUSD"}
+    assert len(calls) == 1 + len(pairs)  # one batch, then exactly one call per pair
+    assert "price pair unavailable: pair=DOTUSD" in caplog.text
+    assert "pair=BCHUSD" not in caplog.text
+
+
+async def test_isolated_all_pairs_unknown_raises() -> None:
+    calls: list[str] = []
+    with _router() as router:
+        router.get(TICKER_URL).mock(side_effect=_ticker_side_effect({"A", "B"}, calls))
+        with pytest.raises(KrakenError, match="all pairs unavailable"):
+            await _isolated(["A", "B"])
+    assert calls == ["A,B", "A", "B"]
+
+
+async def test_isolated_single_pair_unknown_is_not_refetched() -> None:
+    calls: list[str] = []
+    with _router() as router:
+        router.get(TICKER_URL).mock(side_effect=_ticker_side_effect({"A"}, calls))
+        with pytest.raises(KrakenError, match="Unknown asset pair"):
+            await _isolated(["A"])
+    assert calls == ["A"]
+
+
+async def test_isolated_other_errors_do_not_fan_out() -> None:
+    with _router() as router:
+        route = router.get(TICKER_URL).respond(400)
+        with pytest.raises(KrakenError, match="http 400"):
+            await _isolated(["XXBTZUSD", "XETHZUSD"])
+    assert route.call_count == 1
+
+
+async def test_isolated_success_is_one_call() -> None:
+    with _router() as router:
+        route = router.get(TICKER_URL).respond(200, json=_ok_body())
+        result = await _isolated(["XXBTZUSD", "XETHZUSD"])
+    assert set(result) == RESPONSE_KEYS
+    assert route.call_count == 1

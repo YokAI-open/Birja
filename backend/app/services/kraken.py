@@ -6,6 +6,7 @@ code or an exception class name: never headers or URLs.
 """
 
 import asyncio
+import logging
 import random
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
@@ -14,7 +15,10 @@ import httpx
 
 TICKER_URL = "https://api.kraken.com/0/public/Ticker"
 USER_AGENT = "birja-price-scheduler"
-NON_RETRYABLE_ERRORS = ("Unknown asset pair", "EGeneral:Invalid arguments")
+UNKNOWN_PAIR_ERROR = "Unknown asset pair"
+NON_RETRYABLE_ERRORS = (UNKNOWN_PAIR_ERROR, "EGeneral:Invalid arguments")
+
+logger = logging.getLogger(__name__)
 
 _JITTER = random.SystemRandom().random
 
@@ -78,3 +82,32 @@ async def fetch_tickers(
         if attempt < attempts - 1:
             await sleep(min(8, 2**attempt) + jitter())
     raise KrakenError(str(last), retryable=True)
+
+
+async def fetch_tickers_isolated(
+    http: httpx.AsyncClient,
+    pairs: Sequence[str],
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    jitter: Callable[[], float] = _JITTER,
+) -> dict[str, Any]:
+    """Like ``fetch_tickers``, but one unknown pair cannot fail the whole batch.
+
+    Kraken rejects the entire multi-pair request when any pair is unknown (delisted or
+    renamed). Then each pair is fetched on its own, once (at most one call per pair),
+    and the successes are merged. Raises only when every pair fails.
+    """
+    try:
+        return await fetch_tickers(http, pairs, sleep=sleep, jitter=jitter)
+    except KrakenError as exc:
+        if len(pairs) < 2 or UNKNOWN_PAIR_ERROR not in str(exc):
+            raise
+    merged: dict[str, Any] = {}
+    for pair in pairs:
+        try:
+            merged.update(await fetch_tickers(http, [pair], attempts=1))
+        except KrakenError:
+            logger.warning("price pair unavailable: pair=%s", pair)
+    if not merged:
+        raise KrakenError("all pairs unavailable", retryable=False)
+    return merged
