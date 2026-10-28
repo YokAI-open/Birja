@@ -138,6 +138,29 @@ logs, and `/api/v1/prices` returns 401 when signed out.
 
 Rollback to v0.1.x removes the scheduler (that release has no prices page).
 
+## Trading (release 0.3)
+
+What changes in prod:
+
+- Two migrations run on backend start through the normal deploy: 0006 (tables `holdings` and `trades`) and 0007 (`ck_accounts_cash_cents`, a CHECK that cash has at most two decimals; it refuses to apply if any account already has sub-cent cash).
+- No new services, ports or env vars. Trade settings use the code defaults (spread 0.25%, fee 0.25%, minimum fee $0.01, minimum order $1.00; D-01/D-04/D-06) and can be overridden only through prod.env if ever needed.
+
+Before deploying, run the read-only compliance count. It must print 0:
+
+```bash
+docker exec "$(docker ps -q --filter label=com.docker.compose.project=birja-prod --filter label=com.docker.compose.service=postgres)" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "select count(*) from accounts where cash <> round(cash, 2)"'
+```
+
+Rollback: `deploy.sh --rollback` to 0.2.x leaves the new tables and the CHECK in place (migrations are not undone, see Rollback). 0.2.x code never writes cash, so it runs unchanged. Trades made on 0.3 stay in the database.
+
+Checks: `smoke-prod.sh` (both modes) now asserts the trade endpoints refuse signed-out callers: `GET /api/v1/holdings/BTC` is 401 and `POST /api/v1/trades/quote` is 401 or 403. A 404 there means the release is not deployed. To see activity without PII, count only (same `docker exec` as above):
+
+```bash
+psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "select count(*), max(created_at) from trades"
+```
+
+Never print emails or balances per user.
+
 ## Undo (every host change in phase 02.1)
 
 - DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).
