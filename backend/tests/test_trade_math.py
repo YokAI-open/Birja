@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from decimal import ROUND_DOWN, Decimal
 
 import pytest
+
 from app.services.trade_math import (
     MAX_VALUE,
     Plan,
@@ -331,6 +332,17 @@ def test_order_too_large_buy_usd_quantity() -> None:
     # quantity from a tiny price overflows NUMERIC(20,8) even though the amount is small
     with refused("order_too_large"):
         buy_usd("0.00000001", "100000.00", cash="100000.00")
+
+
+def test_unusable_price_refused() -> None:
+    # a mid so small that the execution price rounds to zero must not divide by zero
+    with refused("invalid_order"):
+        buy_usd("0.000000001", "10.00")
+
+
+def test_absurd_amount_refused_before_rounding() -> None:
+    with refused("order_too_large"):
+        buy_usd("100000", "1000000000000000000000000000000.00")
 
 
 # --- cost basis -------------------------------------------------------------------
