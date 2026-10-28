@@ -96,6 +96,54 @@ describe("MarketsPage", () => {
     expect(await screen.findByRole("table", { name: "Markets" })).toBeVisible();
   });
 
+  it("keeps the last prices with a warning when a background refetch fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        calls += 1;
+        return calls === 2 ? Promise.resolve(new Response("{}", { status: 502 })) : ok(payload());
+      }),
+    );
+    renderWithClient(<MarketsPage />);
+    await screen.findByRole("table", { name: "Markets" });
+    expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(calls).toBe(2);
+    expect(
+      await screen.findByText("Couldn't refresh prices. Showing the last update."),
+    ).toBeVisible();
+    const table = screen.getByRole("table", { name: "Markets" });
+    expect(within(table).getAllByRole("row").slice(1)).toHaveLength(15);
+    expect(within(table).getByText("$81,042.35")).toBeVisible();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(calls).toBe(3);
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
+    });
+    expect(screen.getByRole("table", { name: "Markets" })).toBeVisible();
+  });
+
+  it("shows only the full error, no refresh warning, when nothing ever loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("{}", { status: 500 }))),
+    );
+    renderWithClient(<MarketsPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't load prices right now.");
+    expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
+    expect(screen.queryByRole("table", { name: "Markets" })).toBeNull();
+  });
+
   it("refetches every 30 seconds", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = vi.fn(() => ok(payload()));
