@@ -30,6 +30,25 @@ Exit 0 only if every check passed.
 USAGE
 }
 
+# Host port bindings come from `docker port` (HostConfig.PortBindings), not
+# the `docker ps` Ports column: that column also lists a bare image EXPOSE
+# (e.g. "8000/tcp") that is bound to nothing on the host.
+host_bindings() { # host_bindings <container id>: one "<port> -> <addr>" line per binding
+  local out
+  out=$(docker port "$1" 2>/dev/null) || { echo "docker-port-error"; return 0; }
+  printf '%s\n' "$out" | grep . || true
+}
+
+# only_backend_published: stdin is "<service> <binding>" lines for every prod
+# container; succeeds only if the single binding is backend's loopback port.
+# Pure function (tested by deploy/tests/test-smoke-ports.sh).
+only_backend_published() {
+  [ "$(grep . || true)" = "backend 8000/tcp -> 127.0.0.1:18000" ]
+}
+
+# Sourced by deploy/tests/: define the functions above, run no checks.
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
+
 case "${1:-}" in
   "") ;;
   --public) MODE=public ;;
@@ -270,10 +289,11 @@ done < <(ss -ltnH | awk '{print $4}')
 if [ -z "$BAD" ]; then pass "only 22/80/443 public"; else fail "unexpected public ports:$BAD"; fi
 [ -n "$WARNP" ] && warn "pre-existing public port(s):$WARNP (ufw-firewalled)"
 
-PORTS=$(docker ps --filter label=com.docker.compose.project=birja-prod --format '{{.Names}} {{.Ports}}')
-PUB=$(printf '%s\n' "$PORTS" | grep -E '[0-9]->' || true)
-if [ "$(printf '%s\n' "$PUB" | grep -c .)" = 1 ] && printf '%s\n' "$PUB" | grep -q 'backend.*127\.0\.0\.1:18000->8000/tcp' \
-   && ! printf '%s\n' "$PUB" | grep -q '0\.0\.0\.0\|\[::\]'; then
+PUB=$(for c in $(docker ps -q --filter label=com.docker.compose.project=birja-prod); do
+  svc=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")
+  host_bindings "$c" | sed "s|^|$svc |"
+done)
+if printf '%s\n' "$PUB" | only_backend_published; then
   pass "only backend publishes 127.0.0.1:18000->8000"
 else
   fail "published ports differ from expected"
@@ -364,7 +384,7 @@ if [ "$SCHED_N" = 1 ]; then
   fi
   SNETS=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$SCHED" | tr ' ' '\n' | grep . | sort | tr '\n' ' ')
   if [ "$SNETS" = "birja-prod_app birja-prod_data " ]; then pass "scheduler only on app+data networks"; else fail "scheduler networks: $SNETS"; fi
-  SPORTS=$(docker ps --filter "id=$SCHED" --format '{{.Ports}}')
+  SPORTS=$(host_bindings "$SCHED")
   if [ -z "$SPORTS" ]; then pass "scheduler publishes no ports"; else fail "scheduler publishes ports"; fi
   N=$(docker logs "$SCHED" 2>&1 | grep -cE 'DEV EMAIL|code=[0-9]{6}|re_[A-Za-z0-9_]{16,}')
   if [ "$N" = 0 ]; then pass "no codes or keys in scheduler logs (count 0)"; else fail "scheduler logs contain $N suspicious lines"; fi
