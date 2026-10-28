@@ -17,6 +17,7 @@ const badgeVariants = cva(
         success: "bg-gain-soft text-gain-text",
         danger: "bg-loss-soft text-loss-text",
         neutral: "bg-muted text-muted-foreground",
+        warning: "bg-warn-soft text-warn-text",
       },
     },
     defaultVariants: {
