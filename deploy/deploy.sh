@@ -18,6 +18,9 @@
 #   Migrations are never undone.
 #   The price scheduler (Phase 3) is built and started with the backend; a
 #   rollback to a release without it removes it (--remove-orphans).
+# Self re-exec: if the checked-out ref changes deploy/deploy.sh, the deploy
+#   re-runs the new script once (BIRJA_DEPLOY_REEXEC guard) for the same SHA,
+#   keeping the lock. Rollback never re-execs: it runs this script's logic.
 #
 # Undo / teardown:
 #   docker compose -p birja-prod down   stops the stack; volumes are kept.
@@ -39,6 +42,10 @@ NODE_IMAGE=node:24.22.1-trixie-slim         # same pin as frontend/Dockerfile
 KEEP_RELEASES=3                             # static releases kept on disk
 BUILD_UID=1000                              # unprivileged uid for the npm build (node in the image)
 REF="${DEPLOY_REF:-main}"                   # D-05: ref override
+NEW_SCRIPT=$APP_DIR/deploy/deploy.sh        # this script as checked out by a deploy
+# Hash of the script bash is running now, taken before any checkout can
+# replace it on disk (compared after checkout, see maybe_reexec).
+SELF_HASH=$(sha256sum 2>/dev/null < "${BASH_SOURCE[0]}" | awk '{print $1}' || true)
 
 STEP="startup"
 
@@ -81,7 +88,11 @@ on_err() {
 preflight() {
   STEP="preflight"
   [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
-  exec 9>"$LOCK"
+  # A re-exec'd run (maybe_reexec) inherits fd 9 with the lock still held by
+  # the same open file; reopening it would drop the lock for a moment.
+  if [ "${BIRJA_DEPLOY_REEXEC:-}" = 1 ] && [ /dev/fd/9 -ef "$LOCK" ]; then :
+  else exec 9>"$LOCK"
+  fi
   flock -n 9 || { echo "another deploy is running" >&2; exit 1; }
   git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1 \
     || { echo "$APP_DIR is not a git checkout" >&2; exit 1; }
@@ -187,6 +198,29 @@ rollback_target() {
     }' "$1"
 }
 
+# should_reexec <running hash> <checked-out hash> <guard>: succeeds if the
+# deploy must re-run the newly checked-out deploy.sh. Only when both hashes
+# are known and differ, and at most once (guard BIRJA_DEPLOY_REEXEC=1).
+# Pure function (tested by deploy/tests/test-reexec.sh).
+should_reexec() {
+  [ "${3:-}" != 1 ] && [ -n "$1" ] && [ -n "$2" ] && [ "$1" != "$2" ]
+}
+
+# maybe_reexec <sha>: bash keeps running the functions it parsed from the old
+# file even after the checkout replaced it, so a release that changes
+# deploy.sh would be deployed with the previous release's logic. Re-run the
+# new script once instead. It inherits fd 9 (the lock stays held) and is
+# told the already resolved SHA, so it deploys exactly the same commit.
+maybe_reexec() {
+  STEP="re-exec check"
+  local new_hash=""
+  if [ -f "$NEW_SCRIPT" ]; then new_hash=$(sha256sum < "$NEW_SCRIPT" | awk '{print $1}'); fi
+  if should_reexec "$SELF_HASH" "$new_hash" "${BIRJA_DEPLOY_REEXEC:-}"; then
+    echo "deploy.sh changed in $REF; re-running the new version"
+    exec env BIRJA_DEPLOY_REEXEC=1 BIRJA_DEPLOY_SHA="$1" DEPLOY_REF="$REF" "$NEW_SCRIPT" "${SCRIPT_ARGS[@]}"
+  fi
+}
+
 # live_sha <log>: SHA on top of the replayed stack (the last good release).
 live_sha() {
   [ -f "$1" ] || return 0
@@ -220,15 +254,23 @@ prune_releases() {
 do_deploy() {
   install -d -m 755 "$STATE_DIR"
   date -u +%Y-%m-%dT%H:%M:%SZ > "$PENDING_MARK"
-  STEP="git fetch"
-  git -C "$APP_DIR" fetch --prune --tags origin
   local sha
-  if sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "origin/$REF^{commit}"); then :
-  elif sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "$REF^{commit}"); then :
-  else echo "cannot resolve ref '$REF'" >&2; exit 1
+  if [ "${BIRJA_DEPLOY_REEXEC:-}" = 1 ] && [ -n "${BIRJA_DEPLOY_SHA:-}" ]; then
+    # re-exec'd by the previous script: same commit, no second fetch
+    STEP="git rev-parse"
+    sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "$BIRJA_DEPLOY_SHA^{commit}") \
+      || { echo "cannot resolve '$BIRJA_DEPLOY_SHA'" >&2; exit 1; }
+  else
+    STEP="git fetch"
+    git -C "$APP_DIR" fetch --prune --tags origin
+    if sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "origin/$REF^{commit}"); then :
+    elif sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "$REF^{commit}"); then :
+    else echo "cannot resolve ref '$REF'" >&2; exit 1
+    fi
   fi
   STEP="git checkout"
   git -C "$APP_DIR" checkout --detach "$sha"
+  maybe_reexec "$sha"
   echo "Deploying $REF = $(git -C "$APP_DIR" rev-parse --short HEAD)"
 
   if [ ! -d "$APP_DIR/backend" ] || [ ! -f "$APP_DIR/docker-compose.prod.yml" ]; then
@@ -309,6 +351,7 @@ do_rollback() {
 }
 
 main() {
+  SCRIPT_ARGS=("$@")
   case "${1:-}" in
     -h|--help) usage; exit 0 ;;
     "") MODE=deploy
@@ -323,8 +366,10 @@ main() {
   if [ "$MODE" = rollback ]; then do_rollback; else do_deploy; fi
 }
 
-# Parsed as one compound command before it runs (the checkout rewrites this
-# file), and skipped when sourced by deploy/tests/.
+# Everything above only defines functions and variables; this block is parsed
+# as one compound command before it runs and exits, so bash never reads this
+# file again after the checkout rewrites it. Skipped when sourced by
+# deploy/tests/.
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   main "$@"
   exit
