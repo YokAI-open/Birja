@@ -31,7 +31,9 @@ from app.services.kraken import KrakenError, TickerSource
 from app.services.price_rules import Candidate, evaluate_price, mid_from_ticker
 from app.services.prices import AcceptedPrice, CoinState, load_active_coins, upsert_prices
 
-logger = logging.getLogger(__name__)
+# Explicit name: under ``python -m`` __name__ is "__main__", which is outside the
+# "app" tree that configure_logging() attaches its handler to, so INFO logs were lost.
+logger = logging.getLogger("app.tasks.scheduler")
 
 LOCK_KEY = "sim:lock:price-refresh"
 # Exceeds the worst-case cycle; SOURCE_TIMEOUT_S bounds the source call strictly below it,

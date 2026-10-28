@@ -1,4 +1,7 @@
 import asyncio
+import os
+import signal
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +10,8 @@ import pytest
 from app.core.config import get_settings
 from app.tasks import scheduler
 from app.tasks.scheduler import CycleResult, run
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 class Clock:
@@ -200,3 +205,36 @@ def _with_heartbeat(real_run: Any, path: Path) -> Any:
         await real_run(heartbeat=path, **kw)
 
     return wrapped
+
+
+async def test_python_m_entrypoint_logs_cycles_to_stderr(
+    clean_prices: None, tmp_path: Path
+) -> None:
+    """Runs the scheduler exactly like the container does and reads its stderr."""
+    env = {**os.environ, "PRICE_SOURCE": "fake", "TMPDIR": str(tmp_path)}
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "app.tasks.scheduler",
+        cwd=BACKEND_DIR,
+        env=env,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert proc.stderr is not None
+    lines: list[str] = []
+    try:
+        async with asyncio.timeout(20):
+            while not any("price cycle:" in line for line in lines):
+                raw = await proc.stderr.readline()
+                if not raw:
+                    break
+                lines.append(raw.decode())
+    except TimeoutError:
+        pass
+    finally:
+        if proc.returncode is None:
+            proc.send_signal(signal.SIGTERM)
+        await asyncio.wait_for(proc.wait(), timeout=20)
+    text = "".join(lines)
+    assert "INFO app.tasks.scheduler: price scheduler started source=fake" in text
+    assert "INFO app.tasks.scheduler: price cycle: status=ok accepted=15" in text
