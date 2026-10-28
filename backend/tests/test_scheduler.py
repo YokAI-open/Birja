@@ -215,6 +215,24 @@ async def test_decimal_overflow_rejects_only_that_coin(
     assert len(prices) == 14 and "DOGE" not in prices
 
 
+async def test_mid_too_big_for_numeric_on_unpriced_coin_keeps_the_others(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    http: httpx.AsyncClient,
+    settings: Settings,
+) -> None:
+    body = _body()
+    # Fits quantize but not NUMERIC(20,8); a never-priced coin has no spike check.
+    body["result"]["SOLUSD"]["a"][0] = "1e13"
+    body["result"]["SOLUSD"]["b"][0] = "1e13"
+    with _router() as mock:
+        mock.get(TICKER_URL).respond(200, json=body)
+        result = await _cycle(sm, redis_client, http, settings, {})
+    assert result == CycleResult("ok", accepted=14, rejected=1)
+    prices = await _prices(sm)
+    assert len(prices) == 14 and "SOL" not in prices
+
+
 @pytest.mark.parametrize("error", [ValueError("bad"), ArithmeticError("bad")])
 async def test_per_coin_errors_reject_only_that_coin(
     sm: async_sessionmaker[AsyncSession],
