@@ -538,3 +538,35 @@ async def test_build_source_kraken_calls_fetch_tickers(
         result = await source(["XXBTZUSD"])
     assert route.call_count == 1
     assert "XXBTZUSD" in result
+
+
+async def test_stop_cancels_in_flight_cycle_and_releases_lock(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    settings: Settings,
+    tmp_path: Path,
+) -> None:
+    import asyncio
+
+    in_source = asyncio.Event()
+
+    async def hanging(pairs: Any) -> dict[str, Any]:
+        in_source.set()
+        await asyncio.sleep(30)  # a degraded Kraken, longer than the stop grace period
+        return {}
+
+    async def cycle() -> CycleResult:
+        return await run_cycle(
+            sessionmaker=sm, redis=redis_client, source=hanging, settings=settings, candidates={}
+        )
+
+    stop = asyncio.Event()
+    runner = asyncio.create_task(
+        scheduler.run(cycle=cycle, interval=60, stop=stop, heartbeat=tmp_path / "hb")
+    )
+    await asyncio.wait_for(in_source.wait(), timeout=5)
+    assert await redis_client.exists(LOCK_KEY) == 1
+    stop.set()  # what the SIGTERM handler does
+    await asyncio.wait_for(runner, timeout=5)
+    assert await redis_client.exists(LOCK_KEY) == 0
+    assert not (tmp_path / "hb").exists()

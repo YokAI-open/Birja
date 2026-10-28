@@ -212,6 +212,27 @@ def touch_heartbeat(path: Path) -> None:
     path.touch()
 
 
+async def _cycle_unless_stopped(
+    cycle: Callable[[], Awaitable[CycleResult]], stop: asyncio.Event
+) -> bool:
+    """Run one cycle; True if it finished, False if ``stop`` cancelled it first."""
+    task = asyncio.ensure_future(cycle())
+    stopper = asyncio.ensure_future(stop.wait())
+    try:
+        await asyncio.wait({task, stopper}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        stopper.cancel()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+    if task.cancelled():
+        logger.info("price cycle cancelled for shutdown")
+        return False
+    task.result()
+    return True
+
+
 async def run(
     *,
     cycle: Callable[[], Awaitable[CycleResult]],
@@ -223,11 +244,14 @@ async def run(
     """Run ``cycle`` now and then on a fixed schedule until ``stop`` is set.
 
     The heartbeat is touched after every cycle, even failed ones, so an upstream outage
-    shows up as stale prices rather than as a restarting container.
+    shows up as stale prices rather than as a restarting container. Setting ``stop``
+    cancels an in-flight cycle, so its ``finally`` releases the lock well within the
+    container's stop grace period instead of being cut off by SIGKILL.
     """
     next_tick = monotonic()
     while not stop.is_set():
-        await cycle()
+        if not await _cycle_unless_stopped(cycle, stop):
+            return
         touch_heartbeat(heartbeat)
         next_tick += interval
         if next_tick - monotonic() < 0:
