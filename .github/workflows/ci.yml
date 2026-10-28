@@ -44,7 +44,7 @@ jobs:
         run: uv run pytest --cov=app --cov-fail-under=80
       - name: Critical-path coverage (100%)
         working-directory: backend
-        run: uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py --fail-under=100
+        run: uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py --fail-under=100
       - name: Dependency audit
         working-directory: backend
         run: uv run pip-audit
