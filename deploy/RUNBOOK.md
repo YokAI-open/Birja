@@ -42,6 +42,8 @@ The frontend is built from a clean `git archive` copy in a root-only temp dir, i
 
 A failure during preparation (npm, image build, nginx config) leaves the running backend, schema, served frontend and nginx config untouched; only the checkout has moved, and `--rollback` (or a fixed re-deploy) puts it back.
 
+If the checked-out ref changes `deploy/deploy.sh`, the script logs `deploy.sh changed in <ref>; re-running the new version` and re-runs the new version once for the same commit (still holding the deploy lock), so a release is always deployed with its own deploy logic; tested offline by `deploy/tests/test-reexec.sh`.
+
 If it fails, it prints the failing step and the last redacted backend log lines. Fix the cause and re-run, or roll back.
 
 Releases reach `main` only through `release-*` or `hotfix-*` PRs (git-flow in CLAUDE.md).
