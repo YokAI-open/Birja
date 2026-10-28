@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -45,6 +46,13 @@ class Settings(BaseSettings):
     price_fresh_seconds: int = 120
     price_stale_seconds: int = 300
 
+    # Price refresh scheduler (PRICE-03/04). "fake" is dev/CI only and refused in prod.
+    price_source: Literal["kraken", "fake"] = "kraken"
+    price_poll_interval_seconds: int = 60
+    price_max_move: Decimal = Decimal("0.25")
+    price_confirm_tolerance: Decimal = Decimal("0.05")
+    price_confirm_polls: int = 3
+
     @field_validator(
         "rl_request_email_limit",
         "rl_request_email_window",
@@ -66,6 +74,33 @@ class Settings(BaseSettings):
         if v < 1:
             raise ValueError(f"{info.field_name} must be >= 1")
         return v
+
+    @field_validator("price_max_move", "price_confirm_tolerance")
+    @classmethod
+    def _check_fraction(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        if not (Decimal(0) < v < Decimal(1)):
+            raise ValueError(f"{info.field_name} must be > 0 and < 1")
+        return v
+
+    @field_validator("price_confirm_polls")
+    @classmethod
+    def _check_confirm_polls(cls, v: int) -> int:
+        if v < 2:
+            raise ValueError("price_confirm_polls must be >= 2")
+        return v
+
+    @field_validator("price_poll_interval_seconds")
+    @classmethod
+    def _check_poll_interval(cls, v: int) -> int:
+        if v < 10:
+            raise ValueError("price_poll_interval_seconds must be >= 10")
+        return v
+
+    @model_validator(mode="after")
+    def _check_price_source(self) -> Settings:
+        if self.env == "prod" and self.price_source == "fake":
+            raise ValueError("price_source 'fake' is not allowed in prod")
+        return self
 
     @field_validator("resend_api_key", "email_from", mode="before")
     @classmethod
