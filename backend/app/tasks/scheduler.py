@@ -61,7 +61,7 @@ def build_source(settings: Settings, http: httpx.AsyncClient) -> TickerSource:
         return make_fake_source(lambda: datetime.now(UTC))
 
     async def source(pairs: Sequence[str]) -> dict[str, Any]:
-        return await kraken.fetch_tickers(http, pairs)
+        return await kraken.fetch_tickers_isolated(http, pairs)
 
     return source
 

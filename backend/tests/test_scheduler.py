@@ -175,6 +175,28 @@ async def test_kraken_error_writes_nothing_and_releases_lock(
     assert await redis_client.exists(LOCK_KEY) == 0
 
 
+async def test_one_unknown_pair_does_not_stall_the_other_coins(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    http: httpx.AsyncClient,
+    settings: Settings,
+) -> None:
+    full = _body()["result"]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        pairs = request.url.params["pair"].split(",")
+        if "DOTUSD" in pairs:
+            return httpx.Response(200, json={"error": ["EQuery:Unknown asset pair"]})
+        return httpx.Response(200, json={"error": [], "result": {p: full[p] for p in pairs}})
+
+    with _router() as mock:
+        mock.get(TICKER_URL).mock(side_effect=respond)
+        result = await _cycle(sm, redis_client, http, settings, {})
+    assert result == CycleResult("ok", accepted=14, rejected=1)
+    prices = await _prices(sm)
+    assert len(prices) == 14 and "DOT" not in prices
+
+
 async def test_lock_held_makes_no_call_and_keeps_other_lock(
     sm: async_sessionmaker[AsyncSession],
     redis_client: Redis,
