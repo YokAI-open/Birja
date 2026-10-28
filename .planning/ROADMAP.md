@@ -9,7 +9,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
 - [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
-- [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
+- [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
 - [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
@@ -173,7 +173,7 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans:** 8/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -201,11 +201,11 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 03-09-PLAN.md — Full local suite, real Kraken prices on the dev stack (human check), push gate + PR into develop, release decision
+- [x] 03-09-PLAN.md — Full local suite, real Kraken prices on the dev stack (human check), push gate + PR into develop, release decision
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 03-10-PLAN.md — Conditional: release-0.2 via git-flow, tag v0.2.0, deploy + smoke (only if chosen at the push gate)
+- [x] 03-10-PLAN.md — Conditional: release-0.2 via git-flow, tag v0.2.0, deploy + smoke (only if chosen at the push gate)
 
 **UI hint**: yes
 
@@ -264,7 +264,7 @@ Plans:
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
-| 3. Prices | 8/10 | In Progress|  |
+| 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
