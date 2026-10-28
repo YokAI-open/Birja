@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     rl_send_global_limit: int = 100
     rl_send_global_window: int = 3600
 
+    # Price freshness (D-03): the single definition shared by the API response,
+    # the UI (via the response) and Phase 4's stale-trade refusal.
+    price_fresh_seconds: int = 120
+    price_stale_seconds: int = 300
+
     @field_validator(
         "rl_request_email_limit",
         "rl_request_email_window",
@@ -53,6 +58,8 @@ class Settings(BaseSettings):
         "rl_verify_ip_window",
         "rl_send_global_limit",
         "rl_send_global_window",
+        "price_fresh_seconds",
+        "price_stale_seconds",
     )
     @classmethod
     def _check_positive(cls, v: int, info: ValidationInfo) -> int:
@@ -89,6 +96,12 @@ class Settings(BaseSettings):
                 self.rl_request_ip_limit = 200
             if "rl_verify_ip_limit" not in self.model_fields_set:
                 self.rl_verify_ip_limit = 300
+        return self
+
+    @model_validator(mode="after")
+    def _check_price_freshness(self) -> Settings:
+        if self.price_stale_seconds <= self.price_fresh_seconds:
+            raise ValueError("price_stale_seconds must be greater than price_fresh_seconds")
         return self
 
     @model_validator(mode="after")
