@@ -166,3 +166,63 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+class SchedulerSettings(BaseSettings):
+    """Settings for the price scheduler container only (least privilege).
+
+    The scheduler parses a third-party API, so it gets no token, OTP or email secrets:
+    only the datastores and the price_* knobs. Validators mirror the matching ones in
+    ``Settings``.
+    """
+
+    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    env: Literal["dev", "test", "prod"]
+    database_url: str = Field(repr=False)
+    redis_url: str = Field(repr=False)
+
+    price_source: Literal["kraken", "fake"] = "kraken"
+    price_poll_interval_seconds: int = 60
+    price_max_move: Decimal = Decimal("0.25")
+    price_confirm_tolerance: Decimal = Decimal("0.05")
+    price_confirm_polls: int = 3
+
+    @field_validator("database_url")
+    @classmethod
+    def _check_database_url(cls, v: str) -> str:
+        if not v.startswith("postgresql+asyncpg://"):
+            raise ValueError("database_url must start with 'postgresql+asyncpg://'")
+        return v
+
+    @field_validator("price_max_move", "price_confirm_tolerance")
+    @classmethod
+    def _check_fraction(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        if not (Decimal(0) < v < Decimal(1)):
+            raise ValueError(f"{info.field_name} must be > 0 and < 1")
+        return v
+
+    @field_validator("price_confirm_polls")
+    @classmethod
+    def _check_confirm_polls(cls, v: int) -> int:
+        if v < 2:
+            raise ValueError("price_confirm_polls must be >= 2")
+        return v
+
+    @field_validator("price_poll_interval_seconds")
+    @classmethod
+    def _check_poll_interval(cls, v: int) -> int:
+        if v < 10:
+            raise ValueError("price_poll_interval_seconds must be >= 10")
+        return v
+
+    @model_validator(mode="after")
+    def _check_price_source(self) -> SchedulerSettings:
+        if self.env == "prod" and self.price_source == "fake":
+            raise ValueError("price_source 'fake' is not allowed in prod")
+        return self
+
+
+@lru_cache
+def get_scheduler_settings() -> SchedulerSettings:
+    return SchedulerSettings()

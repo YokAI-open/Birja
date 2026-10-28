@@ -66,6 +66,22 @@ def test_mid_zero_after_rounding_is_rejected() -> None:
     assert mid_from_ticker(_entry("0.000000001", "0.000000002")) is None
 
 
+@pytest.mark.parametrize(
+    ("bid", "ask", "expected"),
+    [
+        ("999999999999.99999998", "999999999999.99999998", D("999999999999.99999998")),
+        ("999999999999", "1000000000000", None),
+        ("1e12", "1e12", None),
+        ("1e13", "1e13", None),
+        ("1e30", "1e30", None),
+        # Below 1e12 before rounding, exactly 1e12 after: still too big for NUMERIC(20,8).
+        ("999999999999.999999999", "999999999999.999999999", None),
+    ],
+)
+def test_mid_must_fit_numeric_20_8(bid: str, ask: str, expected: Decimal | None) -> None:
+    assert mid_from_ticker(_entry(bid, ask)) == expected
+
+
 def test_first_observation_accepts() -> None:
     assert evaluate_price(None, D(100), None) == ("accept", None)
 
