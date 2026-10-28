@@ -29,7 +29,7 @@ from app.services import kraken
 from app.services.fake_prices import make_fake_source
 from app.services.kraken import KrakenError, TickerSource
 from app.services.price_rules import Candidate, evaluate_price, mid_from_ticker
-from app.services.prices import AcceptedPrice, load_active_coins, upsert_prices
+from app.services.prices import AcceptedPrice, CoinState, load_active_coins, upsert_prices
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,43 @@ async def _release(redis: Redis, token: str) -> None:
         logger.warning("price lock release failed")
 
 
+def _evaluate_coin(
+    coin: CoinState,
+    entry: object,
+    settings: Settings,
+    candidates: dict[int, Candidate],
+    observed_at: datetime,
+) -> AcceptedPrice | None:
+    """Accepted price for one coin, or None (logged) if this poll is rejected."""
+    mid = mid_from_ticker(entry)
+    if mid is None:
+        logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
+        return None
+    decision, candidate = evaluate_price(
+        coin.last_mid,
+        mid,
+        candidates.get(coin.coin_id),
+        max_move=settings.price_max_move,
+        confirm_tol=settings.price_confirm_tolerance,
+        confirm_n=settings.price_confirm_polls,
+    )
+    if candidate is None:
+        candidates.pop(coin.coin_id, None)
+    else:
+        candidates[coin.coin_id] = candidate
+    if decision in ("accept", "accept_confirmed"):
+        return AcceptedPrice(coin.coin_id, mid, observed_at)
+    assert coin.last_mid is not None  # noqa: S101 - a spike needs a last good price
+    move = abs(mid - coin.last_mid) / coin.last_mid
+    logger.warning(
+        "price rejected: symbol=%s reason=%s move=%s",
+        coin.symbol,
+        decision,
+        move.quantize(Decimal("0.001")),
+    )
+    return None
+
+
 async def _refresh(
     *,
     sessionmaker: async_sessionmaker[AsyncSession],
@@ -101,35 +138,16 @@ async def _refresh(
                 rejected += 1
                 logger.warning("price rejected: symbol=%s reason=missing", coin.symbol)
                 continue
-            mid = mid_from_ticker(entry)
-            if mid is None:
-                rejected += 1
+            try:
+                price = _evaluate_coin(coin, entry, settings, candidates, observed_at)
+            except ArithmeticError, ValueError:
+                # One coin's bad numbers (e.g. Decimal overflow) must not abort the cycle.
+                price = None
                 logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
-                continue
-            decision, candidate = evaluate_price(
-                coin.last_mid,
-                mid,
-                candidates.get(coin.coin_id),
-                max_move=settings.price_max_move,
-                confirm_tol=settings.price_confirm_tolerance,
-                confirm_n=settings.price_confirm_polls,
-            )
-            if candidate is None:
-                candidates.pop(coin.coin_id, None)
-            else:
-                candidates[coin.coin_id] = candidate
-            if decision in ("accept", "accept_confirmed"):
-                accepted.append(AcceptedPrice(coin.coin_id, mid, observed_at))
-            else:
+            if price is None:
                 rejected += 1
-                assert coin.last_mid is not None  # noqa: S101 - a spike needs a last good price
-                move = abs(mid - coin.last_mid) / coin.last_mid
-                logger.warning(
-                    "price rejected: symbol=%s reason=%s move=%s",
-                    coin.symbol,
-                    decision,
-                    move.quantize(Decimal("0.001")),
-                )
+            else:
+                accepted.append(price)
         await upsert_prices(session, accepted, settings.price_source)
         await session.commit()
         return CycleResult("ok", accepted=len(accepted), rejected=rejected)

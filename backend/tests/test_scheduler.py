@@ -197,6 +197,52 @@ async def test_one_unknown_pair_does_not_stall_the_other_coins(
     assert len(prices) == 14 and "DOT" not in prices
 
 
+async def test_decimal_overflow_rejects_only_that_coin(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    http: httpx.AsyncClient,
+    settings: Settings,
+) -> None:
+    body = _body()
+    # 39 digits at 8 dp exceed the 28-digit Decimal context: quantize raises.
+    body["result"]["XDGUSD"]["a"][0] = "1e30"
+    body["result"]["XDGUSD"]["b"][0] = "1e30"
+    with _router() as mock:
+        mock.get(TICKER_URL).respond(200, json=body)
+        result = await _cycle(sm, redis_client, http, settings, {})
+    assert result == CycleResult("ok", accepted=14, rejected=1)
+    prices = await _prices(sm)
+    assert len(prices) == 14 and "DOGE" not in prices
+
+
+@pytest.mark.parametrize("error", [ValueError("bad"), ArithmeticError("bad")])
+async def test_per_coin_errors_reject_only_that_coin(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    http: httpx.AsyncClient,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    real = scheduler.mid_from_ticker
+    btc_entry = _body()["result"]["XXBTZUSD"]
+
+    def flaky(entry: object) -> Decimal | None:
+        if entry == btc_entry:
+            raise error
+        return real(entry)
+
+    monkeypatch.setattr(scheduler, "mid_from_ticker", flaky)
+    with _router() as mock:
+        mock.get(TICKER_URL).respond(200, json=_body())
+        with caplog.at_level("WARNING", logger="app.tasks.scheduler"):
+            result = await _cycle(sm, redis_client, http, settings, {})
+    assert result == CycleResult("ok", accepted=14, rejected=1)
+    assert "symbol=BTC reason=invalid" in caplog.text
+    assert "BTC" not in await _prices(sm)
+
+
 async def test_lock_held_makes_no_call_and_keeps_other_lock(
     sm: async_sessionmaker[AsyncSession],
     redis_client: Redis,
