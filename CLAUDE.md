@@ -37,6 +37,9 @@ Update this block whenever the real commands change. CI runs the same commands.
 # First run, then local dev (full stack). App: http://localhost:5173, API docs: http://127.0.0.1:8000/docs
 cp .env.example .env
 docker compose up --build
+# After frontend dependencies change (package.json): recreate the anonymous node_modules volume,
+# or Vite keeps the old one and fails with "Failed to resolve import"
+docker compose up --build -d --wait --renew-anon-volumes
 docker compose logs -f scheduler   # price refresh loop (one container)
 docker compose restart scheduler   # after backend code changes (no auto-reload)
 # PRICE_SOURCE=fake in .env runs offline with deterministic prices (dev/CI only; prod refuses it)
