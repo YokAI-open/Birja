@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     price_confirm_tolerance: Decimal = Decimal("0.05")
     price_confirm_polls: int = 3
 
+    # Trading costs (D-01, D-04, D-06): a simulated spread around mid plus a fee, a
+    # minimum fee and a minimum order size. Settings, not literals, so prod can retune.
+    trade_spread: Decimal = Decimal("0.0025")
+    trade_fee_rate: Decimal = Decimal("0.0025")
+    trade_min_fee_usd: Decimal = Decimal("0.01")
+    trade_min_order_usd: Decimal = Decimal("1.00")
+
     @field_validator(
         "rl_request_email_limit",
         "rl_request_email_window",
@@ -94,6 +101,24 @@ class Settings(BaseSettings):
     def _check_poll_interval(cls, v: int) -> int:
         if v < 10:
             raise ValueError("price_poll_interval_seconds must be >= 10")
+        return v
+
+    @field_validator("trade_spread", "trade_fee_rate")
+    @classmethod
+    def _check_trade_rate(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        # zero is a legitimate configuration (no spread / no fee), unlike _check_fraction
+        if not (Decimal(0) <= v < Decimal(1)):
+            raise ValueError(f"{info.field_name} must be >= 0 and < 1")
+        return v
+
+    @field_validator("trade_min_fee_usd", "trade_min_order_usd")
+    @classmethod
+    def _check_trade_cents(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        # amounts must sit on the cent grid, or cash arithmetic would need hidden rounding
+        low_ok = v >= 0 if info.field_name == "trade_min_fee_usd" else v > 0
+        if not low_ok or v != v.quantize(Decimal("0.01")):
+            bound = ">= 0" if info.field_name == "trade_min_fee_usd" else "> 0"
+            raise ValueError(f"{info.field_name} must be {bound} and a whole number of cents")
         return v
 
     @model_validator(mode="after")
