@@ -173,7 +173,7 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans:** 4/10 plans executed
+**Plans:** 6/10 plans executed
 
 Plans:
 **Wave 1**
@@ -188,8 +188,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-05-PLAN.md — run_cycle: Redis lock, evaluate, idempotent upsert; scheduler settings; fake source refused in prod; prices.py on the 100% list
-- [ ] 03-06-PLAN.md — Freshness badges (Live/Delayed/Stale) with ticking ages and oldest-age header
+- [x] 03-05-PLAN.md — run_cycle: Redis lock, evaluate, idempotent upsert; scheduler settings; fake source refused in prod; prices.py on the 100% list
+- [x] 03-06-PLAN.md — Freshness badges (Live/Delayed/Stale) with ticking ages and oldest-age header
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -264,7 +264,7 @@ Plans:
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
-| 3. Prices | 4/10 | In Progress|  |
+| 3. Prices | 6/10 | In Progress|  |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
