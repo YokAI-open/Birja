@@ -97,3 +97,37 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Price refresh loop. Exactly ONE instance: never scale it and never run the
+  # loop inside the backend (uvicorn workers would each run it).
+  scheduler:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    stop_grace_period: 20s
+    environment:
+      ENV: ${ENV:?set it in .env (cp .env.example .env)}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set it in .env (cp .env.example .env)}
+      JWT_SECRET: ${JWT_SECRET:?set it in .env (cp .env.example .env)}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      PRICE_SOURCE: ${PRICE_SOURCE:-kraken}
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: ["python", "-m", "app.tasks.scheduler"]
+    networks: [data, app]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/birja-scheduler-heartbeat') < 150 else 1)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

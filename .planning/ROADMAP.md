@@ -173,7 +173,40 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans**: TBD
+**Plans:** 8/10 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md — Branch feature/phase-03-prices, react-router 8.5.1 legitimacy gate + install, RED markets e2e (helpers.ts, markets.spec.ts)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 03-02-PLAN.md — coins/prices schema (0004, mid only per D-05) + 15-coin seed (0005, D-01), freshness rule (D-03), GET /api/v1/prices behind CurrentUserDep (D-02)
+- [x] 03-03-PLAN.md — price_rules.evaluate_price (25% spike + 3-poll confirmation, D-04) at 100% in CI, Kraken Ticker client with bounded retry (respx)
+- [x] 03-04-PLAN.md — Markets table (formatUnitPrice per D-06, 30 s refetch) + routes / and /account with nav, e2e moved to /account
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 03-05-PLAN.md — run_cycle: Redis lock, evaluate, idempotent upsert; scheduler settings; fake source refused in prod; prices.py on the 100% list
+- [x] 03-06-PLAN.md — Freshness badges (Live/Delayed/Stale) with ticking ages and oldest-age header
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 03-07-PLAN.md — Scheduler loop + heartbeat + graceful stop; single scheduler service in dev compose; CI e2e PRICE_SOURCE=fake
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 03-08-PLAN.md — Prod scheduler (PRICE_SOURCE kraken, D-07), deploy.sh/rollback support, smoke checks (one scheduler, fresh prices, 401), RUNBOOK; offline verification only
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 03-09-PLAN.md — Full local suite, real Kraken prices on the dev stack (human check), push gate + PR into develop, release decision
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 03-10-PLAN.md — Conditional: release-0.2 via git-flow, tag v0.2.0, deploy + smoke (only if chosen at the push gate)
+
 **UI hint**: yes
 
 ### Phase 4: Trading
@@ -231,7 +264,7 @@ Plans:
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
-| 3. Prices | 0/TBD | Not started | - |
+| 3. Prices | 8/10 | In Progress|  |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |

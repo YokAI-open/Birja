@@ -37,6 +37,12 @@ Update this block whenever the real commands change. CI runs the same commands.
 # First run, then local dev (full stack). App: http://localhost:5173, API docs: http://127.0.0.1:8000/docs
 cp .env.example .env
 docker compose up --build
+# After frontend dependencies change (package.json): recreate the anonymous node_modules volume,
+# or Vite keeps the old one and fails with "Failed to resolve import"
+docker compose up --build -d --wait --renew-anon-volumes
+docker compose logs -f scheduler   # price refresh loop (one container)
+docker compose restart scheduler   # after backend code changes (no auto-reload)
+# PRICE_SOURCE=fake in .env runs offline with deterministic prices (dev/CI only; prod refuses it)
 
 # Backend deps
 cd backend && uv sync --locked              # install from uv.lock
@@ -46,7 +52,7 @@ cd backend && uv add <pkg>                  # add a dependency (updates uv.lock)
 docker compose -f docker-compose.test.yml up -d --wait
 cd backend && uv run pytest --cov=app --cov-fail-under=80
 # critical paths: login/OTP, sessions, authz, money
-cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py --fail-under=100
+cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py --fail-under=100
 docker compose -f docker-compose.test.yml down -v
 
 # Frontend tests

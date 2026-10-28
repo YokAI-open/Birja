@@ -22,8 +22,9 @@ usage() {
   cat <<USAGE
 Usage: smoke-prod.sh [--public]
   (no args)  host checks via origin: redirect, TLS, build, headers, docs off,
-             ENV=prod, placeholders refused, exposure, client IP, log hygiene
-  --public   user-facing checks through Cloudflare
+             ENV=prod, placeholders refused, exposure, client IP, log hygiene,
+             price scheduler (one, healthy, kraken), price freshness, prices 401
+  --public   user-facing checks through Cloudflare (incl. prices 401 signed out)
   -h, --help this text
 Exit 0 only if every check passed.
 USAGE
@@ -47,6 +48,10 @@ if [ "$MODE" = local ]; then
 else
   RESOLVE=()
 fi
+# One query: active coin count, how many have a price, age in s of the oldest
+# price (-1 if none). Run inside the postgres container; prints numbers only.
+PRICES_SQL="SELECT count(*), count(p.coin_id), coalesce(floor(extract(epoch FROM now() - min(p.as_of)))::int, -1) FROM coins c LEFT JOIN prices p ON p.coin_id = c.id WHERE c.is_active"
+
 curlq() { curl -sS --max-time 15 "${RESOLVE[@]}" "$@"; }
 
 CT_DIR=$(mktemp -d)
@@ -100,6 +105,13 @@ docs_not_exposed() {
   if [ -z "$bad" ]; then pass "API docs/schema not exposed via nginx"; else fail "API docs/schema check failed:$bad"; fi
 }
 
+# D-02: prices need a session
+prices_requires_auth() {
+  local code
+  code=$(curlq -o /dev/null -w '%{http_code}' "https://$H/api/v1/prices")
+  if [ "$code" = 401 ]; then pass "GET /api/v1/prices is 401 when signed out"; else fail "GET /api/v1/prices signed out: got $code (want 401)"; fi
+}
+
 # ---------------------------------------------------------------- public mode
 if [ "$MODE" = public ]; then
   A=$(curl -sS --max-time 15 -H 'accept: application/dns-json' \
@@ -129,6 +141,7 @@ print(" ".join(a["data"] for a in d.get("Answer",[]) if a.get("type")==1))' 2>/d
   if health_ok; then pass "health ok"; else fail "health not ok"; fi
 
   docs_not_exposed
+  prices_requires_auth
 
   if [ "$FAILED" -eq 0 ]; then echo "SMOKE OK ($TOTAL checks)"; exit 0; fi
   echo "SMOKE FAILED ($FAILED of $TOTAL)"; exit 1
@@ -334,7 +347,45 @@ if [ -n "$BACKEND" ]; then
   if [ "$N" = 0 ]; then pass "no codes or keys in backend logs (count 0)"; else fail "backend logs contain $N suspicious lines"; fi
 fi
 
-# 12. Deploy record
+# 12. Prices (Phase 3)
+SCHED_IDS=$(docker ps -q --filter label=com.docker.compose.project=birja-prod \
+  --filter label=com.docker.compose.service=scheduler --filter status=running)
+SCHED_N=$(printf '%s' "$SCHED_IDS" | grep -c .)
+if [ "$SCHED_N" = 1 ]; then
+  pass "exactly one scheduler running"
+  SCHED=$SCHED_IDS
+  HS=$(docker inspect -f '{{.State.Health.Status}}' "$SCHED" 2>/dev/null)
+  if [ "$HS" = healthy ]; then pass "scheduler healthy"; else fail "scheduler health is '${HS:-unknown}'"; fi
+  if [ "$(docker exec "$SCHED" printenv ENV 2>/dev/null)" = prod ] \
+     && [ "$(docker exec "$SCHED" printenv PRICE_SOURCE 2>/dev/null)" = kraken ]; then
+    pass "scheduler runs ENV=prod PRICE_SOURCE=kraken"
+  else
+    fail "scheduler ENV/PRICE_SOURCE is not prod/kraken"
+  fi
+  SNETS=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$SCHED" | tr ' ' '\n' | grep . | sort | tr '\n' ' ')
+  if [ "$SNETS" = "birja-prod_app birja-prod_data " ]; then pass "scheduler only on app+data networks"; else fail "scheduler networks: $SNETS"; fi
+  SPORTS=$(docker ps --filter "id=$SCHED" --format '{{.Ports}}')
+  if [ -z "$SPORTS" ]; then pass "scheduler publishes no ports"; else fail "scheduler publishes ports"; fi
+  N=$(docker logs "$SCHED" 2>&1 | grep -cE 'DEV EMAIL|code=[0-9]{6}|re_[A-Za-z0-9_]{16,}')
+  if [ "$N" = 0 ]; then pass "no codes or keys in scheduler logs (count 0)"; else fail "scheduler logs contain $N suspicious lines"; fi
+else
+  fail "scheduler count is $SCHED_N (want exactly 1)"
+fi
+PG=$(container postgres)
+if [ -n "$PG" ]; then
+  read -r ACTIVE PRICED OLDEST < <(docker exec "$PG" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -F" " -c "$1"' _ "$PRICES_SQL" 2>/dev/null)
+  if [[ "${ACTIVE:-}" =~ ^[0-9]+$ && "${PRICED:-}" =~ ^[0-9]+$ && "${OLDEST:-}" =~ ^-?[0-9]+$ ]] \
+     && [ "$ACTIVE" -ge 10 ] && [ "$PRICED" = "$ACTIVE" ] && [ "$OLDEST" -ge 0 ] && [ "$OLDEST" -le 300 ]; then
+    pass "all $ACTIVE active coins priced, oldest ${OLDEST}s"
+  else
+    fail "price freshness: active=${ACTIVE:-?} priced=${PRICED:-?} oldest=${OLDEST:-?}s (need >=10 active, all priced, <=300s)"
+  fi
+else
+  fail "postgres container not found for price check"
+fi
+prices_requires_auth
+
+# 13. Deploy record
 if [ -f "$DEPLOY_LOG" ]; then
   LAST=$(tail -n1 "$DEPLOY_LOG" | awk '{print $2}')
   HEAD_SHA=$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null)

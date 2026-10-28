@@ -155,7 +155,7 @@ describe("SignInPage code step", () => {
 
   it("puts the user in the me cache so the account shows without another /me fetch", async () => {
     const fetchMock = stubApi({});
-    const view = renderWithClient(<App />);
+    const view = renderWithClient(<App />, { route: "/account" });
     await view.user.type(await screen.findByLabelText("Email"), "a@example.com");
     await view.user.click(screen.getByRole("button", { name: "Send code" }));
     await view.user.type(await screen.findByLabelText("6-digit code"), "123456");

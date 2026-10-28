@@ -111,6 +111,31 @@ docker compose -f /srv/birja/docker-compose.prod.yml --env-file /etc/birja/prod.
 
 Never run `compose config` without `-q`, never read container env with `docker inspect`, and never paste logs that contain addresses into public places.
 
+## Prices scheduler
+
+One container (`scheduler`) polls Kraken every 60 s and writes the latest mid
+price per active coin. If it stops, prices age and the UI shows them as Stale
+(after 300 s). Never scale it; `deploy.sh` starts exactly one, after migrations.
+
+```bash
+docker compose -p birja-prod logs --tail 100 scheduler
+docker compose -p birja-prod ps scheduler
+```
+
+All prices stale together:
+
+- Kraken rejects the batch (look for "Unknown asset pair"): one delisted pair
+  freezes the whole batch. Fix with a new migration that sets `is_active = false`
+  for that coin, never a manual DB edit.
+- No egress to Kraken. Check (the image has no curl; prints 200 when it works):
+  `docker compose -p birja-prod exec scheduler python -c "import urllib.request; print(urllib.request.urlopen('https://api.kraken.com/0/public/Time', timeout=10).status)"`
+
+`smoke-prod.sh` checks: exactly one healthy scheduler with ENV=prod and
+PRICE_SOURCE=kraken, every active coin priced within 300 s, no codes/keys in its
+logs, and `/api/v1/prices` returns 401 when signed out.
+
+Rollback to v0.1.x removes the scheduler (that release has no prices page).
+
 ## Undo (every host change in phase 02.1)
 
 - DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).

@@ -16,6 +16,8 @@
 #     the checkout HEAD differs from the top SHA) the top entry itself is the
 #     last good release, so that is the target.
 #   Migrations are never undone.
+#   The price scheduler (Phase 3) is built and started with the backend; a
+#   rollback to a release without it removes it (--remove-orphans).
 #
 # Undo / teardown:
 #   docker compose -p birja-prod down   stops the stack; volumes are kept.
@@ -44,6 +46,12 @@ dc() {
   docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE" "$@"
 }
 
+# app_services: the services deploy/rollback build and start. Releases before
+# Phase 3 have no scheduler, so it is listed only if this checkout defines it.
+app_services() {
+  if dc config --services | grep -qx scheduler; then echo "backend scheduler"; else echo "backend"; fi
+}
+
 usage() {
   cat <<USAGE
 Usage: deploy.sh [--rollback]
@@ -62,6 +70,9 @@ on_err() {
   if [ -n "${BUILD_TMP:-}" ]; then rm -rf -- "$BUILD_TMP" || true; fi
   echo "--- last 50 backend log lines (redacted) ---" >&2
   dc logs --no-color --tail 50 backend 2>&1 \
+    | sed -E 's/code=[0-9]{6}/code=******/g; s/to=[^ ]+/to=***/g' >&2 || true
+  echo "--- last 30 scheduler log lines (redacted) ---" >&2
+  dc logs --no-color --tail 30 scheduler 2>&1 \
     | sed -E 's/code=[0-9]{6}/code=******/g; s/to=[^ ]+/to=***/g' >&2 || true
   echo "To roll back: /srv/birja/deploy/deploy.sh --rollback" >&2
   exit "$rc"
@@ -228,7 +239,8 @@ do_deploy() {
   # Prepare everything that is likely to fail first (image build, npm,
   # nginx config test). Nothing live changes until all of it has passed.
   STEP="build backend"
-  dc build backend
+  # shellcheck disable=SC2046 # app_services prints a word list on purpose
+  dc build $(app_services)
   build_frontend_release
   STEP="nginx config check"
   "$APP_DIR/deploy/check-nginx-config.sh"
@@ -239,7 +251,8 @@ do_deploy() {
   STEP="migrate"
   dc run --rm --no-deps backend alembic upgrade head
   STEP="start backend"
-  dc up -d --wait backend
+  # shellcheck disable=SC2046 # word list on purpose; --remove-orphans drops a scheduler this release lacks
+  dc up -d --wait --remove-orphans $(app_services)
   swap_current "$RELEASE_DIR"
   STEP="nginx install"
   "$APP_DIR/deploy/install-nginx.sh"
@@ -269,7 +282,8 @@ do_rollback() {
   git -C "$APP_DIR" checkout --detach "$sha"
   echo "Rolling back to $(git -C "$APP_DIR" rev-parse --short HEAD)"
   STEP="rollback build backend"
-  dc build backend
+  # shellcheck disable=SC2046 # app_services prints a word list on purpose
+  dc build $(app_services)
   if [ -d "$rel" ]; then
     RELEASE_DIR="$rel"
   else
@@ -283,7 +297,8 @@ do_rollback() {
     "$APP_DIR/deploy/check-nginx-config.sh"
   fi
   STEP="rollback backend"
-  dc up -d --wait backend
+  # shellcheck disable=SC2046 # word list on purpose; --remove-orphans removes the scheduler when the target has none
+  dc up -d --wait --remove-orphans $(app_services)
   echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
   echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
   swap_current "$RELEASE_DIR"

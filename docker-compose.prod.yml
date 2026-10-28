@@ -112,3 +112,45 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Price refresh loop (Kraken, every 60 s). Exactly ONE instance: never scale
+  # it (deploy.sh does not) and never run the loop inside the backend. No
+  # published ports. PRICE_SOURCE is hardcoded: prod must never read it from
+  # the env file (fake prices are refused in prod by Settings as well).
+  scheduler:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    stop_grace_period: 20s
+    environment:
+      ENV: "prod"
+      EMAIL_BACKEND: "resend"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set in /etc/birja/prod.env}
+      JWT_SECRET: ${JWT_SECRET:?set in /etc/birja/prod.env}
+      RESEND_API_KEY: ${RESEND_API_KEY:?set in /etc/birja/prod.env}
+      EMAIL_FROM: ${EMAIL_FROM:?set in /etc/birja/prod.env}
+      PRICE_SOURCE: "kraken"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: ["python", "-m", "app.tasks.scheduler"]
+    networks: [data, app]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/birja-scheduler-heartbeat') < 150 else 1)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
