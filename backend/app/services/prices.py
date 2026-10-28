@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -60,3 +62,52 @@ async def list_prices(
             )
         )
     return rows
+
+
+@dataclass(frozen=True)
+class CoinState:
+    coin_id: int
+    symbol: str
+    kraken_pair: str
+    last_mid: Decimal | None
+
+
+async def load_active_coins(db: AsyncSession) -> list[CoinState]:
+    """Active coins in display order with their last good mid (None if never priced)."""
+    result = await db.execute(
+        select(Coin.id, Coin.symbol, Coin.kraken_pair, Price.mid)
+        .outerjoin(Price, Price.coin_id == Coin.id)
+        .where(Coin.is_active)
+        .order_by(Coin.sort_order, Coin.id)
+    )
+    return [CoinState(cid, symbol, pair, mid) for cid, symbol, pair, mid in result]
+
+
+@dataclass(frozen=True)
+class AcceptedPrice:
+    coin_id: int
+    mid: Decimal
+    as_of: datetime
+
+
+async def upsert_prices(db: AsyncSession, rows: Sequence[AcceptedPrice], source: str) -> int:
+    """Insert or update prices in one statement; as_of never moves backwards.
+
+    The caller commits. Returns the number of rows inserted or updated.
+    """
+    if not rows:
+        return 0
+    stmt = insert(Price).values(
+        [{"coin_id": r.coin_id, "mid": r.mid, "as_of": r.as_of, "source": source} for r in rows]
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Price.coin_id],
+        set_={
+            "mid": stmt.excluded.mid,
+            "as_of": stmt.excluded.as_of,
+            "source": stmt.excluded.source,
+        },
+        where=Price.as_of < stmt.excluded.as_of,
+    )
+    result = await db.execute(stmt)
+    return int(result.rowcount)  # type: ignore[attr-defined]

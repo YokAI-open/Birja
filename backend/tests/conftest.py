@@ -120,6 +120,6 @@ async def clean_prices(engine: AsyncEngine, migrated: None) -> AsyncIterator[Non
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_auth_redis(redis_client: Redis) -> None:
-    for pattern in ("sim:otp:*", "sim:rl:*"):
+    for pattern in ("sim:otp:*", "sim:rl:*", "sim:lock:*"):
         async for key in redis_client.scan_iter(match=pattern):
             await redis_client.delete(key)
