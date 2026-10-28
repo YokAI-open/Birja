@@ -173,12 +173,12 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans:** 10 plans
+**Plans:** 1/10 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Branch feature/phase-03-prices, react-router 8.5.1 legitimacy gate + install, RED markets e2e (helpers.ts, markets.spec.ts)
+- [x] 03-01-PLAN.md — Branch feature/phase-03-prices, react-router 8.5.1 legitimacy gate + install, RED markets e2e (helpers.ts, markets.spec.ts)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -264,7 +264,7 @@ Plans:
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
-| 3. Prices | 0/10 | Planned | - |
+| 3. Prices | 1/10 | In Progress|  |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
