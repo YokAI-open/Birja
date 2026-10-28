@@ -1,4 +1,8 @@
+import { NavLink, Navigate, Route, Routes } from "react-router";
+import type { Me } from "@/api/auth";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import MarketsPage from "@/pages/MarketsPage";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMe } from "@/hooks/useMe";
 import AccountPage from "@/pages/AccountPage";
@@ -38,7 +42,43 @@ function AuthSwitch() {
       </Card>
     );
   }
-  return data === null ? <SignInPage /> : <AccountPage me={data} />;
+  return data === null ? <SignInPage /> : <SignedIn me={data} />;
+}
+
+const navItem = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    "inline-flex h-9 items-center rounded-pill px-4 text-sm font-medium",
+    isActive
+      ? "bg-primary text-primary-foreground shadow-pill"
+      : "text-muted-foreground hover:bg-muted",
+  );
+
+function SignedIn({ me }: { me: Me }) {
+  return (
+    <>
+      <nav aria-label="Main" className="flex gap-2 pt-2">
+        <NavLink to="/" end className={navItem}>
+          Markets
+        </NavLink>
+        <NavLink to="/account" className={navItem}>
+          Account
+        </NavLink>
+      </nav>
+      <Routes>
+        <Route index element={<MarketsPage />} />
+        <Route
+          path="account"
+          element={
+            <>
+              <AccountPage me={me} />
+              <HealthPage />
+            </>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
 }
 
 function App() {
@@ -50,7 +90,6 @@ function App() {
       </header>
       <main className="mx-auto max-w-[1440px] px-4 md:px-8">
         <AuthSwitch />
-        <HealthPage />
       </main>
     </>
   );

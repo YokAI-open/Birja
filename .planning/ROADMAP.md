@@ -8,7 +8,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 
 - [x] **Phase 1: Skeleton and CI** - Full stack runs with one command, frontend talks to backend, CI gates every PR (completed 2026-10-26)
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
-- [ ] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate
+- [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [ ] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages
 - [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
@@ -120,7 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
-**Plans:** 6/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -146,19 +146,19 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 02.1-07-PLAN.md — Full local suite, push gate, PR into develop (user merges)
+- [x] 02.1-07-PLAN.md — Full local suite, push gate, PR into develop (user merges)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02.1-08-PLAN.md — release-0.1 -> PR into main, tag v0.1.0, back-merge into develop (all user-approved)
+- [x] 02.1-08-PLAN.md — release-0.1 -> PR into main, tag v0.1.0, back-merge into develop (all user-approved)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 02.1-09-PLAN.md — First deploy from main (twice), user creates the proxied DNS record by hand (D-08), DoH + public smoke + CSP
+- [x] 02.1-09-PLAN.md — First deploy from main (twice), user creates the proxied DNS record by hand (D-08), DoH + public smoke + CSP
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 02.1-10-PLAN.md — Real-email sign-in checkpoint, real-IP/log checks, closeout push gate
+- [x] 02.1-10-PLAN.md — Real-email sign-in checkpoint, real-IP/log checks, closeout push gate
 
 ### Phase 3: Prices
 
@@ -173,7 +173,40 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans**: TBD
+**Plans:** 8/10 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md — Branch feature/phase-03-prices, react-router 8.5.1 legitimacy gate + install, RED markets e2e (helpers.ts, markets.spec.ts)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 03-02-PLAN.md — coins/prices schema (0004, mid only per D-05) + 15-coin seed (0005, D-01), freshness rule (D-03), GET /api/v1/prices behind CurrentUserDep (D-02)
+- [x] 03-03-PLAN.md — price_rules.evaluate_price (25% spike + 3-poll confirmation, D-04) at 100% in CI, Kraken Ticker client with bounded retry (respx)
+- [x] 03-04-PLAN.md — Markets table (formatUnitPrice per D-06, 30 s refetch) + routes / and /account with nav, e2e moved to /account
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 03-05-PLAN.md — run_cycle: Redis lock, evaluate, idempotent upsert; scheduler settings; fake source refused in prod; prices.py on the 100% list
+- [x] 03-06-PLAN.md — Freshness badges (Live/Delayed/Stale) with ticking ages and oldest-age header
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 03-07-PLAN.md — Scheduler loop + heartbeat + graceful stop; single scheduler service in dev compose; CI e2e PRICE_SOURCE=fake
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 03-08-PLAN.md — Prod scheduler (PRICE_SOURCE kraken, D-07), deploy.sh/rollback support, smoke checks (one scheduler, fresh prices, 401), RUNBOOK; offline verification only
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 03-09-PLAN.md — Full local suite, real Kraken prices on the dev stack (human check), push gate + PR into develop, release decision
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 03-10-PLAN.md — Conditional: release-0.2 via git-flow, tag v0.2.0, deploy + smoke (only if chosen at the push gate)
+
 **UI hint**: yes
 
 ### Phase 4: Trading
@@ -230,8 +263,8 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
-| 2.1. Deploy to nist.one | 6/10 | In Progress|  |
-| 3. Prices | 0/TBD | Not started | - |
+| 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
+| 3. Prices | 8/10 | In Progress|  |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |

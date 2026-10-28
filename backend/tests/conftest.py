@@ -103,8 +103,23 @@ def outbox(running_app: FastAPI) -> Iterator[OutboxSender]:
     running_app.state.email_sender = original
 
 
+@pytest_asyncio.fixture
+async def clean_prices(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
+    from sqlalchemy import delete
+
+    from app.models.price import Price
+
+    async def _wipe() -> None:
+        async with engine.begin() as conn:
+            await conn.execute(delete(Price))
+
+    await _wipe()
+    yield
+    await _wipe()
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def clean_auth_redis(redis_client: Redis) -> None:
-    for pattern in ("sim:otp:*", "sim:rl:*"):
+    for pattern in ("sim:otp:*", "sim:rl:*", "sim:lock:*"):
         async for key in redis_client.scan_iter(match=pattern):
             await redis_client.delete(key)

@@ -34,18 +34,18 @@ async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0003"]
+    assert await _versions(engine) == ["0005"]
 
     await asyncio.to_thread(command.downgrade, cfg, "base")
     assert await _versions(engine) == []
 
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0003"]
+    assert await _versions(engine) == ["0005"]
 
 
 def test_baseline_is_head() -> None:
     script = ScriptDirectory.from_config(_config())
-    assert script.get_heads() == ["0003"]
+    assert script.get_heads() == ["0005"]
 
 
 async def test_models_match_schema(engine: AsyncEngine) -> None:
