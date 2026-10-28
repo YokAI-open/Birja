@@ -223,7 +223,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 5/10 plans executed
+**Plans:** 7/10 plans executed
 
 Plans:
 **Wave 1**
@@ -239,8 +239,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-06-PLAN.md — trading.py: account FOR UPDATE -> replay -> Live price (D-03) -> holding lock -> plan -> apply; idempotency, price_changed, cost basis; trade_math/trading on the 100% list
-- [ ] 04-07-PLAN.md — /trade/:symbol page (D-05): live preview, Buy/Sell, confirm with idempotency key, refusals, price changed, fill; Markets Trade links
+- [x] 04-06-PLAN.md — trading.py: account FOR UPDATE -> replay -> Live price (D-03) -> holding lock -> plan -> apply; idempotency, price_changed, cost basis; trade_math/trading on the 100% list
+- [x] 04-07-PLAN.md — /trade/:symbol page (D-05): live preview, Buy/Sell, confirm with idempotency key, refusals, price changed, fill; Markets Trade links
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 5/10 | In Progress|  |
+| 4. Trading | 7/10 | In Progress|  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
