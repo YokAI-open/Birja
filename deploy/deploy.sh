@@ -55,8 +55,16 @@ dc() {
 
 # app_services: the services deploy/rollback build and start. Releases before
 # Phase 3 have no scheduler, so it is listed only if this checkout defines it.
+# A failing "dc config" fails this function: guessing "backend" would leave the
+# old scheduler running silently. Call it as its own assignment
+# (services=$(app_services)) so set -e and the ERR trap see the failure.
 app_services() {
-  if dc config --services | grep -qx scheduler; then echo "backend scheduler"; else echo "backend"; fi
+  local svcs
+  svcs=$(dc config --services) || {
+    echo "docker compose config failed; cannot tell which services to deploy" >&2
+    return 1
+  }
+  if grep -qx scheduler <<<"$svcs"; then echo "backend scheduler"; else echo "backend"; fi
 }
 
 usage() {
@@ -280,9 +288,12 @@ do_deploy() {
 
   # Prepare everything that is likely to fail first (image build, npm,
   # nginx config test). Nothing live changes until all of it has passed.
+  STEP="list services"
+  local services
+  services=$(app_services)
   STEP="build backend"
-  # shellcheck disable=SC2046 # app_services prints a word list on purpose
-  dc build $(app_services)
+  # shellcheck disable=SC2086 # $services is a word list on purpose
+  dc build $services
   build_frontend_release
   STEP="nginx config check"
   "$APP_DIR/deploy/check-nginx-config.sh"
@@ -293,8 +304,8 @@ do_deploy() {
   STEP="migrate"
   dc run --rm --no-deps backend alembic upgrade head
   STEP="start backend"
-  # shellcheck disable=SC2046 # word list on purpose; --remove-orphans drops a scheduler this release lacks
-  dc up -d --wait --remove-orphans $(app_services)
+  # shellcheck disable=SC2086 # word list on purpose; --remove-orphans drops a scheduler this release lacks
+  dc up -d --wait --remove-orphans $services
   swap_current "$RELEASE_DIR"
   STEP="nginx install"
   "$APP_DIR/deploy/install-nginx.sh"
@@ -323,9 +334,12 @@ do_rollback() {
   STEP="rollback checkout"
   git -C "$APP_DIR" checkout --detach "$sha"
   echo "Rolling back to $(git -C "$APP_DIR" rev-parse --short HEAD)"
+  STEP="rollback list services"
+  local services
+  services=$(app_services)
   STEP="rollback build backend"
-  # shellcheck disable=SC2046 # app_services prints a word list on purpose
-  dc build $(app_services)
+  # shellcheck disable=SC2086 # $services is a word list on purpose
+  dc build $services
   if [ -d "$rel" ]; then
     RELEASE_DIR="$rel"
   else
@@ -339,8 +353,8 @@ do_rollback() {
     "$APP_DIR/deploy/check-nginx-config.sh"
   fi
   STEP="rollback backend"
-  # shellcheck disable=SC2046 # word list on purpose; --remove-orphans removes the scheduler when the target has none
-  dc up -d --wait --remove-orphans $(app_services)
+  # shellcheck disable=SC2086 # word list on purpose; --remove-orphans removes the scheduler when the target has none
+  dc up -d --wait --remove-orphans $services
   echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
   echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
   swap_current "$RELEASE_DIR"

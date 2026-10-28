@@ -23,20 +23,25 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import Settings, get_settings
+from app.core.config import SchedulerSettings, get_scheduler_settings
 from app.core.logging import configure_logging
 from app.services import kraken
 from app.services.fake_prices import make_fake_source
 from app.services.kraken import KrakenError, TickerSource
 from app.services.price_rules import Candidate, evaluate_price, mid_from_ticker
-from app.services.prices import AcceptedPrice, load_active_coins, upsert_prices
+from app.services.prices import AcceptedPrice, CoinState, load_active_coins, upsert_prices
 
-logger = logging.getLogger(__name__)
+# Explicit name: under ``python -m`` __name__ is "__main__", which is outside the
+# "app" tree that configure_logging() attaches its handler to, so INFO logs were lost.
+logger = logging.getLogger("app.tasks.scheduler")
 
 LOCK_KEY = "sim:lock:price-refresh"
-# Exceeds the worst-case cycle; SOURCE_TIMEOUT_S bounds the source call strictly below it,
+# CYCLE_TIMEOUT_S bounds the whole cycle under the lock (DB read, source call, evaluate,
+# upsert), so the lock cannot expire while this instance still works. The margin up to
+# LOCK_TTL_MS covers the release call. SOURCE_TIMEOUT_S bounds the source call inside it,
 # because httpx timeouts apply per phase, so retries plus backoff could otherwise outlive it.
 LOCK_TTL_MS = 45_000
+CYCLE_TIMEOUT_S = 40
 SOURCE_TIMEOUT_S = 35
 
 _RELEASE_LUA = (
@@ -54,14 +59,14 @@ class CycleResult:
     rejected: int = 0
 
 
-def build_source(settings: Settings, http: httpx.AsyncClient) -> TickerSource:
+def build_source(settings: SchedulerSettings, http: httpx.AsyncClient) -> TickerSource:
     if settings.price_source == "fake":
         if settings.env == "prod":
             raise RuntimeError("price_source 'fake' is not allowed in prod")
         return make_fake_source(lambda: datetime.now(UTC))
 
     async def source(pairs: Sequence[str]) -> dict[str, Any]:
-        return await kraken.fetch_tickers(http, pairs)
+        return await kraken.fetch_tickers_isolated(http, pairs)
 
     return source
 
@@ -73,66 +78,87 @@ async def _release(redis: Redis, token: str) -> None:
         logger.warning("price lock release failed")
 
 
+def _evaluate_coin(
+    coin: CoinState,
+    entry: object,
+    settings: SchedulerSettings,
+    candidates: dict[int, Candidate],
+    observed_at: datetime,
+) -> AcceptedPrice | None:
+    """Accepted price for one coin, or None (logged) if this poll is rejected."""
+    mid = mid_from_ticker(entry)
+    if mid is None:
+        logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
+        return None
+    decision, candidate = evaluate_price(
+        coin.last_mid,
+        mid,
+        candidates.get(coin.coin_id),
+        max_move=settings.price_max_move,
+        confirm_tol=settings.price_confirm_tolerance,
+        confirm_n=settings.price_confirm_polls,
+    )
+    if candidate is None:
+        candidates.pop(coin.coin_id, None)
+    else:
+        candidates[coin.coin_id] = candidate
+    if decision in ("accept", "accept_confirmed"):
+        return AcceptedPrice(coin.coin_id, mid, observed_at)
+    assert coin.last_mid is not None  # noqa: S101 - a spike needs a last good price
+    move = abs(mid - coin.last_mid) / coin.last_mid
+    logger.warning(
+        "price rejected: symbol=%s reason=%s move=%s",
+        coin.symbol,
+        decision,
+        move.quantize(Decimal("0.001")),
+    )
+    return None
+
+
 async def _refresh(
     *,
     sessionmaker: async_sessionmaker[AsyncSession],
     source: TickerSource,
-    settings: Settings,
+    settings: SchedulerSettings,
     candidates: dict[int, Candidate],
     now: Callable[[], datetime],
 ) -> CycleResult:
+    # Short read: the session (and its transaction) is closed before the source call,
+    # so no connection sits idle in a transaction while Kraken is slow.
     async with sessionmaker() as session:
         coins = await load_active_coins(session)
-        if not coins:
-            return CycleResult("ok")
+    if not coins:
+        return CycleResult("ok")
+    try:
+        async with asyncio.timeout(SOURCE_TIMEOUT_S):
+            result = await source([c.kraken_pair for c in coins])
+    except (KrakenError, httpx.HTTPError, TimeoutError) as exc:
+        logger.error("price source failed: %s", str(exc) or type(exc).__name__)
+        return CycleResult("source_error")
+    # Ticker carries no timestamp: the arrival time is the as_of.
+    observed_at = now()
+    accepted: list[AcceptedPrice] = []
+    rejected = 0
+    for coin in coins:
+        entry = result.get(coin.kraken_pair)
+        if entry is None:
+            rejected += 1
+            logger.warning("price rejected: symbol=%s reason=missing", coin.symbol)
+            continue
         try:
-            async with asyncio.timeout(SOURCE_TIMEOUT_S):
-                result = await source([c.kraken_pair for c in coins])
-        except (KrakenError, httpx.HTTPError, TimeoutError) as exc:
-            logger.error("price source failed: %s", str(exc) or type(exc).__name__)
-            return CycleResult("source_error")
-        # Ticker carries no timestamp: the arrival time is the as_of.
-        observed_at = now()
-        accepted: list[AcceptedPrice] = []
-        rejected = 0
-        for coin in coins:
-            entry = result.get(coin.kraken_pair)
-            if entry is None:
-                rejected += 1
-                logger.warning("price rejected: symbol=%s reason=missing", coin.symbol)
-                continue
-            mid = mid_from_ticker(entry)
-            if mid is None:
-                rejected += 1
-                logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
-                continue
-            decision, candidate = evaluate_price(
-                coin.last_mid,
-                mid,
-                candidates.get(coin.coin_id),
-                max_move=settings.price_max_move,
-                confirm_tol=settings.price_confirm_tolerance,
-                confirm_n=settings.price_confirm_polls,
-            )
-            if candidate is None:
-                candidates.pop(coin.coin_id, None)
-            else:
-                candidates[coin.coin_id] = candidate
-            if decision in ("accept", "accept_confirmed"):
-                accepted.append(AcceptedPrice(coin.coin_id, mid, observed_at))
-            else:
-                rejected += 1
-                assert coin.last_mid is not None  # noqa: S101 - a spike needs a last good price
-                move = abs(mid - coin.last_mid) / coin.last_mid
-                logger.warning(
-                    "price rejected: symbol=%s reason=%s move=%s",
-                    coin.symbol,
-                    decision,
-                    move.quantize(Decimal("0.001")),
-                )
+            price = _evaluate_coin(coin, entry, settings, candidates, observed_at)
+        except ArithmeticError, ValueError:
+            # One coin's bad numbers (e.g. Decimal overflow) must not abort the cycle.
+            price = None
+            logger.warning("price rejected: symbol=%s reason=invalid", coin.symbol)
+        if price is None:
+            rejected += 1
+        else:
+            accepted.append(price)
+    async with sessionmaker() as session:
         await upsert_prices(session, accepted, settings.price_source)
         await session.commit()
-        return CycleResult("ok", accepted=len(accepted), rejected=rejected)
+    return CycleResult("ok", accepted=len(accepted), rejected=rejected)
 
 
 async def run_cycle(
@@ -140,7 +166,7 @@ async def run_cycle(
     sessionmaker: async_sessionmaker[AsyncSession],
     redis: Redis,
     source: TickerSource,
-    settings: Settings,
+    settings: SchedulerSettings,
     candidates: dict[int, Candidate],
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> CycleResult:
@@ -154,13 +180,17 @@ async def run_cycle(
         logger.info("price cycle: lock held elsewhere, skipping")
         return CycleResult("locked")
     try:
-        outcome = await _refresh(
-            sessionmaker=sessionmaker,
-            source=source,
-            settings=settings,
-            candidates=candidates,
-            now=now,
-        )
+        async with asyncio.timeout(CYCLE_TIMEOUT_S):
+            outcome = await _refresh(
+                sessionmaker=sessionmaker,
+                source=source,
+                settings=settings,
+                candidates=candidates,
+                now=now,
+            )
+    except TimeoutError:
+        logger.error("price cycle timed out after %ss", CYCLE_TIMEOUT_S)
+        outcome = CycleResult("source_error")
     except Exception:
         logger.exception("price cycle failed unexpectedly")
         outcome = CycleResult("source_error")
@@ -182,6 +212,27 @@ def touch_heartbeat(path: Path) -> None:
     path.touch()
 
 
+async def _cycle_unless_stopped(
+    cycle: Callable[[], Awaitable[CycleResult]], stop: asyncio.Event
+) -> bool:
+    """Run one cycle; True if it finished, False if ``stop`` cancelled it first."""
+    task = asyncio.ensure_future(cycle())
+    stopper = asyncio.ensure_future(stop.wait())
+    try:
+        await asyncio.wait({task, stopper}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        stopper.cancel()
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+    if task.cancelled():
+        logger.info("price cycle cancelled for shutdown")
+        return False
+    task.result()
+    return True
+
+
 async def run(
     *,
     cycle: Callable[[], Awaitable[CycleResult]],
@@ -193,11 +244,14 @@ async def run(
     """Run ``cycle`` now and then on a fixed schedule until ``stop`` is set.
 
     The heartbeat is touched after every cycle, even failed ones, so an upstream outage
-    shows up as stale prices rather than as a restarting container.
+    shows up as stale prices rather than as a restarting container. Setting ``stop``
+    cancels an in-flight cycle, so its ``finally`` releases the lock well within the
+    container's stop grace period instead of being cut off by SIGKILL.
     """
     next_tick = monotonic()
     while not stop.is_set():
-        await cycle()
+        if not await _cycle_unless_stopped(cycle, stop):
+            return
         touch_heartbeat(heartbeat)
         next_tick += interval
         if next_tick - monotonic() < 0:
@@ -209,7 +263,7 @@ async def run(
 
 async def amain(stop: asyncio.Event | None = None) -> None:
     configure_logging()
-    settings = get_settings()
+    settings = get_scheduler_settings()
     own_stop = stop is None
     stop = stop or asyncio.Event()
     if own_stop:

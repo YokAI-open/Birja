@@ -25,7 +25,9 @@ function MarketsPage() {
         ))}
       </div>
     );
-  } else if (isError) {
+  } else if (!data) {
+    // Only when there is nothing to show: a failed background refetch keeps the last
+    // good data (TanStack sets isError but keeps data), so badges age toward Stale.
     body = (
       <div className="flex flex-col items-start gap-4">
         <p role="alert" className="text-loss-text">
@@ -105,6 +107,11 @@ function MarketsPage() {
           </p>
         )}
       </div>
+      {isError && data && (
+        <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
+          Couldn&apos;t refresh prices. Showing the last update.
+        </p>
+      )}
       <Card>
         <CardContent>{body}</CardContent>
       </Card>
