@@ -223,7 +223,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 7/10 plans executed
+**Plans:** 8/10 plans executed
 
 Plans:
 **Wave 1**
@@ -244,7 +244,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-08-PLAN.md — POST /trades/quote, POST /trades, GET /holdings/{symbol} (CSRF, auth, plain-decimal JSON), API tests, real-Postgres concurrency proof
+- [x] 04-08-PLAN.md — POST /trades/quote, POST /trades, GET /holdings/{symbol} (CSRF, auth, plain-decimal JSON), API tests, real-Postgres concurrency proof
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 7/10 | In Progress|  |
+| 4. Trading | 8/10 | In Progress|  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
