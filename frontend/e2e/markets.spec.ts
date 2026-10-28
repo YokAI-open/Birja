@@ -8,7 +8,7 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
 
   const email = await signInNewUser(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe("/");
+  await expect(page).toHaveURL((url) => url.pathname === "/");
 
   const table = page.getByRole("table", { name: "Markets" });
   await expect(table.getByRole("row")).toHaveCount(16);
@@ -34,12 +34,13 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   });
 
   await page.getByRole("link", { name: "Account" }).click();
-  expect(new URL(page.url()).pathname).toBe("/account");
+  await expect(page).toHaveURL((url) => url.pathname === "/account");
   await expect(page.getByText("$10,000.00")).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
 
+  // The redirect from unknown paths happens client-side after load, so wait for it.
   await page.goto("/nope");
-  expect(new URL(page.url()).pathname).toBe("/");
+  await expect(page).toHaveURL((url) => url.pathname === "/");
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
 
   // Signed out (D-02): a fresh context sees sign-in, not Markets.
