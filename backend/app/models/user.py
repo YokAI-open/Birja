@@ -35,6 +35,7 @@ class Account(Base):
     __table_args__ = (
         CheckConstraint("cash >= 0", name="cash_non_negative"),
         CheckConstraint("starting_cash >= 0", name="starting_cash_non_negative"),
+        CheckConstraint("cash = round(cash, 2)", name="cash_cents"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
