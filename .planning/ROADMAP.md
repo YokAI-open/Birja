@@ -173,7 +173,7 @@ Plans:
   3. Prices update about every 60 seconds without reloading the page, driven by a single scheduler container (scaling the backend does not duplicate it)
   4. A zero, negative or implausibly spiking price from the provider is rejected, the last good price stays, and its age keeps growing until it shows as stale
 
-**Plans:** 1/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 **Wave 1**
@@ -182,9 +182,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — coins/prices schema (0004, mid only per D-05) + 15-coin seed (0005, D-01), freshness rule (D-03), GET /api/v1/prices behind CurrentUserDep (D-02)
-- [ ] 03-03-PLAN.md — price_rules.evaluate_price (25% spike + 3-poll confirmation, D-04) at 100% in CI, Kraken Ticker client with bounded retry (respx)
-- [ ] 03-04-PLAN.md — Markets table (formatUnitPrice per D-06, 30 s refetch) + routes / and /account with nav, e2e moved to /account
+- [x] 03-02-PLAN.md — coins/prices schema (0004, mid only per D-05) + 15-coin seed (0005, D-01), freshness rule (D-03), GET /api/v1/prices behind CurrentUserDep (D-02)
+- [x] 03-03-PLAN.md — price_rules.evaluate_price (25% spike + 3-poll confirmation, D-04) at 100% in CI, Kraken Ticker client with bounded retry (respx)
+- [x] 03-04-PLAN.md — Markets table (formatUnitPrice per D-06, 30 s refetch) + routes / and /account with nav, e2e moved to /account
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -264,7 +264,7 @@ Plans:
 | 1. Skeleton and CI | 7/7 | Complete    | 2026-10-26 |
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
-| 3. Prices | 1/10 | In Progress|  |
+| 3. Prices | 4/10 | In Progress|  |
 | 4. Trading | 0/TBD | Not started | - |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
