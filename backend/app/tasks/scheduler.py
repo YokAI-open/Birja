@@ -36,9 +36,12 @@ from app.services.prices import AcceptedPrice, CoinState, load_active_coins, ups
 logger = logging.getLogger("app.tasks.scheduler")
 
 LOCK_KEY = "sim:lock:price-refresh"
-# Exceeds the worst-case cycle; SOURCE_TIMEOUT_S bounds the source call strictly below it,
+# CYCLE_TIMEOUT_S bounds the whole cycle under the lock (DB read, source call, evaluate,
+# upsert), so the lock cannot expire while this instance still works. The margin up to
+# LOCK_TTL_MS covers the release call. SOURCE_TIMEOUT_S bounds the source call inside it,
 # because httpx timeouts apply per phase, so retries plus backoff could otherwise outlive it.
 LOCK_TTL_MS = 45_000
+CYCLE_TIMEOUT_S = 40
 SOURCE_TIMEOUT_S = 35
 
 _RELEASE_LUA = (
@@ -177,13 +180,17 @@ async def run_cycle(
         logger.info("price cycle: lock held elsewhere, skipping")
         return CycleResult("locked")
     try:
-        outcome = await _refresh(
-            sessionmaker=sessionmaker,
-            source=source,
-            settings=settings,
-            candidates=candidates,
-            now=now,
-        )
+        async with asyncio.timeout(CYCLE_TIMEOUT_S):
+            outcome = await _refresh(
+                sessionmaker=sessionmaker,
+                source=source,
+                settings=settings,
+                candidates=candidates,
+                now=now,
+            )
+    except TimeoutError:
+        logger.error("price cycle timed out after %ss", CYCLE_TIMEOUT_S)
+        outcome = CycleResult("source_error")
     except Exception:
         logger.exception("price cycle failed unexpectedly")
         outcome = CycleResult("source_error")

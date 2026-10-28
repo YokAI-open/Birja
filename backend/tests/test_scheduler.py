@@ -374,9 +374,39 @@ async def test_source_timeout_gives_source_error_and_releases_lock(
     assert scheduler.SOURCE_TIMEOUT_S < scheduler.LOCK_TTL_MS
 
 
-def test_source_timeout_is_below_lock_ttl() -> None:
-    assert scheduler.LOCK_TTL_MS > 35 * 1000
-    assert scheduler.SOURCE_TIMEOUT_S == 35
+def test_cycle_timeout_is_below_lock_ttl_with_margin() -> None:
+    assert scheduler.SOURCE_TIMEOUT_S < scheduler.CYCLE_TIMEOUT_S
+    # The margin covers the lock release (redis socket timeout 2 s) after the cycle.
+    assert scheduler.CYCLE_TIMEOUT_S + 3 <= scheduler.LOCK_TTL_MS / 1000
+
+
+async def test_slow_db_step_is_bounded_by_cycle_timeout_and_releases_lock(
+    sm: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    monkeypatch.setattr(scheduler, "CYCLE_TIMEOUT_S", 0.1)
+
+    async def slow_load(session: AsyncSession) -> list[Any]:
+        await asyncio.sleep(5)
+        return []
+
+    monkeypatch.setattr(scheduler, "load_active_coins", slow_load)
+
+    async def source(pairs: Any) -> dict[str, Any]:
+        return {}
+
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    result = await run_cycle(
+        sessionmaker=sm, redis=redis_client, source=source, settings=settings, candidates={}
+    )
+    assert loop.time() - started < 2
+    assert result.status == "source_error"
+    assert await redis_client.exists(LOCK_KEY) == 0
 
 
 async def test_redis_unavailable_gives_lock_error(
