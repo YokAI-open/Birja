@@ -12,16 +12,15 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Sign in with email + one-time code (no passwords); codes emailed via Resend — Phase 2, live delivery verified in Phase 2.1
+- [x] New account starts with $10,000 virtual cash, once, with no reset — Phase 2
+- [x] Curated list of 15 major cryptocurrencies with prices refreshed about every minute and visible age — Phase 3
+- [x] Market buy/sell orders by dollar amount or fractional quantity up to eight decimals — validated in Phase 4: Trading
+- [x] Configured simulated spread and fee shown in a server-computed preview, followed by the actual fill — validated in Phase 4: Trading
+- [x] Refuse prices aged 120 seconds or more, including time spent waiting for database locks — validated in Phase 4: Trading
 
 ### Active
 
-- [ ] Sign in with email + one-time code (no passwords); codes emailed via Resend
-- [ ] New account starts with $10,000 virtual cash, once, with no reset
-- [ ] Curated list of ~10–20 major cryptocurrencies with prices refreshed about every minute, each shown with its "as of" time
-- [ ] Market buy/sell orders, by dollar amount or by quantity (fractional quantities allowed)
-- [ ] Trades execute at market price ± a fixed simulated spread, plus a fixed % fee. Both are shown before the user confirms.
-- [ ] Trades are refused if the price is older than a maximum allowed age
 - [ ] Portfolio view: cash, holdings, total value now, total P/L vs the $10k start
 - [ ] Per-holding P/L against average cost
 - [ ] Trade history: date, coin, side, quantity, price, fee
@@ -46,7 +45,21 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - Market data: free tiers only. The curated coin list keeps API calls within free rate limits. Prices are fetched by a single scheduled job and cached in Redis, with the latest price also persisted in Postgres, which is the source of truth.
 - Simulated pricing: buy price = mid × (1 + spread), sell price = mid × (1 − spread), plus fee = % of notional. The exact values are config. The executed price, fee and price timestamp are recorded on every trade.
 - The repo started with only `main`. Git-flow is mapped as `main` = production (the "master" role in CLAUDE.md) and `develop` = integration.
-- `.claude/skills/ui-ux-pro-max` is available for the design system (`design-system/<project>/MASTER.md`). shadcn setup needs a Node upgrade (Node 18 is too old). Do this in the first frontend phase.
+- The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
+
+## Current State
+
+Phase 4 is complete: market buys/sells, itemized previews, atomic execution,
+idempotent retries and actual fills are verified against all five roadmap
+criteria and TRADE-01..08. Release v0.3.1 is live at https://birja.nist.one
+with the reviewed price-freshness correction, green release/back-merge CI,
+481 passing backend tests, 100% critical-path coverage and passing origin
+and public smoke checks. The user approved live buy/sell verification.
+
+Phase 5 (Portfolio and History) is next and has not started. Public HTTPS
+and sign-in were delivered in Phase 2.1; the remaining Phase 6 deployment
+criteria, including nightly off-server backup and tested restore, remain
+open. See `phases/04-trading/04-VERIFICATION.md` for closeout evidence.
 
 ## Constraints
 
@@ -60,19 +73,22 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | — Pending |
-| Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | — Pending |
-| Market orders only | Delivers the core value without a background order matcher | — Pending |
-| Fixed % simulated spread + fixed % fee | Free APIs give no bid/ask; still teaches that trading costs money | — Pending |
-| $10k start, no reset | Mistakes stay, like real investing | — Pending |
-| Curated ~10–20 coins | Keeps API calls within free rate limits | — Pending |
-| Resend for one-time-code email | Free tier, simple API | — Pending |
+| Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | ✓ Good — prices and trading shipped in Phases 3/4 |
+| Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | ✓ Good — Phase 3 live scheduler verified |
+| Market orders only | Delivers the core value without a background order matcher | ✓ Good — Phase 4 buy/sell flow verified |
+| Fixed % simulated spread + fixed % fee | Free APIs give no bid/ask; still teaches that trading costs money | ✓ Good — Phase 4: 0.25% each, $0.01 minimum fee, sell fee capped at notional |
+| $10k start, no reset | Mistakes stay, like real investing | ✓ Good — Phase 2 account invariants verified |
+| Curated ~10–20 coins | Keeps API calls within free rate limits | ✓ Good — 15 coins live in Phase 3 |
+| Resend for one-time-code email | Free tier, simple API | ✓ Good — real delivery approved in Phases 2.1/4 |
 | v1 done = deployed for friends | Real use by real people is the validation | — Pending |
-| `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | — Pending |
-| Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | — Pending |
+| `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | ✓ Good — release/hotfix PR and back-merge flow verified |
+| Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | ✓ Good — Phase 3 live data verified |
 | Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | — Pending |
-| One simple scheduler-loop container for prices; OTP email via FastAPI BackgroundTasks | Fewest dependencies; Celery has no declared Python 3.14 support; a lost email just means re-requesting | — Pending |
-| "$ amount" on buys = total cash spent including fee | Cash drops by exactly what the user typed | — Pending |
+| One simple scheduler-loop container for prices; OTP email via FastAPI BackgroundTasks | Fewest dependencies; Celery has no declared Python 3.14 support; a lost email just means re-requesting | ✓ Good — Phases 2/3 verified |
+| "$ amount" on buys = total cash spent including fee | Cash drops by exactly what the user typed | ✓ Good — Phase 4 exact-cent API, math and e2e assertions |
+| Trade only at price age <120 seconds; compare preview/current mid | Reuses the Live threshold and requires renewed confirmation if price moves | ✓ Good — Phase 4; v0.3.1 checks freshness after DB waits |
+| Account row lock before holding lock; user-scoped idempotency key | One transaction prevents overspend and duplicate fills | ✓ Good — Phase 4 real-Postgres concurrency verified |
+| Maintain holding cost basis during trade execution | Phase 5 can compute average cost including fees without reconstructing history | ✓ Good — Phase 4 updates basis atomically; valuation UI remains Phase 5 |
 | Repo made public so branch protection can require `ci-pass` on `develop` and `main` (D-01) | Free real merge blocking. The private plan returned 403 for protection. A git-history secret scan came back clean before the switch | ✓ Good (2026-10-26: protection verified, strict, enforce_admins off) |
 | No `ORJSONResponse`/`orjson` (D-02) | Deprecated in FastAPI. Pydantic already serializes `response_model` output | ✓ Good |
 
@@ -94,4 +110,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-20 after initialization*
+*Last updated: 2026-10-29 after Phase 4 completion*
