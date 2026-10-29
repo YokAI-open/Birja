@@ -1,0 +1,35 @@
+---
+name: "gsd-ultraplan-phase"
+description: "[BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back."
+metadata:
+  short-description: "[BETA] Offload plan phase to Claude Code's ultraplan cloud; review in browser and import back."
+---
+
+<codex_skill_adapter>
+Read `.codex/GSD-ADAPTER.md` before executing this skill.
+Invoke as `$gsd-ultraplan-phase`; text after the invocation is `{{GSD_ARGS}}` (empty when omitted).
+Resolve all project paths from the repository root.
+</codex_skill_adapter>
+
+<objective>
+Offload GSD's plan phase to Claude Code's ultraplan cloud infrastructure.
+
+Ultraplan drafts the plan in a remote cloud session while your terminal stays free.
+Review and comment on the plan in your browser, then import it back via $gsd-import --from.
+
+⚠ BETA: ultraplan is in research preview. Use $gsd-plan-phase for stable local planning.
+Requirements: Claude Code v2.1.91+, claude.ai account, GitHub repository.
+</objective>
+
+<execution_context>
+@.codex/get-shit-done/workflows/ultraplan-phase.md
+@.codex/get-shit-done/references/ui-brand.md
+</execution_context>
+
+<context>
+{{GSD_ARGS}}
+</context>
+
+<process>
+Execute the ultraplan-phase workflow end-to-end.
+</process>
