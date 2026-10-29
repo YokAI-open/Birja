@@ -100,6 +100,17 @@ From RESEARCH, with D-06/D-07 applied:
 - User chose `push-pr, release-now`; PR #19 was merged into develop as
   `5dc514d` after green CI.
 
+### Release preparation (04-10, 2026-10-29)
+
+- `release-0.3` was cut from updated develop after PR #19 merged.
+- Commit `22ff0d5` changes only the four project version files to 0.3.0;
+  both lockfiles were checked to contain no dependency changes.
+- Backend: 476 tests, 99.89% total coverage, critical-path list 100%;
+  ruff, formatting and mypy passed.
+- Frontend: 161 tests, 98.88% statements, 99.76% lines; lint, types and build passed.
+- The isolated test stack was removed after the tests.
+- Release push/PR, tag and deployment remain pending their checkpoints.
+
 ## Wave 0 Requirements
 
 - [ ] `backend/tests/test_trade_math.py`, `test_config_trading.py` (04-02 Task 1, RED first)
