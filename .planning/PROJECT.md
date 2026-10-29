@@ -56,7 +56,8 @@ with the reviewed price-freshness correction, green release/back-merge CI,
 481 passing backend tests, 100% critical-path coverage and passing origin
 and public smoke checks. The user approved live buy/sell verification.
 
-Phase 5 (Portfolio and History) is next and has not started. Public HTTPS
+Phase 5 (Portfolio and History) has eight verified plans and an approved UI
+contract; implementation has not started. Public HTTPS
 and sign-in were delivered in Phase 2.1; the remaining Phase 6 deployment
 criteria, including nightly off-server backup and tested restore, remain
 open. See `phases/04-trading/04-VERIFICATION.md` for closeout evidence.

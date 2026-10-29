@@ -1,93 +1,78 @@
 ---
 phase: 5
 slug: portfolio-and-history
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-10-29
 ---
 
-# Phase 5 — Validation Strategy
+# Phase5 — Validation Strategy
 
-## Test Infrastructure
+Planning coverage is complete; no implementation tests/services ran during planning. `nyquist_compliant:true` describes the planned feedback/producer coverage, not execution. `wave_0_complete:false` remains until new tests exist and run. No passed test or human approval is claimed.
 
-| Property | Value |
-|----------|-------|
-| Backend | Existing pytest/pytest-asyncio; real isolated PostgreSQL/Redis from docker-compose.test.yml |
-| Frontend | Existing Vitest/Testing Library; Playwright happy paths in fake-price CI only |
-| Config | backend/pyproject.toml; frontend/vite.config.ts; frontend/playwright.config.ts |
-| Quick backend | `cd backend && uv run pytest -q tests/test_portfolio_math.py tests/test_portfolio_service.py tests/test_portfolio_api.py tests/test_history_service.py tests/test_history_api.py` (use the implemented subset until all exist) |
-| Quick frontend | `cd frontend && npm run test -- --run src/pages/PortfolioPage.test.tsx src/pages/HistoryPage.test.tsx` (use the implemented subset until all exist) |
-| Full backend | `cd backend && uv run pytest --cov=app --cov-fail-under=80` plus project critical-path coverage command extended to new money/auth services |
-| Full frontend | `cd frontend && npm run test -- --coverage` plus lint/typecheck/format/build |
-| Execution preflight | Docker daemon reachable; isolated stack healthy; no dev/prod database or real-email e2e target |
-| Feedback target | Focused task commands <=120s; full suite at each wave boundary |
+Existing pytest/pytest-asyncio/httpx and isolated PostgreSQL/Redis from docker-compose.test.yml; existing Vitest/RTL/QueryClient; Playwright only ephemeral fake-price/console-email CI. Focused commands target<60s after services ready; measure and shard focused selections if necessary. Full suites are intentionally longer. Backend/frontend total coverage≥80%; critical paths100%, identical CI/CLAUDE list adds portfolio_math.py,portfolio.py,history.py. No install or new framework needed.
 
-## Sampling Rate
+## Per-Task Feedback and Producers
 
-- Every implementation task has its own focused automated check before commit.
-- RED tests must fail for the intended missing behavior before implementation;
-  update route/head assertions only with their corresponding real change.
-- At each wave end run the available full backend/frontend suites, lint,
-  formatting and types. Before final UAT/PR, run all project CI-equivalent
-  gates, dependency audits, migration round trips and deploy offline tests.
-- Coverage >=80% overall and 100% on money, auth and execution. Add the new
-  pure portfolio math and user-scoped portfolio/history services to the
-  identical CI/CLAUDE critical lists; meaningful assertions remain required.
+Commands run independently from repo root. Run each RED command separately; behavioral failure is expected before Task2, not fixture failure. GREEN commands use && to preserve failure and repo-root subshells when changing directories. In-task RED sections are the logical Wave0 producers, avoiding a horizontal setup phase.
 
-## Requirement and Secure Behavior Map
+|Task|Wave|Requirements|Threat suffixes|Producer/dependency|Command or explicit checkpoint|Status|
+|---|---|---|---|---|---|---|
+|05-01-1|1|PORT-01..05|AUTH,MATH,UI|Creates portfolio math/service/API,frontend guard/page tests,e2e before01-2|`(cd backend && uv run pytest tests/test_portfolio_math.py tests/test_portfolio_service.py tests/test_portfolio_api.py -x -q)`<br>`(cd frontend && npm run test -- --run src/api/portfolio.test.ts src/pages/PortfolioPage.test.tsx)`; independently expected RED|planned|
+|05-01-2|1|PORT-01..05|AUTH,MATH,UI|01-1+existing accounts/App|`(cd backend && uv run pytest tests/test_portfolio_math.py tests/test_portfolio_service.py tests/test_portfolio_api.py tests/test_accounts.py -x -q) && (cd frontend && npm run test -- --run src/api/portfolio.test.ts src/pages/PortfolioPage.test.tsx src/App.test.tsx)`|planned|
+|05-02-1|2|PORT-01..03|UI,MATH|Creates financialDisplay.test;extends page tests before code;depends01|`cd frontend && npm run test -- --run src/lib/financialDisplay.test.ts src/pages/PortfolioPage.test.tsx && npm run typecheck`|planned|
+|05-02-2|2|PORT-01..04|UI,MATH|Extends math/page tests before code;depends02-1|`(cd backend && uv run pytest tests/test_portfolio_math.py -x -q) && (cd frontend && npm run test -- --run src/lib/financialDisplay.test.ts src/pages/PortfolioPage.test.tsx)`|planned|
+|05-03-1|3|PORT-01..05|TIME,UI|Extends page timer/state assertions before code;depends02|`cd frontend && npm run test -- --run src/pages/PortfolioPage.test.tsx src/components/FreshnessBadge.test.tsx src/lib/age.test.ts`|planned|
+|05-03-2|3|PORT-01..05|MATH,AUTH,TIME|Creates snapshot test;extends service/API;real independent sessions/events|`cd backend && uv run pytest tests/test_portfolio_snapshot.py tests/test_portfolio_service.py tests/test_portfolio_api.py -x -q`|planned|
+|05-04-1|4|HIST-01..02|AUTH,CURSOR,HISTORY|Creates history service/API/guard/page;extends allow-list/e2e;depends03|`(cd backend && uv run pytest tests/test_history_service.py tests/test_history_api.py -x -q)`<br>`(cd frontend && npm run test -- --run src/api/history.test.ts src/pages/HistoryPage.test.tsx)`; independently expected RED|planned|
+|05-04-2|4|HIST-01..02|AUTH,CURSOR,HISTORY|04-1+existing accounts/App|`(cd backend && uv run pytest tests/test_history_service.py tests/test_history_api.py tests/test_accounts.py -x -q) && (cd frontend && npm run test -- --run src/api/history.test.ts src/pages/HistoryPage.test.tsx src/App.test.tsx)`|planned|
+|05-05-1|5|HIST-01..02|CURSOR,HISTORY|Creates useHistory.test;extends page tests before code;depends04|`cd frontend && npm run test -- --run src/hooks/useHistory.test.tsx src/pages/HistoryPage.test.tsx`|planned|
+|05-05-2|5|HIST-02|INDEX,CURSOR|Extends existing migration tests before schema;serial isolated DB;after04|`(cd backend && uv run pytest tests/test_migrations.py -x -q && uv run ruff check app/models/trade.py alembic/env.py alembic/versions/0008_trade_history_index.py tests/test_migrations.py)`|planned|
+|05-06-1|6|All7|REFRESH|Creates useTrade.test before hook edit;depends03+05|`cd frontend && npm run test -- --run src/hooks/useTrade.test.tsx src/pages/TradePage.test.tsx`|planned|
+|05-06-2|6|All7|CACHE|Creates privateQueries/auth mutation tests;extends client/App before code|`cd frontend && npm run test -- --run src/lib/privateQueries.test.ts src/hooks/useAuthMutations.test.tsx src/api/client.test.ts src/App.test.tsx`|planned|
+|05-07-1|7|All7|AUTH,UI|Extends App/e2e before responsive shell;depends06|`cd frontend && npm run test -- --run src/App.test.tsx src/pages/PortfolioPage.test.tsx src/pages/HistoryPage.test.tsx && npm run typecheck`|planned|
+|05-07-2|7|All7|TEST,SC,MATH|Existing/new suites;01-1/04-1 e2e extended|`(cd frontend && npm run e2e -- --list) && (cd backend && uv run pytest tests/test_portfolio_math.py tests/test_portfolio_service.py tests/test_portfolio_api.py tests/test_history_service.py tests/test_history_api.py -x -q)`; actual e2e only CI|planned|
+|05-07-3|7|All7|All|All earlier test producers|`(cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest --cov=app --cov-fail-under=80 -q && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py,app/services/portfolio_math.py,app/services/portfolio.py,app/services/history.py --fail-under=100 && uv run pip-audit) && (cd frontend && npm run lint && npm run typecheck && npx prettier --check . && npm run test -- --coverage && npm run build && npm audit --audit-level=high)`; image/offline/review gates per07-3|planned|
+|05-08-1|8|All7|TEST|07 concrete result|Explicit fresh dev-rebuild choice;after approval service health/alembic0008 only|human pending|
+|05-08-2|8|All7|UI,TEST|Approved rebuild+07 evidence|Fresh human real-price/browser UAT at375/768/1024/1440,200%zoom/keyboard/reduced-motion|human pending|
+|05-08-3|8|All7|RELEASE|UAT/reviews/local evidence/git summary|Scoped push/PR/not-yet;separate fresh release intent or skipped;green CI before separately approved merge|human pending|
 
-The planner must replace this capability map with actual task IDs/waves
-and commands when writing the plans; no test is claimed to have run.
+## Threat and Behavioral Map
 
-| Requirement | Threat Ref | Behavior | Automated evidence | Status |
-|-------------|------------|----------|--------------------|--------|
-| PORT-01 | T-05-01, T-05-02 | Session-scoped, single-snapshot cash/holdings/prices; no mixed concurrent trade state; missing price never zero | portfolio service/API real-PG tests, PortfolioPage component tests | pending |
-| PORT-02 | T-05-02 | Decimal total/start P/L including completed round trip, explicit cent/% rounding | portfolio_math examples/invariants; full liquidation API fixture | pending |
-| PORT-03 | T-05-02 | Fee-inclusive basis, raw intermediates, 8dp average, zero basis returns N/A percent | math/service/API fixtures, null-aware UI assertions | pending |
-| PORT-04 | T-05-02 | Cash-inclusive allocation denominator; zero/incomplete total is unavailable | math edge cases and labelled-bar/UI assertions | pending |
-| PORT-05 | T-05-02 | Exact used timestamp, late clock, 119/120/300/301 boundary, last-known warning and retained data | service/API freshness plus ticking/failure component tests | pending |
-| HIST-01 | T-05-01, T-05-03 | User-only actual stored fills including signed fee-inclusive total, inactive coin retained | history service/API tests; HistoryPage/CI round trip | pending |
-| HIST-02 | T-05-03 | Bounded strict cursor, tied timestamps/id ordering, lookahead, safe retry | cursor matrix, real-PG multi-page tests, migration index checks, infinite-query UI tests | pending |
-| Private cache | T-05-01 | No prior-user data after logout/passive expiry and new login; cancel pending private requests | auth/query lifecycle integration tests; trade invalidation/replay tests | pending |
+Every suffix above has prefix `T-05-`; per-plan threat models name dispositions. ASVS5 L1/high-severity-blocking applies, not certification. No new cryptography; cursor is a seek boundary, not authority.
 
-Threat IDs are phase-local placeholders to reconcile with each PLAN threat
-model. Models must cover private data/auth, valuation integrity, cursor
-validation/resource bounds, migration operational safety and cache identity
-isolation, with exact test-linked mitigations. No new service, secret or
-package is required by the research.
+|Threat|STRIDE / ASVS5 categories|Required evidence|
+|---|---|---|
+|AUTH|I/E;V4 API and Web Service,V6 Authentication,V8 Authorization,V14 Data Protection|GET401/no-store/read-only,fixed user predicates,two users/foreign boundary,exact two-GET allow-list addition|
+|MATH|T;V2 Validation and Business Logic|One nonlocking financial projection,real-PG complete-before/after,Decimal50/raw/HALF_EVEN,zero basis/start/total,dust/huge/tiny/weighted buys+partial sells,completed return|
+|TIME|T;V2,V4|119/120/300/301/configured rules,future skew,late clock,oldest/worst,missing/inactive,last-known vs incomplete,failed-refresh aging|
+|UI|T/I;V1 Encoding and Sanitization,V2|Explicit fresh/aging/stale/unpriced schema/guard/fixture assertions;strict plain-string/null guards,React escaping,no financial Number math,all mobile fields/one representation,neutral signs,N/A vs unavailable,validated bar widths,local+UTC times,focus/reduced motion|
+|CURSOR|T/D;V1,V2,V4|≤512 strict stdlib schema/version/types/UTF8/JSON/microseconds/bigint;422;1..100/default25/limit+1/last-returned cursor,bound tuple,ties/inserts/isolation|
+|HISTORY|T/R;V2,V4|Stored cash_delta/fee/execution values,inactive/dust0,stable string IDs,append/retry/end/focus/retained pages/sequential refresh|
+|INDEX|D/T;V2,V14|0008 concurrent autocommit/per-migration boundaries,populated downgrade/re-upgrade,index validity/definition/key order,parity/full roundtrip,preserve0007 guard,recovery docs|
+|CACHE|I/E;V4,V7 Session Management,V8,V14|Cached/in-flight A→expired→B,await cancel/remove before me publish,logout/late response/refresh-retry signal,preserve observed me|
+|REFRESH|T;V2|Buy/sell/replay await all five key invalidations,no optimistic money/duplicate fill|
+|TEST|I/T;V14|Isolated synthetic PG/Redis,fake/console CI only,discovery≠pass,human-only real-email UAT,no secrets/balances output|
+|RELEASE|T/E;V8|Existing branch/upstream preflight,scoped push/PR,green CI+separate merge approval,fresh release choice or skipped|
+|SC|T;supply chain|No install/new dependency,pip-audit/npm audit high,critical list parity|
 
-## Wave 0 Requirements
+## Sampling and Boundaries
 
-- [ ] New portfolio math/service/API tests using existing isolated fixtures.
-- [ ] New history cursor/service/API tests, including tied timestamps,
-  foreign-user boundaries, malformed/oversized cursors and limit bounds.
-- [ ] Real-PG concurrent-read fixture proving complete before/after trade states.
-- [ ] Existing migration tests extended for the concurrent history index,
-  downgrade/upgrade, validity/definition and model parity.
-- [ ] Portfolio/History page and API-guard tests; hook/private-cache lifecycle
-  tests cover cancellation, identity changes and successful fills/replays.
-- [ ] CI Playwright portfolio/history user flow reuses fake-price auth helpers.
-- [x] Existing frameworks and dependencies suffice; no installation task.
+Each implementation task runs its focused feedback before commit; no three consecutive implementation tasks lack feedback. At wave end run relevant regression suites.07 is the full final gate; repeat broader suites only after new failures/changes. All eight waves are serial:01→02→03→04→05→06→07→08;06 retains03+05 dependencies. Fixed PostgreSQL/Redis resources cannot overlap: autouse auth cleanup deletes OTP/rate-limit keys and migration roundtrips downgrade birja_test to base. Wait for each plan and teardown before the next, even with parallelization enabled; isolated stack tears down with down-v in finally. Never inspect .env/prod.env/secrets/individual balances or authenticate/trade on real dev/prod.
 
-## Manual-Only Verifications
+E2e execution remains pending until permitted ephemeral fake-price/console-email CI exists; no real-email fallback.08 push/PR choice can enable CI. Not-yet leaves remote checks explicitly pending; required CI must pass before any merge. New test files all have producers above and existing frameworks/fixtures; no MISSING scaffold remains unassigned.
 
-| Behavior | Requirement | Why manual | Instructions |
-|----------|-------------|------------|--------------|
-| Read portfolio/holding/history after a real-price buy/sell | PORT-01..05, HIST-01 | Human review of actual visible flow and fee/spread explanation | After explicit dev rebuild approval, user signs in, trades, checks values/freshness and matching history; assistant reads no individual balances or secrets |
-| Responsive/accessibility feel | PORT-01..05, HIST-01..02 | Visual/keyboard inspection | Check 375/768/1024/1440px, keyboard/focus/200% zoom, safe-area tabs, labelled card/table fields, reduced motion and load-more retry/end focus |
+08 human review covers the four roadmap outcomes,375/768/1024/1440px,200% zoom,keyboard/safe-area/end focus/reduced motion. Synthetic unavailable/zero/cursor/refusal branches are automated fixtures, never written to real data. Rebuild approval, browser approval, push, merge and release authority stay distinct.
 
-Automated CI e2e does not replace the user's live-data checkpoint. A future
-release/deployment requires a fresh phase-specific decision; Phase 4's
-release approval is not permission to release Phase 5.
+## Sign-Off
 
-## Validation Sign-Off
+- [x] All18 tasks mapped to automated feedback or explicit human checkpoints.
+- [x] Every test has an earlier/in-task RED producer; no watch flags/new framework.
+- [x] Eight serial waves enforce shared PostgreSQL/Redis fixture isolation and disjoint ownership.
+- [x] Exact threat-linked assertions planned; high findings block.
+- [ ] Actual RED/GREEN/full-suite/review evidence recorded.
+- [ ] Fresh human UAT approved.
+- [ ] CI/e2e green before merge, or honestly pending with not-yet.
 
-- [ ] Every actual task mapped to automated verification or an explicit human checkpoint.
-- [ ] No three consecutive implementation tasks without automated feedback.
-- [ ] Every new test reference has a producer/dependency; no stale provisional commands.
-- [ ] No watch flags, secret/env reads, dev/prod tests or real-email browser automation.
-- [ ] Focused checks target <=120s; full suites preserved at wave/final gates.
-- [ ] Planner finalized task/wave/threat map and set nyquist_compliant true.
-
-**Approval:** planning in progress; execution results and user checks pending.
+**Approval:** Planning finalized; implementation, review outcomes, CI and human checks pending.

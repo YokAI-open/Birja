@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to discuss Phase 5
-stopped_at: Phase 5 research complete and UI contract approved; planning next
-last_updated: "2026-10-29T13:34:43.733Z"
-last_activity: 2026-10-29 — Phase 4 verified 5/5, all TRADE requirements satisfied; v0.3.1 live
+status: ready_to_execute
+stopped_at: Phase 5 plans verified; ready to execute 05-01
+last_updated: "2026-10-29T14:10:34.346Z"
+last_activity: 2026-10-29
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 46
+  total_plans: 54
   completed_plans: 46
   percent: 71
 ---
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-10-29)
 
 ## Current Position
 
-Phase: 5 (Portfolio and History) — NOT STARTED
-Plan: Not started
-Status: Ready to discuss Phase 5
-Last activity: 2026-10-29 — Phase 4 verified 5/5, all TRADE requirements satisfied; v0.3.1 live
+Phase: 5 (Portfolio and History) — PLANNED; implementation not started
+Plan: 0 of 8 executed
+Status: Ready to execute
+Last activity: 2026-10-29 — Phase 5 planning verified: 8 plans, 18 tasks, 8 serial waves; 0 blockers/warnings
 
-Progress: [███████░░░] 71% of phases complete (5/7, including Phase 2.1); all 46 currently planned plans complete. Phases 5 and 6 remain unplanned.
+Progress: [███████░░░] 71% of phases complete (5/7, including Phase 2.1); 46/54 planned plans executed. Phase 5 has 8 verified plans; Phase 6 remains unplanned.
 
 ## Performance Metrics
 
@@ -93,6 +93,23 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 None carried from Phase 4. Domain/email and Node/shadcn prerequisites were
 completed in prior phases; their verification records preserve the evidence.
 
+### Phase 5 Planning
+
+- Branch: feature/phase-05-portfolio-and-history, created from updated
+  develop under project git-flow; no Phase 5 push/release authorization.
+
+- User chose existing requirements, research first, and UI contract from
+  the existing design system. No CONTEXT was fabricated.
+
+- Research and UI contract complete; independent UI checker passed 6/6.
+- Eight plans/18 tasks cover all seven requirements and four roadmap criteria.
+- Independent plan re-check passed after one revision: 0 blockers/warnings.
+  Shared destructive test fixtures require eight serial waves; shell
+  verification commands, research dispositions and unpriced status agree.
+
+- New tests, runtime suites, CI/e2e and human browser checks remain pending
+  execution. Phase 4's production remains v0.3.1.
+
 ### Blockers/Concerns
 
 No Phase 4 blockers. Phase 6 still owns off-server backup/restore,
@@ -101,6 +118,6 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-10-29T13:34:43.706Z
-Stopped at: Phase 5 research complete and UI contract approved; planning next
-Resume file: .planning/phases/05-portfolio-and-history/05-UI-SPEC.md
+Last session: 2026-10-29T14:10:34.316Z
+Stopped at: Phase 5 plans verified; ready to execute 05-01
+Resume file: .planning/phases/05-portfolio-and-history/05-01-PLAN.md

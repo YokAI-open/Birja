@@ -456,13 +456,13 @@ No unverified factual package/library/compliance claims are used as locked decis
 |---|---|---|
 | — | None | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 No blocking product question remains for planning. The following are execution checks, not reasons to reopen the user's answered design/research questions:
 
-1. **Docker runtime access:** CLI installed, daemon reachability unverified in this sandbox. Verify isolated test services under current permissions when executing.
-2. **UI contract details:** create05-UI-SPEC.md from MASTER and the recommended states above, then let plan-checker verify all required metrics remain reachable on mobile. Do not invent charts or remove `/account` regressions.
-3. **Release choice:** leave conditional at the phase push gate; Phase6 still owns backup/restore and the production role/SSL decision. No release number is locked by this research.
+1. **RESOLVED — Docker runtime access:** Availability is an execution preflight, not a planning blocker. CLI is installed; daemon reachability and test-service health remain unverified. Verify isolated test services under current permissions when executing.
+2. **RESOLVED — UI contract details:** 05-UI-SPEC.md was created from MASTER and approved on all six UI-check dimensions. Plans adopt its metrics, mobile reachability and preserved `/account` behavior; this resolves the planning contract, with no implemented UI/runtime evidence claimed.
+3. **RESOLVED — Release choice:** The explicit conditional checkpoint in 05-08 records fresh release intent; absent release-now authorization, release/deployment is skipped. This resolves planning disposition, not future authorization. Phase6 retains backup/restore and production role/SSL; no release number is locked.
 
 ## Sources
 
