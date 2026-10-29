@@ -1,6 +1,6 @@
 [project]
 name = "birja-backend"
-version = "0.3.0"
+version = "0.3.1"
 description = "Birja backend"
 requires-python = ">=3.14,<3.15"
 dependencies = [
