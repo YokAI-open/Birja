@@ -62,7 +62,9 @@ Each task's `<automated>` command is in its plan. RED-first tasks (tdd) create t
 | 04-09-01 | 09 | 5 | all | full suite | CI-equivalent local run (minus e2e) | ✅ | ✅ green |
 | 04-09-02 | 09 | 5 | SC1-4 by eye | manual (dev stack) | `alembic current` = 0007 (head) | n/a | ✅ green |
 | 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ✅ green |
-| 04-10-01..03 | 10 | 6 | release (conditional) | prod smoke | `smoke-prod.sh --public` | ✅ | ⬜ pending |
+| 04-10-01 | 10 | 6 | release decision | manual | release-now and remaining release actions authorized | n/a | ✅ green |
+| 04-10-02 | 10 | 6 | git-flow release | CI + git | PR #20/#21 green and merged; v0.3.0 in main/develop | ✅ | ✅ green |
+| 04-10-03 | 10 | 6 | deploy + live trade | prod smoke + manual | origin 38/38, public 9/9; user browser check pending | ✅ | ⬜ pending |
 
 No 3 consecutive tasks lack an automated check (checkpoint tasks 04-09-02/03 and 04-10-* each have a command).
 
@@ -109,7 +111,10 @@ From RESEARCH, with D-06/D-07 applied:
   ruff, formatting and mypy passed.
 - Frontend: 161 tests, 98.88% statements, 99.76% lines; lint, types and build passed.
 - The isolated test stack was removed after the tests.
-- Release push/PR, tag and deployment remain pending their checkpoints.
+- Release PR #20 and back-merge #21 passed CI and merged; v0.3.0 was published.
+- Production cents check 0; one deploy exited 0, migrations 0006/0007 applied;
+  origin/public smoke passed 38/38 and 9/9. User browser trade check remains pending.
+- Durable evidence: `04-10-RELEASE-CHECKPOINT.md`.
 
 ## Wave 0 Requirements
 

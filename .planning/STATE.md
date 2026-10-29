@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "04-10 executing release; remaining remote steps and deployment authorized"
-last_updated: "2026-10-29T08:40:18.253Z"
+stopped_at: "04-10 deployed v0.3.0; awaiting user live-browser trade approval"
+last_updated: "2026-10-29T08:52:13.859Z"
 last_activity: 2026-10-29
 progress:
   total_phases: 7
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 Phase: 4 (Trading) — EXECUTING
 Plan: 10 of 10
-Status: Executing release 0.3
-Last activity: 2026-10-29 — Release 0.3.0 prepared and locally validated
+Status: Awaiting production browser trade approval
+Last activity: 2026-10-29 — v0.3.0 deployed; origin/public smoke passed
 
 Progress: [██████████] 98%
 
@@ -75,7 +75,10 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - User said "yes, do it all": release pushes, PRs, merge commits after green CI,
   v0.3.0 publication, back-merge and production deployment are authorized.
 - Final live browser trade verification still requires the user.
-- No release tag or production deployment has occurred.
+- v0.3.0 published at `6425dad`; release PR #20 and back-merge PR #21 merged.
+- Production deploy succeeded once; migrations 0006/0007 applied.
+- Origin/public smoke passed 38/38 and 9/9; pre-check production trade count 0.
+- Await user live-site buy/sell approval; do not repeat the deploy.
 
 ### Pending Todos
 
@@ -90,5 +93,5 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 ## Session Continuity
 
 Last session: 2026-10-29T08:33:47.141Z
-Stopped at: 04-10 executing release; remaining remote steps and deployment authorized
-Resume file: None
+Stopped at: 04-10 deployed v0.3.0; awaiting user live-browser trade approval
+Resume file: .planning/phases/04-trading/04-10-RELEASE-CHECKPOINT.md
