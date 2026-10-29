@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 4 complete (10/10) — ready to discuss Phase 5
-last_updated: 2026-10-29T13:04:23.513Z
-last_activity: 2026-10-29
+status: Ready to discuss Phase 5
+stopped_at: Phase 5 research complete and UI contract approved; planning next
+last_updated: "2026-10-29T13:34:43.733Z"
+last_activity: 2026-10-29 — Phase 4 verified 5/5, all TRADE requirements satisfied; v0.3.1 live
 progress:
   total_phases: 7
   completed_phases: 5
@@ -75,6 +75,7 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - Two planning-only closeout commits were carried after PR #19 merged early.
 - User said "yes, do it all": release pushes, PRs, merge commits after green CI,
   v0.3.0 publication, back-merge and production deployment are authorized.
+
 - Final live browser check approved by the user; production trade count 0 -> 2.
 - v0.3.0 published at `6425dad`; release PR #20 and back-merge PR #21 merged.
 - Production deploy succeeded once; migrations 0006/0007 applied.
@@ -82,6 +83,7 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - Final code review found CR-01 (stale time before DB wait); fix and real-PG
   regressions independently re-reviewed; hotfix PR #22 and back-merge #23
   passed CI and merged. v0.3.1 deployed with origin/public smoke 38/38 and 9/9.
+
 - Final goal verification passed 5/5, with all TRADE-01..08 satisfied and no
   outstanding human checks. Completed inline after the delegated verifier
   hit its usage limit; independent code review remains separately recorded.
@@ -99,6 +101,6 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-10-29T13:04:23Z
-Stopped at: Phase 4 complete (10/10), verified 5/5; ready to discuss Phase 5
-Resume file: .planning/phases/04-trading/04-VERIFICATION.md
+Last session: 2026-10-29T13:34:43.706Z
+Stopped at: Phase 5 research complete and UI contract approved; planning next
+Resume file: .planning/phases/05-portfolio-and-history/05-UI-SPEC.md
