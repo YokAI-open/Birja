@@ -1,7 +1,7 @@
 ---
 phase: 4
 slug: trading
-status: draft
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 planned: 2026-10-28
@@ -158,7 +158,7 @@ From RESEARCH, with D-06/D-07 applied:
 - [x] Feedback latency < 120s (per-task commands; full suite at wave end)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** planned 2026-10-28 (statuses turn green during execution)
+**Approval:** completed 2026-10-29; dev and production browser checks approved by the user. Goal verification is recorded in `04-VERIFICATION.md`.
 
 ## Final review and regression gate
 

@@ -10,7 +10,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
 - [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
-- [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
+- [x] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result (completed 2026-10-29)
 - [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
 - [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
 
@@ -211,7 +211,7 @@ Plans:
 
 ### Phase 4: Trading
 
-**Goal**: Users can buy and sell coins at real recent prices, with cost shown up front and the result correct to the cent
+**Goal**: As a signed-in Birja user, I want to buy and sell coins at real, recent market prices with the full cost shown before I confirm, so that I can practise trading and get a result that is correct to the cent.
 **Mode:** mvp
 **Depends on**: Phase 2, Phase 3
 **Requirements**: TRADE-01, TRADE-02, TRADE-03, TRADE-04, TRADE-05, TRADE-06, TRADE-07, TRADE-08
@@ -223,7 +223,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 10/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 10/10 | Verification pending |  |
+| 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |

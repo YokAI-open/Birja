@@ -31,8 +31,9 @@ backmerge_pr: https://github.com/YokAI-open/Birja/pull/21
 
 # Phase 4 Plan 10: Release 0.3 and production deploy Summary
 
-**v0.3.0 is deployed with trading, green release/back-merge CI, passing
-origin/public smoke checks and user-approved live buy/sell verification.**
+**Trading shipped in v0.3.0 with user-approved live buy/sell verification.
+The reviewed freshness fix is now live in v0.3.1, with green release and
+back-merge CI and passing origin/public smoke checks.**
 
 ## Authorization
 
@@ -91,13 +92,13 @@ PR #19 merged into develop as `5dc514d`; 04-09 records release-now.
 
 ## Next Phase Readiness
 
-Trading is released and the final live check is approved. Run phase
-code review, regression verification and goal verification before closing
-Phase 4 and routing to Phase 5.
+Trading is released and the final live check is approved. Code review is
+clean, regression checks passed and final goal verification passed 5/5
+(`04-VERIFICATION.md`). Phase 5 is ready for discussion and has not started.
 
 ## Self-Check: PASSED
 
-Version files exist at 0.3.0; the published release tag is an ancestor of
+Version files at tag v0.3.0 read 0.3.0; the published release tag is an ancestor of
 main and develop; deployed SHA matches the tag; all release and back-merge
 checks passed; smoke suites passed; the user approved the final live check.
 
@@ -128,4 +129,6 @@ checks passed; smoke suites passed; the user approved the final live check.
 
 The post-release code-review fix is an additional deviation handled inside
 this release plan, following the Phase 3 hotfix precedent. Final phase goal
-verification remains required before Phase 4 is marked complete.
+verification subsequently passed all five roadmap criteria and all eight
+TRADE requirements; Phase 4 is complete. No further deployment is needed
+for the planning-only closeout PR.

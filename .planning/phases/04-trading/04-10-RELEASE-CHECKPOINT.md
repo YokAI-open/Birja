@@ -91,4 +91,5 @@ authorized actions.
 
 The manual checkpoint is complete and approval is recorded in the summary.
 Do not repeat the v0.3.0 deployment or republish its tag. The reviewed
-stale-price correction is being released separately as v0.3.1.
+stale-price correction was released separately as v0.3.1; its green CI,
+back-merge and production smoke evidence are in `04-10-SUMMARY.md`.
