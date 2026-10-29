@@ -61,7 +61,7 @@ Each task's `<automated>` command is in its plan. RED-first tasks (tdd) create t
 | 04-08-03 | 08 | 4 | SC5, TRADE-07 (incl. seeded mixed buys/sells with holding-sum invariant) | concurrency (real PG) | `pytest tests/test_trading_concurrency.py` + full suite + critical 100% | created | ✅ green |
 | 04-09-01 | 09 | 5 | all | full suite | CI-equivalent local run (minus e2e) | ✅ | ✅ green |
 | 04-09-02 | 09 | 5 | SC1-4 by eye | manual (dev stack) | `alembic current` = 0007 (head) | n/a | ✅ green |
-| 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ⬜ pending |
+| 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ✅ green |
 | 04-10-01..03 | 10 | 6 | release (conditional) | prod smoke | `smoke-prod.sh --public` | ✅ | ⬜ pending |
 
 No 3 consecutive tasks lack an automated check (checkpoint tasks 04-09-02/03 and 04-10-* each have a command).
@@ -84,11 +84,21 @@ From RESEARCH, with D-06/D-07 applied:
 | D-07 | Cost basis: a buy adds the total spent, a sell reduces it proportionally, a full sell sets it to 0 | service | `test_trading_service.py` | ✅ green |
 | Auth | 401 signed out, 403 without CSRF on both POSTs | API | `test_trades_api.py` | ✅ green |
 | UI | TradePage states; key reused on retry (also after a background refetch changed the mid) and reset only on edit, fill, definitive refusal or price_changed; a double-click sends once; Markets row links to it | Vitest | `TradePage.test.tsx`, `MarketsPage.test.tsx` | ✅ green |
-| E2E | Sign in → Markets → Trade BTC → buy $100 → fill, cash $9,900.00 → sell all; tolerate `price_changed` | Playwright (CI) | `frontend/e2e/trade.spec.ts` | ⬜ pending |
+| E2E | Sign in → Markets → Trade BTC → buy $100 → fill, cash $9,900.00 → sell all; tolerate `price_changed` | Playwright (CI) | `frontend/e2e/trade.spec.ts` | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
+
+### CI evidence (2026-10-29)
+
+- Run `40841931118` exposed missing accessible region names in the trade
+  summary. Regression assertions failed before the fix.
+- Commit `f5294a9` names the card from its current visible heading; all 161
+  frontend tests passed (98.88% statements), with lint, types, format and build.
+- Run `40842519915` passed backend, frontend, image, e2e and ci-pass.
+- User chose `push-pr, release-now`; PR #19 was merged into develop as
+  `5dc514d` after green CI.
 
 ## Wave 0 Requirements
 
