@@ -60,7 +60,7 @@ Each task's `<automated>` command is in its plan. RED-first tasks (tdd) create t
 | 04-08-02 | 08 | 4 | TRADE-02/03/05/06/07/08, Auth | API (real PG) | `pytest tests/test_trades_api.py` | created | ✅ green |
 | 04-08-03 | 08 | 4 | SC5, TRADE-07 (incl. seeded mixed buys/sells with holding-sum invariant) | concurrency (real PG) | `pytest tests/test_trading_concurrency.py` + full suite + critical 100% | created | ✅ green |
 | 04-09-01 | 09 | 5 | all | full suite | CI-equivalent local run (minus e2e) | ✅ | ✅ green |
-| 04-09-02 | 09 | 5 | SC1-4 by eye | manual (dev stack) | `alembic current` = 0007 (head) | n/a | ⬜ pending |
+| 04-09-02 | 09 | 5 | SC1-4 by eye | manual (dev stack) | `alembic current` = 0007 (head) | n/a | ✅ green |
 | 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ⬜ pending |
 | 04-10-01..03 | 10 | 6 | release (conditional) | prod smoke | `smoke-prod.sh --public` | ✅ | ⬜ pending |
 
@@ -103,6 +103,19 @@ From RESEARCH, with D-06/D-07 applied:
 ---
 
 ## Manual-Only Verifications
+
+### Dev check evidence (2026-10-29)
+
+- The user authorized the dev rebuild with `go`, then approved the trading check.
+- `docker compose up --build -d --wait` exited 0; backend, frontend,
+  Postgres, Redis and scheduler were healthy.
+- `alembic current`: `0007 (head)`.
+- Price aggregate after rebuild: `15 17` (15 prices, oldest 17 seconds old).
+- Login delivery initially failed with Resend HTTP 401. The user updated
+  the dev API key; the backend was recreated and reported healthy.
+- Trade count after the user's approval: `2`.
+- The assistant called no auth endpoint and placed no trades. No secrets,
+  recipient addresses or account balances were recorded.
 
 | Behavior | Why Manual | Instructions |
 |----------|------------|--------------|
