@@ -131,7 +131,7 @@ async function enter(user: User, value: string, label = "Amount") {
   await user.type(field, value);
 }
 
-const previewCard = () => within(screen.getByRole("heading", { name: "Preview" }).parentElement!);
+const previewCard = () => within(screen.getByRole("region", { name: "Preview" }));
 const confirmButton = (side = "buy") => screen.getByRole("button", { name: `Confirm ${side}` });
 
 async function previewReady(user: User, value = "100") {
@@ -236,7 +236,7 @@ describe("TradePage", () => {
       expected_mid: "100000.00000000",
       idempotency_key: "key-1",
     });
-    const card = within(screen.getByRole("heading", { name: "Order filled" }).parentElement!);
+    const card = within(screen.getByRole("region", { name: "Order filled" }));
     expect(card.getByText("0.00099501 BTC")).toBeVisible();
     expect(card.getByText("$100,250.00")).toBeVisible();
     expect(card.getByText("$0.25")).toBeVisible();

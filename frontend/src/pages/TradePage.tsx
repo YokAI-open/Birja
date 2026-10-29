@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
@@ -88,6 +88,7 @@ function segment(selected: boolean) {
 }
 
 function TradePage() {
+  const summaryHeadingId = useId();
   const params = useParams();
   const symbol = (params.symbol ?? "").toUpperCase();
   const queryClient = useQueryClient();
@@ -215,7 +216,9 @@ function TradePage() {
   if (fill) {
     preview = (
       <>
-        <h2 className="text-xl leading-7 font-semibold tracking-[-0.01em]">Order filled</h2>
+        <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
+          Order filled
+        </h2>
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -253,7 +256,9 @@ function TradePage() {
     }
     preview = (
       <>
-        <h2 className="text-xl leading-7 font-semibold tracking-[-0.01em]">Preview</h2>
+        <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
+          Preview
+        </h2>
         {priceChanged && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             Price updated. Please review again.
@@ -406,7 +411,11 @@ function TradePage() {
         </CardContent>
       </Card>
 
-      <Card className="lg:col-span-5 lg:self-start">
+      <Card
+        role="region"
+        aria-labelledby={summaryHeadingId}
+        className="lg:col-span-5 lg:self-start"
+      >
         <CardContent className="flex flex-col gap-4">{preview}</CardContent>
       </Card>
     </div>
