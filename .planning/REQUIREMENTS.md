@@ -35,14 +35,14 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Trading
 
-- [ ] **TRADE-01**: User can place a market buy by dollar amount. The amount is the total cash spent, fee included.
-- [ ] **TRADE-02**: User can place a market buy or sell by coin quantity (fractional, up to 8 decimals)
-- [ ] **TRADE-03**: Before confirming, user sees a preview with market price, execution price (including spread), fee, quantity and total cash change
-- [ ] **TRADE-04**: Trades execute at mid price ± a fixed simulated spread, plus a fixed percentage fee charged in USD
-- [ ] **TRADE-05**: A trade is refused with a clear message if the price is older than the maximum allowed age. If the price changed since the preview, the user sees the new preview instead.
-- [ ] **TRADE-06**: A trade is refused if the user lacks the cash or coins for it, or if it is below the minimum order size (selling a whole position is always allowed)
-- [ ] **TRADE-07**: Submitting the same trade twice (double-click, retry) executes it only once
-- [ ] **TRADE-08**: After a trade, user sees the actual fill: quantity, price, fee and new cash balance
+- [x] **TRADE-01**: User can place a market buy by dollar amount. The amount is the total cash spent, fee included.
+- [x] **TRADE-02**: User can place a market buy or sell by coin quantity (fractional, up to 8 decimals)
+- [x] **TRADE-03**: Before confirming, user sees a preview with market price, execution price (including spread), fee, quantity and total cash change
+- [x] **TRADE-04**: Trades execute at mid price ± a fixed simulated spread, plus a fixed percentage fee charged in USD
+- [x] **TRADE-05**: A trade is refused with a clear message if the price is older than the maximum allowed age. If the price changed since the preview, the user sees the new preview instead.
+- [x] **TRADE-06**: A trade is refused if the user lacks the cash or coins for it, or if it is below the minimum order size (selling a whole position is always allowed)
+- [x] **TRADE-07**: Submitting the same trade twice (double-click, retry) executes it only once
+- [x] **TRADE-08**: After a trade, user sees the actual fill: quantity, price, fee and new cash balance
 
 ### Portfolio
 
@@ -128,14 +128,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRICE-02 | Phase 3 | Complete |
 | PRICE-03 | Phase 3 | Complete |
 | PRICE-04 | Phase 3 | Complete |
-| TRADE-01 | Phase 4 | Pending |
-| TRADE-02 | Phase 4 | Pending |
-| TRADE-03 | Phase 4 | Pending |
-| TRADE-04 | Phase 4 | Pending |
-| TRADE-05 | Phase 4 | Pending |
-| TRADE-06 | Phase 4 | Pending |
-| TRADE-07 | Phase 4 | Pending |
-| TRADE-08 | Phase 4 | Pending |
+| TRADE-01 | Phase 4 | Complete |
+| TRADE-02 | Phase 4 | Complete |
+| TRADE-03 | Phase 4 | Complete |
+| TRADE-04 | Phase 4 | Complete |
+| TRADE-05 | Phase 4 | Complete |
+| TRADE-06 | Phase 4 | Complete |
+| TRADE-07 | Phase 4 | Complete |
+| TRADE-08 | Phase 4 | Complete |
 | PORT-01 | Phase 5 | Pending |
 | PORT-02 | Phase 5 | Pending |
 | PORT-03 | Phase 5 | Pending |
