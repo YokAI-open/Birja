@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
@@ -66,6 +67,12 @@ function MarketsPage() {
               >
                 Updated
               </th>
+              <th
+                scope="col"
+                className="h-10 pl-4 text-right text-[13px] leading-[18px] font-medium text-muted-foreground"
+              >
+                Trade
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -85,6 +92,13 @@ function MarketsPage() {
                       status={freshnessStatus(ageNow, data.fresh_seconds, data.stale_seconds)}
                       ageSeconds={ageNow}
                     />
+                  </td>
+                  <td className="pl-4 text-right">
+                    <Button asChild variant="secondary" size="sm">
+                      <Link to={`/trade/${item.symbol}`} aria-label={`Trade ${item.symbol}`}>
+                        Trade
+                      </Link>
+                    </Button>
                   </td>
                 </tr>
               );

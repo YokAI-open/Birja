@@ -8,6 +8,7 @@ import { useMe } from "@/hooks/useMe";
 import AccountPage from "@/pages/AccountPage";
 import HealthPage from "@/pages/HealthPage";
 import SignInPage from "@/pages/SignInPage";
+import TradePage from "@/pages/TradePage";
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -75,6 +76,7 @@ function SignedIn({ me }: { me: Me }) {
             </>
           }
         />
+        <Route path="trade/:symbol" element={<TradePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

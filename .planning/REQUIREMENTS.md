@@ -28,21 +28,21 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Prices
 
-- [ ] **PRICE-01**: User can see a list of about 10–20 curated cryptocurrencies with their current USD price
-- [ ] **PRICE-02**: Every price shows how old it is ("as of" time) and whether it is fresh, aging or stale
-- [ ] **PRICE-03**: Prices refresh automatically about every 60 seconds from a free public market-data source, without the user reloading the page
-- [ ] **PRICE-04**: Invalid prices (zero, negative or implausible spikes) are rejected and the last good price is kept
+- [x] **PRICE-01**: User can see a list of about 10–20 curated cryptocurrencies with their current USD price
+- [x] **PRICE-02**: Every price shows how old it is ("as of" time) and whether it is fresh, aging or stale
+- [x] **PRICE-03**: Prices refresh automatically about every 60 seconds from a free public market-data source, without the user reloading the page
+- [x] **PRICE-04**: Invalid prices (zero, negative or implausible spikes) are rejected and the last good price is kept
 
 ### Trading
 
-- [ ] **TRADE-01**: User can place a market buy by dollar amount. The amount is the total cash spent, fee included.
-- [ ] **TRADE-02**: User can place a market buy or sell by coin quantity (fractional, up to 8 decimals)
-- [ ] **TRADE-03**: Before confirming, user sees a preview with market price, execution price (including spread), fee, quantity and total cash change
-- [ ] **TRADE-04**: Trades execute at mid price ± a fixed simulated spread, plus a fixed percentage fee charged in USD
-- [ ] **TRADE-05**: A trade is refused with a clear message if the price is older than the maximum allowed age. If the price changed since the preview, the user sees the new preview instead.
-- [ ] **TRADE-06**: A trade is refused if the user lacks the cash or coins for it, or if it is below the minimum order size (selling a whole position is always allowed)
-- [ ] **TRADE-07**: Submitting the same trade twice (double-click, retry) executes it only once
-- [ ] **TRADE-08**: After a trade, user sees the actual fill: quantity, price, fee and new cash balance
+- [x] **TRADE-01**: User can place a market buy by dollar amount. The amount is the total cash spent, fee included.
+- [x] **TRADE-02**: User can place a market buy or sell by coin quantity (fractional, up to 8 decimals)
+- [x] **TRADE-03**: Before confirming, user sees a preview with market price, execution price (including spread), fee, quantity and total cash change
+- [x] **TRADE-04**: Trades execute at mid price ± a fixed simulated spread, plus a fixed percentage fee charged in USD
+- [x] **TRADE-05**: A trade is refused with a clear message if the price is older than the maximum allowed age. If the price changed since the preview, the user sees the new preview instead.
+- [x] **TRADE-06**: A trade is refused if the user lacks the cash or coins for it, or if it is below the minimum order size (selling a whole position is always allowed)
+- [x] **TRADE-07**: Submitting the same trade twice (double-click, retry) executes it only once
+- [x] **TRADE-08**: After a trade, user sees the actual fill: quantity, price, fee and new cash balance
 
 ### Portfolio
 
@@ -124,18 +124,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-06 | Phase 2 | Complete |
 | ACCT-01 | Phase 2 | Complete |
 | ACCT-02 | Phase 2 | Complete |
-| PRICE-01 | Phase 3 | Pending |
-| PRICE-02 | Phase 3 | Pending |
-| PRICE-03 | Phase 3 | Pending |
-| PRICE-04 | Phase 3 | Pending |
-| TRADE-01 | Phase 4 | Pending |
-| TRADE-02 | Phase 4 | Pending |
-| TRADE-03 | Phase 4 | Pending |
-| TRADE-04 | Phase 4 | Pending |
-| TRADE-05 | Phase 4 | Pending |
-| TRADE-06 | Phase 4 | Pending |
-| TRADE-07 | Phase 4 | Pending |
-| TRADE-08 | Phase 4 | Pending |
+| PRICE-01 | Phase 3 | Complete |
+| PRICE-02 | Phase 3 | Complete |
+| PRICE-03 | Phase 3 | Complete |
+| PRICE-04 | Phase 3 | Complete |
+| TRADE-01 | Phase 4 | Complete |
+| TRADE-02 | Phase 4 | Complete |
+| TRADE-03 | Phase 4 | Complete |
+| TRADE-04 | Phase 4 | Complete |
+| TRADE-05 | Phase 4 | Complete |
+| TRADE-06 | Phase 4 | Complete |
+| TRADE-07 | Phase 4 | Complete |
+| TRADE-08 | Phase 4 | Complete |
 | PORT-01 | Phase 5 | Pending |
 | PORT-02 | Phase 5 | Pending |
 | PORT-03 | Phase 5 | Pending |

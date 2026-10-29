@@ -34,6 +34,8 @@ const prices = () =>
 const route = (url: string, me: () => Response | Promise<Response>) => {
   if (url === "/api/v1/me") return me();
   if (url === "/api/v1/prices") return prices();
+  if (url === "/api/v1/holdings/BTC")
+    return new Response(JSON.stringify({ symbol: "BTC", quantity: "0" }), { status: 200 });
   return health();
 };
 
@@ -103,6 +105,20 @@ describe("App", () => {
     );
     renderWithClient(<App />);
     expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+  });
+
+  it("shows the trade page at /trade/BTC when signed in", async () => {
+    stubApi(meOk);
+    renderWithClient(<App />, { route: "/trade/BTC" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeVisible();
+  });
+
+  it("shows the sign-in card at /trade/BTC when signed out", async () => {
+    stubApi(unauthorized);
+    renderWithClient(<App />, { route: "/trade/BTC" });
+    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Trade BTC" })).toBeNull();
   });
 
   it("redirects unknown paths to Markets", async () => {

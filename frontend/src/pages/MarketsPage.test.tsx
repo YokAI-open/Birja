@@ -61,6 +61,21 @@ describe("MarketsPage", () => {
     expect(within(rows[14]!).getByText("UNI")).toBeVisible();
   });
 
+  it("links every row to its trade page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => ok(payload())),
+    );
+    renderWithClient(<MarketsPage />);
+    const table = await screen.findByRole("table", { name: "Markets" });
+    expect(within(table).getByRole("columnheader", { name: "Trade" })).toBeVisible();
+    expect(within(table).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/trade/BTC",
+    );
+    expect(within(table).getAllByRole("link")).toHaveLength(15);
+  });
+
   it("shows a loading state while pending", () => {
     vi.stubGlobal(
       "fetch",

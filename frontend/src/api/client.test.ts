@@ -100,6 +100,26 @@ describe("apiFetch", () => {
   });
 });
 
+describe("ApiError.detail", () => {
+  it("exposes the parsed detail object (price_changed quote)", async () => {
+    const detail = { code: "price_changed", message: "moved", quote: { mid: "1.00" } };
+    vi.stubGlobal("fetch", () => Promise.resolve(json({ detail }, 409)));
+    const error = await apiFetch("/api/v1/x").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("price_changed");
+    expect((error as ApiError).detail).toEqual(detail);
+  });
+
+  it("is null for an array detail or no detail", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(json({ detail: [{ msg: "bad" }] }, 422)));
+    const arrayError = (await apiFetch("/api/v1/x").catch((e: unknown) => e)) as ApiError;
+    expect(arrayError.detail).toBeNull();
+    vi.stubGlobal("fetch", () => Promise.resolve(json({}, 500)));
+    const emptyError = (await apiFetch("/api/v1/x").catch((e: unknown) => e)) as ApiError;
+    expect(emptyError.detail).toBeNull();
+  });
+});
+
 describe("apiFetch silent refresh", () => {
   const unauthorized = () => new Response("{}", { status: 401 });
 
