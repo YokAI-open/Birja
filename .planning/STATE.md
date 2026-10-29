@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "04-10 Task 2 prepared; awaiting push of release-0.3 and PR into main"
-last_updated: "2026-10-29T08:37:15.312Z"
+stopped_at: "04-10 executing release; remaining remote steps and deployment authorized"
+last_updated: "2026-10-29T08:40:18.253Z"
 last_activity: 2026-10-29
 progress:
   total_phases: 7
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 Phase: 4 (Trading) — EXECUTING
 Plan: 10 of 10
-Status: Awaiting release-0.3 push and PR approval
+Status: Executing release 0.3
 Last activity: 2026-10-29 — Release 0.3.0 prepared and locally validated
 
 Progress: [██████████] 98%
@@ -72,7 +72,9 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - Backend: 476 tests, 99.89% coverage, critical-path list 100%; lint/types pass.
 - Frontend: 161 tests, 98.88% statements; lint/types/build pass.
 - Two planning-only closeout commits were carried after PR #19 merged early.
-- Await approval to push release-0.3 and open its PR into main.
+- User said "yes, do it all": release pushes, PRs, merge commits after green CI,
+  v0.3.0 publication, back-merge and production deployment are authorized.
+- Final live browser trade verification still requires the user.
 - No release tag or production deployment has occurred.
 
 ### Pending Todos
@@ -88,5 +90,5 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 ## Session Continuity
 
 Last session: 2026-10-29T08:33:47.141Z
-Stopped at: 04-10 Task 2 prepared; awaiting push of release-0.3 and PR into main
+Stopped at: 04-10 executing release; remaining remote steps and deployment authorized
 Resume file: None
