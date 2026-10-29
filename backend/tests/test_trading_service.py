@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import uuid
 from collections.abc import Awaitable, Callable
@@ -6,13 +7,14 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
-from app.models.price import Coin
+from app.models.price import Coin, Price
 from app.models.trade import Trade
+from app.models.user import Account
 from app.services import trading
 from app.services.trade_math import InputKind, Side, TradeRefused
 from app.services.trading import (
@@ -33,6 +35,123 @@ from tests.helpers import (
 
 NewUser = Callable[[], Awaitable[int]]
 D = Decimal
+
+
+@pytest.mark.parametrize("elapsed", [0, 1, 2])
+async def test_execute_checks_freshness_after_waiting_for_account_lock(
+    db: AsyncSession,
+    engine: AsyncEngine,
+    settings: Settings,
+    clean_prices: None,
+    new_user: NewUser,
+    now: datetime,
+    monkeypatch: pytest.MonkeyPatch,
+    elapsed: int,
+) -> None:
+    user_id = await new_user()
+    await put_price(engine, "BTC", "100000.00", now - timedelta(seconds=119))
+
+    class Clock:
+        value: datetime
+
+        @classmethod
+        def now(cls, _tz: object) -> datetime:
+            return cls.value
+
+    Clock.value = now
+    monkeypatch.setattr(trading, "datetime", Clock)
+    pid = (await db.execute(select(func.pg_backend_pid()))).scalar_one()
+    async with AsyncSession(engine) as locker:
+        await locker.execute(select(Account).where(Account.user_id == user_id).with_for_update())
+        pending = asyncio.create_task(
+            execute(
+                db,
+                user_id=user_id,
+                order=_order(),
+                expected_mid=D("100000.00"),
+                idempotency_key=uuid.uuid4(),
+                settings=settings,
+            )
+        )
+        try:
+            # Observe a real PostgreSQL lock wait before advancing the clock.
+            async with asyncio.timeout(5):
+                while True:
+                    async with engine.connect() as observer:
+                        blockers = (
+                            await observer.execute(
+                                select(func.cardinality(func.pg_blocking_pids(pid)))
+                            )
+                        ).scalar_one()
+                    if blockers:
+                        break
+                    await asyncio.sleep(0.01)
+            Clock.value = now + timedelta(seconds=elapsed)
+            await locker.rollback()
+            if elapsed:
+                with pytest.raises(TradeRefused) as exc:
+                    await pending
+                assert exc.value.code == "stale_price"
+            else:
+                fill, created = await pending
+                assert created
+                assert fill.cash_after == D("9900.00")
+        finally:
+            await locker.rollback()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
+    if elapsed:
+        assert await cash_of(engine, user_id) == D("10000.00")
+        assert await holding_of(engine, user_id, "BTC") is None
+        assert await trade_count(engine, user_id) == 0
+    else:
+        assert await cash_of(engine, user_id) == D("9900.00")
+        assert await holding_of(engine, user_id, "BTC") == (D("0.00099501"), D("100.00"))
+        assert await trade_count(engine, user_id) == 1
+
+
+@pytest.mark.parametrize("elapsed", [0, 2])
+async def test_quote_checks_freshness_after_loading_price(
+    db: AsyncSession,
+    engine: AsyncEngine,
+    settings: Settings,
+    clean_prices: None,
+    new_user: NewUser,
+    now: datetime,
+    monkeypatch: pytest.MonkeyPatch,
+    elapsed: int,
+) -> None:
+    user_id = await new_user()
+    await put_price(engine, "BTC", "100000.00", now - timedelta(seconds=119))
+
+    class Clock:
+        value: datetime
+
+        @classmethod
+        def now(cls, _tz: object) -> datetime:
+            return cls.value
+
+    original = trading._load_coin_price
+
+    async def delayed_price(session: AsyncSession, symbol: str) -> tuple[Coin, Price]:
+        result = await original(session, symbol)
+        Clock.value = now + timedelta(seconds=elapsed)
+        return result
+
+    Clock.value = now
+    monkeypatch.setattr(trading, "datetime", Clock)
+    monkeypatch.setattr(trading, "_load_coin_price", delayed_price)
+    if elapsed:
+        with pytest.raises(TradeRefused) as exc:
+            await quote(db, user_id=user_id, order=_order(), settings=settings)
+        assert exc.value.code == "stale_price"
+    else:
+        preview = await quote(db, user_id=user_id, order=_order(), settings=settings)
+        assert preview.age_seconds == 119
+    assert await trade_count(engine, user_id) == 0
+    assert await cash_of(engine, user_id) == D("10000.00")
 
 
 def _order(
