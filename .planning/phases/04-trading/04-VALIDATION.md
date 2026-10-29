@@ -159,3 +159,19 @@ From RESEARCH, with D-06/D-07 applied:
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** planned 2026-10-28 (statuses turn green during execution)
+
+## Final review and regression gate
+
+- CR-01 was fixed in v0.3.1 with real-Postgres lock-wait aging tests.
+  Before fix: 3 stale cases failed, 2 fresh controls passed. After fix: 481
+  backend tests passed, 99.88% total coverage, critical list 100%; lint/format/types pass.
+- This full backend suite includes prior-phase authentication, account,
+  prices, scheduler, migration and health tests. Hotfix CI runs
+  `40847508779` and `40848088770` also passed full frontend, image and e2e
+  jobs, covering prior auth/markets/health flows and the trade round trip.
+- The independent reviewer confirmed CR-01 resolved with no remaining
+  concrete findings. No application changes followed these checks.
+- Hotfix main PR #22 and back-merge PR #23 merged after green ci-pass.
+  v0.3.1 is in main/develop; production checkout/deploy log match its SHA.
+- Patch origin/public smoke passed 38/38 and 9/9. The existing approved
+  live browser check is retained; no UI or ordinary-flow behavior changed.

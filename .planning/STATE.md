@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "04-10 live check approved; CR-01 fixed; hotfix 0.3.1 CI and phase verification pending"
-last_updated: "2026-10-29T08:52:13.859Z"
+stopped_at: "04-10 complete; v0.3.1 deployed and back-merged; final phase verification pending"
+last_updated: "2026-10-29T09:19:31.254Z"
 last_activity: 2026-10-29
 progress:
   total_phases: 7
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 Phase: 4 (Trading) — EXECUTING
 Plan: 10 of 10
-Status: Closing phase — hotfix CI and goal verification pending
-Last activity: 2026-10-29 — Live check approved; reviewed freshness hotfix prepared
+Status: Final phase goal verification pending
+Last activity: 2026-10-29 — v0.3.1 live; review clean; final goal verification pending
 
 Progress: [██████████] 100% of planned plans; phase verification pending
 
@@ -79,7 +79,8 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - Production deploy succeeded once; migrations 0006/0007 applied.
 - Origin/public smoke passed 38/38 and 9/9; pre-check production trade count 0.
 - Final code review found CR-01 (stale time before DB wait); fix and real-PG
-  regressions independently re-reviewed; hotfix PR #22 into main is in CI.
+  regressions independently re-reviewed; hotfix PR #22 and back-merge #23
+  passed CI and merged. v0.3.1 deployed with origin/public smoke 38/38 and 9/9.
 
 ### Pending Todos
 
@@ -94,5 +95,5 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 ## Session Continuity
 
 Last session: 2026-10-29T09:12:18Z
-Stopped at: 04-10 live check approved; CR-01 fixed; hotfix 0.3.1 CI and phase verification pending
+Stopped at: 04-10 complete; v0.3.1 deployed and back-merged; final phase verification pending
 Resume file: .planning/phases/04-trading/04-10-SUMMARY.md

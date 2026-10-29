@@ -6,6 +6,7 @@ tags: [git-flow, release, trading, production, deploy]
 requires: [04-09]
 provides:
   - "v0.3.0 release with trading"
+  - "v0.3.1 freshness hotfix after final code review"
 affects: [05-portfolio-and-history]
 key-files:
   modified:
@@ -13,12 +14,16 @@ key-files:
     - backend/uv.lock
     - frontend/package.json
     - frontend/package-lock.json
+    - backend/app/services/trading.py
+    - backend/tests/test_trading_service.py
 requirements-completed: [TRADE-01, TRADE-02, TRADE-03, TRADE-04, TRADE-05, TRADE-06, TRADE-07, TRADE-08]
 completed: 2026-10-29
 metrics:
   tasks: 3
 release_decision: release-now
 release_tag: v0.3.0
+latest_release_tag: v0.3.1
+latest_release_sha: 0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7
 release_sha: 6425dad1b9c5718eb969688cbe3e2b0ac7cd3224
 release_pr: https://github.com/YokAI-open/Birja/pull/20
 backmerge_pr: https://github.com/YokAI-open/Birja/pull/21
@@ -95,3 +100,32 @@ Phase 4 and routing to Phase 5.
 Version files exist at 0.3.0; the published release tag is an ancestor of
 main and develop; deployed SHA matches the tag; all release and back-merge
 checks passed; smoke suites passed; the user approved the final live check.
+
+## Final review hotfix: v0.3.1
+
+- Review CR-01 found the clock was captured before account lock/price-read
+  waits. A 119-second-old price could fill at actual age 121.
+- `0d52202` reproduces the defect with actual PostgreSQL blocking and a
+  controlled clock: 3 stale cases fail before the fix, 2 fresh controls pass.
+- `d0ee5fd` samples the real clock at freshness enforcement after the DB
+  waits; explicit clocks and replay-before-freshness ordering remain intact.
+- Full backend suite: 481 passed; overall 99.88%; critical list 100%;
+  lint, format and mypy passed. The reviewer independently confirmed closure.
+- Hotfix PR #22 passed all five checks in run `40847508779`, then merged
+  into main as `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`.
+- Annotated v0.3.1 was published. Back-merge PR #23 passed all five checks
+  in run `40848088770` and merged as `dd50ad77bfc99c1b7905227973e530995e2c57cc`.
+- Both main and develop contain the patch tag. This follows git-flow under
+  the user's existing authorization to finish release actions.
+- Pre-patch production cents check: 0. One patch deploy exited 0 and
+  printed Deploy complete: main; no new migrations were introduced.
+- Patch origin/public smoke passed 38/38 and 9/9; 15 coins priced, oldest
+  age 36 seconds. Production checkout and deploy log match v0.3.1.
+- Patch deploy log: `2026-10-29T09:15:27Z 0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7 /var/www/birja/releases/0107706-20261029T091506Z main`.
+- The prior user-approved live buy/sell flow remains applicable; UI and
+  ordinary successful trading behavior are unchanged. No repeat user test
+  was requested; the new lock-delay edge case is covered by the regression.
+
+The post-release code-review fix is an additional deviation handled inside
+this release plan, following the Phase 3 hotfix precedent. Final phase goal
+verification remains required before Phase 4 is marked complete.
