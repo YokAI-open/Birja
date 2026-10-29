@@ -204,9 +204,8 @@ async def quote(
     now: datetime | None = None,
 ) -> Quote:
     """Price an order without locking or writing anything."""
-    now = now or datetime.now(UTC)
     coin, price = await _load_coin_price(db, order.symbol)
-    age = _require_fresh(coin.symbol, price.as_of, now, settings)
+    age = _require_fresh(coin.symbol, price.as_of, now or datetime.now(UTC), settings)
     cash = (await db.execute(select(Account.cash).where(Account.user_id == user_id))).scalar_one()
     plan = plan_trade(
         symbol=coin.symbol,
@@ -237,7 +236,6 @@ async def execute(
     now: datetime | None = None,
 ) -> tuple[Fill, bool]:
     """Execute one market order. Returns (fill, True) when new, (original fill, False) on replay."""
-    now = now or datetime.now(UTC)
     try:
         # (1) account lock first, always; holding lock second.
         account = (
@@ -258,7 +256,7 @@ async def execute(
 
         # (3) Live prices only.
         coin, price = await _load_coin_price(db, order.symbol)
-        age = _require_fresh(coin.symbol, price.as_of, now, settings)
+        age = _require_fresh(coin.symbol, price.as_of, now or datetime.now(UTC), settings)
 
         # (4) holding lock, then plan.
         holding = (
