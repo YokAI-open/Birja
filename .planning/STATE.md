@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "04-10 deployed v0.3.0; awaiting user live-browser trade approval"
+stopped_at: "04-10 live check approved; CR-01 fixed; hotfix 0.3.1 CI and phase verification pending"
 last_updated: "2026-10-29T08:52:13.859Z"
 last_activity: 2026-10-29
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 46
-  completed_plans: 45
-  percent: 98
+  completed_plans: 46
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-20)
 
 Phase: 4 (Trading) — EXECUTING
 Plan: 10 of 10
-Status: Awaiting production browser trade approval
-Last activity: 2026-10-29 — v0.3.0 deployed; origin/public smoke passed
+Status: Closing phase — hotfix CI and goal verification pending
+Last activity: 2026-10-29 — Live check approved; reviewed freshness hotfix prepared
 
-Progress: [██████████] 98%
+Progress: [██████████] 100% of planned plans; phase verification pending
 
 ## Performance Metrics
 
@@ -74,11 +74,12 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 - Two planning-only closeout commits were carried after PR #19 merged early.
 - User said "yes, do it all": release pushes, PRs, merge commits after green CI,
   v0.3.0 publication, back-merge and production deployment are authorized.
-- Final live browser trade verification still requires the user.
+- Final live browser check approved by the user; production trade count 0 -> 2.
 - v0.3.0 published at `6425dad`; release PR #20 and back-merge PR #21 merged.
 - Production deploy succeeded once; migrations 0006/0007 applied.
 - Origin/public smoke passed 38/38 and 9/9; pre-check production trade count 0.
-- Await user live-site buy/sell approval; do not repeat the deploy.
+- Final code review found CR-01 (stale time before DB wait); fix and real-PG
+  regressions independently re-reviewed; hotfix PR #22 into main is in CI.
 
 ### Pending Todos
 
@@ -92,6 +93,6 @@ Decisions are logged in PROJECT.md Key Decisions. Recent, already settled:
 
 ## Session Continuity
 
-Last session: 2026-10-29T08:33:47.141Z
-Stopped at: 04-10 deployed v0.3.0; awaiting user live-browser trade approval
-Resume file: .planning/phases/04-trading/04-10-RELEASE-CHECKPOINT.md
+Last session: 2026-10-29T09:12:18Z
+Stopped at: 04-10 live check approved; CR-01 fixed; hotfix 0.3.1 CI and phase verification pending
+Resume file: .planning/phases/04-trading/04-10-SUMMARY.md

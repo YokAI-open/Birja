@@ -1,7 +1,7 @@
 ---
 phase: 04-trading
 plan: 10
-status: awaiting-human-verification
+status: passed
 updated: 2026-10-29
 release_tag: v0.3.0
 release_sha: 6425dad1b9c5718eb969688cbe3e2b0ac7cd3224
@@ -9,9 +9,10 @@ release_sha: 6425dad1b9c5718eb969688cbe3e2b0ac7cd3224
 
 # Release 0.3 checkpoint
 
-Tasks 1 and 2 are complete. Task 3 has completed deployment and automated
-smoke checks, and awaits the user's live browser trade approval. Do not
-create 04-10-SUMMARY.md or mark Phase 4 complete until that check passes.
+All release tasks are complete. The user replied `appoved` to the final
+live-browser check; the post-check production trade count was 2 (from 0).
+See 04-10-SUMMARY.md. Final code review, hotfix and goal verification are
+tracked by the phase closeout; this document preserves the v0.3.0 evidence.
 
 ## Authorization
 
@@ -69,12 +70,12 @@ authorized actions.
   `6425dad1b9c5718eb969688cbe3e2b0ac7cd3224`.
 - Recorded deploy entry:
   `2026-10-29T08:50:10Z 6425dad1b9c5718eb969688cbe3e2b0ac7cd3224 /var/www/birja/releases/6425dad-20261029T084949Z main`.
-- Production trade count before the user's live check: 0.
+- Production trade count before the user's live check: 0; after approval: 2.
 - No secrets, recipient addresses, login codes or individual balances were
   read or recorded. Smoke scripts perform only their defined synthetic
   rejection checks; the assistant placed no trades or sign-in requests.
 
-## Resume
+## Completed manual checkpoint
 
 1. User opens https://birja.nist.one and signs in with an emailed code.
 2. Markets -> Trade BTC: confirm Live price; buy $10.00, with fee $0.02 and
@@ -88,5 +89,6 @@ authorized actions.
    commits after back-merge still need inclusion in develop via PR; never
    commit directly to main/develop.
 
-The draft `/tmp/birja-04-10-summary-draft.md` is optional convenience; this
-checkpoint is the durable source. Do not repeat deployment or republish the tag.
+The manual checkpoint is complete and approval is recorded in the summary.
+Do not repeat the v0.3.0 deployment or republish its tag. The reviewed
+stale-price correction is being released separately as v0.3.1.

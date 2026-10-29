@@ -3,7 +3,7 @@ phase: 4
 slug: trading
 status: draft
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 planned: 2026-10-28
 created: 2026-10-28
 ---
@@ -64,7 +64,7 @@ Each task's `<automated>` command is in its plan. RED-first tasks (tdd) create t
 | 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ✅ green |
 | 04-10-01 | 10 | 6 | release decision | manual | release-now and remaining release actions authorized | n/a | ✅ green |
 | 04-10-02 | 10 | 6 | git-flow release | CI + git | PR #20/#21 green and merged; v0.3.0 in main/develop | ✅ | ✅ green |
-| 04-10-03 | 10 | 6 | deploy + live trade | prod smoke + manual | origin 38/38, public 9/9; user browser check pending | ✅ | ⬜ pending |
+| 04-10-03 | 10 | 6 | deploy + live trade | prod smoke + manual | origin 38/38, public 9/9; user approved; trade count 0 -> 2 | ✅ | ✅ green |
 
 No 3 consecutive tasks lack an automated check (checkpoint tasks 04-09-02/03 and 04-10-* each have a command).
 
@@ -113,18 +113,18 @@ From RESEARCH, with D-06/D-07 applied:
 - The isolated test stack was removed after the tests.
 - Release PR #20 and back-merge #21 passed CI and merged; v0.3.0 was published.
 - Production cents check 0; one deploy exited 0, migrations 0006/0007 applied;
-  origin/public smoke passed 38/38 and 9/9. User browser trade check remains pending.
+  origin/public smoke passed 38/38 and 9/9. User approved the browser check; trade count increased from 0 to 2.
 - Durable evidence: `04-10-RELEASE-CHECKPOINT.md`.
 
 ## Wave 0 Requirements
 
-- [ ] `backend/tests/test_trade_math.py`, `test_config_trading.py` (04-02 Task 1, RED first)
-- [ ] `backend/tests/test_trading_schema.py` (04-03 Task 2)
-- [ ] `backend/tests/test_trading_service.py` + helpers `put_price`, `set_cash`, `put_holding`, `cash_of`, `holding_of`, `trade_count`, `coin_id` and `db`/`new_user` fixtures (04-06 Task 1, RED first; users are unique per test, so no trade/holding wipe is needed; `clean_prices` resets prices)
-- [ ] `backend/tests/test_trades_api.py`, `test_trading_concurrency.py` (04-08)
-- [ ] `frontend/src/api/trades.test.ts`, `hooks/useDebouncedValue.test.ts` (04-04), `frontend/src/pages/TradePage.test.tsx` (04-07), `frontend/e2e/trade.spec.ts` (04-01, RED first)
-- [ ] `deploy/tests/test-smoke-trading.sh` (04-05)
-- [ ] No new packages
+- [x] `backend/tests/test_trade_math.py`, `test_config_trading.py` (04-02 Task 1, RED first)
+- [x] `backend/tests/test_trading_schema.py` (04-03 Task 2)
+- [x] `backend/tests/test_trading_service.py` + helpers `put_price`, `set_cash`, `put_holding`, `cash_of`, `holding_of`, `trade_count`, `coin_id` and `db`/`new_user` fixtures (04-06 Task 1, RED first; users are unique per test, so no trade/holding wipe is needed; `clean_prices` resets prices)
+- [x] `backend/tests/test_trades_api.py`, `test_trading_concurrency.py` (04-08)
+- [x] `frontend/src/api/trades.test.ts`, `hooks/useDebouncedValue.test.ts` (04-04), `frontend/src/pages/TradePage.test.tsx` (04-07), `frontend/e2e/trade.spec.ts` (04-01, RED first)
+- [x] `deploy/tests/test-smoke-trading.sh` (04-05)
+- [x] No new packages
 
 ---
 

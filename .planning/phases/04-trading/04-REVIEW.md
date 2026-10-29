@@ -51,11 +51,12 @@ files_reviewed_list:
   - frontend/src/pages/TradePage.test.tsx
   - frontend/src/pages/TradePage.tsx
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+  resolved: 1
+status: clean
 ---
 
 # Phase 4: Code Review Report
@@ -63,15 +64,16 @@ status: issues_found
 **Reviewed:** 2026-10-29T09:02:07Z
 **Depth:** standard
 **Files reviewed:** 46, scoped from phase-summary key-files fields
-**Status:** issues_found
+**Status:** clean — CR-01 resolved and independently re-reviewed
 
 ## Summary
 
 Reviewed every scoped file, tracing trade validation, decimal rounding,
 cost basis, transaction locking, idempotency replay, API serialization,
 frontend preview/confirmation, authentication boundaries and deployment
-smoke checks. One execution-time freshness defect violates TRADE-05 when
-a request waits for an account lock near the 120-second price-age limit.
+smoke checks. The initial review identified one execution-time freshness defect near
+the 120-second price-age limit. It is resolved by the hotfix described below;
+there are no remaining concrete findings in the focused re-review.
 
 Accepted v1 choices (including the fee-inclusive dollar amount, minimum
 fee, whole-position dust exemption, stateless quote and lack of a trade
@@ -82,7 +84,7 @@ this review depth. Fallow was disabled; no structural findings were supplied.
 
 ### CR-01: Refresh the clock after acquiring the account lock
 
-**Classification:** BLOCKER
+**Classification:** BLOCKER — resolved
 
 **File:** `backend/app/services/trading.py:240` and `:261`
 
@@ -145,3 +147,18 @@ test. No production or dev trading is needed to reproduce this.
   real-Postgres regression was not run during this read-only review.
 
 _Reviewer: Codex gsd-code-reviewer_
+
+## CR-01 resolution
+
+- `0d52202` adds real-Postgres lock-wait and quote-read aging regressions.
+  Before the fix: 3 stale cases failed with DID NOT RAISE; 2 fresh controls passed.
+- `d0ee5fd` samples the real clock at freshness enforcement after database
+  waits, retaining explicit test clocks and idempotency replay precedence.
+- Full backend suite: 481 passed, 99.88% total coverage, critical list 100%;
+  lint, format and mypy passed.
+- The reviewer independently re-read the focused diff and confirmed actual
+  PostgreSQL blocking is observed before clock advancement, boundary ages
+  120/121 refuse without writes, fresh controls work, cleanup is sound and
+  stale-price replay remains before freshness. No remaining concrete findings.
+- Patch version: 0.3.1 (`39bd120`); production publication/deployment is tracked
+  in the release summary and must pass its separate CI/smoke checks.
