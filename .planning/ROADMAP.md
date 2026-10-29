@@ -223,7 +223,36 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans**: TBD
+**Plans:** 8/10 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 04-01-PLAN.md — Branch feature/phase-04-trading (after PR #18 merged), RED trade e2e (buy $100 -> $9,900.00, sell all, price_changed tolerated)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 04-02-PLAN.md — TDD trade_math.py: D-01 spread/fee settings, D-06 min fee + sell cap, D-02 exact $ buys, D-04 minimum, D-07 cost basis math, 100% coverage
+- [x] 04-03-PLAN.md — holdings + trades schema (0006) and guarded accounts cents CHECK (0007), DB backstop tests
+- [x] 04-04-PLAN.md — Frontend trade API contract (ApiError.detail, guards, formatQuantity) and TanStack hooks (debounced quote, trade, holding)
+- [x] 04-05-PLAN.md — Prod smoke: trade endpoints 401/403 signed out (offline-tested), RUNBOOK "Trading (release 0.3)"
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 04-06-PLAN.md — trading.py: account FOR UPDATE -> replay -> Live price (D-03) -> holding lock -> plan -> apply; idempotency, price_changed, cost basis; trade_math/trading on the 100% list
+- [x] 04-07-PLAN.md — /trade/:symbol page (D-05): live preview, Buy/Sell, confirm with idempotency key, refusals, price changed, fill; Markets Trade links
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 04-08-PLAN.md — POST /trades/quote, POST /trades, GET /holdings/{symbol} (CSRF, auth, plain-decimal JSON), API tests, real-Postgres concurrency proof
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 04-09-PLAN.md — Full local suite, live-price dev trades (human check), push gate + PR into develop, release decision
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
 **UI hint**: yes
 
 ### Phase 5: Portfolio and History
@@ -265,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 0/TBD | Not started | - |
+| 4. Trading | 8/10 | In Progress|  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |

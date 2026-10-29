@@ -43,6 +43,13 @@ Open http://localhost:5173 and expect API, Database and Redis to show "Connected
 
 CI runs on every PR into `develop`/`main`; the `ci-pass` check must be green before merging.
 
+## AI development
+
+Claude Code and Codex share the rules in [CLAUDE.md](CLAUDE.md) and the existing
+GSD state in `.planning/`. Codex starts from [AGENTS.md](AGENTS.md); use
+`$gsd-progress` to inspect the project. See [the Codex guide](docs/CODEX.md)
+for skills, setup checks, and command equivalents.
+
 ## Deploying
 
 Production runs at https://birja.nist.one. Deploy from `main` on the server with `/srv/birja/deploy/deploy.sh` (as root). Setup, rollback, certificate renewal and undo steps are in [deploy/RUNBOOK.md](deploy/RUNBOOK.md).

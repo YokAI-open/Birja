@@ -23,8 +23,10 @@ usage() {
 Usage: smoke-prod.sh [--public]
   (no args)  host checks via origin: redirect, TLS, build, headers, docs off,
              ENV=prod, placeholders refused, exposure, client IP, log hygiene,
-             price scheduler (one, healthy, kraken), price freshness, prices 401
-  --public   user-facing checks through Cloudflare (incl. prices 401 signed out)
+             price scheduler (one, healthy, kraken), price freshness, prices 401,
+             trade endpoints 401/403 signed out
+  --public   user-facing checks through Cloudflare (incl. prices 401 and
+             trade endpoints 401/403 signed out)
   -h, --help this text
 Exit 0 only if every check passed.
 USAGE
@@ -44,6 +46,22 @@ host_bindings() { # host_bindings <container id>: one "<port> -> <addr>" line pe
 # Pure function (tested by deploy/tests/test-smoke-ports.sh).
 only_backend_published() {
   [ "$(grep . || true)" = "backend 8000/tcp -> 127.0.0.1:18000" ]
+}
+
+# Trade endpoints need a session (04-05). Defined before the source guard so
+# deploy/tests/test-smoke-trading.sh can test it with a stubbed curlq.
+# The POST is refused by CSRF/auth before any service code runs: nothing is written.
+trading_requires_auth() {
+  local code
+  code=$(curlq -o /dev/null -w '%{http_code}' "https://$H/api/v1/holdings/BTC")
+  if [ "$code" = 401 ]; then pass "GET /api/v1/holdings/BTC is 401 when signed out"; else fail "GET /api/v1/holdings/BTC signed out: got $code (want 401)"; fi
+  code=$(curlq -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' \
+    --data '{"symbol":"BTC","side":"buy","amount_usd":"1.00"}' "https://$H/api/v1/trades/quote")
+  if [ "$code" = 401 ] || [ "$code" = 403 ]; then
+    pass "POST /api/v1/trades/quote is $code when signed out"
+  else
+    fail "POST /api/v1/trades/quote signed out: got $code (want 401 or 403)"
+  fi
 }
 
 # Sourced by deploy/tests/: define the functions above, run no checks.
@@ -161,6 +179,7 @@ print(" ".join(a["data"] for a in d.get("Answer",[]) if a.get("type")==1))' 2>/d
 
   docs_not_exposed
   prices_requires_auth
+  trading_requires_auth
 
   if [ "$FAILED" -eq 0 ]; then echo "SMOKE OK ($TOTAL checks)"; exit 0; fi
   echo "SMOKE FAILED ($FAILED of $TOTAL)"; exit 1
@@ -404,6 +423,7 @@ else
   fail "postgres container not found for price check"
 fi
 prices_requires_auth
+trading_requires_auth
 
 # 13. Deploy record
 if [ -f "$DEPLOY_LOG" ]; then

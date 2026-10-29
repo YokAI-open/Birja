@@ -1,12 +1,17 @@
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from typing import TYPE_CHECKING
 
 import httpx
 import pytest
 import pytest_asyncio
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from tests.guard import ensure_test_stack
 
@@ -101,6 +106,26 @@ def outbox(running_app: FastAPI) -> Iterator[OutboxSender]:
     running_app.state.email_sender = sender
     yield sender
     running_app.state.email_sender = original
+
+
+@pytest_asyncio.fixture
+async def db(engine: AsyncEngine, migrated: None) -> AsyncIterator[AsyncSession]:
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def new_user(engine: AsyncEngine, migrated: None) -> Callable[[], Awaitable[int]]:
+    async def _make() -> int:
+        from app.services.accounts import get_or_create_user
+        from tests.helpers import unique_email
+
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            user_id, _ = await get_or_create_user(session, unique_email("trader"))
+            await session.commit()
+        return user_id
+
+    return _make
 
 
 @pytest_asyncio.fixture

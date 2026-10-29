@@ -1,0 +1,12 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/gsd-check-update.js\""
+        }
+      ]
+    }
+  ]
+}

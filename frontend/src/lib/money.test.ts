@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { formatUnitPrice, formatUsd } from "./money";
+import { formatQuantity, formatUnitPrice, formatUsd } from "./money";
+
+describe("formatQuantity", () => {
+  it("drops trailing zeros and never groups", () => {
+    expect(formatQuantity("0.00099501")).toBe("0.00099501");
+    expect(formatQuantity("124.43890274")).toBe("124.43890274");
+    expect(formatQuantity("0.00000000")).toBe("0");
+    expect(formatQuantity("125.00000000")).toBe("125");
+    expect(formatQuantity("1234567.5")).toBe("1234567.5");
+  });
+
+  it("rejects exponent and negative input", () => {
+    expect(() => formatQuantity("1E-8")).toThrow();
+    expect(() => formatQuantity("-1")).toThrow();
+  });
+});
 
 describe("formatUsd", () => {
   it("formats a server decimal string", () => {
