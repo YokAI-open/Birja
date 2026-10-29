@@ -1,9 +1,9 @@
 ---
 phase: 4
 slug: trading
-status: draft
+status: complete
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 planned: 2026-10-28
 created: 2026-10-28
 ---
@@ -62,7 +62,9 @@ Each task's `<automated>` command is in its plan. RED-first tasks (tdd) create t
 | 04-09-01 | 09 | 5 | all | full suite | CI-equivalent local run (minus e2e) | ✅ | ✅ green |
 | 04-09-02 | 09 | 5 | SC1-4 by eye | manual (dev stack) | `alembic current` = 0007 (head) | n/a | ✅ green |
 | 04-09-03 | 09 | 5 | push gate, E2E in CI | CI | `gh pr view` / `gh pr checks` (e2e trade.spec.ts) | n/a | ✅ green |
-| 04-10-01..03 | 10 | 6 | release (conditional) | prod smoke | `smoke-prod.sh --public` | ✅ | ⬜ pending |
+| 04-10-01 | 10 | 6 | release decision | manual | release-now and remaining release actions authorized | n/a | ✅ green |
+| 04-10-02 | 10 | 6 | git-flow release | CI + git | PR #20/#21 green and merged; v0.3.0 in main/develop | ✅ | ✅ green |
+| 04-10-03 | 10 | 6 | deploy + live trade | prod smoke + manual | origin 38/38, public 9/9; user approved; trade count 0 -> 2 | ✅ | ✅ green |
 
 No 3 consecutive tasks lack an automated check (checkpoint tasks 04-09-02/03 and 04-10-* each have a command).
 
@@ -109,17 +111,20 @@ From RESEARCH, with D-06/D-07 applied:
   ruff, formatting and mypy passed.
 - Frontend: 161 tests, 98.88% statements, 99.76% lines; lint, types and build passed.
 - The isolated test stack was removed after the tests.
-- Release push/PR, tag and deployment remain pending their checkpoints.
+- Release PR #20 and back-merge #21 passed CI and merged; v0.3.0 was published.
+- Production cents check 0; one deploy exited 0, migrations 0006/0007 applied;
+  origin/public smoke passed 38/38 and 9/9. User approved the browser check; trade count increased from 0 to 2.
+- Durable evidence: `04-10-RELEASE-CHECKPOINT.md`.
 
 ## Wave 0 Requirements
 
-- [ ] `backend/tests/test_trade_math.py`, `test_config_trading.py` (04-02 Task 1, RED first)
-- [ ] `backend/tests/test_trading_schema.py` (04-03 Task 2)
-- [ ] `backend/tests/test_trading_service.py` + helpers `put_price`, `set_cash`, `put_holding`, `cash_of`, `holding_of`, `trade_count`, `coin_id` and `db`/`new_user` fixtures (04-06 Task 1, RED first; users are unique per test, so no trade/holding wipe is needed; `clean_prices` resets prices)
-- [ ] `backend/tests/test_trades_api.py`, `test_trading_concurrency.py` (04-08)
-- [ ] `frontend/src/api/trades.test.ts`, `hooks/useDebouncedValue.test.ts` (04-04), `frontend/src/pages/TradePage.test.tsx` (04-07), `frontend/e2e/trade.spec.ts` (04-01, RED first)
-- [ ] `deploy/tests/test-smoke-trading.sh` (04-05)
-- [ ] No new packages
+- [x] `backend/tests/test_trade_math.py`, `test_config_trading.py` (04-02 Task 1, RED first)
+- [x] `backend/tests/test_trading_schema.py` (04-03 Task 2)
+- [x] `backend/tests/test_trading_service.py` + helpers `put_price`, `set_cash`, `put_holding`, `cash_of`, `holding_of`, `trade_count`, `coin_id` and `db`/`new_user` fixtures (04-06 Task 1, RED first; users are unique per test, so no trade/holding wipe is needed; `clean_prices` resets prices)
+- [x] `backend/tests/test_trades_api.py`, `test_trading_concurrency.py` (04-08)
+- [x] `frontend/src/api/trades.test.ts`, `hooks/useDebouncedValue.test.ts` (04-04), `frontend/src/pages/TradePage.test.tsx` (04-07), `frontend/e2e/trade.spec.ts` (04-01, RED first)
+- [x] `deploy/tests/test-smoke-trading.sh` (04-05)
+- [x] No new packages
 
 ---
 
@@ -153,4 +158,20 @@ From RESEARCH, with D-06/D-07 applied:
 - [x] Feedback latency < 120s (per-task commands; full suite at wave end)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** planned 2026-10-28 (statuses turn green during execution)
+**Approval:** completed 2026-10-29; dev and production browser checks approved by the user. Goal verification is recorded in `04-VERIFICATION.md`.
+
+## Final review and regression gate
+
+- CR-01 was fixed in v0.3.1 with real-Postgres lock-wait aging tests.
+  Before fix: 3 stale cases failed, 2 fresh controls passed. After fix: 481
+  backend tests passed, 99.88% total coverage, critical list 100%; lint/format/types pass.
+- This full backend suite includes prior-phase authentication, account,
+  prices, scheduler, migration and health tests. Hotfix CI runs
+  `40847508779` and `40848088770` also passed full frontend, image and e2e
+  jobs, covering prior auth/markets/health flows and the trade round trip.
+- The independent reviewer confirmed CR-01 resolved with no remaining
+  concrete findings. No application changes followed these checks.
+- Hotfix main PR #22 and back-merge PR #23 merged after green ci-pass.
+  v0.3.1 is in main/develop; production checkout/deploy log match its SHA.
+- Patch origin/public smoke passed 38/38 and 9/9. The existing approved
+  live browser check is retained; no UI or ordinary-flow behavior changed.
