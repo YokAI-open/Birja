@@ -223,7 +223,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans executed
 
 Plans:
 **Wave 1**
@@ -252,7 +252,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
+- [x] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
 **UI hint**: yes
 
 ### Phase 5: Portfolio and History
@@ -294,6 +294,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 9/10 | In Progress|  |
+| 4. Trading | 10/10 | Verification pending |  |
 | 5. Portfolio and History | 0/TBD | Not started | - |
 | 6. Deploy | 0/TBD | Not started | - |
