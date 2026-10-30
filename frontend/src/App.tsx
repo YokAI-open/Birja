@@ -10,6 +10,7 @@ import HealthPage from "@/pages/HealthPage";
 import SignInPage from "@/pages/SignInPage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
+import HistoryPage from "@/pages/HistoryPage";
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -68,10 +69,14 @@ function SignedIn({ me }: { me: Me }) {
         <NavLink to="/account" className={navItem}>
           Account
         </NavLink>
+        <NavLink to="/history" className={navItem}>
+          History
+        </NavLink>
       </nav>
       <Routes>
         <Route index element={<MarketsPage />} />
         <Route path="portfolio" element={<PortfolioPage />} />
+        <Route path="history" element={<HistoryPage />} />
         <Route
           path="account"
           element={

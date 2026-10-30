@@ -25,6 +25,43 @@ it("reserves the initial loading region", () => {
     "true",
   );
 });
+
+it("cancels the first page when the view unmounts", () => {
+  let signal: AbortSignal | undefined;
+  vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+    signal = init.signal as AbortSignal;
+    return new Promise(() => {});
+  });
+  const { unmount } = renderWithClient(<HistoryPage />);
+  expect(signal?.aborted).toBe(false);
+  unmount();
+  expect(signal?.aborted).toBe(true);
+});
+
+it("disables Refresh while retaining the stored fills during an in-flight refresh", async () => {
+  let resolve: (value: Response) => void = () => {};
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementationOnce(() => ok())
+      .mockImplementation(
+        () =>
+          new Promise<Response>((done) => {
+            resolve = done;
+          }),
+      ),
+  );
+  const { user } = renderWithClient(<HistoryPage />);
+  await screen.findByRole("table");
+  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  expect(screen.getByRole("button", { name: "Refreshing history…" })).toBeDisabled();
+  expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
+  resolve(new Response(JSON.stringify({ items: [item], next_cursor: null })));
+  await vi.waitFor(() =>
+    expect(screen.getByRole("button", { name: "Refresh history" })).toBeEnabled(),
+  );
+});
 it("renders stored values in desktop and labelled mobile views without a false end message", async () => {
   const fetch = vi.fn(() =>
     ok(
@@ -59,7 +96,7 @@ it("renders stored values in desktop and labelled mobile views without a false e
     "Quantity",
     "Execution price",
     "Fee",
-    "Total",
+    "Total cash change",
   ]) {
     expect(within(mobile).getAllByText(label, { selector: "dt" })).toHaveLength(3);
   }
