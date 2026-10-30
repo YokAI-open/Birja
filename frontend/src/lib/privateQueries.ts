@@ -5,6 +5,8 @@ export async function clearPrivateQueries(queryClient: QueryClient): Promise<voi
   const filters = {
     predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== "me",
   };
-  await queryClient.cancelQueries(filters);
+  // Identity reads can also finish with the previous session's result. Cancel
+  // them before publication, but retain the query object and its active observer.
+  await queryClient.cancelQueries();
   queryClient.removeQueries(filters);
 }

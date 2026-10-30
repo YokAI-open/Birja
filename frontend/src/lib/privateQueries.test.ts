@@ -2,7 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { clearPrivateQueries } from "./privateQueries";
 
-it("awaits private cancellation before removal and preserves the observed me query", async () => {
+it("awaits all-query cancellation before private removal and preserves the observed me query", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const me = { email: "a@example.test", cash_usd: "10000" };
   client.setQueryData(["me"], me);
@@ -33,6 +33,7 @@ it("awaits private cancellation before removal and preserves the observed me que
     });
   });
   const cleanup = clearPrivateQueries(client);
+  expect(client.cancelQueries).toHaveBeenCalledWith();
   await vi.waitFor(() => expect(signal.aborted).toBe(true));
   await vi.waitFor(() => expect(finishCancel).toBeTypeOf("function"));
   expect(client.getQueryData(["portfolio"])).toBe("cached A");
