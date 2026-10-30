@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useNavigate } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { fetchHistory } from "@/api/history";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +60,42 @@ const unauthorized = () =>
   });
 
 describe("App", () => {
+  it("keeps Account separate from the three responsive primary destinations", async () => {
+    stubApi(meOk);
+    renderWithClient(<App />);
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    expect(nav.querySelectorAll("a")).toHaveLength(3);
+    expect(nav).not.toContainElement(screen.getByRole("link", { name: "Account" }));
+    expect(nav.className).toContain("md:static");
+    expect(nav.className).toContain("safe-area-inset-bottom");
+    expect(screen.getByRole("main").className).toContain("80px");
+    for (const link of nav.querySelectorAll("a")) {
+      expect(link.className).toContain("min-h-11");
+      expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
+  it("focuses route headings on direct entry, navigation and Back without refetch theft", async () => {
+    stubApi(meOk);
+    function Back() {
+      const navigate = useNavigate();
+      return <button onClick={() => void navigate(-1)}>Back</button>;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><Back /><App /></MemoryRouter></QueryClientProvider>);
+    const user = userEvent.setup();
+    expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
+    await user.click(screen.getByRole("link", { name: "Account" }));
+    expect(await screen.findByRole("heading", { name: "Account", level: 1 })).toHaveFocus();
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+    signOut.focus();
+    await act(async () => { await client.invalidateQueries({ queryKey: ["me"] }); });
+    expect(signOut).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
+    client.clear();
+  });
+
   it("never shows cached or late A portfolio/history after passive expiry and B sign-in", async () => {
     document.cookie = "bj_csrf=synthetic; path=/";
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
