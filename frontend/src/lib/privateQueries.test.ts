@@ -34,6 +34,7 @@ it("awaits private cancellation before removal and preserves the observed me que
   });
   const cleanup = clearPrivateQueries(client);
   await vi.waitFor(() => expect(signal.aborted).toBe(true));
+  await vi.waitFor(() => expect(finishCancel).toBeTypeOf("function"));
   expect(client.getQueryData(["portfolio"])).toBe("cached A");
   expect(client.getQueryData(["history"])).toBe("cached A history");
   finishCancel();
