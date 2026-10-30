@@ -46,16 +46,16 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Portfolio
 
-- [ ] **PORT-01**: User can see cash, each holding and total portfolio value at current mid prices
-- [ ] **PORT-02**: User can see total profit/loss against the $10,000 start, in $ and %
-- [ ] **PORT-03**: User can see, per holding: quantity, average cost (fees included), current value and unrealized P/L in $ and %
-- [ ] **PORT-04**: User can see each holding's share of the portfolio (allocation %)
-- [ ] **PORT-05**: The portfolio shows the "as of" time of the prices used
+- [x] **PORT-01**: User can see cash, each holding and total portfolio value at current mid prices
+- [x] **PORT-02**: User can see total profit/loss against the $10,000 start, in $ and %
+- [x] **PORT-03**: User can see, per holding: quantity, average cost (fees included), current value and unrealized P/L in $ and %
+- [x] **PORT-04**: User can see each holding's share of the portfolio (allocation %)
+- [x] **PORT-05**: The portfolio shows the "as of" time of the prices used
 
 ### History
 
-- [ ] **HIST-01**: User can see their past trades, newest first: date/time, coin, side, quantity, execution price, fee and total
-- [ ] **HIST-02**: Long trade histories load page by page
+- [x] **HIST-01**: User can see their past trades, newest first: date/time, coin, side, quantity, execution price, fee and total
+- [x] **HIST-02**: Long trade histories load page by page
 
 ### Deployment
 
@@ -136,13 +136,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRADE-06 | Phase 4 | Complete |
 | TRADE-07 | Phase 4 | Complete |
 | TRADE-08 | Phase 4 | Complete |
-| PORT-01 | Phase 5 | Pending |
-| PORT-02 | Phase 5 | Pending |
-| PORT-03 | Phase 5 | Pending |
-| PORT-04 | Phase 5 | Pending |
-| PORT-05 | Phase 5 | Pending |
-| HIST-01 | Phase 5 | Pending |
-| HIST-02 | Phase 5 | Pending |
+| PORT-01 | Phase 5 | Complete |
+| PORT-02 | Phase 5 | Complete |
+| PORT-03 | Phase 5 | Complete |
+| PORT-04 | Phase 5 | Complete |
+| PORT-05 | Phase 5 | Complete |
+| HIST-01 | Phase 5 | Complete |
+| HIST-02 | Phase 5 | Complete |
 | DEPL-01 | Phase 6 | Pending (partly delivered in Phase 2.1: public HTTPS + sign-in) |
 | DEPL-02 | Phase 6 | Pending |
 

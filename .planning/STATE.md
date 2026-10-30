@@ -2,41 +2,41 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Awaiting Plan 05-08 Task 2 user browser review
-stopped_at: "05-08 Task 3: user approved browser review; awaiting scoped push and release choice"
-last_updated: "2026-10-30T13:33:34.810Z"
+status: planning
+stopped_at: Phase 5 complete and verified; PR 25 open, merge approval pending; Phase 6 unplanned
+last_updated: "2026-10-30T13:58:31.909Z"
 last_activity: 2026-10-30
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 54
-  completed_plans: 53
-  percent: 71
+  completed_plans: 54
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-29)
+See: .planning/PROJECT.md (updated 2026-10-30)
 
 **Core value:** Making a trade at a real, recent market price and then seeing what it's worth now, correct to the cent.
-**Current focus:** Phase 5 — Portfolio and History
+**Current focus:** Phase 6 — deploy
 
 ## Current Position
 
-Phase: 5 (Portfolio and History) — EXECUTING
-Plan: 8 of 8
-Status: Awaiting Plan 05-08 Task 3 scoped push decision
+Phase: 6
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-10-30
 
-Progress: [██████████] 98% of planned plans executed (53/54); 5/7 phases complete. Phase 5: 7/8 plans complete; human and remote checks pending.
+Progress: [██████████] 100% of currently planned plans executed (54/54); 6/7 phases complete. Phase 5: 8/8 complete; Phase 6 has no plans yet.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 53
+- Total plans completed: 54
 - Average duration: -
 - Total execution time: -
 
@@ -50,6 +50,7 @@ Progress: [██████████] 98% of planned plans executed (53/54)
 | 02.1 | 10 | - | - |
 | 3 | 10 | - | - |
 | 4 | 10 | - | - |
+| 5 | 8 | - | - |
 
 ## Accumulated Context
 
@@ -118,6 +119,21 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-10-30T13:33:34.793Z
-Stopped at: 05-08 Task 3: user approved browser review; awaiting scoped push and release choice
-Resume file: .planning/phases/05-portfolio-and-history/05-08-PLAN.md
+Last session: 2026-10-30T13:58:31.890Z
+Stopped at: Phase 5 complete and verified; PR 25 open, merge approval pending; Phase 6 unplanned
+Resume file: .planning/ROADMAP.md
+
+### Phase 5 Closeout — 2026-10-30
+
+- All 8 plans, 4 roadmap criteria, 7 requirements and 25 merged must-haves
+  passed final independent goal verification at d4eda41.
+- Explicit approvals: dev rebuild (five healthy services, 0008 head), full
+  browser checklist, then push-pr. PR #25 targets develop; merge is pending
+  separate approval. Release/deployment skipped. No Phase 6 work started.
+- Local: backend 573 passed/99.90% overall/100% critical; final frontend
+  264 passed with lint/types/format/build. Independent review clean.
+- Actual CI run 41066672894 at 0595c89: all jobs and ci-pass green;
+  Playwright 10 passed, one production-only CSP skip, zero failures.
+- SDK phase.complete emitted a stale human-verification warning because
+  the passed report preserves the prior human_needed audit history.
+  Current frontmatter is passed; UAT/decisions and CI evidence are complete.

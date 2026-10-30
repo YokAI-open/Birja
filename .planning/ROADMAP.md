@@ -11,7 +11,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
 - [x] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result (completed 2026-10-29)
-- [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
+- [x] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history (completed 2026-10-30)
 - [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
 
 ## Phase Details
@@ -268,7 +268,7 @@ Plans:
   3. For each holding, user sees quantity, average cost (fees included), current value, unrealized P/L in dollars and percent, and its allocation share
   4. User sees past trades newest first (date/time, coin, side, quantity, execution price, fee, total), and a long history loads page by page
 
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup and destructive migration state):
 
@@ -302,7 +302,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 05-08-PLAN.md — Wave 8: Fresh dev/browser approval and scoped push/release handoff
+- [x] 05-08-PLAN.md — Wave 8: Fresh dev/browser approval and scoped push/release handoff
 
 **UI hint**: yes
 
@@ -330,5 +330,5 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
-| 5. Portfolio and History | 7/8 | In Progress|  |
+| 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
 | 6. Deploy | 0/TBD | Not started | - |
