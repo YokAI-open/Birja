@@ -240,3 +240,97 @@ it("offers Browse markets only for a successful empty holdings response", async 
   ).toBeVisible();
   expect(screen.getByRole("link", { name: "Browse markets" })).toHaveAttribute("href", "/");
 });
+
+it("shows cash and each position allocation directly from the server", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      ok({
+        ...payload,
+        cash: "9000.00",
+        total_value: "10000.00",
+        cash_allocation_percent: "90.00",
+        holdings: [{ ...holding, current_value: "1000.00", allocation_percent: "10.00" }],
+      }),
+    ),
+  );
+  renderWithClient(<PortfolioPage />);
+  const list = await screen.findByRole("list", { name: "Allocation" });
+  const rows = within(list).getAllByRole("listitem");
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent("Cash90.00%");
+  expect(rows[1]).toHaveTextContent("BTC · Bitcoin10.00%");
+  expect(rows[0]!.querySelector("[data-allocation-fill]")).toHaveStyle({ width: "90.00%" });
+  expect(rows[1]!.querySelector("[data-allocation-fill]")).toHaveStyle({ width: "10.00%" });
+  for (const row of rows) {
+    expect(row.querySelector("[aria-hidden=true]")).toHaveClass("h-2", "bg-muted");
+  }
+  expect(screen.getByText("Share of total portfolio value, including cash.")).toBeVisible();
+});
+
+it.each(["33.33", "33.34"])("preserves %s allocations without a balancing row", async (percent) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      ok({
+        ...payload,
+        cash_allocation_percent: percent,
+        holdings: [
+          { ...holding, allocation_percent: percent },
+          { ...holding, symbol: "ETH", allocation_percent: percent },
+        ],
+      }),
+    ),
+  );
+  renderWithClient(<PortfolioPage />);
+  const list = await screen.findByRole("list", { name: "Allocation" });
+  expect(within(list).getAllByText(`${percent}%`)).toHaveLength(3);
+  expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+});
+
+it("distinguishes known zero allocation from incomplete valuation", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementationOnce(() =>
+        ok({ ...payload, cash_allocation_percent: "0.00", holdings: [holding] }),
+      )
+      .mockImplementation(() =>
+        ok({
+          ...payload,
+          valuation_complete: false,
+          total_value: null,
+          total_pl: null,
+          total_pl_percent: null,
+          cash_allocation_percent: null,
+          holdings: [{ ...holding, allocation_percent: null }],
+        }),
+      ),
+  );
+  const { user } = renderWithClient(<PortfolioPage />);
+  const list = await screen.findByRole("list", { name: "Allocation" });
+  expect(within(list).getByText("0.00%")).toBeVisible();
+  expect(
+    within(list).getAllByRole("listitem")[0]!.querySelector("[data-allocation-fill]"),
+  ).toHaveStyle({ width: "0.00%" });
+  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  await vi.waitFor(() => expect(within(list).getAllByText("Unavailable")).toHaveLength(2));
+  expect(list.querySelector("[data-allocation-fill]")).toBeNull();
+});
+
+it("explains zero total allocation without displaying a fabricated zero percent", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      ok({ ...payload, cash: "0.00", total_value: "0.00", cash_allocation_percent: null }),
+    ),
+  );
+  renderWithClient(<PortfolioPage />);
+  expect(
+    await screen.findByText("Allocation is unavailable while total portfolio value is zero."),
+  ).toBeVisible();
+  const list = screen.getByRole("list", { name: "Allocation" });
+  expect(within(list).getByText("Unavailable")).toBeVisible();
+  expect(within(list).queryByText("0.00%")).toBeNull();
+});
