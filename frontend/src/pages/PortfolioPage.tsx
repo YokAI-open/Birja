@@ -2,37 +2,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useNow } from "@/hooks/useNow";
-import { formatAge, freshnessStatus } from "@/lib/age";
+import { PortfolioFreshness } from "@/components/PortfolioFreshness";
 import { PortfolioHoldings, PortfolioOutcome } from "@/components/PortfolioHoldings";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
-import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUsd } from "@/lib/money";
 
 export default function PortfolioPage() {
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio();
   const now = useNow();
   const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
-  const ages =
-    data?.holdings.flatMap((h) => (h.age_seconds === null ? [] : [h.age_seconds + elapsed])) ?? [];
-  const oldest = ages.length > 0 ? Math.max(...ages) : null;
-  const status =
-    data && oldest !== null
-      ? freshnessStatus(oldest, data.fresh_seconds, data.stale_seconds)
-      : null;
   return (
     <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
           Portfolio
         </h1>
-        <Button variant="secondary" disabled={isFetching} onClick={() => void refetch()}>
+        <Button
+          variant="secondary"
+          className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
+          disabled={isFetching}
+          onClick={() => void refetch()}
+        >
           Refresh portfolio
         </Button>
-        {isFetching && data && (
-          <span role="status" className="sr-only">
-            Refreshing portfolio…
-          </span>
-        )}
       </div>
       {isPending ? (
         <div
@@ -64,7 +56,7 @@ export default function PortfolioPage() {
         <>
           {isError && (
             <div
-              role="status"
+              role="alert"
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
             >
               <p>Couldn&apos;t refresh your portfolio. Showing the last successful update.</p>
@@ -72,19 +64,6 @@ export default function PortfolioPage() {
                 Retry refresh
               </Button>
             </div>
-          )}
-          {!data.valuation_complete && (
-            <p role="status" className="rounded-control bg-warn-soft p-4 text-warn-text">
-              Some holdings have no price. Total value, profit/loss and allocation are unavailable
-              until prices return.
-            </p>
-          )}
-          {data.valuation_complete && status && status !== "fresh" && (
-            <p role="status" className="rounded-control bg-warn-soft p-4 text-warn-text">
-              {status === "stale"
-                ? "Some prices are out of date. Values use the last known prices."
-                : "Some prices are delayed. Values use the last known prices."}
-            </p>
           )}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-12">
             <Card
@@ -111,45 +90,13 @@ export default function PortfolioPage() {
                   )}
                 </div>
                 <p>Compared with your {formatUsd(data.starting_cash)} start</p>
-                <p className="text-[13px] leading-[18px] font-medium">
-                  {data.holdings.length === 0
-                    ? "No market prices needed"
-                    : data.valuation_complete
-                      ? "Values use market mid prices."
-                      : "Valuation incomplete"}
-                </p>
-                {oldest !== null && (
-                  <p className="text-[13px] leading-[18px] font-medium">
-                    {!data.valuation_complete
-                      ? "Oldest available price"
-                      : status === "fresh"
-                        ? "Oldest price"
-                        : "Last-known valuation · oldest price"}{" "}
-                    {formatAge(oldest)}
-                  </p>
-                )}
-                {data.prices_as_of !== null && (
-                  <p className="text-[13px] leading-[18px] font-medium wrap-anywhere">
-                    Price as of{" "}
-                    <time
-                      dateTime={data.prices_as_of}
-                      title={data.prices_as_of}
-                      aria-label={fullLocalTimestamp(data.prices_as_of)}
-                    >
-                      {fullLocalTimestamp(data.prices_as_of)}
-                    </time>
-                  </p>
-                )}
-                <p className="text-[13px] leading-[18px] font-medium">
-                  Calculated at{" "}
-                  <time
-                    dateTime={data.valued_at}
-                    title={data.valued_at}
-                    aria-label={fullLocalTimestamp(data.valued_at)}
-                  >
-                    {fullLocalTimestamp(data.valued_at)}
-                  </time>
-                </p>
+                <PortfolioFreshness
+                  portfolio={data}
+                  elapsed={elapsed}
+                  dataUpdatedAt={dataUpdatedAt}
+                  isFetching={isFetching}
+                  isError={isError}
+                />
               </CardContent>
             </Card>
             <Card role="region" aria-label="Cash" className="min-w-0 lg:col-span-4">
