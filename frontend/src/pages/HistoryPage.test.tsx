@@ -142,3 +142,54 @@ it("retains fills after failed refresh and can retry", async () => {
   await user.click(screen.getByRole("button", { name: "Retry refresh" }));
   await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
+
+it("appends three ordered pages once, retries the same cursor and transfers final button focus", async () => {
+  let finish: (value: Response) => void = () => {};
+  const fetch = vi.fn()
+    .mockImplementationOnce(() => ok([item], "opaque_A-1"))
+    .mockImplementationOnce(() => new Promise<Response>((done) => { finish = done; }))
+    .mockResolvedValueOnce(new Response("{}", { status: 500 }))
+    .mockImplementationOnce(() => ok([{ ...item, id: "9007199254740992", name: "Second" }], "opaque_B-2"))
+    .mockImplementationOnce(() => ok([{ ...item, id: "9007199254740991", name: "Third" }]));
+  vi.stubGlobal("fetch", fetch);
+  const { user } = renderWithClient(<HistoryPage />);
+  const button = await screen.findByRole("button", { name: "Load more" });
+  await user.dblClick(button);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("button", { name: "Loading more trades…" })).toBeDisabled();
+  finish(new Response("{}", { status: 500 }));
+  await user.click(await screen.findByRole("button", { name: "Try loading more" }));
+  expect(await screen.findByRole("button", { name: "Try loading more" })).toBeEnabled();
+  expect(screen.queryByText("Couldn't refresh your trade history. Showing the last successful update.")).toBeNull();
+  expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
+  await user.click(screen.getByRole("button", { name: "Try loading more" }));
+  await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 more trades loaded. 2 trades shown."));
+  expect(button).toHaveFocus();
+  expect(screen.queryByText("All trades loaded.")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Load more" }));
+  const end = await screen.findByText("All trades loaded.");
+  expect(end).toHaveFocus();
+  expect(end).toHaveAttribute("tabindex", "-1");
+  expect(within(screen.getByRole("table")).getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+    expect.stringContaining("Bitcoin"), expect.stringContaining("Second"), expect.stringContaining("Third"),
+  ]);
+  expect(fetch.mock.calls.map((args) => String(args[0]))).toEqual([
+    "/api/v1/trades", "/api/v1/trades?cursor=opaque_A-1", "/api/v1/trades?cursor=opaque_A-1",
+    "/api/v1/trades?cursor=opaque_A-1", "/api/v1/trades?cursor=opaque_B-2",
+  ]);
+});
+
+it("disables append during background refresh and preserves focus elsewhere on exhaustion", async () => {
+  let finish: (value: Response) => void = () => {};
+  vi.stubGlobal("fetch", vi.fn()
+    .mockImplementationOnce(() => ok([item], "old_boundary"))
+    .mockImplementationOnce(() => new Promise<Response>((done) => { finish = done; })));
+  const { user } = renderWithClient(<HistoryPage />);
+  await screen.findByRole("button", { name: "Load more" });
+  const refresh = screen.getByRole("button", { name: "Refresh history" });
+  await user.click(refresh);
+  expect(screen.getByRole("button", { name: "Load more" })).toBeDisabled();
+  finish(new Response(JSON.stringify({ items: [item], next_cursor: null })));
+  await screen.findByText("All trades loaded.");
+  expect(refresh).toHaveFocus();
+});
