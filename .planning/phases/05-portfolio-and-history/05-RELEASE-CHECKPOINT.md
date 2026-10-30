@@ -1,6 +1,6 @@
 ---
 phase: 05-portfolio-and-history
-status: pushed-pr-open-ci-pending
+status: pr-green-awaiting-separate-merge-approval
 updated: 2026-10-30
 ---
 
@@ -22,8 +22,15 @@ Push choice: **push and open PR**, explicitly requested by the user as
 `push=pr`. Branch pushed with upstream tracking;
 [PR #25](https://github.com/YokAI-open/Birja/pull/25) targets develop.
 Release intent: **skipped**; no release/deployment requested for Phase 5.
-Actual Playwright and remote CI: **pending**, required before merge.
+Actual Playwright and remote CI: **passed** at `0595c89`, [run 41066672894](https://github.com/YokAI-open/Birja/actions/runs/41066672894).
+All five jobs including ci-pass succeeded. Playwright: 10 passed, one
+production-only CSP test intentionally skipped. No failed tests.
 Merge approval: **not supplied**. Only the authorized feature push and PR creation were performed.
 
 Previous-phase approval does not authorize these actions. Phase 6 backup,
 restore, friend inbox and production database role/SSL work remains separate.
+
+The initial CI run exposed an uncalled string-evaluation function in
+responsive assertions; the next run exposed native disabled refresh focus
+loss. Both were corrected, regression tested and independently re-reviewed
+before the successful run. The browser assertions remain in place.

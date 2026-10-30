@@ -8,7 +8,7 @@ updated: 2026-10-30 13:26:08+00:00
 
 ## Current Test
 
-Human checkpoints complete: approved rebuild/browser review and push-pr choice. PR #25 open; actual remote CI/Playwright pending, merge unapproved; release skipped.
+Human checkpoints complete: approved rebuild/browser review and push-pr choice. PR #25 open; CI run 41066672894 passed including actual Playwright (10 passed, one production-only CSP skip); merge unapproved; release skipped.
 
 ## Tests
 
@@ -51,4 +51,4 @@ blocked: 0
 
 ## Gaps
 
-No implementation blocker found. Remote CI and actual Playwright execution remain separately pending; discovery does not count as execution.
+No implementation blocker or human issue remains. Remote CI and actual Playwright passed in run 41066672894; one production-only CSP test was intentionally skipped. Merge approval remains separate.

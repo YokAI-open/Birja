@@ -1,7 +1,7 @@
 ---
 phase: 5
 slug: portfolio-and-history
-status: local-gates-passed
+status: all-gates-passed
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-10-29
@@ -9,7 +9,7 @@ created: 2026-10-29
 
 # Phase5 — Validation Strategy
 
-Planning coverage and all local implementation gates are complete as of 2026-10-30. New tests exist and have executed; evidence is recorded below and in summaries 05-01 through 05-07. Remote CI/browser execution and fresh human UAT remain pending. `nyquist_compliant:true` describes feedback coverage, not human approval or completed phase acceptance.
+Planning coverage and all local implementation gates are complete as of 2026-10-30. New tests exist and have executed; evidence is recorded below and in summaries 05-01 through 05-07. Remote CI/browser execution and fresh human UAT have passed; see the final checkpoint closeout below. `nyquist_compliant:true` describes feedback coverage, not human approval or completed phase acceptance.
 
 Existing pytest/pytest-asyncio/httpx and isolated PostgreSQL/Redis from docker-compose.test.yml; existing Vitest/RTL/QueryClient; Playwright only ephemeral fake-price/console-email CI. Focused commands target<60s after services ready; measure and shard focused selections if necessary. Full suites are intentionally longer. Backend/frontend total coverage≥80%; critical paths100%, identical CI/CLAUDE list adds portfolio_math.py,portfolio.py,history.py. No install or new framework needed.
 
@@ -34,9 +34,9 @@ Commands run independently from repo root. Run each RED command separately; beha
 |05-07-1|7|All7|AUTH,UI|Extends App/e2e before responsive shell;depends06|`cd frontend && npm run test -- --run src/App.test.tsx src/pages/PortfolioPage.test.tsx src/pages/HistoryPage.test.tsx && npm run typecheck`|passed; 05-07 summary/local evidence|
 |05-07-2|7|All7|TEST,SC,MATH|Existing/new suites;01-1/04-1 e2e extended|`(cd frontend && npm run e2e -- --list) && (cd backend && uv run pytest tests/test_portfolio_math.py tests/test_portfolio_service.py tests/test_portfolio_api.py tests/test_history_service.py tests/test_history_api.py -x -q)`; actual e2e only CI|passed; 05-07 summary/local evidence|
 |05-07-3|7|All7|All|All earlier test producers|`(cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest --cov=app --cov-fail-under=80 -q && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py,app/services/portfolio_math.py,app/services/portfolio.py,app/services/history.py,app/api/v1/history.py --fail-under=100 && uv run pip-audit) && (cd frontend && npm run lint && npm run typecheck && npx prettier --check . && npm run test -- --coverage && npm run build && npm audit --audit-level=high)`; image/offline/review gates per07-3|passed; 05-07 summary/local evidence|
-|05-08-1|8|All7|TEST|07 concrete result|Explicit fresh dev-rebuild choice;after approval service health/alembic0008 only|human pending|
-|05-08-2|8|All7|UI,TEST|Approved rebuild+07 evidence|Fresh human real-price/browser UAT at375/768/1024/1440,200%zoom/keyboard/reduced-motion|human pending|
-|05-08-3|8|All7|RELEASE|UAT/reviews/local evidence/git summary|Scoped push/PR/not-yet;separate fresh release intent or skipped;green CI before separately approved merge|human pending|
+|05-08-1|8|All7|TEST|07 concrete result|Explicit fresh dev-rebuild choice;after approval service health/alembic0008 only|passed; explicit user response and 05-08 evidence|
+|05-08-2|8|All7|UI,TEST|Approved rebuild+07 evidence|Fresh human real-price/browser UAT at375/768/1024/1440,200%zoom/keyboard/reduced-motion|passed; explicit user response and 05-08 evidence|
+|05-08-3|8|All7|RELEASE|UAT/reviews/local evidence/git summary|Scoped push/PR/not-yet;separate fresh release intent or skipped;green CI before separately approved merge|passed; explicit user response and 05-08 evidence|
 
 ## Threat and Behavioral Map
 
@@ -73,9 +73,9 @@ E2e execution remains pending until permitted ephemeral fake-price/console-email
 - [x] Exact threat-linked assertions planned; high findings block.
 - [x] Actual RED/GREEN/full-suite/inline-review evidence recorded below and in plan summaries.
 - [ ] Fresh human UAT approved.
-- [ ] CI/e2e green before merge, or honestly pending with not-yet.
+- [x] CI/e2e green at 0595c89; merge remains separately gated.
 
-**Approval:** Local implementation and inline review gates passed. Independent phase review, remote CI/e2e and 05-08 fresh human checks remain pending.
+**Approval:** Local gates, independent review, remote CI/e2e and 05-08 human checks passed. Merge requires separate approval. Earlier execution notes below retain the evidence available at that time.
 
 ## Actual Local Execution — 05-07
 
@@ -140,3 +140,21 @@ Every row of 05-SOURCE-AUDIT.md was compared with actual implementation/tests; i
 - Actual ephemeral fake-price/console-email CI Playwright run and green remote CI before merge; no browser test was run locally and no real-email fallback was used.
 - 05-08 explicit fresh dev rebuild choice and human real-price/browser UAT at all four widths, real 200% zoom, keyboard/safe-area/end focus and reduced motion.
 - Scoped push/PR choice, separately approved merge and fresh release decision. No Phase 5 remote action is authorized or completed by this evidence.
+
+## Final checkpoint and CI closeout — 2026-10-30
+
+User approved the rebuilt development app (five healthy services, Alembic
+0008), the supplied real-price/responsive browser checklist, and push-pr.
+PR #25 targets develop. Independent code review is clean, including the
+identity race, exact selector, expression and native-disabled focus fixes.
+Final frontend suite: 264 passed; lint/types/format/build passed.
+Backend source is unchanged since 573 passed/99.90% overall/100% critical.
+
+Actual remote [CI run 41066672894](https://github.com/YokAI-open/Birja/actions/runs/41066672894)
+passed all five jobs including ci-pass at 0595c89. Playwright executed:
+10 passed, one production-only CSP test intentionally skipped, zero failed.
+The full financial flow and all four responsive widths passed. Earlier
+CI failures and focused correction evidence are retained in REVIEW and
+REFRESH-FOCUS-FIX. Earlier pending entries describe their execution time;
+this closeout supersedes them for the final status. Merge requires separate
+approval; release/deployment is skipped.

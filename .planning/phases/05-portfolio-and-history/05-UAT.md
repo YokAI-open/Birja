@@ -1,6 +1,6 @@
 ---
 phase: 05-portfolio-and-history
-status: browser-approved-pr-open-ci-pending
+status: complete
 current_task: 05-08-3
 updated: 2026-10-30
 ---
@@ -43,5 +43,12 @@ is specified in Plan 05-08. No user approval or browser pass is inferred.
 
 Browser acceptance approved. User chose push and PR (`push=pr`). Branch: `feature/phase-05-portfolio-and-history`.
 Feature branch pushed; PR #25 targets develop. Actual remote CI/browser run
-is pending. Merge remains unapproved. Release/deployment is skipped because
+passed at 0595c89: all jobs/ci-pass green, 10 Playwright passed and one
+production-only CSP test intentionally skipped. Merge remains unapproved. Release/deployment is skipped because
 no release-now request was supplied. Phase 4 authorization is not reused.
+
+Post-UAT CI found refresh focus loss in native disabled controls. The
+scoped fix retains focus without duplicate requests or stealing focus on
+retry completion; 264 frontend tests and the actual browser flow passed,
+with independent re-review clean. No financial, layout or account semantics
+were changed. The earlier human acceptance remains recorded separately.
