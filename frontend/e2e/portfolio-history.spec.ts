@@ -134,9 +134,7 @@ for (const width of [375, 768, 1024, 1440]) {
         await expect(records.getByText(field, { exact: true })).toBeVisible();
       await expect(records.locator("time")).toHaveAttribute("datetime", timestamp);
       await expect
-        .poll(() =>
-          page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth"),
-        )
+        .poll(() => page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
         .toBe(true);
       if (width >= 768) {
         const scroll = page.getByRole("region", {
@@ -175,7 +173,7 @@ for (const width of [375, 768, 1024, 1440]) {
     await page.addStyleTag({ content: "html { font-size: 200%; }" });
     await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
     await expect
-      .poll(() => page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth"))
+      .poll(() => page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
       .toBe(true);
   });
 }
