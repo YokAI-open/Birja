@@ -53,6 +53,7 @@ function fields(item: HistoryItem) {
 export default function HistoryPage() {
   const {
     data,
+    dataUpdatedAt,
     isPending,
     isError,
     isFetching,
@@ -65,7 +66,9 @@ export default function HistoryPage() {
   const items = data?.pages.flatMap((page) => page.items);
   const appendButton = useRef<HTMLButtonElement | null>(null);
   const focusEnd = useRef(false);
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState<{ updatedAt: number; text: string } | null>(
+    null,
+  );
   const captureAppendButton = useCallback((node: HTMLButtonElement | null) => {
     if (!node && appendButton.current === document.activeElement) focusEnd.current = true;
     appendButton.current = node;
@@ -78,7 +81,10 @@ export default function HistoryPage() {
     if (!result.isError) {
       const count =
         result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;
-      setAnnouncement(`${count - previousCount} more trades loaded. ${count} trades shown.`);
+      setAnnouncement({
+        updatedAt: result.dataUpdatedAt,
+        text: `${count - previousCount} more trades loaded. ${count} trades shown.`,
+      });
     }
   }
   return (
@@ -252,7 +258,9 @@ export default function HistoryPage() {
               ? "Loading more trades…"
               : isFetching
                 ? "Refreshing history…"
-                : announcement || `${items.length} trades shown.`}
+                : announcement?.updatedAt === dataUpdatedAt
+                  ? announcement.text
+                  : `${items.length} trades shown.`}
           </p>
         </>
       )}

@@ -224,3 +224,32 @@ it("disables append during background refresh and preserves focus elsewhere on e
   await screen.findByText("All trades loaded.");
   expect(refresh).toHaveFocus();
 });
+
+it("keeps focus on another control when append finishes and refresh announces the current count", async () => {
+  let finish: (value: Response) => void = () => {};
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementationOnce(() => ok([item], "more"))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((done) => {
+            finish = done;
+          }),
+      )
+      .mockImplementationOnce(() => ok([item])),
+  );
+  const { user } = renderWithClient(<HistoryPage />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  const region = screen.getByRole("region", { name: "Trade history table" });
+  region.focus();
+  finish(new Response(JSON.stringify({ items: [{ ...item, id: "2" }], next_cursor: null })));
+  await screen.findByText("All trades loaded.");
+  expect(region).toHaveFocus();
+  expect(screen.getByRole("status")).toHaveTextContent("1 more trades loaded. 2 trades shown.");
+  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  await vi.waitFor(() =>
+    expect(screen.getByRole("status")).toHaveTextContent(/^1 trades shown\.$/),
+  );
+});
