@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { HistoryItem } from "@/api/history";
 import { Button } from "@/components/ui/button";
@@ -50,8 +51,36 @@ function fields(item: HistoryItem) {
 }
 
 export default function HistoryPage() {
-  const { data, isPending, isError, isFetching, refetch } = useHistory();
+  const {
+    data,
+    isPending,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useHistory();
   const items = data?.pages.flatMap((page) => page.items);
+  const appendButton = useRef<HTMLButtonElement | null>(null);
+  const focusEnd = useRef(false);
+  const [announcement, setAnnouncement] = useState("");
+  const captureAppendButton = useCallback((node: HTMLButtonElement | null) => {
+    if (!node && appendButton.current === document.activeElement) focusEnd.current = true;
+    appendButton.current = node;
+  }, []);
+
+  async function loadMore() {
+    if (isFetching || !hasNextPage) return;
+    const previousCount = items?.length ?? 0;
+    const result = await fetchNextPage({ cancelRefetch: false });
+    if (!result.isError) {
+      const count =
+        result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;
+      setAnnouncement(`${count - previousCount} more trades loaded. ${count} trades shown.`);
+    }
+  }
   return (
     <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -64,7 +93,7 @@ export default function HistoryPage() {
           disabled={isFetching}
           onClick={() => void refetch()}
         >
-          {isFetching ? "Refreshing history…" : "Refresh history"}
+          {isFetching && !isFetchingNextPage ? "Refreshing history…" : "Refresh history"}
         </Button>
       </div>
       {isPending ? (
@@ -86,7 +115,7 @@ export default function HistoryPage() {
         </Card>
       ) : (
         <>
-          {isError && (
+          {isError && !isFetchNextPageError && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
@@ -185,8 +214,45 @@ export default function HistoryPage() {
               )}
             </CardContent>
           </Card>
+          {items.length > 0 &&
+            (hasNextPage ? (
+              <div className="flex flex-col items-start gap-3">
+                {isFetchNextPageError && (
+                  <p role="alert">Couldn&apos;t load more trades. Try again.</p>
+                )}
+                <Button
+                  ref={captureAppendButton}
+                  className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
+                  disabled={isFetching}
+                  onClick={() => void loadMore()}
+                >
+                  {isFetchingNextPage
+                    ? "Loading more trades…"
+                    : isFetchNextPageError
+                      ? "Try loading more"
+                      : "Load more"}
+                </Button>
+              </div>
+            ) : (
+              <p
+                tabIndex={-1}
+                className="text-muted-foreground"
+                ref={(node) => {
+                  if (node && focusEnd.current) {
+                    node.focus({ preventScroll: true });
+                    focusEnd.current = false;
+                  }
+                }}
+              >
+                All trades loaded.
+              </p>
+            ))}
           <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-            {isFetching ? "Refreshing history…" : `${items.length} trades shown.`}
+            {isFetchingNextPage
+              ? "Loading more trades…"
+              : isFetching
+                ? "Refreshing history…"
+                : announcement || `${items.length} trades shown.`}
           </p>
         </>
       )}
