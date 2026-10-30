@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -11,6 +12,17 @@ export default function PortfolioPage() {
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio();
   const now = useNow();
   const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
+  const refreshButton = useRef<HTMLButtonElement | null>(null);
+  const retryButton = useRef<HTMLButtonElement | null>(null);
+  const captureRetryButton = useCallback((node: HTMLButtonElement | null) => {
+    if (!node && retryButton.current === document.activeElement) {
+      refreshButton.current?.focus({ preventScroll: true });
+    }
+    retryButton.current = node;
+  }, []);
+  function refresh() {
+    if (!isFetching) void refetch({ cancelRefetch: false });
+  }
   return (
     <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -18,10 +30,11 @@ export default function PortfolioPage() {
           Portfolio
         </h1>
         <Button
+          ref={refreshButton}
           variant="secondary"
-          className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
-          disabled={isFetching}
-          onClick={() => void refetch()}
+          className="min-h-11 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 motion-reduce:transform-none motion-reduce:transition-none"
+          aria-disabled={isFetching}
+          onClick={refresh}
         >
           {isFetching ? "Refreshing portfolio…" : "Refresh portfolio"}
         </Button>
@@ -47,7 +60,7 @@ export default function PortfolioPage() {
         <Card>
           <CardContent>
             <p role="alert">Can&apos;t load your portfolio right now. Try again.</p>
-            <Button onClick={() => void refetch()} disabled={isFetching}>
+            <Button ref={captureRetryButton} onClick={refresh} aria-disabled={isFetching}>
               Try again
             </Button>
           </CardContent>
@@ -60,7 +73,13 @@ export default function PortfolioPage() {
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
             >
               <p>Couldn&apos;t refresh your portfolio. Showing the last successful update.</p>
-              <Button variant="secondary" onClick={() => void refetch()} disabled={isFetching}>
+              <Button
+                ref={captureRetryButton}
+                variant="secondary"
+                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+                onClick={refresh}
+                aria-disabled={isFetching}
+              >
                 Retry refresh
               </Button>
             </div>

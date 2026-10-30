@@ -65,6 +65,14 @@ export default function HistoryPage() {
   } = useHistory();
   const items = data?.pages.flatMap((page) => page.items);
   const appendButton = useRef<HTMLButtonElement | null>(null);
+  const refreshButton = useRef<HTMLButtonElement | null>(null);
+  const retryButton = useRef<HTMLButtonElement | null>(null);
+  const captureRetryButton = useCallback((node: HTMLButtonElement | null) => {
+    if (!node && retryButton.current === document.activeElement) {
+      refreshButton.current?.focus({ preventScroll: true });
+    }
+    retryButton.current = node;
+  }, []);
   const focusEnd = useRef(false);
   const [announcement, setAnnouncement] = useState<{ updatedAt: number; text: string } | null>(
     null,
@@ -73,6 +81,10 @@ export default function HistoryPage() {
     if (!node && appendButton.current === document.activeElement) focusEnd.current = true;
     appendButton.current = node;
   }, []);
+
+  function refresh() {
+    if (!isFetching) void refetch({ cancelRefetch: false });
+  }
 
   async function loadMore() {
     if (isFetching || !hasNextPage) return;
@@ -94,10 +106,11 @@ export default function HistoryPage() {
           History
         </h1>
         <Button
+          ref={refreshButton}
           variant="secondary"
-          className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
-          disabled={isFetching}
-          onClick={() => void refetch()}
+          className="min-h-11 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 motion-reduce:transform-none motion-reduce:transition-none"
+          aria-disabled={isFetching}
+          onClick={refresh}
         >
           {isFetching && !isFetchingNextPage ? "Refreshing history…" : "Refresh history"}
         </Button>
@@ -114,7 +127,7 @@ export default function HistoryPage() {
         <Card>
           <CardContent>
             <p role="alert">Can&apos;t load your trade history right now. Try again.</p>
-            <Button disabled={isFetching} onClick={() => void refetch()}>
+            <Button ref={captureRetryButton} aria-disabled={isFetching} onClick={refresh}>
               Try again
             </Button>
           </CardContent>
@@ -127,7 +140,13 @@ export default function HistoryPage() {
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
             >
               <p>Couldn&apos;t refresh your trade history. Showing the last successful update.</p>
-              <Button variant="secondary" disabled={isFetching} onClick={() => void refetch()}>
+              <Button
+                ref={captureRetryButton}
+                variant="secondary"
+                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+                aria-disabled={isFetching}
+                onClick={refresh}
+              >
                 Retry refresh
               </Button>
             </div>

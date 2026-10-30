@@ -193,9 +193,13 @@ it("labels an in-flight manual refresh and keeps the existing data visible", asy
   expect(refresh).toHaveFocus();
 });
 
-it.each(["Try again", "Retry refresh"])(
-  "preserves %s focus through retry and recovery",
-  async (label) => {
+it.each([
+  ["Try again", false],
+  ["Retry refresh", false],
+  ["Retry refresh", true],
+] as const)(
+  "preserves %s focus through retry and recovery (move focus: %s)",
+  async (label, moveFocus) => {
     let finish!: (response: Response) => void;
     const fetch = vi.fn();
     if (label === "Retry refresh") fetch.mockImplementationOnce(() => ok());
@@ -227,9 +231,12 @@ it.each(["Try again", "Retry refresh"])(
       await user.click(refresh);
     }
     expect(fetch).toHaveBeenCalledTimes(count);
+    if (moveFocus) await user.tab();
+    const focused = document.activeElement;
     await act(async () => finish(await ok()));
     await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-    expect(refresh).toHaveFocus();
+    if (moveFocus) expect(document.activeElement).toBe(focused);
+    else expect(refresh).toHaveFocus();
   },
 );
 
