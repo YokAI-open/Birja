@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
 import PortfolioPage from "./PortfolioPage";
 import type { Portfolio, PortfolioHolding } from "@/api/portfolio";
+import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 
 const payload: Portfolio = {
   cash: "9999.00",
@@ -333,4 +334,44 @@ it("explains zero total allocation without displaying a fabricated zero percent"
   const list = screen.getByRole("list", { name: "Allocation" });
   expect(within(list).getByText("Unavailable")).toBeVisible();
   expect(within(list).queryByText("0.00%")).toBeNull();
+});
+
+it.each(["-1.00", "100.01", "101", "1e2", "1%;color:red", "Infinity"])(
+  "refuses unbounded or malformed CSS allocation %s",
+  (percent) => {
+    renderWithClient(
+      <PortfolioAllocation portfolio={{ ...payload, cash_allocation_percent: percent }} />,
+    );
+    const list = screen.getByRole("list", { name: "Allocation" });
+    expect(within(list).getByText("Unavailable")).toBeVisible();
+    expect(list.querySelector("[data-allocation-fill]")).toBeNull();
+  },
+);
+
+it("keeps allocations known when positive raw value rounds to zero dollars", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      ok({
+        ...payload,
+        cash: "0.00",
+        total_value: "0.00",
+        cash_allocation_percent: "0.00",
+        holdings: [
+          {
+            ...holding,
+            quantity: "0.00000001",
+            current_value: "0.00",
+            allocation_percent: "100.00",
+          },
+        ],
+      }),
+    ),
+  );
+  renderWithClient(<PortfolioPage />);
+  const list = await screen.findByRole("list", { name: "Allocation" });
+  expect(within(list).getByText("100.00%")).toBeVisible();
+  expect(
+    screen.queryByText("Allocation is unavailable while total portfolio value is zero."),
+  ).toBeNull();
 });

@@ -4,6 +4,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useNow } from "@/hooks/useNow";
 import { formatAge, freshnessStatus } from "@/lib/age";
 import { PortfolioHoldings, PortfolioOutcome } from "@/components/PortfolioHoldings";
+import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUsd } from "@/lib/money";
 
@@ -157,6 +158,7 @@ export default function PortfolioPage() {
                 <p className="text-[32px] leading-9 font-medium wrap-anywhere tabular-nums md:text-[40px] md:leading-[44px]">
                   {formatUsd(data.cash)}
                 </p>
+                <PortfolioAllocation portfolio={data} />
               </CardContent>
             </Card>
             <PortfolioHoldings
