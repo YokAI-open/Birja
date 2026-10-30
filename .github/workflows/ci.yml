@@ -44,7 +44,7 @@ jobs:
         run: uv run pytest --cov=app --cov-fail-under=80
       - name: Critical-path coverage (100%)
         working-directory: backend
-        run: uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py --fail-under=100
+        run: uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py,app/services/portfolio_math.py,app/services/portfolio.py,app/services/history.py,app/api/v1/history.py --fail-under=100
       - name: Dependency audit
         working-directory: backend
         run: uv run pip-audit
@@ -115,6 +115,7 @@ jobs:
           # CI must never call Kraken: the scheduler uses the offline fake source.
           sed -i 's/^PRICE_SOURCE=.*/PRICE_SOURCE=fake/' .env
           grep -qx 'PRICE_SOURCE=fake' .env
+          grep -qx 'EMAIL_BACKEND=console' .env
       - uses: actions/setup-node@v7
         with:
           node-version-file: frontend/.nvmrc

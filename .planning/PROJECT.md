@@ -19,11 +19,14 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - [x] Configured simulated spread and fee shown in a server-computed preview, followed by the actual fill — validated in Phase 4: Trading
 - [x] Refuse prices aged 120 seconds or more, including time spent waiting for database locks — validated in Phase 4: Trading
 
+- [x] Portfolio cash, holdings at mid, total value and dollar/percent return against stored starting cash — Phase 5
+
+- [x] Fee-inclusive per-holding average cost, unrealized P/L and cash-inclusive allocation with used-price times — Phase 5
+
+- [x] Stored newest-first trade history with exact signed totals and keyset pagination — Phase 5
+
 ### Active
 
-- [ ] Portfolio view: cash, holdings, total value now, total P/L vs the $10k start
-- [ ] Per-holding P/L against average cost
-- [ ] Trade history: date, coin, side, quantity, price, fee
 - [ ] Deployed on a server with a domain and TLS, so friends can sign up and use it
 
 ### Out of Scope
@@ -56,10 +59,19 @@ with the reviewed price-freshness correction, green release/back-merge CI,
 481 passing backend tests, 100% critical-path coverage and passing origin
 and public smoke checks. The user approved live buy/sell verification.
 
-Phase 5 (Portfolio and History) is next and has not started. Public HTTPS
-and sign-in were delivered in Phase 2.1; the remaining Phase 6 deployment
-criteria, including nightly off-server backup and tested restore, remain
-open. See `phases/04-trading/04-VERIFICATION.md` for closeout evidence.
+Phase 5 is complete: portfolio valuation/performance/allocation, used-price
+freshness and stored paginated history satisfy all four roadmap criteria
+and PORT-01..05/HIST-01..02. All eight plans and human checkpoints are
+complete. Final local suites: 573 backend and 264 frontend tests; independent
+review is clean. CI run 41066672894 passed at 0595c89, including 10 actual
+browser tests (one production-only CSP target intentionally skipped).
+PR #25 is open into develop; merge is separately unapproved and no Phase 5
+release/deployment was requested. The live app remains v0.3.1.
+
+Phase 6 remains unplanned. Public HTTPS and sign-in were delivered in
+Phase 2.1; nightly off-server backups, a tested restore, friend inbox checks
+and production database app-role/SSL decisions remain open. See
+`phases/05-portfolio-and-history/05-VERIFICATION.md` for closeout evidence.
 
 ## Constraints
 
@@ -83,7 +95,7 @@ open. See `phases/04-trading/04-VERIFICATION.md` for closeout evidence.
 | v1 done = deployed for friends | Real use by real people is the validation | — Pending |
 | `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | ✓ Good — release/hotfix PR and back-merge flow verified |
 | Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | ✓ Good — Phase 3 live data verified |
-| Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | — Pending |
+| Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | ✓ Good — Phase 5 valuation, exact performance and browser flow verified |
 | One simple scheduler-loop container for prices; OTP email via FastAPI BackgroundTasks | Fewest dependencies; Celery has no declared Python 3.14 support; a lost email just means re-requesting | ✓ Good — Phases 2/3 verified |
 | "$ amount" on buys = total cash spent including fee | Cash drops by exactly what the user typed | ✓ Good — Phase 4 exact-cent API, math and e2e assertions |
 | Trade only at price age <120 seconds; compare preview/current mid | Reuses the Live threshold and requires renewed confirmation if price moves | ✓ Good — Phase 4; v0.3.1 checks freshness after DB waits |
@@ -110,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-29 after Phase 4 completion*
+*Last updated: 2026-10-30 after Phase 5 completion*

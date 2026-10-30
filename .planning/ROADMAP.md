@@ -11,7 +11,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
 - [x] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result (completed 2026-10-29)
-- [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
+- [x] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history (completed 2026-10-30)
 - [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
 
 ## Phase Details
@@ -257,7 +257,7 @@ Plans:
 
 ### Phase 5: Portfolio and History
 
-**Goal**: Users can see what their holdings are worth now, their profit or loss, and every past trade
+**Goal**: As a signed-in Birja user, I want to see my current portfolio value and profit or loss alongside every past trade, so that I can understand how my practice investments are performing.
 **Mode:** mvp
 **Depends on**: Phase 4
 **Requirements**: PORT-01, PORT-02, PORT-03, PORT-04, PORT-05, HIST-01, HIST-02
@@ -268,7 +268,42 @@ Plans:
   3. For each holding, user sees quantity, average cost (fees included), current value, unrealized P/L in dollars and percent, and its allocation share
   4. User sees past trades newest first (date/time, coin, side, quantity, execution price, fee, total), and a long history loads page by page
 
-**Plans**: TBD
+**Plans:** 8/8 plans complete
+
+Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup and destructive migration state):
+
+**Wave 1**
+
+- [x] 05-01-PLAN.md — Wave 1: Real portfolio summary, full Decimal valuation response and RED happy path
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 05-02-PLAN.md — Wave 2: Complete holding performance and cash-inclusive allocation
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 05-03-PLAN.md — Wave 3: Used-price freshness/availability and real-PG snapshot proof
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 05-04-PLAN.md — Wave 4: Actual stored trade history with strict user-scoped cursor API
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 05-05-PLAN.md — Wave 5: Load more/retry/end focus and reversible concurrent history index
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [x] 05-06-PLAN.md — Wave 6: Fill/replay invalidation and private-cache identity isolation
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [x] 05-07-PLAN.md — Wave 7: Responsive navigation, CI happy path, coverage and full quality gates
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [x] 05-08-PLAN.md — Wave 8: Fresh dev/browser approval and scoped push/release handoff
+
 **UI hint**: yes
 
 ### Phase 6: Deploy
@@ -295,5 +330,5 @@ Plans:
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
-| 5. Portfolio and History | 0/TBD | Not started | - |
+| 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
 | 6. Deploy | 0/TBD | Not started | - |

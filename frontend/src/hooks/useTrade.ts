@@ -18,6 +18,8 @@ export function useTrade(symbol: string) {
         queryClient.invalidateQueries({ queryKey: ["me"] }),
         queryClient.invalidateQueries({ queryKey: ["holding", symbol] }),
         queryClient.invalidateQueries({ queryKey: ["prices"] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio"] }),
+        queryClient.invalidateQueries({ queryKey: ["history"] }),
       ]);
     },
   });

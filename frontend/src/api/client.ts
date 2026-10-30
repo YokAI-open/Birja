@@ -91,6 +91,7 @@ function refreshSession(): Promise<boolean> {
 }
 
 async function send(path: string, init: RequestInit): Promise<Response> {
+  init.signal?.throwIfAborted();
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -103,21 +104,29 @@ async function send(path: string, init: RequestInit): Promise<Response> {
       headers.set("X-CSRF-Token", token);
     }
   }
+  init.signal?.throwIfAborted();
   return fetch(path, { ...init, method, headers });
 }
 
 /** The only place that calls fetch for /api. Returns parsed JSON, or null for 204. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
   let response = await send(path, init);
+  init.signal?.throwIfAborted();
   if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
     await refreshSession();
+    init.signal?.throwIfAborted();
     response = await send(path, init);
+    init.signal?.throwIfAborted();
   }
   if (!response.ok) {
-    throw await toApiError(response);
+    const error = await toApiError(response);
+    init.signal?.throwIfAborted();
+    throw error;
   }
   if (response.status === 204) {
     return null;
   }
-  return response.json();
+  const body: unknown = await response.json();
+  init.signal?.throwIfAborted();
+  return body;
 }
