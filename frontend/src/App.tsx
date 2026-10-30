@@ -9,6 +9,7 @@ import AccountPage from "@/pages/AccountPage";
 import HealthPage from "@/pages/HealthPage";
 import SignInPage from "@/pages/SignInPage";
 import TradePage from "@/pages/TradePage";
+import PortfolioPage from "@/pages/PortfolioPage";
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -57,9 +58,12 @@ const navItem = ({ isActive }: { isActive: boolean }) =>
 function SignedIn({ me }: { me: Me }) {
   return (
     <>
-      <nav aria-label="Main" className="flex gap-2 pt-2">
+      <nav aria-label="Main" className="flex flex-wrap gap-2 pt-2">
         <NavLink to="/" end className={navItem}>
           Markets
+        </NavLink>
+        <NavLink to="/portfolio" className={navItem}>
+          Portfolio
         </NavLink>
         <NavLink to="/account" className={navItem}>
           Account
@@ -67,6 +71,7 @@ function SignedIn({ me }: { me: Me }) {
       </nav>
       <Routes>
         <Route index element={<MarketsPage />} />
+        <Route path="portfolio" element={<PortfolioPage />} />
         <Route
           path="account"
           element={
