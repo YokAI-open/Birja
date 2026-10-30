@@ -191,7 +191,9 @@ test("a new user opens their real cash-only portfolio from Markets", async ({ pa
     "$10,000.00",
   );
   await expect(page.getByRole("region", { name: "Cash" })).toContainText("$10,000.00");
-  await expect(page.getByText("No market prices needed")).toBeVisible();
+  const cashOnlyMessage = page.getByText("No market prices needed");
+  await expect(cashOnlyMessage).toHaveCount(1);
+  await expect(cashOnlyMessage).toBeVisible();
 });
 
 async function confirmFill(page: Page, side: "buy" | "sell"): Promise<Fill> {
