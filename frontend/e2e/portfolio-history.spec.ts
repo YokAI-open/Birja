@@ -191,7 +191,7 @@ test("a new user opens their real cash-only portfolio from Markets", async ({ pa
     "$10,000.00",
   );
   await expect(page.getByRole("region", { name: "Cash" })).toContainText("$10,000.00");
-  const cashOnlyMessage = page.getByText("No market prices needed");
+  const cashOnlyMessage = page.getByText("No market prices needed", { exact: true });
   await expect(cashOnlyMessage).toHaveCount(1);
   await expect(cashOnlyMessage).toBeVisible();
 });
