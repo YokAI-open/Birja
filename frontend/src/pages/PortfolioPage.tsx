@@ -3,30 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useNow } from "@/hooks/useNow";
 import { formatAge, freshnessStatus } from "@/lib/age";
+import { PortfolioHoldings, PortfolioOutcome } from "@/components/PortfolioHoldings";
+import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUsd } from "@/lib/money";
-
-function Outcome({ value, dollars = false }: { value: string; dollars?: boolean }) {
-  const zero = /^-?0+(\.0+)?$/.test(value);
-  const negative = !zero && value.startsWith("-");
-  const label = zero ? "No change" : negative ? "Loss" : "Gain";
-  const absolute = value.replace(/^-/, "");
-  return (
-    <span
-      className={
-        zero
-          ? "rounded-control bg-muted px-2 py-1 text-foreground"
-          : negative
-            ? "rounded-control bg-loss-soft px-2 py-1 text-loss-text"
-            : "rounded-control bg-gain-soft px-2 py-1 text-gain-text"
-      }
-    >
-      <span className="sr-only">{label}: </span>
-      <span aria-hidden="true">{zero ? "" : negative ? "↓ " : "↑ "}</span>
-      {zero ? "" : negative ? "−" : "+"}
-      {dollars ? formatUsd(absolute) : `${absolute}%`}
-    </span>
-  );
-}
 
 export default function PortfolioPage() {
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio();
@@ -122,12 +101,12 @@ export default function PortfolioPage() {
                   {data.total_pl === null ? (
                     "Unavailable"
                   ) : (
-                    <Outcome value={data.total_pl} dollars />
+                    <PortfolioOutcome value={data.total_pl} dollars />
                   )}
                   {data.total_pl_percent === null ? (
                     <span>{data.valuation_complete ? "Not applicable" : "Unavailable"}</span>
                   ) : (
-                    <Outcome value={data.total_pl_percent} />
+                    <PortfolioOutcome value={data.total_pl_percent} />
                   )}
                 </div>
                 <p>Compared with your {formatUsd(data.starting_cash)} start</p>
@@ -151,17 +130,23 @@ export default function PortfolioPage() {
                 {data.prices_as_of !== null && (
                   <p className="text-[13px] leading-[18px] font-medium wrap-anywhere">
                     Price as of{" "}
-                    <time dateTime={data.prices_as_of} title={data.prices_as_of}>
-                      {new Date(data.prices_as_of).toLocaleString(undefined, {
-                        timeZoneName: "short",
-                      })}
+                    <time
+                      dateTime={data.prices_as_of}
+                      title={data.prices_as_of}
+                      aria-label={fullLocalTimestamp(data.prices_as_of)}
+                    >
+                      {fullLocalTimestamp(data.prices_as_of)}
                     </time>
                   </p>
                 )}
                 <p className="text-[13px] leading-[18px] font-medium">
                   Calculated at{" "}
-                  <time dateTime={data.valued_at} title={data.valued_at}>
-                    {new Date(data.valued_at).toLocaleString(undefined, { timeZoneName: "short" })}
+                  <time
+                    dateTime={data.valued_at}
+                    title={data.valued_at}
+                    aria-label={fullLocalTimestamp(data.valued_at)}
+                  >
+                    {fullLocalTimestamp(data.valued_at)}
                   </time>
                 </p>
               </CardContent>
@@ -174,6 +159,12 @@ export default function PortfolioPage() {
                 </p>
               </CardContent>
             </Card>
+            <PortfolioHoldings
+              holdings={data.holdings}
+              elapsed={elapsed}
+              freshSeconds={data.fresh_seconds}
+              staleSeconds={data.stale_seconds}
+            />
           </div>
         </>
       )}
