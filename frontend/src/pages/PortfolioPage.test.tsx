@@ -41,6 +41,74 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("announces only meaningful freshness transitions while retained prices keep aging", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2035-01-01T00:00:00Z"));
+  vi.stubGlobal("fetch", vi.fn().mockImplementationOnce(() => ok({
+    ...payload, prices_as_of: holding.as_of, holdings: [{ ...holding, age_seconds: 118 }],
+  })).mockResolvedValue(new Response("{}", { status: 500 })));
+  renderWithClient(<PortfolioPage />);
+  await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+  const status = screen.getByRole("status");
+  expect(status).toHaveAttribute("aria-atomic", "true");
+  expect(status).toHaveTextContent("Live");
+  const initial = status.textContent;
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(status.textContent).toBe(initial);
+  expect(screen.getAllByText("Live · 1m ago")).toHaveLength(2);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(status).toHaveTextContent("Some prices are delayed. Values use the last known prices.");
+  await act(async () => { await vi.advanceTimersByTimeAsync(180_000); });
+  expect(screen.getAllByText("Delayed · 5m ago")).toHaveLength(2);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByRole("region", { name: "Cash" })).toHaveTextContent("$9,999.00");
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(status).toHaveTextContent("Some prices are out of date. Values use the last known prices.");
+  expect(screen.getAllByText("Stale · 5m ago")).toHaveLength(2);
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+});
+
+it("uses configured boundaries and keeps incomplete valuation ahead of stale warnings", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => ok({
+    ...payload, valuation_complete: false, total_value: null, total_pl: null,
+    total_pl_percent: null, cash_allocation_percent: null, prices_as_of: holding.as_of,
+    fresh_seconds: 5, stale_seconds: 8,
+    holdings: [{ ...holding, age_seconds: 9, allocation_percent: null, is_active: false },
+      { ...holding, symbol: "ETH", mid: null, as_of: null, age_seconds: null,
+        current_value: null, unrealized_pl: null, unrealized_pl_percent: null,
+        allocation_percent: null, status: "unpriced" }],
+  })));
+  renderWithClient(<PortfolioPage />);
+  await screen.findByText("Value unavailable");
+  expect(screen.getByRole("status")).toHaveTextContent("Valuation incomplete");
+  expect(screen.queryByText("Some prices are out of date. Values use the last known prices.")).toBeNull();
+  expect(screen.getByText(/Oldest available price/, { selector: "p" })).toHaveTextContent("9s ago");
+  expect(screen.getAllByText("Stale · 9s ago")).toHaveLength(2);
+  expect(screen.getAllByText("Price unavailable")).toHaveLength(2);
+  const summary = screen.getByRole("region", { name: "Total portfolio value" });
+  const time = summary.querySelector("time");
+  expect(time).toHaveAttribute("datetime", holding.as_of);
+  expect(time).toHaveAttribute("title", holding.as_of);
+  expect(time?.textContent).toBeTruthy();
+  expect(time).toHaveAccessibleName(time!.textContent!);
+});
+
+it("reports refresh recovery once and preserves manual refresh focus", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockImplementationOnce(() => ok({ ...payload, holdings: [holding] }))
+    .mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(() => ok()));
+  const { user } = renderWithClient(<PortfolioPage />);
+  await screen.findByRole("region", { name: "Cash" });
+  const refresh = screen.getByRole("button", { name: "Refresh portfolio" });
+  await user.click(refresh);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't refresh your portfolio");
+  expect(refresh).toHaveFocus();
+  await user.click(refresh);
+  await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(refresh).toHaveFocus();
+  expect(screen.getByRole("status")).toHaveTextContent("Portfolio refreshed.");
+  expect(screen.getByText("No market prices needed")).toBeVisible();
+});
+
 it("shows actual liquidated cash and return against stored starting cash", async () => {
   vi.stubGlobal(
     "fetch",
