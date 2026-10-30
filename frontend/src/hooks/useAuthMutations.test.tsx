@@ -14,20 +14,32 @@ afterEach(() => {
   document.cookie = "bj_csrf=; max-age=0; path=/";
 });
 
-it.each(["verify", "logout"] as const)(
-  "awaits cancel/remove before %s publishes identity, preserving me's observer",
-  async (action) => {
+it.each([
+  { action: "logout", initialMe: a, lateMe: a },
+  { action: "verify", initialMe: a, lateMe: a },
+  { action: "verify", initialMe: null, lateMe: null },
+] as const)(
+  "cancels pending me ($lateMe) before $action publishes identity",
+  async ({ action, initialMe, lateMe }) => {
     document.cookie = "bj_csrf=test; path=/";
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    client.setQueryData(["me"], a);
+    client.setQueryData(["me"], initialMe);
     client.setQueryData(["portfolio"], "A portfolio");
     client.setQueryData(["history"], "A history");
     client.setQueryData(["holding", "BTC"], "A holding");
     const signals: AbortSignal[] = [];
     const releases: ((response: Response) => void)[] = [];
+    let meSignal!: AbortSignal;
+    let releaseMe!: (response: Response) => void;
     vi.stubGlobal(
       "fetch",
       vi.fn((path: string, init: RequestInit) => {
+        if (path === "/api/v1/me") {
+          meSignal = init.signal as AbortSignal;
+          return new Promise<Response>((resolve) => {
+            releaseMe = resolve;
+          });
+        }
         if (path === "/api/v1/auth/verify-code") return Promise.resolve(json(b));
         if (path === "/api/v1/auth/logout")
           return Promise.resolve(new Response(null, { status: 204 }));
@@ -52,6 +64,12 @@ it.each(["verify", "logout"] as const)(
       },
     );
     const meQuery = client.getQueryCache().find({ queryKey: ["me"] });
+    let pendingMe!: ReturnType<typeof result.current.me.refetch>;
+    act(() => {
+      pendingMe = result.current.me.refetch();
+    });
+    await waitFor(() => expect(releaseMe).toBeTypeOf("function"));
+    expect(meSignal.aborted).toBe(false);
     const cancel = client.cancelQueries.bind(client);
     let finishCancel!: () => void;
     vi.spyOn(client, "cancelQueries").mockImplementation(async (filters) => {
@@ -80,7 +98,8 @@ it.each(["verify", "logout"] as const)(
     });
     await waitFor(() => expect(signals.every((signal) => signal.aborted)).toBe(true));
     expect(signals).toHaveLength(2);
-    expect(client.getQueryData(["me"])).toEqual(a);
+    expect(meSignal.aborted).toBe(true);
+    expect(client.getQueryData(["me"])).toEqual(initialMe);
     expect(client.getQueryData(["history"])).toBe("A history");
     expect(publications).toEqual([]);
     await act(async () => {
@@ -92,9 +111,12 @@ it.each(["verify", "logout"] as const)(
     expect(meQuery!.getObserversCount()).toBe(1);
     await waitFor(() => expect(result.current.me.data).toEqual(action === "verify" ? b : null));
     await act(async () => {
+      releaseMe(lateMe === null ? json({}, 401) : json(lateMe));
       releases.forEach((release) => release(json("late private A")));
-      await Promise.all(late);
+      await Promise.all([...late, pendingMe]);
     });
+    expect(client.getQueryData(["me"])).toEqual(action === "verify" ? b : null);
+    expect(result.current.me.data).toEqual(action === "verify" ? b : null);
     expect(client.getQueryCache().getAll()).toEqual([meQuery]);
     unsubscribe();
     unmount();

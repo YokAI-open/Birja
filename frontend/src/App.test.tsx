@@ -372,7 +372,16 @@ describe("App", () => {
     it("signs out and shows the sign-in card", async () => {
       document.cookie = "bj_csrf=tok; path=/";
       let resolveLogout: (r: Response) => void = () => {};
-      const fetchMock = vi.fn((url: string) => {
+      let deferMe = false;
+      let resolveMe!: (r: Response) => void;
+      let meSignal!: AbortSignal;
+      const fetchMock = vi.fn((url: string, init: RequestInit) => {
+        if (url === "/api/v1/me" && deferMe) {
+          meSignal = init.signal as AbortSignal;
+          return new Promise<Response>((resolve) => {
+            resolveMe = resolve;
+          });
+        }
         if (url === "/api/v1/auth/logout") {
           return new Promise<Response>((resolve) => {
             resolveLogout = resolve;
@@ -381,7 +390,23 @@ describe("App", () => {
         return Promise.resolve(route(url, meOk));
       });
       vi.stubGlobal("fetch", fetchMock);
-      const { user } = renderWithClient(<App />, { route: "/account" });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const user = userEvent.setup();
+      const { container } = render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={["/account"]}>
+            <App />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await screen.findByRole("button", { name: "Sign out" });
+      const meQuery = client.getQueryCache().find({ queryKey: ["me"] });
+      deferMe = true;
+      let pendingMe!: Promise<void>;
+      act(() => {
+        pendingMe = client.invalidateQueries({ queryKey: ["me"] });
+      });
+      await waitFor(() => expect(resolveMe).toBeTypeOf("function"));
       await user.click(await screen.findByRole("button", { name: "Sign out" }));
       expect(await screen.findByRole("button", { name: "Signing out…" })).toBeDisabled();
       const call = fetchMock.mock.calls.find(([u]) => u === "/api/v1/auth/logout") as unknown as [
@@ -392,6 +417,25 @@ describe("App", () => {
       resolveLogout(new Response(null, { status: 204 }));
       expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
       expect(screen.queryByText("$10,000.00")).toBeNull();
+      expect(screen.queryByText("a@example.com")).toBeNull();
+      expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(meQuery);
+      expect(meQuery!.getObserversCount()).toBe(1);
+      expect(meSignal.aborted).toBe(true);
+      const frames: string[] = [];
+      const observer = new MutationObserver(() => frames.push(container.textContent ?? ""));
+      observer.observe(container, { subtree: true, childList: true, characterData: true });
+      await act(async () => {
+        resolveMe(meOk());
+        await pendingMe;
+      });
+      expect(client.getQueryData(["me"])).toBeNull();
+      expect(screen.getByRole("button", { name: "Send code" })).toBeVisible();
+      expect(screen.queryByText("$10,000.00")).toBeNull();
+      expect(screen.queryByText("a@example.com")).toBeNull();
+      expect(
+        frames.every((frame) => !frame.includes("a@example.com") && !frame.includes("$10,000.00")),
+      ).toBe(true);
+      observer.disconnect();
       document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     });
 
