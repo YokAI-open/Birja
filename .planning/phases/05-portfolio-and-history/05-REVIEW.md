@@ -1,8 +1,8 @@
 ---
 phase: 05-portfolio-and-history
-reviewed: 2026-10-30T13:21:52Z
+reviewed: 2026-10-30T13:50:17Z
 initial_reviewed: 2026-10-30T08:03:38Z
-reviewed_commit: e2764d1
+reviewed_commit: 151c40e
 depth: standard
 files_reviewed: 50
 files_reviewed_list:
@@ -67,7 +67,7 @@ status: clean
 
 # Phase 5: Code Review Report
 
-**Reviewed:** 2026-10-30T13:21:52Z; initial review 2026-10-30T08:03:38Z
+**Reviewed:** 2026-10-30T13:50:17Z; initial review 2026-10-30T08:03:38Z
 **Depth:** standard  
 **Files Reviewed:** 50  
 **Status:** clean (both original findings resolved)
@@ -120,6 +120,22 @@ The initial review covered the explicit 50-file summary-derived scope and found 
 ## Review Boundaries
 
 No structural pre-pass was supplied. This reviewer changed only this review artifact. The initial pass used static analysis and two synthetic Node probes; the focused re-review additionally ran the four frontend regression files and an exact-selector synthetic Node probe as recorded above. No backend suite, browser, database, secrets or development/production accounts were accessed. Actual browser rendering, remote CI and fresh human acceptance remain separate pending gates.
+
+## Focused CI Correction Addendum — 2026-10-30T13:43:26Z
+
+**Result:** clean; zero new active findings. Reviewed commit `0790cb0` and the affected responsive-test context. Its only source changes replace two string-valued arrow-function expressions passed to `page.evaluate` with direct `document.documentElement.scrollWidth <= window.innerWidth` expressions, at `frontend/e2e/portfolio-history.spec.ts:137` and `:176`. Both polling assertions still require `true`; neither the overflow check nor its viewport/enlarged-text coverage was weakened. The strings now evaluate to serializable booleans rather than uncalled functions.
+
+The orchestrator reports actual browser CI run `41064731762` completed six tests successfully, skipped the production CSP case, and failed all four responsive cases at the earlier overflow assertion with `Expected true, Received undefined`. This explains the correction; this reviewer did not access that remote run. Independently evaluated the corrected expression in Node VM contexts at 375, 768, 1024 and 1440 pixels: equal document/viewport widths returned `true`, and document widths one pixel larger returned `false`. Static inspection found no new defect in this narrowly scoped change. The replacement browser CI run **`41065518861` remains pending**; this addendum does not claim the corrected responsive browser cases have passed. No broad suite, browser, backend, dev/prod or remote action was performed during this addendum review.
+
+## Focused Refresh Focus Addendum — 2026-10-30T13:50:17Z
+
+**Result:** clean; zero new active findings. Reviewed `311c00f..151c40e`, the affected Portfolio/History page handlers and tests, unchanged query hooks and browser focus assertion, installed query-core cancellation contract, and `05-REFRESH-FOCUS-FIX.md`. This supplements the original scope without repeating its 50-file review.
+
+The orchestrator reports browser CI `41065518861` subsequently finished with **nine passed, one production CSP skip and one full-financial-flow failure**, at the manual-refresh focus assertion. Thus it supersedes that run's earlier pending status above: responsive cases passed, but the overall browser gate did not. The reported offline Chromium probe established native-disabled focus loss and aria-disabled focus retention. This reviewer did not access either browser or remote run.
+
+Both persistent refresh controls now retain native focusability and expose pending state with `aria-disabled`, with matching unavailable styling. Their shared page handler checks `!isFetching` before dispatching refresh/retry. Passing `cancelRefetch: false` also reuses an existing query fetch if activation occurs before the pending render; it does not cancel and restart the request. In History this guard includes append activity, preserving the existing mutual exclusion. Retry ref callbacks transfer focus to the persistent refresh control only when the disappearing retry still equals `document.activeElement`, using `preventScroll`; they leave focus elsewhere untouched. No change to the actual e2e focus expectation was made.
+
+Independently ran the two affected page suites: **39 passed in two files, 3.51 seconds**, covering retained focus, pending semantics, repeated mouse/Enter/Space activation, initial/background retries, successful recovery and focus moved elsewhere. No new defect was found in this fix. The executor's separate full-frontend **264-test** and lint/types/format/build results remain recorded in the fix evidence, not claimed as independently rerun here. A corrected full-flow browser result is still pending; actual browser pagination end-focus verification is outside this correction. Only this review artifact was changed by the reviewer; no broad suite, browser, backend, dev/prod, real-data or remote operation was performed.
 
 ---
 

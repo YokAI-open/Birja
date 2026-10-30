@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 05-portfolio-and-history
 source: [05-VERIFICATION.md]
 started: 2026-10-30 13:26:08+00:00
@@ -8,7 +8,7 @@ updated: 2026-10-30 13:26:08+00:00
 
 ## Current Test
 
-Awaiting Plan 05-08 Task 3: scoped push and release decision. User approved the supplied browser checklist after the healthy rebuild.
+Human checkpoints complete: approved rebuild/browser review and push-pr choice. PR #25 open; actual remote CI/Playwright pending, merge unapproved; release skipped.
 
 ## Tests
 
@@ -38,14 +38,14 @@ result: passed — user replied approved to the supplied browser checklist; no i
 
 ### 7. Scoped push and release decisions
 expected: Record push, push-and-PR or not-yet for the concrete feature result, with separate release intent or skipped; require green CI and separate approval before merge.
-result: [pending]
+result: passed — user chose push=pr; PR #25 opened, release skipped, merge remains unapproved.
 
 ## Summary
 
 total: 7
-passed: 6
+passed: 7
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

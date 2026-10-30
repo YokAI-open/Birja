@@ -1,6 +1,6 @@
 ---
 phase: 05-portfolio-and-history
-status: browser-approved-awaiting-push-choice
+status: browser-approved-pr-open-ci-pending
 current_task: 05-08-3
 updated: 2026-10-30
 ---
@@ -41,6 +41,7 @@ is specified in Plan 05-08. No user approval or browser pass is inferred.
 
 ## Task 3 — Remote Decision
 
-Browser acceptance approved; scoped push decision pending. Branch: `feature/phase-05-portfolio-and-history`.
-No Phase 5 push, PR, merge, release or deployment is authorized or performed.
-Release intent is unset. Phase 4 authorization is not reused.
+Browser acceptance approved. User chose push and PR (`push=pr`). Branch: `feature/phase-05-portfolio-and-history`.
+Feature branch pushed; PR #25 targets develop. Actual remote CI/browser run
+is pending. Merge remains unapproved. Release/deployment is skipped because
+no release-now request was supplied. Phase 4 authorization is not reused.
