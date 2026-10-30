@@ -146,8 +146,10 @@ for (const width of [375, 768, 1024, 1440]) {
               : "Trade history table",
           exact: true,
         });
+        await page.keyboard.press("Tab");
         await scroll.focus();
         await expect(scroll).toBeFocused();
+        await expect(scroll).toHaveCSS("outline-width", "2px");
         const overflows = await scroll.evaluate((node) => node.scrollWidth > node.clientWidth);
         if (overflows) {
           await page.keyboard.press("ArrowRight");
@@ -159,9 +161,11 @@ for (const width of [375, 768, 1024, 1440]) {
           name === "Portfolio"
             ? records.getByRole("link", { name: "Trade BTC" })
             : page.getByText("All trades loaded.", { exact: true });
+        await page.keyboard.press("Tab");
         await last.focus();
         await last.scrollIntoViewIfNeeded();
         await expect(last).toBeFocused();
+        await expect(last).toHaveCSS("outline-width", "2px");
         const bottom = await last.boundingBox();
         const tabs = await nav.boundingBox();
         expect(bottom!.y + bottom!.height).toBeLessThanOrEqual(tabs!.y);

@@ -168,6 +168,9 @@ it("appends three ordered pages once, retries the same cursor and transfers fina
   finish(new Response("{}", { status: 500 }));
   await user.click(await screen.findByRole("button", { name: "Try loading more" }));
   expect(await screen.findByRole("button", { name: "Try loading more" })).toBeEnabled();
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Couldn't load more trades. Your loaded trades are still here.",
+  );
   expect(
     screen.queryByText("Couldn't refresh your trade history. Showing the last successful update."),
   ).toBeNull();

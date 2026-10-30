@@ -32,6 +32,7 @@ INVALID = [
     "",
     "!",
     "e30=",
+    "e31",  # Nonzero discarded base64 bits decode to {}, but are not canonical.
     "a",
     token(b"\xff"),
     token(b"{"),
@@ -77,6 +78,27 @@ def test_cursor_round_trip_preserves_microseconds_and_bigint():
 def test_invalid_cursor(cursor):
     with pytest.raises(InvalidCursor):
         decode_cursor(cursor)
+
+
+def test_cursor_encoder_refuses_naive_time():
+    with pytest.raises(InvalidCursor):
+        encode_cursor(HistoryCursor(created_at=STAMP.replace(tzinfo=None), id=1))
+
+
+@pytest.mark.parametrize("limit", [0, 101, True, 1.0, "1"])
+async def test_service_refuses_invalid_page_size_before_query(db, engine, limit):
+    statements = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        with pytest.raises(ValueError, match="History limit must be between 1 and 100"):
+            await list_history(db, user_id=1, limit=limit)
+        assert statements == []
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
 
 
 async def put_fill(engine, uid, *, stamp=STAMP, side="buy", total="-100.00", high=False):

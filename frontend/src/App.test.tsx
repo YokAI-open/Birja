@@ -260,13 +260,35 @@ describe("App", () => {
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
   });
 
-  it("shows the sign-in card on /account when signed out", async () => {
-    stubApi(unauthorized);
-    renderWithClient(<App />, { route: "/account" });
-    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
-  });
+  it.each(["/account", "/portfolio", "/history"])(
+    "gates direct %s entry when signed out",
+    async (path) => {
+      stubApi(unauthorized);
+      renderWithClient(<App />, { route: path });
+      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+      expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
+      expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+    },
+  );
+
+  it.each(["/portfolio", "/history"])(
+    "returns %s to sign-in after a final private-read 401",
+    async (path) => {
+      let meCalls = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) => {
+          if (url === "/api/v1/me")
+            return Promise.resolve(++meCalls === 1 ? meOk() : unauthorized());
+          return Promise.resolve(unauthorized());
+        }),
+      );
+      renderWithClient(<App />, { route: path });
+      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+      expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+      expect(screen.queryByRole("table")).toBeNull();
+    },
+  );
 
   it("shows Markets with the nav at / when signed in", async () => {
     stubApi(meOk);

@@ -139,7 +139,7 @@ function App() {
         <span aria-hidden="true" className="size-8 rounded-control bg-brand" />
         <span className="text-xl font-semibold tracking-[-0.01em]">Birja</span>
       </header>
-      <main className="mx-auto max-w-[1440px] px-4 pb-[calc(80px+env(safe-area-inset-bottom))] md:px-8 md:pb-8">
+      <main className="mx-auto max-w-[1440px] px-4 pb-[calc(80px+env(safe-area-inset-bottom))] md:px-8 md:pb-8 [&_:focus]:scroll-mb-[calc(80px+env(safe-area-inset-bottom))] md:[&_:focus]:scroll-mb-0">
         <AuthSwitch />
       </main>
     </>

@@ -224,7 +224,9 @@ export default function HistoryPage() {
             (hasNextPage ? (
               <div className="flex flex-col items-start gap-3">
                 {isFetchNextPageError && (
-                  <p role="alert">Couldn&apos;t load more trades. Try again.</p>
+                  <p role="alert">
+                    Couldn&apos;t load more trades. Your loaded trades are still here.
+                  </p>
                 )}
                 <Button
                   ref={captureAppendButton}
