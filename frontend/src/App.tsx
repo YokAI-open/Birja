@@ -52,7 +52,7 @@ function AuthSwitch() {
 
 const navItem = ({ isActive }: { isActive: boolean }) =>
   cn(
-    "inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-pill px-4 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none",
+    "inline-flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-pill px-2 text-[13px] md:flex-row md:px-4 md:text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none",
     isActive
       ? "bg-primary text-primary-foreground shadow-pill"
       : "text-muted-foreground hover:bg-muted",
