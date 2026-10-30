@@ -82,14 +82,23 @@ describe("App", () => {
       return <button onClick={() => void navigate(-1)}>Back</button>;
     }
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(<QueryClientProvider client={client}><MemoryRouter><Back /><App /></MemoryRouter></QueryClientProvider>);
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Back />
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
     const user = userEvent.setup();
     expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
     await user.click(screen.getByRole("link", { name: "Account" }));
     expect(await screen.findByRole("heading", { name: "Account", level: 1 })).toHaveFocus();
     const signOut = screen.getByRole("button", { name: "Sign out" });
     signOut.focus();
-    await act(async () => { await client.invalidateQueries({ queryKey: ["me"] }); });
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["me"] });
+    });
     expect(signOut).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
