@@ -1,7 +1,7 @@
 ---
 phase: 05-portfolio-and-history
-status: awaiting-browser-review
-current_task: 05-08-2
+status: browser-approved-awaiting-push-choice
+current_task: 05-08-3
 updated: 2026-10-30
 ---
 
@@ -33,12 +33,14 @@ The user performs all real sign-in and trading themselves.
 
 ## Task 2 — Human Verification
 
-Ready for user review after the healthy rebuild. The persisted human checks are in
+User replied **approved** to the complete real-price Portfolio, History,
+navigation/mobile/keyboard/zoom checklist after the healthy rebuild. No
+visible issue was reported. The persisted human checks are in
 [05-HUMAN-UAT.md](05-HUMAN-UAT.md); the real-price and responsive checklist
 is specified in Plan 05-08. No user approval or browser pass is inferred.
 
 ## Task 3 — Remote Decision
 
-Pending browser acceptance. Branch: `feature/phase-05-portfolio-and-history`.
+Browser acceptance approved; scoped push decision pending. Branch: `feature/phase-05-portfolio-and-history`.
 No Phase 5 push, PR, merge, release or deployment is authorized or performed.
 Release intent is unset. Phase 4 authorization is not reused.
