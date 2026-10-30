@@ -161,6 +161,44 @@ psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "select count(*), max(created_
 
 Never print emails or balances per user.
 
+## History index (migration 0008)
+
+0008 adds only `public.ix_trades_user_created_id`, a non-unique B-tree on
+`trades (user_id, created_at, id)`, for the existing user-scoped history seek.
+Upgrade and downgrade use `CONCURRENTLY` outside transactions; Alembic uses
+one transaction per migration online and offline. Earlier revisions can
+therefore remain committed if a later revision fails. No data is rewritten.
+Normal application rollback leaves the index in place; an explicitly approved
+schema downgrade to 0007 removes only this index and preserves fills.
+
+A failed concurrent build can leave an invalid named index even while the
+Alembic revision remains 0007. Before retrying, inspect revision state and
+only the named index, using the deployment's approved database connection:
+
+```sql
+SELECT version_num FROM alembic_version;
+SELECT i.indisvalid, i.indisready, pg_get_indexdef(i.indexrelid)
+FROM pg_index i
+WHERE i.indexrelid = to_regclass('public.ix_trades_user_created_id');
+```
+
+The successful definition must be exactly a non-unique B-tree on
+`public.trades (user_id, created_at, id)`, with both flags true. If the named
+index exists but is invalid, first establish that no build is still running
+(inspect `pg_stat_progress_create_index`), review the failure and definition,
+and obtain approval for recovery. Only the failed new index may be removed:
+
+```sql
+DROP INDEX CONCURRENTLY public.ix_trades_user_created_id;
+```
+
+Run that statement outside a transaction, then rerun the normal Alembic
+upgrade to head and inspect both validity flags and the definition again.
+If the index is valid but revision state is behind, or its definition differs,
+stop for review before modifying it. Never silently stamp head, use
+`IF NOT EXISTS` to hide an invalid/mismatched index, drop another index, or
+rewrite trades to recover. These instructions authorize no production action.
+
 ## Undo (every host change in phase 02.1)
 
 - DNS record: delete the birja record in the Cloudflare dashboard (DNS, Records).
