@@ -1,7 +1,7 @@
 ---
 phase: 05-portfolio-and-history
-status: awaiting-rebuild-approval
-current_task: 05-08-1
+status: awaiting-browser-review
+current_task: 05-08-2
 updated: 2026-10-30
 ---
 
@@ -20,17 +20,20 @@ execution and remote CI remain pending.
 
 ## Task 1 — Rebuild Decision
 
-Approval: **pending**. No fresh Phase 5 development rebuild approval has
-been supplied. No development service has been rebuilt or restarted.
+Approval: **approved** by the user on 2026-10-30 in response to the
+explicit Phase 5 rebuild request. The approved rebuild completed successfully
+with exit code 0.
 
-Proposed command after approval: `docker compose up --build -d --wait`,
+Approved command: `docker compose up --build -d --wait`,
 from the repository root, using existing configuration unchanged and
-unread. Afterward, check only service health and Alembic current, expecting
-`0008 (head)`. The user performs all real sign-in and trading themselves.
+unread. Checks confirmed backend, frontend, postgres, redis and scheduler
+all running healthy. `docker compose exec -T backend alembic current`
+reported `0008 (head)`. No service logs or private account data were read.
+The user performs all real sign-in and trading themselves.
 
 ## Task 2 — Human Verification
 
-Pending authorized rebuild. The seven persisted human checks are in
+Ready for user review after the healthy rebuild. The persisted human checks are in
 [05-HUMAN-UAT.md](05-HUMAN-UAT.md); the real-price and responsive checklist
 is specified in Plan 05-08. No user approval or browser pass is inferred.
 

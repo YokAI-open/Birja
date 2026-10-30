@@ -8,13 +8,13 @@ updated: 2026-10-30 13:26:08+00:00
 
 ## Current Test
 
-Awaiting Plan 05-08 Task 1: fresh approval to rebuild the development app.
+Awaiting Plan 05-08 Task 2: user real-price browser review. Rebuild approved and completed; all five services healthy, Alembic 0008 (head).
 
 ## Tests
 
 ### 1. Fresh development rebuild decision
 expected: Current explicit approval precedes rebuilding; record service health and Alembic 0008 head afterward.
-result: [pending]
+result: passed — explicit user approval; rebuild exit 0, five services healthy, Alembic 0008 (head).
 
 ### 2. Cash, holdings, mid valuation and used-price times
 expected: Real-price Portfolio shows actual cash, every positive holding, total at mid, and the exact times of the prices used.
@@ -43,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 7
-passed: 0
+passed: 1
 issues: 0
-pending: 7
+pending: 6
 skipped: 0
 blocked: 0
 
