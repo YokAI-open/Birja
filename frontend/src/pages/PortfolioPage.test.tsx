@@ -179,13 +179,59 @@ it("labels an in-flight manual refresh and keeps the existing data visible", asy
   await screen.findByRole("region", { name: "Cash" });
   await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
   const refresh = screen.getByRole("button", { name: "Refreshing portfolio…" });
-  expect(refresh).toBeDisabled();
+  expect(refresh).toBeEnabled();
+  expect(refresh).toHaveAttribute("aria-disabled", "true");
+  expect(refresh).toHaveFocus();
+  await user.click(refresh);
+  await user.keyboard("{Enter} ");
+  expect(fetch).toHaveBeenCalledTimes(2);
   expect(screen.getByRole("status")).toHaveTextContent("Refreshing portfolio…");
   expect(screen.getByRole("region", { name: "Cash" })).toHaveTextContent("$9,999.00");
   await act(async () => finish(await ok()));
   expect(await screen.findByRole("button", { name: "Refresh portfolio" })).toBeEnabled();
+  expect(refresh).toHaveAttribute("aria-disabled", "false");
   expect(refresh).toHaveFocus();
 });
+
+it.each(["Try again", "Retry refresh"])(
+  "preserves %s focus through retry and recovery",
+  async (label) => {
+    let finish!: (response: Response) => void;
+    const fetch = vi.fn();
+    if (label === "Retry refresh") fetch.mockImplementationOnce(() => ok());
+    fetch.mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { user } = renderWithClient(<PortfolioPage />);
+    if (label === "Retry refresh") {
+      await screen.findByRole("region", { name: "Cash" });
+      await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+    }
+    const retry = await screen.findByRole("button", { name: label });
+    await user.click(retry);
+    const refresh = screen.getByRole("button", { name: "Refreshing portfolio…" });
+    expect(refresh).toHaveAttribute("aria-disabled", "true");
+    const count = fetch.mock.calls.length;
+    if (label === "Retry refresh") {
+      expect(retry).toHaveFocus();
+      expect(retry).toHaveAttribute("aria-disabled", "true");
+      await user.click(retry);
+      await user.keyboard("{Enter} ");
+      expect(fetch).toHaveBeenCalledTimes(count);
+    } else {
+      expect(refresh).toHaveFocus();
+      await user.click(refresh);
+    }
+    expect(fetch).toHaveBeenCalledTimes(count);
+    await act(async () => finish(await ok()));
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(refresh).toHaveFocus();
+  },
+);
 
 it("shows actual liquidated cash and return against stored starting cash", async () => {
   vi.stubGlobal(

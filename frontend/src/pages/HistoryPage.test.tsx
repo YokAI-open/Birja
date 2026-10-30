@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import { renderWithClient } from "@/test/render";
 import HistoryPage from "./HistoryPage";
 
@@ -38,7 +38,7 @@ it("cancels the first page when the view unmounts", () => {
   expect(signal?.aborted).toBe(true);
 });
 
-it("disables Refresh while retaining the stored fills during an in-flight refresh", async () => {
+it("keeps Refresh focusable and blocks repeated activation during an in-flight refresh", async () => {
   let resolve: (value: Response) => void = () => {};
   vi.stubGlobal(
     "fetch",
@@ -55,13 +55,59 @@ it("disables Refresh while retaining the stored fills during an in-flight refres
   const { user } = renderWithClient(<HistoryPage />);
   await screen.findByRole("table");
   await user.click(screen.getByRole("button", { name: "Refresh history" }));
-  expect(screen.getByRole("button", { name: "Refreshing history…" })).toBeDisabled();
+  const refresh = screen.getByRole("button", { name: "Refreshing history…" });
+  expect(refresh).toBeEnabled();
+  expect(refresh).toHaveAttribute("aria-disabled", "true");
+  expect(refresh).toHaveFocus();
+  await user.click(refresh);
+  await user.keyboard("{Enter} ");
+  expect(fetch).toHaveBeenCalledTimes(2);
   expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
   resolve(new Response(JSON.stringify({ items: [item], next_cursor: null })));
   await vi.waitFor(() =>
     expect(screen.getByRole("button", { name: "Refresh history" })).toBeEnabled(),
   );
+  await vi.waitFor(() => expect(refresh).toHaveAttribute("aria-disabled", "false"));
+  expect(refresh).toHaveFocus();
 });
+it.each(["Try again", "Retry refresh"])(
+  "preserves %s focus through retry and recovery",
+  async (label) => {
+    let finish!: (response: Response) => void;
+    const fetch = vi.fn();
+    if (label === "Retry refresh") fetch.mockImplementationOnce(() => ok());
+    fetch.mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { user } = renderWithClient(<HistoryPage />);
+    if (label === "Retry refresh") {
+      await screen.findByRole("table");
+      await user.click(screen.getByRole("button", { name: "Refresh history" }));
+    }
+    const retry = await screen.findByRole("button", { name: label });
+    await user.click(retry);
+    const refresh = screen.getByRole("button", { name: "Refreshing history…" });
+    expect(refresh).toHaveAttribute("aria-disabled", "true");
+    const count = fetch.mock.calls.length;
+    if (label === "Retry refresh") {
+      expect(retry).toHaveFocus();
+      expect(retry).toHaveAttribute("aria-disabled", "true");
+      await user.click(retry);
+      await user.keyboard("{Enter} ");
+    } else {
+      expect(refresh).toHaveFocus();
+    }
+    expect(fetch).toHaveBeenCalledTimes(count);
+    await act(async () => finish(await ok()));
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(refresh).toHaveFocus();
+  },
+);
+
 it("renders stored values in desktop and labelled mobile views without a false end message", async () => {
   const fetch = vi.fn(() =>
     ok(
