@@ -268,7 +268,7 @@ Plans:
   3. For each holding, user sees quantity, average cost (fees included), current value, unrealized P/L in dollars and percent, and its allocation share
   4. User sees past trades newest first (date/time, coin, side, quantity, execution price, fee, total), and a long history loads page by page
 
-**Plans:** 5/8 plans executed
+**Plans:** 6/8 plans executed
 
 Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup and destructive migration state):
 
@@ -294,7 +294,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 05-06-PLAN.md — Wave 6: Fill/replay invalidation and private-cache identity isolation
+- [x] 05-06-PLAN.md — Wave 6: Fill/replay invalidation and private-cache identity isolation
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -330,5 +330,5 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
-| 5. Portfolio and History | 5/8 | In Progress|  |
+| 5. Portfolio and History | 6/8 | In Progress|  |
 | 6. Deploy | 0/TBD | Not started | - |
