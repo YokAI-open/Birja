@@ -23,7 +23,7 @@ export default function PortfolioPage() {
           disabled={isFetching}
           onClick={() => void refetch()}
         >
-          Refresh portfolio
+          {isFetching ? "Refreshing portfolio…" : "Refresh portfolio"}
         </Button>
       </div>
       {isPending ? (

@@ -161,6 +161,32 @@ it("reports refresh recovery once and preserves manual refresh focus", async () 
   expect(screen.getByText("No market prices needed")).toBeVisible();
 });
 
+it("labels an in-flight manual refresh and keeps the existing data visible", async () => {
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementationOnce(() => ok())
+      .mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+  );
+  const { user } = renderWithClient(<PortfolioPage />);
+  await screen.findByRole("region", { name: "Cash" });
+  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  const refresh = screen.getByRole("button", { name: "Refreshing portfolio…" });
+  expect(refresh).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("Refreshing portfolio…");
+  expect(screen.getByRole("region", { name: "Cash" })).toHaveTextContent("$9,999.00");
+  await act(async () => finish(await ok()));
+  expect(await screen.findByRole("button", { name: "Refresh portfolio" })).toBeEnabled();
+  expect(refresh).toHaveFocus();
+});
+
 it("shows actual liquidated cash and return against stored starting cash", async () => {
   vi.stubGlobal(
     "fetch",
