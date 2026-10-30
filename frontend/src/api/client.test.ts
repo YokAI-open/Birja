@@ -195,3 +195,119 @@ describe("apiFetch silent refresh", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("apiFetch cancellation boundaries", () => {
+  it("never sends an already aborted request or a CSRF bootstrap", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchMock = vi.fn(() => Promise.resolve(json({ old: true })));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      apiFetch("/api/v1/trades/quote", { method: "POST", signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not send a POST if cancelled while waiting for CSRF", async () => {
+    const controller = new AbortController();
+    let release!: (response: Response) => void;
+    const fetchMock = vi.fn((path: string) =>
+      path.endsWith("/csrf")
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(json({ old: true })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const result = apiFetch("/api/v1/trades/quote", {
+      method: "POST",
+      signal: controller.signal,
+    }).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    controller.abort();
+    release(new Response(null, { status: 204 }));
+    expect(await result).toMatchObject({ name: "AbortError" });
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/v1/auth/csrf"]);
+  });
+
+  it.each([204, 401])(
+    "does not retry an aborted caller after shared refresh HTTP %s, and preserves a valid caller",
+    async (status) => {
+      document.cookie = "bj_csrf=tok; path=/";
+      const controller = new AbortController();
+      const valid = new AbortController();
+      let release!: (response: Response) => void;
+      const seen: Record<string, number> = {};
+      const fetchMock = vi.fn((path: string) => {
+        seen[path] = (seen[path] ?? 0) + 1;
+        if (path === "/api/v1/auth/refresh")
+          return new Promise<Response>((resolve) => {
+            release = resolve;
+          });
+        return Promise.resolve(seen[path] === 1 ? json({}, 401) : json({ path }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const aborted = apiFetch("/api/v1/portfolio", { signal: controller.signal }).catch(
+        (error: unknown) => error,
+      );
+      const other = apiFetch("/api/v1/trades", { signal: valid.signal });
+      await vi.waitFor(() => expect(seen["/api/v1/auth/refresh"]).toBe(1));
+      controller.abort();
+      release(new Response(null, { status }));
+      expect(await aborted).toMatchObject({ name: "AbortError" });
+      expect(await other).toEqual({ path: "/api/v1/trades" });
+      expect(seen["/api/v1/portfolio"]).toBe(1);
+      expect(seen["/api/v1/trades"]).toBe(2);
+      expect(seen["/api/v1/auth/refresh"]).toBe(1);
+      const validCalls = fetchMock.mock.calls.filter(([path]) => path === "/api/v1/trades");
+      for (const call of validCalls)
+        expect((call as unknown as [string, RequestInit])[1].signal).toBe(valid.signal);
+      expect(lastInit(fetchMock, 2).signal).toBeUndefined();
+    },
+  );
+
+  it.each([200, 204, 401])(
+    "rejects a cancelled late HTTP %s response before parsing/refresh/publication",
+    async (status) => {
+      const controller = new AbortController();
+      let release!: (response: Response) => void;
+      const fetchMock = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((resolve) => {
+              release = resolve;
+            }),
+        )
+        .mockImplementation(() => Promise.resolve(json({}, 401)));
+      vi.stubGlobal("fetch", fetchMock);
+      const pending = apiFetch("/api/v1/portfolio", { signal: controller.signal }).catch(
+        (error: unknown) => error,
+      );
+      controller.abort();
+      release(status === 204 ? new Response(null, { status }) : json({ private: "A" }, status));
+      expect(await pending).toMatchObject({ name: "AbortError" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([200, 422])("rejects cancellation while parsing HTTP %s JSON", async (status) => {
+    const controller = new AbortController();
+    let release!: (body: unknown) => void;
+    const response = json({}, status);
+    const parse = vi.spyOn(response, "json").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", () => Promise.resolve(response));
+    const pending = apiFetch("/api/v1/portfolio", { signal: controller.signal }).catch(
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(parse).toHaveBeenCalled());
+    controller.abort();
+    release({ detail: { code: "old" }, private: "A" });
+    expect(await pending).toMatchObject({ name: "AbortError" });
+  });
+});
