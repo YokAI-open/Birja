@@ -2,7 +2,7 @@
 
 Updated: 2026-11-02. Non-secret execution ledger for plan 06-01.
 Status: Task 06-01-01 complete; awaiting checkpoint 06-01-02.
-User approved operating defaults, recovery custody/checking and latest-only rotation. Provider/destination and free-only policy selection remain pending.
+User selected Backblaze B2 free tier (US$0 paid usage), operating defaults, recovery custody/checking and latest-only rotation. Actual bucket/endpoint provisioning and local acquisition approval remain pending.
 
 ## Branch preparation — completed
 
@@ -24,9 +24,9 @@ not approvals or inferred account availability.
 
 | Input | Proposal or required answer | Approved value |
 |---|---|---|
-| Storage backend | Recommend owner-provisioned off-server S3-compatible repository; existing independent SFTP storage is an alternative | Pending |
+| Storage backend | Backblaze B2 through S3-compatible API | Approved: Backblaze B2 free tier |
 | Destination | Provider/account, endpoint, region and bucket/prefix, or independent SFTP host/path; no credentials in this ledger | Pending |
-| Spending limit | Owner chooses currency and maximum recurring cost | Pending |
+| Spending limit | Free allowances only | Approved: US$0 paid usage; no automatic paid upgrade or silent overage |
 | Maximum data loss | Nightly logical-dump recovery window | Approved: maximum 26 hours; missed backup must be escalated, not treated as meeting target |
 | Recovery time | Target, to be measured by recovery rehearsal | Approved: 4 hours |
 | Schedule | Nightly UTC with bounded jitter | Approved: 03:00 UTC plus up to 15 minutes jitter |
@@ -279,3 +279,45 @@ No specific provider, numerical resource ceilings or paid spend is inferred.
 At implementation, reconcile these requirements into the owning backup,
 restore, scheduling and validation tasks with focused regression evidence.
 No runtime/source change, installation, backup or deletion occurred here.
+
+## Provider selection — Backblaze B2 free tier, 2026-11-02
+
+User explicitly selected “Backblaze B2’s free tier”. Destination provider is
+now approved; do not ask that choice again. No paid allowance is approved.
+Actual account region, private bucket name and S3 endpoint must come from
+the owner's provisioned bucket. Do not fabricate an account or endpoint.
+Recommend EU region if available; bucket names are globally unique. Do not
+create a public bucket or enable Object Lock, which conflicts with the
+requested rolling deletion. No provider account/bucket has been created by
+the assistant, no keys supplied, and no remote repository initialized.
+
+Use the S3 API: official restic documentation recommends it over its native
+B2 backend due to native-library error handling. B2's default retained file
+versions can defeat repository pruning and consume free storage. For this
+dedicated restic bucket, use the documented 'Keep only the last version of
+the file' lifecycle; hidden versions are then deleted after one day. Never
+configure age-based deletion of currently referenced restic objects. This
+is provider object-version cleanup, separate from keeping one verified
+application snapshot. Include hidden versions, unfinished uploads and
+transient two-snapshot/repack space in quota calculations. Surface cleanup
+lag and free-limit failure; do not silently pay or delete the only copy.
+
+Free-policy verification must cover storage, download and request budgets,
+provider caps where supported, and no event-notification or other paid
+features. Do not present caps as a universal hard billing guarantee. Avoid
+attaching a payment method if the owner's free-account path allows it.
+Owner must verify the actual account controls; no account access occurred.
+
+Exact account setup references checked 2026-11-02:
+- https://www.backblaze.com/docs/cloud-storage-create-and-manage-buckets
+- https://www.backblaze.com/docs/cloud-storage-integrate-restic-with-backblaze-b2
+- https://www.backblaze.com/docs/cloud-storage-lifecycle-rules
+- https://www.backblaze.com/docs/en/cloud-storage-data-caps-and-alerts
+- https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#backblaze-b2
+
+Asked only for the non-secret bucket name/S3 endpoint, or 'not created'.
+Separately presented the exact prepared restic 0.19.1 Linux amd64 official
+artifact and signature/checksum verification for isolated local installation
+at /tmp/birja-test-tools/restic-0.19.1/restic. No global package/PATH or
+production service changes proposed. Local install approval is still
+pending, and never transfers to the later production installation gate.
