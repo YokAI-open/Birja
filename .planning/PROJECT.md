@@ -65,10 +65,12 @@ and PORT-01..05/HIST-01..02. All eight plans and human checkpoints are
 complete. Final local suites: 573 backend and 264 frontend tests; independent
 review is clean. CI run 41066672894 passed at 0595c89, including 10 actual
 browser tests (one production-only CSP target intentionally skipped).
-PR #25 is open into develop; merge is separately unapproved and no Phase 5
-release/deployment was requested. The live app remains v0.3.1.
+PR #25 merged into develop as 8a76a68 after explicit approval and green
+final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
+Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 remains unplanned. Public HTTPS and sign-in were delivered in
+Phase 6 has 13 verified plans / 30 tasks with zero active plan-check findings;
+execution has not started. Public HTTPS and sign-in were delivered in
 Phase 2.1; nightly off-server backups, a tested restore, friend inbox checks
 and production database app-role/SSL decisions remain open. See
 `phases/05-portfolio-and-history/05-VERIFICATION.md` for closeout evidence.
@@ -122,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-30 after Phase 5 completion*
+*Last updated: 2026-11-02 after Phase 6 planning*
