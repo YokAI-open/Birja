@@ -152,3 +152,33 @@ Task 06-01-02 remains pending provider/service assessment and an explicit
 chosen destination/budget if additional storage is needed. Provider choice
 may require a focused plan revision rather than proceeding with R2/restic
 assumptions. Acquisition checkpoint 06-01-03 remains unapproved.
+
+## HOSTKEY documentation assessment — 2026-11-02
+
+Owner supplied:
+https://hostkey.ru/documentation/controlpanel/server_card/backup/
+Read the official page (updated 2026-10-29), without signing into the panel,
+requesting backup downloads or accessing any actual private backup.
+
+Documented capabilities: configurable days/time for full VM backup; backup
+downloads via S3 storage credentials; tar.gz export; original-server restore
+requires stopping the server. Total backup storage quota is 50 GB and new
+backups stop at the quota. The page says exported files cannot be restored
+or used to create a new server through Invapi. It does not document
+PostgreSQL-consistent snapshot/WAL coordination, physical storage failure
+domain, encryption guarantees, or actual owner schedule/usage/retention.
+Do not infer these properties from the full-system description.
+
+Recommend assessing/reusing this paid/existing service before adding R2.
+A candidate adaptation is a nightly consistent PostgreSQL logical dump
+included in provider backups, and an actual retrieval plus isolated database
+restore drill. A dump remaining only on the VDS is not off-server evidence;
+the provider archive must contain it and its independent recovery must be
+proven. Need validate export format/extraction path and availability of
+recovery without overwriting the live server before accepting this approach.
+
+Asked owner whether all-day scheduling is enabled, its time/timezone and
+current 50 GB usage. No R2 spending/provider selection or HOSTKEY changes
+are approved. Reviewed restic/S3 plans remain unchanged pending a concrete
+owner-selected adaptation and focused verification; do not install tools
+or assume the old backend contract still applies.
