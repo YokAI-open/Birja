@@ -131,3 +131,24 @@ custody is the owner's off-server password manager with encrypted recovery
 of required configuration/role/CA material; proposed missed-night response
 is owner daily review and immediate handling of stale/failed status. These
 additional choices were asked explicitly and have not been inferred.
+
+## Owner clarification — provider system backups, 2026-11-02
+
+User reports the VDS provider backs up the whole system and asks whether
+that can satisfy the requirement. Provider/service documentation and backup
+properties are unknown. R2/provider selection and spending are NOT approved.
+Assess the existing service before selecting or buying additional storage.
+Required evidence remains off-VDS nightly recovery, PostgreSQL consistency,
+retention/access/custody, and a successful isolated restore. A full-system
+backup is not assumed either adequate or inadequate solely from its name.
+
+User explicitly approved the proposed recovery/checking policy: off-server
+password-manager custody for backup/storage/database/CA recovery material,
+encrypted recovery of required configuration, and personal daily backup
+status review and handling of failures. No secret values were supplied or
+read; no actual configuration was backed up or installed.
+
+Task 06-01-02 remains pending provider/service assessment and an explicit
+chosen destination/budget if additional storage is needed. Provider choice
+may require a focused plan revision rather than proceeding with R2/restic
+assumptions. Acquisition checkpoint 06-01-03 remains unapproved.
