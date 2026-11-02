@@ -1,8 +1,8 @@
 # Phase 06 — Operations decisions and authority
 
 Updated: 2026-11-02. Non-secret execution ledger for plan 06-01.
-Status: Task 06-01-01 complete; awaiting checkpoint 06-01-02.
-User selected Backblaze B2 free tier (US$0 paid usage), operating defaults, recovery custody/checking and latest-only rotation. Actual bucket/endpoint provisioning and local acquisition approval remain pending.
+Status: Tasks 06-01-01 and 06-01-02 complete; checkpoint 06-01-03 approved for isolated local tooling; artifact verification in progress.
+User selected Backblaze B2 free tier (US$0 paid usage), operating defaults, recovery custody/checking and latest-only rotation. The supplied destination is recorded below; actual account/bucket controls and all production operations remain unverified and separately gated. Historical pending entries below describe earlier checkpoints, not the current authority.
 
 ## Branch preparation — completed
 
@@ -17,22 +17,22 @@ User selected Backblaze B2 free tier (US$0 paid usage), operating defaults, reco
   Only this ledger is included in the branch-preparation task commit;
   the orchestrator owns the separate planning/state commit.
 
-## Checkpoint 06-01-02 — owner choices pending
+## Checkpoint 06-01-02 — owner choices recorded
 
-Recommendations below are proposals from the reviewed plan/research,
-not approvals or inferred account availability.
+Approved values below combine the owner's explicit answers. They do not
+prove account availability, credentials, quotas or successful recovery.
 
 | Input | Proposal or required answer | Approved value |
 |---|---|---|
 | Storage backend | Backblaze B2 through S3-compatible API | Approved: Backblaze B2 free tier |
-| Destination | Provider/account, endpoint, region and bucket/prefix, or independent SFTP host/path; no credentials in this ledger | Pending |
+| Destination | Owner-supplied B2 bucket and S3 endpoint; prefix as proposed | Approved: bucket `Birja-backup` (exact case), endpoint `s3.eu-central-003.backblazeb2.com`, prefix `prod`; endpoint identifies `eu-central-003`; account identity/access uninspected |
 | Spending limit | Free allowances only | Approved: US$0 paid usage; no automatic paid upgrade or silent overage |
 | Maximum data loss | Nightly logical-dump recovery window | Approved: maximum 26 hours; missed backup must be escalated, not treated as meeting target |
 | Recovery time | Target, to be measured by recovery rehearsal | Approved: 4 hours |
 | Schedule | Nightly UTC with bounded jitter | Approved: 03:00 UTC plus up to 15 minutes jitter |
 | Freshness | Maximum successful remote-backup age | Approved: 26 hours; report stale/missing/failure as failure |
 | Retention | Single recovery point after successful replacement | Latest explicit instruction supersedes 7 daily/4 weekly/3 monthly: keep one verified completed Birja backup |
-| Deletion/pruning | Scoped rolling replacement | Requested: remove previous Birja backup only after new off-server upload and verification succeed; preserve old copy on any failure; no deletion performed yet |
+| Deletion/pruning | Scoped rolling replacement | Approved policy: remove previous Birja backup only after new off-server upload and verification succeed; preserve old copy on any failure; actual provider actions remain gated; no deletion performed |
 | Recovery custody | Independent recovery access | Approved: owner off-server password manager for backup password and storage recovery access |
 | Encrypted config recovery | Required service configuration | Approved: include required configuration in encrypted recovery material; no plaintext or secrets in evidence |
 | Role/CA custody | Independent recovery access | Approved: owner off-server password manager for database credentials and CA recovery material |
@@ -67,11 +67,10 @@ the older token instructions.
 
 ## Resume
 
-Verify the task commit and branch, then resume at 06-01-02 with the owner's
-explicit non-secret operating contract. Do not repeat branch creation or
-mark plan 06-01 complete. After policy approval, prepare the concrete
-acquisition record for 06-01-03 and stop for its separate scoped approval.
-No application changes, runtime tests, services or live operations occurred.
+Tasks 06-01-01 and 06-01-02 are complete. Do not repeat branch creation or
+policy selection. Continue the explicitly approved local acquisition and
+record actual verification before completing 06-01-03. No application
+changes, services or live operations occurred in these tasks.
 
 ## Explicit response — 2026-11-02
 
@@ -321,3 +320,34 @@ artifact and signature/checksum verification for isolated local installation
 at /tmp/birja-test-tools/restic-0.19.1/restic. No global package/PATH or
 production service changes proposed. Local install approval is still
 pending, and never transfers to the later production installation gate.
+
+## Exact destination and local acquisition approval — 2026-11-02
+
+Owner supplied bucket `Birja-backup` and endpoint
+`s3.eu-central-003.backblazeb2.com`. Preserve the bucket's exact case; use
+the proposed prefix `prod`. The selected non-secret restic destination is
+`s3:https://s3.eu-central-003.backblazeb2.com/Birja-backup/prod`.
+This is the selected address, not a connectivity test or permission to
+read credentials, list objects, initialize a repository or upload data.
+No bucket privacy, Object Lock state, lifecycle/version cleanup, quota,
+free-tier caps or recovery access has been verified. Validate these under
+later scoped authority; do not silently lowercase, substitute or provision
+a different bucket if a backend rejects this address.
+
+Owner explicitly approved the prepared official restic 0.19.1 Linux amd64
+artifact `restic_0.19.1_linux_amd64.bz2` for isolated local testing at
+`/tmp/birja-test-tools/restic-0.19.1/restic`, after signed SHA256 verification
+against expected key `CF8F18F2844575973F79D4E191A6868BD3F7A907`.
+Public artifact download and scoped local git commits are authorized.
+No global package/PATH, service or production installation is authorized.
+Production acquisition/install, private source/config/credential reads,
+real backups, provider actions, timers, push/PR/merge/release and deploy
+remain pending their separate checkpoints.
+
+Task 06-01-02 policy acceptance is complete. Quota safety is a required
+implementation and later live preflight condition: US$0 paid usage,
+temporary old/new coexistence and repacking headroom, hidden versions and
+unfinished objects, bounded requests/retries and download budget. Routine
+verification must fit that budget; initial actual off-server retrieval and
+isolated restore remain mandatory. These are requirements, not measured
+production resource ceilings or proof that free allowances suffice.
