@@ -182,3 +182,30 @@ current 50 GB usage. No R2 spending/provider selection or HOSTKEY changes
 are approved. Reviewed restic/S3 plans remain unchanged pending a concrete
 owner-selected adaptation and focused verification; do not install tools
 or assume the old backend contract still applies.
+
+## Free-tier alternatives requested — 2026-11-02
+
+User does not want the HOSTKEY backup approach and asks for possible free
+options. Do not continue HOSTKEY schedule/usage collection as a prerequisite.
+No paid storage budget or provider selection has been approved.
+
+Checked official current sources: Backblaze B2 includes the first 10 GB
+storage free; download egress is free up to 3x average monthly storage, then
+billable. Its documented caps/alerts can limit categories of daily spend;
+no unlimited-cost configuration is authorized. R2 Standard includes 10
+GB-month plus request allowances and free direct egress; it requires R2
+subscription checkout and over-allowance usage is billable. Neither is an
+unlimited free storage commitment. Recommend B2 free allowances for further
+owner selection, with retained archive size and restore/download limits
+measured before claiming it fits the policy. Still use the planned S3 API
+and client-side encryption; no additional application dependency needed.
+
+Sources checked 2026-11-02:
+- https://www.backblaze.com/cloud-storage/pricing
+- https://www.backblaze.com/docs/en/cloud-storage-data-caps-and-alerts
+- https://developers.cloudflare.com/r2/pricing/
+- https://developers.cloudflare.com/r2/get-started/
+
+Provider/account creation, destination, free-only enforcement and acquisition
+checkpoint remain pending. No external account, storage, credential or
+production operation was performed.
