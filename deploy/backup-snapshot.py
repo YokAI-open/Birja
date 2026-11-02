@@ -123,7 +123,18 @@ def load_config(args):
             "secret_key_file",
         }
     )
-    require(set(c) == expected)
+    # Recovery bundle may retain the approved fixed synthetic source definition
+    # beside an archived old checkout. Never accept an arbitrary Compose target.
+    require(set(c) in [expected, expected | {"source_compose"}])
+    if "source_compose" in c:
+        require(synthetic)
+        source = Path(c["source_compose"])
+        require(source == root / "old" / "docker-compose.ops-test.yml")
+        require(source == source.resolve() and source.is_file())
+        require(
+            hashlib.sha256(source.read_bytes()).hexdigest()
+            == "91af78e11963a7a8f944e1807b310193e1ea1da676b74beab2e667b5e841c7f0"
+        )
     require(c["source_project"] == ("birja-ops-test" if synthetic else "birja-prod"))
     require(re.fullmatch(r"[0-9a-f]{40}", c["release"]))
     for key in ["db_user", "db_name"]:
@@ -225,6 +236,7 @@ class Job:
         self.env = {
             "PATH": "/usr/bin:/bin",
             "HOME": str(self.state),
+            "TMPDIR": str(self.state),
             "LANG": "C.UTF-8",
             "GOMAXPROCS": "2",
             "GOMEMLIMIT": "256MiB",
@@ -252,10 +264,14 @@ class Job:
             "-f",
             "/srv/birja/docker-compose.prod.yml"
             if not c["_synthetic"]
-            else str(HERE.parent / "docker-compose.ops-test.yml"),
+            else c.get(
+                "source_compose", str(HERE.parent / "docker-compose.ops-test.yml")
+            ),
         ]
         if not c["_synthetic"]:
             self.dc += ["--env-file", "/etc/birja/prod.env"]
+        else:
+            self.dc += ["--env-file", "/dev/null"]
         self.dc += ["exec", "-T", "postgres"]
 
     def limit(self):

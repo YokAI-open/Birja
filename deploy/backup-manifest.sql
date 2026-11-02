@@ -18,6 +18,11 @@ WITH canonical(table_name, row_key, body) AS (
  FROM names LEFT JOIN canonical ON table_name=name GROUP BY name
 )
 SELECT json_build_object(
+ 'schema',json_build_object(
+  'constraints',(SELECT json_agg(json_build_array(c.conrelid::regclass::text,c.conname,c.contype,c.convalidated,pg_get_constraintdef(c.oid)) ORDER BY c.conrelid::regclass::text,c.conname) FROM pg_constraint c WHERE c.connamespace='public'::regnamespace),
+  'indexes',(SELECT json_agg(json_build_array(c.relname,i.indisvalid,i.indisready,pg_get_indexdef(i.indexrelid)) ORDER BY c.relname) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relnamespace='public'::regnamespace),
+  'identities',(SELECT json_agg(json_build_array(c.relname,a.attname,a.attidentity,format_type(a.atttypid,a.atttypmod)) ORDER BY c.relname,a.attnum) FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE c.relnamespace='public'::regnamespace AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped)
+ ),
  'tables',(SELECT json_object_agg(name,json_build_object('count',count,'sha256',sha256) ORDER BY name) FROM summaries),
  'revision',(SELECT string_agg(version_num,',' ORDER BY version_num) FROM alembic_version),
  'server_version',current_setting('server_version'),

@@ -189,6 +189,20 @@ class Backup(unittest.TestCase):
   for script in ['backup.sh','backup-status.sh']:
    r=subprocess.run(['bash','-c','source "$1"', '_',str(ROOT/'deploy'/script)],capture_output=True)
    self.assertEqual(r.returncode,0); self.assertEqual(r.stdout,b'')
+ def test_retained_source_compose_and_private_pack_temp(self):
+  source=self.p/'old'/'docker-compose.ops-test.yml'; source.parent.mkdir(mode=0o700)
+  shutil.copyfile(ROOT/'docker-compose.ops-test.yml',source)
+  self.c['source_compose']=str(source)
+  self.assertEqual(self.run_script().returncode,0)
+  calls=self.calls()
+  self.assertTrue(any(str(source) in call and '/dev/null' in call for call in calls if call[0]=='docker'))
+  (self.p/'calls').unlink(); source.write_text('hostile compose')
+  self.assertEqual(self.run_script().returncode,2); self.assertEqual(self.calls(),[])
+  self.c['source_compose']='/srv/birja/docker-compose.prod.yml'
+  self.assertEqual(self.run_script().returncode,2); self.assertEqual(self.calls(),[])
+  spec=importlib.util.spec_from_file_location('backup_snapshot',ROOT/'deploy'/'backup-snapshot.py')
+  module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+  self.assertEqual(module.Job({**self.c,'_synthetic':True}).env['TMPDIR'],self.c['state_dir'])
  def test_cleanup_failure_does_not_publish_success(self):
   spec=importlib.util.spec_from_file_location('backup_snapshot',ROOT/'deploy'/'backup-snapshot.py')
   module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
