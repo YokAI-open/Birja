@@ -171,6 +171,8 @@ def main():
         require(len(sys.argv) > 1)
         if sys.argv[1] == "restore":
             restore(sys.argv[2:])
+        elif sys.argv[1] == "bundle":
+            return 0
         else:
             raise ValueError("mode")
         return 0

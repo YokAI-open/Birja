@@ -18,5 +18,10 @@ class Safety(unittest.TestCase):
  def test_source_safe(self):
   r=subprocess.run(['bash','-c','source "$1"','bash',str(ROOT/'deploy/restore-check.sh')],capture_output=True)
   self.assertEqual(r.returncode,0); self.assertEqual(r.stdout,b'')
+ def test_bundle_rejects_before_install(self):
+  for args in [[],['install'],['verify','/srv/birja/archive'],['install','--archive','/tmp/missing','--sha','a'*64],['package','--output','/srv/birja/archive'],['verify','--archive','/tmp/missing','--sha','bad']]:
+   with self.subTest(args=args):
+    r=subprocess.run(['bash',str(ROOT/'deploy/recovery-bundle.sh'),*args],capture_output=True)
+    self.assertNotEqual(r.returncode,0)
 unittest.main(argv=['safety'])
 PY
