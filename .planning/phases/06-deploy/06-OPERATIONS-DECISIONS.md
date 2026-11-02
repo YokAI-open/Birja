@@ -2,7 +2,7 @@
 
 Updated: 2026-11-02. Non-secret execution ledger for plan 06-01.
 Status: Task 06-01-01 complete; awaiting checkpoint 06-01-02.
-User approved the operating defaults below; destination, budget and remaining custody/response details are pending.
+User approved operating defaults, recovery custody/checking and latest-only rotation. Provider/destination and free-only policy selection remain pending.
 
 ## Branch preparation — completed
 
@@ -31,12 +31,12 @@ not approvals or inferred account availability.
 | Recovery time | Target, to be measured by recovery rehearsal | Approved: 4 hours |
 | Schedule | Nightly UTC with bounded jitter | Approved: 03:00 UTC plus up to 15 minutes jitter |
 | Freshness | Maximum successful remote-backup age | Approved: 26 hours; report stale/missing/failure as failure |
-| Retention | Desired keep policy; destructive enforcement separately gated | Approved: 7 daily, 4 weekly, 3 monthly; no automatic pruning yet |
-| Deletion/pruning | Separate explicit authority required | Not authorized; disabled |
-| Recovery custody | Independent recovery access | Approved requirement: encryption password and recovery credentials kept outside this server; exact private custody route pending |
-| Encrypted config recovery | Owner chooses which configuration and recovery material to include separately from the database archive | Pending |
-| Role/CA custody | Owner chooses independent recovery custody for database credentials, CA and keys | Pending |
-| Missed-night response | Owner chooses operator check frequency, responsible person and escalation; no external notification is implicitly authorized | Pending |
+| Retention | Single recovery point after successful replacement | Latest explicit instruction supersedes 7 daily/4 weekly/3 monthly: keep one verified completed Birja backup |
+| Deletion/pruning | Scoped rolling replacement | Requested: remove previous Birja backup only after new off-server upload and verification succeed; preserve old copy on any failure; no deletion performed yet |
+| Recovery custody | Independent recovery access | Approved: owner off-server password manager for backup password and storage recovery access |
+| Encrypted config recovery | Required service configuration | Approved: include required configuration in encrypted recovery material; no plaintext or secrets in evidence |
+| Role/CA custody | Independent recovery access | Approved: owner off-server password manager for database credentials and CA recovery material |
+| Missed-night response | Owner checks and responds | Approved: owner daily status checks and handles failures; no messages to others authorized |
 
 Supply secret values only through agreed root-only files, never chat,
 committed documentation, command arguments or public evidence.
@@ -209,3 +209,31 @@ Sources checked 2026-11-02:
 Provider/account creation, destination, free-only enforcement and acquisition
 checkpoint remain pending. No external account, storage, credential or
 production operation was performed.
+
+## Latest-only rotation instruction — 2026-11-02
+
+User asked to create the new backup and remove the previous one. This is
+an explicit retention change superseding the earlier multi-version keep
+policy and disabled-pruning default. Implement one completed, verified
+Birja recovery point at rest, using create-before-delete rotation:
+
+1. Produce a consistent new archive and complete its off-server upload.
+2. Verify the exact new snapshot/archive integrity and expected contents.
+3. Only then remove the previous Birja snapshot and safely reclaim unused
+   repository data. Restrict operations to this dedicated backup set; never
+   remove unrelated snapshots, keys, repositories or live database state.
+4. Any dump/upload/verification failure preserves the previous backup.
+   Missing or ambiguous snapshot identity fails closed; do not delete first
+   to make space. Serialize backup and prune operations and check repository
+   integrity afterward. Initial recovery proof remains mandatory.
+
+Two snapshots and temporary upload/repacking data may briefly coexist;
+free-space/budget planning must include this headroom. One recovery point
+cannot recover an error already present in that newest backup. This
+tradeoff is explained to the owner; no older history is promised.
+
+Official restic supports latest-only snapshot retention plus pruning:
+https://restic.readthedocs.io/en/stable/060_forget.html
+This is a policy/implementation instruction, not evidence that a new backup
+exists or a previous backup was deleted. Provider selection, installation
+and scoped production operations remain separately pending.
