@@ -237,3 +237,45 @@ https://restic.readthedocs.io/en/stable/060_forget.html
 This is a policy/implementation instruction, not evidence that a new backup
 exists or a previous backup was deleted. Provider selection, installation
 and scoped production operations remain separately pending.
+
+## Resource-limit optimization requirement — 2026-11-02
+
+User explicitly requires backup logic to account for limits and be
+optimized. Treat this as an execution acceptance requirement, preserving
+the chosen latest-only/create-before-delete policy and pending provider.
+
+- Back up the PostgreSQL logical archive and the minimum required recovery
+  configuration. Exclude Docker images/build caches, application logs,
+  dependency trees and rebuildable Redis/cache data. Do not broaden access
+  or omit financial/session database state to save space.
+- Measure archive/repository size, run time, CPU/memory pressure, uploaded
+  and downloaded bytes and request counts using synthetic fixtures first.
+  Do not guess real production size, compression ratio or dedup savings.
+- Use standard compression/deduplication supported by the reviewed tools;
+  benchmark their combination instead of blindly double-compressing data.
+  Reuse uploaded content when supported; avoid redundant archive creation,
+  repeated uploads and unnecessary storage/list/check requests.
+- Serialize backup/verification/prune, with bounded retries/backoff and
+  timeouts; schedule off-peak. Exceeding a resource or free-tier allowance
+  fails visibly and preserves the previous verified snapshot. Never
+  silently delete first, skip verification or switch to paid usage.
+- Budget for temporary coexistence of old/new snapshots, local staging,
+  upload/repack overhead and provider-specific request/download limits.
+  Count all retained versions, incomplete objects and repository overhead,
+  not only the logical database size. Handle quota/partial-upload failures
+  without claiming success or destroying the recovery point.
+- Distinguish routine new-backup integrity checks from full retrieval/
+  recovery drills; do not introduce needless repeated full downloads that
+  exhaust free egress. Initial real off-server retrieval/isolated restore
+  remains mandatory, and later drill frequency must fit the chosen budget.
+  Define the exact routine assurance before pruning; never label an
+  unexecuted recovery drill as passed.
+- Tests must cover quota exhaustion, insufficient replacement headroom,
+  failed/partial uploads, interrupted cleanup, concurrent runs and bounded
+  retry/request behavior. Record measured costs and pass/fail privately
+  without rows, individual balances or secret values.
+
+No specific provider, numerical resource ceilings or paid spend is inferred.
+At implementation, reconcile these requirements into the owning backup,
+restore, scheduling and validation tasks with focused regression evidence.
+No runtime/source change, installation, backup or deletion occurred here.
