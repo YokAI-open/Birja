@@ -1,7 +1,7 @@
 # Phase 06 — Operations decisions and authority
 
 Updated: 2026-11-02. Non-secret execution ledger for plan 06-01.
-Status: Tasks 06-01-01 and 06-01-02 complete; checkpoint 06-01-03 approved for isolated local tooling; artifact verification in progress.
+Status: Plan 06-01 complete (3/3 tasks); approved isolated local restic acquisition verified. Production authority and live evidence remain pending.
 User selected Backblaze B2 free tier (US$0 paid usage), operating defaults, recovery custody/checking and latest-only rotation. The supplied destination is recorded below; actual account/bucket controls and all production operations remain unverified and separately gated. Historical pending entries below describe earlier checkpoints, not the current authority.
 
 ## Branch preparation — completed
@@ -41,14 +41,13 @@ prove account availability, credentials, quotas or successful recovery.
 Supply secret values only through agreed root-only files, never chat,
 committed documentation, command arguments or public evidence.
 
-## Checkpoint 06-01-03 — acquisition pending
+## Checkpoint 06-01-03 — local acquisition verified
 
-Restic remains the research's proposed executable with installation
-provenance marked ASSUMED. Exact platform/version/artifact, official origin,
-signed checksum verification and local installation scope must be presented
-for explicit approval after the policy checkpoint. No install, download or
-existing binary inspection was performed in Task 06-01-01. Host installation
-authority must be obtained separately from local tooling approval.
+The research's ASSUMED acquisition provenance is resolved for the exact
+local executable below by explicit owner approval, expected-key signature
+verification and matching artifact checksum. No install or download was
+performed in Task 06-01-01. Host installation authority must be obtained
+separately from local tooling approval.
 
 ## Authority boundaries
 
@@ -67,10 +66,10 @@ the older token instructions.
 
 ## Resume
 
-Tasks 06-01-01 and 06-01-02 are complete. Do not repeat branch creation or
-policy selection. Continue the explicitly approved local acquisition and
-record actual verification before completing 06-01-03. No application
-changes, services or live operations occurred in these tasks.
+All three tasks are complete. Continue with 06-02 using the verified local
+executable explicitly in test PATH, checking its hash/version again if
+the ephemeral /tmp path changes. Do not repeat branch creation or policy
+selection. No application changes, services or live operations occurred.
 
 ## Explicit response — 2026-11-02
 
@@ -351,3 +350,49 @@ unfinished objects, bounded requests/retries and download budget. Routine
 verification must fit that budget; initial actual off-server retrieval and
 isolated restore remain mandatory. These are requirements, not measured
 production resource ceilings or proof that free allowances suffice.
+
+## Verified local acquisition result — 2026-11-02
+
+Re-read official installation and pinned release documentation independently
+before execution:
+- https://restic.readthedocs.io/en/stable/020_installation.html
+- https://github.com/restic/restic/releases/tag/v0.19.1
+
+Downloaded only the approved executable archive plus verification material
+over HTTPS, following HTTPS-only redirects:
+- https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2
+- https://github.com/restic/restic/releases/download/v0.19.1/SHA256SUMS
+- https://github.com/restic/restic/releases/download/v0.19.1/SHA256SUMS.asc
+- https://restic.net/gpg-key-alex.asc (linked by the official installation page)
+
+Used an isolated GPG home under the approved tooling directory; no user
+keyring, credentials or storage configuration was read. The public key
+bundle includes an old revoked key; only the explicitly expected primary
+fingerprint was accepted. `gpg --no-autostart --batch --status-fd 1 --verify`
+returned exit 0, GOODSIG and VALIDSIG for
+`CF8F18F2844575973F79D4E191A6868BD3F7A907`. Signature timestamp:
+2026-07-05 07:59:26 UTC. GPG's undefined web-of-trust warning is expected
+for an isolated keyring; identity was pinned to the independently checked
+official fingerprint, not inferred from a UID or short key ID.
+
+The signed checksum file contained exactly one matching archive entry.
+SHA-256 matched before decompression or execution:
+`f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c`.
+Compressed size: 10,107,515 bytes. Extracted binary size: 30,941,346 bytes;
+binary SHA-256:
+`20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639`.
+These hashes identify public tool artifacts, not private database content.
+
+Installed at `/tmp/birja-test-tools/restic-0.19.1/restic` with mode 0700;
+tooling directory and GPG home mode 0700. The only binary invocation was
+`version`, exit 0: `restic 0.19.1 compiled with go1.26.4 on linux/amd64`.
+Use the exact path or a per-command test PATH; no global PATH/package or
+service change occurred. No repository was initialized, no backups made,
+and no provider request or production data/config access occurred.
+
+Sandbox DNS initially blocked public GitHub download; the approved scoped
+network escalation succeeded. GPG import initially tried an unavailable
+agent socket; public verification with `--no-autostart` succeeded without
+starting a service. These environment restrictions did not weaken either
+verification gate. The ephemeral tooling may disappear; repeat signature,
+checksum and version verification before reacquisition or replacement.
