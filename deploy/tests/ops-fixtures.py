@@ -832,6 +832,7 @@ def roles(red_probe=False):
             with (root / "operation.lock").open("w") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 rejected(admin + approved)
+            (root / "operation.lock").chmod(0o644)
             print("role_input_and_lock_rejections=12 secrets_printed=false")
         try:
             r.call(dc + ["up", "-d", "--wait"])

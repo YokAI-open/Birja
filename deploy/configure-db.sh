@@ -74,8 +74,12 @@ def main():
     lock = root / "operation.lock" if synthetic else Path("/var/lock/birja-deploy.lock")
     fd = os.open(lock, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as held:
-        require(os.fstat(held.fileno()).st_uid == os.geteuid())
-        require(os.fstat(held.fileno()).st_mode & 0o077 == 0)
+        lock_stat = os.fstat(held.fileno())
+        require(stat.S_ISREG(lock_stat.st_mode) and lock_stat.st_uid == os.geteuid())
+        # The existing deploy script can create its non-secret lock as 0644.
+        # Preserve its inode; forbid other writers rather than harmless reads.
+        require(lock_stat.st_mode & 0o022 == 0)
+        require(os.path.samestat(lock_stat, lock.stat()))
         fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
         prefix = "".join("\\set " + k + " '" + v + "'\n" for k, v in values.items())
         sql = prefix + (source / "db/bootstrap-roles.sql").read_text()
