@@ -132,10 +132,13 @@ def target(root, argv, ok=True, allowed_files=()):
 def options(args):
     p = argparse.ArgumentParser()
     p.add_argument("--backup-restore", action="store_true")
+    p.add_argument("--roles", action="store_true")
     p.add_argument("--recovery-bundle")
     p.add_argument("--self-test-recovery-bundle-inputs", action="store_true")
     a = p.parse_args(args)
-    assert a.backup_restore != a.self_test_recovery_bundle_inputs
+    assert sum((a.backup_restore, a.roles, a.self_test_recovery_bundle_inputs)) == 1
+    assert args.count("--roles") <= 1
+    assert not a.roles or a.recovery_bundle is None
     assert args.count("--backup-restore") <= 1 and args.count("--recovery-bundle") <= 1
     assert a.recovery_bundle is None or bool(a.recovery_bundle)
     if a.recovery_bundle:
@@ -637,12 +640,314 @@ def smoke():
         r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
 
 
+ROLE_SERVICES = r"""
+import asyncio, uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from app.core.config import Settings
+from app.services.accounts import get_or_create_user, get_me
+from app.services.auth import start_session, rotate_session, end_session, InvalidSession
+from app.services.prices import AcceptedPrice, load_active_coins, upsert_prices
+from app.services.trading import execute, Order
+async def main():
+ s=Settings()
+ engine=create_async_engine(s.database_url)
+ sessions=async_sessionmaker(engine,expire_on_commit=False)
+ async with sessions() as db:
+  role=(await db.execute(text('SELECT current_user'))).scalar_one()
+  assert role in {'birja_app','birja_scheduler'}
+  assert (await db.execute(text('SHOW statement_timeout'))).scalar_one()=='30s'
+  assert (await db.execute(text('SHOW idle_in_transaction_session_timeout'))).scalar_one()=='30s'
+  if role=='birja_scheduler':
+   coins=await load_active_coins(db)
+   assert coins
+   prices=[AcceptedPrice(c.coin_id,Decimal('12345.12345678'),datetime.now(UTC)) for c in coins]
+   await upsert_prices(db,prices,'fake')
+   await db.commit()
+   await upsert_prices(db,prices,'fake')
+   await db.commit()
+  else:
+   uid,new=await get_or_create_user(db,'restricted-runtime@example.invalid')
+   assert new
+   same,new=await get_or_create_user(db,'restricted-runtime@example.invalid')
+   assert same==uid and not new
+   assert (await get_me(db,uid)).cash_usd==Decimal('10000.00')
+   issued=await start_session(db,uid,s)
+   await db.commit()
+   rotated=await rotate_session(db,s,issued.refresh)
+   await end_session(db,s,rotated.access)
+   try: await rotate_session(db,s,rotated.refresh)
+   except InvalidSession: pass
+   else: raise AssertionError('session revocation failed')
+   key=uuid.uuid4()
+   order=Order('BTC','buy','usd',Decimal('100.00'))
+   fill,new=await execute(db,user_id=uid,order=order,expected_mid=Decimal('12345.12345678'),idempotency_key=key,settings=s)
+   assert new and fill.cash_after==Decimal('9900.00')
+   replay,new=await execute(db,user_id=uid,order=order,expected_mid=Decimal('12345.12345678'),idempotency_key=key,settings=s)
+   assert not new and replay.trade_id==fill.trade_id
+   await execute(db,user_id=uid,order=Order('BTC','sell','quantity',Decimal('0.00010000')),expected_mid=Decimal('12345.12345678'),idempotency_key=uuid.uuid4(),settings=s)
+ await engine.dispose()
+asyncio.run(main())
+"""
+
+
+def role_python(code, role=r.BOOT):
+    # Only synthetic credentials on the fixed internal network, no host ports.
+    password = "synthetic-ops-only" if role == r.BOOT else "a" * 64
+    return r.call(
+        [
+            "/usr/bin/docker",
+            "run",
+            "--rm",
+            "-i",
+            "--network",
+            "birja-ops-test_isolated",
+            "-e",
+            "ENV=test",
+            "-e",
+            f"DATABASE_URL=postgresql+asyncpg://{role}:{password}@postgres:5432/birja_source_test",
+            "-e",
+            "REDIS_URL=redis://localhost:6379/0",
+            "-e",
+            "OTP_HMAC_SECRET=synthetic-only-otp-secret-00000000000000",
+            "-e",
+            "JWT_SECRET=synthetic-only-jwt-secret-00000000000000",
+            "-e",
+            "EMAIL_BACKEND=console",
+            "-e",
+            "PRICE_SOURCE=fake",
+            "--entrypoint",
+            "python",
+            "birja-backend-test:phase05-07",
+            "-",
+        ],
+        code.encode(),
+    )
+
+
+def role_sql(dc, query, role=r.BOOT, denied=False):
+    result = subprocess.run(
+        dc
+        + [
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-XqAt",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-v",
+            "VERBOSITY=sqlstate",
+            "-U",
+            role,
+            "-d",
+            "birja_source_test",
+        ],
+        input=query.encode(),
+        check=False,
+        capture_output=True,
+        env=r.ENV,
+        timeout=45,
+    )
+    if denied:
+        assert result.returncode != 0 and b"42501" in result.stderr, (
+            "expected insufficient_privilege: " + role + " " + query
+        )
+    else:
+        assert result.returncode == 0, "role SQL failed"
+    return result.stdout.strip()
+
+
+def roles(red_probe=False):
+    dc = r.compose()
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+        root = Path(tmp)
+        root.chmod(0o700)
+        config = root / "roles.json"
+        config.write_text(
+            json.dumps(
+                {
+                    "project": "birja-ops-test",
+                    "db_name": "birja_source_test",
+                    "bootstrap": r.BOOT,
+                    "password_files": {
+                        name: str(root / name)
+                        for name in ("app", "scheduler", "migrator")
+                    },
+                }
+            )
+        )
+        config.chmod(0o600)
+        for name in ("app", "scheduler", "migrator"):
+            (root / name).write_text("a" * 64)
+            (root / name).chmod(0o600)
+        admin = [
+            "bash",
+            str(ROOT / "deploy/configure-db.sh"),
+            "--synthetic",
+            str(config),
+        ]
+        try:
+            r.call(dc + ["up", "-d", "--wait"])
+            r.check_running(dc)
+            setup_done = time.monotonic()
+            r.sql(dc, "CREATE DATABASE birja_source_test", "birja_ops_test")
+            role_python(SEED)
+            assert r.canonical(dc, "birja_source_test")["revision"] == "0007"
+            role_sql(
+                dc,
+                "CREATE TABLE public.unrelated_fixture(id bigint GENERATED ALWAYS AS IDENTITY, marker text); INSERT INTO unrelated_fixture(marker) VALUES ('untouched')",
+            )
+            owner_query = "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version') AND relowner=(SELECT oid FROM pg_roles WHERE rolname='%s')"
+            assert role_sql(dc, owner_query % r.BOOT) == b"9"
+            identities = "SELECT c.relname,s.relname,d.deptype FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attidentity='a' JOIN pg_depend d ON d.refobjid=c.oid AND d.refobjsubid=a.attnum AND d.deptype='i' JOIN pg_class s ON s.oid=d.objid WHERE c.relnamespace='public'::regnamespace AND c.relname!='unrelated_fixture' ORDER BY c.relname"
+            before_identity = role_sql(dc, identities)
+            assert len(before_identity.splitlines()) == 7
+            before = r.canonical(dc, "birja_source_test")
+            if red_probe:
+                assert role_sql(dc, owner_query % "birja_migrator") == b"9", (
+                    "populated application objects lack restricted migration ownership"
+                )
+                return
+            # RED must reach a real populated PG18 database before discovering
+            # the missing implementation, not fail at argument parsing.
+            r.call(admin + ["--inspect"])
+            assert role_sql(dc, owner_query % r.BOOT) == b"9"
+            r.call(
+                admin + ["--apply", "--approved-operation", "populated-role-transition"]
+            )
+            assert role_sql(dc, owner_query % "birja_migrator") == b"9"
+            assert role_sql(dc, identities) == before_identity
+            assert r.canonical(dc, "birja_source_test") == before
+            r.call(
+                admin + ["--apply", "--approved-operation", "populated-role-transition"]
+            )
+            assert r.canonical(dc, "birja_source_test") == before
+            assert (
+                role_sql(
+                    dc,
+                    "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='unrelated_fixture'::regclass",
+                )
+                == r.BOOT.encode()
+            )
+            assert role_sql(dc, "SELECT marker FROM unrelated_fixture") == b"untouched"
+            assert (
+                role_sql(
+                    dc,
+                    "SELECT count(*) FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator') AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit)",
+                )
+                == b"0"
+            )
+            assert (
+                role_sql(
+                    dc,
+                    "SELECT count(*) FROM pg_auth_members WHERE member IN (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator')) OR roleid IN (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator'))",
+                )
+                == b"0"
+            )
+            role_python(
+                "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",
+                "birja_migrator",
+            )
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0008"
+            assert (
+                role_sql(
+                    dc,
+                    "SELECT indisvalid AND indisready FROM pg_index WHERE indexrelid='ix_trades_user_created_id'::regclass",
+                )
+                == b"t"
+            )
+            assert (
+                role_sql(
+                    dc,
+                    "SELECT bool_and(s.relowner=c.relowner) FROM pg_class c JOIN pg_depend d ON d.refobjid=c.oid AND d.deptype='i' JOIN pg_class s ON s.oid=d.objid AND s.relkind='S' WHERE c.relnamespace='public'::regnamespace AND c.relname!='unrelated_fixture'",
+                )
+                == b"t"
+            )
+            role_python(ROLE_SERVICES, "birja_scheduler")
+            role_python(ROLE_SERVICES, "birja_app")
+            negatives = 0
+            for role in ("birja_app", "birja_scheduler"):
+                for query in (
+                    "CREATE TABLE public.forbidden(id int)",
+                    "ALTER TABLE prices ADD COLUMN forbidden int",
+                    "ALTER TABLE prices OWNER TO " + role,
+                    "CREATE ROLE forbidden",
+                    "CREATE DATABASE forbidden",
+                    "TRUNCATE prices",
+                    "UPDATE alembic_version SET version_num='bad'",
+                    "SET ROLE birja_migrator",
+                    "SET ROLE " + r.BOOT,
+                    "ALTER ROLE " + role + " BYPASSRLS",
+                    "SELECT * FROM unrelated_fixture",
+                    "UPDATE coins SET name=name",
+                    "SELECT setval('users_id_seq',1)",
+                ):
+                    role_sql(dc, query, role, denied=True)
+                    negatives += 1
+            for table in (
+                "users",
+                "accounts",
+                "auth_sessions",
+                "refresh_tokens",
+                "holdings",
+                "trades",
+            ):
+                for query in (
+                    f"SELECT * FROM {table}",
+                    f"DELETE FROM {table}",
+                    f"INSERT INTO {table} DEFAULT VALUES",
+                    f"UPDATE {table} SET id=id"
+                    if table not in ("accounts", "holdings")
+                    else f"UPDATE {table} SET user_id=user_id",
+                ):
+                    role_sql(dc, query, "birja_scheduler", denied=True)
+                    negatives += 1
+            for query in (
+                "UPDATE prices SET mid=mid",
+                "DELETE FROM users",
+                "DELETE FROM trades",
+            ):
+                role_sql(dc, query, "birja_app", denied=True)
+                negatives += 1
+            role_sql(
+                dc,
+                "CREATE TABLE public.defaults_fixture(id bigint GENERATED ALWAYS AS IDENTITY, marker text)",
+                "birja_migrator",
+            )
+            for role in ("birja_app", "birja_scheduler"):
+                for query in (
+                    "SELECT * FROM defaults_fixture",
+                    "INSERT INTO defaults_fixture(marker) VALUES ('bad')",
+                    "SELECT nextval('defaults_fixture_id_seq')",
+                ):
+                    role_sql(dc, query, role, denied=True)
+                    negatives += 1
+            role_sql(dc, "DROP TABLE public.defaults_fixture", "birja_migrator")
+            print(
+                f"roles_populated_transfer=true repeatable=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
+            )
+            print(
+                f"fixture_setup_seconds={setup_done - started:.3f} roles_integration_seconds={time.monotonic() - started:.3f}"
+            )
+        finally:
+            r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+            assert r.call(dc + ["ps", "-q"]).strip() == b""
+
+
 if __name__ == "__main__":
     os.umask(0o077)
     if sys.argv[1:] == ["--smoke"]:
         smoke()
     elif sys.argv[1:] == ["--self-test-recovery-bundle-inputs"]:
         input_self_test()
+    elif sys.argv[1:] == ["--roles"]:
+        roles()
+    elif sys.argv[1:] == ["--roles-red-probe"]:
+        roles(red_probe=True)
     else:
         args = options(sys.argv[1:])
         roundtrip(args.recovery_bundle)
