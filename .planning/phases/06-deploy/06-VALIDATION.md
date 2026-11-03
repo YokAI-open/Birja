@@ -1,7 +1,7 @@
 ---
 phase: 6
 slug: deploy
-status: planned
+status: executing
 nyquist_compliant: true
 wave_0_complete: false
 created: 2026-10-30
@@ -9,10 +9,7 @@ created: 2026-10-30
 
 # Phase 6 — Validation Strategy
 
-Planning contract only. No tests, services, backups, installations or live
-operations have run for Phase 6. Exact task IDs and producer dependencies
-are reconciled below. Independent plan review and all execution results
-remain pending.
+Execution update 2026-11-03: plans01..06 are complete with actual local/synthetic evidence in their SUMMARY files. Original planning matrix below is historical; live acceptance remains pending. Additional prerequisite14 passed independent plan review and precedes07. No production/provider operation is implied.
 
 ## Test Infrastructure
 
@@ -45,7 +42,7 @@ target is recorded honestly and does not weaken critical integration.
 
 ## Per-Task Verification Map
 
-Reconciled: 30 tasks in 13 sequential waves. All commands are produced in
+Reconciled: 33 tasks in 14 sequential waves (additive prerequisite14 at wave7;07..13 now waves8..14). All commands are produced in
 the same task's RED phase or an earlier plan. Actual test runs and runtimes
 remain pending; structural planning checks do not prove execution.
 
@@ -119,3 +116,15 @@ before push/review; actual CI and separate approval precede merge.
 - [x] Planning compliance reviewed separately from execution results.
 
 Planning approval: independent recheck passed 2026-11-02, zero active blockers or warnings. All implementation, runtime tests, Wave 0 producers and live evidence remain pending execution.
+
+## Additive prerequisite14 validation
+
+Independent check06-14-PLAN-CHECK passed after resolving lock-path and capability-profile findings.
+
+| Task | Automated producer | Actual status |
+|---|---|---|
+|06-14-01|python3 deploy/tests/test-deploy-prerequisites.py --locks (created by this task)|pending|
+|06-14-02|same producer --evidence plus backup/restore-safety|pending|
+|06-14-03|same producer --fixtures plus serial recovery/roles/TLS|pending|
+
+No runtime pass is claimed for14; completed01..06 remain evidenced by summaries.
