@@ -15,6 +15,7 @@ read all remote data blobs or replace initial full retrieval/restore proof.
 There is no automatic repository initialization, provider setup or unlock.
 """
 
+import argparse
 import datetime as dt
 import fcntl
 import hashlib
@@ -185,7 +186,6 @@ def load_config(args):
     return c
 
 
-
 def acquire_operation_lock(path, inherited_fd=None):
     """Return an owned handle; never unlock a parent's open-file description."""
     path = Path(path)
@@ -194,17 +194,28 @@ def acquire_operation_lock(path, inherited_fd=None):
     def validate(fd):
         current, held = path.lstat(), os.fstat(fd)
         require(stat.S_ISREG(current.st_mode) and stat.S_ISREG(held.st_mode))
-        require(held.st_uid == (0 if path == Path("/var/lock/birja-deploy.lock") else os.geteuid()))
+        require(
+            held.st_uid
+            == (0 if path == Path("/var/lock/birja-deploy.lock") else os.geteuid())
+        )
         require(held.st_mode & 0o022 == 0 and os.path.samestat(current, held))
 
-    inherited = os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
+    inherited = (
+        os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
+    )
     if inherited is not None:
-        require(type(inherited) is str and inherited.isascii() and inherited.isdigit()
-                and 3 <= int(inherited) <= 1024)
+        require(
+            type(inherited) is str
+            and inherited.isascii()
+            and inherited.isdigit()
+            and 3 <= int(inherited) <= 1024
+        )
         fd = int(inherited)
         validate(fd)
         lines = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
-        require(any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines))
+        require(
+            any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines)
+        )
         owned = os.dup(fd)
     else:
         owned = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -238,6 +249,185 @@ def atomic(path, obj):
             os.close(d)
     finally:
         Path(name).unlink(missing_ok=True)
+
+
+def sha_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def file_sha(path):
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def config_digest(c):
+    stable = {k: v for k, v in c.items() if not k.startswith("_") and k != "quota"}
+    stable["quota_policy"] = {
+        k: c["quota"].get(k)
+        for k in [
+            "storage_limit_bytes",
+            "upload_reserve_bytes",
+            "repack_reserve_bytes",
+            "request_reserve",
+            "free_controls_verified",
+            "dedicated_repository",
+        ]
+    }
+    stable["material"] = {
+        str(p): file_sha(private_file(p)) for p in c["recovery_files"]
+    }
+    for k in ["password_file", "access_key_file", "secret_key_file"]:
+        if k in c:
+            stable[k] = {"path": c[k], "sha256": file_sha(private_file(c[k]))}
+    if "source_compose" in c:
+        stable["source_compose_sha256"] = file_sha(c["source_compose"])
+    return sha_bytes(json.dumps(stable, sort_keys=True).encode())
+
+
+def recovery_binding(c):
+    # Installed identity comes from the immutable release and its authenticated
+    # inventory, never from an argument claiming that a restore was successful.
+    release = HERE.parent
+    bundle_sha = None
+    inventory_hashes = {}
+    if release.parent.name == "releases" and release.parent.parent.name == "recovery":
+        require(ID.fullmatch(release.name) and release == release.resolve())
+        private_dir(release)
+        inventory = json.loads(private_file(release / "INVENTORY.json").read_text())
+        for line in private_file(release / "SHA256SUMS").read_text().splitlines():
+            value, name = line.split("  ")
+            require(ID.fullmatch(value) and name not in inventory_hashes)
+            path = release / name
+            require(path == path.resolve() and path.is_relative_to(release))
+            require(file_sha(path) == value)
+            inventory_hashes[name] = value
+        require(set(inventory_hashes) == set(inventory["files"]) | {"INVENTORY.json"})
+        bundle_sha = release.name
+    toolchain = {
+        "inventory": inventory_hashes,
+        "python": file_sha(sys.executable),
+        "docker_host": file_sha("/usr/bin/docker"),
+        "bash": file_sha("/bin/bash"),
+    }
+    for key in ["restic_binary", "docker_binary"]:
+        toolchain[key] = file_sha(c[key])
+    # Include actual adjacent helpers even outside an installed release.
+    toolchain["helpers"] = {
+        p.name: file_sha(p)
+        for p in HERE.iterdir()
+        if p.is_file()
+        and p.name
+        in {
+            "backup-snapshot.py",
+            "verify-restore.py",
+            "backup-manifest.sql",
+            "backup.sh",
+            "restore-check.sh",
+        }
+    }
+    return {
+        "source_project": c["source_project"],
+        "db_name": c["db_name"],
+        "db_user": c["db_user"],
+        "repository_sha256": sha_bytes(c["repository"].encode()),
+        "config_sha256": config_digest(c),
+        "toolchain_sha256": sha_bytes(json.dumps(toolchain, sort_keys=True).encode()),
+        "bundle_sha256": bundle_sha,
+    }
+
+
+def read_state(state, name):
+    return json.loads(private_file(private_dir(state) / name).read_text())
+
+
+def recovery_gate(c, snapshot_id, expected):
+    require(type(snapshot_id) is str and ID.fullmatch(snapshot_id))
+    job = Job(c)
+    with job.lock():
+        binding = recovery_binding(c)
+        require(set(expected) == set(binding) | {"source_release", "source_revision"})
+        require(binding["bundle_sha256"] is not None)
+        require(expected["source_release"] == c["release"])
+        require(all(expected[k] == v for k, v in binding.items()))
+        require(
+            re.fullmatch(r"[0-9a-f]{40}", expected["source_release"])
+            and re.fullmatch(r"[A-Za-z0-9_]{1,64}", expected["source_revision"])
+        )
+        backup = read_state(job.state, "last-success.json")
+        backup_attempt = read_state(job.state, "last-attempt.json")
+        success = read_state(job.state, "restore-last-success.json")
+        attempt = read_state(job.state, "restore-last-attempt.json")
+        require(
+            backup["ok"] is True
+            and backup_attempt["ok"] is True
+            and backup["run_id"] == backup_attempt["run_id"]
+        )
+        require(
+            set(success)
+            == set(binding)
+            | {
+                "format",
+                "run_id",
+                "snapshot_id",
+                "ok",
+                "started_epoch",
+                "started_utc",
+                "completed_epoch",
+                "completed_utc",
+                "source_release",
+                "source_revision",
+                "manifest_sha256",
+                "dump_sha256",
+                "recovery_sha256",
+            }
+        )
+        require(success == attempt and success["ok"] is True and success["format"] == 1)
+        require(backup["snapshot_id"] == success["snapshot_id"] == snapshot_id)
+        require(all(success[k] == value for k, value in expected.items()))
+        now = time.time()
+        for epoch in [
+            backup["epoch"],
+            success["started_epoch"],
+            success["completed_epoch"],
+        ]:
+            require(
+                type(epoch) is int
+                and 0 <= now - epoch <= c["freshness_seconds"] <= 93600
+            )
+        require(
+            backup["epoch"] <= success["started_epoch"] <= success["completed_epoch"]
+        )
+        for prefix in ["started", "completed"]:
+            require(
+                success[prefix + "_utc"]
+                == dt.datetime.fromtimestamp(
+                    success[prefix + "_epoch"], dt.UTC
+                ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            )
+        job.quota()  # Revalidate fresh request/download allowances; no full blobs.
+        rows = json.loads(job.restic("snapshots", snapshot_id))
+        require(job.check_scope(rows) == [snapshot_id])
+        epoch = dt.datetime.fromisoformat(rows[0]["time"]).timestamp()
+        require(
+            0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1
+        )
+        raw = job.restic("dump", snapshot_id, "/manifest.json")
+        require(sha_bytes(raw) == success["manifest_sha256"])
+        manifest = json.loads(raw)
+        require(
+            manifest["release"] == expected["source_release"]
+            and manifest["revision"] == expected["source_revision"]
+        )
+        require(
+            manifest["archive_sha256"] == success["dump_sha256"]
+            and manifest["recovery_sha256"] == success["recovery_sha256"]
+        )
+        require(manifest["source_binding"] == binding)
+        return {
+            "snapshot_id": snapshot_id,
+            "recovery_verified": True,
+            "completed_utc": success["completed_utc"],
+        }
 
 
 def status(c):
@@ -390,7 +580,8 @@ class Job:
     def lock(self):
         return acquire_operation_lock(
             Path(self.c["_config_root"]) / "operation.lock"
-            if self.c["_synthetic"] else Path("/var/lock/birja-deploy.lock")
+            if self.c["_synthetic"]
+            else Path("/var/lock/birja-deploy.lock")
         )
 
     def line(self, proc):
@@ -577,6 +768,15 @@ class Job:
                             arcname=f"{index:02d}-{Path(name).name}",
                             recursive=False,
                         )
+                manifest_path = self.bundle / "manifest.json"
+                manifest = json.loads(manifest_path.read_text())
+                manifest.update(
+                    source_binding=recovery_binding(self.c),
+                    recovery_sha256=file_sha(self.bundle / "recovery.tar"),
+                )
+                manifest_path.write_text(
+                    json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+                )
                 size = sum(p.stat().st_size for p in self.bundle.iterdir())
                 require(size <= self.c["max_stage_bytes"])
                 self.quota()
@@ -672,7 +872,26 @@ class Job:
 def main(argv):
     os.umask(0o077)
     try:
-        require(argv and argv[0] in ["backup", "status"])
+        require(argv and argv[0] in ["backup", "status", "recovery-gate"])
+        if argv[0] == "recovery-gate":
+            require(
+                len([x.split("=", 1)[0] for x in argv if x.startswith("--")])
+                == len({x.split("=", 1)[0] for x in argv if x.startswith("--")})
+            )
+            parser = argparse.ArgumentParser(allow_abbrev=False)
+            for name in ["snapshot", "source-release", "source-revision", "bundle-sha"]:
+                parser.add_argument("--" + name, required=True)
+            parser.add_argument("--synthetic")
+            args = parser.parse_args(argv[1:])
+            c = load_config(["--synthetic", args.synthetic] if args.synthetic else [])
+            expected = recovery_binding(c)
+            require(expected["bundle_sha256"] == args.bundle_sha)
+            expected.update(
+                source_release=args.source_release, source_revision=args.source_revision
+            )
+            result = recovery_gate(c, args.snapshot, expected)
+            print("recovery_verified=true id=" + result["snapshot_id"])
+            return 0
         c = load_config(argv[1:])
     except (OSError, ValueError, KeyError, TypeError):
         print("step=config invalid=1")

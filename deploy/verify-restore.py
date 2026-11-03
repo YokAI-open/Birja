@@ -10,11 +10,13 @@ import os
 import platform
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -623,7 +625,12 @@ def restore(args):
             ]
         )
     )
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    require(
+        len([x.split("=", 1)[0] for x in args if x.startswith("--")])
+        == len({x.split("=", 1)[0] for x in args if x.startswith("--")})
+    )
+    parser.add_argument("--isolated-clone", action="store_true")
     parser.add_argument("--synthetic")
     parser.add_argument("--approved-clone", action="store_true")
     parser.add_argument("--snapshot", required=True)
@@ -634,14 +641,38 @@ def restore(args):
     c = b.load_config(["--synthetic", a.synthetic] if a.synthetic else [])
     if a.synthetic:
         require(c["db_user"] == BOOT and c["db_name"] == "birja_source_test")
-    dc = compose("birja-ops-test" if a.synthetic else "birja-restore-check")
+    require(not a.isolated_clone or a.synthetic)
+    dc = compose(
+        "birja-ops-test"
+        if a.synthetic and not a.isolated_clone
+        else "birja-restore-check"
+    )
     job = b.Job(c)
     job.state.mkdir(mode=0o700, parents=True, exist_ok=True)
     b.private_dir(job.state)
     with job.lock():
         owns_server = False
+        started = int(time.time())
+        attempt = {
+            "format": 1,
+            "run_id": os.urandom(16).hex(),
+            "snapshot_id": a.snapshot,
+            "ok": False,
+            "started_epoch": started,
+            "started_utc": b.utc(),
+        }
+        b.atomic(job.state / "restore-last-attempt.json", attempt)
+        previous_signals = {}
+
+        def interrupted(signum, frame):
+            raise InterruptedError("restore interrupted")
+
+        for signum in [signal.SIGTERM, signal.SIGINT]:
+            previous_signals[signum] = signal.signal(signum, interrupted)
         try:
-            if a.approved_clone:
+            binding = b.recovery_binding(c)
+            job.quota()
+            if a.approved_clone or a.isolated_clone:
                 require(not call(dc + ["ps", "-q"]).strip())
                 owns_server = True
                 call(dc + ["up", "-d", "--wait"])
@@ -665,9 +696,42 @@ def restore(args):
                 require(digest(target / "database.dump") == manifest["archive_sha256"])
                 with restored(dc, (target / "database.dump").read_bytes()):
                     verify(dc, manifest)
-        finally:
+                attempt.update(
+                    binding,
+                    source_release=manifest["release"],
+                    source_revision=manifest["revision"],
+                    manifest_sha256=digest(target / "manifest.json"),
+                    dump_sha256=digest(target / "database.dump"),
+                    recovery_sha256=digest(target / "recovery.tar"),
+                )
+                if "source_binding" in manifest:
+                    require(
+                        manifest["source_binding"] == binding
+                        and manifest["recovery_sha256"] == attempt["recovery_sha256"]
+                    )
             if owns_server:
                 call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+                require(not call(dc + ["ps", "-q"]).strip())
+                owns_server = False
+            require(binding == b.recovery_binding(c))
+            attempt.update(
+                ok=True, completed_epoch=int(time.time()), completed_utc=b.utc()
+            )
+            b.atomic(job.state / "restore-last-success.json", attempt)
+            b.atomic(job.state / "restore-last-attempt.json", attempt)
+        except BaseException:
+            attempt.update(
+                ok=False, completed_epoch=int(time.time()), completed_utc=b.utc()
+            )
+            b.atomic(job.state / "restore-last-attempt.json", attempt)
+            raise
+        finally:
+            try:
+                if owns_server:
+                    call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+            finally:
+                for signum, handler in previous_signals.items():
+                    signal.signal(signum, handler)
 
 
 def main():

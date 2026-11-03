@@ -163,7 +163,7 @@ class Backup(unittest.TestCase):
   self.assertEqual(self.run_script().returncode,2)
  def test_lock_contention_and_forged_descriptor(self):
   (self.p/'state').mkdir(mode=0o700)
-  with (self.p/'state'/'operation.lock').open('w') as f:
+  with (self.p/'operation.lock').open('w') as f:
    fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)
    self.assertNotEqual(self.run_script().returncode,0); self.assertEqual(self.calls(),[])
   self.env['BIRJA_BACKUP_LOCK_FD']='9'; self.assertNotEqual(self.run_script().returncode,0)
@@ -213,7 +213,7 @@ class Backup(unittest.TestCase):
   self.assertFalse((self.p/'state'/'last-success.json').exists())
  def test_inherited_descriptor_must_already_hold_exact_lock(self):
   (self.p/'state').mkdir(mode=0o700)
-  with (self.p/'state'/'operation.lock').open('w') as f:
+  with (self.p/'operation.lock').open('w') as f:
    self.env['BIRJA_BACKUP_LOCK_FD']=str(f.fileno())
    self.assertNotEqual(self.run_script(pass_fds=(f.fileno(),)).returncode,0)
    self.assertEqual(self.calls(),[])
