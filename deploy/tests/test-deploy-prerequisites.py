@@ -149,7 +149,7 @@ class Evidence(unittest.TestCase):
         def verified(*args):
             if failure == "verify":
                 raise ValueError("synthetic verification failure")
-        with patch.object(r, "backup_module", return_value=b), patch.object(b, "load_config", return_value=self.c), patch.object(b.Job, "restic", self.remote), patch.object(b.Job, "quota"), patch.object(r, "check_running"), patch.object(r, "restored", return_value=contextlib.nullcontext()), patch.object(r, "verify", side_effect=verified):
+        with patch.object(r, "backup_module", return_value=b), patch.object(b, "load_config", return_value=self.c), patch.object(b.Job, "restic", lambda job, *args, **kwargs: self.remote(job, *args, **kwargs)), patch.object(b.Job, "quota"), patch.object(r, "check_running"), patch.object(r, "restored", return_value=contextlib.nullcontext()), patch.object(r, "verify", side_effect=verified):
             r.restore(["--synthetic", str(self.root / "config"), "--snapshot", self.sid])
 
     def test_restore_publishes_private_attempt_and_success_after_cleanup(self):
