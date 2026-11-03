@@ -2,6 +2,9 @@
 """Fast stdlib contracts; synthetic files and intercepted command boundaries only."""
 
 import argparse
+import contextlib
+import hashlib
+import time
 import fcntl
 import importlib.util
 import json
@@ -117,11 +120,63 @@ except BaseException as error:
                     self.caller(caller)
 
 
+class Evidence(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="birja-backup-test-")
+        self.root = Path(self.tmp.name)
+        self.state = self.root / "state"
+        self.state.mkdir(mode=0o700)
+        self.sid = "a" * 64
+        self.manifest = {"archive_sha256": hashlib.sha256(b"PGDMPtest").hexdigest(), "release": "1" * 40, "revision": "0007"}
+        self.c = {"_synthetic": True, "_config_root": str(self.root), "state_dir": str(self.state), "password_file": str(self.root / "password"), "repository": str(self.root / "repository"), "source_project": "birja-ops-test", "docker_binary": str(self.root / "docker"), "restic_binary": str(self.root / "restic"), "release": "1" * 40, "db_user": r.BOOT, "db_name": "birja_source_test", "max_stage_bytes": 10000, "freshness_seconds": 93600, "timeout_seconds": 10, "quota": {}, "recovery_files": []}
+        self.metadata = [{"id": self.sid, "hostname": b.HOST, "tags": [b.TAG], "paths": [str(self.state / "stage/backup")], "time": b.utc()}]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def remote(self, job, *args, **kwargs):
+        if args[0] == "snapshots":
+            return json.dumps(self.metadata).encode()
+        if args[0] == "restore":
+            target = Path(args[args.index("--target") + 1])
+            for name, data in [("database.dump", b"PGDMPtest"), ("manifest.json", json.dumps(self.manifest).encode()), ("recovery.tar", b"material")]:
+                (target / name).write_bytes(data)
+        if args[0] == "dump":
+            return json.dumps(self.manifest).encode()
+        return b""
+
+    def run_restore(self, failure=None):
+        def verified(*args):
+            if failure == "verify":
+                raise ValueError("synthetic verification failure")
+        with patch.object(r, "backup_module", return_value=b), patch.object(b, "load_config", return_value=self.c), patch.object(b.Job, "restic", self.remote), patch.object(b.Job, "quota"), patch.object(r, "check_running"), patch.object(r, "restored", return_value=contextlib.nullcontext()), patch.object(r, "verify", side_effect=verified):
+            r.restore(["--synthetic", str(self.root / "config"), "--snapshot", self.sid])
+
+    def test_restore_publishes_private_attempt_and_success_after_cleanup(self):
+        self.run_restore()
+        attempt = json.loads((self.state / "restore-last-attempt.json").read_text())
+        success = json.loads((self.state / "restore-last-success.json").read_text())
+        self.assertTrue(attempt["ok"])
+        self.assertEqual(attempt, success)
+        self.assertEqual(success["snapshot_id"], self.sid)
+        self.assertFalse(list(self.state.glob("restore-*/*")))
+        self.assertEqual((self.state / "restore-last-success.json").stat().st_mode & 0o077, 0)
+
+    def test_failed_latest_restore_invalidates_previous_success(self):
+        self.run_restore()
+        with self.assertRaises(ValueError):
+            self.run_restore("verify")
+        attempt = json.loads((self.state / "restore-last-attempt.json").read_text())
+        success = json.loads((self.state / "restore-last-success.json").read_text())
+        self.assertFalse(attempt["ok"])
+        self.assertNotEqual(attempt["run_id"], success["run_id"])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     for name in ["locks", "evidence", "fixtures"]:
         parser.add_argument("--" + name, action="store_true")
     options = parser.parse_args()
-    selected = [Locks] if options.locks or not any(vars(options).values()) else []
+    selected = [c for name, c in [("locks", Locks), ("evidence", Evidence)] if getattr(options, name) or not any(vars(options).values())]
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(c) for c in selected)
     sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
