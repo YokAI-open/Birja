@@ -1019,6 +1019,215 @@ def roles(red_probe=False):
             assert r.call(dc + ["ps", "-q"]).strip() == b""
 
 
+TLS_PROBE = r"""
+import asyncio
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from app.core.config import Settings
+from app.db.connection import database_connect_args
+async def main():
+ s=Settings()
+ engine=create_async_engine(s.database_url,connect_args=database_connect_args(s))
+ async with engine.connect() as db:
+  assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one(), 'production-shaped database session is plaintext'
+ await engine.dispose()
+asyncio.run(main())
+"""
+
+
+def tls_red_probe():
+    """A real-session RED, without counting missing future artifacts as evidence."""
+    dc = r.compose()
+    try:
+        r.call(dc + ["up", "-d", "--wait"])
+        r.sql(dc, "CREATE DATABASE birja_source_test", "birja_ops_test")
+        # Existing image predates the shared helper; bind current source explicitly.
+        argv = ["/usr/bin/docker", "run", "--rm", "-i", "--network",
+                "birja-ops-test_isolated", "-v", str(ROOT / "backend/app") + ":/app/app:ro",
+                "-e", "ENV=test", "-e", "DATABASE_URL=postgresql+asyncpg://birja_ops_bootstrap:synthetic-ops-only@postgres:5432/birja_source_test",
+                "-e", "REDIS_URL=redis://localhost:6379/0", "-e", "OTP_HMAC_SECRET=synthetic-only-otp-secret-00000000000000",
+                "-e", "JWT_SECRET=synthetic-only-jwt-secret-00000000000000", "--entrypoint", "python",
+                "birja-backend-test:phase05-07", "-"]
+        result = subprocess.run(argv, input=TLS_PROBE.encode(), capture_output=True, env=r.ENV, timeout=60)
+        assert result.returncode == 0, (
+            "real_pg18_verified_tls=false plaintext_session=true"
+            if b"production-shaped database session is plaintext" in result.stderr
+            else "TLS RED infrastructure failed")
+    finally:
+        r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+
+
+def tls():
+    if not (ROOT / "deploy/provision-db-tls.sh").exists():
+        return tls_red_probe()
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+        root = Path(tmp)
+        root.chmod(0o700)
+        # Each credential route is deliberately different; fixtures never read prod.env.
+        passwords = {name: char * 64 for name, char in
+                     (("app", "a"), ("scheduler", "b"), ("migrator", "c"))}
+        env = {**r.ENV, "POSTGRES_USER": r.BOOT,
+               "POSTGRES_PASSWORD": "synthetic-ops-only", "POSTGRES_DB": "birja_source_test",
+               "REDIS_PASSWORD": "synthetic-redis-only", "OTP_HMAC_SECRET": "synthetic-only-otp-secret-00000000000000",
+               "JWT_SECRET": "synthetic-only-jwt-secret-00000000000000",
+               "RESEND_API_KEY": "synthetic-not-used", "EMAIL_FROM": "Birja <test@example.invalid>"}
+        for name, password in passwords.items():
+            env[name.upper() + "_DATABASE_URL"] = f"postgresql+asyncpg://birja_{name}:{password}@postgres:5432/birja_source_test"
+        prod = json.loads(subprocess.run(
+            ["/usr/bin/docker", "compose", "--env-file", "/dev/null", "-f", str(ROOT / "docker-compose.prod.yml"),
+             "--profile", "migrate", "config", "--format", "json"],
+            env=env, check=True, capture_output=True, timeout=20).stdout)
+        for name, role in (("backend", "app"), ("scheduler", "scheduler"), ("migrate", "migrator")):
+            service = prod["services"][name]
+            assert service["environment"]["DATABASE_URL"] == env[role.upper() + "_DATABASE_URL"]
+            assert service["environment"]["DATABASE_SSL_CA_FILE"] == "/run/birja/db-ca.crt"
+            assert all(not key.startswith(("POSTGRES_", "APP_DATABASE", "SCHEDULER_DATABASE", "MIGRATOR_DATABASE"))
+                       for key in service["environment"])
+            assert len(service["volumes"]) == 1 and service["volumes"][0]["read_only"]
+            assert service["volumes"][0]["target"] == "/run/birja/db-ca.crt"
+            if name != "backend":
+                assert not set(service["environment"]) & {"JWT_SECRET", "OTP_HMAC_SECRET", "RESEND_API_KEY", "EMAIL_FROM"}
+        assert prod["services"]["backend"]["ports"][0]["host_ip"] == "127.0.0.1"
+        assert prod["services"]["backend"]["ports"][0]["published"] == "18000"
+        for name in ("postgres", "redis", "scheduler", "migrate"):
+            assert not prod["services"][name].get("ports")
+        assert prod["services"]["postgres"]["volumes"][0]["source"] == "pgdata"
+        assert prod["services"]["postgres"]["volumes"][0]["target"] == "/var/lib/postgresql"
+        assert set(prod["services"]["postgres"]["networks"]) == {"data"}
+        assert prod["networks"]["data"]["internal"] is True
+        assert prod["services"]["migrate"]["profiles"] == ["migrate"]
+        assert "OTP_HMAC_SECRET" not in prod["services"]["migrate"]["environment"]
+        provision = ["bash", str(ROOT / "deploy/provision-db-tls.sh"), "--synthetic", str(root)]
+        r.call(provision + ["--create", "--approved-custody", "owner-off-server-password-manager"])
+        assert (root / "custody/ca.key").stat().st_mode & 0o777 == 0o600
+        assert (root / "db-tls/server/server.key").stat().st_mode & 0o777 == 0o640
+        assert (root / "db-tls/server/server.key").stat().st_uid == 0
+        assert (root / "db-tls/server/server.key").stat().st_gid == 999
+        before = (root / "db-tls/server/server.crt").read_bytes()
+        r.call(provision + ["--check"])
+        duplicate = subprocess.run(provision + ["--create", "--approved-custody", "owner-off-server-password-manager"], env=r.ENV, capture_output=True)
+        assert duplicate.returncode != 0
+        assert (root / "db-tls/server/server.crt").read_bytes() == before
+        # Renew preserves CA and replaces only leaf material; expiry check is bounded.
+        ca = (root / "db-tls/ca.crt").read_bytes()
+        r.call(provision + ["--renew", "--approved-custody", "owner-off-server-password-manager"])
+        assert (root / "db-tls/ca.crt").read_bytes() == ca
+        assert (root / "db-tls/server/server.crt").read_bytes() != before
+        r.call(provision + ["--check"])
+        # Mount a directory so replacing HBA below is visible on reload.
+        hba = root / "hba"
+        hba.mkdir(mode=0o755)
+        policy = (ROOT / "deploy/db/pg_hba.conf").read_text()
+        (hba / "pg_hba.conf").write_text("hostssl all " + r.BOOT + " samenet scram-sha-256\n" + policy)
+        (hba / "pg_hba.conf").chmod(0o644)
+        fixture = {"name": "birja-ops-test", "services": {}, "networks": {"isolated": {"internal": True}}}
+        for name, source in prod["services"].items():
+            s = copy.deepcopy(source)
+            for key in ("build", "ports", "restart", "logging", "profiles", "depends_on", "volumes", "networks"):
+                s.pop(key, None)
+            s["networks"] = {"isolated": {"aliases": ["wrong-host"]}} if name == "postgres" else ["isolated"]
+            s.update(mem_limit="512m", cpus=2, pids_limit=128)
+            s["volumes"] = []
+            if name == "postgres":
+                s["tmpfs"] = ["/var/lib/postgresql:size=268435456"]
+                s["volumes"] = [str(root / "db-tls/server") + ":/run/birja/db-server:ro",
+                                str(hba) + ":/run/birja/db-hba:ro"]
+            elif name == "redis":
+                s["tmpfs"] = ["/data:size=16777216"]
+            else:
+                s["image"] = "birja-backend-test:phase05-07"
+                s["volumes"] = [str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro",
+                                str(ROOT / "backend/app") + ":/app/app:ro",
+                                str(ROOT / "backend/alembic") + ":/app/alembic:ro"]
+                # Test app real services with production trust, never real email/market network.
+                if name == "backend":
+                    s["environment"]["EMAIL_BACKEND"] = "console"
+                if name == "migrate":
+                    s["command"] = ["alembic", "upgrade", "head"]
+                else:
+                    s["command"] = ["sleep", "infinity"]
+            fixture["services"][name] = s
+        file = root / "tls-compose.json"
+        file.write_text(json.dumps(fixture))
+        dc = ["/usr/bin/docker", "compose", "--env-file", "/dev/null", "-p", "birja-ops-test", "-f", str(file)]
+
+        def client(service, code, overrides=(), ok=True):
+            result = subprocess.run(dc + ["run", "--rm", "--no-deps", "-T"] + list(overrides) +
+                                    ["--entrypoint", "python", service, "-"], input=code.encode(),
+                                    capture_output=True, env=r.ENV, timeout=120)
+            assert (result.returncode == 0) == ok, "TLS client assertion failed: " + service
+            return result
+
+        try:
+            r.call(dc + ["up", "-d", "--wait", "postgres", "redis"], timeout=120)
+            assert r.sql(dc, "SHOW server_version", "birja_source_test").startswith(b"18.6")
+            # Validate pinned image ownership rather than guessing uid/gid.
+            assert r.call(dc + ["exec", "-T", "postgres", "id", "-g", "postgres"]).strip() == b"999"
+            setup = time.monotonic()
+            bootstrap = ["-e", "ENV=test", "-e", "DATABASE_URL=postgresql+asyncpg://" + r.BOOT + ":synthetic-ops-only@postgres:5432/birja_source_test"]
+            secure_seed = SEED.replace("engine=create_async_engine(s.database_url)", "from app.db.connection import database_connect_args\n engine=create_async_engine(s.database_url,connect_args=database_connect_args(s))")
+            client("backend", secure_seed, bootstrap)
+            config = root / "roles.json"
+            config.write_text(json.dumps({"project": "birja-ops-test", "db_name": "birja_source_test", "bootstrap": r.BOOT,
+                                          "password_files": {n: str(root / n) for n in passwords}}))
+            config.chmod(0o600)
+            for n, password in passwords.items():
+                (root / n).write_text(password)
+                (root / n).chmod(0o600)
+            r.call(["bash", str(ROOT / "deploy/configure-db.sh"), "--synthetic", str(config), "--apply",
+                    "--approved-operation", "populated-role-transition"])
+            (hba / "pg_hba.conf").write_text(policy)
+            assert r.sql(dc, "SELECT pg_reload_conf()", "birja_source_test") == b"t\n"
+            assert r.sql(dc, "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL", "birja_source_test") == b"0\n"
+            # Real one-shot production migration command, with only migrator route/trust.
+            r.call(dc + ["run", "--rm", "--no-deps", "-T", "migrate"])
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0008"
+            assert role_sql(dc, "SELECT indisvalid AND indisready FROM pg_index WHERE indexrelid='ix_trades_user_created_id'::regclass") == b"t"
+            for service in ("backend", "scheduler", "migrate"):
+                code = TLS_PROBE
+                if service != "backend":
+                    code = code.replace("from app.core.config import Settings", "from app.core.config import SchedulerSettings as Settings")
+                client(service, code)
+            services_code = ROLE_SERVICES.replace("engine=create_async_engine(s.database_url)", "from app.db.connection import database_connect_args\n engine=create_async_engine(s.database_url,connect_args=database_connect_args(s))")
+            client("scheduler", services_code.replace("from app.core.config import Settings", "from app.core.config import SchedulerSettings as Settings"))
+            client("backend", services_code)
+            # Check certificate errors themselves, not arbitrary network/settings failures.
+            bad = root / "bad-ca"
+            bad.mkdir(mode=0o700)
+            r.call(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=unrelated-test-ca",
+                    "-keyout", str(bad / "key"), "-out", str(bad / "ca.crt")])
+            (bad / "ca.crt").chmod(0o644)
+            negative = client("backend", TLS_PROBE, ["-v", str(bad / "ca.crt") + ":/run/birja/db-ca.crt:ro"], ok=False)
+            assert b"CERTIFICATE_VERIFY_FAILED" in negative.stderr
+            wrong = env["APP_DATABASE_URL"].replace("@postgres:", "@wrong-host:")
+            negative = client("backend", TLS_PROBE, ["-e", "DATABASE_URL=" + wrong], ok=False)
+            assert b"CERTIFICATE_VERIFY_FAILED" in negative.stderr and b"Hostname mismatch" in negative.stderr
+            client("backend", TLS_PROBE, ["-e", "DATABASE_SSL_CA_FILE="], ok=False)
+            plain = "import asyncio,asyncpg\nasync def main():\n try: await asyncpg.connect(host='postgres',user='birja_app',password='" + passwords["app"] + "',database='birja_source_test',ssl=False,timeout=5)\n except asyncpg.InvalidAuthorizationSpecificationError: return\n raise AssertionError('plaintext accepted')\nasyncio.run(main())"
+            client("backend", plain)
+            # Deployed service config and actual inspect cannot leak another credential/key.
+            r.call(dc + ["up", "-d", "--no-deps", "backend", "scheduler"])
+            for service, role in (("backend", "app"), ("scheduler", "scheduler")):
+                container = r.call(dc + ["ps", "-q", service]).decode().strip()
+                inspected = json.loads(r.call(["/usr/bin/docker", "inspect", container]))[0]
+                serialized = json.dumps(inspected)
+                assert "synthetic-ops-only" not in serialized
+                assert passwords["migrator"] not in serialized
+                assert passwords["scheduler" if role == "app" else "app"] not in serialized
+                assert not inspected["HostConfig"].get("PortBindings")
+                assert all(m["Destination"] not in {"/run/birja/db-server", "/custody"} for m in inspected["Mounts"])
+                assert all(not m["RW"] for m in inspected["Mounts"])
+            network = json.loads(r.call(["/usr/bin/docker", "network", "inspect", "birja-ops-test_isolated"]))[0]
+            assert network["Internal"]
+            assert len(r.call(dc + ["ps", "-q", "scheduler"]).split()) == 1
+            print("tls_pg18=true app_scheduler_migrator_ssl=true bad_ca_hostname_plaintext_rejected=true concurrent_0008_valid=true runtime_services=true credential_mount_isolation=true renewal=true")
+            print(f"tls_fixture_setup_seconds={setup-started:.3f} tls_integration_seconds={time.monotonic()-started:.3f}")
+        finally:
+            r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+            assert not r.call(dc + ["ps", "-q"]).strip()
+
+
 if __name__ == "__main__":
     os.umask(0o077)
     if sys.argv[1:] == ["--smoke"]:
@@ -1029,6 +1238,12 @@ if __name__ == "__main__":
         roles()
     elif sys.argv[1:] == ["--roles-red-probe"]:
         roles(red_probe=True)
+    elif sys.argv[1:] == ["--tls"]:
+        tls()
+    elif sys.argv[1:] == ["--all"]:
+        roundtrip()
+        roles()
+        tls()
     else:
         args = options(sys.argv[1:])
         roundtrip(args.recovery_bundle)
