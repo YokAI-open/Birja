@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 06-04 complete at 553d305; continuing 06-05 shared database TLS
+stopped_at: 06-05 complete at a17d290; continuing 06-06 production-shaped TLS rehearsal
 last_updated: "2026-11-02T10:35:03.725Z"
 last_activity: 2026-11-02 -- Phase 06 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 67
-  completed_plans: 58
-  percent: 87
+  completed_plans: 59
+  percent: 88
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 5 of 13 (Plans 06-01..04 complete)
-Status: Executing Plan 06-05 verified database TLS configuration
+Plan: 6 of 13 (Plans 06-01..05 complete)
+Status: Executing Plan 06-06 production-shaped roles and TLS
 Last activity: 2026-11-02 -- Phase 06 execution started
 
-Progress: [████████░░] 87% of planned plans executed (58/67); Phase 6: 4/13 plans complete.
+Progress: [████████░░] 88% of planned plans executed (59/67); Phase 6: 5/13 plans complete.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 58
+- Total plans completed: 59
 - Average duration: -
 - Total execution time: -
 
@@ -120,7 +120,7 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 ## Session Continuity
 
 Last session: 2026-11-02T10:35:03.703Z
-Stopped at: 06-04 complete at 553d305; continuing 06-05 shared database TLS
+Stopped at: 06-05 complete at a17d290; continuing 06-06 production-shaped TLS rehearsal
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -179,3 +179,5 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 - Continue06-04; existing storage/tool approvals persist, live authority remains pending.
 
 - Plan06-04 complete553d305: actual restricted-role migration/services,65 permissiondenials,12 guards,2 unsafe-role preflights; recovery regression passed.
+
+- Plan06-05 completea17d290: shared verifiedTLS policy in all engines;117 focused tests,lint/types pass, isolated cleanup verified. Real handshakes remain06-06.
