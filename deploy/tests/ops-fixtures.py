@@ -4,6 +4,7 @@
 import argparse
 import copy
 import ctypes
+import fcntl
 import importlib.util
 import json
 import os
@@ -790,6 +791,48 @@ def roles(red_probe=False):
             "--synthetic",
             str(config),
         ]
+        approved = ["--apply", "--approved-operation", "populated-role-transition"]
+
+        def rejected(argv):
+            result = subprocess.run(
+                argv, capture_output=True, env=r.ENV, timeout=10, check=False
+            )
+            assert result.returncode != 0
+            assert (
+                result.stdout == b""
+                and result.stderr == b"db_roles_failed=true diagnostics=redacted\n"
+            )
+
+        if not red_probe:
+            for tail in (
+                [],
+                ["--apply"],
+                ["--inspect", "--apply"],
+                ["--apply", "--approved-operation", "other"],
+            ):
+                rejected(admin + tail)
+            original = config.read_text()
+            for key, value in (
+                ("project", "birja-prod"),
+                ("db_name", "postgres"),
+                ("bootstrap", "postgres"),
+            ):
+                changed = json.loads(original)
+                changed[key] = value
+                config.write_text(json.dumps(changed))
+                rejected(admin + approved)
+            config.write_text(original)
+            config.chmod(0o666)
+            rejected(admin + approved)
+            config.chmod(0o600)
+            for bad in ("a" * 63, "a" * 64 + "\n\\! false", "'secret-value'"):
+                (root / "app").write_text(bad)
+                rejected(admin + approved)
+            (root / "app").write_text("a" * 64)
+            with (root / "operation.lock").open("w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                rejected(admin + approved)
+            print("role_input_and_lock_rejections=12 secrets_printed=false")
         try:
             r.call(dc + ["up", "-d", "--wait"])
             r.check_running(dc)
@@ -812,8 +855,7 @@ def roles(red_probe=False):
                     "populated application objects lack restricted migration ownership"
                 )
                 return
-            # RED must reach a real populated PG18 database before discovering
-            # the missing implementation, not fail at argument parsing.
+            # Inspection preflights the populated schema without mutation.
             r.call(admin + ["--inspect"])
             assert role_sql(dc, owner_query % r.BOOT) == b"9"
             r.call(
@@ -822,6 +864,19 @@ def roles(red_probe=False):
             assert role_sql(dc, owner_query % "birja_migrator") == b"9"
             assert role_sql(dc, identities) == before_identity
             assert r.canonical(dc, "birja_source_test") == before
+            for unsafe, undo in (
+                (
+                    "GRANT birja_migrator TO birja_app",
+                    "REVOKE birja_migrator FROM birja_app",
+                ),
+                ("ALTER ROLE birja_app CREATEDB", "ALTER ROLE birja_app NOCREATEDB"),
+            ):
+                role_sql(dc, unsafe)
+                try:
+                    rejected(admin + approved)
+                finally:
+                    role_sql(dc, undo)
+                assert r.canonical(dc, "birja_source_test") == before
             r.call(
                 admin + ["--apply", "--approved-operation", "populated-role-transition"]
             )
@@ -873,6 +928,7 @@ def roles(red_probe=False):
             for role in ("birja_app", "birja_scheduler"):
                 for query in (
                     "CREATE TABLE public.forbidden(id int)",
+                    "CREATE SCHEMA forbidden",
                     "ALTER TABLE prices ADD COLUMN forbidden int",
                     "ALTER TABLE prices OWNER TO " + role,
                     "CREATE ROLE forbidden",
@@ -880,6 +936,8 @@ def roles(red_probe=False):
                     "TRUNCATE prices",
                     "UPDATE alembic_version SET version_num='bad'",
                     "SET ROLE birja_migrator",
+                    "SET ROLE "
+                    + ("birja_scheduler" if role == "birja_app" else "birja_app"),
                     "SET ROLE " + r.BOOT,
                     "ALTER ROLE " + role + " BYPASSRLS",
                     "SELECT * FROM unrelated_fixture",
@@ -896,13 +954,19 @@ def roles(red_probe=False):
                 "holdings",
                 "trades",
             ):
+                column = {
+                    "users": "email",
+                    "accounts": "cash",
+                    "auth_sessions": "revoked_at",
+                    "refresh_tokens": "used_at",
+                    "holdings": "quantity",
+                    "trades": "fee",
+                }[table]
                 for query in (
                     f"SELECT * FROM {table}",
                     f"DELETE FROM {table}",
                     f"INSERT INTO {table} DEFAULT VALUES",
-                    f"UPDATE {table} SET id=id"
-                    if table not in ("accounts", "holdings")
-                    else f"UPDATE {table} SET user_id=user_id",
+                    f"UPDATE {table} SET {column}={column}",
                 ):
                     role_sql(dc, query, "birja_scheduler", denied=True)
                     negatives += 1
@@ -926,6 +990,22 @@ def roles(red_probe=False):
                 ):
                     role_sql(dc, query, role, denied=True)
                     negatives += 1
+            role_sql(
+                dc,
+                "INSERT INTO defaults_fixture(marker) VALUES ('private'); ALTER TABLE defaults_fixture ENABLE ROW LEVEL SECURITY; GRANT SELECT ON defaults_fixture TO birja_app,birja_scheduler",
+                "birja_migrator",
+            )
+            for role in ("birja_app", "birja_scheduler"):
+                assert (
+                    role_sql(dc, "SELECT count(*) FROM defaults_fixture", role) == b"0"
+                )
+                role_sql(
+                    dc,
+                    "SET row_security=off; SELECT * FROM defaults_fixture",
+                    role,
+                    denied=True,
+                )
+                negatives += 1
             role_sql(dc, "DROP TABLE public.defaults_fixture", "birja_migrator")
             print(
                 f"roles_populated_transfer=true repeatable=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
