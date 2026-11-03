@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 06-03 complete at 5060600; continuing 06-04 restricted database roles
+stopped_at: 06-04 complete at 553d305; continuing 06-05 shared database TLS
 last_updated: "2026-11-02T10:35:03.725Z"
 last_activity: 2026-11-02 -- Phase 06 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 67
-  completed_plans: 57
-  percent: 85
+  completed_plans: 58
+  percent: 87
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 4 of 13 (Plans 06-01..03 complete)
-Status: Executing Plan 06-04 populated ownership transfer and least privilege
+Plan: 5 of 13 (Plans 06-01..04 complete)
+Status: Executing Plan 06-05 verified database TLS configuration
 Last activity: 2026-11-02 -- Phase 06 execution started
 
-Progress: [████████░░] 85% of planned plans executed (57/67); Phase 6: 3/13 plans complete.
+Progress: [████████░░] 87% of planned plans executed (58/67); Phase 6: 4/13 plans complete.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 57
+- Total plans completed: 58
 - Average duration: -
 - Total execution time: -
 
@@ -120,7 +120,7 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 ## Session Continuity
 
 Last session: 2026-11-02T10:35:03.703Z
-Stopped at: 06-03 complete at 5060600; continuing 06-04 restricted database roles
+Stopped at: 06-04 complete at 553d305; continuing 06-05 shared database TLS
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -177,3 +177,5 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 
 - 06-03 complete at5060600 after usage-limit interruption; final supplied recovery artifact proof44.297s, backup17/safety3/input20 passed, synthetic Docker cleanup verified.
 - Continue06-04; existing storage/tool approvals persist, live authority remains pending.
+
+- Plan06-04 complete553d305: actual restricted-role migration/services,65 permissiondenials,12 guards,2 unsafe-role preflights; recovery regression passed.
