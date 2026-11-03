@@ -21,7 +21,8 @@ try:
     tests_started = time.monotonic()
     status = subprocess.run(
         ["uv", "run", "--locked", "--no-sync", "pytest", "-q", "tests/test_db_connection.py",
-         "tests/test_config.py", "tests/test_config_scheduler.py", "tests/test_config_prices.py"],
+         "tests/test_config.py", "tests/test_config_scheduler.py", "tests/test_config_prices.py",
+         "tests/test_health.py", "tests/test_scheduler_loop.py"],
         cwd=root / "backend", env=env, timeout=120,
     ).returncode
     print(f"test-db-config focused tests: {time.monotonic() - tests_started:.3f}s", flush=True)

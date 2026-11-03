@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import SchedulerSettings, get_scheduler_settings
 from app.core.logging import configure_logging
+from app.db.connection import database_connect_args
 from app.services import kraken
 from app.services.fake_prices import make_fake_source
 from app.services.kraken import KrakenError, TickerSource
@@ -273,13 +274,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
-        connect_args={
-            "timeout": 5,
-            "server_settings": {
-                "statement_timeout": "30000",
-                "idle_in_transaction_session_timeout": "30000",
-            },
-        },
+        connect_args=database_connect_args(settings),
     )
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     redis = Redis.from_url(

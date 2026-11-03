@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.db.connection import database_connect_args
 from app.services.email import build_email_sender
 from app.services.otp import OtpStore
 
@@ -21,13 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
-        connect_args={
-            "timeout": 5,
-            "server_settings": {
-                "statement_timeout": "30000",
-                "idle_in_transaction_session_timeout": "30000",
-            },
-        },
+        connect_args=database_connect_args(settings),
     )
     redis = Redis.from_url(
         settings.redis_url,

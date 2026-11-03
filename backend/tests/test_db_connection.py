@@ -104,6 +104,7 @@ def test_invalid_trust_fails_closed(kind, bad: str, tmp_path: Path, monkeypatch)
         "ssl=require",
         "sslrootcert=private",
         "s%73l=disable",
+        "ssl=",
     ],
 )
 def test_url_cannot_override_tls(kind, query: str, ca: str) -> None:
@@ -113,6 +114,21 @@ def test_url_cannot_override_tls(kind, query: str, ca: str) -> None:
             database_ssl_ca_file=ca,
             database_url=f"postgresql+asyncpg://u:UrlSecret@postgres/db?{query}",
         )
+    assert "UrlSecret" not in str(exc.value)
+
+
+@pytest.mark.parametrize("kind", [Settings, SchedulerSettings])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+asyncpg:///db",
+        "postgresql+asyncpg://%2Ftmp/db",
+        "postgresql+asyncpg://u:UrlSecret@postgres/db?host=%2Ftmp",
+    ],
+)
+def test_production_cannot_skip_tls_over_unix_socket(kind, url: str, ca: str) -> None:
+    with pytest.raises(ValidationError, match="TCP hostname") as exc:
+        make_settings(kind, database_url=url, database_ssl_ca_file=ca)
     assert "UrlSecret" not in str(exc.value)
 
 
