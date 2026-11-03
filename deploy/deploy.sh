@@ -43,6 +43,10 @@ KEEP_RELEASES=3                             # static releases kept on disk
 BUILD_UID=1000                              # unprivileged uid for the npm build (node in the image)
 REF="${DEPLOY_REF:-main}"                   # D-05: ref override
 NEW_SCRIPT=$APP_DIR/deploy/deploy.sh        # this script as checked out by a deploy
+if [ -n "${BIRJA_RETAINED_DIR:-}" ]; then
+  # The entrypoint verified the immutable bundle before executing this file.
+  NEW_SCRIPT=$BIRJA_RETAINED_DIR/deploy/deploy.sh
+fi
 # Hash of the script bash is running now, taken before any checkout can
 # replace it on disk (compared after checkout, see maybe_reexec).
 SELF_HASH=$(sha256sum 2>/dev/null < "${BASH_SOURCE[0]}" | awk '{print $1}' || true)
@@ -50,7 +54,78 @@ SELF_HASH=$(sha256sum 2>/dev/null < "${BASH_SOURCE[0]}" | awk '{print $1}' || tr
 STEP="startup"
 
 dc() {
-  docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE" "$@"
+  if [ -n "${BIRJA_RETAINED_DIR:-}" ]; then
+    local suffix=""
+    if [ "$(git -C "$APP_DIR" rev-parse HEAD)" = "$(git -C "$APP_DIR" rev-parse 'v0.3.1^{commit}')" ]; then suffix='?ssl=verify-full'; fi
+    BIRJA_OLD_TLS_SUFFIX=$suffix BIRJA_APP_DIR=$APP_DIR BIRJA_MIGRATOR_CONTEXT=$BIRJA_RETAINED_DIR/backend \
+      docker compose -p birja-prod -f "$BIRJA_RETAINED_DIR/docker-compose.prod.yml" \
+        -f "$BIRJA_RETAINED_DIR/deploy/db-security.compose.yml" --env-file "$ENV_FILE" "$@"
+  else
+    docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE" "$@"
+  fi
+}
+
+supported_ref() {
+  # Explicit compatibility set: other releases require a reviewed bundle update.
+  case "$1" in main|v0.3.1|"${BIRJA_TESTED_SOURCE:-unsupported}") return 0 ;; *) return 1 ;; esac
+}
+
+checkout_source() {
+  # The installer owns this launcher outside the sparse application source.
+  # Git still detects an existing excluded tracked path as a local change.
+  # Remove only our exact launcher during checkout, then restore it even if
+  # checkout fails. The path is absent, never an old executable, in between.
+  python3 - "$APP_DIR" "$1" "$LOCK" <<'PY'
+import importlib.util, os, pathlib, stat, subprocess, sys
+sys.dont_write_bytecode = True
+app = pathlib.Path(sys.argv[1])
+launcher = app / 'deploy/deploy.sh'
+content = '#!/bin/bash\nexec /usr/local/sbin/birja-deploy "$@"\n'
+s = launcher.lstat()
+assert stat.S_ISREG(s.st_mode) and s.st_uid == 0 and not s.st_mode & 0o022
+assert launcher.read_text() == content
+patterns = subprocess.run(['git','-C',str(app),'sparse-checkout','list'], capture_output=True, check=True).stdout.decode().splitlines()
+assert patterns == ['/*', '!/deploy/']
+status = subprocess.run(['git','-C',str(app),'status','--porcelain','-z'], capture_output=True, check=True).stdout
+assert status in [b'', b' M deploy/deploy.sh\0'], 'unapproved source changes'
+if sys.argv[2] == '--check':
+    sys.exit(0)
+helper = pathlib.Path('/var/lib/birja/recovery/current/deploy/backup-snapshot.py')
+spec = importlib.util.spec_from_file_location('backup_lock', helper)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+held = module.acquire_operation_lock(pathlib.Path(sys.argv[3]), '9')
+launcher.unlink()
+try:
+    result = subprocess.run(['git','-C',str(app),'checkout','--detach',sys.argv[2]], capture_output=True)
+finally:
+    # Sparse checkout must never produce an old privileged launcher.
+    assert not launcher.exists() and not launcher.is_symlink()
+    launcher.parent.mkdir(mode=0o755, exist_ok=True)
+    assert not launcher.parent.is_symlink()
+    temporary = launcher.with_name('deploy.sh.handoff')
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o500)
+    with os.fdopen(fd, 'w') as out:
+        out.write(content)
+    os.replace(temporary, launcher)
+assert result.returncode == 0, 'source checkout failed; diagnostics=redacted'
+PY
+}
+
+recovery_gate() {
+  local recovery snapshot source_sha revision bundle
+  recovery=$(readlink -f /var/lib/birja/recovery/current)
+  [[ "$recovery" =~ ^/var/lib/birja/recovery/releases/[0-9a-f]{64}$ ]] || return 1
+  bundle=${recovery##*/}
+  source_sha=$(live_sha "$DEPLOY_LOG")
+  if [ -z "$source_sha" ]; then source_sha=$(git -C "$APP_DIR" rev-parse HEAD); fi
+  [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+  revision=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"' 2>/dev/null)
+  [[ "$revision" =~ ^[A-Za-z0-9_]{1,64}$ ]] || return 1
+  snapshot=$(python3 -I -c 'import json; print(json.load(open("/var/lib/birja/backup/last-success.json"))["snapshot_id"])' 2>/dev/null)
+  [[ "$snapshot" =~ ^[0-9a-f]{64}$ ]] || return 1
+  BIRJA_BACKUP_LOCK_FD=9 python3 "$recovery/deploy/backup-snapshot.py" recovery-gate \
+    --snapshot "$snapshot" --source-release "$source_sha" --source-revision "$revision" --bundle-sha "$bundle" >/dev/null 2>&1
 }
 
 # app_services: the services deploy/rollback build and start. Releases before
@@ -83,13 +158,8 @@ on_err() {
   local rc=$?
   echo "FAILED at step: $STEP (exit $rc)" >&2
   if [ -n "${BUILD_TMP:-}" ]; then rm -rf -- "$BUILD_TMP" || true; fi
-  echo "--- last 50 backend log lines (redacted) ---" >&2
-  dc logs --no-color --tail 50 backend 2>&1 \
-    | sed -E 's/code=[0-9]{6}/code=******/g; s/to=[^ ]+/to=***/g' >&2 || true
-  echo "--- last 30 scheduler log lines (redacted) ---" >&2
-  dc logs --no-color --tail 30 scheduler 2>&1 \
-    | sed -E 's/code=[0-9]{6}/code=******/g; s/to=[^ ]+/to=***/g' >&2 || true
-  echo "To roll back: /srv/birja/deploy/deploy.sh --rollback" >&2
+  echo "Diagnostics withheld; inspect private service state through the approved runbook." >&2
+  echo "To roll back: /usr/local/sbin/birja-deploy --rollback" >&2
   exit "$rc"
 }
 
@@ -98,14 +168,16 @@ preflight() {
   [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
   # A re-exec'd run (maybe_reexec) inherits fd 9 with the lock still held by
   # the same open file; reopening it would drop the lock for a moment.
-  if [ "${BIRJA_DEPLOY_REEXEC:-}" = 1 ] && [ /dev/fd/9 -ef "$LOCK" ]; then :
+  if { [ "${BIRJA_DEPLOY_REEXEC:-}" = 1 ] || [ "${BIRJA_RETAINED_LOCK:-}" = 1 ]; } && [ /dev/fd/9 -ef "$LOCK" ]; then :
   else exec 9>"$LOCK"
   fi
   flock -n 9 || { echo "another deploy is running" >&2; exit 1; }
+  # A valid held lock is independently checked by recovery-gate's kernel-backed
+  # helper; its duplicate closes without dropping this parent's lock.
   git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1 \
     || { echo "$APP_DIR is not a git checkout" >&2; exit 1; }
-  [ -z "$(git -C "$APP_DIR" status --porcelain)" ] \
-    || { echo "$APP_DIR has uncommitted changes, refusing" >&2; exit 1; }
+  checkout_source --check \
+    || { echo "$APP_DIR has unapproved source changes, refusing" >&2; exit 1; }
   [ -f "$ENV_FILE" ] || { echo "$ENV_FILE missing (run deploy/init-prod-env.sh)" >&2; exit 1; }
   [ "$(stat -c '%a %U' "$ENV_FILE")" = "600 root" ] \
     || { echo "$ENV_FILE must be mode 600 owned by root" >&2; exit 1; }
@@ -119,6 +191,8 @@ preflight() {
   if ! openssl x509 -checkend $((30 * 86400)) -noout -in "$CERT" >/dev/null; then
     echo "WARNING: certificate expires within 30 days, renew it (see deploy/RUNBOOK.md)" >&2
   fi
+  STEP="fresh exact recovery gate"
+  recovery_gate || { echo "fresh exact recovery and completed restore required" >&2; exit 1; }
 }
 
 # Passes only if the API is healthy and nginx serves this release's exact
@@ -277,7 +351,7 @@ do_deploy() {
     fi
   fi
   STEP="git checkout"
-  git -C "$APP_DIR" checkout --detach "$sha"
+  checkout_source "$sha"
   maybe_reexec "$sha"
   echo "Deploying $REF = $(git -C "$APP_DIR" rev-parse --short HEAD)"
 
@@ -296,19 +370,20 @@ do_deploy() {
   dc build $services
   build_frontend_release
   STEP="nginx config check"
-  "$APP_DIR/deploy/check-nginx-config.sh"
+  "$BIRJA_RETAINED_DIR/deploy/check-nginx-config.sh"
 
   # Go live: schema, backend, static release, nginx.
   STEP="start postgres and redis"
   dc up -d --wait postgres redis
   STEP="migrate"
-  dc run --rm --no-deps backend alembic upgrade head
+  dc --profile migrate build migrate
+  dc --profile migrate run --rm --no-deps migrate >/dev/null 2>&1
   STEP="start backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans drops a scheduler this release lacks
   dc up -d --wait --remove-orphans $services
   swap_current "$RELEASE_DIR"
   STEP="nginx install"
-  "$APP_DIR/deploy/install-nginx.sh"
+  "$BIRJA_RETAINED_DIR/deploy/install-nginx.sh"
   health_check
   record "$REF"
   prune_releases
@@ -330,9 +405,15 @@ do_rollback() {
   fi
   sha=${target%% *}
   rel=${target#* }
+  # Rollback logs store immutable SHAs. Accept only the tested release or the
+  # retained bundle's tested current source, never arbitrary historical refs.
+  local old_sha
+  old_sha=$(git -C "$APP_DIR" rev-parse --verify 'v0.3.1^{commit}')
+  [ "$sha" = "$old_sha" ] || [ "$sha" = "$BIRJA_TESTED_SOURCE" ] \
+    || { echo "rollback target is outside the supported compatibility set" >&2; return 1; }
   echo "Rollback target: $sha ($rel)"
   STEP="rollback checkout"
-  git -C "$APP_DIR" checkout --detach "$sha"
+  checkout_source "$sha"
   echo "Rolling back to $(git -C "$APP_DIR" rev-parse --short HEAD)"
   STEP="rollback list services"
   local services
@@ -348,23 +429,26 @@ do_rollback() {
   # The rolled-back frontend gets the nginx config (CSP etc.) of its own
   # release. Files that release does not know (e.g. newer birja-* confs)
   # stay installed.
-  if [ -x "$APP_DIR/deploy/check-nginx-config.sh" ]; then
+  if [ -x "$BIRJA_RETAINED_DIR/deploy/check-nginx-config.sh" ]; then
     STEP="rollback nginx config check"
-    "$APP_DIR/deploy/check-nginx-config.sh"
+    "$BIRJA_RETAINED_DIR/deploy/check-nginx-config.sh"
   fi
   STEP="rollback backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans removes the scheduler when the target has none
   dc up -d --wait --remove-orphans $services
   echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
-  echo "A schema-incompatible rollback needs a manual alembic downgrade (no backups until Phase 6)." >&2
+  echo "Incompatible schema recovery requires a separately approved manual procedure." >&2
   swap_current "$RELEASE_DIR"
   STEP="rollback nginx install"
-  "$APP_DIR/deploy/install-nginx.sh"
+  "$BIRJA_RETAINED_DIR/deploy/install-nginx.sh"
   health_check
   record rollback
 }
 
 main() {
+  [ -n "${BIRJA_RETAINED_DIR:-}" ] || { echo "Use /usr/local/sbin/birja-deploy (retained security bundle required)." >&2; exit 1; }
+  BIRJA_TESTED_SOURCE=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tested_source"])' "$BIRJA_RETAINED_DIR/MANIFEST.json")
+  supported_ref "$REF" || { echo "unsupported deployment ref" >&2; exit 2; }
   SCRIPT_ARGS=("$@")
   case "${1:-}" in
     -h|--help) usage; exit 0 ;;
