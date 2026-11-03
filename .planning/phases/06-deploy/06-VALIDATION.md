@@ -123,8 +123,8 @@ Independent check06-14-PLAN-CHECK passed after resolving lock-path and capabilit
 
 | Task | Automated producer | Actual status |
 |---|---|---|
-|06-14-01|python3 deploy/tests/test-deploy-prerequisites.py --locks (created by this task)|pending|
-|06-14-02|same producer --evidence plus backup/restore-safety|pending|
-|06-14-03|same producer --fixtures plus serial recovery/roles/TLS|pending|
+|06-14-01|python3 deploy/tests/test-deploy-prerequisites.py --locks|passed;14SUMMARY|
+|06-14-02|same producer --evidence plus backup/restore-safety|passed;14SUMMARY|
+|06-14-03|same producer --fixtures plus serial recovery/roles/TLS|passed;14SUMMARY|
 
-No runtime pass is claimed for14; completed01..06 remain evidenced by summaries.
+14 runtime checks passed and are measured in14SUMMARY; live acceptance remains pending.
