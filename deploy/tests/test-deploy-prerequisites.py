@@ -6,10 +6,12 @@ import contextlib
 import fcntl
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import unittest
@@ -439,6 +441,53 @@ class Evidence(unittest.TestCase):
             )
 
 
+class Fixtures(unittest.TestCase):
+    def test_authentic_legacy_selection_rejects_before_runtime_or_docker(self):
+        spec = importlib.util.spec_from_file_location("fixture", HERE / "tests/ops-fixtures.py")
+        ops = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ops)
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+            root = Path(tmp)
+            image_config = b'{}'
+            image_id = "sha256:" + hashlib.sha256(image_config).hexdigest()
+            image = io.BytesIO()
+            with tarfile.open(fileobj=image, mode="w") as tar:
+                info = tarfile.TarInfo(image_id[7:] + ".json")
+                info.size = len(image_config)
+                tar.addfile(info, io.BytesIO(image_config))
+            files = {name: (HERE.parent / name).read_bytes() for name in r.CORE}
+            tools = Path("/tmp/birja-test-tools/restic-0.19.1")
+            files["tools/restic"] = (tools / "restic").read_bytes()
+            for name in r.PROVENANCE:
+                files["provenance/" + name] = (tools / name).read_bytes()
+            files["provenance/verified.json"] = json.dumps({"fingerprint": "CF8F18F2844575973F79D4E191A6868BD3F7A907", "binary_sha256": r.RESTIC_SHA, "compressed_sha256": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c", "signature": "GOODSIG VALIDSIG; verified 2026-11-02; official restic 0.19.1 linux amd64"}).encode()
+            files["images/postgres.tar"] = image.getvalue()
+            inventory = {"format": 1, "files": sorted(files), "units": [], "image_id": image_id, "restic_sha256": r.RESTIC_SHA, "recovery_profile": "legacy-v1"}
+            files["INVENTORY.json"] = json.dumps(inventory).encode()
+            files["SHA256SUMS"] = "".join(hashlib.sha256(data).hexdigest() + "  " + name + "\n" for name, data in sorted(files.items())).encode()
+            archive = root / "legacy.tar"
+            with tarfile.open(archive, "w") as tar:
+                for name, data in sorted(files.items()):
+                    info = tarfile.TarInfo(name)
+                    info.mode = 0o600
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+            archive.chmod(0o600)
+            sha = r.digest(archive)
+            archive.with_suffix(".tar.sha256").write_text(sha)
+            archive.with_suffix(".tar.sha256").chmod(0o600)
+            # Only the synthetic image's trusted identity is substituted. The
+            # real approved restic/provenance and every archive checksum pass.
+            with patch.object(ops, "r", r), patch.object(r, "IMAGE_ID", image_id), patch.object(r, "runtime", return_value={}) as runtime, patch.object(r, "call", side_effect=AssertionError("Docker reached")) as calls, patch.object(r, "bundle_package", side_effect=AssertionError("fallback builder reached")) as builder:
+                self.assertEqual(r.bundle_verify(archive, sha)["recovery_profile"], "legacy-v1")
+                runtime.reset_mock()
+                with self.assertRaises(ValueError):
+                    ops.roundtrip(str(archive))
+                runtime.assert_not_called()
+                calls.assert_not_called()
+                builder.assert_not_called()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     for name in ["locks", "evidence", "fixtures"]:
@@ -446,7 +495,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
     selected = [
         c
-        for name, c in [("locks", Locks), ("evidence", Evidence)]
+        for name, c in [("locks", Locks), ("evidence", Evidence), ("fixtures", Fixtures)]
         if getattr(options, name) or not any(vars(options).values())
     ]
     suite = unittest.TestSuite(
