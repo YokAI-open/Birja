@@ -179,8 +179,44 @@ def load_config(args):
     private_file(c["password_file"])
     for p in c["recovery_files"]:
         private_file(p)
+    require(path == path.resolve())
+    c["_config_root"] = str(root)
     c["_synthetic"] = synthetic
     return c
+
+
+
+def acquire_operation_lock(path, inherited_fd=None):
+    """Return an owned handle; never unlock a parent's open-file description."""
+    path = Path(path)
+    require(path.is_absolute() and path == path.resolve())
+
+    def validate(fd):
+        current, held = path.lstat(), os.fstat(fd)
+        require(stat.S_ISREG(current.st_mode) and stat.S_ISREG(held.st_mode))
+        require(held.st_uid == (0 if path == Path("/var/lock/birja-deploy.lock") else os.geteuid()))
+        require(held.st_mode & 0o022 == 0 and os.path.samestat(current, held))
+
+    inherited = os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
+    if inherited is not None:
+        require(type(inherited) is str and inherited.isascii() and inherited.isdigit()
+                and 3 <= int(inherited) <= 1024)
+        fd = int(inherited)
+        validate(fd)
+        lines = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
+        require(any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines))
+        owned = os.dup(fd)
+    else:
+        owned = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    try:
+        validate(owned)
+        if inherited is None:
+            fcntl.flock(owned, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        validate(owned)
+        return os.fdopen(owned, "a")
+    except BaseException:
+        os.close(owned)
+        raise
 
 
 def utc():
@@ -352,34 +388,10 @@ class Job:
         require(shutil.disk_usage(self.state).free >= self.c["max_stage_bytes"] * 2)
 
     def lock(self):
-        lock = (
-            (self.state / "operation.lock")
-            if self.c["_synthetic"]
-            else Path("/var/lock/birja-deploy.lock")
+        return acquire_operation_lock(
+            Path(self.c["_config_root"]) / "operation.lock"
+            if self.c["_synthetic"] else Path("/var/lock/birja-deploy.lock")
         )
-        inherited = os.environ.get("BIRJA_BACKUP_LOCK_FD")
-        if inherited is not None:
-            require(inherited.isdigit() and 3 <= int(inherited) <= 1024)
-            fd = int(inherited)
-            require(os.path.samestat(os.fstat(fd), lock.stat()))
-            info = Path(f"/proc/self/fdinfo/{fd}").read_text()
-            require(
-                any(
-                    "FLOCK" in s and "WRITE" in s
-                    for s in info.splitlines()
-                    if s.startswith("lock:")
-                )
-            )
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return os.fdopen(os.dup(fd), "a")
-        fd = os.open(lock, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
-        f = os.fdopen(fd, "a")
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BaseException:
-            f.close()
-            raise
-        return f
 
     def line(self, proc):
         with selectors.DefaultSelector() as selector:

@@ -45,23 +45,21 @@ class Locks(unittest.TestCase):
         self.tmp.cleanup()
 
     def caller(self, name, inherited=True):
-        reader, writer = os.pipe()
-        pid = os.fork()
-        if pid == 0:
-            os.close(reader)
-            try:
-                self._caller(name, inherited)
-                result = "ok"
-            except BaseException as error:
-                result = type(error).__name__
-            os.write(writer, result.encode())
-            os._exit(0)
-        os.close(writer)
-        result = os.read(reader, 100).decode()
-        os.close(reader)
-        os.waitpid(pid, 0)
-        if result != "ok":
-            raise {"BlockingIOError": BlockingIOError, "FileNotFoundError": FileNotFoundError}.get(result, ValueError)(result)
+        code = """import runpy,sys,os
+from pathlib import Path
+m=runpy.run_path(sys.argv[1],run_name='contract')
+t=m['Locks']();t.root=Path(sys.argv[2]);t.roles=t.root/'roles.json'
+t.parent=os.fdopen(int(sys.argv[3]),'a')
+try:
+ t._caller(sys.argv[4],sys.argv[5]=='True')
+ print('RESULT:ok')
+except BaseException as error:
+ print('RESULT:'+type(error).__name__)
+"""
+        result = subprocess.run([sys.executable, "-c", code, __file__, str(self.root), str(self.parent.fileno()), name, str(inherited)], pass_fds=(self.parent.fileno(),), capture_output=True, timeout=10)
+        outcome = result.stdout.decode().rsplit("RESULT:", 1)[-1].strip()
+        if outcome != "ok":
+            raise {"BlockingIOError": BlockingIOError, "FileNotFoundError": FileNotFoundError}.get(outcome, ValueError)(outcome)
 
     def _caller(self, name, inherited=True):
         env = {"BIRJA_BACKUP_LOCK_FD": str(self.parent.fileno())} if inherited else {}
@@ -74,7 +72,7 @@ class Locks(unittest.TestCase):
             source = source.rsplit("\ntry:\n    main()", 1)[0]
             scope = {"__name__": "contract"}
             exec(compile(source, name, "exec"), scope)
-            args = ["script", str(HERE), "--synthetic", str(self.roles), "--inspect"] if name == "configure-db.sh" else ["script", "--synthetic", str(self.root), "--check"]
+            args = ["script", str(HERE), "--synthetic", str(self.roles), "--inspect"] if name == "configure-db.sh" else ["script", str(HERE), "--synthetic", str(self.root), "--check"]
             scope["check"] = lambda *args: None
             with patch.object(sys, "argv", args), patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0, b"", b"")):
                 scope["main"]()

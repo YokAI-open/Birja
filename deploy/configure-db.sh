@@ -8,7 +8,7 @@ set -Eeuo pipefail
 umask 077
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec python3 - "$SCRIPT_DIR" "$@" <<'PY'
-import fcntl
+import importlib.util
 import hashlib
 import json
 import os
@@ -72,15 +72,11 @@ def main():
     env_file = "/dev/null" if synthetic else "/etc/birja/prod.env"
     dc = ["/usr/bin/docker", "compose", "--env-file", env_file, "-p", c["project"], "-f", str(compose)]
     lock = root / "operation.lock" if synthetic else Path("/var/lock/birja-deploy.lock")
-    fd = os.open(lock, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as held:
-        lock_stat = os.fstat(held.fileno())
-        require(stat.S_ISREG(lock_stat.st_mode) and lock_stat.st_uid == os.geteuid())
-        # The existing deploy script can create its non-secret lock as 0644.
-        # Preserve its inode; forbid other writers rather than harmless reads.
-        require(lock_stat.st_mode & 0o022 == 0)
-        require(os.path.samestat(lock_stat, lock.stat()))
-        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    spec = importlib.util.spec_from_file_location("backup", source / "backup-snapshot.py")
+    backup = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    spec.loader.exec_module(backup)
+    with backup.acquire_operation_lock(lock):
         prefix = "".join("\\set " + k + " '" + v + "'\n" for k, v in values.items())
         sql = prefix + (source / "db/bootstrap-roles.sql").read_text()
         result = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-U", c["bootstrap"], "-d", c["db_name"]],
