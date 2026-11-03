@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# --backup-restore and --roles are serial modes. The Python producer owns
+# --backup-restore, --roles, --tls and --all are serial modes. --all performs
+# backup/restore, restricted roles, then production-shaped TLS. The producer owns
 # the complete fixed-project lifecycle in finally; never use a live target.
 set -Eeuo pipefail
 umask 077

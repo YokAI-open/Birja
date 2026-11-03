@@ -37,8 +37,20 @@ services:
       - statement_timeout=30000
       - -c
       - idle_in_transaction_session_timeout=30000
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - ssl_cert_file=/run/birja/db-server/server.crt
+      - -c
+      - ssl_key_file=/run/birja/db-server/server.key
+      - -c
+      - hba_file=/run/birja/db-hba/pg_hba.conf
     volumes:
       - pgdata:/var/lib/postgresql
+      - /etc/birja/db-tls/server:/run/birja/db-server:ro
+      - ./deploy/db:/run/birja/db-hba:ro
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -77,12 +89,15 @@ services:
     environment:
       ENV: "prod"
       EMAIL_BACKEND: "resend"
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${APP_DATABASE_URL:?configure app role after verified recovery}
+      DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set in /etc/birja/prod.env}
       JWT_SECRET: ${JWT_SECRET:?set in /etc/birja/prod.env}
       RESEND_API_KEY: ${RESEND_API_KEY:?set in /etc/birja/prod.env}
       EMAIL_FROM: ${EMAIL_FROM:?set in /etc/birja/prod.env}
+    volumes:
+      - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,9 +143,12 @@ services:
     # Least privilege: no token, OTP or email secrets (SchedulerSettings needs none).
     environment:
       ENV: "prod"
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: ${SCHEDULER_DATABASE_URL:?configure scheduler role after verified recovery}
+      DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       PRICE_SOURCE: "kraken"
+    volumes:
+      - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,3 +168,31 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  # Explicit one-shot DDL login. Never inherit web authentication/email secrets.
+  migrate:
+    profiles: [migrate]
+    build:
+      context: ./backend
+      target: runtime
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    environment:
+      ENV: "prod"
+      DATABASE_URL: ${MIGRATOR_DATABASE_URL:?configure migrator role after verified recovery}
+      DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
+      REDIS_URL: redis://unused.invalid:6379/0
+    # Alembic loads Settings; these inert values satisfy its unrelated auth
+    # fields and cannot authenticate real sessions. Redis/email are never used.
+    command: [env, OTP_HMAC_SECRET=migration-unused-not-an-otp-secret-000000,
+              JWT_SECRET=migration-unused-not-a-jwt-secret-000000,
+              EMAIL_BACKEND=resend, RESEND_API_KEY=migration-unused,
+              EMAIL_FROM=migration@example.invalid,
+              alembic, upgrade, head]
+    volumes:
+      - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
+    networks: [data]
+    depends_on:
+      postgres:
+        condition: service_healthy
