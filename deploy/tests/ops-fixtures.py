@@ -2,6 +2,7 @@
 """Independent synthetic PG18 fixture; never imports application test fixtures."""
 
 import argparse
+import contextlib
 import copy
 import ctypes
 import fcntl
@@ -15,6 +16,7 @@ import tarfile
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
@@ -145,7 +147,7 @@ def options(args):
     if a.recovery_bundle:
         archive = r.synthetic_path(a.recovery_bundle)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha)
+        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v2")
     return a
 
 
@@ -315,9 +317,9 @@ def config(root, release):
     return c
 
 
-def roundtrip(archive_arg=None):
-    dc = r.compose()
-    started = time.monotonic()
+@contextlib.contextmanager
+def installed_recovery(archive_arg=None):
+    """Install once; caller exclusively owns source server, seed and transitions."""
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
         root = Path(tmp)
         root.chmod(0o700)
@@ -325,7 +327,147 @@ def roundtrip(archive_arg=None):
         if not archive_arg:
             r.bundle_package(archive)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha)
+        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v2")
+        old = root / "old"
+        old.mkdir(mode=0o700)
+        app = old / "app"
+        app.mkdir(mode=0o700)
+        old_tar = r.call(["git", "archive", "v0.3.1"])
+        with tarfile.open(fileobj=__import__("io").BytesIO(old_tar)) as t:
+            t.extractall(app, filter="data")
+        shutil.copyfile(
+            ROOT / "docker-compose.ops-test.yml",
+            old / "docker-compose.ops-test.yml",
+        )
+        (old / "docker-compose.ops-test.yml").chmod(0o600)
+        for name in ["password", "credentials"]:
+            (root / name).write_text("synthetic-only")
+            (root / name).chmod(0o600)
+        # Use the trusted verifier to install the exact artifact. Target
+        # launchers themselves execute with feature checkout denied.
+        bootstrap = root / "bootstrap"
+        bootstrap.mkdir(mode=0o700)
+        shutil.copyfile(
+            ROOT / "deploy/verify-restore.py", bootstrap / "verify-restore.py"
+        )
+        target(
+            root,
+            [
+                "python3",
+                str(bootstrap / "verify-restore.py"),
+                "bundle",
+                "install",
+                "--archive",
+                str(archive),
+                "--sha",
+                sha,
+                "--require-profile",
+                "deploy-recovery-v2",
+                "--synthetic-root",
+                str(root / "host"),
+            ],
+            allowed_files=[archive],
+        )
+        release = root / "host/var/lib/birja/recovery/releases" / sha
+        c = config(root, release)
+        wrapper = root / "docker"
+        wrapper.write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
+        wrapper.chmod(0o700)
+        tools = root / "host/usr/local/sbin"
+        env = {
+            **r.ENV,
+            "RESTIC_REPOSITORY": c["repository"],
+            "RESTIC_PASSWORD_FILE": c["password_file"],
+        }
+        subprocess.run(
+            [c["restic_binary"], "init"],
+            env=env,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        immutable = [
+            archive,
+            *tools.iterdir(),
+            *[release / name for name in r.CORE],
+            release / "INVENTORY.json",
+            release / "SHA256SUMS",
+            release / "tools/restic",
+        ]
+        session = SimpleNamespace(
+            root=root,
+            archive=archive,
+            archive_sha=sha,
+            release=release,
+            tools=tools,
+            config_path=root / "config",
+            immutable={p: r.digest(p) for p in immutable},
+        )
+        try:
+            yield session
+        finally:
+            assert all(
+                r.digest(path) == value for path, value in session.immutable.items()
+            )
+
+
+def recovery_roundtrip(session, *, source_revision, source_release):
+    """Use installed launchers and a fixed separate clone; never own the source."""
+    import re
+
+    assert re.fullmatch(r"[A-Za-z0-9_]{1,64}", source_revision)
+    assert re.fullmatch(r"[0-9a-f]{40}", source_release)
+    root, tools = session.root, session.tools
+    assert all(r.digest(path) == value for path, value in session.immutable.items())
+    c = json.loads(session.config_path.read_text())
+    c["release"] = source_release
+    c["quota"]["observed_at"] = int(time.time())
+    session.config_path.write_text(json.dumps(c))
+    common = ["--synthetic", str(session.config_path)]
+    target(root, [str(tools / "birja-backup"), *common])
+    assert not (root / "state/stage").exists()
+    target(root, [str(tools / "birja-backup-status"), *common])
+    sid = json.loads((root / "state/last-success.json").read_text())["snapshot_id"]
+    target(
+        root,
+        [
+            str(tools / "birja-restore-check"),
+            *common,
+            "--snapshot",
+            sid,
+            "--isolated-clone",
+        ],
+    )
+    target(
+        root,
+        [
+            "python3",
+            str(session.release / "deploy/backup-snapshot.py"),
+            "recovery-gate",
+            *common,
+            "--snapshot",
+            sid,
+            "--source-release",
+            source_release,
+            "--source-revision",
+            source_revision,
+            "--bundle-sha",
+            session.archive_sha,
+        ],
+    )
+    assert all(r.digest(path) == value for path, value in session.immutable.items())
+    assert not list((root / "state").glob("restore-*/*"))
+    return sid
+
+
+def roundtrip(archive_arg=None):
+    dc = r.compose()
+    started = time.monotonic()
+    with installed_recovery(archive_arg) as session:
+        root, archive, sha = session.root, session.archive, session.archive_sha
+        tools = session.tools
+        c = json.loads(session.config_path.read_text())
+        old = root / "old"
         try:
             r.call(dc + ["up", "-d", "--wait"])
             r.check_running(dc)
@@ -366,21 +508,6 @@ def roundtrip(archive_arg=None):
                 .decode()
                 .strip()
             )
-            old = root / "old"
-            old.mkdir(mode=0o700)
-            app = old / "app"
-            app.mkdir(mode=0o700)
-            old_tar = r.call(["git", "archive", "v0.3.1"])
-            with tarfile.open(fileobj=__import__("io").BytesIO(old_tar)) as t:
-                t.extractall(app, filter="data")
-            shutil.copyfile(
-                ROOT / "docker-compose.ops-test.yml",
-                old / "docker-compose.ops-test.yml",
-            )
-            (old / "docker-compose.ops-test.yml").chmod(0o600)
-            for name in ["password", "credentials"]:
-                (root / name).write_text("synthetic-only")
-                (root / name).chmod(0o600)
             unchanged = {
                 str(p.relative_to(root)): r.digest(p)
                 for p in old.rglob("*")
@@ -388,83 +515,23 @@ def roundtrip(archive_arg=None):
             }
             unchanged["credentials"] = r.digest(root / "credentials")
             before = r.canonical(dc, "birja_source_test")
-            # Use the trusted verifier to install the exact artifact. Target
-            # launchers themselves execute with feature checkout denied.
-            bootstrap = root / "bootstrap"
-            bootstrap.mkdir(mode=0o700)
-            shutil.copyfile(
-                ROOT / "deploy/verify-restore.py", bootstrap / "verify-restore.py"
-            )
-            target(
-                root,
-                [
-                    "python3",
-                    str(bootstrap / "verify-restore.py"),
-                    "bundle",
-                    "install",
-                    "--archive",
-                    str(archive),
-                    "--sha",
-                    sha,
-                    "--synthetic-root",
-                    str(root / "host"),
-                ],
-                allowed_files=[archive],
-            )
-            release = root / "host/var/lib/birja/recovery/releases" / sha
-            c = config(root, release)
             wrapper = root / "docker"
             wrapper.write_text(
                 '#!/usr/bin/python3\nimport subprocess,sys\na=sys.argv[1:]\nif any(x.startswith("--snapshot=") for x in a):\n subprocess.run(["/usr/bin/docker","compose","--env-file","/dev/null","-p","birja-ops-test","-f",'
                 + repr(str(old / "docker-compose.ops-test.yml"))
-                + ',"exec","-T","postgres","psql","-XqAt","-v","ON_ERROR_STOP=1","-U","birja_ops_bootstrap","-d","birja_source_test","-c","INSERT INTO users(email) VALUES (\'writer-after-export@example.invalid\');"],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nsubprocess.run(["/usr/bin/docker",*a],check=True)\n'
+                + ',"exec","-T","postgres","psql","-XqAt","-v","ON_ERROR_STOP=1","-U","birja_ops_bootstrap","-d","birja_source_test","-c","INSERT INTO users(email) VALUES (\'writer-after-export@example.invalid\') ON CONFLICT(email) DO NOTHING;"],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nsubprocess.run(["/usr/bin/docker",*a],check=True)\n'
             )
             wrapper.chmod(0o700)
-            tools = root / "host/usr/local/sbin"
-            env = {
-                **r.ENV,
-                "RESTIC_REPOSITORY": c["repository"],
-                "RESTIC_PASSWORD_FILE": c["password_file"],
-            }
-            subprocess.run(
-                [c["restic_binary"], "init"],
-                env=env,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
             target(
                 root, ["python3", "-c", f"open({str(ROOT / 'CLAUDE.md')!r})"], ok=False
             )
             print("feature_checkout_denied=true")
-            target(
-                root, [str(tools / "birja-backup"), "--synthetic", str(root / "config")]
+            sid = recovery_roundtrip(
+                session, source_revision="0007", source_release=c["release"]
             )
-            assert not (root / "state/stage").exists()
-            target(
-                root,
-                [
-                    str(tools / "birja-backup-status"),
-                    "--synthetic",
-                    str(root / "config"),
-                ],
-            )
-            sid = json.loads((root / "state/last-success.json").read_text())[
-                "snapshot_id"
-            ]
             assert (
                 r.canonical(dc, "birja_source_test")["tables"]["users"]["count"]
                 == before["tables"]["users"]["count"] + 1
-            )
-            target(
-                root,
-                [
-                    str(tools / "birja-restore-check"),
-                    "--synthetic",
-                    str(root / "config"),
-                    "--snapshot",
-                    sid,
-                ],
             )
             print(
                 "installed_launchers_backup_retrieval_restore=true concurrent_writer=true staging_removed=true"
@@ -541,6 +608,9 @@ def roundtrip(archive_arg=None):
                 ok=False,
             )
             os.rename(root / "unavailable", root / "repository")
+            recovery_roundtrip(
+                session, source_revision="0007", source_release=c["release"]
+            )
             assert all(r.digest(root / p) == h for p, h in unchanged.items())
             assert r.canonical(dc, "birja_source_test")["revision"] == "0007"
             print("old_checkout_credentials_compose_revision_unchanged=true")

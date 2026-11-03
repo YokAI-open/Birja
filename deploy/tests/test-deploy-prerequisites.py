@@ -204,6 +204,18 @@ except BaseException as error:
                 ):
                     self.caller(caller)
 
+    def test_closed_descriptor_and_foreign_owner_are_rejected(self):
+        closed = os.dup(self.parent.fileno())
+        os.close(closed)
+        with self.assertRaises(OSError):
+            b.acquire_operation_lock(self.lock, str(closed))
+        fcntl.flock(self.parent, fcntl.LOCK_EX)
+        with (
+            patch.object(b.os, "geteuid", return_value=os.geteuid() + 1),
+            self.assertRaises(ValueError),
+        ):
+            b.acquire_operation_lock(self.lock, str(self.parent.fileno()))
+
 
 class Evidence(unittest.TestCase):
     def setUp(self):
@@ -330,6 +342,7 @@ class Evidence(unittest.TestCase):
             "run_id": "backup",
             "snapshot_id": self.sid,
             "epoch": success["started_epoch"],
+            "utc": b.utc(success["started_epoch"]),
         }
         for name in ["last-success.json", "last-attempt.json"]:
             b.atomic(self.state / name, backup)
@@ -381,6 +394,56 @@ class Evidence(unittest.TestCase):
         # Noninstalled code cannot turn local successful restore into rollout authority.
         with self.assertRaises(ValueError):
             b.recovery_gate(self.c, self.sid, expected)
+
+    def test_ordinary_nightly_status_does_not_require_full_restore(self):
+        now = int(time.time())
+        backup = {
+            "ok": True,
+            "run_id": "nightly",
+            "snapshot_id": self.sid,
+            "epoch": now,
+            "utc": b.utc(),
+        }
+        for name in ["last-success.json", "last-attempt.json"]:
+            b.atomic(self.state / name, backup)
+        self.assertEqual(b.status(self.c), 0)
+        with self.assertRaises(ValueError):
+            b.recovery_gate(self.c, self.sid, {})
+
+    def test_isolated_clone_cleanup_failure_invalidates_attempt(self):
+        def call(argv, *args, **kwargs):
+            if "down" in argv:
+                raise OSError("synthetic server cleanup failure")
+            return b""
+
+        with (
+            patch.object(r, "backup_module", return_value=b),
+            patch.object(b, "load_config", return_value=self.c),
+            patch.object(
+                b.Job,
+                "restic",
+                lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
+            ),
+            patch.object(b.Job, "quota"),
+            patch.object(r, "check_running"),
+            patch.object(r, "restored", return_value=contextlib.nullcontext()),
+            patch.object(r, "verify"),
+            patch.object(r, "call", side_effect=call),
+            self.assertRaises(OSError),
+        ):
+            r.restore(
+                [
+                    "--synthetic",
+                    str(self.root / "config"),
+                    "--snapshot",
+                    self.sid,
+                    "--isolated-clone",
+                ]
+            )
+        self.assertFalse((self.state / "restore-last-success.json").exists())
+        self.assertFalse(
+            json.loads((self.state / "restore-last-attempt.json").read_text())["ok"]
+        )
 
     def test_config_identity_excludes_quota_observation_but_binds_material(self):
         before = b.config_digest(self.c)
@@ -443,12 +506,14 @@ class Evidence(unittest.TestCase):
 
 class Fixtures(unittest.TestCase):
     def test_authentic_legacy_selection_rejects_before_runtime_or_docker(self):
-        spec = importlib.util.spec_from_file_location("fixture", HERE / "tests/ops-fixtures.py")
+        spec = importlib.util.spec_from_file_location(
+            "fixture", HERE / "tests/ops-fixtures.py"
+        )
         ops = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ops)
         with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
             root = Path(tmp)
-            image_config = b'{}'
+            image_config = b"{}"
             image_id = "sha256:" + hashlib.sha256(image_config).hexdigest()
             image = io.BytesIO()
             with tarfile.open(fileobj=image, mode="w") as tar:
@@ -460,32 +525,155 @@ class Fixtures(unittest.TestCase):
             files["tools/restic"] = (tools / "restic").read_bytes()
             for name in r.PROVENANCE:
                 files["provenance/" + name] = (tools / name).read_bytes()
-            files["provenance/verified.json"] = json.dumps({"fingerprint": "CF8F18F2844575973F79D4E191A6868BD3F7A907", "binary_sha256": r.RESTIC_SHA, "compressed_sha256": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c", "signature": "GOODSIG VALIDSIG; verified 2026-11-02; official restic 0.19.1 linux amd64"}).encode()
+            files["provenance/verified.json"] = json.dumps(
+                {
+                    "fingerprint": "CF8F18F2844575973F79D4E191A6868BD3F7A907",
+                    "binary_sha256": r.RESTIC_SHA,
+                    "compressed_sha256": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+                    "signature": "GOODSIG VALIDSIG; verified 2026-11-02; official restic 0.19.1 linux amd64",
+                }
+            ).encode()
             files["images/postgres.tar"] = image.getvalue()
-            inventory = {"format": 1, "files": sorted(files), "units": [], "image_id": image_id, "restic_sha256": r.RESTIC_SHA, "recovery_profile": "legacy-v1"}
-            files["INVENTORY.json"] = json.dumps(inventory).encode()
-            files["SHA256SUMS"] = "".join(hashlib.sha256(data).hexdigest() + "  " + name + "\n" for name, data in sorted(files.items())).encode()
+            inventory = {
+                "format": 1,
+                "files": sorted(files),
+                "units": [],
+                "image_id": image_id,
+                "restic_sha256": r.RESTIC_SHA,
+                "recovery_profile": "legacy-v1",
+            }
             archive = root / "legacy.tar"
-            with tarfile.open(archive, "w") as tar:
-                for name, data in sorted(files.items()):
-                    info = tarfile.TarInfo(name)
-                    info.mode = 0o600
-                    info.size = len(data)
-                    tar.addfile(info, io.BytesIO(data))
-            archive.chmod(0o600)
-            sha = r.digest(archive)
-            archive.with_suffix(".tar.sha256").write_text(sha)
-            archive.with_suffix(".tar.sha256").chmod(0o600)
+
+            def build(profile):
+                if profile is None:
+                    inventory.pop("recovery_profile", None)
+                else:
+                    inventory["recovery_profile"] = profile
+                files.pop("SHA256SUMS", None)
+                files["INVENTORY.json"] = json.dumps(inventory).encode()
+                files["SHA256SUMS"] = "".join(
+                    hashlib.sha256(data).hexdigest() + "  " + name + "\n"
+                    for name, data in sorted(files.items())
+                ).encode()
+                with tarfile.open(archive, "w") as tar:
+                    for name, data in sorted(files.items()):
+                        info = tarfile.TarInfo(name)
+                        info.mode = 0o600
+                        info.size = len(data)
+                        tar.addfile(info, io.BytesIO(data))
+                archive.chmod(0o600)
+                sha = r.digest(archive)
+                archive.with_suffix(".tar.sha256").write_text(sha)
+                archive.with_suffix(".tar.sha256").chmod(0o600)
+                return sha
+
+            sha = build("legacy-v1")
             # Only the synthetic image's trusted identity is substituted. The
             # real approved restic/provenance and every archive checksum pass.
-            with patch.object(ops, "r", r), patch.object(r, "IMAGE_ID", image_id), patch.object(r, "runtime", return_value={}) as runtime, patch.object(r, "call", side_effect=AssertionError("Docker reached")) as calls, patch.object(r, "bundle_package", side_effect=AssertionError("fallback builder reached")) as builder:
-                self.assertEqual(r.bundle_verify(archive, sha)["recovery_profile"], "legacy-v1")
-                runtime.reset_mock()
-                with self.assertRaises(ValueError):
-                    ops.roundtrip(str(archive))
-                runtime.assert_not_called()
-                calls.assert_not_called()
-                builder.assert_not_called()
+            with (
+                patch.object(ops, "r", r),
+                patch.object(r, "IMAGE_ID", image_id),
+                patch.object(r, "runtime", return_value={}) as runtime,
+                patch.object(
+                    r, "call", side_effect=AssertionError("Docker reached")
+                ) as calls,
+                patch.object(
+                    r,
+                    "bundle_package",
+                    side_effect=AssertionError("fallback builder reached"),
+                ) as builder,
+            ):
+                self.assertEqual(
+                    r.bundle_verify(archive, sha)["recovery_profile"], "legacy-v1"
+                )
+                for profile in ["legacy-v1", None, "unknown-v99"]:
+                    sha = build(profile)
+                    r.bundle_verify(archive, sha)  # Generic legacy compatibility.
+                    runtime.reset_mock()
+                    with self.assertRaises(ValueError):
+                        ops.roundtrip(str(archive))
+                    with self.assertRaises(ValueError):
+                        r.bundle_install(
+                            archive,
+                            sha,
+                            str(root / "host"),
+                            required_profile="deploy-recovery-v2",
+                        )
+                    runtime.assert_not_called()
+                    calls.assert_not_called()
+                    builder.assert_not_called()
+                sha = build("deploy-recovery-v2")
+                self.assertEqual(
+                    r.bundle_verify(
+                        archive, sha, required_profile="deploy-recovery-v2"
+                    )["recovery_profile"],
+                    "deploy-recovery-v2",
+                )
+
+    def test_repeated_hook_uses_same_installed_launchers_and_separate_clone(self):
+        spec = importlib.util.spec_from_file_location(
+            "fixture", HERE / "tests/ops-fixtures.py"
+        )
+        ops = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ops)
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+            root = Path(tmp)
+            (root / "state").mkdir(mode=0o700)
+            config = root / "config"
+            config.write_text(json.dumps({"release": "1" * 40, "quota": {}}))
+            config.chmod(0o600)
+            session = __import__("types").SimpleNamespace(
+                root=root,
+                tools=root / "tools",
+                release=root / "release",
+                archive_sha="a" * 64,
+                config_path=config,
+                immutable={config: r.digest(config)},
+            )
+            # Config is per-attempt state; immutable code/launchers are distinct.
+            marker = root / "launcher"
+            marker.write_bytes(b"immutable installed launcher")
+            session.immutable = {marker: r.digest(marker)}
+            calls = []
+
+            def target(root, argv):
+                calls.append(argv)
+                if Path(argv[0]).name == "birja-backup":
+                    b.atomic(
+                        root / "state/last-success.json", {"snapshot_id": "b" * 64}
+                    )
+
+            with (
+                patch.object(ops, "target", side_effect=target),
+                patch.object(
+                    ops.r,
+                    "call",
+                    side_effect=AssertionError("source lifecycle reached"),
+                ),
+            ):
+                for revision in ["0007", "0008"]:
+                    self.assertEqual(
+                        ops.recovery_roundtrip(
+                            session, source_revision=revision, source_release="1" * 40
+                        ),
+                        "b" * 64,
+                    )
+            self.assertEqual(len(calls), 8)
+            self.assertTrue(
+                all(
+                    "--isolated-clone" in argv
+                    for argv in calls
+                    if Path(argv[0]).name == "birja-restore-check"
+                )
+            )
+            self.assertTrue(
+                all(
+                    str(session.release / "deploy/backup-snapshot.py") in argv
+                    for argv in calls
+                    if "recovery-gate" in argv
+                )
+            )
+            self.assertEqual(r.digest(marker), session.immutable[marker])
 
 
 if __name__ == "__main__":
@@ -495,7 +683,11 @@ if __name__ == "__main__":
     options = parser.parse_args()
     selected = [
         c
-        for name, c in [("locks", Locks), ("evidence", Evidence), ("fixtures", Fixtures)]
+        for name, c in [
+            ("locks", Locks),
+            ("evidence", Evidence),
+            ("fixtures", Fixtures),
+        ]
         if getattr(options, name) or not any(vars(options).values())
     ]
     suite = unittest.TestSuite(

@@ -79,6 +79,17 @@ def require(value):
         raise ValueError("guard")
 
 
+def strict_json(data):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result)
+            result[key] = value
+        return result
+
+    return json.loads(data, object_pairs_hook=unique)
+
+
 def private_file(path):
     p = Path(path)
     s = p.lstat()
@@ -113,7 +124,7 @@ def load_config(args):
     else:
         require(os.geteuid() == 0)
         root = Path("/etc/birja")
-    c = json.loads(private_file(path).read_text())
+    c = strict_json(private_file(path).read_text())
     expected = CONFIG_KEYS | (
         set()
         if synthetic
@@ -230,8 +241,10 @@ def acquire_operation_lock(path, inherited_fd=None):
         raise
 
 
-def utc():
-    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+def utc(epoch=None):
+    return dt.datetime.fromtimestamp(
+        time.time() if epoch is None else epoch, dt.UTC
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def atomic(path, obj):
@@ -337,7 +350,7 @@ def recovery_binding(c):
 
 
 def read_state(state, name):
-    return json.loads(private_file(private_dir(state) / name).read_text())
+    return strict_json(private_file(private_dir(state) / name).read_text())
 
 
 def recovery_gate(c, snapshot_id, expected):
@@ -382,6 +395,12 @@ def recovery_gate(c, snapshot_id, expected):
             }
         )
         require(success == attempt and success["ok"] is True and success["format"] == 1)
+        require(backup_attempt == backup)
+        require(backup["utc"] == utc(backup["epoch"]))
+        require(
+            type(success["format"]) is int
+            and re.fullmatch(r"[0-9a-f]{32}", success["run_id"])
+        )
         require(backup["snapshot_id"] == success["snapshot_id"] == snapshot_id)
         require(all(success[k] == value for k, value in expected.items()))
         now = time.time()
@@ -405,15 +424,17 @@ def recovery_gate(c, snapshot_id, expected):
                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
             )
         job.quota()  # Revalidate fresh request/download allowances; no full blobs.
-        rows = json.loads(job.restic("snapshots", snapshot_id))
+        rows = strict_json(job.restic("snapshots", snapshot_id))
         require(job.check_scope(rows) == [snapshot_id])
-        epoch = dt.datetime.fromisoformat(rows[0]["time"]).timestamp()
+        remote_time = dt.datetime.fromisoformat(rows[0]["time"])
+        require(remote_time.tzinfo is not None)
+        epoch = remote_time.timestamp()
         require(
             0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1
         )
         raw = job.restic("dump", snapshot_id, "/manifest.json")
         require(sha_bytes(raw) == success["manifest_sha256"])
-        manifest = json.loads(raw)
+        manifest = strict_json(raw)
         require(
             manifest["release"] == expected["source_release"]
             and manifest["revision"] == expected["source_revision"]

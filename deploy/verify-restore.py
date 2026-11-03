@@ -129,7 +129,7 @@ def tar_members(tar):
     return set(names)
 
 
-def bundle_verify(archive, sha):
+def bundle_verify(archive, sha, required_profile=None):
     p = (
         synthetic_path(archive)
         if str(archive).startswith("/tmp/")
@@ -198,6 +198,11 @@ def bundle_verify(archive, sha):
                     )
                     config_found = True
             require(config_found)
+        if required_profile is not None:
+            require(
+                required_profile == "deploy-recovery-v2"
+                and inventory.get("recovery_profile") == required_profile
+            )
     runtime()
     return inventory
 
@@ -264,6 +269,7 @@ def bundle_package(output, units=False):
         )
         inventory = {
             "format": 1,
+            "recovery_profile": "deploy-recovery-v2",
             "files": files,
             "units": UNITS if units else [],
             "image_id": IMAGE_ID,
@@ -296,14 +302,14 @@ def bundle_package(output, units=False):
     print("archive_sha256=" + sha)
 
 
-def bundle_install(archive, sha, synthetic_root=None):
+def bundle_install(archive, sha, synthetic_root=None, required_profile=None):
     if synthetic_root:
         root = synthetic_path(synthetic_root, False)
         require(root.name == "host")
     else:
         require(os.geteuid() == 0)
         root = Path("/")
-    bundle_verify(archive, sha)
+    bundle_verify(archive, sha, required_profile)
     base = root / "var/lib/birja/recovery"
     releases = base / "releases"
     if base.exists():
@@ -373,18 +379,20 @@ def bundle(args):
     p.add_argument("--output")
     p.add_argument("--synthetic-root")
     p.add_argument("--include-units", action="store_true")
+    p.add_argument("--require-profile", choices=["deploy-recovery-v2"])
     a = p.parse_args(args)
     if a.mode == "package":
         require(a.output and not a.archive and not a.sha and not a.synthetic_root)
+        require(not a.require_profile)
         bundle_package(a.output, a.include_units)
     else:
         require(a.archive and a.sha and not a.output and not a.include_units)
         if a.mode == "verify":
             require(not a.synthetic_root)
-            bundle_verify(a.archive, a.sha)
+            bundle_verify(a.archive, a.sha, a.require_profile)
             print("bundle_verified=true")
         else:
-            bundle_install(a.archive, a.sha, a.synthetic_root)
+            bundle_install(a.archive, a.sha, a.synthetic_root, a.require_profile)
 
 
 def backup_module():
@@ -659,7 +667,7 @@ def restore(args):
             "snapshot_id": a.snapshot,
             "ok": False,
             "started_epoch": started,
-            "started_utc": b.utc(),
+            "started_utc": b.utc(started),
         }
         b.atomic(job.state / "restore-last-attempt.json", attempt)
         previous_signals = {}
@@ -714,14 +722,16 @@ def restore(args):
                 require(not call(dc + ["ps", "-q"]).strip())
                 owns_server = False
             require(binding == b.recovery_binding(c))
+            completed = int(time.time())
             attempt.update(
-                ok=True, completed_epoch=int(time.time()), completed_utc=b.utc()
+                ok=True, completed_epoch=completed, completed_utc=b.utc(completed)
             )
             b.atomic(job.state / "restore-last-success.json", attempt)
             b.atomic(job.state / "restore-last-attempt.json", attempt)
         except BaseException:
+            completed = int(time.time())
             attempt.update(
-                ok=False, completed_epoch=int(time.time()), completed_utc=b.utc()
+                ok=False, completed_epoch=completed, completed_utc=b.utc(completed)
             )
             b.atomic(job.state / "restore-last-attempt.json", attempt)
             raise
