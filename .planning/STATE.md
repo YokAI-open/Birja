@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 06-05 complete at a17d290; continuing 06-06 production-shaped TLS rehearsal
+stopped_at: 06-06 complete at 36dc08e; continuing 06-07 retained secure rollback
 last_updated: "2026-11-02T10:35:03.725Z"
 last_activity: 2026-11-02 -- Phase 06 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 67
-  completed_plans: 59
-  percent: 88
+  completed_plans: 60
+  percent: 90
 ---
 
 # Project State
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 6 of 13 (Plans 06-01..05 complete)
-Status: Executing Plan 06-06 production-shaped roles and TLS
+Plan: 7 of 13 (Plans 06-01..06 complete)
+Status: Executing Plan 06-07 retained deployment and old-image rollback
 Last activity: 2026-11-02 -- Phase 06 execution started
 
-Progress: [████████░░] 88% of planned plans executed (59/67); Phase 6: 5/13 plans complete.
+Progress: [████████░░] 90% of planned plans executed (60/67); Phase 6: 6/13 plans complete.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 59
+- Total plans completed: 60
 - Average duration: -
 - Total execution time: -
 
@@ -120,7 +120,7 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 ## Session Continuity
 
 Last session: 2026-11-02T10:35:03.703Z
-Stopped at: 06-05 complete at a17d290; continuing 06-06 production-shaped TLS rehearsal
+Stopped at: 06-06 complete at 36dc08e; continuing 06-07 retained secure rollback
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -181,3 +181,5 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 - Plan06-04 complete553d305: actual restricted-role migration/services,65 permissiondenials,12 guards,2 unsafe-role preflights; recovery regression passed.
 
 - Plan06-05 completea17d290: shared verifiedTLS policy in all engines;117 focused tests,lint/types pass, isolated cleanup verified. Real handshakes remain06-06.
+
+- Plan06-06 complete36dc08e: actual TLS/CA/hostname/plaintext negatives, credential isolation/renewal, serial recoveryrolesTLS+backup17 passed; synthetic cleanup verified.
