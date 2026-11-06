@@ -1,9 +1,12 @@
 ---
 phase: 06-deploy
 reviewed: 2026-11-06T13:13:08Z
+rereviewed: 2026-11-06T13:30:36Z
 depth: deep
 source_base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 source_head: 674fcbbcd84d4ff6bf7e88262dfd80576abfc04b
+rereview_head: f0fae414982a1632bbf09bcfc06f14485227f759
+rereview_source: ea4cd28
 files_reviewed: 39
 files_reviewed_list:
   - .github/workflows/ci.yml
@@ -46,10 +49,10 @@ files_reviewed_list:
   - docker-compose.ops-test.yml
   - docker-compose.prod.yml
 findings:
-  critical: 2
-  warning: 1
+  critical: 1
+  warning: 0
   info: 0
-  total: 3
+  total: 1
 status: issues_found
 ---
 
@@ -57,11 +60,15 @@ status: issues_found
 
 **Depth:** deep. **Scope:** explicit current changed-source override, derived from the validated base-to-HEAD Git diff, including incomplete Plan 08. Summary-only file selection was not used. No structural pre-pass was supplied.
 
+**Current result after independent re-review at `f0fae41`: one active BLOCKER, CR-01's gate-boundary case.** CR-02 and WR-01 are resolved under the explicitly approved revised request-budget contract. Counts above describe active findings. The initial findings below are retained as history; their current dispositions and re-review evidence follow at the end. The external image gate remains independently pending.
+
 ## Narrative Findings (AI reviewer)
 
 ### Critical Issues
 
 ### CR-01: BLOCKER — Completion-based freshness can approve data older than the 26-hour recovery window
+
+**Re-review disposition:** partially fixed; active gate-boundary case described below.
 
 **File:** `/home/YokaiExchange/deploy/backup-snapshot.py:845-853`; consumers at `:454-469` and `:406-446`.
 
@@ -74,6 +81,8 @@ status: issues_found
 **Regression:** Advance a fake clock during a successful dump/upload, then check both status and rollout at the 26-hour data boundary while completion remains younger. Assert rejection; also cover UTC/epoch disagreement, future values and matching authenticated remote manifest timestamps.
 
 ### CR-02: BLOCKER — Configured local request/download ceilings do not constrain the admitted work
+
+**Re-review disposition:** resolved by `80a7a2f`, under the approved native-request-only contract and separately bounded restic work described below.
 
 **File:** `/home/YokaiExchange/deploy/backup-quota.py:348-356`; consumers `/home/YokaiExchange/deploy/backup-snapshot.py:530-575` and `:577-601`; operator contract `/home/YokaiExchange/deploy/RUNBOOK.md:207-211`.
 
@@ -88,6 +97,8 @@ status: issues_found
 ### Warnings
 
 ### WR-01: WARNING — Restore and rollout require fresh quota but have no refresh-only producer
+
+**Re-review disposition:** resolved by `ea4cd28`.
 
 **File:** `/home/YokaiExchange/deploy/verify-restore.py:688-689`; `/home/YokaiExchange/deploy/backup-snapshot.py:426` and `:582`; `/home/YokaiExchange/deploy/backup-quota.py:384-395`.
 
@@ -114,3 +125,33 @@ B2 API shape/POST compatibility and version pagination were checked against prim
 **BLOCKED external image gate:** `06-LOCAL-GATES.md` already records unresolved HIGH/CRITICAL image scan results for the exact reviewed images. Keep this as one external supply-chain acceptance gate, separate from the three source findings counted above. Attribution/remediation belongs to the orchestrator's next role; this review did not pull replacement images, rerun scans or assume every reported CVE is exploitable in the application. Plan 08 task 03 and live advancement remain blocked until that gate and these source findings are resolved/reviewed.
 
 The fresh backend 616-test/99.80%/critical-100%, frontend 264-test, audits/build/smoke, and exact-artifact recovery/roles/TLS/old-image rollback results are recorded prior evidence in `06-LOCAL-GATES.md`, not tests rerun or independently certified here. This pass used static cross-file analysis plus two small offline synthetic probes of the actual status/quota consumers. No production/private configuration, provider calls, real auth/trades/email, Docker lifecycle, installation, publication or source edits occurred. Actual CI, provider recovery, timer execution and live friend acceptance remain later gates. Only this report was written; no commit was made.
+
+## Independent fix re-review — `bd96d81..ea4cd28` at HEAD `f0fae41`
+
+Read the full `06-REVIEW-FIX.md` and actual six-file source/test/runbook diff, then traced the resulting runtime consumers. Re-review scope is the fixes and their cross-file interactions within the original 39-file scope, including installed adjacent-module imports, unchanged authenticated bundle closure, shared lock/deadline inheritance, config identity and evidence preservation. This is not a repeat of the full original test run or a final supplied-artifact acceptance claim.
+
+### Active CR-01: BLOCKER — The remote gate does not recheck data freshness at the authorization boundary
+
+**File:** `/home/YokaiExchange/deploy/backup-snapshot.py:400`, `:408-454`.
+
+The new separate integer `data_epoch`/canonical UTC, completion ordering and authenticated manifest binding correctly close the original completion-versus-data confusion. Missing historical fields, contradictory UTC and future data times now fail closed. However, the gate invokes `data_time(backup, c)` before its refresh-only inventory and remote snapshot/manifest requests. Its `now` variable is likewise captured before those operations. After the requests it checks only equality of manifest/local data time, then returns `recovery_verified=True`. A valid point can expire while those operations run and still authorize the subsequent deployment.
+
+**Independent offline reproduction:** Used the actual existing Evidence fixture to prepare private, mutually matching backup/restore state and authenticated manifest, then called the actual `recovery_gate()`. Set entry data age to 93,590 seconds and advanced a fake wall clock by 20 seconds inside the refresh boundary; only remote/host boundaries were intercepted. Output: `recovery_verified=True data_age_at_return=93610 maximum=93600`. No Docker, provider or private production access occurred. The refresh's own native ceiling permits up to 120 seconds, before additional remote checks, so this is within supported operation durations.
+
+**Minimal fix:** After all refresh/remote manifest validation and immediately before returning authorization, rerun `data_time(backup, c)` using a newly read current wall clock. Preserve the early check to avoid unnecessary work. Reject if the selected recovery point expired during the gate. A current-time check should also govern any remaining time-sensitive authorization predicates rather than reusing the pre-I/O `now`.
+
+**Regression:** Begin with data ten seconds inside the recovery window, advance wall time twenty seconds during refresh and separately during manifest retrieval, and require rejection in both cases. Include a positive case that stays inside the window and retain exact UTC/manifest/epoch matching tests. Ordinary status already checks current time without this intervening I/O.
+
+### Resolved CR-02: Native request accounting and conservative restic admission
+
+The orchestrator explicitly approved a revised technical contract: `local_request_budget` governs native inventory HTTP calls; restic HTTP count is unobservable and is bounded separately by tool calls/retries/connections/deadline. Re-review applies that actual contract rather than requiring an invented total HTTP counter. The runbook now states that distinction and makes no provider-remaining or exact-wire guarantee.
+
+Native request/response accounting is enforced at the actual opener/read boundary. Counts include failed attempts and pagination; a shared `_inventory_api` is retained in the config through `backup.main(..., config=c)`, and subsequent refresh cannot replenish its counters or relax selected budgets. `_operation_started` is also carried into the backup Job. Restic admission deducts consumed native bytes and process reserve, derives an actual CLI download rate from the remaining selected budget and conservative timeout/burst allowance, and uses that fixed rate across commands with the shared deadline. Admission rejects insufficient allowance. The reviewed tests exercise actual API adapter -> inventory -> refreshed config -> actual Job admission, cumulative refresh exhaustion and actual CLI rate changes, rather than relabeling subprocess count as HTTP count. No additional proved defect in those changes was found under the approved bounded-work contract.
+
+### Resolved WR-01: Refresh-only recovery paths preserve exact evidence
+
+Both restore and the exact remote gate now invoke `Job.refresh_quota(lock)` under the validated already-held lock, independently of the nightly backup producer. The helper imports only the adjacent installed `backup-quota.py`, already in the mandatory authenticated CORE bundle, updates the protected quota config and checks actual Job admission without backup/forget/prune or backup/restore identity publication. It excludes internal API/deadline objects from persisted JSON. The stable config binding excludes volatile quota observations while retaining safety policy/material identity. Restic checks freshness at admission and retains the original deadline/rate during longer operations. The regression explicitly runs a delayed refresh and a long restore, then refreshes the gate and verifies unchanged completed evidence and exact remote command sequence. Inventory failure blocks further remote work. CR-01's remaining final-boundary check is separately active above.
+
+### Re-review limits and external gate
+
+The fix report records 25 backup, 15 prerequisite, four restore-safety, 20 input-rejection checks and one 82.243-second PostgreSQL/encrypted-recovery run; these are execution evidence supplied by the fixer, not suites rerun by this re-review. This pass read their new assertions and ran the additional minimal gate-boundary probe above. No image changed, no scan was repeated, and the known external image HIGH/CRITICAL gate remains open. Final retained/supplied artifact recovery and roles/TLS/old-image rollback replay remain orchestrator acceptance work after the active source finding is fixed. Only REVIEW.md was edited; no source, state or commit change was made.
