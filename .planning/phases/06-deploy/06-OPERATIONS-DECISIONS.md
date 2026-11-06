@@ -396,3 +396,30 @@ agent socket; public verification with `--no-autostart` succeeded without
 starting a service. These environment restrictions did not weaken either
 verification gate. The ephemeral tooling may disappear; repeat signature,
 checksum and version verification before reacquisition or replacement.
+
+## B2 observability checkpoint — 2026-11-06
+
+Plan08 has no source changes as of2c8f3fa. Its executor was interrupted by
+a usage limit during official-document research. The owner said continue.
+Official docs describe console-managed caps, up-to10minute propagation and
+no ClassDcap. No documented API was found for live cap settings or remaining
+account billing/download counters. Do not invent that API or mark a manual
+value as a current automatic observation.
+
+A concrete design revision is PENDING OWNER ANSWER: preserve US$0 paid
+usage policy, owner verifies $0 console caps at setup, bounded automatic
+actual storage/version/unfinished/headroom checks and bounded transfer work,
+owner daily status handling. Console controls are owner-attested facts,
+not machine-verified billing proof; no universal hard-zero guarantee.
+No paid use, provider access or live activation is approved by the question.
+The alternative is to leave scheduled production backup disabled pending
+stronger observable provider controls. Elapsed time is not approval.
+
+Independent CI/local checks may continue while this scoped answer is pending.
+Do not implement a permanent always-failing preflight and call it a usable
+nightly backup. Task08-01/final artifact readiness remain pending.
+
+Sources checked2026-11-06:
+- https://www.backblaze.com/docs/cloud-storage-create-and-manage-caps-and-alerts
+- https://www.backblaze.com/docs/cloud-storage-data-caps-and-alerts
+- https://www.backblaze.com/cloud-storage/pricing
