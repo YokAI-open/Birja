@@ -128,3 +128,27 @@ acceptance gates.
 ---
 
 _Fixer: gsd-code-fixer; iteration 1._
+
+## CR-01 authorization-boundary follow-up — 2026-11-06
+
+**Commit:** `c8e23fd`
+**Status:** fixed: requires human verification (final independent recheck pending).
+**Files modified:** `deploy/backup-snapshot.py`, `deploy/tests/test-deploy-prerequisites.py`.
+
+The independent re-review found that remote work could consume the remaining
+data window after the gate's entry freshness check. Immediately after all
+inventory/remote manifest verification and before returning authorization, the
+gate now captures a new wall-clock value, rechecks the bound data timestamp,
+and revalidates backup completion, restore start/completion and remote snapshot
+freshness against that current value. Early rejection and all authenticated
+manifest/UTC/epoch identity checks remain in place.
+
+Behavioral RED was observed before this follow-up source change: the actual
+gate failed both new assertions that require rejection when an entry age of
+93,590 seconds advances by 20 seconds during refresh or manifest dump. GREEN:
+all 15 prerequisite contracts passed in 8.198 seconds after the fix. Positive
+cases remain accepted at 93,599 seconds and exactly the existing inclusive
+93,600-second boundary. Affected Ruff lint/format and git whitespace checks
+passed. No retrospective RED commit was made. This local timing-only follow-up
+did not rerun PostgreSQL, image, provider, application or frontend suites;
+external image acceptance and final artifact replay remain orchestrator gates.
