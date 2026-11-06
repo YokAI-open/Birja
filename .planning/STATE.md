@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan15 source implemented at3bc1ca7; resume interrupted independent review, then one final supplied-artifact replay
+stopped_at: Plan15 review clean; final packaging blocked by Docker OCI attestation export; upstream image gate also fails
 last_updated: "2026-11-06T20:09:01.855395Z"
-last_activity: 2026-11-06 -- Plan15 source complete; bounded review and final replay pending
+last_activity: 2026-11-06 -- Review and CI fix complete; actual final packaging guard failure recorded
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,18 +27,20 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 15 prerequisite, wave 9 of 15 (Plan08 tasks01/02 implemented)
-Status: Plan15 source implemented; independent image-diff review and final replay pending
-Last activity: 2026-11-06 -- image fixes implemented; review interrupted by status request, now resuming
+Status: Plan15 task03 blocked by actual recovery export shape; source review clean
+Last activity: 2026-11-06 -- Final Node build/scan complete; packaging rejects extra OCI attestation descriptor
 
 Progress: [████████░░] 90% of planned plans executed (62/69); Phase 6: 8/15 plans complete.
 
 ## Immediate remaining work
 
-1. Finish independent review of image changes `89c7039..3bc1ca7`; the prior review turn was interrupted, not completed.
-2. Fix only confirmed defects from that bounded review, then build/package one final recovery artifact and run its supplied restore/rollback checks.
-3. Record Plan15's bounded result and report Plan08's remaining upstream image security blocker. Do not start another remediation plan or repeatedly rescan unchanged images.
+Plan15 task03 is blocked, not complete. Independent source review and focused recheck have zero active findings; CI missing-image reporting fix is committed at `26614f5`. Final evidence/review is committed at `d09cba0` in `06-IMAGE-GATES.md`.
 
-The original source review is clean after `c8e23fd`. Current image fixes remove available apt, runtime global-pip and npm findings; known vendor/required-test-tool HIGH/CRITICAL findings remain. No waiver, push or production operation is authorized. Full application evidence (616 backend /264 frontend) is historical measured evidence, not rerun on each operational edit.
+Actual Docker29 export includes an extra OCI attestation descriptor. Strict verification rejects it at `verify-restore.py:201` before creating a recovery archive. Exporting the selected immutable engine ID reproduced the same failure; the ineffective attempted correction was removed. No final supplied-artifact replay started.
+
+Next work must address that specific export compatibility boundary with review before one exact final artifact/replay. Do not repeat completed application suites/image research or add another remediation plan automatically. Final Node rebuild passed and its raw scan still fails with48 Debian HIGH findings/zero npm findings. Other unchanged-image reports are retained by exact identity. Upstream HIGH/CRITICAL findings separately block Plan08 and downstream live gates; no waiver exists.
+
+Full application evidence (616 backend /264 frontend) remains historical measured evidence. All four fixed synthetic projects are cleaned. No push, provider or production operation occurred; Phase6 remains8/15 complete.
 
 ## Performance Metrics
 
