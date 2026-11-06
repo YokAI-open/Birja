@@ -1,4 +1,9 @@
-FROM python:3.14.9-slim-trixie AS builder
+FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS builder
+# uv installs locked wheels directly; neither stage uses global pip/ensurepip.
+RUN rm -rf /usr/local/lib/python3.14/site-packages/pip \
+    /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+    /usr/local/lib/python3.14/ensurepip \
+    /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -16,7 +21,12 @@ FROM builder AS test-builder
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project
 
-FROM python:3.14.9-slim-trixie AS runtime
+FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS runtime
+# uv installs locked wheels directly; neither stage uses global pip/ensurepip.
+RUN rm -rf /usr/local/lib/python3.14/site-packages/pip \
+    /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+    /usr/local/lib/python3.14/ensurepip \
+    /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
 RUN useradd --system --uid 1001 --create-home app
 COPY --from=builder --chown=app:app /opt/venv /opt/venv
 COPY --from=builder --chown=app:app /app/app /app/app

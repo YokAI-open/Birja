@@ -68,7 +68,7 @@ def main():
     compose = source.parent / "docker-compose.ops-test.yml" if synthetic else Path("/srv/birja/docker-compose.prod.yml")
     require(compose.is_file() and not compose.is_symlink())
     if synthetic:
-        require(hashlib.sha256(compose.read_bytes()).hexdigest() == "91af78e11963a7a8f944e1807b310193e1ea1da676b74beab2e667b5e841c7f0")
+        require(hashlib.sha256(compose.read_bytes()).hexdigest() == "a2861c84c41d76167e515885a07e0348019e2de3d61e846637b51605fd79bb31")
     env_file = "/dev/null" if synthetic else "/etc/birja/prod.env"
     dc = ["/usr/bin/docker", "compose", "--env-file", env_file, "-p", c["project"], "-f", str(compose)]
     lock = root / "operation.lock" if synthetic else Path("/var/lock/birja-deploy.lock")

@@ -2,7 +2,8 @@
 name: birja-ops-test
 services:
   postgres:
-    image: postgres:18.6-trixie
+    image: birja-recovery-postgres:verified-8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc
+    pull_policy: never
     environment:
       POSTGRES_USER: birja_ops_bootstrap
       POSTGRES_PASSWORD: synthetic-ops-only

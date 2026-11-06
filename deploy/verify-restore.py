@@ -17,15 +17,25 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.request
 from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
-COMPOSE_SHA = "91af78e11963a7a8f944e1807b310193e1ea1da676b74beab2e667b5e841c7f0"
+COMPOSE_SHA = "a2861c84c41d76167e515885a07e0348019e2de3d61e846637b51605fd79bb31"
 BOOT = "birja_ops_bootstrap"
 CLONE = "birja_restore_test"
 RESTIC_SHA = "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639"
-IMAGE_ID = "sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6"
+# Config identity is distinct from registry and engine identities. Docker's
+# classic store exposes the config ID; containerd exposes the manifest ID.
+IMAGE_ID = "sha256:8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc"
+INDEX_DIGEST = "sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
+PLATFORM_DIGEST = (
+    "sha256:e923a22ac074261dd73970c57edf659475bf0497cb9456f17d98ed7cdd3ca913"
+)
+REGISTRY_REF = "postgres:18.6-trixie@" + INDEX_DIGEST
+RECOVERY_IMAGE = "birja-recovery-postgres:verified-" + IMAGE_ID[7:]
+IMAGE_PROVENANCE = ["images/registry-index.json", "images/platform-manifest.json"]
 CORE = [
     "deploy/backup.sh",
     "deploy/backup-status.sh",
@@ -130,6 +140,135 @@ def tar_members(tar):
     return set(names)
 
 
+def sha_bytes(data):
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def verify_image_provenance(index_bytes, manifest_bytes, config_bytes):
+    require(sha_bytes(index_bytes) == INDEX_DIGEST)
+    require(sha_bytes(manifest_bytes) == PLATFORM_DIGEST)
+    require(sha_bytes(config_bytes) == IMAGE_ID)
+    index, manifest, config = map(
+        json.loads, [index_bytes, manifest_bytes, config_bytes]
+    )
+    selected = [
+        m
+        for m in index["manifests"]
+        if m.get("platform", {}).get("os") == "linux"
+        and m.get("platform", {}).get("architecture") == "amd64"
+    ]
+    require(len(selected) == 1)
+    require(
+        selected[0]["digest"] == PLATFORM_DIGEST
+        and selected[0]["size"] == len(manifest_bytes)
+    )
+    require(
+        manifest["config"]["digest"] == IMAGE_ID
+        and manifest["config"]["size"] == len(config_bytes)
+    )
+    require(config["os"] == "linux" and config["architecture"] == "amd64")
+
+
+def verify_saved_image(fileobj, index_bytes, manifest_bytes):
+    # Inspect the Docker-save manifest and actual config bytes without loading.
+    # Both classic .json paths and OCI blob paths are supported explicitly.
+    with tarfile.open(fileobj=fileobj, mode="r:") as image:
+        names = image.getnames()
+        require(len(names) == len(set(names)))
+        for member in image:
+            require(member.isfile() or member.isdir())
+            require(
+                not member.name.startswith("/") and ".." not in Path(member.name).parts
+            )
+        manifest = json.load(image.extractfile("manifest.json"))
+        require(len(manifest) == 1)
+        config_name = manifest[0]["Config"]
+        require(config_name in {IMAGE_ID[7:] + ".json", "blobs/sha256/" + IMAGE_ID[7:]})
+        config_bytes = image.extractfile(config_name).read()
+        verify_image_provenance(index_bytes, manifest_bytes, config_bytes)
+        # OCI imports use this manifest as their engine identity. Authenticate
+        # its bytes and layers too, rather than trusting a mutable local tag.
+        blob = "blobs/sha256/" + PLATFORM_DIGEST[7:]
+        if blob in names:
+            require(image.extractfile(blob).read() == manifest_bytes)
+            doc = json.loads(manifest_bytes)
+            for layer in doc["layers"]:
+                name = "blobs/sha256/" + layer["digest"][7:]
+                member = image.getmember(name)
+                require(member.size == layer["size"])
+                require(
+                    "sha256:"
+                    + hashlib.file_digest(
+                        image.extractfile(member), "sha256"
+                    ).hexdigest()
+                    == layer["digest"]
+                )
+        else:
+            config = json.loads(config_bytes)
+            require(len(manifest[0]["Layers"]) == len(config["rootfs"]["diff_ids"]))
+            for name, expected in zip(
+                manifest[0]["Layers"], config["rootfs"]["diff_ids"], strict=True
+            ):
+                require(
+                    "sha256:"
+                    + hashlib.file_digest(image.extractfile(name), "sha256").hexdigest()
+                    == expected
+                )
+
+
+def image_inspect(ref):
+    rows = json.loads(call(["docker", "image", "inspect", ref]))
+    require(len(rows) == 1)
+    row = rows[0]
+    require(row["Id"] in {IMAGE_ID, PLATFORM_DIGEST})
+    require(row["Os"] == "linux" and row["Architecture"] == "amd64")
+    return row["Id"]
+
+
+def bind_recovery_image():
+    # Only identities authenticated from the archive graph may be selected.
+    # No registry reference, RepoDigest, floating tag or pull is consulted.
+    for identity in [IMAGE_ID, PLATFORM_DIGEST]:
+        try:
+            engine_id = image_inspect(identity)
+        except ValueError:
+            continue
+        require(engine_id == identity)
+        call(["docker", "image", "tag", engine_id, RECOVERY_IMAGE])
+        require(loaded_recovery_image() == engine_id)
+        return engine_id
+    raise ValueError("verified imported recovery image missing")
+
+
+def loaded_recovery_image():
+    return image_inspect(RECOVERY_IMAGE)
+
+
+def registry_manifests():
+    def fetch(url, headers=None):
+        request = urllib.request.Request(url, headers=headers or {})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = response.read(2_000_001)
+        require(len(data) <= 2_000_000)
+        return data
+
+    token = json.loads(
+        fetch(
+            "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/postgres:pull"
+        )
+    )["token"]
+    headers = {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json",
+    }
+    base = "https://registry-1.docker.io/v2/library/postgres/manifests/"
+    index, manifest = (
+        fetch(base + d, headers) for d in [INDEX_DIGEST, PLATFORM_DIGEST]
+    )
+    require(sha_bytes(index) == INDEX_DIGEST and sha_bytes(manifest) == PLATFORM_DIGEST)
+    return index, manifest
+
+
 def bundle_verify(archive, sha, required_profile=None):
     p = (
         synthetic_path(archive)
@@ -150,6 +289,7 @@ def bundle_verify(archive, sha, required_profile=None):
                 "INVENTORY.json",
                 "SHA256SUMS",
             ]
+            + IMAGE_PROVENANCE
             + ["provenance/" + n for n in PROVENANCE]
         )
         require(inventory["units"] == UNITS)
@@ -160,6 +300,9 @@ def bundle_verify(archive, sha, required_profile=None):
         )
         require(
             inventory["image_id"] == IMAGE_ID
+            and inventory["registry_index_digest"] == INDEX_DIGEST
+            and inventory["platform_manifest_digest"] == PLATFORM_DIGEST
+            and inventory["registry_reference"] == REGISTRY_REF
             and inventory["restic_sha256"] == RESTIC_SHA
         )
         sums = t.extractfile("SHA256SUMS").read().decode().splitlines()
@@ -184,21 +327,11 @@ def bundle_verify(archive, sha, required_profile=None):
                 "signature": "GOODSIG VALIDSIG; verified 2026-11-02; official restic 0.19.1 linux amd64",
             }
         )
-        # Independently inspect Docker-save config identity without loading it.
-        with tarfile.open(
-            fileobj=t.extractfile("images/postgres.tar"), mode="r|"
-        ) as image:
-            config_found = False
-            for m in image:
-                require(m.isfile() or m.isdir())
-                require(not m.name.startswith("/") and ".." not in Path(m.name).parts)
-                if m.name.endswith(IMAGE_ID[7:]) or m.name == IMAGE_ID[7:] + ".json":
-                    require(
-                        hashlib.file_digest(image.extractfile(m), "sha256").hexdigest()
-                        == IMAGE_ID[7:]
-                    )
-                    config_found = True
-            require(config_found)
+        verify_saved_image(
+            t.extractfile("images/postgres.tar"),
+            t.extractfile(IMAGE_PROVENANCE[0]).read(),
+            t.extractfile(IMAGE_PROVENANCE[1]).read(),
+        )
         if required_profile is not None:
             require(
                 required_profile == "deploy-recovery-v2"
@@ -215,21 +348,8 @@ def bundle_package(output, units=False):
     tools = Path("/tmp/birja-test-tools/restic-0.19.1")
     require(digest(tools / "restic") == RESTIC_SHA)
     require(all(digest(tools / n) == h for n, h in PROVENANCE.items()))
-    require(
-        call(
-            [
-                "docker",
-                "image",
-                "inspect",
-                "postgres:18.6-trixie",
-                "--format",
-                "{{.Id}}",
-            ]
-        )
-        .decode()
-        .strip()
-        == IMAGE_ID
-    )
+    image_inspect(REGISTRY_REF)
+    index_bytes, manifest_bytes = registry_manifests()
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
         files = CORE + UNITS
@@ -257,7 +377,7 @@ def bundle_package(output, units=False):
         )
         with (stage / "images/postgres.tar").open("wb") as f:
             run = subprocess.run(
-                ["docker", "image", "save", "postgres:18.6-trixie"],
+                ["docker", "image", "save", REGISTRY_REF],
                 check=False,
                 stdout=f,
                 stderr=subprocess.DEVNULL,
@@ -265,6 +385,12 @@ def bundle_package(output, units=False):
                 timeout=120,
             )
             require(run.returncode == 0)
+        for name, data in zip(
+            IMAGE_PROVENANCE, [index_bytes, manifest_bytes], strict=True
+        ):
+            (stage / name).write_bytes(data)
+        with (stage / "images/postgres.tar").open("rb") as saved:
+            verify_saved_image(saved, index_bytes, manifest_bytes)
         files = sorted(
             p.relative_to(stage).as_posix() for p in stage.rglob("*") if p.is_file()
         )
@@ -274,7 +400,9 @@ def bundle_package(output, units=False):
             "files": files,
             "units": UNITS,
             "image_id": IMAGE_ID,
-            "image_digest": "postgres@" + IMAGE_ID,
+            "registry_reference": REGISTRY_REF,
+            "registry_index_digest": INDEX_DIGEST,
+            "platform_manifest_digest": PLATFORM_DIGEST,
             "restic_sha256": RESTIC_SHA,
             "runtime": versions,
         }
@@ -339,11 +467,15 @@ def bundle_install(archive, sha, synthetic_root=None, required_profile=None):
                 timeout=120,
             )
             require(result.returncode == 0)
-        require(
-            call(["docker", "image", "inspect", IMAGE_ID, "--format", "{{.Id}}"])
-            .decode()
-            .strip()
-            == IMAGE_ID
+        engine_id = bind_recovery_image()
+        print(
+            "recovery_image="
+            + RECOVERY_IMAGE
+            + " engine_image_id="
+            + engine_id
+            + " config_digest="
+            + IMAGE_ID
+            + " platform=linux/amd64 pull_fallback=false"
         )
         os.rename(stage, release)
         # TemporaryDirectory tolerates its renamed staging directory.
@@ -459,19 +591,43 @@ def sql(dc, query, db=CLONE):
     )
 
 
-def check_running(dc):
+def recovery_config(dc):
     config = json.loads(call(dc + ["config", "--format", "json"]))
     require(set(config["services"]) == {"postgres"} and not config.get("volumes"))
     s = config["services"]["postgres"]
     require(not s.get("ports") and not s.get("volumes") and not s.get("privileged"))
-    require(s["image"] == "postgres:18.6-trixie")
+    require(s["image"] == RECOVERY_IMAGE and s["pull_policy"] == "never")
     require(
         len(config["networks"]) == 1
         and all(n.get("internal") is True for n in config["networks"].values())
     )
+    return s
+
+
+def start_recovery(dc):
+    recovery_config(dc)
+    loaded_recovery_image()
+    call(dc + ["up", "-d", "--wait", "--pull", "never"])
+
+
+def check_running(dc):
+    s = recovery_config(dc)
+    engine_id = loaded_recovery_image()
     ids = call(dc + ["ps", "-q", "postgres"]).decode().split()
     require(len(ids) == 1)
     inspected = json.loads(call(["/usr/bin/docker", "inspect", ids[0]]))[0]
+    require(inspected["Image"] == engine_id)
+    require(inspected["Platform"] == "linux")
+    require(image_inspect(inspected["Image"]) == engine_id)
+    print(
+        "recovery_running_image_id="
+        + engine_id
+        + " config_digest="
+        + IMAGE_ID
+        + " resolved_image="
+        + s["image"]
+        + " platform=linux/amd64 pull_policy=never"
+    )
     require(not inspected["HostConfig"]["Privileged"])
     require(
         not inspected["HostConfig"].get("Binds")
@@ -690,7 +846,7 @@ def restore(args):
             if a.approved_clone or a.isolated_clone:
                 require(not call(dc + ["ps", "-q"]).strip())
                 owns_server = True
-                call(dc + ["up", "-d", "--wait"])
+                start_recovery(dc)
             check_running(dc)
             snapshots = json.loads(job.restic("snapshots", a.snapshot))
             require(job.check_scope(snapshots) == [a.snapshot])

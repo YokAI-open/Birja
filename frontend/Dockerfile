@@ -1,5 +1,5 @@
 # Dev image. A production static build served by nginx arrives in Phase 6.
-FROM node:24.22.1-trixie-slim
+FROM node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d
 
 WORKDIR /app
 RUN chown node:node /app

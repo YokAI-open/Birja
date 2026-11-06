@@ -713,13 +713,37 @@ class Fixtures(unittest.TestCase):
         spec.loader.exec_module(ops)
         with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
             root = Path(tmp)
-            image_config = b"{}"
+            image_config = json.dumps(
+                {"os": "linux", "architecture": "amd64", "rootfs": {"diff_ids": []}}
+            ).encode()
             image_id = "sha256:" + hashlib.sha256(image_config).hexdigest()
+            platform_manifest = json.dumps(
+                {"config": {"digest": image_id, "size": len(image_config)}}
+            ).encode()
+            platform_id = r.sha_bytes(platform_manifest)
+            registry_index = json.dumps(
+                {
+                    "manifests": [
+                        {
+                            "digest": platform_id,
+                            "size": len(platform_manifest),
+                            "platform": {"os": "linux", "architecture": "amd64"},
+                        }
+                    ]
+                }
+            ).encode()
+            index_id = r.sha_bytes(registry_index)
             image = io.BytesIO()
             with tarfile.open(fileobj=image, mode="w") as tar:
                 info = tarfile.TarInfo(image_id[7:] + ".json")
                 info.size = len(image_config)
                 tar.addfile(info, io.BytesIO(image_config))
+                manifest = json.dumps(
+                    [{"Config": image_id[7:] + ".json", "Layers": []}]
+                ).encode()
+                info = tarfile.TarInfo("manifest.json")
+                info.size = len(manifest)
+                tar.addfile(info, io.BytesIO(manifest))
             files = {
                 name: (HERE.parent / name).read_bytes() for name in r.CORE + r.UNITS
             }
@@ -736,11 +760,16 @@ class Fixtures(unittest.TestCase):
                 }
             ).encode()
             files["images/postgres.tar"] = image.getvalue()
+            files[r.IMAGE_PROVENANCE[0]] = registry_index
+            files[r.IMAGE_PROVENANCE[1]] = platform_manifest
             inventory = {
                 "format": 1,
                 "files": sorted(files),
                 "units": r.UNITS,
                 "image_id": image_id,
+                "registry_index_digest": index_id,
+                "platform_manifest_digest": platform_id,
+                "registry_reference": r.REGISTRY_REF,
                 "restic_sha256": r.RESTIC_SHA,
                 "recovery_profile": "legacy-v1",
             }
@@ -775,6 +804,8 @@ class Fixtures(unittest.TestCase):
             with (
                 patch.object(ops, "r", r),
                 patch.object(r, "IMAGE_ID", image_id),
+                patch.object(r, "INDEX_DIGEST", index_id),
+                patch.object(r, "PLATFORM_DIGEST", platform_id),
                 patch.object(r, "runtime", return_value={}) as runtime,
                 patch.object(
                     r, "call", side_effect=AssertionError("Docker reached")
