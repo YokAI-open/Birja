@@ -451,6 +451,21 @@ def recovery_gate(c, snapshot_id, expected):
             and manifest["started_utc"] == backup["data_utc"]
             and manifest["data_utc"] == backup["data_utc"]
         )
+        # Inventory and remote reads can consume the last seconds of the RPO.
+        # Recheck every freshness predicate at authorization, after all I/O.
+        authorized_at = time.time()
+        data_time(backup, c, authorized_at)
+        require(
+            all(
+                0 <= authorized_at - value <= c["freshness_seconds"]
+                for value in [
+                    backup["epoch"],
+                    success["started_epoch"],
+                    success["completed_epoch"],
+                    epoch,
+                ]
+            )
+        )
         return {
             "snapshot_id": snapshot_id,
             "recovery_verified": True,

@@ -455,6 +455,70 @@ class Evidence(unittest.TestCase):
             self.assertTrue(
                 b.recovery_gate(self.c, self.sid, expected)["recovery_verified"]
             )
+            # The point is fresh on entry and can expire during either native
+            # inventory refresh or the final authenticated manifest retrieval.
+            entry = int(time.time())
+            near = {
+                **backup,
+                "data_epoch": entry - 93590,
+                "data_utc": b.utc(entry - 93590),
+            }
+            original_manifest = dict(self.manifest)
+            self.manifest.update(
+                data_epoch=near["data_epoch"],
+                data_utc=near["data_utc"],
+                started_utc=near["data_utc"],
+            )
+            near_success = {
+                **success,
+                "manifest_sha256": b.sha_bytes(json.dumps(self.manifest).encode()),
+            }
+            for name in ["last-success.json", "last-attempt.json"]:
+                b.atomic(self.state / name, near)
+            for name in ["restore-last-success.json", "restore-last-attempt.json"]:
+                b.atomic(self.state / name, near_success)
+            for boundary, delay, allowed in [
+                ("refresh", 20, False),
+                ("dump", 20, False),
+                ("dump", 9, True),
+                ("dump", 10, True),
+            ]:
+                clock = [entry]
+
+                def refresh(job, lock, *, boundary=boundary, clock=clock, delay=delay):
+                    if boundary == "refresh":
+                        clock[0] += delay
+
+                def remote(
+                    job, *args, boundary=boundary, clock=clock, delay=delay, **kwargs
+                ):
+                    value = self.remote(job, *args, **kwargs)
+                    if boundary == args[0] == "dump":
+                        clock[0] += delay
+                    return value
+
+                with (
+                    self.subTest(boundary=boundary, delay=delay),
+                    patch.object(
+                        b.time, "time", side_effect=lambda clock=clock: clock[0]
+                    ),
+                    patch.object(b.Job, "refresh_quota", refresh),
+                    patch.object(b.Job, "restic", remote),
+                ):
+                    if allowed:
+                        self.assertTrue(
+                            b.recovery_gate(self.c, self.sid, expected)[
+                                "recovery_verified"
+                            ]
+                        )
+                    else:
+                        with self.assertRaises(ValueError):
+                            b.recovery_gate(self.c, self.sid, expected)
+            self.manifest = original_manifest
+            for name in ["last-success.json", "last-attempt.json"]:
+                b.atomic(self.state / name, backup)
+            for name in ["restore-last-success.json", "restore-last-attempt.json"]:
+                b.atomic(self.state / name, success)
             stale_data = {
                 **backup,
                 "data_epoch": backup["epoch"] - 97000,
