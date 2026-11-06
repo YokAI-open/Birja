@@ -423,3 +423,17 @@ Sources checked2026-11-06:
 - https://www.backblaze.com/docs/cloud-storage-create-and-manage-caps-and-alerts
 - https://www.backblaze.com/docs/cloud-storage-data-caps-and-alerts
 - https://www.backblaze.com/cloud-storage/pricing
+
+## Owner-approved B2 controls revision — 2026-11-06
+
+Owner answered: “Use console caps and automatic checks (Recommended)”.
+The practical policy above is APPROVED for implementation: US$0 budget,
+owner-verified $0 console caps during setup, automatic actual storage and
+replacement-headroom checks, bounded transfers and daily owner status checks.
+No universal hard-zero billing guarantee is claimed or required as an API
+proof. Distinguish owner-attested controls from current measured inventory;
+never fabricate remaining account billing/download counters. The previous
+requirement to fetch console-only controls/remaining counters automatically
+is superseded. Unknown inventory or inadequate headroom still fails before
+upload/deletion; retain previous copy. No provider/account/production action
+is authorized by this design answer. Actual setup verification remains09.
