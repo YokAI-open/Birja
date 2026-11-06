@@ -396,6 +396,7 @@ def recovery_gate(c, snapshot_id, expected):
         )
         require(success == attempt and success["ok"] is True and success["format"] == 1)
         require(backup_attempt == backup)
+        data_time(backup, c)
         require(backup["utc"] == utc(backup["epoch"]))
         require(
             type(success["format"]) is int
@@ -444,6 +445,11 @@ def recovery_gate(c, snapshot_id, expected):
             and manifest["recovery_sha256"] == success["recovery_sha256"]
         )
         require(manifest["source_binding"] == binding)
+        require(
+            manifest["data_epoch"] == backup["data_epoch"]
+            and manifest["started_utc"] == backup["data_utc"]
+            and manifest["data_utc"] == backup["data_utc"]
+        )
         return {
             "snapshot_id": snapshot_id,
             "recovery_verified": True,
@@ -451,14 +457,23 @@ def recovery_gate(c, snapshot_id, expected):
         }
 
 
+def data_time(record, c, now=None):
+    now = time.time() if now is None else now
+    for epoch, stamp in [("data_epoch", "data_utc"), ("epoch", "utc")]:
+        require(type(record[epoch]) is int and record[stamp] == utc(record[epoch]))
+    require(0 <= now - record["data_epoch"] <= c["freshness_seconds"])
+    require(record["data_epoch"] <= record["epoch"] <= now)
+    return record["data_epoch"]
+
+
 def status(c):
     try:
         state = private_dir(c["state_dir"])
         s = json.loads(private_file(state / "last-success.json").read_text())
         a = json.loads(private_file(state / "last-attempt.json").read_text())
-        require(a["ok"] is True and a["run_id"] == s["run_id"])
+        require(a == s and a["ok"] is True)
         require(ID.fullmatch(s["snapshot_id"]))
-        require(0 <= time.time() - s["epoch"] <= c["freshness_seconds"])
+        data_time(s, c)
         require(
             s["utc"]
             == dt.datetime.fromtimestamp(s["epoch"], dt.UTC).strftime(
@@ -712,6 +727,8 @@ class Job:
                     "snapshot": snapshot,
                     "release": self.c["release"],
                     "started_utc": self.start_utc,
+                    "data_epoch": self.data_epoch,
+                    "data_utc": self.start_utc,
                     "finished_utc": utc(),
                     "archive_sha256": digest,
                     "restic_version": "0.19.1",
@@ -748,7 +765,8 @@ class Job:
         self.state.mkdir(mode=0o700, parents=True, exist_ok=True)
         private_dir(self.state)
         with self.lock():
-            self.start_utc = utc()
+            self.data_epoch = int(time.time())
+            self.start_utc = utc(self.data_epoch)
             attempt = {
                 "run_id": self.run_id,
                 "ok": False,
@@ -851,6 +869,8 @@ class Job:
                         "%Y-%m-%dT%H:%M:%SZ"
                     ),
                     "epoch": now,
+                    "data_epoch": self.data_epoch,
+                    "data_utc": self.start_utc,
                     "snapshot_id": sid,
                     "archive_bytes": size,
                     "tool_invocations": self.calls,

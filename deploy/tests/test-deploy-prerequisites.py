@@ -327,7 +327,11 @@ class Evidence(unittest.TestCase):
         binding = b.recovery_binding(self.c)
         binding["bundle_sha256"] = "c" * 64
         self.manifest.update(
-            source_binding=binding, recovery_sha256=success["recovery_sha256"]
+            data_epoch=success["started_epoch"],
+            data_utc=b.utc(success["started_epoch"]),
+            started_utc=b.utc(success["started_epoch"]),
+            source_binding=binding,
+            recovery_sha256=success["recovery_sha256"],
         )
         success.update(
             binding, manifest_sha256=b.sha_bytes(json.dumps(self.manifest).encode())
@@ -341,6 +345,8 @@ class Evidence(unittest.TestCase):
             "ok": True,
             "run_id": "backup",
             "snapshot_id": self.sid,
+            "data_epoch": success["started_epoch"],
+            "data_utc": b.utc(success["started_epoch"]),
             "epoch": success["started_epoch"],
             "utc": b.utc(success["started_epoch"]),
         }
@@ -360,6 +366,29 @@ class Evidence(unittest.TestCase):
             self.assertTrue(
                 b.recovery_gate(self.c, self.sid, expected)["recovery_verified"]
             )
+            stale_data = {
+                **backup,
+                "data_epoch": backup["epoch"] - 97000,
+                "data_utc": b.utc(backup["epoch"] - 97000),
+            }
+            for name in ["last-success.json", "last-attempt.json"]:
+                b.atomic(self.state / name, stale_data)
+            with self.assertRaises(ValueError):
+                b.recovery_gate(self.c, self.sid, expected)
+            for name in ["last-success.json", "last-attempt.json"]:
+                b.atomic(self.state / name, backup)
+            self.manifest["data_epoch"] -= 1
+            changed = {
+                **success,
+                "manifest_sha256": b.sha_bytes(json.dumps(self.manifest).encode()),
+            }
+            for name in ["restore-last-success.json", "restore-last-attempt.json"]:
+                b.atomic(self.state / name, changed)
+            with self.assertRaises(ValueError):
+                b.recovery_gate(self.c, self.sid, expected)
+            self.manifest["data_epoch"] += 1
+            for name in ["restore-last-success.json", "restore-last-attempt.json"]:
+                b.atomic(self.state / name, success)
             for key in expected:
                 wrong = {**expected, key: "wrong"}
                 with self.subTest(key=key), self.assertRaises(ValueError):
@@ -401,12 +430,28 @@ class Evidence(unittest.TestCase):
             "ok": True,
             "run_id": "nightly",
             "snapshot_id": self.sid,
+            "data_epoch": now,
+            "data_utc": b.utc(now),
             "epoch": now,
             "utc": b.utc(),
         }
         for name in ["last-success.json", "last-attempt.json"]:
             b.atomic(self.state / name, backup)
         self.assertEqual(b.status(self.c), 0)
+        for change in [
+            {
+                "data_epoch": now - 97000,
+                "data_utc": b.utc(now - 97000),
+                "epoch": now - 93500,
+                "utc": b.utc(now - 93500),
+            },
+            {"data_epoch": now + 1},
+            {"data_utc": "wrong"},
+            {"data_epoch": None},
+        ]:
+            for name in ["last-success.json", "last-attempt.json"]:
+                b.atomic(self.state / name, {**backup, **change})
+            self.assertEqual(b.status(self.c), 1)
         with self.assertRaises(ValueError):
             b.recovery_gate(self.c, self.sid, {})
 
