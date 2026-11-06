@@ -36,6 +36,9 @@ def image_policy(image, aggregate):
         "if-no-files-found: error",
         "retention-days: 7",
         "if: always()",
+        "2> image-reports/runtime-resolve.log",
+        "2> image-reports/builder-resolve.log",
+        "2> image-reports/node-resolve.log",
     ]:
         if text not in image:
             raise ValueError("missing image policy: " + text)
@@ -65,6 +68,7 @@ class CI(unittest.TestCase):
             ("load: true", "load: false"),
             ("--runtime", "--ignore-unfixed --runtime"),
             ("push: false", "continue-on-error: true"),
+            ("2> image-reports/node-resolve.log", "2>/dev/null"),
         ]:
             with self.assertRaises(ValueError):
                 image_policy(j["image"].replace(old, new), j["ci-pass"])

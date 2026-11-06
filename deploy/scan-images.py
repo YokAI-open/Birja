@@ -80,11 +80,14 @@ def db_metadata(cache):
 
 
 def run_scans(output, targets):
-    require(set(targets) == TARGETS and len(set(targets.values())) == 5)
+    require(set(targets) == TARGETS)
+    resolved = [ref for ref in targets.values() if ref]
+    require(len(set(resolved)) == len(resolved))
     require(
         all(
-            re.fullmatch(r"(?:[a-z0-9./:_-]+@)?sha256:[0-9a-f]{64}", ref)
-            for ref in targets.values()
+            (ref == "" and name in {"runtime", "builder", "node"})
+            or re.fullmatch(r"(?:[a-z0-9./:_-]+@)?sha256:[0-9a-f]{64}", ref)
+            for name, ref in targets.items()
         )
     )
     output = Path(output).resolve()
@@ -122,6 +125,12 @@ def run_scans(output, targets):
             evidence["targets"][name] = record
             archive = work / (name + ".tar")
             try:
+                if targets[name] == "":
+                    record["error"] = "identity-resolution-failed"
+                    resolution_log = output / (name + "-resolve.log")
+                    if resolution_log.is_file():
+                        record["identity_resolution_log_sha256"] = sha(resolution_log)
+                    continue
                 inspected = command(["docker", "image", "inspect", targets[name]])
                 (output / (name + "-inspect.log")).write_bytes(inspected.stderr)
                 require(inspected.returncode == 0)

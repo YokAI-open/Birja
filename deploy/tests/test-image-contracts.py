@@ -6,10 +6,13 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import shlex
 import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -330,6 +333,58 @@ class Identity(unittest.TestCase):
 
 
 class Scans(unittest.TestCase):
+    def workflow_handoff(self, root, unavailable, inputs):
+        """Execute the actual CI scan shell with one missing built image."""
+        script = (
+            (ROOT / ".github/workflows/ci.yml")
+            .read_text()
+            .split("- name: Scan all five actual images\n", 1)[1]
+            .split("- name: Upload public image evidence", 1)[0]
+            .split("run: |\n", 1)[1]
+        )
+        script = textwrap.dedent(script)
+        capture = root / "capture.py"
+        capture.write_text(
+            "import json,sys\nfrom pathlib import Path\nPath('handoff.json').write_text(json.dumps(sys.argv[1:]))\n"
+        )
+        binpath = root / "bin"
+        binpath.mkdir()
+        tags = {
+            "birja-backend-runtime:ci": "runtime",
+            "birja-backend-test:ci": "builder",
+            "birja-node-toolchain:ci": "node",
+        }
+        docker = binpath / "docker"
+        docker.write_text(
+            "#!"
+            + sys.executable
+            + "\nimport sys\ntags="
+            + repr(tags)
+            + "\ninputs="
+            + repr(inputs)
+            + "\nname=tags[sys.argv[3]]\nif name=="
+            + repr(unavailable)
+            + ":\n sys.stderr.write('original Docker inspect failed: image missing\\n')\n sys.exit(1)\nprint(inputs[name])\n"
+        )
+        docker.chmod(0o700)
+        script = script.replace(
+            "python3 deploy/scan-images.py",
+            shlex.quote(sys.executable) + " " + shlex.quote(str(capture)),
+        )
+        script = script.replace("image-reports", shlex.quote(str(root)))
+        completed = subprocess.run(
+            ["bash", "-c", script],
+            check=False,
+            cwd=root,
+            env={"PATH": str(binpath) + os.pathsep + os.defpath},
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+        args = json.loads((root / "handoff.json").read_text())
+        self.assertEqual(args[args.index("--" + unavailable) + 1], "")
+        return args
+
     def test_actual_producer_collects_all_targets_and_fails_closed(self):
         path = ROOT / "deploy/scan-images.py"
         self.assertTrue(path.is_file(), "strict scan producer missing")
@@ -353,6 +408,8 @@ class Scans(unittest.TestCase):
             "inspect",
             "export",
             "identity",
+            "missing-node-id",
+            "missing-runtime-id",
         ]:
             seen = []
 
@@ -368,7 +425,7 @@ class Scans(unittest.TestCase):
                         json.dumps(
                             [
                                 {
-                                    "Id": argv[3],
+                                    "Id": argv[3].rsplit("@", 1)[-1],
                                     "Os": "linux",
                                     "Architecture": "amd64",
                                     "RepoDigests": [],
@@ -470,18 +527,48 @@ class Scans(unittest.TestCase):
                 tempfile.TemporaryDirectory() as tmp,
                 patch.object(producer, "command", side_effect=command),
             ):
-                result = producer.run_scans(Path(tmp), inputs)
+                selected = dict(inputs)
+                unavailable = {
+                    "missing-node-id": "node",
+                    "missing-runtime-id": "runtime",
+                }.get(mode)
+                if unavailable:
+                    handoff = self.workflow_handoff(Path(tmp), unavailable, inputs)
+                    with patch.object(sys, "argv", ["scan-images.py", *handoff]):
+                        result = producer.main()
+                else:
+                    result = producer.run_scans(Path(tmp), selected)
                 self.assertEqual(result, 0 if mode == "clean" else 1, mode)
                 evidence = json.loads((Path(tmp) / "status.json").read_text())
                 self.assertEqual(set(evidence["targets"]), set(inputs))
-                self.assertEqual(len(seen), 4 if mode in ["inspect", "export"] else 5)
-                self.assertTrue((Path(tmp) / "node.json").is_file())
+                self.assertEqual(
+                    len(seen),
+                    4
+                    if mode
+                    in ["inspect", "export", "missing-node-id", "missing-runtime-id"]
+                    else 5,
+                )
+                if unavailable:
+                    self.assertEqual(
+                        evidence["targets"][unavailable]["error"],
+                        "identity-resolution-failed",
+                    )
+                    self.assertIn(
+                        "original Docker inspect failed",
+                        (Path(tmp) / (unavailable + "-resolve.log")).read_text(),
+                    )
+                    for available in set(inputs) - {unavailable}:
+                        self.assertTrue((Path(tmp) / (available + ".json")).is_file())
+                else:
+                    self.assertTrue((Path(tmp) / "node.json").is_file())
                 self.assertFalse(list(Path(tmp).glob("*.tar")))
         with tempfile.TemporaryDirectory() as tmp:
             for invalid in [
                 {},
                 {**inputs, "node": inputs["redis"]},
                 {**inputs, "node": "node:latest"},
+                {**inputs, "node": "", "runtime": "runtime:latest"},
+                {**inputs, "postgres": ""},
             ]:
                 with self.assertRaises(ValueError):
                     producer.run_scans(Path(tmp), invalid)
