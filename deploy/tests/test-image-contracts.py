@@ -187,6 +187,9 @@ class Identity(unittest.TestCase):
         dockerfile = (ROOT / "frontend/Dockerfile").read_text()
         self.assertIn("AS toolchain", dockerfile)
         self.assertIn("npm-11.21.2.tgz", dockerfile)
+        self.assertIn("AbortSignal.timeout(60000)", dockerfile)
+        self.assertIn("10 * 1024 * 1024", dockerfile)
+        self.assertIn("for await", dockerfile)
         self.assertIn(
             "7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==",
             dockerfile,
