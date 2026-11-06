@@ -25,7 +25,7 @@ The Node production build is a docker run in deploy/deploy.sh; frontend/Dockerfi
 |15-02| Final identities and15-01 test module | One bounded stdlib producer deploy/scan-images.py; extend test-image-contracts.py and test-ci-ops.py; wire existing .github/workflows/ci.yml | Five scan targets → required image job → ci-pass; fake-boundary behavioral failure/omission tests |
 |15-03| Final images/helpers after focused review corrections | New evidence06-IMAGE-GATES.md; external temporary JSON/artifact bytes referenced by hashes | Actual affected builds/smoke/audits, fresh raw scans, same final retained supplied recovery/roles/TLS/actual-old rollback; independent review |
 
-Total ownership:16 files:13 existing and three new paths (scan-images.py, test-image-contracts.py and IMAGE-GATES.md). The count is inventory, not a context estimate. Task01's ten existing consumer/provenance files include eight mechanical frontend/Compose/deploy pin updates; substantive changes are the existing verifier/provenance and backend Dockerfile's tightly bounded complete pip cleanup plus focused tests. No new image framework, dependency manager, data model or application feature. Estimated executor context: task01 roughly20%, task02 roughly15%, task03 roughly10–15%; total45–50% with source references/evidence already available. If verified npm repair needs a shared build subsystem or expanded retained-bundle ownership, report that exact additional scope rather than inventing it within this plan. No existing source/test file outside the16 owned paths may be edited without a bounded explicit scope update.
+Total ownership:18 files:15 existing and three new paths (scan-images.py, test-image-contracts.py and IMAGE-GATES.md). The count is inventory, not a context estimate. Task01's ten existing consumer/provenance files include eight mechanical frontend/Compose/deploy pin updates; substantive changes are the existing verifier/provenance and backend Dockerfile's tightly bounded complete pip cleanup plus focused tests. No new image framework, dependency manager, data model or application feature. Estimated executor context: task01 roughly20%, task02 roughly15%, task03 roughly10–15%; total45–50% with source references/evidence already available. If verified npm repair needs a shared build subsystem or expanded retained-bundle ownership, report that exact additional scope rather than inventing it within this plan. No existing source/test file outside the18 owned paths may be edited without a bounded explicit scope update.
 
 ## Mandatory constraints and residual interpretation
 
@@ -67,3 +67,14 @@ Root coverage correction before independentcheck: rg found the exact recovery
 Compose SHA also in backup-snapshot.py:149 and configure-db.sh:71. Both are
 explicit task01 ownership for literal authenticated-hash synchronization;
 no guard broadening. This avoids an out-of-scope runtime fix at execution.
+
+## Execution scope refinements
+
+Root authorized18paths afterverifiednpm11.21.2 containedfixedbrace-expansion
+andundici: smallfrontendDockerfiletoolchainstage, retainedproduction/CIreuse
+withinownedfiles; deploy-entrypoint.shonlyexactfrontendDockerfileinventory
+closure andtest-rollback-db-security.shonefixtureinventorylineadded.
+Sourcecommits89c7039..3bc1ca7. No sharedframework/app lockchange.
+DockerengineIDrepresentation revisedto authenticatedgraph/localaliasmapping
+(classicconfigID orcontainerdplatformmanifest) withpullsdisabled; nohash
+relabeling or registryfallback. Independentreviewpendingbeforefinalbundle.

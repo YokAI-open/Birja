@@ -204,3 +204,10 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 -Additive15 wave9 availablefixes/strictCI;08partialtask3 moveswave10,09..13waves11..15. Plan15 reviewpending, no waiver/newliveauthority.
 
 -15independentplancheckpassed0active aftercold/offlineimageclosure revision; executionready.
+
+### Plan15 source checkpoint
+
+-Task01/02sourceimplemented3bc1ca7; independentboundedreviewpending. No15SUMMARY.
+-Availableapt/globalpip/npm fixes delivered; rawactualscans stillfail (runtime49H,builder54H,PG91H2C,Redis48H,Node48H); no policywaiver.
+-No finalbundlepackaged. AfterreviewrebuildNodepoststreamguard, confirmimageevidence, oneexactbundle thenserialsuppliedrestore/roles/TLS/oldrollback.
+-Original08securitygate/DEPL/liveauthorityremainpending. All4fixedtestprojectscleaned.
