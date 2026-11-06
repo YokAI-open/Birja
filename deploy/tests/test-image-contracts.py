@@ -2,6 +2,7 @@
 """Image identity and offline recovery contracts at actual command boundaries."""
 
 import hashlib
+import datetime
 import importlib.util
 import io
 import json
@@ -92,7 +93,20 @@ class Identity(unittest.TestCase):
             self.assertIn("image: " + PG, source)
             self.assertIn("image: " + REDIS, source)
         self.assertIn("FROM " + NODE, (ROOT / "frontend/Dockerfile").read_text())
-        self.assertIn("NODE_IMAGE=" + NODE, (ROOT / "deploy/deploy.sh").read_text())
+        self.assertIn("NODE_BASE_IMAGE=" + NODE, (ROOT / "deploy/deploy.sh").read_text())
+
+    def test_complete_npm_distribution_and_retained_production_consumer(self):
+        dockerfile = (ROOT / "frontend/Dockerfile").read_text()
+        self.assertIn("AS toolchain", dockerfile)
+        self.assertIn("npm-11.21.2.tgz", dockerfile)
+        self.assertIn("7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==", dockerfile)
+        self.assertLess(dockerfile.index("createHash"), dockerfile.index("tar -xzf"))
+        deploy = (ROOT / "deploy/deploy.sh").read_text()
+        self.assertIn('"$BIRJA_RETAINED_DIR/frontend/Dockerfile"', deploy)
+        self.assertIn("--target toolchain", deploy)
+        self.assertIn("--iidfile", deploy)
+        retained = (ROOT / "deploy/deploy-entrypoint.sh").read_text()
+        self.assertGreaterEqual(retained.count("'frontend/Dockerfile'"), 2)
 
     def test_authenticated_manifest_links_and_config_platform(self):
         config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
@@ -228,21 +242,57 @@ class Scans(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("scan_images", path)
         producer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(producer)
-        inputs = {name: "sha256:" + str(i) * 64 for i, name in enumerate(["runtime", "builder", "postgres", "redis", "node"], 1)}
-        for mode in ["clean", "high", "critical", "scanner", "db", "malformed", "missing", "inspect", "export"]:
+        inputs = {
+            name: "sha256:" + str(i) * 64
+            for i, name in enumerate(
+                ["runtime", "builder", "postgres", "redis", "node"], 1
+            )
+        }
+        for mode in [
+            "clean",
+            "high",
+            "critical",
+            "scanner",
+            "db",
+            "malformed",
+            "missing",
+            "inspect",
+            "export",
+        ]:
             seen = []
-            def command(argv, **kwargs):
+
+            def command(argv, mode=mode, seen=seen, **kwargs):
                 if argv[1:3] == ["image", "inspect"]:
                     if mode == "inspect" and argv[3] == inputs["runtime"]:
-                        return subprocess.CompletedProcess(argv, 1, b"", b"inspect error")
-                    return subprocess.CompletedProcess(argv, 0, json.dumps([{"Id": argv[3], "Os": "linux", "Architecture": "amd64", "RepoDigests": []}]).encode(), b"")
+                        return subprocess.CompletedProcess(
+                            argv, 1, b"", b"inspect error"
+                        )
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        json.dumps(
+                            [
+                                {
+                                    "Id": argv[3],
+                                    "Os": "linux",
+                                    "Architecture": "amd64",
+                                    "RepoDigests": [],
+                                }
+                            ]
+                        ).encode(),
+                        b"",
+                    )
                 if argv[1:3] == ["image", "save"]:
                     if mode == "export" and argv[-1] == inputs["runtime"]:
-                        return subprocess.CompletedProcess(argv, 1, b"", b"export error")
+                        return subprocess.CompletedProcess(
+                            argv, 1, b"", b"export error"
+                        )
                     Path(argv[argv.index("-o") + 1]).write_bytes(b"archive")
                     return subprocess.CompletedProcess(argv, 0, b"", b"")
                 if "--version" in argv:
-                    return subprocess.CompletedProcess(argv, 0, b'{"Version":"0.76.1"}', b"")
+                    return subprocess.CompletedProcess(
+                        argv, 0, b'{"Version":"0.76.1"}', b""
+                    )
                 self.assertIn(producer.SCANNER, argv)
                 self.assertIn("--read-only", argv)
                 self.assertIn("--cap-drop=ALL", argv)
@@ -253,18 +303,56 @@ class Scans(unittest.TestCase):
                 mount = next(arg for arg in argv if arg.endswith(",dst=/cache"))
                 cache = Path(mount.split("src=", 1)[1].split(",dst=", 1)[0])
                 (cache / "db").mkdir(exist_ok=True)
-                (cache / "db/metadata.json").write_text(json.dumps({"Version": 2, "UpdatedAt": "2099-01-01T00:00:00Z", "DownloadedAt": "2099-01-01T00:00:00Z", "NextUpdate": "2099-01-02T00:00:00Z"}) if mode != "db" else "{}")
-                doc = {"SchemaVersion": 2, "Trivy": {"Version": "0.76.1"}, "Results": [{"Target": "fixture", "Type": "debian", "Vulnerabilities": []}]}
+                (cache / "db/metadata.json").write_text(
+                    json.dumps(
+                        {
+                            "Version": 2,
+                            "UpdatedAt": datetime.datetime.now(
+                                datetime.timezone.utc
+                            ).isoformat(),
+                            "DownloadedAt": datetime.datetime.now(
+                                datetime.timezone.utc
+                            ).isoformat(),
+                            "NextUpdate": (
+                                datetime.datetime.now(datetime.timezone.utc)
+                                + datetime.timedelta(days=1)
+                            ).isoformat(),
+                        }
+                    )
+                    if mode != "db"
+                    else "{}"
+                )
+                doc = {
+                    "SchemaVersion": 2,
+                    "Trivy": {"Version": "0.76.1"},
+                    "Results": [
+                        {"Target": "fixture", "Type": "debian", "Vulnerabilities": []}
+                    ],
+                }
                 status = 0
                 if len(seen) == 1:
                     if mode in ["high", "critical"]:
-                        doc["Results"][0]["Vulnerabilities"] = [{"Severity": mode.upper(), "VulnerabilityID": "fixture"}]
+                        doc["Results"][0]["Vulnerabilities"] = [
+                            {"Severity": mode.upper(), "VulnerabilityID": "fixture"}
+                        ]
                         # Findings must fail even if scanner mistakenly exits 0.
                     elif mode == "scanner":
                         status = 2
-                stdout = b"{" if mode == "malformed" and len(seen) == 1 else b"" if mode == "missing" and len(seen) == 1 else json.dumps(doc).encode()
-                return subprocess.CompletedProcess(argv, status, stdout, b"fixture scanner log")
-            with tempfile.TemporaryDirectory() as tmp, patch.object(producer, "command", side_effect=command):
+                stdout = (
+                    b"{"
+                    if mode == "malformed" and len(seen) == 1
+                    else b""
+                    if mode == "missing" and len(seen) == 1
+                    else json.dumps(doc).encode()
+                )
+                return subprocess.CompletedProcess(
+                    argv, status, stdout, b"fixture scanner log"
+                )
+
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                patch.object(producer, "command", side_effect=command),
+            ):
                 result = producer.run_scans(Path(tmp), inputs)
                 self.assertEqual(result, 0 if mode == "clean" else 1, mode)
                 evidence = json.loads((Path(tmp) / "status.json").read_text())
@@ -273,7 +361,11 @@ class Scans(unittest.TestCase):
                 self.assertTrue((Path(tmp) / "node.json").is_file())
                 self.assertFalse(list(Path(tmp).glob("*.tar")))
         with tempfile.TemporaryDirectory() as tmp:
-            for invalid in [{}, {**inputs, "node": inputs["redis"]}, {**inputs, "node": "node:latest"}]:
+            for invalid in [
+                {},
+                {**inputs, "node": inputs["redis"]},
+                {**inputs, "node": "node:latest"},
+            ]:
                 with self.assertRaises(ValueError):
                     producer.run_scans(Path(tmp), invalid)
 
