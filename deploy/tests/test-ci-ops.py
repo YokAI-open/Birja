@@ -19,7 +19,29 @@ def jobs():
     }
 
 
+def image_policy(image, aggregate):
+    """Validate strict required image wiring; also used against mutations."""
+    for text in ["target: test-builder", "target: runtime", "tags: birja-backend-runtime:ci", "python3 deploy/scan-images.py", "--runtime", "--builder", "--postgres", "--redis", "--node", "actions/upload-artifact@", "image-reports", "if-no-files-found: error", "retention-days: 7", "if: always()"]:
+        if text not in image:
+            raise ValueError("missing image policy: " + text)
+    if image.count("load: true") < 2 or "load: false" in image:
+        raise ValueError("both built stages must load")
+    for forbidden in ["continue-on-error", "ignore-unfixed", "ignorefile", "--vex", "|| true"]:
+        if forbidden in image:
+            raise ValueError("fail-open image policy")
+    if not re.search(r"needs: \[[^\]]*\bimage\b", aggregate):
+        raise ValueError("image is required")
+
+
 class CI(unittest.TestCase):
+    def test_image_policy_and_mutation_regressions(self):
+        j = jobs()
+        image_policy(j["image"], j["ci-pass"])
+        for old, new in [("python3 deploy/scan-images.py", "true"), ("--node", "--omitted"), ("image-reports", "other"), ("load: true", "load: false"), ("--runtime", "--ignore-unfixed --runtime"), ("push: false", "continue-on-error: true")]:
+            with self.assertRaises(ValueError):
+                image_policy(j["image"].replace(old, new), j["ci-pass"])
+        with self.assertRaises(ValueError):
+            image_policy(j["image"], j["ci-pass"].replace(", image", ""))
     def test_required_aggregate_rejects_every_nonsuccess(self):
         j = jobs()
         self.assertIn("ops", j)

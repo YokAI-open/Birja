@@ -8,6 +8,8 @@ import json
 import sys
 import tarfile
 import unittest
+import subprocess
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -217,6 +219,63 @@ class Identity(unittest.TestCase):
             self.assertRaises(ValueError),
         ):
             r.bind_recovery_image()
+
+
+class Scans(unittest.TestCase):
+    def test_actual_producer_collects_all_targets_and_fails_closed(self):
+        path = ROOT / "deploy/scan-images.py"
+        self.assertTrue(path.is_file(), "strict scan producer missing")
+        spec = importlib.util.spec_from_file_location("scan_images", path)
+        producer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(producer)
+        inputs = {name: "sha256:" + str(i) * 64 for i, name in enumerate(["runtime", "builder", "postgres", "redis", "node"], 1)}
+        for mode in ["clean", "high", "critical", "scanner", "db", "malformed", "missing", "inspect", "export"]:
+            seen = []
+            def command(argv, **kwargs):
+                if argv[1:3] == ["image", "inspect"]:
+                    if mode == "inspect" and argv[3] == inputs["runtime"]:
+                        return subprocess.CompletedProcess(argv, 1, b"", b"inspect error")
+                    return subprocess.CompletedProcess(argv, 0, json.dumps([{"Id": argv[3], "Os": "linux", "Architecture": "amd64", "RepoDigests": []}]).encode(), b"")
+                if argv[1:3] == ["image", "save"]:
+                    if mode == "export" and argv[-1] == inputs["runtime"]:
+                        return subprocess.CompletedProcess(argv, 1, b"", b"export error")
+                    Path(argv[argv.index("-o") + 1]).write_bytes(b"archive")
+                    return subprocess.CompletedProcess(argv, 0, b"", b"")
+                if "--version" in argv:
+                    return subprocess.CompletedProcess(argv, 0, b'{"Version":"0.76.1"}', b"")
+                self.assertIn(producer.SCANNER, argv)
+                self.assertIn("--read-only", argv)
+                self.assertIn("--cap-drop=ALL", argv)
+                self.assertNotIn("/var/run/docker.sock", " ".join(argv))
+                self.assertIn("HIGH,CRITICAL", argv)
+                seen.append(argv)
+                # The fake scanner writes the real mounted cache DB metadata.
+                mount = next(arg for arg in argv if arg.endswith(",dst=/cache"))
+                cache = Path(mount.split("src=", 1)[1].split(",dst=", 1)[0])
+                (cache / "db").mkdir(exist_ok=True)
+                (cache / "db/metadata.json").write_text(json.dumps({"Version": 2, "UpdatedAt": "2099-01-01T00:00:00Z", "DownloadedAt": "2099-01-01T00:00:00Z", "NextUpdate": "2099-01-02T00:00:00Z"}) if mode != "db" else "{}")
+                doc = {"SchemaVersion": 2, "Trivy": {"Version": "0.76.1"}, "Results": [{"Target": "fixture", "Type": "debian", "Vulnerabilities": []}]}
+                status = 0
+                if len(seen) == 1:
+                    if mode in ["high", "critical"]:
+                        doc["Results"][0]["Vulnerabilities"] = [{"Severity": mode.upper(), "VulnerabilityID": "fixture"}]
+                        # Findings must fail even if scanner mistakenly exits 0.
+                    elif mode == "scanner":
+                        status = 2
+                stdout = b"{" if mode == "malformed" and len(seen) == 1 else b"" if mode == "missing" and len(seen) == 1 else json.dumps(doc).encode()
+                return subprocess.CompletedProcess(argv, status, stdout, b"fixture scanner log")
+            with tempfile.TemporaryDirectory() as tmp, patch.object(producer, "command", side_effect=command):
+                result = producer.run_scans(Path(tmp), inputs)
+                self.assertEqual(result, 0 if mode == "clean" else 1, mode)
+                evidence = json.loads((Path(tmp) / "status.json").read_text())
+                self.assertEqual(set(evidence["targets"]), set(inputs))
+                self.assertEqual(len(seen), 4 if mode in ["inspect", "export"] else 5)
+                self.assertTrue((Path(tmp) / "node.json").is_file())
+                self.assertFalse(list(Path(tmp).glob("*.tar")))
+        with tempfile.TemporaryDirectory() as tmp:
+            for invalid in [{}, {**inputs, "node": inputs["redis"]}, {**inputs, "node": "node:latest"}]:
+                with self.assertRaises(ValueError):
+                    producer.run_scans(Path(tmp), invalid)
 
 
 if __name__ == "__main__":
