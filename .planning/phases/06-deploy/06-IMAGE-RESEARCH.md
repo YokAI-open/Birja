@@ -203,3 +203,57 @@ The above are measured gaps, not `[ASSUMED]` claims. There are no new locked dec
 ## Metadata
 
 Source hierarchy: direct image/registry evidence and official vendor/distro documentation; no community source used for a disposition. Standard candidate identity confidence HIGH; existing-file attribution HIGH; residual not-affected assessments MEDIUM or explicitly unresolved; zero-HIGH remediation outcome LOW until rescanned. Research valid until the next image/DB/advisory update; reverify registry/DB identities at execution. This report changes no source, pins, locks, CI, runtime, state or completion status. [VERIFIED: scoped research execution]
+
+## Authorized candidate validation — measured follow-up
+
+**Result: ordinary same-major patch/rebuild refresh fixes apt/libapt only; all five actual candidate scan targets still fail HIGH/CRITICAL.** This follow-up supersedes the earlier candidate-unpulled/unmeasured statements above. It does not adopt new source pins or change policy. [VERIFIED: candidate JSON and multiset comparison below]
+
+Parent explicitly authorized four exact public candidate pulls, temporary backend builds changing only both Python FROM lines, version inspection and scans. Immediately before pulling, the registry-only query reverified all four index/amd64 identities above unchanged. Commands pulled `python@sha256:ac25e5afbfdb4a94ff99cc24b0345719210133144481480bcba6085efa36a341`, `postgres@sha256:e923a22ac074261dd73970c57edf659475bf0497cb9456f17d98ed7cdd3ca913`, `redis@sha256:f00c54d05acbb9f6b9ce47e3dbd03d7ed16d94c274470be17acd6b0112734162`, and `node@sha256:947528b072c170d980592b851c802155d84dcad60d3f550b8a0451b84d65dabd` using `docker pull --platform linux/amd64 <digest-ref>`. No tag retargeting or replacement fallback occurred. [VERIFIED: /tmp/birja-candidate-research.py; pull logs; registry script output]
+
+Build context remained `/home/YokaiExchange/backend`. Read `backend/.dockerignore`: excludes `.venv`, `.env`, `.env.*`, caches and coverage artifacts; bounded filename audit found no additional key/credential/private files. Temporary `/tmp/birja-candidate-research-4n5r71mi/Dockerfile` replaces exactly two occurrences of `FROM python:3.14.9-slim-trixie` with the verified candidate Python digest, preserving uv 0.13.5 and committed locked dependency resolution. Dockerfile SHA256 `d89a305180e56bceba0bad4bf378c4da1cbd820bc31567eddf89be794d9b15ca`. Builds used:
+
+```text
+docker build --platform linux/amd64 --target runtime \
+  -f /tmp/birja-candidate-research-4n5r71mi/Dockerfile \
+  -t birja-image-research-runtime:phase06-python31410 /home/YokaiExchange/backend
+docker build --platform linux/amd64 --target test-builder \
+  -f /tmp/birja-candidate-research-4n5r71mi/Dockerfile \
+  -t birja-image-research-builder:phase06-python31410 /home/YokaiExchange/backend
+```
+
+Both builds exit0: runtime12.893s, test-builder13.931s. These are image build checks, not runtime/app/DB test results. No package cleanup or app lock update was performed. [VERIFIED: build-runtime.log; build-builder.log; temporary Dockerfile construction]
+
+Version inspection used network-disabled, read-only, cap-drop-ALL ephemeral containers with no mounts; script `/tmp/birja-candidate-versions.py`, outputs `versions-{python,postgres,redis,node}.txt` under the same temporary directory. [VERIFIED: executed inspection]
+
+| Candidate | Actual public versions/components |
+|---|---|
+| Python | Python3.14.10; global pip26.2.2; ensurepip `pip-26.2.2-py3-none-any.whl`; vendor.txt still msgpack1.1.2, setuptools70.3.0, urllib3 2.7.0. [VERIFIED: versions-python.txt] |
+| PostgreSQL | PostgreSQL18.6 Debian18.6-1.pgdg13+2; gosu1.19 Go1.24.6; postgres UID/GID999; apt/libapt3.0.4; libxml2 still2.12.7+dfsg+really2.9.14-2.1+deb13u3. [VERIFIED: versions-postgres.txt] |
+| Redis | Redis8.8.4, jemalloc5.3.0; apt/libapt3.0.4. [VERIFIED: versions-redis.txt] |
+| Node | Node24.22.2; npm11.19.1; npm nested undici still6.28.0 and brace-expansion still5.0.9. [VERIFIED: versions-node.txt] |
+
+Scanner command, pinned scanner image and severity/error policy are identical to the earlier successful JSON run. Reused existing private cache `/tmp/birja-image-research-5yhyvf54/cache`; DB UpdatedAt/DownloadedAt/NextUpdate remain exactly as recorded above, allowing comparison without DB drift. Scan inputs were the two **actually built backend candidate images**, PostgreSQL, Redis and Node candidates; Python base alone was not substituted for backend scans. [VERIFIED: candidate driver and cache metadata]
+
+| Actual candidate scan target | Debian HIGH / CRITICAL | Other HIGH / CRITICAL | Debian rows with listed fix | Exit | Seconds |
+|---|---:|---:|---:|---:|---:|
+| birja-image-research-runtime:phase06-python31410 |49 /0|Python5 /0|0|1|2.408|
+| birja-image-research-builder:phase06-python31410 |49 /0|Python5 /0|0|1|2.527|
+| postgres candidate digest |66 /1|gosu25 /1|0|1|3.948|
+| redis candidate digest |48 /0|—|0|1|1.413|
+| node candidate digest |48 /0|npm6 /0|0|1|2.208|
+
+Exact comparison used a multiset of `(Result.Type, PkgName, VulnerabilityID, InstalledVersion)` across all finding rows. In **each** target, the only removed rows are `apt / CVE-2026-109518 /3.0.3` and `libapt-pkg7.0 / CVE-2026-109518 /3.0.3`; **no rows added**. Therefore every other earlier exact finding/path/version persists. Listed-fix residual non-OS totals remain Python5, gosu26 and npm6; no claim that the refresh clears all fixable findings is justified. [VERIFIED: Python collections.Counter comparison of original/candidate JSON]
+
+Exact remaining shared Debian CVE set: `CVE-2025-69720`, `CVE-2026-119373`, `CVE-2026-119374`, `CVE-2026-119379`, `CVE-2026-16742`, `CVE-2026-54369`, `CVE-2026-76642`, `CVE-2026-76844`, `CVE-2026-78408`, `CVE-2026-78409`, `CVE-2026-78410`, `CVE-2026-85091`, `CVE-2026-9538`. PostgreSQL additionally retains `CVE-2026-24882`, `CVE-2026-6653`, `CVE-2026-74860`, `CVE-2026-86138`, `CVE-2026-86139`, `CVE-2026-86140`, `CVE-2026-86142`, `CVE-2026-86143`, `CVE-2026-86144`. Exact binary-package attribution and the unchanged non-OS findings are in the earlier tables and candidate JSON. [VERIFIED: candidate JSON result sets]
+
+| Candidate report in `/tmp/birja-candidate-research-4n5r71mi/` | SHA256 |
+|---|---|
+| runtime.json | `1eead28e8fe50e58cd242988bb8850d52ea077262a74f7efc4cd0b672fecc2ac` |
+| builder.json | `1b15d90315bd9ef97fd5382816dc062279e044be541d666ea77c6a4753e315bc` |
+| postgres.json | `2b7863fc1e35dd68461755bce08e4e0db2e385459f5b9cf13057c2a7a0be2147` |
+| redis.json | `4b74999f7b324ba6c0f0008bf0fa724db5e95b9f06a401bc3eb2c573a103dc09` |
+| node.json | `74753cb4d378beddf78d503f3871a456cfe087aafc3e144e5c8095a263ed0ecd` |
+
+Temporary research runtime inspection identity `sha256:93eb5781f642e5d125d8649ca353e089c6398e58d083446f677aba0a4956ce9b`; builder `sha256:282d02b93aa23006f03d05a7a7fbaac0a3e96bbd631e7d45214550e9505d8501`. Full `docker image inspect` outputs, creation times and RepoDigests retained in `identities.txt`. After all pulls/builds/scans, reinspection of the five original tags matched **all five earlier identities exactly**; no prior recovery image or artifact was changed. Generated scan archives were removed; research images and public report/cache files remain for review. [VERIFIED: identities.txt; original-tag postcheck; driver cleanup]
+
+**Decision support:** applying these candidate pins is a real apt security improvement but does not satisfy Plan08. A further bounded remediation plan must separately address distributed pip/npm toolchains, gosu exact dispositions and unfixed Debian components; strict zero-HIGH/CRITICAL remains demonstrably blocked. No cleanup, waiver, VEX, ignorefile, policy change, service/DB change or phase advancement is authorized or implemented by this validation. [VERIFIED: measured results and assignment scope]
