@@ -85,7 +85,7 @@ def orchestration_self_test():
                  'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                  'deploy/smoke-prod.sh','deploy/configure-db.sh','deploy/provision-db-tls.sh',
                  'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
-                 'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml']
+                 'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml','frontend/Dockerfile']
         for name in names:
             dest=app/name
             dest.parent.mkdir(parents=True,exist_ok=True)

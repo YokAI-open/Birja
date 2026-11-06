@@ -59,7 +59,8 @@ def verify(release):
     required = {'deploy/deploy.sh','deploy/deploy-entrypoint.sh','deploy/db-security.compose.yml',
                 'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                 'deploy/check-nginx-config.sh','deploy/install-nginx.sh',
-                'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml'}
+                'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml',
+                'frontend/Dockerfile'}
     require(required <= values['files'].keys())
     for name, sha in values['files'].items():
         require(not name.startswith('/') and '..' not in Path(name).parts)
@@ -101,7 +102,8 @@ def install(source, args):
              'deploy/check-nginx-config.sh','deploy/install-nginx.sh',
              'deploy/cloudflare-ips.sh','deploy/smoke-prod.sh',
              'deploy/configure-db.sh','deploy/provision-db-tls.sh',
-             'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql']
+             'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
+             'frontend/Dockerfile']
     names += call(['git','-C','/srv/birja','ls-files','deploy/nginx']).splitlines()
     names += call(['git','-C','/srv/birja','ls-files','backend']).splitlines()
     with tempfile.TemporaryDirectory(prefix='stage-', dir=base) as tmp:

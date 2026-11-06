@@ -38,7 +38,7 @@ PENDING_MARK=$STATE_DIR/deploy.pending      # exists while a deploy is unfinishe
 LOCK=/var/lock/birja-deploy.lock            # prevents concurrent deploys
 HOST=birja.nist.one                         # public host name
 CERT=/etc/nginx/certs/nist.one/fullchain.pem  # installed origin certificate
-NODE_IMAGE=node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d         # same pin as frontend/Dockerfile
+NODE_BASE_IMAGE=node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d # frontend toolchain base
 KEEP_RELEASES=3                             # static releases kept on disk
 BUILD_UID=1000                              # unprivileged uid for the npm build (node in the image)
 REF="${DEPLOY_REF:-main}"                   # D-05: ref override
@@ -220,12 +220,24 @@ health_check() {
 # nothing else the container wrote is used or executed.
 build_frontend_release() {
   STEP="frontend build"
-  local sha ts rel dist
+  local sha ts rel dist toolchain_file node_image
   BUILD_TMP=$(mktemp -d)                    # root 700: host users cannot reach inside
+  toolchain_file="$APP_DIR/frontend/Dockerfile"
+  if [ -n "${BIRJA_RETAINED_DIR:-}" ]; then
+    toolchain_file="$BIRJA_RETAINED_DIR/frontend/Dockerfile"
+  fi
+  grep -qx "FROM $NODE_BASE_IMAGE AS toolchain" "$toolchain_file"
+  mkdir "$BUILD_TMP/toolchain-context"
+  docker build --target toolchain --iidfile "$BUILD_TMP/node-image-id" \
+    -f "$toolchain_file" "$BUILD_TMP/toolchain-context"
+  node_image=$(cat "$BUILD_TMP/node-image-id")
+  [[ "$node_image" =~ ^sha256:[0-9a-f]{64}$ ]]
+  node_image=$(docker image inspect "$node_image" --format '{{.Id}}')
+  [[ "$node_image" =~ ^sha256:[0-9a-f]{64}$ ]]
   git -C "$APP_DIR" archive HEAD frontend | tar -x -C "$BUILD_TMP"
   chown -R "$BUILD_UID:$BUILD_UID" "$BUILD_TMP/frontend"
   docker run --rm --user "$BUILD_UID:$BUILD_UID" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-    -v "$BUILD_TMP/frontend":/app -w /app "$NODE_IMAGE" \
+    -v "$BUILD_TMP/frontend":/app -w /app "$node_image" \
     sh -c 'npm ci --ignore-scripts && npm run build'
   STEP="frontend release"
   dist="$BUILD_TMP/frontend/dist"
