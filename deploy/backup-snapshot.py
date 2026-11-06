@@ -492,8 +492,9 @@ class Job:
         self.c = c
         self.state = Path(c["state_dir"])
         self.step = "startup"
-        self.started = time.monotonic()
+        self.started = c.setdefault("_operation_started", time.monotonic())
         self.calls = 0
+        self.download_rate = None
         self.run_id = os.urandom(16).hex()
         self.env = {
             "PATH": "/usr/bin:/bin",
@@ -567,6 +568,7 @@ class Job:
         return b""
 
     def restic(self, *args, cwd=None):
+        self.quota()
         return self.call(
             [
                 self.c["restic_binary"],
@@ -583,7 +585,7 @@ class Job:
                 "--limit-upload",
                 "1024",
                 "--limit-download",
-                "1024",
+                str(self.download_rate),
                 *args,
             ],
             cwd=cwd,
@@ -609,8 +611,26 @@ class Job:
             <= q["storage_limit_bytes"]
         )
         require(q["upload_reserve_bytes"] >= self.c["max_stage_bytes"])
-        require(q["download_remaining_bytes"] >= self.c["max_stage_bytes"])
-        require(q["request_remaining"] >= q["request_reserve"] >= 1000)
+        api = self.c.get("_inventory_api")
+        native_bytes = api.bytes if api is not None else 0
+        require(q["request_remaining"] >= q["request_reserve"] >= 1)
+        # Restic has no HTTP counter. Its work is separately bounded by tool
+        # calls, retries, connections and this shared whole-operation deadline.
+        # Reserve 64 KiB per possible process for limiter bursts/metadata,
+        # then double rate*time for protocol/retry overhead. Keep the rate
+        # fixed across commands; never grant each subprocess a fresh budget.
+        if self.download_rate is None:
+            allowance = q["download_remaining_bytes"] - native_bytes - 20 * 65536
+            self.download_rate = min(
+                1024, allowance // (2 * 1024 * (self.c["timeout_seconds"] + 20))
+            )
+        require(self.download_rate >= 1)
+        require(
+            native_bytes
+            + 20 * 65536
+            + 2 * self.download_rate * 1024 * (self.c["timeout_seconds"] + 20)
+            <= q["download_remaining_bytes"]
+        )
         require(shutil.disk_usage(self.state).free >= self.c["max_stage_bytes"] * 2)
 
     def lock(self):
@@ -910,7 +930,7 @@ class Job:
                 return 1
 
 
-def main(argv):
+def main(argv, *, config=None):
     os.umask(0o077)
     try:
         require(argv and argv[0] in ["backup", "status", "recovery-gate"])
@@ -933,7 +953,7 @@ def main(argv):
             result = recovery_gate(c, args.snapshot, expected)
             print("recovery_verified=true id=" + result["snapshot_id"])
             return 0
-        c = load_config(argv[1:])
+        c = load_config(argv[1:]) if config is None else config
     except (OSError, ValueError, KeyError, TypeError):
         print("step=config invalid=1")
         return 2

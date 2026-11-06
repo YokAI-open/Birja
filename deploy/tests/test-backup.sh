@@ -88,6 +88,35 @@ elif cmd=='prune':
 '''
 
 class Backup(unittest.TestCase):
+ def test_native_http_budget_is_cumulative_at_transport(self):
+  q=self.quota_module(); api=q.API(request_budget=2,download_budget=100000)
+  response=mock.MagicMock(); response.status=200; response.__enter__.return_value=response
+  def opened(*args,**kwargs):
+   response.read1.side_effect=[b'{}',b'']; return response
+  with mock.patch.object(api.opener,'open',side_effect=opened) as transport:
+   for _ in range(2): self.assertEqual(api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'synthetic'),{})
+   with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'synthetic')
+   self.assertEqual(transport.call_count,2); self.assertEqual(api.calls,2)
+   self.assertEqual(api.bytes,2*(8192+2))
+  small=q.API(request_budget=1,download_budget=8192)
+  with mock.patch.object(small.opener,'open') as transport:
+   with self.assertRaises(ValueError): small.call('https://api003.backblazeb2.com','b2_list_buckets',{},'synthetic')
+   transport.assert_not_called()
+ def test_download_budget_changes_actual_command_rate_and_rejects_small(self):
+  q=self.quota_module(); c=q.backup.load_config(['--synthetic',str(self.p/'config')])
+  Path(c['state_dir']).mkdir(mode=0o700)
+  job=q.backup.Job(c); job.quota(); first=job.download_rate
+  c['quota']['download_remaining_bytes']//=2
+  smaller=q.backup.Job(c); smaller.quota(); self.assertLess(smaller.download_rate,first)
+  with mock.patch.object(smaller,'call',return_value=b'') as call:
+   smaller.restic('snapshots'); self.assertEqual(call.call_args.args[0][call.call_args.args[0].index('--limit-download')+1],str(smaller.download_rate))
+  c['quota']['download_remaining_bytes']=1000000
+  with mock.patch.object(job,'call') as call:
+   with self.assertRaises(ValueError): q.backup.Job(c).restic('snapshots')
+   call.assert_not_called()
+  c['quota']['download_remaining_bytes']=10000000
+  api=q.API(download_budget=10000000); c['_inventory_api']=api; api.bytes=9000000
+  with self.assertRaises(ValueError): q.backup.Job(c).quota()
  def quota_module(self):
   spec=importlib.util.spec_from_file_location('quota',ROOT/'deploy'/'backup-quota.py')
   q=importlib.util.module_from_spec(spec); spec.loader.exec_module(q); return q
@@ -124,6 +153,24 @@ class Backup(unittest.TestCase):
   c={'access_key_file':str(self.p/'writer-id'),'secret_key_file':str(self.p/'writer-key')}
   self.assertEqual(q.inventory(c,a,Fake()),expected)
   self.assertTrue(any(c[1]=='b2_list_parts' for c in calls))
+  # Real HTTP adapter -> inventory -> refreshed quota -> actual Job admission.
+  api=q.API(request_budget=1000,download_budget=10000000)
+  response=mock.MagicMock(); response.status=200; response.__enter__.return_value=response
+  def opened(request,**kwargs):
+   op=request.full_url.rsplit('/',1)[1]
+   result=Fake().call(request.full_url.split('/b2api/')[0],op,json.loads(request.data) if request.data else {},request.headers['Authorization'])
+   response.read1.side_effect=[json.dumps(result).encode(),b'']; return response
+  actual=q.backup.load_config(['--synthetic',str(self.p/'config')]); actual.update(c)
+  actual.update(_synthetic=False,_inventory_api=api)
+  controls={**a,'local_request_budget':1000,'local_download_budget_bytes':10000000}
+  Path(actual['state_dir']).mkdir(mode=0o700)
+  with mock.patch.object(api.opener,'open',side_effect=opened), mock.patch.object(q,'controls',return_value=controls):
+   actual['quota']=q.refresh(actual); q.backup.Job(actual).quota()
+   first=api.calls; self.assertGreater(first,0)
+   actual['quota']=q.refresh(actual); q.backup.Job(actual).quota()
+   self.assertEqual(api.calls,2*first)
+   api.request_budget=api.calls
+   with self.assertRaises(ValueError): q.refresh(actual)
   outside_partial=True
   with self.assertRaises(ValueError): q.inventory(c,a,Fake())
   outside_partial=False
@@ -177,7 +224,7 @@ class Backup(unittest.TestCase):
   p=self.p/'backup-controls.json'; p.write_text(json.dumps(a)); p.chmod(0o600)
   c=q.backup.load_config(['--synthetic',str(self.p/'config')])
   self.assertEqual(q.controls(c),a)
-  for key,value in [('verified_at',int(time.time())),('verified_at',0),('console_zero_caps',False),('exclusive_account_writes',False),('local_request_budget',999)]:
+  for key,value in [('verified_at',int(time.time())),('verified_at',0),('console_zero_caps',False),('exclusive_account_writes',False),('local_request_budget',0)]:
    p.write_text(json.dumps({**a,key:value}))
    with self.assertRaises(ValueError): q.controls(c)
   p.write_text(json.dumps(a)); p.chmod(0o644)

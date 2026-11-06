@@ -35,13 +35,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class API:
-    def __init__(self):
+    def __init__(
+        self, request_budget=MAX_CALLS, download_budget=MAX_CALLS * MAX_RESPONSE
+    ):
         # Ignore ambient proxies, credentials, netrc and alternate endpoints.
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}), NoRedirect()
         )
         self.started = time.monotonic()
         self.calls = 0
+        self.bytes = 0
+        self.request_budget = request_budget
+        self.download_budget = download_budget
 
     def call(self, base, operation, body, token):
         require(
@@ -58,7 +63,14 @@ class API:
                 "b2_list_parts",
             }
         )
-        require(self.calls < MAX_CALLS and time.monotonic() - self.started < 120)
+        require(
+            self.calls < min(MAX_CALLS, self.request_budget)
+            and time.monotonic() - self.started < 120
+        )
+        # Charge a protocol allowance even for failed HTTP requests. No retries
+        # or redirects occur beneath this counted native request boundary.
+        require(self.bytes + 8192 < self.download_budget)
+        self.bytes += 8192
         self.calls += 1
         req = urllib.request.Request(
             base + "/b2api/v4/" + operation,
@@ -74,11 +86,14 @@ class API:
             chunks, size = [], 0
             while True:
                 require(time.monotonic() - self.started < 120)
-                chunk = response.read1(min(65536, MAX_RESPONSE + 1 - size))
+                remaining = self.download_budget - self.bytes
+                require(remaining > 0)
+                chunk = response.read1(min(65536, MAX_RESPONSE + 1 - size, remaining))
                 if not chunk:
                     break
                 chunks.append(chunk)
                 size += len(chunk)
+                self.bytes += len(chunk)
                 require(size <= MAX_RESPONSE)
             data = b"".join(chunks)
         require(len(data) <= MAX_RESPONSE and time.monotonic() - self.started < 120)
@@ -133,7 +148,7 @@ def controls(c):
         p = backup.contained(a[key], root)
         require(p == p.resolve())
         backup.private_file(p)
-    require(1000 <= integer(a["local_request_budget"]) <= 10000)
+    require(1 <= integer(a["local_request_budget"]) <= 10000)
     require(
         c["max_stage_bytes"]
         <= integer(a["local_download_budget_bytes"])
@@ -143,7 +158,13 @@ def controls(c):
 
 
 def inventory(c, a, api=None):
-    api = API() if api is None else api
+    if api is None:
+        api = c.get("_inventory_api")
+        if api is None:
+            api = API(a["local_request_budget"], a["local_download_budget_bytes"])
+            c["_inventory_api"] = api
+        api.request_budget = min(api.request_budget, a["local_request_budget"])
+        api.download_budget = min(api.download_budget, a["local_download_budget_bytes"])
     key = text(backup.private_file(a["inventory_key_id_file"]).read_text().strip())
     secret = text(backup.private_file(a["inventory_key_file"]).read_text().strip())
     auth = api.call(
@@ -353,7 +374,7 @@ def refresh(c):
             repack_reserve_bytes=c["max_stage_bytes"],
             download_remaining_bytes=a["local_download_budget_bytes"],
             request_remaining=a["local_request_budget"],
-            request_reserve=1000,
+            request_reserve=1,
             free_controls_verified=True,
             dedicated_repository=True,
         )
@@ -392,7 +413,7 @@ def main(args):
             previous = os.environ.get("BIRJA_BACKUP_LOCK_FD")
             os.environ["BIRJA_BACKUP_LOCK_FD"] = str(lock.fileno())
             try:
-                return backup.main(["backup", *args])
+                return backup.main(["backup", *args], config=c)
             finally:
                 if previous is None:
                     os.environ.pop("BIRJA_BACKUP_LOCK_FD", None)

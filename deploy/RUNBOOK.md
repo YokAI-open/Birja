@@ -204,10 +204,11 @@ It has exactly these fields (supply actual measured/setup values privately):
   `/etc/birja` for an account-wide **read-only** inventory application key,
   with `listBuckets`, `listFiles`, `readBucketRetentions`, no bucket/prefix
   restrictions and no file/bucket/key write/delete capabilities.
-- `local_request_budget`: 1000..10000; `local_download_budget_bytes`: at least
+- `local_request_budget`: 1..10000 actual native inventory HTTP requests per
+  operation (also capped at 128); `local_download_budget_bytes`: at least
   max_stage_bytes and at most 4 GB. Size these conservatively with the owner's
   current free-egress knowledge before setup/restore; they are local work
-  ceilings, **not** automatically measured provider remaining allowances.
+  budgets, **not** automatically measured provider remaining allowances.
 
 Native `b2_list_parts` requires `writeFiles`. Only when unfinished Birja
 `prod/` uploads exist does preflight reuse the existing Birja bucket-scoped
@@ -221,9 +222,17 @@ the explicit minimal encrypted `recovery_files`; retain independent custody.
 
 The preflight stores historical compatibility fields `request_remaining` and
 `download_remaining_bytes` as these local budgets. Their names do not mean
-remaining B2 account allowance. Restic uses two connections, bounded retries,
-1 MiB/s directional rate limits and a whole-job timeout. Exact HTTP request
-totals/wire bytes are not measured by subprocess counts or packed payload size.
+remaining B2 account allowance. The request budget counts native HTTP requests
+at the actual opener boundary, cumulatively across inventory pagination and
+refreshes in an operation. It does not cover restic's unobservable HTTP count.
+Restic is limited separately to 20 tool calls, two connections, two S3 retries,
+30-second stuck-request timeout and one shared whole-job deadline. Downloads
+use a derived rate capped at 1 MiB/s: admission reserves native response bytes
+plus protocol allowance, 64 KiB per possible process, and twice rate times
+(whole-job seconds + 20 one-second process bursts). A budget too small for
+1 KiB/s fails before restic work; each command shares the allowance and deadline.
+This is conservative bounded work, not an exact wire-byte or billing meter.
+Exact restic HTTP totals are not measured by subprocess counts or payload size.
 The conservative storage reserve includes twice the rate-times-timeout plus
 staging/repack reserve without assumed dedup savings. If headroom is inadequate,
 reduce measured work, wait for provider version cleanup or stop; never delete
