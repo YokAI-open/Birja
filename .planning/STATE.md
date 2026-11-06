@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 06-07 complete at 4625435; continue 06-08 scheduling and full local gates
+stopped_at: 06-08 tasks01/02 complete at19df11e; image findings and independent review pending
 last_updated: "2026-11-02T10:35:03.725Z"
 last_activity: 2026-11-02 -- Phase 06 execution started
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 8, wave 9 of 14 (Plans 06-01..07 and 14 complete)
-Status: Executing Plan 06-08 scheduled backups, operational CI and local gates
+Status: Plan06-08 2/3 tasks complete; independent review and image security gate pending
 Last activity: 2026-11-02 -- Phase 06 execution started
 
 Progress: [████████░░] 91% of planned plans executed (62/68); Phase 6: 8/14 plans complete.
@@ -120,7 +120,7 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 ## Session Continuity
 
 Last session: 2026-11-02T10:35:03.703Z
-Stopped at: 06-07 complete at 4625435; continue 06-08 scheduling and full local gates
+Stopped at: 06-08 tasks01/02 complete at19df11e; image findings and independent review pending
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -189,3 +189,12 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 - Prerequisite06-14 completee6a768a:14fast,17backup,3safety,20inputchecks; real default+suppliedrecovery/strictgate,roles/TLS passed, bothfixedprojectsremoved. Resume07 with explicit interfaces in14SUMMARY.
 
 -06-07 complete4625435: default113.735s/supplied107.927s, actualoldv0.3.1/currentTLSservices,3recoverystages,58legacyassertionspass; cleanupverified. Task02per-taskREDcommitmissing documentedhonestly.
+
+### Phase06 local checkpoint —2026-11-06
+
+-Owner approved B2 console caps + automatic inventory checks; $0 budget unchanged.
+-08tasks01/02 complete, no08SUMMARY and no plan-count advancement.
+-Fresh backend616/99.80%/critical100 and frontend264 plus audits/builds/smoke pass.
+-Finalexactartifactaea60b9f7b05a997660983968ac9eb28a32c4821ba025e8b445fb4851d4bbc8f passed supplied recovery/roles/TLS/actualoldrollback; all3testprojectsremoved.
+-Image scanHIGH/CRITICAL findings unresolved; do not claim task03complete or advance09.
+-Independent code/security review required; trace image/SBOM origins before bounded remediation. Detailed06-LOCAL-GATES.md and public/tmpreports. No live/provider/publication authority.
