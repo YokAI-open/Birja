@@ -328,6 +328,21 @@ index through approved maintenance, and follow its reviewed recovery procedure
 before retry. Do not automatically downgrade or drop arbitrary objects; a
 schema-changing repair needs a reviewed migration and scoped approval.
 
+For this specific interrupted 0008, have the approved migrator inspect
+`pg_index.indisvalid`, `pg_index.indisready`, `pg_get_indexdef(indexrelid)` and
+the current `alembic_version` for
+`to_regclass('public.ix_trades_user_created_id')`. The expected index is
+nonunique on `public.trades (user_id, created_at, id)` and the source revision
+is 0007 until 0008 completes. If and only if that exact invalid partial index
+is confirmed, retain the private inspection and request scoped maintenance
+authority for standalone `DROP INDEX CONCURRENTLY public.ix_trades_user_created_id`.
+Run it outside a transaction with the migrator, then retry the unchanged
+reviewed `alembic upgrade head` through the retained migration path. Verify
+revision 0008 and both index flags true before starting candidate services.
+A valid index, different definition/revision, missing ownership, or unrelated
+object stops this recipe for review; never use CASCADE, automatic downgrade,
+an app superuser, or a wildcard drop.
+
 Certificate dates above are recorded history, not fresh expiry evidence.
 Owner checks actual origin/DB certificate expiry daily alongside backup status,
 renews before the recorded deadline, and repeats trusted TLS verification.
