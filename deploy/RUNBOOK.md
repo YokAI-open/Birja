@@ -233,6 +233,17 @@ plus protocol allowance, 64 KiB per possible process, and twice rate times
 1 KiB/s fails before restic work; each command shares the allowance and deadline.
 This is conservative bounded work, not an exact wire-byte or billing meter.
 Exact restic HTTP totals are not measured by subprocess counts or payload size.
+Restore and the exact remote recovery gate automatically run a refresh-only
+inventory preflight under the validated shared operation lock. This updates
+quota observations only: it never backs up, forgets or prunes, and does not
+rewrite backup/restore identities or completed evidence. An inventory failure
+blocks remote work and preserves existing recovery points. Freshness is
+checked at admission; a restore longer than five minutes keeps its shared
+deadline and transfer budget, then the later rollout gate refreshes separately.
+The 26-hour recovery window uses the conservative backup start (`data_epoch`
+and matching UTC in both private manifest and success), independently of job
+completion. Historical records missing data time fail closed and require a
+new completed backup/restore before rollout.
 The conservative storage reserve includes twice the rate-times-timeout plus
 staging/repack reserve without assumed dedup savings. If headroom is inadequate,
 reduce measured work, wait for provider version cleanup or stop; never delete

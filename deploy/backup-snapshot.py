@@ -19,6 +19,7 @@ import argparse
 import datetime as dt
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -356,7 +357,7 @@ def read_state(state, name):
 def recovery_gate(c, snapshot_id, expected):
     require(type(snapshot_id) is str and ID.fullmatch(snapshot_id))
     job = Job(c)
-    with job.lock():
+    with job.lock() as lock:
         binding = recovery_binding(c)
         require(set(expected) == set(binding) | {"source_release", "source_revision"})
         require(binding["bundle_sha256"] is not None)
@@ -424,7 +425,7 @@ def recovery_gate(c, snapshot_id, expected):
                     success[prefix + "_epoch"], dt.UTC
                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
             )
-        job.quota()  # Revalidate fresh request/download allowances; no full blobs.
+        job.refresh_quota(lock)  # Fresh inventory, without changing recovery evidence.
         rows = strict_json(job.restic("snapshots", snapshot_id))
         require(job.check_scope(rows) == [snapshot_id])
         remote_time = dt.datetime.fromisoformat(rows[0]["time"])
@@ -568,7 +569,7 @@ class Job:
         return b""
 
     def restic(self, *args, cwd=None):
-        self.quota()
+        self.quota(fresh=self.download_rate is None)
         return self.call(
             [
                 self.c["restic_binary"],
@@ -591,12 +592,13 @@ class Job:
             cwd=cwd,
         )
 
-    def quota(self):
+    def quota(self, *, fresh=True):
         q = self.c["quota"]
         require(
             q["free_controls_verified"] is True and q["dedicated_repository"] is True
         )
-        require(0 <= time.time() - q["observed_at"] <= 300)
+        if fresh:
+            require(0 <= time.time() - q["observed_at"] <= 300)
         used = sum(
             q[k]
             for k in [
@@ -632,6 +634,27 @@ class Job:
             <= q["download_remaining_bytes"]
         )
         require(shutil.disk_usage(self.state).free >= self.c["max_stage_bytes"] * 2)
+
+    def refresh_quota(self, lock):
+        """Refresh only inventory under a validated already-held operation lock."""
+        path = (
+            Path(self.c["_config_root"]) / "operation.lock"
+            if self.c["_synthetic"]
+            else Path("/var/lock/birja-deploy.lock")
+        )
+        with acquire_operation_lock(path, str(lock.fileno())):
+            spec = importlib.util.spec_from_file_location(
+                "quota_preflight", HERE / "backup-quota.py"
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            self.c["quota"] = module.refresh(self.c)
+            self.quota()
+            config = Path(self.c["_config_root"]) / (
+                "config" if self.c["_synthetic"] else "backup.env"
+            )
+            private_file(config)
+            atomic(config, {k: v for k, v in self.c.items() if not k.startswith("_")})
 
     def lock(self):
         return acquire_operation_lock(

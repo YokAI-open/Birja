@@ -665,7 +665,7 @@ def restore(args):
     job = b.Job(c)
     job.state.mkdir(mode=0o700, parents=True, exist_ok=True)
     b.private_dir(job.state)
-    with job.lock():
+    with job.lock() as lock:
         owns_server = False
         started = int(time.time())
         attempt = {
@@ -686,7 +686,7 @@ def restore(args):
             previous_signals[signum] = signal.signal(signum, interrupted)
         try:
             binding = b.recovery_binding(c)
-            job.quota()
+            job.refresh_quota(lock)
             if a.approved_clone or a.isolated_clone:
                 require(not call(dc + ["ps", "-q"]).strip())
                 owns_server = True

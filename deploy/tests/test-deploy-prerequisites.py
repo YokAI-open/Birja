@@ -224,6 +224,7 @@ class Evidence(unittest.TestCase):
         self.state = self.root / "state"
         self.state.mkdir(mode=0o700)
         self.sid = "a" * 64
+        self.remote_calls = []
         self.manifest = {
             "archive_sha256": hashlib.sha256(b"PGDMPtest").hexdigest(),
             "release": "1" * 40,
@@ -264,6 +265,7 @@ class Evidence(unittest.TestCase):
         self.tmp.cleanup()
 
     def remote(self, job, *args, **kwargs):
+        self.remote_calls.append(args[0])
         if args[0] == "snapshots":
             return json.dumps(self.metadata).encode()
         if args[0] == "restore":
@@ -278,10 +280,12 @@ class Evidence(unittest.TestCase):
             return json.dumps(self.manifest).encode()
         return b""
 
-    def run_restore(self, failure=None):
+    def run_restore(self, failure=None, *, actual_preflight=False, clock=None):
         def verified(*args):
             if failure == "verify":
                 raise ValueError("synthetic verification failure")
+            if clock is not None:
+                clock[0] += 301
 
         with (
             patch.object(r, "backup_module", return_value=b),
@@ -291,7 +295,12 @@ class Evidence(unittest.TestCase):
                 "restic",
                 lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
             ),
-            patch.object(b.Job, "quota"),
+            contextlib.nullcontext()
+            if actual_preflight
+            else patch.object(b.Job, "quota"),
+            contextlib.nullcontext()
+            if actual_preflight
+            else patch.object(b.Job, "refresh_quota"),
             patch.object(r, "check_running"),
             patch.object(r, "restored", return_value=contextlib.nullcontext()),
             patch.object(r, "verify", side_effect=verified),
@@ -299,6 +308,85 @@ class Evidence(unittest.TestCase):
             r.restore(
                 ["--synthetic", str(self.root / "config"), "--snapshot", self.sid]
             )
+
+    def test_delayed_gate_and_long_restore_refresh_without_rotating_evidence(self):
+        clock = [int(time.time())]
+        self.c["timeout_seconds"] = 3600
+        self.c["quota"] = {
+            "observed_at": clock[0] - 301,
+            "storage_limit_bytes": 100000000,
+            "visible_bytes": 0,
+            "hidden_bytes": 0,
+            "unfinished_bytes": 0,
+            "other_bytes": 0,
+            "upload_reserve_bytes": 1000000,
+            "repack_reserve_bytes": 1000000,
+            "download_remaining_bytes": 10000000,
+            "request_remaining": 1000,
+            "request_reserve": 1,
+            "free_controls_verified": True,
+            "dedicated_repository": True,
+        }
+        Path(self.c["repository"]).mkdir(mode=0o700)
+        b.atomic(
+            self.root / "config",
+            {k: v for k, v in self.c.items() if not k.startswith("_")},
+        )
+        binding = {**b.recovery_binding(self.c), "bundle_sha256": "c" * 64}
+        self.manifest.update(
+            source_binding=binding,
+            recovery_sha256=b.sha_bytes(b"material"),
+            data_epoch=clock[0],
+            data_utc=b.utc(clock[0]),
+            started_utc=b.utc(clock[0]),
+        )
+        backup = {
+            "ok": True,
+            "run_id": "backup",
+            "snapshot_id": self.sid,
+            "data_epoch": clock[0],
+            "data_utc": b.utc(clock[0]),
+            "epoch": clock[0],
+            "utc": b.utc(clock[0]),
+        }
+        for name in ["last-attempt.json", "last-success.json"]:
+            b.atomic(self.state / name, backup)
+        expected = {
+            **binding,
+            "source_release": self.manifest["release"],
+            "source_revision": "0007",
+        }
+        with (
+            patch.object(b.time, "time", side_effect=lambda: clock[0]),
+            patch.object(b, "recovery_binding", return_value=binding),
+        ):
+            self.run_restore(actual_preflight=True, clock=clock)
+            names = [
+                "last-attempt.json",
+                "last-success.json",
+                "restore-last-attempt.json",
+                "restore-last-success.json",
+            ]
+            records = {name: (self.state / name).read_bytes() for name in names}
+            clock[0] += 301
+            with patch.object(
+                b.Job,
+                "restic",
+                lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
+            ):
+                self.assertTrue(
+                    b.recovery_gate(self.c, self.sid, expected)["recovery_verified"]
+                )
+                self.assertEqual(self.c["quota"]["observed_at"], clock[0])
+                Path(self.c["repository"]).rmdir()
+                with self.assertRaises(ValueError):
+                    b.recovery_gate(self.c, self.sid, expected)
+            self.assertEqual(
+                records, {name: (self.state / name).read_bytes() for name in names}
+            )
+        self.assertEqual(
+            self.remote_calls, ["snapshots", "restore", "snapshots", "dump"]
+        )
 
     def test_restore_publishes_private_attempt_and_success_after_cleanup(self):
         self.run_restore()
@@ -357,6 +445,7 @@ class Evidence(unittest.TestCase):
         with (
             patch.object(b, "recovery_binding", return_value=binding),
             patch.object(b.Job, "quota"),
+            patch.object(b.Job, "refresh_quota"),
             patch.object(
                 b.Job,
                 "restic",
@@ -470,6 +559,7 @@ class Evidence(unittest.TestCase):
                 lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
             ),
             patch.object(b.Job, "quota"),
+            patch.object(b.Job, "refresh_quota"),
             patch.object(r, "check_running"),
             patch.object(r, "restored", return_value=contextlib.nullcontext()),
             patch.object(r, "verify"),
@@ -520,6 +610,7 @@ class Evidence(unittest.TestCase):
                     lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
                 ),
                 patch.object(b.Job, "quota"),
+                patch.object(b.Job, "refresh_quota"),
                 patch.object(r, "check_running"),
                 patch.object(
                     r,
