@@ -42,7 +42,7 @@ target is recorded honestly and does not weaken critical integration.
 
 ## Per-Task Verification Map
 
-Reconciled: 33 tasks in 14 sequential waves (additive prerequisite14 at wave7;07..13 now waves8..14). All commands are produced in
+Reconciled: 36 tasks in 15 sequential waves (14 at wave7;15 at wave9;08 at wave10;09..13 at waves11..15). All commands are produced in
 the same task's RED phase or an earlier plan. Actual test runs and runtimes
 remain pending; structural planning checks do not prove execution.
 
@@ -128,3 +128,12 @@ Independent check06-14-PLAN-CHECK passed after resolving lock-path and capabilit
 |06-14-03|same producer --fixtures plus serial recovery/roles/TLS|passed;14SUMMARY|
 
 14 runtime checks passed and are measured in14SUMMARY; live acceptance remains pending.
+
+## Additive image prerequisite15
+
+Independent15 plan checkpassed afterofflineimage-referenceclosure revision.
+Three tasks: immutableactualconsumerpins/provenance with newimage-contract
+producer; strictfive-targetscanner/CI; affectedbuild/runtimeandfinalexact
+artifactproof/residualscanrecord.16pathsowned, testproducerscreatedbeforeuse.
+Actualruntimepending. Bounded15completiondoesnotcomplete08rawsecuritygate
+whileknownvendorHIGH/CRITICALfindingspersist. No waiver orliveadvance.

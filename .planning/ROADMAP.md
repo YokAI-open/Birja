@@ -321,7 +321,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: 8/14 plans complete
+**Plans**: 8/15 plans complete
 
 Plans:
 **Wave 1**
@@ -358,25 +358,29 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
+- [ ] 06-15-PLAN.md — Apply available image fixes and strict CI enforcement; retain vendor blockers
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
+- [ ] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 06-10-PLAN.md — Review feature push, actual CI and integration choices
+- [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 06-11-PLAN.md — Prepare the selected release and verify release CI
+- [ ] 06-10-PLAN.md — Review feature push, actual CI and integration choices
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
+- [ ] 06-11-PLAN.md — Prepare the selected release and verify release CI
 
 **Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
+
+**Wave 15** *(blocked on Wave 14 completion)*
 
 - [ ] 06-13-PLAN.md — Verify Gmail/Outlook friends and all four live criteria
 
@@ -390,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 8/14 | Executing | - |
+| 6. Deploy | 8/15 | Executing | - |
