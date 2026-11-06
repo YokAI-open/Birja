@@ -54,7 +54,7 @@ Releases reach `main` only through `release-*` or `hotfix-*` PRs (git-flow in CL
 /srv/birja/deploy/deploy.sh --rollback
 ```
 
-This returns to the release that was live before the current one. It prints the target SHA and release before acting. Migrations are not undone. There are no backups until Phase 6.
+This returns to the release that was live before the current one. It prints the target SHA and release before acting. Migrations are not undone. Phase 6 adds the separately installed recovery tooling described below; actual provider recovery and timer acceptance remain gated until recorded.
 
 How the target is chosen (`/var/lib/birja/deploys.log`, one line per successful deploy or rollback, `time sha release ref`, ref `rollback` for rollbacks):
 
@@ -137,6 +137,204 @@ PRICE_SOURCE=kraken, every active coin priced within 300 s, no codes/keys in its
 logs, and `/api/v1/prices` returns 401 when signed out.
 
 Rollback to v0.1.x removes the scheduler (that release has no prices page).
+
+## Phase 6 retained operations and authority
+
+These are setup/recovery instructions for the later explicitly approved host
+operation. Local synthetic rehearsals do not establish live backups, enable
+timers, authorize a deployment, or satisfy DEPL-01/02. Do not run a destructive
+restore against production. The accepted recovery target is at most 26 hours
+of data loss and a measured restore within 4 hours; the owner checks daily.
+
+The deployment installer is `deploy/deploy-entrypoint.sh --install
+--approved-operation install-retained-deploy --tested-source <exact-tested-SHA>`.
+It needs a clean, reviewed exact source and separate live approval. It retains
+helpers under `/var/lib/birja/ops/current/deploy/` and installs
+`/usr/local/sbin/birja-deploy`. `/srv/birja/deploy/deploy.sh` becomes the sole
+managed launcher exception: its exact validated bytes may differ from Git's
+tracked file across old/new release checkouts. Managed sparse checkout excludes
+the remaining deploy tree. Never broaden the dirty-check exception or overwrite
+this launcher from an old checkout. Use retained helpers, including smoke,
+instead of `/srv/birja/deploy/` paths after installation. The independent
+recovery artifact lives under `/var/lib/birja/recovery/current/`; installing a
+deployment bundle does not replace or refresh it.
+
+After a successful deploy/rollback, synchronize backup JSON `release` to the
+actual deployed full commit before the next backup. Recreate completed backup
+and exact full-restore evidence after source/config/security/custody changes.
+The strict prechange gate binds the prior source, configuration, tools and
+recovery bundle; never edit evidence to make a candidate deployment pass.
+
+## B2 free policy and preflight setup
+
+Destination is exactly `s3:https://s3.eu-central-003.backblazeb2.com/Birja-backup/prod`.
+Keep the bucket private, Object Lock off, with one whole-bucket lifecycle rule:
+`fileNamePrefix=""`, `daysFromHidingToDeleting=1`, uploading-to-hiding and
+unfinished-cancellation unset/null. This preserves current referenced restic
+objects. Hidden versions still consume space during cleanup lag. Keep this
+dedicated repository free of foreign snapshots. No payment/paid usage is
+authorized. Console caps are not a universal zero-bill guarantee: changes can
+take 10 minutes, and Class D transactions cannot be capped. The owner verifies
+all available spend caps at $0 in the console, checks account usage/caps daily,
+and stops the timer if the controls or available free allowances change.
+
+`/etc/birja/backup.env` is mode 0600 root-owned **JSON**, never shell input or
+systemd EnvironmentFile. Use the exact validated CONFIG_KEYS in
+`backup-snapshot.py`; set freshness to 93600, timeout at most 3600, resource
+ceilings measured in the later real-data rehearsal, and approved host identity.
+Password and bucket-scoped S3 key values live only in referenced root-only
+files. The automatic preflight updates its `quota` atomically under the same
+operation lock immediately before backup; never hand-edit measurements to
+bypass rejection. It counts actual visible/hidden versions, unfinished upload
+parts and other account storage, includes old/new/repack/wire overhead reserves,
+and refuses unknown, excessive, stale or insufficient inventory before upload
+or deletion. Inventory errors publish a failed latest attempt and preserve the
+last completed recovery point. The native HTTPS API has no redirects/proxies,
+128-call/120-second inventory ceilings, 2 MB responses and bounded pagination.
+
+Create `/etc/birja/backup-controls.json` as root mode 0600 after verifying setup.
+It has exactly these fields (supply actual measured/setup values privately):
+
+- `format`: 1; `verified_at`: actual console verification epoch, at least 600
+  seconds old before execution, renewed within 31 days.
+- `console_zero_caps`, `daily_owner_checks`, `exclusive_account_writes`: true
+  only after owner confirmation. Other account writers must not run during
+  backup; all-account inventory is measured but cannot prevent concurrent use.
+- `inventory_key_id_file`, `inventory_key_file`: root-only paths under
+  `/etc/birja` for an account-wide **read-only** inventory application key,
+  with `listBuckets`, `listFiles`, `readBucketRetentions`, no bucket/prefix
+  restrictions and no file/bucket/key write/delete capabilities.
+- `local_request_budget`: 1000..10000; `local_download_budget_bytes`: at least
+  max_stage_bytes and at most 4 GB. Size these conservatively with the owner's
+  current free-egress knowledge before setup/restore; they are local work
+  ceilings, **not** automatically measured provider remaining allowances.
+
+Native `b2_list_parts` requires `writeFiles`. Only when unfinished Birja
+`prod/` uploads exist does preflight reuse the existing Birja bucket-scoped
+writer for this read operation; its auth response must match the same account,
+endpoint, bucket and allowed prefix. It never calls a provider mutation API.
+Unfinished uploads elsewhere fail closed because the read-only inventory key
+cannot fully measure their parts. Owner resolves those separately; never grant
+account-wide writes to make this check pass. Keys cannot configure billing
+caps. Include controls and required credential/password/CA configuration among
+the explicit minimal encrypted `recovery_files`; retain independent custody.
+
+The preflight stores historical compatibility fields `request_remaining` and
+`download_remaining_bytes` as these local budgets. Their names do not mean
+remaining B2 account allowance. Restic uses two connections, bounded retries,
+1 MiB/s directional rate limits and a whole-job timeout. Exact HTTP request
+totals/wire bytes are not measured by subprocess counts or packed payload size.
+The conservative storage reserve includes twice the rate-times-timeout plus
+staging/repack reserve without assumed dedup savings. If headroom is inadequate,
+reduce measured work, wait for provider version cleanup or stop; never delete
+the only completed backup first or silently authorize paid capacity.
+
+Official interfaces checked 2026-11-06:
+[authorization](https://www.backblaze.com/apidocs/b2-authorize-account),
+[buckets](https://www.backblaze.com/apidocs/b2-list-buckets),
+[versions](https://www.backblaze.com/apidocs/b2-list-file-versions),
+[unfinished uploads](https://www.backblaze.com/apidocs/b2-list-unfinished-large-files),
+[parts](https://www.backblaze.com/apidocs/b2-list-parts),
+[lifecycle](https://www.backblaze.com/docs/cloud-storage-lifecycle-rules),
+[caps](https://www.backblaze.com/docs/cloud-storage-data-caps-and-alerts).
+
+## Install and operate the nightly schedule (later approved setup)
+
+Build with `bash deploy/recovery-bundle.sh package --output
+/tmp/birja-backup-test-<private-directory>/recovery.tar --include-units`.
+Carry its independently recorded SHA256 and reviewed verifier off-server.
+The exact mandatory inventory includes quota helper, both units, signed restic
+provenance, image identity and SHA256SUMS. Verify with `bundle verify --archive
+<archive> --sha <SHA256> --require-profile deploy-recovery-v2` before install;
+then `bundle install` with the same exact arguments after host approval.
+Do not execute archive scripts to verify themselves. Review the trusted
+verifier against the recorded source before use.
+
+The installer creates `/usr/local/sbin/birja-backup`, `birja-backup-status`,
+`birja-restore-check`. The backup launcher invokes retained quota preflight
+then locked backup; it works while the application checkout is v0.3.1 or
+absent. It never depends on the deployment bundle. Prepare private state
+`/var/lib/birja/backup`, protected JSON/credential files and local tool paths
+before enabling. Install the verified unit files mode 0644 in
+`/etc/systemd/system/`, run `systemd-analyze verify` against them, then
+`systemctl daemon-reload` and `systemctl enable --now birja-backup.timer`.
+These are later host actions, not actions performed by local tests.
+
+Schedule: 03:00 UTC daily, up to 15 minutes randomized delay, persistent missed
+trigger catch-up. `Type=oneshot` has no RemainAfterExit. Filesystem write access
+is limited to backup config/state/lock; Docker socket and network access are
+required. Docker still represents host authority; unit hardening is not an
+isolation boundary against Docker. MemoryMax=768M/CPUQuota=200%, job timeout
+65 minutes, private umask, low I/O priority; validate suitability on the host.
+
+For verification use `systemctl list-timers --all birja-backup.timer` and
+`systemctl show birja-backup.timer -p LastTriggerUSec -p NextElapseUSecRealtime`;
+then `systemctl show birja-backup.service -p Result -p ExecMainStatus
+-p ExecMainStartTimestamp` and `/usr/local/sbin/birja-backup-status`.
+Preserve original failed Result/ExecMainStatus before any manual retry.
+`systemctl start birja-backup.service` tests a manual run; it cannot count as
+actual scheduled-trigger evidence. Match timer LastTrigger, service invocation
+and remote completed snapshot for acceptance. Exit failure/missing/stale
+status is an escalation to the owner the same day; do not reset failure or
+claim an older success satisfies a failed latest attempt. Disable future
+runs with `systemctl disable --now birja-backup.timer`; this does not cancel
+an already-running service. Diagnose before deciding whether to stop that job.
+No notification service or messages to others are configured.
+
+Latest-only rotation is already owner-selected: upload a new exact snapshot,
+verify its files/private manifest/structural integrity, then forget only
+enumerated prior Birja IDs and prune with zero data repacking, under the shared
+lock. Failures preserve the old point until new verification. Routine structural
+checks are not full restore proof. For separately approved manual maintenance,
+first inspect `restic forget --dry-run <exact-prior-IDs>` with the same protected
+credential environment and exact repository; never wildcard or use an unscoped
+retention rule. Only after exact-new verification, scope review and authority
+run `forget <exact-prior-IDs>`, `prune --max-repack-size 0` and `check`, under
+the operation lock. Do not run these maintenance commands in parallel with
+backup/deploy/restore, and do not run them merely to make space for replacement.
+
+## Independent recovery and secure rollback
+
+Retrieve the encrypted exact snapshot ID with independent storage access and
+the backup password from the owner's off-server password manager. Recover the
+tested recovery artifact/verifier and its separately recorded SHA first, verify
+the complete immutable inventory/provenance, install on an approved recovery
+host, and recreate protected JSON/credentials from independent custody.
+Do not paste configuration, rows, tokens, private manifests or content hashes
+into chat/logs. The recovery password must not exist only on the failed VDS.
+
+Run `/usr/local/sbin/birja-restore-check --snapshot <exact-64-hex-ID>
+--approved-clone` for the fixed isolated `birja-restore-check` target. Consult
+the actual guarded CLI if it rejects an option; do not add an arbitrary DB URL
+or use `latest`. It downloads that exact snapshot, checks archive SHA and full
+private canonical manifest, restores into isolated PostgreSQL 18 tmpfs with no
+host ports, verifies all rows/money/schema/FKs/indexes/sequences privately, and
+tears down the clone before publishing completed evidence. Historical auth
+sessions stay inside the clone and are never served to users. Record only
+sanitized counts/booleans/snapshot ID/timing; private evidence stays root-only.
+The real-data clone must be explicitly approved; synthetic tests cannot grant
+that authority. Re-provision DB app/migrator passwords, CA/server key material
+and required grants/mounts using the reviewed retained role/TLS procedures;
+an application DB dump alone does not recreate cluster roles or independent
+credential custody. Never use a bootstrap superuser for app/scheduler runtime.
+
+For current/old release rollback use `/usr/local/sbin/birja-deploy --rollback`
+with exact fresh prechange recovery evidence. The retained orchestrator keeps
+the role/TLS overlay and separate migrator even for actual v0.3.1. Never switch
+back to the old release's unchecked deployment script or downgrade 0008.
+If concurrent index migration 0008 stops with an invalid index, stop rollout,
+preserve failure and completed backup, inspect the exact invalid concurrent
+index through approved maintenance, and follow its reviewed recovery procedure
+before retry. Do not automatically downgrade or drop arbitrary objects; a
+schema-changing repair needs a reviewed migration and scoped approval.
+
+Certificate dates above are recorded history, not fresh expiry evidence.
+Owner checks actual origin/DB certificate expiry daily alongside backup status,
+renews before the recorded deadline, and repeats trusted TLS verification.
+Origin renewal stays the manual DNS procedure above (no Cloudflare token).
+DB renewal uses the retained provision helper and documented least-privilege
+mount/restart sequence only after approval; replace CA/recovery custody and
+perform new recovery evidence when identities/configuration change.
 
 ## Trading (release 0.3)
 

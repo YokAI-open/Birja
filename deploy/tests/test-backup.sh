@@ -88,6 +88,100 @@ elif cmd=='prune':
 '''
 
 class Backup(unittest.TestCase):
+ def quota_module(self):
+  spec=importlib.util.spec_from_file_location('quota',ROOT/'deploy'/'backup-quota.py')
+  q=importlib.util.module_from_spec(spec); spec.loader.exec_module(q); return q
+ def test_native_inventory_includes_all_versions_parts_and_other_buckets(self):
+  q=self.quota_module()
+  for name in ['inventory-id','inventory-key','writer-id','writer-key']:
+   (self.p/name).write_text(name); (self.p/name).chmod(0o600)
+  a={'inventory_key_id_file':str(self.p/'inventory-id'),'inventory_key_file':str(self.p/'inventory-key')}
+  target={'bucketId':'target','bucketName':'Birja-backup','bucketType':'allPrivate','fileLockConfiguration':{'isClientAuthorizedToRead':True,'value':{'isFileLockEnabled':False}},'lifecycleRules':[{'fileNamePrefix':'','daysFromHidingToDeleting':1}]}
+  allowed={'buckets':None,'namePrefix':None,'capabilities':['listBuckets','listFiles','readBucketRetentions']}
+  auth={'accountId':'account','authorizationToken':'synthetic-token','apiInfo':{'storageApi':{'apiUrl':'https://api003.backblazeb2.com','s3ApiUrl':q.ENDPOINT,'allowed':allowed}}}
+  def file(name,fid,size,action='upload',bid='target'):
+   return {'bucketId':bid,'accountId':'account','fileName':name,'fileId':fid,'contentLength':size,'action':action}
+  calls=[]
+  outside_partial=False
+  class Fake:
+   def call(s,base,op,body,token):
+    calls.append((base,op,body))
+    if op=='b2_authorize_account':
+     import base64
+     if 'writer-id' in base64.b64decode(token.split()[1]).decode():
+      import copy
+      writer=copy.deepcopy(auth); writer['apiInfo']['storageApi']['allowed']={'buckets':[{'id':'target','name':'Birja-backup'}],'namePrefix':'prod/','capabilities':['writeFiles']}; return writer
+     return auth
+    if op=='b2_list_buckets': return {'buckets':[target,{'bucketId':'other','bucketName':'other'}]}
+    if op=='b2_list_file_versions':
+     if body['bucketId']=='other': return {'files':[file('outside','o',31,bid='other')],'nextFileName':None,'nextFileId':None}
+     if 'startFileId' not in body: return {'files':[file('prod/a','new',7)],'nextFileName':'prod/a','nextFileId':'old'}
+     return {'files':[file('prod/a','old',11),file('prod/b','hide',0,'hide'),file('prod/b','hidden',13),file('zzz','outside',17)],'nextFileName':None,'nextFileId':None}
+    if op=='b2_list_unfinished_large_files': return {'files':[file('prod/partial','partial',0,'start')] if body['bucketId']=='target' else ([file('elsewhere','otherpartial',0,'start',bid='other')] if outside_partial else []),'nextFileId':None}
+    if op=='b2_list_parts': return {'parts':[{'fileId':'partial','partNumber':1,'contentLength':19}],'nextPartNumber':None}
+    raise AssertionError(op)
+  expected={'visible_bytes':7,'hidden_bytes':24,'unfinished_bytes':19,'other_bytes':48}
+  c={'access_key_file':str(self.p/'writer-id'),'secret_key_file':str(self.p/'writer-key')}
+  self.assertEqual(q.inventory(c,a,Fake()),expected)
+  self.assertTrue(any(c[1]=='b2_list_parts' for c in calls))
+  outside_partial=True
+  with self.assertRaises(ValueError): q.inventory(c,a,Fake())
+  outside_partial=False
+  allowed['capabilities'].append('writeBucketRetentions')
+  with self.assertRaises(ValueError): q.inventory(c,a,Fake())
+  allowed['capabilities'].pop()
+  for key,value in [('buckets',[{'id':'target'}]),('namePrefix','prod/')]:
+   prior=allowed[key]; allowed[key]=value
+   with self.assertRaises(ValueError): q.inventory({},a,Fake())
+   allowed[key]=prior
+  target['bucketType']='allPublic'
+  with self.assertRaises(ValueError): q.inventory({},a,Fake())
+  target['bucketType']='allPrivate'; target['lifecycleRules'][0]['daysFromUploadingToHiding']=1
+  with self.assertRaises(ValueError): q.inventory({},a,Fake())
+ def test_native_transport_rejects_redirect_endpoint_and_bounds(self):
+  q=self.quota_module(); api=q.API()
+  with mock.patch.object(api.opener,'open') as opened:
+   for host in ['http://api003.backblazeb2.com','https://api003.backblazeb2.com.evil','https://evil','https://user@api003.backblazeb2.com']:
+    with self.assertRaises(ValueError): api.call(host,'b2_list_buckets',{},'secret')
+   opened.assert_not_called()
+   api.calls=q.MAX_CALLS
+   with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'secret')
+   opened.assert_not_called()
+  with self.assertRaises(ValueError): q.NoRedirect().redirect_request(None,None,302,'',{},'https://evil')
+  api=q.API()
+  response=mock.MagicMock(); response.status=200; response.read1.return_value=b'x'*65536
+  response.__enter__.return_value=response
+  with mock.patch.object(api.opener,'open',return_value=response):
+   with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'secret')
+  self.assertLessEqual(response.read1.call_count,32)
+  api=q.API(); api.started-=121
+  with mock.patch.object(api.opener,'open') as opened:
+   with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'secret')
+   opened.assert_not_called()
+ def test_nightly_success_and_local_inventory_exhaustion(self):
+  q=self.quota_module(); (self.p/'repository').mkdir()
+  with mock.patch.dict(os.environ,self.env):
+   self.assertEqual(q.main(['--synthetic',str(self.p/'config')]),0)
+  prior=(self.p/'state'/'last-success.json').read_bytes()
+  self.c['quota']['storage_limit_bytes']=1; self.save(); (self.p/'calls').unlink()
+  with mock.patch.dict(os.environ,self.env), contextlib.redirect_stdout(io.StringIO()):
+   self.assertNotEqual(q.main(['--synthetic',str(self.p/'config')]),0)
+  self.assertEqual(self.calls(),[])
+  self.assertEqual((self.p/'state'/'last-success.json').read_bytes(),prior)
+  self.assertEqual(self.run_script('backup-status.sh').returncode,1)
+ def test_setup_attestation_is_private_mature_and_separate(self):
+  q=self.quota_module()
+  for name in ['inventory-id','inventory-key']:
+   (self.p/name).write_text('synthetic'); (self.p/name).chmod(0o600)
+  a={'format':1,'verified_at':int(time.time())-601,'console_zero_caps':True,'daily_owner_checks':True,'exclusive_account_writes':True,'inventory_key_id_file':str(self.p/'inventory-id'),'inventory_key_file':str(self.p/'inventory-key'),'local_request_budget':1000,'local_download_budget_bytes':1000000}
+  p=self.p/'backup-controls.json'; p.write_text(json.dumps(a)); p.chmod(0o600)
+  c=q.backup.load_config(['--synthetic',str(self.p/'config')])
+  self.assertEqual(q.controls(c),a)
+  for key,value in [('verified_at',int(time.time())),('verified_at',0),('console_zero_caps',False),('exclusive_account_writes',False),('local_request_budget',999)]:
+   p.write_text(json.dumps({**a,key:value}))
+   with self.assertRaises(ValueError): q.controls(c)
+  p.write_text(json.dumps(a)); p.chmod(0o644)
+  with self.assertRaises(ValueError): q.controls(c)
  def test_nightly_preflight_failure_blocks_backup_and_status(self):
   spec=importlib.util.spec_from_file_location('quota',ROOT/'deploy'/'backup-quota.py')
   self.assertTrue(spec.origin and Path(spec.origin).is_file(),'Callable nightly preflight required')

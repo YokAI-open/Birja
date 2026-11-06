@@ -520,7 +520,9 @@ class Fixtures(unittest.TestCase):
                 info = tarfile.TarInfo(image_id[7:] + ".json")
                 info.size = len(image_config)
                 tar.addfile(info, io.BytesIO(image_config))
-            files = {name: (HERE.parent / name).read_bytes() for name in r.CORE}
+            files = {
+                name: (HERE.parent / name).read_bytes() for name in r.CORE + r.UNITS
+            }
             tools = Path("/tmp/birja-test-tools/restic-0.19.1")
             files["tools/restic"] = (tools / "restic").read_bytes()
             for name in r.PROVENANCE:
@@ -537,7 +539,7 @@ class Fixtures(unittest.TestCase):
             inventory = {
                 "format": 1,
                 "files": sorted(files),
-                "units": [],
+                "units": r.UNITS,
                 "image_id": image_id,
                 "restic_sha256": r.RESTIC_SHA,
                 "recovery_profile": "legacy-v1",

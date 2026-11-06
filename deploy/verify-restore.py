@@ -30,6 +30,7 @@ CORE = [
     "deploy/backup.sh",
     "deploy/backup-status.sh",
     "deploy/backup-snapshot.py",
+    "deploy/backup-quota.py",
     "deploy/backup-manifest.sql",
     "deploy/restore-check.sh",
     "deploy/verify-restore.py",
@@ -151,7 +152,7 @@ def bundle_verify(archive, sha, required_profile=None):
             ]
             + ["provenance/" + n for n in PROVENANCE]
         )
-        require(inventory["units"] in [[], UNITS])
+        require(inventory["units"] == UNITS)
         allowed.update(inventory["units"])
         require(
             names == allowed
@@ -231,7 +232,7 @@ def bundle_package(output, units=False):
     )
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
-        files = CORE + (UNITS if units else [])
+        files = CORE + UNITS
         for name in files:
             src = HERE.parent / name
             require(src.is_file() and not src.is_symlink())
@@ -271,7 +272,7 @@ def bundle_package(output, units=False):
             "format": 1,
             "recovery_profile": "deploy-recovery-v2",
             "files": files,
-            "units": UNITS if units else [],
+            "units": UNITS,
             "image_id": IMAGE_ID,
             "image_digest": "postgres@" + IMAGE_ID,
             "restic_sha256": RESTIC_SHA,
@@ -359,6 +360,12 @@ def bundle_install(archive, sha, synthetic_root=None, required_profile=None):
             + str(base / "current/deploy" / script)
             + '" "$@"\n'
         )
+        if name == "birja-backup":
+            content = (
+                '#!/bin/bash\nset -Eeuo pipefail\numask 077\nexec /usr/bin/python3 "'
+                + str(base / "current/deploy/backup-quota.py")
+                + '" "$@"\n'
+            )
         temp = bindir / ("." + name + ".tmp")
         require(not temp.exists() and not temp.is_symlink())
         temp.write_text(content)
