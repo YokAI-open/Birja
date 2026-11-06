@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Image identity and offline recovery contracts at actual command boundaries."""
 
-import hashlib
 import datetime
+import hashlib
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import tarfile
-import unittest
-import subprocess
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -32,6 +32,92 @@ def sha(data):
 
 
 class Identity(unittest.TestCase):
+    def test_start_rejects_registry_and_pull_fallback_before_up(self):
+        for image, policy in [
+            (PG, "never"),
+            (r.RECOVERY_IMAGE, "missing"),
+            (r.RECOVERY_IMAGE, "always"),
+        ]:
+            config = {
+                "services": {"postgres": {"image": image, "pull_policy": policy}},
+                "networks": {"isolated": {"internal": True}},
+            }
+            with (
+                patch.object(
+                    r, "call", return_value=json.dumps(config).encode()
+                ) as calls,
+                self.assertRaises(ValueError),
+            ):
+                r.start_recovery(["docker", "compose"])
+            self.assertEqual(calls.call_count, 1)
+            self.assertEqual(
+                calls.call_args.args[0][-3:], ["config", "--format", "json"]
+            )
+
+    def test_oci_import_graph_rejects_forged_index_and_extra_blobs(self):
+        config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
+        cid = sha(config)
+        manifest = json.dumps(
+            {"config": {"digest": cid, "size": len(config)}, "layers": []}
+        ).encode()
+        mid = sha(manifest)
+        index = json.dumps(
+            {
+                "manifests": [
+                    {
+                        "digest": mid,
+                        "size": len(manifest),
+                        "platform": {"os": "linux", "architecture": "amd64"},
+                    }
+                ]
+            }
+        ).encode()
+        for mutation in [None, "index", "extra", "tag"]:
+            files = {
+                "manifest.json": json.dumps(
+                    [
+                        {
+                            "Config": "blobs/sha256/" + cid[7:],
+                            "Layers": [],
+                            "RepoTags": ["unreviewed:tag"]
+                            if mutation == "tag"
+                            else None,
+                        }
+                    ]
+                ).encode(),
+                "index.json": json.dumps(
+                    {
+                        "manifests": [
+                            {
+                                "digest": cid if mutation == "index" else mid,
+                                "size": len(manifest),
+                            }
+                        ]
+                    }
+                ).encode(),
+                "blobs/sha256/" + cid[7:]: config,
+                "blobs/sha256/" + mid[7:]: manifest,
+            }
+            if mutation == "extra":
+                files["blobs/sha256/" + "0" * 64] = b"unexpected graph"
+            saved = io.BytesIO()
+            with tarfile.open(fileobj=saved, mode="w") as tar:
+                for name, data in files.items():
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+            saved.seek(0)
+            with (
+                patch.object(r, "INDEX_DIGEST", sha(index)),
+                patch.object(r, "PLATFORM_DIGEST", mid),
+                patch.object(r, "IMAGE_ID", cid),
+            ):
+                if mutation is None:
+                    r.verify_saved_image(saved, index, manifest)
+                else:
+                    with self.assertRaises(ValueError):
+                        r.verify_saved_image(saved, index, manifest)
+
     def test_saved_config_and_manifest_cannot_be_substituted(self):
         config = json.dumps(
             {"os": "linux", "architecture": "amd64", "rootfs": {"diff_ids": []}}
@@ -93,13 +179,18 @@ class Identity(unittest.TestCase):
             self.assertIn("image: " + PG, source)
             self.assertIn("image: " + REDIS, source)
         self.assertIn("FROM " + NODE, (ROOT / "frontend/Dockerfile").read_text())
-        self.assertIn("NODE_BASE_IMAGE=" + NODE, (ROOT / "deploy/deploy.sh").read_text())
+        self.assertIn(
+            "NODE_BASE_IMAGE=" + NODE, (ROOT / "deploy/deploy.sh").read_text()
+        )
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):
         dockerfile = (ROOT / "frontend/Dockerfile").read_text()
         self.assertIn("AS toolchain", dockerfile)
         self.assertIn("npm-11.21.2.tgz", dockerfile)
-        self.assertIn("7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==", dockerfile)
+        self.assertIn(
+            "7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A==",
+            dockerfile,
+        )
         self.assertLess(dockerfile.index("createHash"), dockerfile.index("tar -xzf"))
         deploy = (ROOT / "deploy/deploy.sh").read_text()
         self.assertIn('"$BIRJA_RETAINED_DIR/frontend/Dockerfile"', deploy)
@@ -258,6 +349,7 @@ class Scans(unittest.TestCase):
             "missing",
             "inspect",
             "export",
+            "identity",
         ]:
             seen = []
 
@@ -287,7 +379,20 @@ class Scans(unittest.TestCase):
                         return subprocess.CompletedProcess(
                             argv, 1, b"", b"export error"
                         )
-                    Path(argv[argv.index("-o") + 1]).write_bytes(b"archive")
+                    config = json.dumps(
+                        {"os": "linux", "architecture": "amd64"}
+                    ).encode()
+                    config_path = sha(config)[7:] + ".json"
+                    with tarfile.open(argv[argv.index("-o") + 1], "w") as saved:
+                        for name, data in {
+                            "manifest.json": json.dumps(
+                                [{"Config": config_path}]
+                            ).encode(),
+                            config_path: config,
+                        }.items():
+                            member = tarfile.TarInfo(name)
+                            member.size = len(data)
+                            saved.addfile(member, io.BytesIO(data))
                     return subprocess.CompletedProcess(argv, 0, b"", b"")
                 if "--version" in argv:
                     return subprocess.CompletedProcess(
@@ -308,13 +413,13 @@ class Scans(unittest.TestCase):
                         {
                             "Version": 2,
                             "UpdatedAt": datetime.datetime.now(
-                                datetime.timezone.utc
+                                datetime.UTC
                             ).isoformat(),
                             "DownloadedAt": datetime.datetime.now(
-                                datetime.timezone.utc
+                                datetime.UTC
                             ).isoformat(),
                             "NextUpdate": (
-                                datetime.datetime.now(datetime.timezone.utc)
+                                datetime.datetime.now(datetime.UTC)
                                 + datetime.timedelta(days=1)
                             ).isoformat(),
                         }
@@ -325,6 +430,15 @@ class Scans(unittest.TestCase):
                 doc = {
                     "SchemaVersion": 2,
                     "Trivy": {"Version": "0.76.1"},
+                    "Metadata": {
+                        "ImageID": "sha256:" + "0" * 64
+                        if mode == "identity"
+                        else sha(
+                            json.dumps(
+                                {"os": "linux", "architecture": "amd64"}
+                            ).encode()
+                        )
+                    },
                     "Results": [
                         {"Target": "fixture", "Type": "debian", "Vulnerabilities": []}
                     ],

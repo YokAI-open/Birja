@@ -182,6 +182,7 @@ def verify_saved_image(fileobj, index_bytes, manifest_bytes):
             )
         manifest = json.load(image.extractfile("manifest.json"))
         require(len(manifest) == 1)
+        require(not manifest[0].get("RepoTags"))
         config_name = manifest[0]["Config"]
         require(config_name in {IMAGE_ID[7:] + ".json", "blobs/sha256/" + IMAGE_ID[7:]})
         config_bytes = image.extractfile(config_name).read()
@@ -192,6 +193,19 @@ def verify_saved_image(fileobj, index_bytes, manifest_bytes):
         if blob in names:
             require(image.extractfile(blob).read() == manifest_bytes)
             doc = json.loads(manifest_bytes)
+            require(
+                manifest[0]["Layers"]
+                == ["blobs/sha256/" + layer["digest"][7:] for layer in doc["layers"]]
+            )
+            saved_index = json.load(image.extractfile("index.json"))
+            require(len(saved_index["manifests"]) == 1)
+            require(saved_index["manifests"][0]["digest"] == PLATFORM_DIGEST)
+            require(saved_index["manifests"][0]["size"] == len(manifest_bytes))
+            allowed_blobs = {blob, config_name, *manifest[0]["Layers"]}
+            require(
+                {name for name in names if name.startswith("blobs/sha256/")}
+                == allowed_blobs
+            )
             for layer in doc["layers"]:
                 name = "blobs/sha256/" + layer["digest"][7:]
                 member = image.getmember(name)
@@ -205,6 +219,10 @@ def verify_saved_image(fileobj, index_bytes, manifest_bytes):
                 )
         else:
             config = json.loads(config_bytes)
+            require(
+                {m.name for m in image.getmembers() if m.isfile()}
+                == {"manifest.json", config_name, *manifest[0]["Layers"]}
+            )
             require(len(manifest[0]["Layers"]) == len(config["rootfs"]["diff_ids"]))
             for name, expected in zip(
                 manifest[0]["Layers"], config["rootfs"]["diff_ids"], strict=True
@@ -217,7 +235,9 @@ def verify_saved_image(fileobj, index_bytes, manifest_bytes):
 
 
 def image_inspect(ref):
-    rows = json.loads(call(["docker", "image", "inspect", ref]))
+    rows = json.loads(
+        call(["docker", "image", "inspect", ref, "--platform", "linux/amd64"])
+    )
     require(len(rows) == 1)
     row = rows[0]
     require(row["Id"] in {IMAGE_ID, PLATFORM_DIGEST})
@@ -377,7 +397,7 @@ def bundle_package(output, units=False):
         )
         with (stage / "images/postgres.tar").open("wb") as f:
             run = subprocess.run(
-                ["docker", "image", "save", REGISTRY_REF],
+                ["docker", "image", "save", "--platform", "linux/amd64", REGISTRY_REF],
                 check=False,
                 stdout=f,
                 stderr=subprocess.DEVNULL,
