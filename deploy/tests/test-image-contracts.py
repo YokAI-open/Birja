@@ -35,6 +35,112 @@ def sha(data):
 
 
 class Identity(unittest.TestCase):
+    def test_authenticated_optional_attestation_graph_and_tampering(self):
+        config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
+        manifest = json.dumps(
+            {"config": {"digest": sha(config), "size": len(config)}, "layers": []}
+        ).encode()
+        mid = sha(manifest)
+        att_config, att_layer = b"{}", b"authenticated in-toto statement"
+        att_manifest = json.dumps(
+            {
+                "config": {"digest": sha(att_config), "size": len(att_config)},
+                "layers": [
+                    {
+                        "digest": sha(att_layer),
+                        "size": len(att_layer),
+                        "mediaType": "application/vnd.in-toto+json",
+                    }
+                ],
+            }
+        ).encode()
+        aid = sha(att_manifest)
+        runnable = {
+            "digest": mid,
+            "size": len(manifest),
+            "platform": {"os": "linux", "architecture": "amd64"},
+        }
+        attestation = {
+            "digest": aid,
+            "size": len(att_manifest),
+            "platform": {"os": "unknown", "architecture": "unknown"},
+            "annotations": {
+                "vnd.docker.reference.type": "attestation-manifest",
+                "vnd.docker.reference.digest": mid,
+            },
+        }
+        for mutation in [
+            None,
+            "manifest",
+            "config",
+            "layer",
+            "unknown-root",
+            "unknown-blob",
+            "subject",
+            "size",
+            "duplicate",
+            "untrusted",
+        ]:
+            trusted_attestation = json.loads(json.dumps(attestation))
+            if mutation == "untrusted":
+                trusted_attestation["annotations"]["vnd.docker.reference.digest"] = sha(
+                    config
+                )
+            index = json.dumps({"manifests": [runnable, trusted_attestation]}).encode()
+            roots = [
+                {"digest": mid, "size": len(manifest)},
+                {
+                    "digest": aid,
+                    "size": len(att_manifest),
+                    "annotations": {
+                        "io.containerd.manifest.subject": sha(config)
+                        if mutation == "subject"
+                        else mid
+                    },
+                },
+            ]
+            if mutation == "size":
+                roots[1]["size"] += 1
+            if mutation == "duplicate":
+                roots.append(roots[1])
+            if mutation == "unknown-root":
+                roots.append({"digest": "sha256:" + "0" * 64, "size": 1})
+            files = {
+                "manifest.json": json.dumps(
+                    [{"Config": "blobs/sha256/" + sha(config)[7:], "Layers": []}]
+                ).encode(),
+                "index.json": json.dumps({"manifests": roots}).encode(),
+            }
+            for name, data in [
+                ("runnable-config", config),
+                ("runnable-manifest", manifest),
+                ("manifest", att_manifest),
+                ("config", att_config),
+                ("layer", att_layer),
+            ]:
+                files["blobs/sha256/" + sha(data)[7:]] = (
+                    data + b"tampered" if mutation == name else data
+                )
+            if mutation == "unknown-blob":
+                files["blobs/sha256/" + "0" * 64] = b"unknown"
+            saved = io.BytesIO()
+            with tarfile.open(fileobj=saved, mode="w") as tar:
+                for name, data in files.items():
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+            saved.seek(0)
+            with (
+                patch.object(r, "INDEX_DIGEST", sha(index)),
+                patch.object(r, "PLATFORM_DIGEST", mid),
+                patch.object(r, "IMAGE_ID", sha(config)),
+            ):
+                if mutation is None:
+                    r.verify_saved_image(saved, index, manifest)
+                else:
+                    with self.assertRaises(ValueError, msg=mutation):
+                        r.verify_saved_image(saved, index, manifest)
+
     def test_start_rejects_registry_and_pull_fallback_before_up(self):
         for image, policy in [
             (PG, "never"),

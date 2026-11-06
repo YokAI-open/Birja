@@ -169,6 +169,66 @@ def verify_image_provenance(index_bytes, manifest_bytes, config_bytes):
     require(config["os"] == "linux" and config["architecture"] == "amd64")
 
 
+def verified_blob(image, descriptor):
+    require(re.fullmatch(r"sha256:[0-9a-f]{64}", descriptor["digest"]))
+    name = "blobs/sha256/" + descriptor["digest"][7:]
+    member = image.getmember(name)
+    require(member.isfile() and member.size == descriptor["size"])
+    require(
+        "sha256:" + hashlib.file_digest(image.extractfile(member), "sha256").hexdigest()
+        == descriptor["digest"]
+    )
+    return name
+
+
+def verify_saved_roots(image, saved_index, index_bytes):
+    # Docker29 may retain the selected platform's attestation sibling. Accept
+    # only the optional sibling authenticated by our exact pinned registry
+    # index, then authenticate every manifest/config/payload byte it references.
+    source = json.loads(index_bytes)["manifests"]
+    attestations = [
+        d
+        for d in source
+        if d.get("annotations", {}).get("vnd.docker.reference.type")
+        == "attestation-manifest"
+        and d.get("annotations", {}).get("vnd.docker.reference.digest")
+        == PLATFORM_DIGEST
+        and d.get("platform") == {"os": "unknown", "architecture": "unknown"}
+    ]
+    require(len(attestations) <= 1)
+    trusted = {d["digest"]: d for d in source if d["digest"] == PLATFORM_DIGEST}
+    trusted.update({d["digest"]: d for d in attestations})
+    roots = saved_index["manifests"]
+    digests = [d["digest"] for d in roots]
+    require(PLATFORM_DIGEST in digests and len(digests) == len(set(digests)))
+    require(set(digests) <= set(trusted))
+    extra_blobs = set()
+    for descriptor in roots:
+        approved = trusted[descriptor["digest"]]
+        require(
+            descriptor["size"] == approved["size"]
+            and descriptor.get("mediaType") == approved.get("mediaType")
+        )
+        require(
+            not descriptor.get("platform")
+            or descriptor["platform"] == approved["platform"]
+        )
+        if descriptor["digest"] == PLATFORM_DIGEST:
+            continue
+        require(
+            descriptor.get("annotations", {}).get("io.containerd.manifest.subject")
+            == PLATFORM_DIGEST
+        )
+        name = verified_blob(image, approved)
+        extra_blobs.add(name)
+        attestation = json.load(image.extractfile(name))
+        extra_blobs.add(verified_blob(image, attestation["config"]))
+        for layer in attestation["layers"]:
+            require(layer["mediaType"] == "application/vnd.in-toto+json")
+            extra_blobs.add(verified_blob(image, layer))
+    return extra_blobs
+
+
 def verify_saved_image(fileobj, index_bytes, manifest_bytes):
     # Inspect the Docker-save manifest and actual config bytes without loading.
     # Both classic .json paths and OCI blob paths are supported explicitly.
@@ -198,10 +258,8 @@ def verify_saved_image(fileobj, index_bytes, manifest_bytes):
                 == ["blobs/sha256/" + layer["digest"][7:] for layer in doc["layers"]]
             )
             saved_index = json.load(image.extractfile("index.json"))
-            require(len(saved_index["manifests"]) == 1)
-            require(saved_index["manifests"][0]["digest"] == PLATFORM_DIGEST)
-            require(saved_index["manifests"][0]["size"] == len(manifest_bytes))
             allowed_blobs = {blob, config_name, *manifest[0]["Layers"]}
+            allowed_blobs.update(verify_saved_roots(image, saved_index, index_bytes))
             require(
                 {name for name in names if name.startswith("blobs/sha256/")}
                 == allowed_blobs
