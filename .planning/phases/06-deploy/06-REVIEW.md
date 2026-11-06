@@ -1,12 +1,12 @@
 ---
 phase: 06-deploy
 reviewed: 2026-11-06T13:13:08Z
-rereviewed: 2026-11-06T13:30:36Z
+rereviewed: 2026-11-06T13:33:35Z
 depth: deep
 source_base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 source_head: 674fcbbcd84d4ff6bf7e88262dfd80576abfc04b
-rereview_head: f0fae414982a1632bbf09bcfc06f14485227f759
-rereview_source: ea4cd28
+rereview_head: a5540c34c05c79e34b6b4b17a170ed74c999f9ae
+rereview_source: c8e23fd400844e2d3a834229afb3b514bc1ecc2e
 files_reviewed: 39
 files_reviewed_list:
   - .github/workflows/ci.yml
@@ -49,18 +49,18 @@ files_reviewed_list:
   - docker-compose.ops-test.yml
   - docker-compose.prod.yml
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 06: Code Review Report
 
 **Depth:** deep. **Scope:** explicit current changed-source override, derived from the validated base-to-HEAD Git diff, including incomplete Plan 08. Summary-only file selection was not used. No structural pre-pass was supplied.
 
-**Current result after independent re-review at `f0fae41`: one active BLOCKER, CR-01's gate-boundary case.** CR-02 and WR-01 are resolved under the explicitly approved revised request-budget contract. Counts above describe active findings. The initial findings below are retained as history; their current dispositions and re-review evidence follow at the end. The external image gate remains independently pending.
+**Current result after final focused independent re-review at `a5540c3`: zero active source findings.** CR-01, CR-02 and WR-01 are resolved, including CR-01's authorization-boundary follow-up. CR-02 uses the explicitly approved revised request-budget contract. Counts above describe active source findings. The initial findings and intermediate re-review below are retained as history; final evidence follows at the end. The external image gate remains independently pending; `clean` does not mean Plan 08 or deployment acceptance is complete.
 
 ## Narrative Findings (AI reviewer)
 
@@ -68,7 +68,7 @@ status: issues_found
 
 ### CR-01: BLOCKER — Completion-based freshness can approve data older than the 26-hour recovery window
 
-**Re-review disposition:** partially fixed; active gate-boundary case described below.
+**Re-review disposition:** resolved by `0a68575` plus final boundary correction `c8e23fd`; intermediate gate-boundary case preserved below.
 
 **File:** `/home/YokaiExchange/deploy/backup-snapshot.py:845-853`; consumers at `:454-469` and `:406-446`.
 
@@ -122,7 +122,7 @@ B2 API shape/POST compatibility and version pagination were checked against prim
 
 ## Existing external gate and review limits
 
-**BLOCKED external image gate:** `06-LOCAL-GATES.md` already records unresolved HIGH/CRITICAL image scan results for the exact reviewed images. Keep this as one external supply-chain acceptance gate, separate from the three source findings counted above. Attribution/remediation belongs to the orchestrator's next role; this review did not pull replacement images, rerun scans or assume every reported CVE is exploitable in the application. Plan 08 task 03 and live advancement remain blocked until that gate and these source findings are resolved/reviewed.
+**BLOCKED external image gate:** `06-LOCAL-GATES.md` already records unresolved HIGH/CRITICAL image scan results for the exact reviewed images. Keep this as one external supply-chain acceptance gate, separate from source finding counts. Attribution/remediation belongs to the orchestrator's next role; this review did not pull replacement images, rerun scans or assume every reported CVE is exploitable in the application. Plan 08 task 03 and live advancement remain blocked until the external gate and other acceptance work are complete.
 
 The fresh backend 616-test/99.80%/critical-100%, frontend 264-test, audits/build/smoke, and exact-artifact recovery/roles/TLS/old-image rollback results are recorded prior evidence in `06-LOCAL-GATES.md`, not tests rerun or independently certified here. This pass used static cross-file analysis plus two small offline synthetic probes of the actual status/quota consumers. No production/private configuration, provider calls, real auth/trades/email, Docker lifecycle, installation, publication or source edits occurred. Actual CI, provider recovery, timer execution and live friend acceptance remain later gates. Only this report was written; no commit was made.
 
@@ -130,7 +130,9 @@ The fresh backend 616-test/99.80%/critical-100%, frontend 264-test, audits/build
 
 Read the full `06-REVIEW-FIX.md` and actual six-file source/test/runbook diff, then traced the resulting runtime consumers. Re-review scope is the fixes and their cross-file interactions within the original 39-file scope, including installed adjacent-module imports, unchanged authenticated bundle closure, shared lock/deadline inheritance, config identity and evidence preservation. This is not a repeat of the full original test run or a final supplied-artifact acceptance claim.
 
-### Active CR-01: BLOCKER — The remote gate does not recheck data freshness at the authorization boundary
+### Historical iteration-1 CR-01: BLOCKER — The remote gate does not recheck data freshness at the authorization boundary
+
+**Current disposition:** resolved by `c8e23fd`; the account below preserves the pre-correction finding and reproduction.
 
 **File:** `/home/YokaiExchange/deploy/backup-snapshot.py:400`, `:408-454`.
 
@@ -155,3 +157,11 @@ Both restore and the exact remote gate now invoke `Job.refresh_quota(lock)` unde
 ### Re-review limits and external gate
 
 The fix report records 25 backup, 15 prerequisite, four restore-safety, 20 input-rejection checks and one 82.243-second PostgreSQL/encrypted-recovery run; these are execution evidence supplied by the fixer, not suites rerun by this re-review. This pass read their new assertions and ran the additional minimal gate-boundary probe above. No image changed, no scan was repeated, and the known external image HIGH/CRITICAL gate remains open. Final retained/supplied artifact recovery and roles/TLS/old-image rollback replay remain orchestrator acceptance work after the active source finding is fixed. Only REVIEW.md was edited; no source, state or commit change was made.
+
+## Final focused re-review — source `c8e23fd`, HEAD `a5540c3`
+
+**Result: CR-01 resolved; zero active source BLOCKERs or WARNINGs.** Read the complete two-file correction and its actual gate regression. The gate now captures `authorized_at` after inventory refresh, remote snapshot lookup, manifest retrieval and authenticated manifest/time binding. Immediately before granting authorization it checks data age/canonical timestamps/ordering with this new current time and rechecks backup completion, restore start/completion and remote snapshot freshness. The earlier admission checks remain. No I/O follows the final freshness check before the result is returned, and the change introduces no new routing, privilege or bundle dependency.
+
+Independently ran the single actual-consumer test `Evidence.test_gate_rechecks_exact_remote_presence_and_all_bindings` through a stdlib unittest suite: **one test passed in 0.296 seconds**. Its new subcases advance the clock 20 seconds during inventory refresh and separately during manifest retrieval, taking data age from 93,590 to 93,610 seconds; both now reject. Positive cases at 93,599 and exactly 93,600 seconds pass, matching the approved inclusive maximum. Existing identity, authenticated-manifest, remote-presence, failed-attempt and historical-data checks in that test also passed. No broader fixture run was needed for this focused correction, and none is claimed.
+
+CR-02 and WR-01 remain resolved under the previously reviewed implementation/approved bounded-work contract. This final pass only revisited the bounded correction and affected invariant; it did not redo the 39-file original review. The external image gate, final retained/supplied artifact replay and later provider/timer/CI/live acceptance remain separate outstanding work. No Docker/provider/private access, source edit or commit occurred; only this report was updated.
