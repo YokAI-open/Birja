@@ -169,8 +169,70 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  ops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Acquire approved restic with signed checksum verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tools=/tmp/birja-test-tools/restic-0.19.1
+          mkdir -p "$tools/gnupg"
+          chmod 700 "$tools" "$tools/gnupg"
+          base=https://github.com/restic/restic/releases/download/v0.19.1
+          for name in restic_0.19.1_linux_amd64.bz2 SHA256SUMS SHA256SUMS.asc; do
+            curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 120 "$base/$name" -o "$tools/$name"
+          done
+          curl --fail --silent --show-error --proto '=https' --max-time 120 https://restic.net/gpg-key-alex.asc -o "$tools/gpg-key-alex.asc"
+          echo 'e4f09134173fdd60ece4454d30e38459d172f3ea9a97b32a37324b4f0515a289  '"$tools/gpg-key-alex.asc" | sha256sum --check --status
+          gpg --homedir "$tools/gnupg" --batch --no-autostart --import "$tools/gpg-key-alex.asc"
+          gpg --homedir "$tools/gnupg" --batch --no-autostart --status-fd 1 --verify "$tools/SHA256SUMS.asc" "$tools/SHA256SUMS" > "$tools/signature-status"
+          grep -Eq '^\[GNUPG:\] VALIDSIG CF8F18F2844575973F79D4E191A6868BD3F7A907 ' "$tools/signature-status"
+          echo 'fb520966ee01d2a3d4219c66762c66efa56300833b6f639f36082b7462f91cb8  '"$tools/SHA256SUMS" | sha256sum --check --status
+          echo '649f3a48d322c3d7a457ef58e2dc4c5094b1f823192cdbac3f092ea23e194d9a  '"$tools/SHA256SUMS.asc" | sha256sum --check --status
+          echo 'f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c  '"$tools/restic_0.19.1_linux_amd64.bz2" | sha256sum --check --status
+          bzcat "$tools/restic_0.19.1_linux_amd64.bz2" > "$tools/restic"
+          echo '20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639  '"$tools/restic" | sha256sum --check --status
+          chmod 700 "$tools/restic"
+          "$tools/restic" version
+      - name: Build locked operations fixture image
+        run: docker build --target test-builder -t birja-backend-test:phase05-07 backend
+      - name: Offline operational contracts
+        run: |
+          set -Eeuo pipefail
+          python3 deploy/tests/test-ci-ops.py
+          bash deploy/tests/test-backup.sh
+          bash deploy/tests/test-restore-safety.sh
+          bash deploy/tests/test-db-config.sh
+          python3 deploy/tests/test-deploy-prerequisites.py
+          bash deploy/tests/test-reexec.sh
+          bash deploy/tests/test-rollback-target.sh
+          bash deploy/tests/test-app-services.sh
+          bash deploy/tests/test-smoke-ports.sh
+          bash deploy/tests/test-smoke-trading.sh
+          bash deploy/check-nginx-config.sh
+      - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
+        run: |
+          set -Eeuo pipefail
+          bash deploy/tests/test-db-operations.sh --all
+          bash deploy/tests/test-rollback-db-security.sh
+      - name: Clean fixed synthetic projects
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          result=0
+          for project in birja-ops-test birja-restore-check; do
+            docker compose -p "$project" --env-file /dev/null -f "$GITHUB_WORKSPACE/docker-compose.ops-test.yml" down --volumes --remove-orphans --timeout 10 || result=1
+          done
+          exit "$result"
+
   ci-pass:
-    needs: [backend, frontend, image, e2e]
+    needs: [backend, frontend, image, e2e, ops]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
