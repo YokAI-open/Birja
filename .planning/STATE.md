@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: 06-08 tasks01/02 complete at19df11e; image findings and independent review pending
-last_updated: "2026-11-02T10:35:03.725Z"
-last_activity: 2026-11-02 -- Phase 06 execution started
+stopped_at: Plan15 source implemented at3bc1ca7; resume interrupted independent review, then one final supplied-artifact replay
+last_updated: "2026-11-06T20:09:01.855395Z"
+last_activity: 2026-11-06 -- Plan15 source complete; bounded review and final replay pending
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,10 +27,18 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 15 prerequisite, wave 9 of 15 (Plan08 tasks01/02 implemented)
-Status: Executing reviewed Plan15 image refresh; source review clean, image gate blocked
-Last activity: 2026-11-02 -- Phase 06 execution started
+Status: Plan15 source implemented; independent image-diff review and final replay pending
+Last activity: 2026-11-06 -- image fixes implemented; review interrupted by status request, now resuming
 
 Progress: [████████░░] 90% of planned plans executed (62/69); Phase 6: 8/15 plans complete.
+
+## Immediate remaining work
+
+1. Finish independent review of image changes `89c7039..3bc1ca7`; the prior review turn was interrupted, not completed.
+2. Fix only confirmed defects from that bounded review, then build/package one final recovery artifact and run its supplied restore/rollback checks.
+3. Record Plan15's bounded result and report Plan08's remaining upstream image security blocker. Do not start another remediation plan or repeatedly rescan unchanged images.
+
+The original source review is clean after `c8e23fd`. Current image fixes remove available apt, runtime global-pip and npm findings; known vendor/required-test-tool HIGH/CRITICAL findings remain. No waiver, push or production operation is authorized. Full application evidence (616 backend /264 frontend) is historical measured evidence, not rerun on each operational edit.
 
 ## Performance Metrics
 
