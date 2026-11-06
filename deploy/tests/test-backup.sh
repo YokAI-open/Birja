@@ -88,6 +88,34 @@ elif cmd=='prune':
 '''
 
 class Backup(unittest.TestCase):
+ def test_nightly_preflight_failure_blocks_backup_and_status(self):
+  spec=importlib.util.spec_from_file_location('quota',ROOT/'deploy'/'backup-quota.py')
+  self.assertTrue(spec.origin and Path(spec.origin).is_file(),'Callable nightly preflight required')
+  quota=importlib.util.module_from_spec(spec); spec.loader.exec_module(quota)
+  with mock.patch.object(quota,'refresh',side_effect=ValueError('SECRET-provider')) as preflight, contextlib.redirect_stdout(io.StringIO()) as out:
+   self.assertNotEqual(quota.main(['--synthetic',str(self.p/'config')]),0)
+  preflight.assert_called_once()
+  self.assertNotIn('SECRET',out.getvalue()); self.assertEqual(self.calls(),[])
+  self.assertEqual(self.run_script('backup-status.sh').returncode,1)
+  self.assertFalse((self.p/'state'/'last-success.json').exists())
+ def test_nightly_policy_and_measured_inventory(self):
+  service=(ROOT/'deploy/systemd/birja-backup.service').read_text()
+  timer=(ROOT/'deploy/systemd/birja-backup.timer').read_text()
+  self.assertIn('Type=oneshot',service); self.assertIn('ExecStart=/usr/local/sbin/birja-backup',service)
+  self.assertNotIn('EnvironmentFile=',service); self.assertNotIn('RemainAfterExit=yes',service)
+  self.assertIn('OnCalendar=*-*-* 03:00:00 UTC',timer)
+  self.assertIn('RandomizedDelaySec=15m',timer); self.assertIn('Persistent=true',timer)
+  spec=importlib.util.spec_from_file_location('quota',ROOT/'deploy'/'backup-quota.py')
+  quota=importlib.util.module_from_spec(spec); spec.loader.exec_module(quota)
+  (self.p/'repository').mkdir(); (self.p/'repository'/'actual').write_bytes(b'x'*37)
+  c=quota.backup.load_config(['--synthetic',str(self.p/'config')])
+  updated=quota.refresh(c)
+  self.assertEqual(updated['visible_bytes'],37)
+  self.assertGreaterEqual(updated['observed_at'],int(time.time())-1)
+  self.assertEqual(self.run_script().returncode,0)
+  p=self.p/'state'/'last-success.json'; d=json.loads(p.read_text())
+  d['epoch']=int(time.time())-93601; p.write_text(json.dumps(d))
+  self.assertEqual(self.run_script('backup-status.sh').returncode,1)
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory(prefix='birja-backup-test-')
   self.p=Path(self.tmp.name); self.p.chmod(0o700)

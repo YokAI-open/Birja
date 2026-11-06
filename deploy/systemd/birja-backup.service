@@ -1,0 +1,6 @@
+[Unit]
+Description=Birja backup (behavioral RED seam)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/false
