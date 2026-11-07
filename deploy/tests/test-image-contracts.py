@@ -25,7 +25,6 @@ spec = importlib.util.spec_from_file_location(
 )
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
-PYTHON = "python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d"
 PG = "postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
 REDIS = "redis:8.8.4-trixie@sha256:a008e2cb5579f3616b29bd9e9913a25f16ec09ae2f56ddab524664663b581228"
 NODE = "node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d"
@@ -313,11 +312,18 @@ class Identity(unittest.TestCase):
         self.assertEqual(project["dependency-groups"]["audit"], ["pip-audit>=2.10.1"])
         self.assertFalse(any("pip-audit" in dep for dep in project["dependency-groups"]["dev"]))
         # Regrouping must retain every locked version and distribution artifact.
-        previous = tomllib.loads(subprocess.check_output(["git", "show", "e728855:backend/uv.lock"], cwd=ROOT).decode())
         current = tomllib.loads((ROOT / "backend/uv.lock").read_text())
-        def distributions(lock):
-            return {p["name"]: p for p in lock["package"] if p["name"] != "birja-backend"}
-        self.assertEqual(distributions(previous), distributions(current))
+        distributions = {
+            p["name"]: p for p in current["package"]
+            if p["name"] != "birja-backend"
+        }
+        # Canonical pre-regrouping inventory from e728855, including artifacts.
+        # A digest keeps this contract usable in shallow CI checkouts.
+        encoded = json.dumps(distributions, sort_keys=True, separators=(",", ":"))
+        self.assertEqual(
+            hashlib.sha256(encoded.encode()).hexdigest(),
+            "c1aed6af821462b2d8734a0a02dae4bf71f21028b3ba125be631256474a1f9ba",
+        )
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):
         dockerfile = (ROOT / "frontend/Dockerfile").read_text()
