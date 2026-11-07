@@ -13,6 +13,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -28,6 +29,7 @@ PYTHON = "python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87
 PG = "postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
 REDIS = "redis:8.8.4-trixie@sha256:a008e2cb5579f3616b29bd9e9913a25f16ec09ae2f56ddab524664663b581228"
 NODE = "node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d"
+WOLFI = "cgr.dev/chainguard/wolfi-base@sha256:24f549a7fcace88e69b9557941168c74645688ecc4acf7fb6d734a6b74e9019d"
 
 
 def sha(data):
@@ -276,9 +278,10 @@ class Identity(unittest.TestCase):
                         r.verify_saved_image(saved, index, manifest)
 
     def test_all_actual_consumers_are_immutable(self):
-        self.assertEqual(
-            (ROOT / "backend/Dockerfile").read_text().count("FROM " + PYTHON), 2
-        )
+        backend = (ROOT / "backend/Dockerfile").read_text()
+        self.assertIn("FROM " + WOLFI + " AS python-base", backend)
+        self.assertIn("FROM python-base AS builder", backend)
+        self.assertIn("FROM python-base AS runtime", backend)
         for filename in [
             "docker-compose.yml",
             "docker-compose.test.yml",
@@ -287,10 +290,34 @@ class Identity(unittest.TestCase):
             source = (ROOT / filename).read_text()
             self.assertIn("image: " + PG, source)
             self.assertIn("image: " + REDIS, source)
-        self.assertIn("FROM " + NODE, (ROOT / "frontend/Dockerfile").read_text())
+        self.assertIn("FROM " + WOLFI, (ROOT / "frontend/Dockerfile").read_text())
         self.assertIn(
             "NODE_BASE_IMAGE=" + NODE, (ROOT / "deploy/deploy.sh").read_text()
         )
+
+    def test_signed_exact_packages_and_complete_group_boundaries(self):
+        backend = (ROOT / "backend/Dockerfile").read_text()
+        frontend = (ROOT / "frontend/Dockerfile").read_text()
+        self.assertIn("python-3.14=3.14.10_git20261104-r0", backend)
+        self.assertIn("python-3.14-base=3.14.10_git20261104-r0", backend)
+        self.assertIn("nodejs-24=24.22.2-r2", frontend)
+        self.assertIn("ghcr.io/astral-sh/uv:0.13.5", backend)
+        for source in [backend, frontend]:
+            self.assertIn("apk add --no-cache", source)
+            for forbidden in ["--allow-untrusted", "site-packages/pip", "dist-info", "--ignore-unfixed", "--skip-files", "--skip-dirs"]:
+                self.assertNotIn(forbidden, source)
+        self.assertIn("uv sync --locked --no-install-project --no-default-groups\n", backend)
+        self.assertIn("uv sync --locked --no-install-project --no-default-groups --group dev", backend)
+        project = tomllib.loads((ROOT / "backend/pyproject.toml").read_text())
+        self.assertEqual(set(project["tool"]["uv"]["default-groups"]), {"dev", "audit"})
+        self.assertEqual(project["dependency-groups"]["audit"], ["pip-audit>=2.10.1"])
+        self.assertFalse(any("pip-audit" in dep for dep in project["dependency-groups"]["dev"]))
+        # Regrouping must retain every locked version and distribution artifact.
+        previous = tomllib.loads(subprocess.check_output(["git", "show", "e728855:backend/uv.lock"], cwd=ROOT).decode())
+        current = tomllib.loads((ROOT / "backend/uv.lock").read_text())
+        def distributions(lock):
+            return {p["name"]: p for p in lock["package"] if p["name"] != "birja-backend"}
+        self.assertEqual(distributions(previous), distributions(current))
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):
         dockerfile = (ROOT / "frontend/Dockerfile").read_text()
