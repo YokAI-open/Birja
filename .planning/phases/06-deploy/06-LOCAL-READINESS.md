@@ -78,3 +78,10 @@ real authentication/email/trade or publication operation was accessed.
 The report and current validation tables are the only owned edits; unrelated
 work is preserved. Temporary logs are supporting local artifacts, not a
 durable substitute for the later approved current-evidence checkpoints.
+
+## Owner selection after audit — 2026-11-07
+
+Owner chose keepstrict/finishlocal/preparehandoff. `06-LIVE-HANDOFF.md` now
+records the exact artifact and future gates. No exception, base migration or
+live action is approved. This later policy note does not alter the audit's
+observed local results or the blocked overall acceptance.

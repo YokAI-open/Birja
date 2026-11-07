@@ -454,3 +454,14 @@ remain unverified. Raw image security findings remain blocking. Security
 paths were presented for owner choice; no answer/waiver/base migration is
 recorded. Preserve strict policy and existing plans; do not manufacture live
 acceptance or automatically start another remediation cycle.
+
+## Owner decision — 2026-11-07: keep strict gate and prepare handoff
+
+Owner answered: “Keep the strict gate; finish local validation and prepare the
+live handoff”. This resolves the security-path question: retain strict raw
+HIGH/CRITICAL enforcement, no exception/base migration. Local validation and
+independent readiness audit are complete. Prepared06-LIVE-HANDOFF.md and
+preserved the exact verified recovery archive/checksum/trusted verifier in
+ignored.local/phase-06-handoff. No live action or publication is authorized;
+09..13 remain gated after08's unresolved vendor findings. Do not re-ask this
+policy choice or repeat successful local work without new evidence.
