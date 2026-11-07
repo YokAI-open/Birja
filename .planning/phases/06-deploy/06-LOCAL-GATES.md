@@ -287,3 +287,55 @@ occurred. Only this evidence document and the scoped0008 runbook clarification
 remain for the checkpoint documentation commit. No source gap/stub was hidden;
 the failed security gate above remains explicit. No SUMMARY/state advance or
 requirements completion was performed.
+
+## Actual isolated browser rehearsal — 2026-11-07
+
+At source `ba1897d19f4a3b0eae89925d0d501c2269936a5f`, existing installed
+Playwright1.64.1/Chromium1248 ran the actual browser suite: **10 passed,
+1 skipped,0 failed,0 flaky**, starting16:27:34 UTC. Covered sign-in/session/
+sign-out, connected services, markets, responsive portfolio/history at four
+widths, real cash-only portfolio, exact server-valued buy/portfolio/history/
+whole-position sell and the separate trading round trip. The existing CSP
+test skipped because `E2E_PROD_URL` was unset; no deployed-site proof is claimed.
+
+Only throwaway `birja-e2e-test` was used. Absolute base Compose plus a private
+temporary override, `COMPOSE_PROJECT_NAME=birja-e2e-test`, synthetic
+`COMPOSE_ENV_FILES` and `COMPOSE_DISABLE_ENV_FILE=1` were inherited by the
+existing console-code helper. The rendered definition was checked before
+startup: internal data network, tmpfs datastores, no named volumes/source
+mounts, no backend/datastore host ports, frontend bound only to127.0.0.1 on a
+free port; fake prices/console email and example.com accounts only. No real
+`.env`, credentials, market API, email, account or trade was used. No tool,
+browser or system dependency was installed; application locks were unchanged.
+
+The first temporary fixture also made the app network internal: all services
+were healthy, but host navigation was refused (10 failed/1 CSP skip in10.629s).
+That failure is preserved at `/tmp/birja-e2e-local-mkapjajz/`; cleanup passed.
+Only the temporary app network was returned to the base bridge, retaining the
+internal data network and loopback publishing. A localhost HTTP200 probe then
+passed before browser execution; no repository source fix was needed.
+
+Initial final-image build/start took108.450s; `docker compose exec -T frontend
+npm run build` passed6.353s. The successful rehearsal reused those exact images
+with `up --no-build -d --wait --wait-timeout 180` (18.072s), then existing
+`frontend/node_modules/.bin/playwright test --workers=1 --retries=0
+--reporter=list,json --output <private-temp>/test-results` (57.391s).
+
+| Running consumer | Actual linux/amd64 engine image ID |
+|---|---|
+|Frontend final Dockerfile/toolchain|`sha256:0ed8023343303f9f1061a5dd3ac8a0ac4cf8accf0fa32605ee27c0501b890b70`|
+|Backend runtime|`sha256:d93f802d73240b78a97ea497d4786d31b3ad9487108e70c8a1424f90db99c5da`|
+|Scheduler runtime|`sha256:28beb53cafd236a33a25324307cbaf1c840b4d9572df56a319e736dec3bd07ac`|
+|PostgreSQL pinned index|`sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583`|
+|Redis pinned index|`sha256:a008e2cb5579f3616b29bd9e9913a25f16ec09ae2f56ddab524664663b581228`|
+
+Final frontend Dockerfile SHA256:
+`5bc2ebb43ab48a7223272e560d4e0c0138b1e5ee6444b67b83e76b0f4c6717fe`.
+Successful evidence/sanitized logs/JSON: `/tmp/birja-e2e-local-bigoocoe/`;
+`playwright.json` SHA256
+`babc68fe287cd16481e7fe52e4235e4f62e3efc8aa6ac5233e1e3007662777d6`.
+Finally `down --volumes --remove-orphans --timeout 10` passed2.484s; label
+queries found zero project containers/networks/volumes. Other projects and
+shared caches were untouched. This closes the local browser execution gap;
+remote CI, image security acceptance and provider/live gates remain separate.
+No push or Plan08 completion is implied.
