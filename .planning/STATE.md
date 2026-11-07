@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan15 review clean; final packaging blocked by Docker OCI attestation export; upstream image gate also fails
-last_updated: "2026-11-06T20:09:01.855395Z"
-last_activity: 2026-11-06 -- Review and CI fix complete; actual final packaging guard failure recorded
+stopped_at: Plan15 complete; Plan08 task03 blocked by unresolved vendor HIGH/CRITICAL image findings
+last_updated: "2026-11-07T16:11:55Z"
+last_activity: 2026-11-07 -- Final exact-artifact recovery and rollback acceptance closed; Plan15 complete
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
-  completed_plans: 62
-  percent: 90
+  completed_plans: 63
+  percent: 91
 ---
 
 # Project State
@@ -26,27 +26,27 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 15 prerequisite, wave 9 of 15 (Plan08 tasks01/02 implemented)
-Status: Plan15 task03 blocked by actual recovery export shape; source review clean
-Last activity: 2026-11-06 -- Final Node build/scan complete; packaging rejects extra OCI attestation descriptor
+Plan: 08 task03, wave10 of15 (Plan15 prerequisite complete;08tasks01/02 implemented)
+Status: Blocked by vendor HIGH/CRITICAL image findings; packaging and final recovery proof passed
+Last activity: 2026-11-07 -- Confirmed successful final rollback, cleanup and Plan15 closeout
 
-Progress: [████████░░] 90% of planned plans executed (62/69); Phase 6: 8/15 plans complete.
+Progress: [████████░░] 91% of planned plans executed (63/69); Phase 6: 9/15 plans complete.
 
 ## Immediate remaining work
 
-Plan15 task03 is blocked, not complete. Independent source review and focused recheck have zero active findings; CI missing-image reporting fix is committed at `26614f5`. Final evidence/review is committed at `d09cba0` in `06-IMAGE-GATES.md`.
+Plan15 is complete; read `06-15-SUMMARY.md`, `06-IMAGE-GATES.md` and the clean `06-15-REVIEW.md`. The Docker29 attestation-export blocker was corrected in `de331fb` and independently reviewed; do not repeat that diagnosis.
 
-Actual Docker29 export includes an extra OCI attestation descriptor. Strict verification rejects it at `verify-restore.py:201` before creating a recovery archive. Exporting the selected immutable engine ID reproduced the same failure; the ineffective attempted correction was removed. No final supplied-artifact replay started.
+Final archive SHA256 `cb766040b9eed5eed4dce00400d39c0d8bcb7a02fc4c6d4030c9e6cf6da16814` passed supplied recovery73.507s, populated roles31.845s, TLS57.607s and actualv0.3.1 supplied rollback119.673s. All four runners exited0, with the same bytes for both supplied-artifact runners. Exact inventory/hash and zero resources for all4fixedprojects were checked during closeout. The executor usage-limit interruption happened after starting rollback; its persisted successful result was recovered without repeating fixtures.
 
-Next work must address that specific export compatibility boundary with review before one exact final artifact/replay. Do not repeat completed application suites/image research or add another remediation plan automatically. Final Node rebuild passed and its raw scan still fails with48 Debian HIGH findings/zero npm findings. Other unchanged-image reports are retained by exact identity. Upstream HIGH/CRITICAL findings separately block Plan08 and downstream live gates; no waiver exists.
+**Plan08 task03 remains blocked by raw vendor HIGH/CRITICAL image findings.** Recorded exact-image scans: runtime49HIGH, builder54HIGH, PostgreSQL91HIGH/2CRITICAL, Redis48HIGH, Node48HIGH. Global runtime pip and all6npm findings are removed; remaining Debian/required-test-tool/gosu findings are not waived. Image reports date2026-11-06; do not rescan unchanged images or repeat completed application suites/research without new evidence.
 
-Full application evidence (616 backend /264 frontend) remains historical measured evidence. All four fixed synthetic projects are cleaned. No push, provider or production operation occurred; Phase6 remains8/15 complete.
+Do not create08SUMMARY, start09/live gates or mark DEPL-01/02 complete. Vendor fixes or an explicitly reviewed security resolution remain necessary for the strict image gate. No new remediation plan is automatically authorized. User has not authorized Phase6 publication/provider/production actions; no push, provider access or production changes occurred. Full application616/264 evidence remains historical measured proof. Phase6 is9/15 complete.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 62
+- Total plans completed: 63
 - Average duration: -
 - Total execution time: -
 
@@ -129,8 +129,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-02T10:35:03.703Z
-Stopped at: 06-08 tasks01/02 complete at19df11e; image findings and independent review pending
+Last session: 2026-11-07T16:11:55Z
+Stopped at: Plan15 complete;06-08task03 blocked by vendor image security findings
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -221,3 +221,10 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 -Availableapt/globalpip/npm fixes delivered; rawactualscans stillfail (runtime49H,builder54H,PG91H2C,Redis48H,Node48H); no policywaiver.
 -No finalbundlepackaged. AfterreviewrebuildNodepoststreamguard, confirmimageevidence, oneexactbundle thenserialsuppliedrestore/roles/TLS/oldrollback.
 -Original08securitygate/DEPL/liveauthorityremainpending. All4fixedtestprojectscleaned.
+
+### Plan15 closeout — 2026-11-07
+
+- Source `de331fb` fixes authenticated optional attestation export; focused independent review clean.
+- Exact final cb766040... artifact passed all4serial recovery/roles/TLS/actual-old rollback runners; archive/checksum and zero4projectresources verified at closeout.
+- Plan15 SUMMARY exists;9/15 phase plans,63/69 total complete. Plan08task03/security gate remains blocked; no08SUMMARY/09advance/DEPL completion.
+- No additional scans/application reruns, provider/private/live/publication operations occurred during closeout. See IMAGE-GATES for dated evidence rather than stale earlier checkpoints.

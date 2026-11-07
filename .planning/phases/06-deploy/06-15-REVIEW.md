@@ -2,12 +2,12 @@
 phase: 06-deploy
 plan: "15"
 reviewed: 2026-11-06T20:11:04Z
-rereviewed: 2026-11-06T20:16:37Z
+rereviewed: 2026-11-06T20:32:18Z
 depth: deep
 source_base: 89c7039
 source_head: 3bc1ca7
 context_head: ffcceb2a65cdb8746afb2317d584424fbe9d7d9c
-rereview_head: 26614f5c6131eba26b8977894c5fdd134dfec907
+rereview_head: de331fbad1c3aa139bde94b99478439b59fc29a8
 files_reviewed: 17
 files_reviewed_list:
   - .github/workflows/ci.yml
@@ -37,7 +37,9 @@ status: clean
 
 # Plan 06-15: Independent Code and Security Review
 
-**Current result:** zero active source findings after focused independent re-review of `26614f5`. WR-01 below is retained as resolved history. The external image gate and final artifact acceptance remain pending; `clean` describes source review only.
+**Current result:** zero active source findings after focused independent re-reviews of `26614f5` and `de331fb`. WR-01 below is retained as resolved history. Final artifact execution evidence is recorded separately in `06-IMAGE-GATES.md`; raw vendor image findings remain blocked. `clean` describes source review only.
+
+The subsequent focused security recheck of attestation compatibility in `de331fb` also found zero active findings; details follow at the end.
 
 ## Narrative Findings (AI reviewer)
 
@@ -83,3 +85,13 @@ The regression executes the actual workflow shell with fake Docker identity insp
 Independently reran `python3 deploy/tests/test-image-contracts.py`: **8 passed in 0.347s**, including the two new workflow/CLI handoff cases (12 scanner modes total). `python3 deploy/tests/test-ci-ops.py`: **4 passed in 0.002s**. No new confirmed defect was found in this bounded correction. WR-01 is resolved; active counts are zero.
 
 This was a focused recheck, not a repeat of the original 17-file deep review, actual builds/scans or artifact replays. External vendor HIGH/CRITICAL acceptance remains blocked separately. Only this report was updated; no source change, commit, image/build/provider/private operation occurred. The orchestrator retains report commit and final artifact acceptance.
+
+## Focused attestation compatibility review — `3972ecd..de331fb`
+
+**Result: zero new confirmed findings; source review remains clean.** Read the complete two-file correction and its new graph rejection cases. The accepted optional attestation is selected only from the exact hash-pinned upstream registry index, must identify the selected platform manifest and unknown/unknown attestation platform, and is limited to one sibling. Saved roots must contain the runnable platform, have no duplicate or unapproved digest, and match authenticated size/media type/platform information. The optional sibling must also carry the selected platform subject association. Its manifest, config and every in-toto layer are individually checked against authenticated digest/size descriptors; exact blob membership still rejects unchecked extra content. The preceding pinned index/platform/config authentication remains mandatory before this path is reached.
+
+Classic Docker-save verification and runnable-only OCI archives retain their prior behavior. Accepted engine identities and the installed fixed-alias binding/startup checks are unchanged: this compatibility path does not add arbitrary image selection, registry dependency or pull fallback. The attestation is authenticated archive metadata, not an additional runnable platform.
+
+Independently ran `python3 deploy/tests/test-image-contracts.py`: **9 passed in 0.366s**. The new test covers valid optional attestation plus changed manifest/config/layer bytes, unknown root/blob, changed subject, incorrect size, duplicate root and upstream attestation not associated with the selected platform; existing classic/containerd import-only/no-pull and scanner/CI handoff cases also passed. This focused review did not rerun packaging or the supplied recovery fixtures.
+
+Parent-reported packaging evidence is 8.082s for archive SHA256 `cb766040b9eed5eed4dce00400d39c0d8bcb7a02fc4c6d4030c9e6cf6da16814`; it is recorded here as supplied execution evidence, not an independently repeated build or completed replay. Final same-artifact recovery/roles/TLS/old-release replay and the external vendor image gate remain separate acceptance work. Only this review artifact was edited; no source, state, image, credential/provider operation or commit occurred.

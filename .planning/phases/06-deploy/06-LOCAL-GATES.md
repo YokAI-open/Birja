@@ -1,3 +1,5 @@
+> Current final-artifact acceptance is in `06-IMAGE-GATES.md` / `06-15-SUMMARY.md` (closeout2026-11-07). Final cb766040... archive passed recovery/roles/TLS/actual-old rollback. The older artifact below is historical. Plan08 task03 remains blocked by vendor HIGH/CRITICAL image findings; no08 SUMMARY or live advancement.
+
 # Phase 06 local gates — Plan 08 checkpoint
 
 Observed 2026-11-06 on `feature/phase-06-deploy`. **Plan 08 is incomplete:**

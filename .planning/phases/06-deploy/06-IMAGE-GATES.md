@@ -1,6 +1,6 @@
-# Phase 06 Plan 15 image gates — incomplete acceptance
+# Phase 06 Plan 15 image gates — bounded acceptance complete
 
-Observed 2026-11-06 on `feature/phase-06-deploy`. Tasks01/02 implementation is committed through `26614f5`; independent source/security review and the WR-01 recheck have zero active findings. **Task03 is incomplete:** finalized recovery packaging rejects Docker's exported OCI attestation sibling before creating a recovery archive. No 15 SUMMARY, 08 SUMMARY, requirement completion or downstream advancement is justified.
+Image/build observations: 2026-11-06. Closeout checked 2026-11-07 on `feature/phase-06-deploy`. Tasks01/02 and bounded task03 acceptance are complete through source `de331fb`. Independent source/security review and both focused rechecks have zero active findings. The previously recorded export failure below was corrected and the final exact archive passed recovery/roles/TLS/actual-old rollback. **Raw vendor HIGH/CRITICAL findings still block Plan08 task03 and all downstream live gates.** No08 SUMMARY or DEPL completion is justified.
 
 ## Implemented and reviewed source
 
@@ -12,7 +12,7 @@ Observed 2026-11-06 on `feature/phase-06-deploy`. Tasks01/02 implementation is c
 
 All four upstream pins remain the exact reviewed version@index values in `06-15-SCOPE.md`. Application locks, Python3.14, PG18.6/layout/UID999, Redis8.8, Node24, trixie/glibc and uv0.13.5 remain preserved.
 
-The actual Docker29 containerd store distinguishes engine/manifest IDs from config digests. Recovery authenticates registry index → selected platform manifest → config bytes and layers, then binds a fixed local alias to an allowed verified imported immutable engine identity. Classic config-ID and containerd manifest-ID import-only tests pass without registry refs/RepoDigests or pull fallback. This successful behavioral evidence does **not** replace the pending actual finalized-artifact execution proof.
+The actual Docker29 containerd store distinguishes engine/manifest IDs from config digests. Recovery authenticates registry index → selected platform manifest → config bytes and layers, then binds a fixed local alias to an allowed verified imported immutable engine identity. Classic config-ID and containerd manifest-ID import-only tests pass without registry refs/RepoDigests or pull fallback. The final actual execution proof below complements the import-only behavioral tests.
 
 Approved ownership additions: `deploy/deploy-entrypoint.sh` requires/packages the trusted current frontend Dockerfile so old-source builds use the retained toolchain; `deploy/tests/test-rollback-db-security.sh` adds only that file to its synthetic source inventory. No shared framework or application dependency update was added.
 
@@ -56,7 +56,7 @@ The PG index selects linux/amd64 platform manifest `sha256:e923a22ac074261dd7397
 
 Apt/libapt CVE-2026-109518 rows are absent after the reviewed rebuild/patch refresh. Runtime's five distributed global-pip rows and all six npm rows are removed by complete-tool changes. Remaining builder Python rows: msgpack1.1.2 CVE-2026-114613/GHSA-6v7p-g79w-8964, setuptools70.3.0 CVE-2025-47273, urllib3 2.7.0 CVE-2026-97687/97689, with scanner-listed fixed versions1.2.3/1.2.1,78.1.1,2.8.0. Their aggregate `Python` target originates in required `/opt/venv/.../pip/_vendor`, not remaining global pip. PG target `usr/local/bin/gosu` still reports Go1.24.6 including CRITICAL CVE-2025-68121; PG libxml2 CRITICAL CVE-2026-6653 remains. Exact remaining rows/paths/installed/fixed versions are retained in JSON and the existing research. No not-affected disposition or vendor fix is invented.
 
-## Blocking actual packaging result
+## Historical packaging failure — resolved by `de331fb`
 
 Final attempt command:
 
@@ -84,10 +84,32 @@ A proposed two-line selection fix was tested rather than assumed: capture explic
 |Canonical PG index pin|168550912|`3f7da981b33a850dcf1a9ba69a1056fc26ce0b892b3ef1f4f1991da3a387fe81`|Reject extra root descriptor|
 |Selected immutable engineID `sha256:e923a22...`|168550400|`aff0ec8ac56f9f89bd36ce7d6417521a921bb813f64580a97cc71ab9b51d1559`|Same rejection|
 
-Small exact exported index evidence is retained as `/tmp/birja-plan15-export-index.json` and `/tmp/birja-plan15-selected-index.json`; diagnostic image export archives were removed after recording hashes. Approved upstream exact index/platform manifest bytes remain in `/tmp/birja-plan15-registry/`. Attempt log/status: `/tmp/birja-plan15-final-ops.{log,json}`. Further canonical export or authenticated attestation-graph handling requires separately reviewed bounded work; it was not silently added during acceptance.
+Small exact exported index evidence is retained as `/tmp/birja-plan15-export-index.json` and `/tmp/birja-plan15-selected-index.json`; diagnostic image export archives were removed after recording hashes. Approved upstream exact index/platform manifest bytes remain in `/tmp/birja-plan15-registry/`. Attempt log/status: `/tmp/birja-plan15-final-ops.{log,json}`. The following bounded, independently reviewed correction resolves this historical failure without relaxing unknown-graph rejection.
+
+## Final correction and exact supplied-artifact acceptance
+
+`de331fb` authenticates at most one optional selected-platform attestation from the exact pinned upstream registry index, requires its subject/platform association, hashes its manifest/config/every in-toto layer, and retains exact known-blob membership. Unknown roots, unknown blobs, duplicates, mismatched subjects and changed bytes/sizes reject. Classic Docker exports and runnable-only OCI behavior remain supported. No arbitrary image, registry dependency or pull fallback was added. Independent focused security review passed with zero new findings;9 image contracts,15 prerequisites,4 safety methods and affected Ruff/format/whitespace passed. See `06-15-REVIEW.md` for the separate reviewer evidence.
+
+Actual packaging plus generic verification succeeded in8.082s. One finalized archive was used unchanged for both supplied-artifact entrypoints; no repackaging or feature-checkout fallback occurred:
+
+- Path: `/tmp/birja-backup-test-plan15-fixed-zl4pb12y/recovery.tar`;199,669,760bytes.
+- External SHA256 and separate `.tar.sha256`: `cb766040b9eed5eed4dce00400d39c0d8bcb7a02fc4c6d4030c9e6cf6da16814`.
+- Inventory: `deploy-recovery-v2`,19 payloads plus INVENTORY.json/SHA256SUMS, including both systemd units, quota preflight, exact index/platform manifest, PG archive and signed-restic provenance/tool.
+- Index `bd5dfa49...`, platform manifest `e923a22a...`, config `8bca9649...` are the full digests recorded above and in INVENTORY.json. Actual recovery log confirms running `sha256:e923a22ac074261dd73970c57edf659475bf0497cb9456f17d98ed7cdd3ca913`, config `sha256:8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc`, fixed alias `birja-recovery-postgres:verified-8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc`, linux/amd64 and `pull_policy=never`. Startup retains explicit `--pull never`; import-only absent-registry contract tests prove zero fallback without deleting shared images.
+
+| Exact command after `bash deploy/tests/` | Exit | Wall seconds |
+|---|---:|---:|
+|`test-db-operations.sh --backup-restore --recovery-bundle /tmp/birja-backup-test-plan15-fixed-zl4pb12y/recovery.tar`|0|73.507|
+|`test-db-operations.sh --roles`|0|31.845|
+|`test-db-operations.sh --tls`|0|57.607|
+|`test-rollback-db-security.sh --recovery-bundle /tmp/birja-backup-test-plan15-fixed-zl4pb12y/recovery.tar`|0|119.673|
+
+Supplied recovery proves installed launchers, concurrent-writer snapshot consistency, row/money/session equality, invariants, generated identities, FK/index/sequence and encrypted checksum/manifest negatives, staging removal and denied feature-checkout access. Roles proves populated repeatable transfer, actual services/scheduler, valid concurrent0008 and65 denied operations. TLS proves app/scheduler/migrator verified transport plus bad-CA/hostname/plaintext rejection, credential/mount isolation and renewal. Actual v0.3.1 rollback proves retained installer/real-Git legacy routing, recovery-gate negatives, the same installed recovery before/after hardening and after old-image rollback, old-image TLS negatives and preserved0008. Roles/TLS commands retain their own existing fixtures; the two explicitly supplied runners use the same final archive.
+
+Execution evidence: `/tmp/birja-plan15-fixed-package.json`, `/tmp/birja-plan15-replay.json`, `/tmp/birja-plan15-{supplied-recovery,roles,tls,supplied-old-rollback}.log`. The executor hit a usage limit after starting rollback; closeout inspected the completed persisted result (all four exit0), rather than rerunning successful fixtures. Archive size/hash/separate checksum were rechecked during closeout.
 
 ## Cleanup and remaining gates
 
-Final-attempt cleanup returned0 for `birja-test`, `birja-ops-test`, `birja-restore-check`, `birja-rollback-test`. Scanner containers used `--rm`; private scan archives/cache were removed. Label-filtered queries verify no containers, networks or volumes remain for those four projects. No shared images/cache were removed and no privileged Docker daemon was started.
+All four finally-cleanup commands returned0. Fresh read-only label-filtered queries on2026-11-07 confirm **zero containers, networks and volumes** for `birja-test`, `birja-ops-test`, `birja-restore-check`, `birja-rollback-test`. No shared cache/images were removed.
 
-Pending: reviewed packaging compatibility correction, one finalized retained artifact and exact supplied recovery/roles/TLS/actual-v0.3.1 rollback proof, actual installed/running offline identity proof and Plan15 summary. Raw vendor HIGH/CRITICAL findings independently keep Plan08 task03/09/live advancement blocked. Actual remote CI/provider/timer/production/inbox gates remain later work. No private config/.env/.aws, provider, real authentication/trade/email, live installation/restart, push/PR/merge/release/deploy occurred. `.claude/` and parent-owned STATE/ROADMAP/history are preserved.
+Plan15 bounded compatibility/review/evidence criteria pass. Raw vendor HIGH/CRITICAL findings independently keep Plan08 task03 and09/live advancement blocked; no suppression, waiver or pass is claimed. Existing image reports date2026-11-06 and were not rescanned on closeout because image contents did not change. Actual remote CI/provider/timer/production/inbox gates remain later work. No private config/.env/.aws, provider, real authentication/trade/email, live installation/restart, push/PR/merge/release/deploy occurred. Unrelated `.claude/` remains preserved.
