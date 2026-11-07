@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Plan15 complete; Plan08 task03 blocked by unresolved vendor HIGH/CRITICAL image findings
-last_updated: "2026-11-07T16:11:55Z"
-last_activity: 2026-11-07 -- Final exact-artifact recovery and rollback acceptance closed; Plan15 complete
+last_updated: "2026-11-07T16:34:47Z"
+last_activity: 2026-11-07 -- Final local browser10pass/1expectedskip; independent local-readiness audit complete
 progress:
   total_phases: 7
   completed_phases: 6
@@ -28,11 +28,15 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 Phase: 06 (Deploy) — EXECUTING
 Plan: 08 task03, wave10 of15 (Plan15 prerequisite complete;08tasks01/02 implemented)
 Status: Blocked by vendor HIGH/CRITICAL image findings; packaging and final recovery proof passed
-Last activity: 2026-11-07 -- Confirmed successful final rollback, cleanup and Plan15 closeout
+Last activity: 2026-11-07 -- Actual local browser and independent readiness audit complete; strict security/live gates pending
 
 Progress: [████████░░] 91% of planned plans executed (63/69); Phase 6: 9/15 plans complete.
 
 ## Immediate remaining work
+
+**Owner direction2026-11-07: continue locally; do not push or ask for push during this local-only scope.** Local implementation and rehearsals are complete within the bounded independent audit (`06-LOCAL-READINESS.md`). Actual final-image browser suite passed10/1expectedproductionCSPskip/0flaky in57.391s; final frontend staticbuild passed6.353s. Throwaway birja-e2e-test has zero remaining containers/networks/volumes. No real .env/dev/prod data was used. An initial temporary-network navigation failure was corrected and retained honestly in LOCAL-GATES.
+
+The audit independently checked code wiring and actual persisted browser/recovery/raw-scan evidence, found no additional concrete local implementation/test gap, and reconciled stale validation tables. It is local readiness, not final phase verification. All four full live/current-CI success criteria still need prescribed evidence. User was offered security paths (keep strict/alternative bases/prepare explicit exceptions); no answer is recorded, so strict policy remains. Do not silently select an exception or architecture migration.
 
 Plan15 is complete; read `06-15-SUMMARY.md`, `06-IMAGE-GATES.md` and the clean `06-15-REVIEW.md`. The Docker29 attestation-export blocker was corrected in `de331fb` and independently reviewed; do not repeat that diagnosis.
 
@@ -129,7 +133,7 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-07T16:11:55Z
+Last session: 2026-11-07T16:34:47Z
 Stopped at: Plan15 complete;06-08task03 blocked by vendor image security findings
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
@@ -228,3 +232,10 @@ Resume file: .planning/phases/06-deploy/.continue-here.md
 - Exact final cb766040... artifact passed all4serial recovery/roles/TLS/actual-old rollback runners; archive/checksum and zero4projectresources verified at closeout.
 - Plan15 SUMMARY exists;9/15 phase plans,63/69 total complete. Plan08task03/security gate remains blocked; no08SUMMARY/09advance/DEPL completion.
 - No additional scans/application reruns, provider/private/live/publication operations occurred during closeout. See IMAGE-GATES for dated evidence rather than stale earlier checkpoints.
+
+### Local-only readiness — 2026-11-07
+
+- Owner requested continued local work. Final actual-container frontend build and isolated full Playwright suite passed; evidence86ed974.
+- Independent bounded local-readiness audit found no new implementation/test gap. See LOCAL-READINESS and reconciled VALIDATION.
+- Strict image policy unresolved; provider/nightly/remoteCI/release/livefriend evidence cannot be completed locally.9/15 plans remain complete; no false phase/requirement advancement.
+- No push question/action, provider or production operation. Continue only after a concrete security resolution or newly authorized required boundary; do not repeat passing local work.

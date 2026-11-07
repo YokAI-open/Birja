@@ -437,3 +437,20 @@ requirement to fetch console-only controls/remaining counters automatically
 is superseded. Unknown inventory or inadequate headroom still fails before
 upload/deletion; retain previous copy. No provider/account/production action
 is authorized by this design answer. Actual setup verification remains09.
+
+## Owner direction — 2026-11-07: continue locally
+
+Owner requested continued local phase work until completion. This selects
+local-only work, not a push/PR/release/provider/production operation. Do not
+repeat push questions during this scope. Remaining live checkpoints still
+require their concrete evidence and scoped authority; local-only language
+does not authorize production-data access, timer activation or live mail.
+
+Final actual-image local browser suite passed10/1expectedCSPskip, with fake
+prices, console email, throwaway example.com accounts and separate tmpfs
+project. Cleanup verified. Independent LOCAL-READINESS audit found no new
+concrete local implementation/test gap; all full live/currentCI criteria
+remain unverified. Raw image security findings remain blocking. Security
+paths were presented for owner choice; no answer/waiver/base migration is
+recorded. Preserve strict policy and existing plans; do not manufacture live
+acceptance or automatically start another remediation cycle.

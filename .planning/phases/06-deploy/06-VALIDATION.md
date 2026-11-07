@@ -9,7 +9,14 @@ created: 2026-10-30
 
 # Phase 6 — Validation Strategy
 
-Execution update 2026-11-03: plans01..06 are complete with actual local/synthetic evidence in their SUMMARY files. Original planning matrix below is historical; live acceptance remains pending. Additional prerequisite14 passed independent plan review and precedes07. No production/provider operation is implied.
+Execution reconciliation 2026-11-07: plans01..07,14,15 are complete (9/15).
+08tasks01/02 are implemented;08task03 remains blocked by raw vendor
+HIGH/CRITICAL image findings. Current execution tables below supersede their
+former all-pending statuses. The planning strategy and sign-off are retained
+separately as historical planning, not new execution claims. Local browser
+execution now passed10 with one expected production-CSP skip. Live acceptance
+and actual current-head remote CI remain pending. See `06-LOCAL-READINESS.md`
+for the bounded code/evidence audit and exact remaining boundaries.
 
 ## Test Infrastructure
 
@@ -42,29 +49,29 @@ target is recorded honestly and does not weaken critical integration.
 
 ## Per-Task Verification Map
 
-Reconciled: 36 tasks in 15 sequential waves (14 at wave7;15 at wave9;08 at wave10;09..13 at waves11..15). All commands are produced in
-the same task's RED phase or an earlier plan. Actual test runs and runtimes
-remain pending; structural planning checks do not prove execution.
+Reconciled:36 tasks in15 sequential waves (14 at wave7;15 at wave9;08 at
+wave10;09..13 at waves11..15). Status is actual coverage as of2026-11-07;
+measured local results are distinct from unavailable live/remote evidence.
 
 | Task(s) | Requirement | Verification / producer | Status |
 |---|---|---|---|
-| 06-01-01 | Both | Existing git branch/base/diff checks before source mutations | pending |
-| 06-01-02,03 | Both | Explicit operating-policy and blocking-human provenance decisions | pending human |
-| 06-02-01,02 | DEPL-02 | Produces test-backup.sh and backup/status/snapshot/manifest; RED then GREEN | pending |
-| 06-03-01 | DEPL-02 | Produces test-restore-safety.sh and actual test-db-operations.sh lifecycle | pending |
-| 06-03-02 | DEPL-02 | Produces recovery-bundle.sh/ops-fixtures.py; fast bundle guards then --backup-restore, tamper negatives and old-checkout-only populated0007 install | pending |
-| 06-04-01,02 | DEPL-01/SC4 | Extends real runner --roles; populated0007->0008 and denials | pending |
-| 06-05-01,02 | DEPL-01/SC4 | Produces test-db-config.sh and focused test_db_connection.py/config tests | pending |
-| 06-06-01,02 | DEPL-01/SC4 | Extends real runner --tls/--all; real handshake/credential negatives | pending |
-| 06-07-01,02 | DEPL-01/SC4 | Fast existing offline regressions/restore guards then real old-image test-rollback-db-security.sh; same installed recovery entrypoints before/after hardening | pending |
-| 06-08-01 | Both/SC2 | Extends fast backup timer/status; final bundle packaging/old-host install rehearsal with tested units | pending |
-| 06-08-02 | Both/SC3 | Produces test-ci-ops.py and required ops job; prior backup/safety | pending |
-| 06-08-03 | Both | Full backend/frontend/image/audit/coverage + serial ops/rollback and separate reviews | pending |
+| 06-01-01 | Both | Existing git branch/base/diff checks before source mutations | complete locally;01 |
+| 06-01-02,03 | Both | Explicit operating-policy and blocking-human provenance decisions | choices/provenance complete; live scope remains separate |
+| 06-02-01,02 | DEPL-02 | test-backup.sh and backup/status/snapshot/manifest; RED then GREEN | implemented/tested locally; latest25 backup methods recorded in IMAGE-GATES |
+| 06-03-01 | DEPL-02 | test-restore-safety.sh and actual test-db-operations.sh lifecycle | implemented/tested; final4 safety methods pass |
+| 06-03-02 | DEPL-02 | recovery-bundle.sh/ops-fixtures.py; guards, encrypted recovery and old-checkout-only install | complete locally; final cb766040... supplied recovery exit0/73.507s |
+| 06-04-01,02 | DEPL-01/SC4 | real --roles runner; populated0007->0008 and denials | complete locally; latest exit0/31.845s,65 denied operations |
+| 06-05-01,02 | DEPL-01/SC4 | test-db-config.sh and focused connection/config tests | implemented;117 focused tests pass; shared policy wired to3 engines |
+| 06-06-01,02 | DEPL-01/SC4 | real --tls/--all runner; handshake/credential negatives | complete locally; latest TLS exit0/57.607s |
+| 06-07-01,02 | DEPL-01/SC4 | actual old-image rollback; same installed recovery before/after hardening | complete locally; final same-artifact rollback exit0/119.673s; per-task RED omission retained in07 history |
+| 06-08-01 | Both/SC2 | timer/status, final bundle and old-host install rehearsal with tested units | implemented/tested locally; final artifact acceptance in IMAGE-GATES; no live timer |
+| 06-08-02 | Both/SC3 | test-ci-ops.py and required ops job; prior backup/safety | implemented/tested locally; CI wiring verified; actual Phase06 CI pending |
+| 06-08-03 | Both | full suites/image/audit/coverage, serial ops/rollback, separate reviews | BLOCKED: raw image HIGH/CRITICAL; other measured local gates/reviews and10-pass browser rehearsal complete; no08 SUMMARY |
 | 06-09-01 | DEPL-02 | Explicit scoped host/backup/private-manifest/retrieval/timer approval | pending human |
 | 06-09-02 | DEPL-02/SC2 | Approved exact recovery artifact transfer/hash verification/install on unchanged v0.3.1, then real remote restore/calendar activation | pending live |
 | 06-10-01,03 | Both | Explicit feature push/merge/version-preparation choices | pending human |
 | 06-10-02 | DEPL-01/SC3 | Prior CI contract + actual feature-head all-job/browser/ops CI | pending remote |
-| 06-11-01 | DEPL-01 | Git diff + prior CI/backup/safety; selected-version candidate gates | pending |
+| 06-11-01 | DEPL-01 | Git diff + prior CI/backup/safety; selected-version candidate gates | pending approved integration/version; no release candidate authorized |
 | 06-11-02 | DEPL-01 | Explicit release push/PR approval | pending human |
 | 06-11-03 | DEPL-01/SC3 | Prior CI contract + actual release-head all-job CI | pending remote |
 | 06-12-01 | Both | Individually scoped release/tag/backmerge/live approval | pending human |
@@ -72,19 +79,19 @@ remain pending; structural planning checks do not prove execution.
 | 06-13-01 | DEPL-01/SC1 | Owner/friends Gmail + Outlook signup/trade/portfolio/history | pending human |
 | 06-13-02 | Both/all4SC | Prior CI contract/diff + independent/separate exact-evidence goal verification | pending |
 
-### Research-level capability map
+### Current capability coverage (original research producers now exist)
 
 | Capability | Requirement | Secure behavior | Proposed command / producer | Status |
 |---|---|---|---|---|
-| Backup failures and scheduling | DEPL-02 | No false success, no overlapping run, fresh remote snapshot evidence | `bash deploy/tests/test-backup.sh`; producer required | pending |
-| Restore guard | DEPL-02 | Reject dev/prod target before Docker call; reject corrupt artifact | `bash deploy/tests/test-restore-safety.sh`; producer required | pending |
-| Real encrypted recovery | DEPL-02 | Retrieve exact encrypted snapshot, restore synthetic financial/session state and constraints privately | `bash deploy/tests/test-db-operations.sh`; isolated fixture/manifest producers required | pending |
-| Role/TLS transition | DEPL-01, SC4 | Runtime DDL/admin denial; migrator succeeds; CA/hostname verification and plaintext rejection | Same isolated runner plus focused settings tests; producers required | pending |
-| Old-ref rollback | DEPL-01, SC4 | v0.3.1 cannot reinstate privileged/plaintext access | `bash deploy/tests/test-rollback-db-security.sh`; producer required | pending |
-| Trading story | DEPL-01, SC3 | Existing fake/console CI happy path remains green | Existing `frontend/e2e/trade.spec.ts` and `portfolio-history.spec.ts` via actual CI | pending |
-| Regression | Both | Money/auth/portfolio/history and deployment checks preserved | Existing CI-equivalent backend/frontend/image/deploy gates | pending |
+| Backup failures and scheduling | DEPL-02 | No false success/overlap; fresh remote snapshot evidence | `bash deploy/tests/test-backup.sh` | local/synthetic pass; actual provider/nightly evidence pending09 |
+| Restore guard | DEPL-02 | Reject unsafe target/corrupt artifact before Docker | `bash deploy/tests/test-restore-safety.sh` | final4 methods pass; supplied-input negatives also pass |
+| Real encrypted recovery | DEPL-02 | Exact snapshot restores financial/session/schema invariants privately | `bash deploy/tests/test-db-operations.sh --backup-restore --recovery-bundle <final>` | synthetic actualPG/restic pass73.507s; production remote restore pending09 |
+| Role/TLS transition | DEPL-01, SC4 | Runtime denials, migrator success, verified TLS/plaintext rejection | real `--roles` / `--tls`, focused settings tests | local pass31.845s/57.607s; production pending12 |
+| Old-ref rollback | DEPL-01, SC4 | actualv0.3.1 preserves restricted roles/verified TLS | `bash deploy/tests/test-rollback-db-security.sh --recovery-bundle <final>` | final same-artifact pass119.673s |
+| Trading story | DEPL-01, SC3 | fake/console real-server happy paths execute | actual local Playwright plus required unfiltered CI invocation | local10 pass/1 expected deployed-CSP skip; current Phase06 CI pending10/11 |
+| Regression | Both | Money/auth/portfolio/history/deployment checks preserved | CI-equivalent application/ops/image gates |616 backend/264 frontend, audits and operations pass; raw images FAIL; reviews clean |
 
-## Sampling and Wave 0
+## Historical planning strategy — sampling and Wave 0
 
 Every automatic task needs an executable automated check or a dependency
 on its named test producer. Record intended RED before behavior changes;
@@ -115,7 +122,11 @@ before push/review; actual CI and separate approval precede merge.
 - [x] Human/live prerequisites explicit; no production authority inferred.
 - [x] Planning compliance reviewed separately from execution results.
 
-Planning approval: independent recheck passed 2026-11-02, zero active blockers or warnings. All implementation, runtime tests, Wave 0 producers and live evidence remain pending execution.
+Historical planning approval: independent recheck passed2026-11-02 with zero
+active blockers/warnings. At that approval all implementation, runtime tests,
+Wave0 producers and live evidence were pending. That historical statement is
+not current execution status; current coverage appears above. No final live
+validation sign-off has occurred.
 
 ## Additive prerequisite14 validation
 
@@ -135,5 +146,10 @@ Independent15 plan checkpassed afterofflineimage-referenceclosure revision.
 Three tasks: immutableactualconsumerpins/provenance with newimage-contract
 producer; strictfive-targetscanner/CI; affectedbuild/runtimeandfinalexact
 artifactproof/residualscanrecord.16pathsowned, testproducerscreatedbeforeuse.
-Actualruntimepending. Bounded15completiondoesnotcomplete08rawsecuritygate
-whileknownvendorHIGH/CRITICALfindingspersist. No waiver orliveadvance.
+Actual bounded15runtime acceptance is complete: final cb766040... artifact
+passed recovery/roles/TLS/actual-old rollback, with persisted exit0 evidence.
+Independent source/security review and focused rechecks have zero active
+findings. Actual raw five-target scans remain FAILED with vendor
+HIGH/CRITICAL findings; bounded15completion does not complete08task03.
+No waiver or live advance. See `06-IMAGE-GATES.md` for current identities,
+commands/times and historical resolved packaging failure.
