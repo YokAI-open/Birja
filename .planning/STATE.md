@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan15 complete; Plan08 task03 blocked by unresolved vendor HIGH/CRITICAL image findings
+stopped_at: Plan08 task03 T3A safer-image builds; revised replacement plan checked, strict gate retained
 last_updated: "2026-11-07T16:55:40Z"
 last_activity: 2026-11-07 -- Owner selected strict gate; live handoff prepared and exact archive preserved
 progress:
@@ -27,12 +27,15 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 08 task03, wave10 of15 (Plan15 prerequisite complete;08tasks01/02 implemented)
-Status: Blocked by vendor HIGH/CRITICAL image findings; packaging and final recovery proof passed
+Status: Executing safer-image replacement T3A; prior-image strict gate remains failed
 Last activity: 2026-11-07 -- Strict policy confirmed; LIVE-HANDOFF ready, no external execution authorized
 
 Progress: [████████░░] 91% of planned plans executed (63/69); Phase 6: 9/15 plans complete.
 
 ## Immediate remaining work
+
+**Latest owner scope:** fix the strict gate using safer alternative images locally. DHI login confirmed and ordinary authenticated image operations authorized, without credential extraction. Actual DHI Debian candidates all failed raw scans. Public Chainguard PG18.6/Redis8.10.3 and Wolfi base passed; Python3.14/Node24 signed-package assemblies still require proof. Read ALTERNATIVE-IMAGE-RESEARCH and checked08-IMAGE-REPLACEMENT contract. Resume T3A actual builds/strict scans before T3B consumer/data transition and T3C final acceptance. Existing08tasks01/02 and15 completion remain unchanged; no production/publication authority. Earlier no-alternate-base wording below describes the previous checkpoint and is superseded by this explicit owner request.
+
 
 **Owner direction2026-11-07: continue locally; do not push or ask for push during this local-only scope.** Local implementation and rehearsals are complete within the bounded independent audit (`06-LOCAL-READINESS.md`). Actual final-image browser suite passed10/1expectedproductionCSPskip/0flaky in57.391s; final frontend staticbuild passed6.353s. Throwaway birja-e2e-test has zero remaining containers/networks/volumes. No real .env/dev/prod data was used. An initial temporary-network navigation failure was corrected and retained honestly in LOCAL-GATES.
 

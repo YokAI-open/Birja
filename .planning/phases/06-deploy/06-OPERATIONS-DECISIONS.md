@@ -465,3 +465,19 @@ preserved the exact verified recovery archive/checksum/trusted verifier in
 ignored.local/phase-06-handoff. No live action or publication is authorized;
 09..13 remain gated after08's unresolved vendor findings. Do not re-ask this
 policy choice or repeat successful local work without new evidence.
+
+## Owner scope update — safer alternative images
+
+Owner requested “fix it then, maybe another more safe image?”. This authorizes
+local alternative-image evaluation and implementation under the same strict
+raw HIGH/CRITICAL policy. It supersedes the earlier no-alternate-base scope,
+not the live/publication boundaries. Owner separately confirmed existing
+DHI authentication; ordinary Docker image operations may use that login,
+without reading/printing credential files or helper secrets. Authenticated
+DHI Debian candidates were actually scanned and failed; no exception was
+created. Public Wolfi/Chainguard candidates measured0H0C; assembled images
+and populated compatibility remain execution gates, not assumed passes.
+
+Existing08task03 revised with a checked three-segment replacement contract;
+completed01/02/15 history and15-plan count are preserved. No push, provider
+or production data/ownership/collation action is authorized.
