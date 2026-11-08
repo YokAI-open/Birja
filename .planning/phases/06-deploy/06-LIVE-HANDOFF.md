@@ -1,48 +1,75 @@
 ---
 phase: 06-deploy
-prepared: 2026-11-07
-status: blocked-security-gate
+prepared: 2026-11-08
+status: ready-for-scoped-live-preparation
 execution_authorized: false
 ---
 
 # Phase06 live handoff
 
-Owner chose **keep the strict gate; finish local validation and prepare the live handoff** on2026-11-07. Local preparation is complete within the audited scope. **This packet authorizes no live operation.** Plan08 task03 still fails the raw HIGH/CRITICAL image gate;09..13 and DEPL-01/02 remain pending. Phase6 is9/15 complete.
+The owner authorized safer alternative images while retaining the strict raw
+HIGH/CRITICAL gate and local-only scope. Plan08 is now complete after independent
+source review and full final acceptance on2026-11-08. Phase6 is10/15 complete;
+Plans09..13 and DEPL-01/02 remain pending. **This packet authorizes no live
+operation, private configuration access, transfer, publication or deployment.**
 
 ## Tested artifact preserved locally
 
 The exact tested recovery archive is retained outside temporary storage at:
 
-`/home/YokaiExchange/.local/phase-06-handoff/recovery.tar`
+`/home/YokaiExchange/.local/phase-06-handoff/candidate-cgr/recovery.tar`
 
 This directory is mode0700, its files0600, and it is explicitly git-ignored. The archive contains tools/provenance, not a production database backup. No secret or production recovery material was copied into it. It is not an off-server recovery copy; later independent custody remains required. Original temporary evidence paths remain historical.
 
 | Item | Exact binding |
 |---|---|
-|Archive size|199,669,760bytes|
-|Archive SHA256|`cb766040b9eed5eed4dce00400d39c0d8bcb7a02fc4c6d4030c9e6cf6da16814`|
+|Archive size|152,156,160bytes|
+|Archive SHA256|`83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`|
 |Separate checksum|`recovery.tar.sha256` in the same directory; independent approved hash must also be retained off-server|
-|Reviewed source|`de331fb` verifier correction; independent `06-15-REVIEW.md` has zero active findings|
-|Trusted verifier|Separately copied `verify-restore.py`, SHA256 `4a9c485f8e663b2af4132449a15262f24cac661e54e804cbddc740be3fed30ae`; byte-identical to the reviewed source and bundled verifier|
-|Inventory|Separate `INVENTORY.json` SHA256 `af964e14957ae15974f29eb1a98c5bcac3d136c616167845ddbb8f0079286a24`;19 payloads plus inventory/checksums, deploy-recovery-v2 profile, quota helper, both units, PG archive and signed-restic provenance|
-|PostgreSQL index|`sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583`|
-|Platform manifest|`sha256:e923a22ac074261dd73970c57edf659475bf0497cb9456f17d98ed7cdd3ca913`|
-|Config digest|`sha256:8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc`|
+|Reviewed source|`e40f688` replacement source; independent `06-08-IMAGE-REPLACEMENT-REVIEW.md` has zero active findings; final evidence `10b5241`|
+|Trusted verifier|Separately copied `verify-restore.py`, SHA256 `c3fed604fbf14ad9c3df0e43b00874d7761223391eb55c7cb0c45a8cde98b4de`; byte-identical to the reviewed source and bundled verifier|
+|Inventory|Separate `INVENTORY.json` SHA256 `55069a4ecca727f85f8f55f33f3e4dc9b9e7887a1ff60841b0aa14a7b45d15ea`;19 payloads plus inventory/checksums, deploy-recovery-v2 profile, quota helper, both units, PG archive and signed-restic provenance|
+|PostgreSQL index|`sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4`|
+|Platform manifest|`sha256:4401cf2919e749cd77b634a72e4a677c1a1afc12baddb21faf28df326162472e`|
+|Config digest|`sha256:91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4`|
 
 The preserved copy's hash, separate checksum and trusted verifier were checked, and the separately copied verifier successfully ran generic `bundle verify` with `--require-profile deploy-recovery-v2` (exit0, `bundle_verified=true`). No install/load/backup occurred. Changing the archive/source/image later invalidates this exact approval candidate and requires affected review/revalidation; never silently rebuild it under the same hash.
 
 ## Completed local evidence
 
-- Final exact-artifact supplied recovery73.507s, populated roles31.845s, verifiedTLS57.607s and actualv0.3.1 supplied rollback119.673s: all exit0. Same archive bytes for both supplied runners; authenticated imported image/fixed alias and pulling disabled.
-- Final actual-container frontend static build6.353s; Playwright10passed/1expectedproduction-onlyCSPskip/0flaky57.391s. Fake prices, console email and isolated example.com accounts only. No developer.env or actual market/email service used.
-- Existing measured backend616/99.80%overall/100%critical and frontend264 tests, audits/builds and focused operational contracts pass. Dates/scope/identities are in LOCAL-GATES/IMAGE-GATES; no repeated-suite claim is made.
-- Independent source/security reviews clean; bounded local-readiness audit found no additional concrete implementation/test gap. All five synthetic project labels were confirmed clean at their respective closeouts; no shared images/cache were deleted.
+- Fresh five-target unchanged scanner returned0 in29.325s; each actual final
+  runtime/test-builder/Node/PostgreSQL/Redis raw report has0HIGH/0CRITICAL,
+  including unfixed findings. DB updated2026-11-08T06:39:21Z. No exception,
+  ignores/VEX, vendor-file/metadata deletion or security-policy change.
+- Backend616 passed,99.80%overall/100%critical; actual frontend264 with audits,
+  lint/types/format/build passed. Default host pip-audit is retained and passed;
+  npm has13moderate/2low and0HIGH/0CRITICAL.
+- Actual unfiltered browser10passed/1expectedproduction-CSPskip,57.406s,
+  retries0; fake prices, console email and isolated example.com accounts only.
+  The retained list output and passed last-run record verify execution; a
+  private report filename collision lost detailed JSON, recorded honestly.
+- Same exact supplied artifact: recovery65.167s, roles30.099s with65 denials,
+  TLS49.578s and actualv0.3.1rollback102.263s, all exit0. Retained source-independent
+  launchers, authenticated imported image/fixed alias/pull-never, private
+  invariants and transport negatives passed.
+- Populated PostgreSQL/Redis image transition37.064s, clone-only UID conversion,
+  actual collation drift/reindex-before-refresh, logical recovery and untouched
+  original abort passed. Independent22-path replacement source review is clean.
+  Actual old application build uses immutable archived dependency files.
+- All six synthetic project labels have zero containers/networks/volumes.
+  T3C's166-file evidence manifest SHA256 is
+  `6a95813377aa41c9d6daa12beb7404df2a8b2b22c60c09c4b4dc6aacb81e3dad`.
+  Exact current evidence is `06-08-T3C-EVIDENCE.md`/IMAGE-GATES/LOCAL-GATES.
 
-## Required sequence after the security blocker is resolved
+The historical Debian/cb766040... packet at the parent handoff directory is
+untouched. It is not the current candidate. Use only the candidate-cgr packet
+and independently recorded new hash above for later scoped approval.
+
+## Required sequence after local acceptance
 
 | Boundary | Concrete prerequisite and scope | Required evidence before proceeding |
 |---|---|---|
-|08 security acceptance|Vendor fixes in actual consumed images, followed by affected tests, exact-image scans and any required archive revalidation. Owner selected no exceptions and no alternate-base migration.|Required strict image scans pass; source review and affected compatibility remain valid. No blanket ignore-unfixed, downgrade or automatic rescan loop.|
+|08 local acceptance — complete|Reviewed sourcee40f688 and exact final packet above; fresh scans, application/browser/transition and serial supplied-artifact checks pass.|08SUMMARY exists;10/15 plans complete. Future source/image changes require affected review/revalidation, not silent repackaging.|
 |09 preparation/approval|Confirm exact SSH/SCP route, host identity and configuration fingerprints through a separately authorized narrow process. The route is **not verified in this packet**; do not infer it from the website domain. Present exact archive/hash, target allowlists, proposed runtime/tool installation, private config scope and cleanup/undo.|Owner explicitly approves the displayed host/tool/recovery installation, opaque production backup processing, B2 upload/exact retrieval/isolated restore and timer scope. Do not execute from the feature checkout on production.|
 |09 real recovery/timer|Keep source checkout at its actually confirmed prechange release. Install immutable recovery at `/var/lib/birja/recovery/releases/<archive-sha>` and stable `/usr/local/sbin/birja-backup`, `birja-backup-status`, `birja-restore-check`. Source projectbirja-prod, checkout/srv/birja; restore only fixedbirja-restore-check, internal/noports/tmpfs. Source release/schema/runtime facts must be revalidated, not assumed from historicalv0.3.1.|Actual off-server same-snapshot retrieval/full private invariant verification; then an actual calendar-triggered successful snapshot. A manual service run cannot prove nightly operation. No app-role/TLS rollout or deployment in this step.|
 |10 feature publication|Separate owner push/PR selection, then approved current-head all-job CI and reviewed recovery evidence.|Current exact-head backend/frontend/image/e2e/ops/ci-pass green; separate feature merge/version-preparation choice. Local browser results do not replace remote CI.|
@@ -58,8 +85,43 @@ Keep exactly one verified completed snapshot: verify replacement before removing
 
 Provision secrets privately into validated root-only JSON `/etc/birja/backup.env` and referenced credential/password/CA files; never source that JSON as shell/systemdEnvironmentFile. The read-only account inventory key and Birja-scoped writer have separate roles. Protect controls/state, independent off-server password-manager custody and minimum encrypted recovery_files as specified in RUNBOOK. Never paste secrets, rows, balances, tokens or private manifests into chat/evidence.
 
+## Production image-transition prerequisite for later Plan12
+
+The safer PostgreSQL18.6 image uses UID/GID70 and glibc2.44, compared with old
+Debian UID999/glibc2.41. Explicit PGDATA stays `/var/lib/postgresql/18/docker`
+under `/var/lib/postgresql`. Normal startup cannot auto-chown old volumes;
+role/deploy preflight rejects collation drift, unknown versions or invalid
+indexes before progression. Matching PostgreSQL major alone is insufficient.
+
+Plan09 installs recovery tools only, leaving actual source app/datastore,
+credentials, services and schema unchanged. Its fixed isolated restore uses the
+verified candidate image. Later Plan12 production engine/role/TLS rollout needs
+an explicitly approved stopped-writer outage and selected clone (or fresh
+logical restore), untouched original preserved, clone owner70 and affected
+index REINDEX **before** collation version refresh. Verify data/index/session/
+money/identity invariants before switching. An engine-change abort uses the
+untouched old volume and old image; never old libc on rewritten candidate data.
+Application rollback retains the reviewed candidate engine/security setup.
+
+Persisted Redis AOF similarly needs separately approved selected-clone owner65532
+conversion, auth/TTL/noeviction/restart checks and untouched original preservation.
+No automatic live chown or deletion of OTP/rate-limit state is permitted. The
+complete tested procedure is in RUNBOOK's image/collation transition section;
+local rehearsals do not authorize that production maintenance.
+
 ## Stop/undo and current next action
 
-Target/host mismatch, invalid provenance, stale source/config/recovery evidence, unknown inventory, exhausted budget/headroom or failing verification stops the operation. Never delete prod volumes, auto-restore real data, reset failed status or broaden target/path guards. Timer disable leaves backup data intact; an already-running job needs its own diagnosis. Reviewed app rollback is distinct from restoring a production database.
+Target/host mismatch, invalid provenance, stale source/config/recovery evidence,
+unknown inventory, insufficient budget/headroom or failed verification stops the
+operation. Never delete prod volumes, auto-restore real data, reset failed status
+or broaden target/path guards. Timer disable leaves backup data intact; an
+already-running job needs its own diagnosis. App rollback and database restoration
+are distinct operations.
 
-**Current next action: retain this packet and wait for a concrete vendor fix that can satisfy08's strict gate.** Do not start09, publish or deploy while blocked. A later instruction must explicitly authorize its displayed external action; this owner answer only keeps strict policy and requests local preparation. No further passing local suite or unchanged-image scan needs repetition without new evidence.
+**Current next action: scoped Plan09 preparation only after the owner expands
+local-only authorization.** The SSH/SCP route, host identity and private setup
+controls still need narrow verification; the website domain is not a host route.
+Present that concrete route/target and exact packet before requesting installation,
+opaque production backup/remote retrieval/isolated restore and calendar timer
+scope. No live action or push is authorized by this document. All currently
+required local gates have passed; do not repeat them without changed evidence.

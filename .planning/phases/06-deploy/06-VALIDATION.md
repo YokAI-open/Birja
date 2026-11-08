@@ -9,14 +9,15 @@ created: 2026-10-30
 
 # Phase 6 — Validation Strategy
 
-Execution reconciliation 2026-11-07: plans01..07,14,15 are complete (9/15).
-08tasks01/02 are implemented;08task03 remains blocked by raw vendor
-HIGH/CRITICAL image findings. Current execution tables below supersede their
-former all-pending statuses. The planning strategy and sign-off are retained
-separately as historical planning, not new execution claims. Local browser
-execution now passed10 with one expected production-CSP skip. Live acceptance
-and actual current-head remote CI remain pending. See `06-LOCAL-READINESS.md`
-for the bounded code/evidence audit and exact remaining boundaries.
+Execution reconciliation2026-11-08: plans01..08,14,15 complete (10/15).
+The owner-authorized safer-image replacement passed independent source review
+and final T3C acceptance: all five actual fresh raw scans0HIGH/0CRITICAL,
+full616/264 suites, native/build/audit/browser checks and one exact recovery
+archive83f4f515... through serial recovery/roles/TLS/actualoldrollback pass.
+All six synthetic projects are clean. Historical Plan15 vendor failures remain
+below as dated history. Plan09 real off-server recovery/calendar timer, actual
+current-head remote CI and all later live/friend acceptance remain pending.
+No phase/DEPL completion or provider/production/publication authority is implied.
 
 ## Test Infrastructure
 
@@ -50,7 +51,7 @@ target is recorded honestly and does not weaken critical integration.
 ## Per-Task Verification Map
 
 Reconciled:36 tasks in15 sequential waves (14 at wave7;15 at wave9;08 at
-wave10;09..13 at waves11..15). Status is actual coverage as of2026-11-07;
+wave10;09..13 at waves11..15). Status is actual coverage as of2026-11-08;
 measured local results are distinct from unavailable live/remote evidence.
 
 | Task(s) | Requirement | Verification / producer | Status |
@@ -59,14 +60,14 @@ measured local results are distinct from unavailable live/remote evidence.
 | 06-01-02,03 | Both | Explicit operating-policy and blocking-human provenance decisions | choices/provenance complete; live scope remains separate |
 | 06-02-01,02 | DEPL-02 | test-backup.sh and backup/status/snapshot/manifest; RED then GREEN | implemented/tested locally; latest25 backup methods recorded in IMAGE-GATES |
 | 06-03-01 | DEPL-02 | test-restore-safety.sh and actual test-db-operations.sh lifecycle | implemented/tested; final4 safety methods pass |
-| 06-03-02 | DEPL-02 | recovery-bundle.sh/ops-fixtures.py; guards, encrypted recovery and old-checkout-only install | complete locally; final cb766040... supplied recovery exit0/73.507s |
-| 06-04-01,02 | DEPL-01/SC4 | real --roles runner; populated0007->0008 and denials | complete locally; latest exit0/31.845s,65 denied operations |
+| 06-03-02 | DEPL-02 | recovery-bundle.sh/ops-fixtures.py; guards, encrypted recovery and old-checkout-only install | complete locally; final83f4f515... supplied recovery exit0/65.167s |
+| 06-04-01,02 | DEPL-01/SC4 | real --roles runner; populated0007->0008 and denials | complete locally; latest exit0/30.099s,65 denied operations |
 | 06-05-01,02 | DEPL-01/SC4 | test-db-config.sh and focused connection/config tests | implemented;117 focused tests pass; shared policy wired to3 engines |
-| 06-06-01,02 | DEPL-01/SC4 | real --tls/--all runner; handshake/credential negatives | complete locally; latest TLS exit0/57.607s |
-| 06-07-01,02 | DEPL-01/SC4 | actual old-image rollback; same installed recovery before/after hardening | complete locally; final same-artifact rollback exit0/119.673s; per-task RED omission retained in07 history |
+| 06-06-01,02 | DEPL-01/SC4 | real --tls/--all runner; handshake/credential negatives | complete locally; latest TLS exit0/49.578s |
+| 06-07-01,02 | DEPL-01/SC4 | actual old-image rollback; same installed recovery before/after hardening | complete locally; final same-artifact rollback exit0/102.263s; per-task RED omission retained in07 history |
 | 06-08-01 | Both/SC2 | timer/status, final bundle and old-host install rehearsal with tested units | implemented/tested locally; final artifact acceptance in IMAGE-GATES; no live timer |
 | 06-08-02 | Both/SC3 | test-ci-ops.py and required ops job; prior backup/safety | implemented/tested locally; CI wiring verified; actual Phase06 CI pending |
-| 06-08-03 | Both | full suites/image/audit/coverage, serial ops/rollback, separate reviews | BLOCKED: raw image HIGH/CRITICAL; other measured local gates/reviews and10-pass browser rehearsal complete; no08 SUMMARY |
+| 06-08-03 | Both | full suites/image/audit/coverage, serial ops/rollback, separate reviews | complete locally: five raw scans0HIGH/0CRITICAL, full suites/reviews and10-pass browser;08SUMMARY exists |
 | 06-09-01 | DEPL-02 | Explicit scoped host/backup/private-manifest/retrieval/timer approval | pending human |
 | 06-09-02 | DEPL-02/SC2 | Approved exact recovery artifact transfer/hash verification/install on unchanged v0.3.1, then real remote restore/calendar activation | pending live |
 | 06-10-01,03 | Both | Explicit feature push/merge/version-preparation choices | pending human |
@@ -85,11 +86,11 @@ measured local results are distinct from unavailable live/remote evidence.
 |---|---|---|---|---|
 | Backup failures and scheduling | DEPL-02 | No false success/overlap; fresh remote snapshot evidence | `bash deploy/tests/test-backup.sh` | local/synthetic pass; actual provider/nightly evidence pending09 |
 | Restore guard | DEPL-02 | Reject unsafe target/corrupt artifact before Docker | `bash deploy/tests/test-restore-safety.sh` | final4 methods pass; supplied-input negatives also pass |
-| Real encrypted recovery | DEPL-02 | Exact snapshot restores financial/session/schema invariants privately | `bash deploy/tests/test-db-operations.sh --backup-restore --recovery-bundle <final>` | synthetic actualPG/restic pass73.507s; production remote restore pending09 |
-| Role/TLS transition | DEPL-01, SC4 | Runtime denials, migrator success, verified TLS/plaintext rejection | real `--roles` / `--tls`, focused settings tests | local pass31.845s/57.607s; production pending12 |
-| Old-ref rollback | DEPL-01, SC4 | actualv0.3.1 preserves restricted roles/verified TLS | `bash deploy/tests/test-rollback-db-security.sh --recovery-bundle <final>` | final same-artifact pass119.673s |
+| Real encrypted recovery | DEPL-02 | Exact snapshot restores financial/session/schema invariants privately | `bash deploy/tests/test-db-operations.sh --backup-restore --recovery-bundle <final>` | synthetic actualPG/restic pass65.167s; production remote restore pending09 |
+| Role/TLS transition | DEPL-01, SC4 | Runtime denials, migrator success, verified TLS/plaintext rejection | real `--roles` / `--tls`, focused settings tests | local pass30.099s/49.578s; production pending12 |
+| Old-ref rollback | DEPL-01, SC4 | actualv0.3.1 preserves restricted roles/verified TLS | `bash deploy/tests/test-rollback-db-security.sh --recovery-bundle <final>` | final same-artifact pass102.263s |
 | Trading story | DEPL-01, SC3 | fake/console real-server happy paths execute | actual local Playwright plus required unfiltered CI invocation | local10 pass/1 expected deployed-CSP skip; current Phase06 CI pending10/11 |
-| Regression | Both | Money/auth/portfolio/history/deployment checks preserved | CI-equivalent application/ops/image gates |616 backend/264 frontend, audits and operations pass; raw images FAIL; reviews clean |
+| Regression | Both | Money/auth/portfolio/history/deployment checks preserved | CI-equivalent application/ops/image gates |616 backend/264 frontend, audits and operations pass; five raw images0HIGH/0CRITICAL; reviews clean |
 
 ## Historical planning strategy — sampling and Wave 0
 
@@ -153,3 +154,18 @@ findings. Actual raw five-target scans remain FAILED with vendor
 HIGH/CRITICAL findings; bounded15completion does not complete08task03.
 No waiver or live advance. See `06-IMAGE-GATES.md` for current identities,
 commands/times and historical resolved packaging failure.
+
+## Plan08 safer-image final acceptance —2026-11-08
+
+Checked task03 replacement contract executed T3A→T3B→independent source review→T3C.
+All22 reviewed source paths remain unchanged sincee40f688. Final scanner exit0
+29.325s, DBUpdatedAt2026-11-08T06:39:21Z; five actual targets0HIGH/0CRITICAL.
+No waiver/ignore/VEX/vendor-file masking or weakened critical-path list.
+PGUID70/glibc2.44 and RedisUID65532 clone transitions/untouched abort pass37.064s.
+New preserved152156160byte archive83f4f515... passed recovery65.167s,
+roles30.099s/TLS49.578s/actualoldrollback102.263s and copied genericverification.
+Backend616/99.80%/critical100; frontend264; actual browser10pass1expectedskip
+57.406s; native/offline/build/hostaudits/operationalcontracts pass. Two extra
+private harness/reporting failures are honestly retained in T3C-EVIDENCE.
+Sixfixedprojects0resources. This completes08 only, not actual remoteCI/live
+requirements;09..13 remain pending under local-only authorization.

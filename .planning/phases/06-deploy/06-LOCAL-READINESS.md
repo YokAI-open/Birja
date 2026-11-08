@@ -2,11 +2,30 @@
 phase: 06-deploy
 audited: 2026-11-07
 scope: bounded-local-readiness
-status: blocked
+status: local-acceptance-passed-live-pending
 phase_complete: false
 ---
 
-# Phase 06 local readiness
+# Phase06 local readiness — current reconciliation2026-11-08
+
+Plan08 is now complete; Phase6 is10/15, with no remaining local image blocker.
+The owner later authorized safer alternative images. Independently reviewed
+sourcee40f688 passed fresh five-target raw0HIGH/0CRITICAL scans, full616/264
+application suites, actual browser10pass/1expectedskip, populated clone transition
+and one exact new archive through recovery65.167s/roles30.099s/TLS49.578s/
+actualoldrollback102.263s. All six synthetic projects are clean. See08SUMMARY,
+T3C-EVIDENCE and current LIVE-HANDOFF for exact archive83f4f515... and identities.
+
+This reconciliation is a parent evidence closeout, not a new independent audit.
+The independent Nov7 audit below remains unchanged historical evidence of its
+then-blocked source. Its no-alternate-base/08blocked/9of15 conclusions were
+superseded by the explicit owner request and accepted T3A/T3B/T3C proof.
+All four complete live/current-CI truths remain pending. The remaining five plans
+are09livebackup/timer,10actualCI/integration,11release,12productiontransition,
+13friends/finalverification. Local-only scope persists; no provider, production
+or publication action is authorized. Detailed boundaries are in LIVE-HANDOFF.
+
+## Historical independent audit —2026-11-07
 
 Phase 06 remains **9/15 plans complete**. The available local implementation,
 compatibility rehearsals and browser checks are complete within the reviewed

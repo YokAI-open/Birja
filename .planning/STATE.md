@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan08 task03 T3B passed e40f688; source review clean; execute final T3C acceptance
-last_updated: "2026-11-07T16:55:40Z"
-last_activity: 2026-11-07 -- Owner selected strict gate; live handoff prepared and exact archive preserved
+stopped_at: Plan08 complete; Plan09 live recovery/timer scope required; local-only boundary
+last_updated: "2026-11-08T08:35:18Z"
+last_activity: 2026-11-08 -- Strict safer-image acceptance passed; Plan08 complete and new verified packet preserved
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
-  completed_plans: 63
-  percent: 91
+  completed_plans: 64
+  percent: 93
 ---
 
 # Project State
@@ -26,34 +26,56 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 08 task03, wave10 of15 (Plan15 prerequisite complete;08tasks01/02 implemented)
-Status: Safer-image integration and independent source review passed; final T3C acceptance pending
-Last activity: 2026-11-07 -- Strict policy confirmed; LIVE-HANDOFF ready, no external execution authorized
+Plan: 09, wave11 of15 — scoped live recovery/timer checkpoint not entered
+Status: Plan08 complete; all local acceptance passed; live/provider authority absent
+Last activity: 2026-11-08 -- Final strict scans and exact-artifact replays passed
 
-Progress: [████████░░] 91% of planned plans executed (63/69); Phase 6: 9/15 plans complete.
+Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
 
 ## Immediate remaining work
 
-**Latest owner scope:** fix the strict gate using safer alternative images locally. T3A passed b48f80e: actual Python3.14runtime/test-builder and Node24toolchain raw0H0C plus consumer/audit checks. T3B passed e40f688: CGR PostgreSQL/Redis consumers, rootlessUIDs, fixed recovery provenance and populated transition/abort/roles/TLS proofs. Independent replacement review has0active findings. Resume T3C final fresh five-target scans, full application/browser gates and ONE final new-artifact supplied recovery/roles/TLS/actualv0.3.1rollback after source freeze. No push/provider/production authority;15plans/9complete unchanged until08acceptance. Earlier no-alternate-base/old-image blocker wording below is preserved history, superseded by this explicit owner request and measured new results.
+**Owner scope remains local only.** The requested safer-image fix is complete.
+Plan08 SUMMARY records T3A/T3B/T3C acceptance; do not repeat passing research,
+scans, suites or fixtures without changed source or new evidence. All five
+actual raw scans pass0HIGH/0CRITICAL, including unfixed findings, without
+exceptions. Reviewed source e40f688 is unchanged; independent22-path review
+has0 active findings. Final T3C evidence committed10b5241.
 
+Fresh backend616/99.80%overall/100%critical, frontend264, default pip-audit,
+npm high gate, native/build/smoke, offline ops and browser10pass/1expected
+production-onlyCSPskip pass. npm retains13moderate/2low. Populated PG/Redis
+transition and untouched-original abort pass. All six synthetic projects
+have0 containers/networks/volumes. Two private harness/reporting failures
+are preserved honestly in T3C evidence; prescribed acceptance passed.
 
-**Owner direction2026-11-07: continue locally; do not push or ask for push during this local-only scope.** Local implementation and rehearsals are complete within the bounded independent audit (`06-LOCAL-READINESS.md`). Actual final-image browser suite passed10/1expectedproductionCSPskip/0flaky in57.391s; final frontend staticbuild passed6.353s. Throwaway birja-e2e-test has zero remaining containers/networks/volumes. No real .env/dev/prod data was used. An initial temporary-network navigation failure was corrected and retained honestly in LOCAL-GATES.
+Final archive152,156,160bytes, SHA256
+`83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`,
+passed supplied recovery65.167s, roles30.099s, TLS49.578s and actualv0.3.1
+supplied rollback102.263s, all exit0. Byte-identical verified packet, separate
+checksum, raw inventory and trusted verifier are preserved at ignored
+`.local/phase-06-handoff/candidate-cgr/`. The earlier cb766040... packet and
+failed Debian scans remain historical, not current acceptance inputs.
 
-The audit independently checked code wiring and actual persisted browser/recovery/raw-scan evidence, found no additional concrete local implementation/test gap, and reconciled stale validation tables. It is local readiness, not final phase verification. All four full live/current-CI success criteria still need prescribed evidence. Owner explicitly chose “Keep the strict gate; finish local validation and prepare the live handoff.” No exception or alternate-base migration is selected. Local preparation is complete in `06-LIVE-HANDOFF.md`; the exact tested archive/checksum, independent verifier and inventory are preserved at git-ignored `.local/phase-06-handoff/`. The copied artifact passed generic verification; no install occurred.
+**Next is Plan09's separately scoped real backup/restore and timer operation.**
+The local handoff is concrete, but the SSH/SCP route/host fingerprints,
+private setup controls and exact live authority remain unverified/unapproved.
+No provider/private configuration or production access is permitted yet.
+Do not inspect .env/.aws or private rows, enable units, transfer/install tools,
+perform live backups, change volumes or deploy under local authorization.
+Later PGUID999→70/glibc/collation and RedisAOFUID65532 production transitions
+need separately approved stopped-writer selected-clone maintenance, not an
+automatic chown/reindex or old-libc reuse of converted data.
 
-Plan15 is complete; read `06-15-SUMMARY.md`, `06-IMAGE-GATES.md` and the clean `06-15-REVIEW.md`. The Docker29 attestation-export blocker was corrected in `de331fb` and independently reviewed; do not repeat that diagnosis.
-
-Final archive SHA256 `cb766040b9eed5eed4dce00400d39c0d8bcb7a02fc4c6d4030c9e6cf6da16814` passed supplied recovery73.507s, populated roles31.845s, TLS57.607s and actualv0.3.1 supplied rollback119.673s. All four runners exited0, with the same bytes for both supplied-artifact runners. Exact inventory/hash and zero resources for all4fixedprojects were checked during closeout. The executor usage-limit interruption happened after starting rollback; its persisted successful result was recovered without repeating fixtures.
-
-**Plan08 task03 remains blocked by raw vendor HIGH/CRITICAL image findings.** Recorded exact-image scans: runtime49HIGH, builder54HIGH, PostgreSQL91HIGH/2CRITICAL, Redis48HIGH, Node48HIGH. Global runtime pip and all6npm findings are removed; remaining Debian/required-test-tool/gosu findings are not waived. Image reports date2026-11-06; do not rescan unchanged images or repeat completed application suites/research without new evidence.
-
-Do not create08SUMMARY, start09/live gates or mark DEPL-01/02 complete. Vendor fixes or an explicitly reviewed security resolution remain necessary for the strict image gate. No new remediation plan is automatically authorized. User has not authorized Phase6 publication/provider/production actions; no push, provider access or production changes occurred. Full application616/264 evidence remains historical measured proof. Phase6 is9/15 complete.
+No push or push question during the selected local-only scope. Plans09..13,
+actual current-head remote CI, release/production rollout, Gmail/Outlook friend
+acceptance and DEPL-01/02 remain pending. The phase is not complete.
+See08SUMMARY, T3C-EVIDENCE, IMAGE-GATES and updated LIVE-HANDOFF.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 63
+- Total plans completed: 64
 - Average duration: -
 - Total execution time: -
 
@@ -136,8 +158,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-07T16:55:40Z
-Stopped at: Plan15 complete;06-08task03 blocked by vendor image security findings
+Last session: 2026-11-08T08:35:18Z
+Stopped at: Plan08 complete; Plan09 needs scoped live recovery/timer authority
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -269,3 +291,14 @@ volume rejection anduntouchedoriginalabort; RedisAOFclone/restart/abortpass.
 Actualv0.3.1retainedDockerfilebuilds18.751s, archivedlocksunchanged.
 Independent22sourcepathreviewclean0active;36focusedofflinechecks pass.
 ResumeT3C, no08SUMMARY/finalnewartifact yet. DetailedT3B-EVIDENCE/REVIEW.
+
+### Plan08 closeout — 2026-11-08
+
+T3C passed10b5241 on unchanged independently reviewed sourcee40f688:
+allfivefreshraw0HIGH/0CRITICAL, full616/264 suites/coverage/audits/builds,
+actualbrowser10pass/1expectedskip, populatedtransition and oneexactarchive
+recovery65.167s/roles30.099s/TLS49.578s/actualoldrollback102.263s pass.
+New83f4f515... packet preserved candidate-cgr; allsixprojects0resources.
+08SUMMARY created; Phase6 now10/15, overall64/69. Older blocked entries above
+are historical and superseded. Plan09 live authority is absent; no push,
+provider/production operation or DEPL/wholephase completion.

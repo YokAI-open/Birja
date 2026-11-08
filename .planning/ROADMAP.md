@@ -321,7 +321,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: 9/15 plans complete
+**Plans**: 10/15 plans complete
 
 Plans:
 **Wave 1**
@@ -362,7 +362,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
+- [x] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -394,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 9/15 | Executing — image gate blocked | - |
+| 6. Deploy | 10/15 | Executing — local gates passed; live recovery pending | - |

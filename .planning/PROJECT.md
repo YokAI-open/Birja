@@ -69,18 +69,22 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase6 has9/15 plans complete. Local encrypted recovery, populated role/TLS
-transition, actualv0.3.1 rollback, retained scheduling/operational CI and the
-bounded image enforcement prerequisite are implemented and locally rehearsed.
-The final exact recovery artifact passed all four serial checks; actual final
-local browser suite passed10 tests with one expected production-CSP skip.
-Independent source reviews and the bounded local-readiness audit found no
-active local source finding or additional concrete local implementation gap.
-Plan08 task03 still fails the strict HIGH/CRITICAL image gate on vendor
-findings. Live off-server backup/calendar timer, actual current-head CI,
-production role/TLS rollout and Gmail/Outlook friend acceptance remain pending.
-The owner requested local-only work; no Phase6 push/provider/live operation
-is authorized. See Phase06 LOCAL-READINESS/IMAGE-GATES/STATE for exact evidence.
+Phase6 has10/15 plans complete. Plan08 now passes its original local acceptance:
+reviewed Wolfi Python3.14/Node24 and pinned Chainguard PostgreSQL18.6/Redis8.10.3
+images each pass fresh raw scans with0HIGH/0CRITICAL, including unfixed findings.
+Fresh backend616/99.80%overall/100%critical, frontend264, audits/builds and actual
+browser10passed/1expectedproduction-CSPskip pass. One exact new recovery archive
+passed serial restore/roles/TLS/actualv0.3.1rollback; populated ownership/collation
+and RedisAOF clone transitions plus untouched-original abort are rehearsed.
+Independent source review has0 active findings; six synthetic projects are clean.
+The verified packet is preserved locally at ignored
+`.local/phase-06-handoff/candidate-cgr/`; details in08SUMMARY/T3C-EVIDENCE.
+
+The next boundary is Plan09 real off-server restore and nightly timer setup.
+Actual current-head CI, release, approved production datastore transition/role/
+TLS rollout and Gmail/Outlook friend acceptance remain pending. DEPL-01/02 and
+Phase6 are not complete. Local-only scope persists; no Phase6 push, provider or
+production action is authorized. See updated LIVE-HANDOFF and STATE.
 
 ## Constraints
 
@@ -131,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-07 after Phase6 local-readiness audit; phase acceptance pending*
+*Last updated: 2026-11-08 after Plan08 local acceptance; live phase acceptance pending*
