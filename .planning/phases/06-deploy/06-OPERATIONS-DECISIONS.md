@@ -529,3 +529,19 @@ as a mapping and stopped before mutation; corrected exact-checksum parsing
 and20file verification passed. No source/artifact correction needed.
 Task01complete; task02awaits privatekeys/controls/custody, then actual real
 restore/nightly evidence. No09SUMMARY, Phase6 remains10/15.
+
+## No-card account and master-key clarification —2026-11-08
+
+Owner says bucket setup is ready, no credit card is available so cap editing
+is disabled, and only the master application key exists. Do not require a
+card, recreate the bucket or accept a master key on the server. Existing $0
+budget and authorization remain unchanged. The prior instruction to edit caps
+is corrected to inspect current limits first; an already verified zero cap
+requires no edit. Actual displayed cap/free-only status is requested before
+controls attestation; no claim that no payment method alone proves all caps.
+
+Guide now explains two standard web-console keys: Birja-backup/prod/ writer
+and all-bucket read-only inventory, privately saved in the four prepared files.
+No source/artifact change, provider access/upload, backup or timer action.
+Do not bypass console_zero_caps in the installed preflight or attest unknown
+facts. Approval persists while this missing setup evidence is resolved.

@@ -326,3 +326,11 @@ Private credential placeholders and unseen password prepared; production ref/
 all4container IDs unchanged. No B2/backup/restore/timer yet. LIVE-RECOVERY has
 operator setup steps; resume02 after keys/controls/offservercustody ready.
 Earlier no-live-authority notes are superseded only for this approved09scope.
+
+### Plan09 no-card setup clarification —2026-11-08
+
+Owner reports bucket settingsready, no creditcard/cannoteditcaps, onlymasterkey.
+Do not recreatebucket/addcard/readmasterkey/pretendrestrictedkeysready. Inspect
+existing displayedcap/freeonlylimits (textquestionpending), then privately
+provision2standardkeys usingconsole. LIVE-RECOVERY guidancecorrected; no
+source/artifact/preflightbypass/provideroperation. Named09approval persists.

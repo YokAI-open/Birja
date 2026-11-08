@@ -63,10 +63,16 @@ In the Backblaze web console:
    Set its lifecycle to keep only the last file version; do not add a rule
    that deletes current files after a number of days. This controls obsolete
    object versions, while Birja keeps one verified completed backup.
-2. In Caps & Alerts, edit available daily spending caps to `$0`, with uncapped
-   options cleared, then save. Record when you checked them; changes may take
-   up to10minutes. The existing policy still requires daily owner checks and
-   exclusive account writes during backup. Caps do not guarantee zero bills.
+2. In Caps & Alerts, check the existing limits first. The owner reports no
+   credit card/payment method and cannot edit this page. Do not require adding
+   a card or assert that limits were edited. Ask for only the displayed cap
+   amounts/free-only status and verify whether existing controls satisfy the
+   agreed $0 policy. Existing verified zero caps do not need editing. Unknown
+   defaults/no payment method alone do not establish every billing control;
+   leave remote work/timer inactive until resolved. If an available control
+   needs changing, use $0 with uncapped options cleared; changes can take10min.
+   Daily owner checks and exclusive writes still apply. Caps are not a
+   universal zero-bill guarantee.
 3. In Application Keys, reuse an existing matching key if securely held, or
    create `birja-backup-writer`: Read and Write, bucket `Birja-backup`, file
    prefix `prod/`. If offered, allow listing bucket names for S3 compatibility.
@@ -96,7 +102,7 @@ send it here. Keep required production config/DB/CA recovery material under
 the previously approved independent custody policy too.
 
 When finished, report only that the settings, four files and independent
-password custody are ready, plus when caps were checked and whether other
+password custody are ready, plus the observed caps/check time and whether other
 account writers are stopped during backup. No credentials or screenshots
 containing secrets are needed.
 
@@ -123,3 +129,17 @@ checkpoint between nights instead of blocking a tool for hours.
 
 Plan09 remains incomplete. No09 SUMMARY or DEPL-02 acceptance yet; Phase6 stays
 10/15. Actual snapshot ID/UTC/restore result and calendar evidence remain absent.
+
+## Owner setup clarification —2026-11-08
+
+Owner reports bucket settings are ready, cannot edit caps without a credit
+card, and currently has only the master application key. No card/payment method
+is available or approved. Do not recreate the bucket, request master credentials,
+mark restricted keys supplied, or attest console_zero_caps without actual
+confirmation. B2 signup permits starting without a card; precise no-card
+account cap/default/paid-overage behavior is not established by generic signup
+wording. Current task is to obtain displayed cap amounts/free-only status and
+privately provision two standard restricted keys through the web console.
+Source controls/installed artifact remain unchanged; no provider call/upload,
+backup or timer activation occurred for this clarification. Existing Plan09
+approval persists.
