@@ -194,3 +194,22 @@ Resume when the owner privately corrects the keyID/applicationKey pairings
 key custody and exclusive writes, then revalidate scopes/inventory. No second
 approval for the already named09 scope, no cap edit or bucket recreation.
 Protected JSON/controls remain inactive; timer absent,10/15 plans complete.
+
+## Corrected key retry —2026-11-08
+
+Owner disclosed that secret files had contained key names, then requested retry.
+Fresh writer authentication is still401/unauthorized; independent inventory
+key authentication now succeeds with expected region/all-bucket/no-prefix scope.
+Two requests, no bucket inventory/remote mutation/backup. Sanitized retry reports
+are retained under ignored plan09-evidence with epochs1794135413/1794135441.
+Next owner action is to recheck/update BOTH writer keyID and applicationKey from
+the same creation result. Existing encryption password/custody guidance persists.
+
+Inventory authorization success is not full preflight acceptance. Its standard
+web-console ReadOnly capability set includes shareFiles; installed controls
+currently require every capability to begin read/list and will reject that
+extra permission. Keep this concrete compatibility/least-privilege question
+open: obtain a minimally scoped key or review a justified source correction;
+never filter/misreport authorization capabilities, silently bypass the guard
+or modify the installed exact approved archive. No source changes made now.
+Prior pair-wide auth failure is superseded only for inventory authentication.

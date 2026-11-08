@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan09 tools installed; supplied B2 pairs rejected401; awaiting corrected credentials and custody
-last_updated: "2026-11-08T10:33:37Z"
+stopped_at: Plan09 writer pair still401; inventory authenticates but strict permission validation pending
+last_updated: "2026-11-08T10:57:21+00:00"
 last_activity: 2026-11-08 -- Approved Plan09 recovery tools installed; private B2 setup pending
 progress:
   total_phases: 7
@@ -50,10 +50,15 @@ backup state. Four empty root-only credential files plus generated unseen
 
 **Awaiting corrected B2 authentication and off-server custody/exclusive writes.**
 Owner saidkeysready; all four private files now populated/plain/single-line.
-Actual writer and inventory authentication returns401/bad_auth_token. Installed
-curl independently confirms writer failure. Four bounded auth-only requests,
+Earlier both pairs failed. After owner corrected secret values, fresh writer
+authentication remains401/unauthorized; inventory now authenticates. Inventory
+UIReadOnly also includes shareFiles, rejected by installed read/list-only guard;
+resolve minimally scoped key or reviewed correction before full acceptance.
+Do not bypass capabilities or modify installed approved bytes. Earlier four plus
+two fresh bounded authentication-only requests,
 no bucket inventory/remote mutation/backup. Stop retries until owner privately
-corrects matched keyID/applicationKey pairs. Existing random restic-password is
+corrects the matched WRITER keyID/applicationKey pair (both files if replaced).
+Existing random restic-password is
 already generated; owner should retain/copy it privately off-server, not write
 a B2 key into it. Actual custody/no-other-writers readiness remains unconfirmed.
 
@@ -354,3 +359,11 @@ independentcurl writer alsofails. Fourauth-onlyrequests, no retryloop or B2
 mutation. Await correctedpairs and actualoffserverpassword/key custody plus
 exclusivewriters readiness. Existingresticpasswordalreadygenerated, retain it.
 Do not re-ask09approval/capediting orrecreatebucket; no code/artifact changes.
+
+### Corrected key retry —2026-11-08
+
+Inventory now authenticates; writer401/unauthorized persists. Twofreshrequests,
+no bucket inventory/upload. Writer ID+secret must match samecreationresult.
+Inventory shareFiles permission fromUIReadOnly conflicts with installed guard;
+full permission acceptance pending, no workaround/sourcechange. LIVE-RECOVERY
+records exact sanitized reports; remainingcustody/exclusivewriters pending.
