@@ -1,7 +1,7 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: awaiting-private-b2-setup
+status: awaiting-corrected-b2-authentication
 updated: 2026-11-08
 installation_complete: true
 remote_restore_complete: false
@@ -166,3 +166,31 @@ empty, regular/root-owned0600. No contents were read. Next action is to create
 and privately save the two restricted standard key pairs and complete independent
 password custody; do not re-ask the cap amounts or existing09approval. No B2
 request, private source read, backup/restore or timer activation occurred.
+
+## Restricted keys supplied; authentication gate —2026-11-08
+
+Owner said “keys ready”. All four root-owned0600 keyfiles are populated;
+opaque checks confirm plain distinct single-line values, no quotes/assignments/
+whitespace, plausible hexadecimal IDs, and separate values for each pair.
+No credential value/hash or token was printed or retained in public evidence.
+
+Installed exact quota helper made one bounded writer authorization request:
+HTTP401 at epoch1794134947, before bucket inventory. A diagnostic classified
+both writer and inventory responses as401/bad_auth_token (two requests), and
+one independent installed-curl writer cross-check also returned401/bad_auth_token.
+Four total authentication-only requests; no upload/delete/init/backup/restore.
+Private sanitized records are in ignored plan09-evidence/key-inventory-preflight,
+key-authorization-diagnostic and curl-auth-diagnostic JSON files. No retry loop.
+The key pair rejection is not attributed to a confirmed source defect.
+
+Owner asks what to write in restic-password. It already contains an agent-generated
+private random encryption password from approved setup; retain it and copy it
+privately into the off-server password manager. It is separate from both B2
+credentials. Actual off-server copying and no-other-writers readiness are not
+yet confirmed. Do not rotate/overwrite the password or expose its value.
+
+Resume when the owner privately corrects the keyID/applicationKey pairings
+(recreate only restricted keys if original secret was lost), confirms password/
+key custody and exclusive writes, then revalidate scopes/inventory. No second
+approval for the already named09 scope, no cap edit or bucket recreation.
+Protected JSON/controls remain inactive; timer absent,10/15 plans complete.

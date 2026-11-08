@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan09 approved; recovery tools installed; awaiting private B2 keys and controls
+stopped_at: Plan09 tools installed; supplied B2 pairs rejected401; awaiting corrected credentials and custody
 last_updated: "2026-11-08T10:33:37Z"
 last_activity: 2026-11-08 -- Approved Plan09 recovery tools installed; private B2 setup pending
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 09 task02, wave11 of15 — private credential/setup checkpoint
-Status: Plan09 scope approved; tools installed; real backup/restore/timer evidence pending
+Status: Plan09 approved/tools installed; B2 authentication gate before first inventory/upload
 Last activity: 2026-11-08 -- Final strict scans and exact-artifact replays passed
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -48,17 +48,19 @@ inventory hashes verified, signed restic0.19.1 checked link/version, protected
 backup state. Four empty root-only credential files plus generated unseen
 `/etc/birja/restic-password` prepared. No source artifact/code changes.
 
-**Awaiting restricted key files and off-server custody, not another bucket or
-cap edit.** Owner screenshot reviewed2026-11-08T10:43:46UTC shows existing
-$0/10GBstorage, $0/1GBdaily download,2500/dayClassB and2500/dayClassC limits.
-No card or cap change needed. This is console evidence, not automatic API
-remaining-budget observation. Size local download work within actual remaining
-allowance; the code's4GB maximum is not a provider entitlement. All four prepared
-root-only keyfiles are still empty by metadata check; no contents read. Guide
-and evidence: LIVE-RECOVERY. Reuse Birja-backup/prod at the exact approved endpoint.
-Owner privately saves writer/inventory key pairs and keeps password/access/DB/CA
-material off-server. Do not read .aws or display any secret values. No backup
-JSON/controls activation, B2 request, repo init, backup/restore or timer yet.
+**Awaiting corrected B2 authentication and off-server custody/exclusive writes.**
+Owner saidkeysready; all four private files now populated/plain/single-line.
+Actual writer and inventory authentication returns401/bad_auth_token. Installed
+curl independently confirms writer failure. Four bounded auth-only requests,
+no bucket inventory/remote mutation/backup. Stop retries until owner privately
+corrects matched keyID/applicationKey pairs. Existing random restic-password is
+already generated; owner should retain/copy it privately off-server, not write
+a B2 key into it. Actual custody/no-other-writers readiness remains unconfirmed.
+
+Existing screenshot caps accepted: $0/10GBstorage, $0/1GBdaydownload,
+2500/dayeachClassB/C. No card/cap edit/bucket recreation or approval re-ask.
+Protected JSON/controls inactive, timer absent. Exact destination and09scope
+persist. Details and private sanitized diagnostic paths in LIVE-RECOVERY.
 
 Once files/controls are ready, validate opaquely, measure actual inventory and
 source aggregate size, set conservative limits and protected JSON, then run
@@ -344,3 +346,11 @@ Screenshot verifies $0storage10GB/$0download1GBday and2500/dayeachClassB/C.
 No card/cap editing needed; no re-ask of these values. Four prepared keyfiles
 remain empty (metadata only), so next owner action is restrictedkey creation/
 private saving and offservercustody. No source/provider/liveoperation changes.
+
+### Plan09 auth gate —2026-11-08
+
+Supplied files validformat/populated, but both restricted pairs rejected401;
+independentcurl writer alsofails. Fourauth-onlyrequests, no retryloop or B2
+mutation. Await correctedpairs and actualoffserverpassword/key custody plus
+exclusivewriters readiness. Existingresticpasswordalreadygenerated, retain it.
+Do not re-ask09approval/capediting orrecreatebucket; no code/artifact changes.

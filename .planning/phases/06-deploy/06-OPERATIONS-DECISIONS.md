@@ -568,3 +568,17 @@ empty, regular/root-owned0600. No contents were read. Next action is to create
 and privately save the two restricted standard key pairs and complete independent
 password custody; do not re-ask the cap amounts or existing09approval. No B2
 request, private source read, backup/restore or timer activation occurred.
+
+## Plan09 restricted credential authentication gate —2026-11-08
+
+Owner reported keysready; four private files populated/format valid. Actual
+B2 authentication rejects writer and inventory pairs with401/bad_auth_token;
+independent curl writer check confirms. Four bounded auth-only requests total,
+no remote mutation/inventory/backup. Details in LIVE-RECOVERY/private sanitized
+plan09-evidence. Stop attempts until owner corrects matched keyID/applicationKey
+values; no master key, bucket recreation, scope waiver or new tool is needed.
+
+Owner asked what to write in restic-password: existing random password already
+generated during approved setup must remain unchanged and be copied privately
+off-server. Custody/exclusive account write readiness remain unconfirmed.
+Existing09approval/$0limits persist; no controls attestation/config/timer yet.
