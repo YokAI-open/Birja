@@ -48,14 +48,17 @@ inventory hashes verified, signed restic0.19.1 checked link/version, protected
 backup state. Four empty root-only credential files plus generated unseen
 `/etc/birja/restic-password` prepared. No source artifact/code changes.
 
-**Awaiting owner private B2 setup, not another bucket.** Reuse exact Birja-backup,
-endpoint s3.eu-central-003.backblazeb2.com, prefixprod. Guide and actual partial
-installation evidence: `06-LIVE-RECOVERY.md`. Owner checks private/ObjectLockoff/
-lifecycle/$0consolecaps, supplies writer/inventory key pairs into prepared
-/etc/birja files, and keeps access/password/DB/CA material off-server. Do not
-read .aws or print secret values; no arbitrary reuse of old credentials.
-No backup JSON/controls activated, B2 request, repository initialization,
-production backup/restore or timer installation/enable has occurred.
+**Awaiting restricted key files and off-server custody, not another bucket or
+cap edit.** Owner screenshot reviewed2026-11-08T10:43:46UTC shows existing
+$0/10GBstorage, $0/1GBdaily download,2500/dayClassB and2500/dayClassC limits.
+No card or cap change needed. This is console evidence, not automatic API
+remaining-budget observation. Size local download work within actual remaining
+allowance; the code's4GB maximum is not a provider entitlement. All four prepared
+root-only keyfiles are still empty by metadata check; no contents read. Guide
+and evidence: LIVE-RECOVERY. Reuse Birja-backup/prod at the exact approved endpoint.
+Owner privately saves writer/inventory key pairs and keeps password/access/DB/CA
+material off-server. Do not read .aws or display any secret values. No backup
+JSON/controls activation, B2 request, repo init, backup/restore or timer yet.
 
 Once files/controls are ready, validate opaquely, measure actual inventory and
 source aggregate size, set conservative limits and protected JSON, then run
@@ -334,3 +337,10 @@ Do not recreatebucket/addcard/readmasterkey/pretendrestrictedkeysready. Inspect
 existing displayedcap/freeonlylimits (textquestionpending), then privately
 provision2standardkeys usingconsole. LIVE-RECOVERY guidancecorrected; no
 source/artifact/preflightbypass/provideroperation. Named09approval persists.
+
+### Existing console caps received —2026-11-08
+
+Screenshot verifies $0storage10GB/$0download1GBday and2500/dayeachClassB/C.
+No card/cap editing needed; no re-ask of these values. Four prepared keyfiles
+remain empty (metadata only), so next owner action is restrictedkey creation/
+private saving and offservercustody. No source/provider/liveoperation changes.

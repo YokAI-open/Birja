@@ -143,3 +143,26 @@ privately provision two standard restricted keys through the web console.
 Source controls/installed artifact remain unchanged; no provider call/upload,
 backup or timer activation occurred for this clarification. Existing Plan09
 approval persists.
+
+## Existing caps verified from owner-provided screen —2026-11-08
+
+Screenshot received/reviewed at2026-11-08T10:43:46UTC shows:
+
+- Daily storage cap: $0.00,10GB; displayed usage0bytes/$0.00.
+- Daily download bandwidth cap: $0.00,1GB; displayed usage0bytes/$0.00.
+- Daily ClassB transactions:2500 maximum; displayed usage0.
+- Daily ClassC transactions:2500 maximum; displayed usage7.
+
+This is owner-provided console evidence, not an API observation or remaining
+allowance counter. No card/cap edit is required for these existing controls;
+no claim is made about an unseen category or universal zero-bill enforcement.
+Keep agreed automatic actual-storage/headroom and bounded-transfer checks,
+$0budget/daily owner checks and fail-closed behavior. The1GB/day displayed
+allowance constrains actual later local download-budget sizing; do not use
+the code's4GB maximum as available provider allowance.
+
+Metadata-only keyfile check: all four prepared /etc/birja keyfiles are still
+empty, regular/root-owned0600. No contents were read. Next action is to create
+and privately save the two restricted standard key pairs and complete independent
+password custody; do not re-ask the cap amounts or existing09approval. No B2
+request, private source read, backup/restore or timer activation occurred.
