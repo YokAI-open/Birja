@@ -831,6 +831,191 @@ def role_sql(dc, query, role=r.BOOT, denied=False):
     return result.stdout.strip()
 
 
+def image_transition():
+    """Physical clone plus independent logical recovery; original never migrated."""
+    project = "birja-image-transition-test"
+    old_image = "postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
+    original_volume = project + "_original"
+    clone_volume = project + "_clone"
+    redis_original = project + "_redis_original"
+    redis_clone = project + "_redis_clone"
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+        root = Path(tmp)
+        root.chmod(0o700)
+        config = root / "transition.json"
+        environment = {"PGDATA": "/var/lib/postgresql/18/docker", "POSTGRES_USER": r.BOOT,
+                       "POSTGRES_PASSWORD": "synthetic-ops-only", "POSTGRES_DB": "birja_source_test",
+                       "POSTGRES_INITDB_ARGS": "--locale=en_US.utf8 --locale-provider=libc"}
+        common = {"environment": environment, "networks": ["isolated"], "mem_limit": "512m",
+                  "cpus": 2, "pids_limit": 128,
+                  "healthcheck": {"test": ["CMD", "pg_isready", "-U", r.BOOT, "-d", "birja_source_test"],
+                                  "interval": "1s", "timeout": "3s", "retries": 60}}
+        services = {
+            "original": {**common, "image": old_image, "volumes": ["original:/var/lib/postgresql"]},
+            "postgres": {**common, "user": "70:70", "image": r.REGISTRY_REF, "volumes": ["clone:/var/lib/postgresql"]},
+            "fresh": {**common, "user": "70:70", "image": r.REGISTRY_REF, "tmpfs": ["/var/lib/postgresql:size=268435456,uid=70,gid=70,mode=0750"]},
+        }
+        redis_flags = ["--requirepass", "synthetic-redis-only", "--maxmemory", "64mb",
+                       "--maxmemory-policy", "noeviction", "--appendonly", "yes", "--appendfsync", "always"]
+        for service, image, volume, command in [
+            ("redis-original", "redis:8.8.4-trixie@sha256:a008e2cb5579f3616b29bd9e9913a25f16ec09ae2f56ddab524664663b581228", "redis_original", ["redis-server", *redis_flags]),
+            ("redis", "cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48", "redis_clone", redis_flags),
+        ]:
+            services[service] = {"image": image, "command": command, "volumes": [volume + ":/data"],
+                                 "networks": ["isolated"], "mem_limit": "128m", "cpus": 1, "pids_limit": 64,
+                                 "healthcheck": {"test": ["CMD-SHELL", "REDISCLI_AUTH=synthetic-redis-only redis-cli ping | grep PONG"],
+                                                 "interval": "1s", "timeout": "3s", "retries": 30}}
+        config.write_text(json.dumps({"name": project, "services": services,
+                                      "volumes": {name: {} for name in ["original", "clone", "redis_original", "redis_clone"]},
+                                      "networks": {"isolated": {"internal": True}}}))
+        dc = ["/usr/bin/docker", "compose", "--env-file", "/dev/null", "-p", project, "-f", str(config)]
+
+        def query(service, sql):
+            return r.call(dc + ["exec", "-T", service, "psql", "-XqAt", "-v", "ON_ERROR_STOP=1",
+                                "-U", r.BOOT, "-d", "birja_source_test"], sql.encode()).strip()
+
+        def redis(service, *args, auth=True):
+            return r.call(dc + ["exec", "-T", *(["-e", "REDISCLI_AUTH=synthetic-redis-only"] if auth else []),
+                                service, "redis-cli", *args]).strip()
+
+        def canonical(service):
+            data = json.loads(query(service, "SET TIME ZONE 'UTC';\n" + (ROOT / "deploy/backup-manifest.sql").read_text()))
+            # Debian appends its package build to server_version. Existing
+            # recovery equality compares schema/data/money/revision, not that
+            # distro label; actual PG/libc majors are separately checked.
+            assert data.pop("server_version").startswith("18.6")
+            return data
+
+        def readonly_original_fingerprint(volume=original_volume):
+            assert volume in {original_volume, redis_original}
+            data = r.call(["/usr/bin/docker", "run", "--rm", "--network", "none", "--read-only",
+                           "--mount", "type=volume,source=" + volume + ",target=/original,readonly",
+                           "--entrypoint", "sh", r.REGISTRY_REF, "-c",
+                           "find /original -type f -exec sha256sum '{}' ';' | sort"])
+            return __import__("hashlib").sha256(data).digest()
+
+        # Same SQL as privileged helper, executed read-only in this fixed fixture.
+        embedded = (ROOT / "deploy/configure-db.sh").read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        embedded = embedded.rsplit("\ntry:\n    main()", 1)[0]
+        scope = {"__name__": "contract"}
+        exec(compile(embedded, "configure-db.sh", "exec"), scope)
+        check = scope["COLLATION_PREFLIGHT"]
+        # Reject collisions before entering cleanup: never adopt another run.
+        for kind in ["container", "volume", "network"]:
+            assert not r.call(["/usr/bin/docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + project]).strip()
+        for volume in [original_volume, clone_volume, redis_original, redis_clone]:
+            assert not r.call(["/usr/bin/docker", "volume", "ls", "-q", "--filter", "name=^" + volume + "$"]).strip()
+        try:
+            r.call(dc + ["up", "-d", "--wait", "original", "redis-original"], timeout=120)
+            assert r.call(dc + ["exec", "-T", "redis-original", "stat", "-c", "%u", "/data"]).strip() == b"999"
+            assert redis("redis-original", "SET", "birja:transition:proof", "aof-preserved", "EX", "600") == b"OK"
+            r.call(dc + ["stop", "redis-original"])
+            redis_hash = readonly_original_fingerprint(redis_original)
+            r.call(["/usr/bin/docker", "run", "--rm", "--network", "none", "--read-only",
+                    "--mount", "type=volume,source=" + redis_original + ",target=/original,readonly",
+                    "--mount", "type=volume,source=" + redis_clone + ",target=/clone",
+                    "--entrypoint", "sh", r.REGISTRY_REF, "-c",
+                    "cp -a /original/. /clone/ && chown -R 65532:65532 /clone"], timeout=60)
+            r.call(dc + ["up", "-d", "--wait", "redis"], timeout=60)
+            assert b"NOAUTH" in redis("redis", "PING", auth=False)
+            assert redis("redis", "GET", "birja:transition:proof") == b"aof-preserved"
+            assert int(redis("redis", "TTL", "birja:transition:proof")) > 0
+            assert redis("redis", "CONFIG", "GET", "maxmemory-policy").splitlines()[-1] == b"noeviction"
+            assert redis("redis", "CONFIG", "GET", "appendonly").splitlines()[-1] == b"yes"
+            assert r.call(dc + ["exec", "-T", "redis", "id", "-u"]).strip() == b"65532"
+            assert b"Uid:\t65532\t65532\t65532\t65532" in r.call(dc + ["exec", "-T", "redis", "cat", "/proc/1/status"])
+            r.call(dc + ["stop", "redis"])
+            r.call(dc + ["up", "-d", "--wait", "redis"], timeout=60)
+            assert redis("redis", "GET", "birja:transition:proof") == b"aof-preserved"
+            assert readonly_original_fingerprint(redis_original) == redis_hash
+            r.call(dc + ["up", "-d", "--wait", "redis-original"], timeout=60)
+            assert redis("redis-original", "GET", "birja:transition:proof") == b"aof-preserved"
+            print("redis_aof_clone_uid65532=true auth_denial=true noeviction=true persistence_restart=true untouched_original_abort=true")
+            assert b"2.41" in r.call(dc + ["exec", "-T", "original", "ldd", "--version"])
+            assert r.call(dc + ["exec", "-T", "original", "stat", "-c", "%u", environment["PGDATA"]]).strip() == b"999"
+            seed = ["/usr/bin/docker", "run", "--rm", "-i", "--network", project + "_isolated"]
+            for key, value in {"ENV": "test", "DATABASE_URL": "postgresql+asyncpg://" + r.BOOT + ":synthetic-ops-only@original:5432/birja_source_test",
+                               "REDIS_URL": "redis://localhost/0", "OTP_HMAC_SECRET": "synthetic-only-otp-secret-00000000000000",
+                               "JWT_SECRET": "synthetic-only-jwt-secret-00000000000000", "EMAIL_BACKEND": "console"}.items():
+                seed += ["-e", key + "=" + value]
+            r.call(seed + ["--entrypoint", "python", "birja-backend-test:phase05-07", "-"], SEED.encode())
+            query("original", "CREATE COLLATION public.transition_locale (provider=libc, locale='en_US.utf8'); CREATE TABLE public.locale_probe(value text COLLATE public.transition_locale PRIMARY KEY); INSERT INTO public.locale_probe VALUES ('a'),('A'),('ä'),('å'),('ae'),('é'),('z'),('Z'),('ß'),('ss'),('Ω'),('Ж');")
+            before = canonical("original")
+            versions = query("original", "SELECT datcollversion FROM pg_database WHERE datname=current_database()")
+            assert query("original", check) == b"collation_ok"
+            ordered = query("original", "SELECT json_agg(value ORDER BY value) FROM locale_probe")
+            dump = r.call(dc + ["exec", "-T", "original", "pg_dump", "-U", r.BOOT, "-d", "birja_source_test", "-Fc"])
+            r.call(dc + ["stop", "original"])
+            original_hash = readonly_original_fingerprint()
+            refused = subprocess.run(["/usr/bin/docker", "run", "--rm", "--network", "none", "--read-only",
+                                      "--user", "70:70", "-e", "PGDATA=/var/lib/postgresql/18/docker",
+                                      "-e", "POSTGRES_USER=" + r.BOOT, "-e", "POSTGRES_PASSWORD=synthetic-ops-only",
+                                      "-e", "POSTGRES_DB=birja_source_test",
+                                      "--mount", "type=volume,source=" + original_volume + ",target=/var/lib/postgresql,readonly",
+                                      r.REGISTRY_REF], capture_output=True, timeout=30, env=r.ENV)
+            assert refused.returncode != 0 and b"permission denied" in (refused.stdout + refused.stderr).lower()
+            assert readonly_original_fingerprint() == original_hash
+            r.call(["/usr/bin/docker", "run", "--rm", "--network", "none", "--read-only",
+                    "--mount", "type=volume,source=" + original_volume + ",target=/original,readonly",
+                    "--mount", "type=volume,source=" + clone_volume + ",target=/clone",
+                    "--entrypoint", "sh", r.REGISTRY_REF, "-c",
+                    "cp -a /original/. /clone/ && chown -R 70:70 /clone/18/docker"], timeout=120)
+            r.call(dc + ["up", "-d", "--wait", "postgres"], timeout=120)
+            assert b"2.44" in r.call(dc + ["exec", "-T", "postgres", "ldd", "--version"])
+            assert r.call(dc + ["exec", "-T", "postgres", "stat", "-c", "%u", environment["PGDATA"]]).strip() == b"70"
+            assert b"Uid:\t70\t70\t70\t70" in r.call(dc + ["exec", "-T", "postgres", "cat", "/proc/1/status"])
+            for service in ["original", "postgres", "redis-original", "redis"]:
+                cid = r.call(dc + ["ps", "-a", "-q", service]).decode().strip()
+                actual = json.loads(r.call(["/usr/bin/docker", "inspect", cid]))[0]
+                assert not actual["HostConfig"].get("PortBindings")
+                if service == "redis":
+                    assert actual["Config"]["Entrypoint"] == ["/usr/bin/redis-server"]
+                    assert actual["Config"]["Cmd"] == redis_flags
+            drift = query("postgres", check) != b"collation_ok"
+            assert canonical("postgres") == before
+            # Rebuild BEFORE refreshing either catalog, even when no drift.
+            query("postgres", "REINDEX DATABASE birja_source_test")
+            query("postgres", "ALTER COLLATION public.transition_locale REFRESH VERSION; ALTER DATABASE birja_source_test REFRESH COLLATION VERSION")
+            assert query("postgres", check) == b"collation_ok"
+            assert query("postgres", "SET enable_seqscan=off; SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
+            assert query("postgres", "SET enable_seqscan=off; SELECT count(*) FROM locale_probe WHERE value IN ('ä','ß','Ω')") == b"3"
+            assert canonical("postgres") == before
+            # Full existing money/FK/index/identity verifier on the physical clone.
+            # canonical includes complete existing financial/schema invariants;
+            # reuse verifier against fixed source DB without changing its target API.
+            original_sql = r.sql
+            try:
+                r.sql = lambda unused, sql, db=r.CLONE: query("postgres", sql)
+                r.verify(dc, before)
+            finally:
+                r.sql = original_sql
+            r.call(dc + ["up", "-d", "--wait", "fresh"], timeout=120)
+            r.call(dc + ["exec", "-T", "fresh", "pg_restore", "-U", r.BOOT, "-d", "birja_source_test",
+                         "--no-owner", "--no-acl", "--exit-on-error", "--single-transaction"], dump)
+            assert canonical("fresh") == before
+            assert query("fresh", check) == b"collation_ok"
+            assert query("fresh", "SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
+            assert readonly_original_fingerprint() == original_hash
+            r.call(dc + ["stop", "postgres", "fresh"])
+            r.call(dc + ["up", "-d", "--wait", "original"], timeout=120)
+            assert canonical("original") == before
+            assert query("original", check) == b"collation_ok"
+            assert query("original", "SELECT datcollversion FROM pg_database WHERE datname=current_database()") == versions
+            assert query("original", "SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
+            assert r.call(dc + ["exec", "-T", "original", "stat", "-c", "%u", environment["PGDATA"]]).strip() == b"999"
+            print("image_transition_populated=true original_uid999_glibc241=true clone_uid70_glibc244=true actual_collation_drift=" + str(drift).lower() + " reindex_before_refresh=true logical_restore=true untouched_original_abort=true")
+            print(f"image_transition_seconds={time.monotonic() - started:.3f}")
+        finally:
+            r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
+            # The clone is created by the fixed-name helper before Compose sees it.
+            for volume in [clone_volume, redis_clone]:
+                if r.call(["/usr/bin/docker", "volume", "ls", "-q", "--filter", "name=^" + volume + "$"]).strip():
+                    r.call(["/usr/bin/docker", "volume", "rm", volume])
+            for kind in ["container", "volume", "network"]:
+                assert not r.call(["/usr/bin/docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + project]).strip()
+
+
 def roles(red_probe=False):
     dc = r.compose()
     started = time.monotonic()
@@ -915,6 +1100,7 @@ def roles(red_probe=False):
                 dc,
                 "CREATE TABLE public.unrelated_fixture(id bigint GENERATED ALWAYS AS IDENTITY, marker text); INSERT INTO unrelated_fixture(marker) VALUES ('untouched')",
             )
+            role_sql(dc, "CREATE COLLATION public.role_fixture_locale (provider=libc, locale='en_US.utf8'); CREATE INDEX role_fixture_locale_idx ON unrelated_fixture(marker COLLATE role_fixture_locale)")
             owner_query = "SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version') AND relowner=(SELECT oid FROM pg_roles WHERE rolname='%s')"
             assert role_sql(dc, owner_query % r.BOOT) == b"9"
             identities = "SELECT c.relname,s.relname,d.deptype FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attidentity='a' JOIN pg_depend d ON d.refobjid=c.oid AND d.refobjsubid=a.attnum AND d.deptype='i' JOIN pg_class s ON s.oid=d.objid WHERE c.relnamespace='public'::regnamespace AND c.relname!='unrelated_fixture' ORDER BY c.relname"
@@ -929,6 +1115,34 @@ def roles(red_probe=False):
             # Inspection preflights the populated schema without mutation.
             r.call(admin + ["--inspect"])
             assert role_sql(dc, owner_query % r.BOOT) == b"9"
+            # Synthetic catalog negatives must stop BEFORE privileged roles.
+            for version in ("'synthetic-mismatch'", "NULL"):
+                role_sql(dc, "UPDATE pg_database SET datcollversion=" + version + " WHERE datname=current_database()")
+                rejected(admin + approved)
+                assert role_sql(dc, "SELECT count(*) FROM pg_roles WHERE rolname='birja_app'") == b"0"
+                role_sql(dc, "REINDEX DATABASE birja_source_test")
+                if version == "NULL":
+                    # Restore the deliberately removed synthetic catalog value;
+                    # PG refuses REFRESH from NULL. Never a production path.
+                    role_sql(dc, "UPDATE pg_database SET datcollversion=pg_database_collation_actual_version(oid) WHERE datname=current_database()")
+                else:
+                    role_sql(dc, "ALTER DATABASE birja_source_test REFRESH COLLATION VERSION")
+                role_sql(dc, "UPDATE pg_collation SET collversion=" + version + " WHERE oid='public.role_fixture_locale'::regcollation")
+                rejected(admin + approved)
+                assert role_sql(dc, "SELECT count(*) FROM pg_roles WHERE rolname='birja_app'") == b"0"
+                role_sql(dc, "REINDEX INDEX role_fixture_locale_idx")
+                if version == "NULL":
+                    role_sql(dc, "UPDATE pg_collation SET collversion=pg_collation_actual_version(oid) WHERE oid='public.role_fixture_locale'::regcollation")
+                else:
+                    role_sql(dc, "ALTER COLLATION public.role_fixture_locale REFRESH VERSION")
+            role_sql(dc, "INSERT INTO unrelated_fixture(marker) VALUES ('untouched')")
+            invalid = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-U", r.BOOT, "-d", "birja_source_test"], input=b"CREATE UNIQUE INDEX CONCURRENTLY role_fixture_invalid ON unrelated_fixture(marker)", capture_output=True, timeout=30, env=r.ENV)
+            assert invalid.returncode != 0
+            rejected(admin + approved)
+            assert role_sql(dc, "SELECT count(*) FROM pg_roles WHERE rolname='birja_app'") == b"0"
+            role_sql(dc, "DROP INDEX role_fixture_invalid")
+            role_sql(dc, "DELETE FROM unrelated_fixture WHERE id=(SELECT max(id) FROM unrelated_fixture)")
+            print("collation_mismatch_unknown_rejected_before_roles=true")
             r.call(
                 admin + ["--apply", "--approved-operation", "populated-role-transition"]
             )
@@ -1283,7 +1497,7 @@ def tls():
         assert (root / "custody/ca.key").stat().st_mode & 0o777 == 0o600
         assert (root / "db-tls/server/server.key").stat().st_mode & 0o777 == 0o640
         assert (root / "db-tls/server/server.key").stat().st_uid == 0
-        assert (root / "db-tls/server/server.key").stat().st_gid == 999
+        assert (root / "db-tls/server/server.key").stat().st_gid == 70
         key = root / "db-tls/server/server.key"
         key.chmod(0o644)
         reject_provision(["--check"])
@@ -1293,7 +1507,7 @@ def tls():
         key.chmod(0o640)
         os.chown(key, 0, 0)
         reject_provision(["--check"])
-        os.chown(key, 0, 999)
+        os.chown(key, 0, 70)
         with (root / "operation.lock").open("w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             reject_provision(
@@ -1433,13 +1647,13 @@ def tls():
             s.update(mem_limit="512m", cpus=2, pids_limit=128)
             s["volumes"] = []
             if name == "postgres":
-                s["tmpfs"] = ["/var/lib/postgresql:size=268435456"]
+                s["tmpfs"] = ["/var/lib/postgresql:size=268435456,uid=70,gid=70,mode=0750"]
                 s["volumes"] = [
                     str(root / "db-tls/server") + ":/run/birja/db-server:ro",
                     str(hba) + ":/run/birja/db-hba:ro",
                 ]
             elif name == "redis":
-                s["tmpfs"] = ["/data:size=16777216"]
+                s["tmpfs"] = ["/data:size=16777216,uid=65532,gid=65532,mode=0750"]
             else:
                 s["image"] = "birja-backend-test:phase05-07"
                 s["volumes"] = [
@@ -1489,7 +1703,7 @@ def tls():
             # Validate pinned image ownership rather than guessing uid/gid.
             assert (
                 r.call(dc + ["exec", "-T", "postgres", "id", "-g", "postgres"]).strip()
-                == b"999"
+                == b"70"
             )
             setup = time.monotonic()
             bootstrap = [
@@ -1660,6 +1874,8 @@ if __name__ == "__main__":
         input_self_test()
     elif sys.argv[1:] == ["--roles"]:
         roles()
+    elif sys.argv[1:] == ["--image-transition"]:
+        image_transition()
     elif sys.argv[1:] == ["--roles-red-probe"]:
         roles(red_probe=True)
     elif sys.argv[1:] == ["--tls"]:

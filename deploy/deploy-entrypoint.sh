@@ -164,7 +164,7 @@ def main():
     # No caller-controlled bundle/Compose/service routing. Only the supported
     # ref is retained from the environment; deploy.sh applies its allowlist.
     env = {'PATH':'/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin','HOME':'/root','LANG':'C.UTF-8',
-           'BIRJA_RETAINED_DIR':str(release),'BIRJA_APP_DIR':'/srv/birja',
+           'BIRJA_RETAINED_DIR':str(release),'BIRJA_OPS_DIR':str(release),'BIRJA_APP_DIR':'/srv/birja',
            'BIRJA_MIGRATOR_CONTEXT':str(release/'backend')}
     if 'DEPLOY_REF' in os.environ: env['DEPLOY_REF'] = os.environ['DEPLOY_REF']
     if args not in [['--help'], ['-h']]:

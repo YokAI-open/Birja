@@ -348,6 +348,63 @@ index through approved maintenance, and follow its reviewed recovery procedure
 before retry. Do not automatically downgrade or drop arbitrary objects; a
 schema-changing repair needs a reviewed migration and scoped approval.
 
+### PostgreSQL image and collation transition
+
+The reviewed PostgreSQL18.6 image uses glibc2.44 and postgres UID/GID70;
+the old Debian image used glibc2.41 and UID/GID999. PGDATA is explicitly
+`/var/lib/postgresql/18/docker`, with the volume still mounted at
+`/var/lib/postgresql`. A matching major version does not establish physical
+data compatibility. Server TLS keys remain root-owned mode0640 with group70;
+the server directory is mode0750, and applications receive only the CA.
+
+The guarded role helper and retained deployment preflight fail closed on
+unknown/mismatching database or used explicit collation versions, query
+failure, and invalid public indexes. They only read catalogs. They never
+change ownership, rebuild indexes, or refresh version records automatically.
+All reviewed PostgreSQL consumers set `user: "70:70"`, so the image's root
+entrypoint cannot silently convert a UID999 volume before the preflight.
+An unconverted old data directory must fail closed.
+Old application releases retain the reviewed current Python/Node build
+instructions and secure PostgreSQL/Redis orchestration; their archived
+application dependency files remain unchanged. Application rollback keeps
+the new database engine and must not reattach rewritten data to old libc.
+
+Production maintenance needs a separately approved outage and procedure:
+
+1. Verify a fresh encrypted recovery point and independent password/key
+   custody. Stop all writers. Preserve an untouched original volume and its
+   old pinned engine; work only on an explicitly selected clone, or restore
+   a logical dump into a fresh candidate cluster.
+2. On that clone only, verify the fixed PG18 path and convert its data owner
+   to70. Check required extensions, client tools, locales and recorded versus
+   actual collation versions. Never recursively chown the production volume.
+3. Rebuild every affected index with reviewed `REINDEX` maintenance **before**
+   `ALTER COLLATION ... REFRESH VERSION` or `ALTER DATABASE ... REFRESH
+   COLLATION VERSION`. Refreshing a catalog version alone leaves stale indexes.
+   These catalog operations do not replace an Alembic schema migration.
+4. Verify indexed locale-sensitive lookups against sequential results, all
+   index validity flags, exact row/session/money invariants, constraints and
+   generated identities; rerun the guarded role/TLS/deploy preflights. Resume
+   writers only after the approved verification passes.
+5. To abort the engine change, restore/use the untouched original with its
+   original Debian image, UID and collation state, then verify the same data.
+   Never claim that old libc can safely reuse the converted/reindexed clone.
+
+`test-db-operations.sh --image-transition` rehearses this on the fixed internal
+`birja-image-transition-test` project with synthetic named original/clone
+volumes, no published ports, and finally cleanup. It is local evidence only,
+not production ownership/reindex or rollout authority.
+
+Redis also changes from the Debian UID999 image to UID65532. Preserve
+password authentication, `noeviction`, AOF and the internal-only network.
+An existing persisted AOF volume requires a separately approved stopped-writer
+clone/ownership transition to65532, verified AOF reload, TTLs and authenticated
+client checks before reuse. Do not automatically chown a live volume or discard
+OTP/rate-limit state as a cache workaround. The same synthetic transition
+runner verifies old AOF bytes remain untouched, cloned AOF reloads as65532,
+unauthenticated requests fail, a restart preserves the TTL-bearing test key,
+and the untouched original remains usable by its original Debian engine.
+
 For this specific interrupted 0008, have the approved migrator inspect
 `pg_index.indisvalid`, `pg_index.indisready`, `pg_get_indexdef(indexrelid)` and
 the current `alembic_version` for

@@ -155,7 +155,7 @@ except BaseException as error:
                 patch.object(
                     subprocess,
                     "run",
-                    return_value=subprocess.CompletedProcess([], 0, b"", b""),
+                    return_value=subprocess.CompletedProcess([], 0, b"collation_ok\n", b""),
                 ),
             ):
                 scope["main"]()

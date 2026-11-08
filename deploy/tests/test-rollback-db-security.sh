@@ -16,6 +16,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -184,12 +185,22 @@ def integration(archive_arg):
     with f.installed_recovery(archive_arg) as session:
         root = session.root
         old = root / 'old/app'
-        # Actual old application source, using byte-identical locked dependencies.
-        assert (old / 'backend/uv.lock').read_bytes() == (ROOT / 'backend/uv.lock').read_bytes()
-        assert (old / 'backend/pyproject.toml').read_bytes() == (ROOT / 'backend/pyproject.toml').read_bytes()
-        (old / 'backend/Rollback.Dockerfile').write_text(
-            'FROM birja-backend-test:phase05-07\nCOPY --chown=app:app app /app/app\nCOPY --chown=app:app alembic /app/alembic\nCOPY --chown=app:app alembic.ini /app/alembic.ini\n')
-        run(['/usr/bin/docker', 'build', '--network=none', '--pull=false', '-f', str(old / 'backend/Rollback.Dockerfile'), '-t', 'birja-rollback-test:v0.3.1', str(old / 'backend')])
+        # Preserve immutable release bytes; current audit-group metadata differs.
+        for name in ['backend/uv.lock', 'backend/pyproject.toml', 'frontend/package-lock.json']:
+            assert (old / name).read_bytes() == r.call(['git', 'show', old_sha + ':' + name])
+        old_lock = tomllib.loads((old / 'backend/uv.lock').read_text())
+        current_lock = tomllib.loads((ROOT / 'backend/uv.lock').read_text())
+        def artifacts(lock):
+            return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
+        assert artifacts(old_lock) == artifacts(current_lock)
+        old_project = tomllib.loads((old / 'backend/pyproject.toml').read_text())
+        current_project = tomllib.loads((ROOT / 'backend/pyproject.toml').read_text())
+        assert old_project['project']['dependencies'] == current_project['project']['dependencies']
+        assert sorted(d for d in old_project['dependency-groups']['dev'] if not d.startswith('pip-audit')) == sorted(current_project['dependency-groups']['dev'])
+        # Actual old source and lock, production-only deps, reviewed build file.
+        run(['/usr/bin/docker', 'build', '--pull=false', '--target', 'runtime', '-f', str(ROOT / 'backend/Dockerfile'), '-t', 'birja-rollback-test:v0.3.1', str(old / 'backend')])
+        for name in ['backend/uv.lock', 'backend/pyproject.toml']:
+            assert (old / name).read_bytes() == r.call(['git', 'show', old_sha + ':' + name])
         env = {**r.ENV, 'POSTGRES_USER': r.BOOT, 'POSTGRES_PASSWORD': 'synthetic-ops-only',
                'POSTGRES_DB': 'birja_source_test', 'REDIS_PASSWORD': 'synthetic-redis-only',
                'OTP_HMAC_SECRET': 'synthetic-only-otp-secret-00000000000000',
@@ -270,11 +281,11 @@ def integration(archive_arg):
                 s.update(networks=['isolated'], mem_limit='512m', cpus=2, pids_limit=128)
                 if name == 'postgres':
                     s['networks'] = {'isolated':{'aliases':['wrong-host']}}
-                    s['environment'] = {'POSTGRES_USER':r.BOOT,'POSTGRES_PASSWORD':'synthetic-ops-only','POSTGRES_DB':'birja_ops_test'}
+                    s['environment'] = {'PGDATA':'/var/lib/postgresql/18/docker','POSTGRES_USER':r.BOOT,'POSTGRES_PASSWORD':'synthetic-ops-only','POSTGRES_DB':'birja_ops_test'}
                     # Keep the same already populated tmpfs container; enable TLS in place below.
-                    s['tmpfs'] = ['/var/lib/postgresql:size=268435456']
-                    s['command'] = ['postgres','-c','statement_timeout=30000','-c','idle_in_transaction_session_timeout=30000']
-                elif name == 'redis': s['tmpfs'] = ['/data:size=16777216']
+                    s['tmpfs'] = ['/var/lib/postgresql:size=268435456,uid=70,gid=70,mode=0750']
+                    s['command'] = ['-c','statement_timeout=30000','-c','idle_in_transaction_session_timeout=30000']
+                elif name == 'redis': s['tmpfs'] = ['/data:size=16777216,uid=65532,gid=65532,mode=0750']
                 else:
                     s['image'] = 'birja-rollback-test:v0.3.1' if name != 'migrate' else 'birja-backend-test:phase05-07'
                     s['volumes'] = [str(root/'db-tls/ca.crt')+':/run/birja/db-ca.crt:ro']
@@ -292,7 +303,7 @@ def integration(archive_arg):
             def server_file(source,destination):
                 assert destination.startswith('/var/lib/postgresql/')
                 run(['/usr/bin/docker','exec','-i','-u','0',container,'sh','-c',
-                     'umask 077; cat > "$1"; chown 0:999 "$1"; chmod 640 "$1"','_',destination],source.read_bytes())
+                     'umask 077; cat > "$1"; chown 0:70 "$1"; chmod 640 "$1"','_',destination],source.read_bytes())
             server_file(root/'db-tls/server/server.crt','/var/lib/postgresql/server.crt')
             server_file(root/'db-tls/server/server.key','/var/lib/postgresql/server.key')
             hba = root/'pg_hba.conf'

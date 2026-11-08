@@ -5,6 +5,7 @@ services:
   backend:
     build:
       context: ${BIRJA_APP_DIR:?retained entrypoint required}/backend
+      dockerfile: ${BIRJA_OPS_DIR:?retained entrypoint required}/backend/Dockerfile
       target: runtime
     environment:
       DATABASE_URL: ${APP_DATABASE_URL:?limited app login required}${BIRJA_OLD_TLS_SUFFIX:-}
@@ -13,6 +14,7 @@ services:
   scheduler:
     build:
       context: ${BIRJA_APP_DIR:?retained entrypoint required}/backend
+      dockerfile: ${BIRJA_OPS_DIR:?retained entrypoint required}/backend/Dockerfile
       target: runtime
     environment:
       DATABASE_URL: ${SCHEDULER_DATABASE_URL:?limited scheduler login required}${BIRJA_OLD_TLS_SUFFIX:-}
@@ -21,6 +23,7 @@ services:
   migrate:
     build:
       context: ${BIRJA_MIGRATOR_CONTEXT:?retained migration source required}
+      dockerfile: ${BIRJA_OPS_DIR:?retained entrypoint required}/backend/Dockerfile
       target: runtime
     environment:
       DATABASE_URL: ${MIGRATOR_DATABASE_URL:?limited migrator login required}

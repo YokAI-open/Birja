@@ -146,7 +146,7 @@ def load_config(args):
         require(source == source.resolve() and source.is_file())
         require(
             hashlib.sha256(source.read_bytes()).hexdigest()
-            == "a2861c84c41d76167e515885a07e0348019e2de3d61e846637b51605fd79bb31"
+            == "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c"
         )
     require(c["source_project"] == ("birja-ops-test" if synthetic else "birja-prod"))
     require(re.fullmatch(r"[0-9a-f]{40}", c["release"]))

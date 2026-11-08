@@ -109,6 +109,7 @@ class CI(unittest.TestCase):
             "test-db-config.sh",
             "test-deploy-prerequisites.py",
             "test-db-operations.sh --all",
+            "test-db-operations.sh --image-transition",
             "test-rollback-db-security.sh",
             "test-reexec.sh",
             "test-rollback-target.sh",

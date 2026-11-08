@@ -38,7 +38,7 @@ PENDING_MARK=$STATE_DIR/deploy.pending      # exists while a deploy is unfinishe
 LOCK=/var/lock/birja-deploy.lock            # prevents concurrent deploys
 HOST=birja.nist.one                         # public host name
 CERT=/etc/nginx/certs/nist.one/fullchain.pem  # installed origin certificate
-NODE_BASE_IMAGE=node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d # frontend toolchain base
+NODE_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:24f549a7fcace88e69b9557941168c74645688ecc4acf7fb6d734a6b74e9019d # frontend toolchain base
 KEEP_RELEASES=3                             # static releases kept on disk
 BUILD_UID=1000                              # unprivileged uid for the npm build (node in the image)
 REF="${DEPLOY_REF:-main}"                   # D-05: ref override
@@ -57,7 +57,7 @@ dc() {
   if [ -n "${BIRJA_RETAINED_DIR:-}" ]; then
     local suffix=""
     if [ "$(git -C "$APP_DIR" rev-parse HEAD)" = "$(git -C "$APP_DIR" rev-parse 'v0.3.1^{commit}')" ]; then suffix='?ssl=verify-full'; fi
-    BIRJA_OLD_TLS_SUFFIX=$suffix BIRJA_APP_DIR=$APP_DIR BIRJA_MIGRATOR_CONTEXT=$BIRJA_RETAINED_DIR/backend \
+    BIRJA_OLD_TLS_SUFFIX=$suffix BIRJA_APP_DIR=$APP_DIR BIRJA_OPS_DIR=$BIRJA_RETAINED_DIR BIRJA_MIGRATOR_CONTEXT=$BIRJA_RETAINED_DIR/backend \
       docker compose -p birja-prod -f "$BIRJA_RETAINED_DIR/docker-compose.prod.yml" \
         -f "$BIRJA_RETAINED_DIR/deploy/db-security.compose.yml" --env-file "$ENV_FILE" "$@"
   else
@@ -193,6 +193,8 @@ preflight() {
   fi
   STEP="fresh exact recovery gate"
   recovery_gate || { echo "fresh exact recovery and completed restore required" >&2; exit 1; }
+  STEP="read-only database compatibility preflight"
+  BIRJA_BACKUP_LOCK_FD=9 "$BIRJA_RETAINED_DIR/deploy/configure-db.sh" --production --inspect
 }
 
 # Passes only if the API is healthy and nginx serves this release's exact

@@ -36,6 +36,80 @@ def sha(data):
 
 
 class Identity(unittest.TestCase):
+    def test_anonymous_registry_fixed_origin_and_bounded_graph(self):
+        config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
+        manifest = json.dumps({"config": {"digest": sha(config), "size": len(config)}}).encode()
+        index = json.dumps({"manifests": [{"digest": sha(manifest), "size": len(manifest), "platform": {"os": "linux", "architecture": "amd64"}}]}).encode()
+        seen = []
+        class Response(io.BytesIO):
+            status = 200
+            def geturl(self):
+                return self.url
+        class Opener:
+            def open(self, request, timeout):
+                self_test.assertEqual(timeout, 30)
+                seen.append(request)
+                url = request.full_url
+                self_test.assertTrue(url.startswith("https://cgr.dev/"))
+                if len(seen) == 1:
+                    self_test.assertEqual(url, "https://cgr.dev/token?service=cgr.dev&scope=repository%3Achainguard%2Fpostgres%3Apull")
+                    self_test.assertNotIn("Authorization", request.headers)
+                    data = b'{"token":"anonymous-test-token"}'
+                else:
+                    self_test.assertEqual(request.headers["Authorization"], "Bearer anonymous-test-token")
+                    data = index if len(seen) == 2 else manifest
+                response = Response(data)
+                response.url = url
+                return response
+        self_test = self
+        def build(handler):
+            with self.assertRaises(ValueError):
+                handler().redirect_request(None, None, 302, "redirect", {}, "https://other.invalid/")
+            return Opener()
+        with patch.object(r.urllib.request, "build_opener", side_effect=build), patch.object(r, "INDEX_DIGEST", sha(index)), patch.object(r, "PLATFORM_DIGEST", sha(manifest)):
+            self.assertEqual(r.registry_manifests(), (index, manifest))
+        self.assertEqual([request.full_url for request in seen[1:]], ["https://cgr.dev/v2/chainguard/postgres/manifests/" + value for value in [sha(index), sha(manifest)]])
+
+    def test_replacement_layout_entrypoints_and_retained_build_routing(self):
+        for name in ["docker-compose.yml", "docker-compose.prod.yml", "docker-compose.test.yml", "docker-compose.ops-test.yml"]:
+            source = (ROOT / name).read_text()
+            self.assertIn("PGDATA: /var/lib/postgresql/18/docker", source)
+            self.assertIn('user: "70:70"', source)
+            self.assertNotIn("redis-server --requirepass", source)
+            self.assertNotIn('"redis-server", "--requirepass"', source)
+            self.assertNotIn("      - postgres\n", source)
+        overlay = (ROOT / "deploy/db-security.compose.yml").read_text()
+        self.assertEqual(overlay.count("dockerfile: ${BIRJA_OPS_DIR:?retained entrypoint required}/backend/Dockerfile"), 3)
+        self.assertIn("'backend/Dockerfile'", (ROOT / "deploy/deploy-entrypoint.sh").read_text())
+        self.assertIn("0o640, 70", (ROOT / "deploy/provision-db-tls.sh").read_text())
+        self.assertEqual(r.COMPOSE_SHA, hashlib.sha256((ROOT / "docker-compose.ops-test.yml").read_bytes()).hexdigest())
+
+    def test_collation_preflight_fail_closed_before_privileged_sql(self):
+        source = (ROOT / "deploy/configure-db.sh").read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        source = source.rsplit("\ntry:\n    main()", 1)[0]
+        scope = {"__name__": "contract"}
+        exec(compile(source, "configure-db.sh", "exec"), scope)
+        sql = scope["COLLATION_PREFLIGHT"]
+        for required in ["BEGIN READ ONLY", "statement_timeout = '10s'", "pg_database_collation_actual_version", "pg_collation_actual_version", "NOT i.indisvalid", "IS NOT NULL"]:
+            self.assertIn(required, sql)
+        for forbidden in ["REFRESH", "REINDEX", "UPDATE "]:
+            self.assertNotIn(forbidden, sql)
+        self.assertLess(source.index("with backup.acquire_operation_lock"), source.index("input=COLLATION_PREFLIGHT.encode()"))
+        self.assertLess(source.index('probe.stdout == b"collation_ok\\n"'), source.index('db/bootstrap-roles.sql'))
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
+            root = Path(tmp)
+            root.chmod(0o700)
+            config = root / "roles.json"
+            config.write_text(json.dumps({"project": "birja-ops-test", "db_name": "birja_source_test", "bootstrap": r.BOOT, "password_files": {role: str(root / role) for role in ["app", "scheduler", "migrator"]}}))
+            config.chmod(0o600)
+            argv = ["script", str(ROOT / "deploy"), "--synthetic", str(config), "--inspect"]
+            for status, output in [(0, b"collation_blocked\n"), (0, b""), (1, b"collation_ok\n"), (0, b"collation_ok\nextra")]:
+                with patch.object(sys, "argv", argv), patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], status, output, b"")) as run:
+                    with self.assertRaises(ValueError):
+                        scope["main"]()
+                    self.assertEqual(run.call_count, 1)
+                    self.assertEqual(run.call_args.kwargs["input"], sql.encode())
+
     def test_authenticated_optional_attestation_graph_and_tampering(self):
         config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
         manifest = json.dumps(
@@ -433,7 +507,7 @@ class Identity(unittest.TestCase):
                                 "Platform": "linux",
                                 "HostConfig": {
                                     "Privileged": False,
-                                    "Tmpfs": {"/var/lib/postgresql": "size=268435456"},
+                                    "Tmpfs": {"/var/lib/postgresql": "size=268435456,uid=70,gid=70,mode=0750"},
                                 },
                                 "Mounts": [],
                                 "NetworkSettings": {"Networks": {"isolated": {}}},

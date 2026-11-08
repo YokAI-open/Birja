@@ -22,18 +22,18 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
-COMPOSE_SHA = "a2861c84c41d76167e515885a07e0348019e2de3d61e846637b51605fd79bb31"
+COMPOSE_SHA = "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c"
 BOOT = "birja_ops_bootstrap"
 CLONE = "birja_restore_test"
 RESTIC_SHA = "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639"
 # Config identity is distinct from registry and engine identities. Docker's
 # classic store exposes the config ID; containerd exposes the manifest ID.
-IMAGE_ID = "sha256:8bca9649e52d948114ccc8164b55b7ab26b64e729893e420114bb5c87bf7c7cc"
-INDEX_DIGEST = "sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
+IMAGE_ID = "sha256:91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4"
+INDEX_DIGEST = "sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4"
 PLATFORM_DIGEST = (
-    "sha256:e923a22ac074261dd73970c57edf659475bf0497cb9456f17d98ed7cdd3ca913"
+    "sha256:4401cf2919e749cd77b634a72e4a677c1a1afc12baddb21faf28df326162472e"
 )
-REGISTRY_REF = "postgres:18.6-trixie@" + INDEX_DIGEST
+REGISTRY_REF = "cgr.dev/chainguard/postgres@" + INDEX_DIGEST
 RECOVERY_IMAGE = "birja-recovery-postgres:verified-" + IMAGE_ID[7:]
 IMAGE_PROVENANCE = ["images/registry-index.json", "images/platform-manifest.json"]
 CORE = [
@@ -298,7 +298,12 @@ def image_inspect(ref):
     )
     require(len(rows) == 1)
     row = rows[0]
-    require(row["Id"] in {IMAGE_ID, PLATFORM_DIGEST})
+    # A registry pull can retain the multi-platform index as engine ID.
+    # Cold import binds only the authenticated platform/config identities.
+    identities = {IMAGE_ID, PLATFORM_DIGEST}
+    if ref == REGISTRY_REF:
+        identities.add(INDEX_DIGEST)
+    require(row["Id"] in identities)
     require(row["Os"] == "linux" and row["Architecture"] == "amd64")
     return row["Id"]
 
@@ -323,23 +328,32 @@ def loaded_recovery_image():
 
 
 def registry_manifests():
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            raise ValueError("registry redirect rejected")
+
+    opener = urllib.request.build_opener(NoRedirect)
+
     def fetch(url, headers=None):
+        require(url.startswith("https://cgr.dev/"))
         request = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with opener.open(request, timeout=30) as response:
+            require(response.geturl() == url and response.status == 200)
             data = response.read(2_000_001)
         require(len(data) <= 2_000_000)
         return data
 
     token = json.loads(
         fetch(
-            "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/postgres:pull"
+            "https://cgr.dev/token?service=cgr.dev&scope=repository%3Achainguard%2Fpostgres%3Apull"
         )
     )["token"]
+    require(isinstance(token, str) and 0 < len(token) <= 100_000 and "\n" not in token and "\r" not in token)
     headers = {
         "Authorization": "Bearer " + token,
         "Accept": "application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json",
     }
-    base = "https://registry-1.docker.io/v2/library/postgres/manifests/"
+    base = "https://cgr.dev/v2/chainguard/postgres/manifests/"
     index, manifest = (
         fetch(base + d, headers) for d in [INDEX_DIGEST, PLATFORM_DIGEST]
     )
@@ -715,7 +729,7 @@ def check_running(dc):
     require(
         not mounts
         and inspected["HostConfig"]["Tmpfs"]
-        == {"/var/lib/postgresql": "size=268435456"}
+        == {"/var/lib/postgresql": "size=268435456,uid=70,gid=70,mode=0750"}
     )
     networks = inspected["NetworkSettings"]["Networks"]
     require(len(networks) == 1)
