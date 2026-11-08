@@ -481,3 +481,22 @@ and populated compatibility remain execution gates, not assumed passes.
 Existing08task03 revised with a checked three-segment replacement contract;
 completed01/02/15 history and15-plan count are preserved. No push, provider
 or production data/ownership/collation action is authorized.
+
+## Plan09 host route and prepared scope —2026-11-08
+
+Owner answered “same vds” to the access-route question. Route is direct local
+execution on DE189274, not SSH/SCP. Metadata-only preflight observed root/Linux
+amd64, Docker29.2.1/Compose5.0.0/Python3.12.3/systemd255, source `/srv/birja`
+at exactv0.3.1 `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`, projectbirja-prod
+backend/scheduler/PG18.6-trixie/Redis8.8.3-trixie running. Backup config/controls,
+recovery install, `/usr/local/bin/restic`, launchers and backup timer are absent.
+No secret/config contents, logs or private rows were read; no service changed.
+
+LIVE-HANDOFF now displays the exact direct-host operation: archive83f4f515...,
+immutable recovery/tools/restic and checked global link, protected JSON/state,
+private credential/control setup, bounded B2 backup/exact retrieval/isolated
+restore, then nightly timer after success. Actual B2 controls/keys/material/
+resource bounds remain unverified. Host-route confirmation alone grants no
+installation, private production processing, provider or timer authority.
+Explicit Plan09 decision remains pending;10/15 plans complete, no09SUMMARY.
+No app-role/TLS/schema/engine/restart/publication/rollout scope is included.

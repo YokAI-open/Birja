@@ -57,9 +57,11 @@ checksum, raw inventory and trusted verifier are preserved at ignored
 failed Debian scans remain historical, not current acceptance inputs.
 
 **Next is Plan09's separately scoped real backup/restore and timer operation.**
-The local handoff is concrete, but the SSH/SCP route/host fingerprints,
-private setup controls and exact live authority remain unverified/unapproved.
-No provider/private configuration or production access is permitted yet.
+The owner confirmed same VDS; direct local metadata preflight identifies host
+DE189274 and `/srv/birja` at exactv0.3.1 0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7.
+LIVE-HANDOFF now displays the exact local install/backup/restore/timer scope.
+Private setup controls and explicit live authority remain unverified/unapproved.
+No provider/private configuration access or production mutation is permitted yet.
 Do not inspect .env/.aws or private rows, enable units, transfer/install tools,
 perform live backups, change volumes or deploy under local authorization.
 Later PGUID999→70/glibc/collation and RedisAOFUID65532 production transitions
@@ -302,3 +304,10 @@ New83f4f515... packet preserved candidate-cgr; allsixprojects0resources.
 08SUMMARY created; Phase6 now10/15, overall64/69. Older blocked entries above
 are historical and superseded. Plan09 live authority is absent; no push,
 provider/production operation or DEPL/wholephase completion.
+
+### Plan09 route prepared —2026-11-08
+
+Owner confirmed sameVDS; metadata-only host/source/service preflight complete.
+Concrete exact-artifact scope in LIVE-HANDOFF; operations ledger records facts,
+no secrets/private data read. Await scoped install/B2/restore/timer decision and
+private setup readiness; no09completion/live action or push authority implied.

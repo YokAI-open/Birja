@@ -70,7 +70,7 @@ and independently recorded new hash above for later scoped approval.
 | Boundary | Concrete prerequisite and scope | Required evidence before proceeding |
 |---|---|---|
 |08 local acceptance — complete|Reviewed sourcee40f688 and exact final packet above; fresh scans, application/browser/transition and serial supplied-artifact checks pass.|08SUMMARY exists;10/15 plans complete. Future source/image changes require affected review/revalidation, not silent repackaging.|
-|09 preparation/approval|Confirm exact SSH/SCP route, host identity and configuration fingerprints through a separately authorized narrow process. The route is **not verified in this packet**; do not infer it from the website domain. Present exact archive/hash, target allowlists, proposed runtime/tool installation, private config scope and cleanup/undo.|Owner explicitly approves the displayed host/tool/recovery installation, opaque production backup processing, B2 upload/exact retrieval/isolated restore and timer scope. Do not execute from the feature checkout on production.|
+|09 preparation/approval|Owner confirmed the workspace is on the same VDS. Direct local route on hostname `DE189274`, Linuxamd64/root, replaces SSH/SCP. Metadata-only preflight confirms `/srv/birja` at exact v0.3.1 commit `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`, projectbirja-prod running. Backup JSON/controls, retained recovery, restic path and timer are absent. See concrete scope below.|Owner approval of the displayed host/tool/recovery installation, private config processing, B2 upload/exact retrieval/isolated restore and timer is still pending. No feature checkout or app deployment on production.|
 |09 real recovery/timer|Keep source checkout at its actually confirmed prechange release. Install immutable recovery at `/var/lib/birja/recovery/releases/<archive-sha>` and stable `/usr/local/sbin/birja-backup`, `birja-backup-status`, `birja-restore-check`. Source projectbirja-prod, checkout/srv/birja; restore only fixedbirja-restore-check, internal/noports/tmpfs. Source release/schema/runtime facts must be revalidated, not assumed from historicalv0.3.1.|Actual off-server same-snapshot retrieval/full private invariant verification; then an actual calendar-triggered successful snapshot. A manual service run cannot prove nightly operation. No app-role/TLS rollout or deployment in this step.|
 |10 feature publication|Separate owner push/PR selection, then approved current-head all-job CI and reviewed recovery evidence.|Current exact-head backend/frontend/image/e2e/ops/ci-pass green; separate feature merge/version-preparation choice. Local browser results do not replace remote CI.|
 |11 release preparation|Owner-selected version and approved integration; create release branch only from updated integrated develop, preserving git-flow.|Version-only candidate, scoped release push/PR approval, exact release-head green CI. No invented release version or premature release branch.|
@@ -118,10 +118,66 @@ or broaden target/path guards. Timer disable leaves backup data intact; an
 already-running job needs its own diagnosis. App rollback and database restoration
 are distinct operations.
 
-**Current next action: scoped Plan09 preparation only after the owner expands
-local-only authorization.** The SSH/SCP route, host identity and private setup
-controls still need narrow verification; the website domain is not a host route.
-Present that concrete route/target and exact packet before requesting installation,
-opaque production backup/remote retrieval/isolated restore and calendar timer
-scope. No live action or push is authorized by this document. All currently
-required local gates have passed; do not repeat them without changed evidence.
+**Current next action: approve or revise the concrete Plan09 operation below.**
+The access route and host metadata are now known; B2 controls, credentials,
+private config, measured resource bounds and actual recovery evidence remain
+unverified. No passing local suite needs repetition without changed evidence.
+
+## Concrete Plan09 scope — owner decision pending
+
+Owner confirmed “same vds”. The route is direct local execution, not SSH/SCP.
+Read-only administrative preflight on2026-11-08 observed host `DE189274`,
+Linuxx86_64/root, Docker29.2.1, Compose5.0.0, Python3.12.3 and systemd255.
+`/srv/birja` HEAD is `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`, exactly
+v0.3.1. Selected project metadata shows backend/scheduler/PostgreSQL/Redis
+running, with source PostgreSQL18.6-trixie and Redis8.8.3-trixie. No container
+environment, production config contents, logs or database records were read.
+These facts identify the target; they do not grant the live operation below.
+
+Proposed operation, bound to archive SHA256
+`83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`:
+
+1. Reverify the preserved candidate-cgr packet and trusted verifier, install
+   its exact immutable release under `/var/lib/birja/recovery/releases/<SHA>`,
+   atomically set recovery/current and three `/usr/local/sbin/birja-*` recovery
+   launchers, and load only its authenticated PostgreSQL recovery image.
+   Expose its signed restic0.19.1 binary at required `/usr/local/bin/restic`
+   through a checked link to the immutable tools/restic; no package upgrades.
+2. Create root-only JSON `/etc/birja/backup.env`, controls, explicit credential/
+   password references and `/var/lib/birja/backup`. Read required production
+   configuration opaquely for setup/encrypted recovery only, never display it.
+   Owner independently holds recovery password/access/DB/CA material off-server.
+   Use Birja-scoped S3 writer and account-wide read-only inventory key with the
+   existing bounded preflight. Owner supplies secrets privately, not in chat.
+3. Verify actual B2 private/ObjectLock/lifecycle and owner-attested $0 console
+   caps/daily checks/exclusive writes. Measure required source aggregate sizes
+   privately; choose bounded work fitting free allowance/headroom and shared
+   deadline. Unknown controls or inadequate headroom stop before remote work.
+   Repository initialization, if needed, is limited to exact approved B2 prod
+   prefix and follows these controls. No paid spend or provider account creation.
+4. Take a consistent encrypted production backup from fixed birja-prod only,
+   privately compute same-snapshot invariants, upload to the exact approved
+   B2 destination, retrieve that exact snapshot using independently held
+   recovery material, and restore only fixed `birja-restore-check` with internal
+   networking, tmpfs, no ports/email/jobs. Verify all invariants privately and
+   remove only that clone/private staging in finally. Publish only sanitized
+   status, UTC, snapshot ID and timing, never rows or private data digests.
+5. Only after full restore succeeds, install the two verified unit files in
+   `/etc/systemd/system`, validate them, reload systemd and enable the timer
+   at03:00UTC+up to15minutes jitter. Observe an actual calendar activation and
+   remote snapshot before completing09; a manual run is not nightly evidence.
+   Latest-only replacement keeps the previous point until new verification;
+   deletion/prune stays within explicitly approved Birja rotation scope.
+
+Production app checkout, source database engine/volumes/roles/TLS/schema and
+services remain unchanged. No application restart, physical clone transition,
+production data restoration, push, PR, merge, release or deployment is included.
+Stop on host/source/config/provenance mismatch, credential/controls failure or
+insufficient budget. Disable an installed timer to stop future scheduling;
+retain completed backup data and diagnose any running job separately. No
+production volumes are removed and no database downgrade is an undo mechanism.
+
+All changes above remain **proposed**, not authorized by the host-route answer.
+Missing B2 setup/credential material will be resolved privately before any
+remote operation. The existing exact artifact/review/replay evidence supplies
+the reversible local preparation; no replacement bundle is required.
