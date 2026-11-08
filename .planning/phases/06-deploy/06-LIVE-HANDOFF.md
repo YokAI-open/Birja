@@ -1,17 +1,19 @@
 ---
 phase: 06-deploy
 prepared: 2026-11-08
-status: ready-for-scoped-live-preparation
-execution_authorized: false
+status: approved-installed-awaiting-private-setup
+execution_authorized: true
 ---
 
 # Phase06 live handoff
 
-The owner authorized safer alternative images while retaining the strict raw
-HIGH/CRITICAL gate and local-only scope. Plan08 is now complete after independent
-source review and full final acceptance on2026-11-08. Phase6 is10/15 complete;
-Plans09..13 and DEPL-01/02 remain pending. **This packet authorizes no live
-operation, private configuration access, transfer, publication or deployment.**
+The owner explicitly approved the concrete Plan09 backup setup and verification
+on DE189274 with the exact archive below. Recovery tools are installed; private
+B2 keys/controls and actual backup/restore/nightly evidence remain pending.
+See `06-LIVE-RECOVERY.md` for observed installation and owner setup guidance.
+No new bucket is needed. This approval covers only the named09 operation;
+publication, app rollout/restart and datastore transition remain separately gated.
+Phase6 is10/15 complete; Plans09..13 and DEPL-01/02 remain pending.
 
 ## Tested artifact preserved locally
 
@@ -70,7 +72,7 @@ and independently recorded new hash above for later scoped approval.
 | Boundary | Concrete prerequisite and scope | Required evidence before proceeding |
 |---|---|---|
 |08 local acceptance — complete|Reviewed sourcee40f688 and exact final packet above; fresh scans, application/browser/transition and serial supplied-artifact checks pass.|08SUMMARY exists;10/15 plans complete. Future source/image changes require affected review/revalidation, not silent repackaging.|
-|09 preparation/approval|Owner confirmed the workspace is on the same VDS. Direct local route on hostname `DE189274`, Linuxamd64/root, replaces SSH/SCP. Metadata-only preflight confirms `/srv/birja` at exact v0.3.1 commit `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`, projectbirja-prod running. Backup JSON/controls, retained recovery, restic path and timer are absent. See concrete scope below.|Owner approval of the displayed host/tool/recovery installation, private config processing, B2 upload/exact retrieval/isolated restore and timer is still pending. No feature checkout or app deployment on production.|
+|09 preparation/approval|Owner confirmed the workspace is on the same VDS. Direct local route on hostname `DE189274`, Linuxamd64/root, replaces SSH/SCP. Metadata-only preflight confirms `/srv/birja` at exact v0.3.1 commit `0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7`, projectbirja-prod running. Backup JSON/controls, retained recovery, restic path and timer are absent. See concrete scope below.|Owner approval is now recorded; tool installation complete. Private controls/credentials and actual restore/nightly evidence remain pending. No feature checkout or app deployment on production.|
 |09 real recovery/timer|Keep source checkout at its actually confirmed prechange release. Install immutable recovery at `/var/lib/birja/recovery/releases/<archive-sha>` and stable `/usr/local/sbin/birja-backup`, `birja-backup-status`, `birja-restore-check`. Source projectbirja-prod, checkout/srv/birja; restore only fixedbirja-restore-check, internal/noports/tmpfs. Source release/schema/runtime facts must be revalidated, not assumed from historicalv0.3.1.|Actual off-server same-snapshot retrieval/full private invariant verification; then an actual calendar-triggered successful snapshot. A manual service run cannot prove nightly operation. No app-role/TLS rollout or deployment in this step.|
 |10 feature publication|Separate owner push/PR selection, then approved current-head all-job CI and reviewed recovery evidence.|Current exact-head backend/frontend/image/e2e/ops/ci-pass green; separate feature merge/version-preparation choice. Local browser results do not replace remote CI.|
 |11 release preparation|Owner-selected version and approved integration; create release branch only from updated integrated develop, preserving git-flow.|Version-only candidate, scoped release push/PR approval, exact release-head green CI. No invented release version or premature release branch.|
@@ -118,12 +120,12 @@ or broaden target/path guards. Timer disable leaves backup data intact; an
 already-running job needs its own diagnosis. App rollback and database restoration
 are distinct operations.
 
-**Current next action: approve or revise the concrete Plan09 operation below.**
+**Current next action: finish private B2 setup, then continue the approved operation.**
 The access route and host metadata are now known; B2 controls, credentials,
 private config, measured resource bounds and actual recovery evidence remain
 unverified. No passing local suite needs repetition without changed evidence.
 
-## Concrete Plan09 scope — owner decision pending
+## Concrete Plan09 scope — approved; tools installed
 
 Owner confirmed “same vds”. The route is direct local execution, not SSH/SCP.
 Read-only administrative preflight on2026-11-08 observed host `DE189274`,
@@ -132,9 +134,10 @@ Linuxx86_64/root, Docker29.2.1, Compose5.0.0, Python3.12.3 and systemd255.
 v0.3.1. Selected project metadata shows backend/scheduler/PostgreSQL/Redis
 running, with source PostgreSQL18.6-trixie and Redis8.8.3-trixie. No container
 environment, production config contents, logs or database records were read.
-These facts identify the target; they do not grant the live operation below.
+The later explicit owner decision approves the named operation below; these
+metadata facts identify its target.
 
-Proposed operation, bound to archive SHA256
+Approved operation, bound to archive SHA256
 `83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`:
 
 1. Reverify the preserved candidate-cgr packet and trusted verifier, install
@@ -177,7 +180,7 @@ insufficient budget. Disable an installed timer to stop future scheduling;
 retain completed backup data and diagnose any running job separately. No
 production volumes are removed and no database downgrade is an undo mechanism.
 
-All changes above remain **proposed**, not authorized by the host-route answer.
-Missing B2 setup/credential material will be resolved privately before any
-remote operation. The existing exact artifact/review/replay evidence supplies
+The owner subsequently approved this full named scope. Tool installation is
+complete; do not reinstall/repackage. Missing B2 setup/credential material
+will be resolved privately before any remote operation. The existing exact artifact/review/replay evidence supplies
 the reversible local preparation; no replacement bundle is required.

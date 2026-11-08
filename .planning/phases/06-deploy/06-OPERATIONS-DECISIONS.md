@@ -500,3 +500,32 @@ resource bounds remain unverified. Host-route confirmation alone grants no
 installation, private production processing, provider or timer authority.
 Explicit Plan09 decision remains pending;10/15 plans complete, no09SUMMARY.
 No app-role/TLS/schema/engine/restart/publication/rollout scope is included.
+
+## Explicit Plan09 approval and installed preparation —2026-11-08
+
+Owner answered “Approve Plan09 backup setup and verification” to the exact
+DE189274/83f4f515... scope displayed in LIVE-HANDOFF: install recovery/restic,
+private config, $0-policy encrypted B2 backup/exact isolated restore, then
+nightly timer after successful restore. This supersedes earlier local-only
+limits for these named09 actions only; no app deployment/restart/role/TLS/
+schema/engine/publication/private-record inspection authority is added.
+Approval persists through credential setup and pending nightly observation.
+
+Owner remembers creating the bucket and asks whether another is required.
+No: reuse Birja-backup. Actual settings/credentials/caps remain unverified;
+no duplication or bucket creation occurred. Installed exact verified artifact,
+root/current/three private launchers and authenticated recoveryPG image;
+all20payload/inventory hashes pass. Signed retained restic0.19.1 linked at
+/usr/local/bin/restic and hash/version checked. Prepared private backup state,
+four empty credential files and generated unseen backup password under/etc/birja.
+No existing secret overwritten or value exposed. LIVE-RECOVERY records actual
+partial installation and privately completed owner setup steps.
+
+Final metadata recheck: source exactv0.3.1 unchanged; original4production
+container IDs/states unchanged. No remoteB2/request/init/upload/retrieve,
+production backup/restore, timer installation/activation or app restart.
+One private installation verification script misread public inventory files
+as a mapping and stopped before mutation; corrected exact-checksum parsing
+and20file verification passed. No source/artifact correction needed.
+Task01complete; task02awaits privatekeys/controls/custody, then actual real
+restore/nightly evidence. No09SUMMARY, Phase6 remains10/15.

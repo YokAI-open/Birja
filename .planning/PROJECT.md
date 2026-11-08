@@ -80,11 +80,14 @@ Independent source review has0 active findings; six synthetic projects are clean
 The verified packet is preserved locally at ignored
 `.local/phase-06-handoff/candidate-cgr/`; details in08SUMMARY/T3C-EVIDENCE.
 
-The next boundary is Plan09 real off-server restore and nightly timer setup.
-Actual current-head CI, release, approved production datastore transition/role/
-TLS rollout and Gmail/Outlook friend acceptance remain pending. DEPL-01/02 and
-Phase6 are not complete. Local-only scope persists; no Phase6 push, provider or
-production action is authorized. See updated LIVE-HANDOFF and STATE.
+Plan09 backup setup and verification is explicitly approved on the same VDS,
+DE189274. Exact recovery tools/image/launchers and signed restic are installed
+and verified; private B2 key/control setup is pending. No provider request,
+production backup/restore or timer activation has occurred. The production
+release and four existing container IDs remain unchanged. Actual current-head
+CI, release, datastore transition/role/TLS rollout and Gmail/Outlook acceptance
+remain pending. DEPL-01/02 and Phase6 are not complete. No publication or app
+restart/deployment authority is included. See LIVE-RECOVERY/HANDOFF and STATE.
 
 ## Constraints
 

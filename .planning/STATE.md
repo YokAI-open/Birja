@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan08 complete; Plan09 live recovery/timer scope required; local-only boundary
-last_updated: "2026-11-08T08:35:18Z"
-last_activity: 2026-11-08 -- Strict safer-image acceptance passed; Plan08 complete and new verified packet preserved
+stopped_at: Plan09 approved; recovery tools installed; awaiting private B2 keys and controls
+last_updated: "2026-11-08T10:33:37Z"
+last_activity: 2026-11-08 -- Approved Plan09 recovery tools installed; private B2 setup pending
 progress:
   total_phases: 7
   completed_phases: 6
@@ -26,52 +26,57 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 09, wave11 of15 — scoped live recovery/timer checkpoint not entered
-Status: Plan08 complete; all local acceptance passed; live/provider authority absent
+Plan: 09 task02, wave11 of15 — private credential/setup checkpoint
+Status: Plan09 scope approved; tools installed; real backup/restore/timer evidence pending
 Last activity: 2026-11-08 -- Final strict scans and exact-artifact replays passed
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
 
 ## Immediate remaining work
 
-**Owner scope remains local only.** The requested safer-image fix is complete.
-Plan08 SUMMARY records T3A/T3B/T3C acceptance; do not repeat passing research,
-scans, suites or fixtures without changed source or new evidence. All five
-actual raw scans pass0HIGH/0CRITICAL, including unfixed findings, without
-exceptions. Reviewed source e40f688 is unchanged; independent22-path review
-has0 active findings. Final T3C evidence committed10b5241.
+**Plan09 scope is explicitly APPROVED.** Owner answered “Approve Plan09 backup
+setup and verification” for DE189274/exact83f4f515... archive. Do not re-ask
+installation/privateconfig/B2backup/isolatedrestore/timer scope already granted.
+Owner confirms sameVDS. Source `/srv/birja` remains exactv0.3.1
+0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7; all four production containers retain
+their original IDs/running states after recovery installation.
 
-Fresh backend616/99.80%overall/100%critical, frontend264, default pip-audit,
-npm high gate, native/build/smoke, offline ops and browser10pass/1expected
-production-onlyCSPskip pass. npm retains13moderate/2low. Populated PG/Redis
-transition and untouched-original abort pass. All six synthetic projects
-have0 containers/networks/volumes. Two private harness/reporting failures
-are preserved honestly in T3C evidence; prescribed acceptance passed.
+Completed: trusted exact archive/profile verification, immutable recovery root
+`/var/lib/birja/recovery/releases/83f4f515...`, current link/three private stable
+launchers, authenticated PG recovery image import, all20 installed payload/
+inventory hashes verified, signed restic0.19.1 checked link/version, protected
+backup state. Four empty root-only credential files plus generated unseen
+`/etc/birja/restic-password` prepared. No source artifact/code changes.
 
-Final archive152,156,160bytes, SHA256
-`83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`,
-passed supplied recovery65.167s, roles30.099s, TLS49.578s and actualv0.3.1
-supplied rollback102.263s, all exit0. Byte-identical verified packet, separate
-checksum, raw inventory and trusted verifier are preserved at ignored
-`.local/phase-06-handoff/candidate-cgr/`. The earlier cb766040... packet and
-failed Debian scans remain historical, not current acceptance inputs.
+**Awaiting owner private B2 setup, not another bucket.** Reuse exact Birja-backup,
+endpoint s3.eu-central-003.backblazeb2.com, prefixprod. Guide and actual partial
+installation evidence: `06-LIVE-RECOVERY.md`. Owner checks private/ObjectLockoff/
+lifecycle/$0consolecaps, supplies writer/inventory key pairs into prepared
+/etc/birja files, and keeps access/password/DB/CA material off-server. Do not
+read .aws or print secret values; no arbitrary reuse of old credentials.
+No backup JSON/controls activated, B2 request, repository initialization,
+production backup/restore or timer installation/enable has occurred.
 
-**Next is Plan09's separately scoped real backup/restore and timer operation.**
-The owner confirmed same VDS; direct local metadata preflight identifies host
-DE189274 and `/srv/birja` at exactv0.3.1 0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7.
-LIVE-HANDOFF now displays the exact local install/backup/restore/timer scope.
-Private setup controls and explicit live authority remain unverified/unapproved.
-No provider/private configuration access or production mutation is permitted yet.
-Do not inspect .env/.aws or private rows, enable units, transfer/install tools,
-perform live backups, change volumes or deploy under local authorization.
-Later PGUID999→70/glibc/collation and RedisAOFUID65532 production transitions
-need separately approved stopped-writer selected-clone maintenance, not an
-automatic chown/reindex or old-libc reuse of converted data.
+Once files/controls are ready, validate opaquely, measure actual inventory and
+source aggregate size, set conservative limits and protected JSON, then run
+approved exact-repository backup/exact retrieval/fixed isolated restore through
+installed entrypoints only. Enable timer only after full restore succeeds;
+complete09 only after genuine calendar trigger and remote snapshot evidence.
+No hours-long blocking wait. Preserve old point until verified replacement;
+unknown budget/headroom/controls stops remote work, no paid use.
 
-No push or push question during the selected local-only scope. Plans09..13,
-actual current-head remote CI, release/production rollout, Gmail/Outlook friend
-acceptance and DEPL-01/02 remain pending. The phase is not complete.
-See08SUMMARY, T3C-EVIDENCE, IMAGE-GATES and updated LIVE-HANDOFF.
+Plan08 remains complete: five fresh raw0HIGH/0CRITICAL, backend616/frontend264,
+critical100%, actual browser10pass/1expectedskip, native/build/audits/ops,
+populated clone transition and same-artifact recovery/roles/TLS/oldrollback
+passed. Reviewed sourcee40f688 unchanged; independent review0 active. Do not
+repeat passing local research/scans/suites without changed evidence. The exact
+packet and detailed final proof remain candidate-cgr/T3C-EVIDENCE.
+
+Phase6 remains10/15, overall64/69. Plan09 task01 approved, task02 partial; no
+09SUMMARY/DEPL completion. Plans10..13 retain separate actualCI/publication/
+release/productiontransition/friend boundaries. No app restart, engine/volume/
+role/TLS/schema change, private record inspection, realOTP/email/trade or
+publication is authorized. Existing no-push/no-pushquestion preference persists.
 
 ## Performance Metrics
 
@@ -160,8 +165,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-08T08:35:18Z
-Stopped at: Plan08 complete; Plan09 needs scoped live recovery/timer authority
+Last session: 2026-11-08T10:33:37Z
+Stopped at: Plan09 approved/tools installed; awaiting private B2 key/control setup
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -311,3 +316,13 @@ Owner confirmed sameVDS; metadata-only host/source/service preflight complete.
 Concrete exact-artifact scope in LIVE-HANDOFF; operations ledger records facts,
 no secrets/private data read. Await scoped install/B2/restore/timer decision and
 private setup readiness; no09completion/live action or push authority implied.
+
+### Plan09 approval and installation —2026-11-08
+
+Owner explicitly approved prepared09 scope; bucket creation is not repeated.
+Exact83f4f515... installation exit0; authenticated PG import,20installed hashes,
+root-only launchers/current, signed resticlink/version and protectedstate pass.
+Private credential placeholders and unseen password prepared; production ref/
+all4container IDs unchanged. No B2/backup/restore/timer yet. LIVE-RECOVERY has
+operator setup steps; resume02 after keys/controls/offservercustody ready.
+Earlier no-live-authority notes are superseded only for this approved09scope.
