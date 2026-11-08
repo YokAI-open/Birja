@@ -1,4 +1,13 @@
-> Current final-artifact acceptance is in `06-IMAGE-GATES.md` / `06-15-SUMMARY.md` (closeout2026-11-07). Final cb766040... archive passed recovery/roles/TLS/actual-old rollback. The older artifact below is historical. Plan08 task03 remains blocked by vendor HIGH/CRITICAL image findings; no08 SUMMARY or live advancement.
+> Current local acceptance: **T3C passed2026-11-08** on unchanged reviewed
+> `e40f688` source. See `06-08-T3C-EVIDENCE.md` and `06-IMAGE-GATES.md`.
+> Fresh five-image raw0HIGH/0CRITICAL; backend616/99.80%/critical100,
+> frontend264/audit/build, actual browser10pass/1expectedskip and one new
+> exact-artifact recovery/roles/TLS/actual-old rollback passed. New archive
+> SHA256 `83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`
+> is preserved in ignored `.local/phase-06-handoff/candidate-cgr/`.
+> All six synthetic projects have zero resources. Parent owns08 closure;
+> remote CI/provider/live/DEPL acceptance remains pending. The dated records
+> and earlier archives below are historical and are not new-source acceptance.
 
 # Phase 06 local gates — Plan 08 checkpoint
 

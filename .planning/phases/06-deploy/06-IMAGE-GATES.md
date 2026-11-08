@@ -1,4 +1,53 @@
-# Phase 06 Plan 15 image gates — bounded acceptance complete
+# Phase06 final safer-image gate — T3C passed2026-11-08
+
+Unchanged reviewed source `e40f688`, independent22-path review0active findings.
+Actual final cached runtime/test-builder/consumed Node/current frontend builds
+passed. Unchanged `deploy/scan-images.py` returned0 in29.325s using pinned
+Trivy0.76.1 with raw HIGH/CRITICAL including unfixed findings, no suppression,
+VEX/ignore/waiver, package/SBOM masking or policy change. Readonly scanner root,
+bounded tmpfs, cap-drop/no-new-privileges and archive/config validation remain.
+
+| Final actual target | Raw exit | HIGH | CRITICAL | Scan seconds |
+|---|---:|---:|---:|---:|
+| Runtime |0|0|0|13.016|
+| Test-builder |0|0|0|4.934|
+| CGR PostgreSQL18.6 |0|0|0|5.436|
+| CGR Redis8.10.3 |0|0|0|1.578|
+| Consumed Node24 toolchain |0|0|0|3.311|
+
+DB UpdatedAt `2026-11-08T06:39:21.614725497Z`, DownloadedAt
+`2026-11-08T08:18:44.255306429Z`, NextUpdate `2026-11-09T06:39:21.614725236Z`.
+Exact explicit input references/actual engine identities:
+
+| Target | Engine ID / pinned index |
+|---|---|
+| Runtime |`sha256:d059c1b457d553fa3573af7878624229d507890d9127cd65ac6e0271261dcf86`|
+| Test-builder |`sha256:aaad9b8ac02ff21f03f8d152b8838ceb117d4bb157abac916136f9e9aadfcbc5`|
+| Node |`sha256:c3a6e138dea56c3edbb5bef5dafa123541bd979299410dafac0cc2d09138011e`|
+| PostgreSQL |`cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4`|
+| Redis |`cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48`|
+
+All exported config/archive/report SHA256s, raw JSON, fresh DB and immediate
+producer/target statuses are retained in ignored
+`.local/phase-06-handoff/t3c-evidence/scans/`. Complete evidence manifest and
+native/audit/full application/browser/transition checks are in
+`06-08-T3C-EVIDENCE.md`; default host pip-audit passed. App npm audit has
+13moderate/2low,0HIGH/0CRITICAL, rather than zero total advisories.
+
+One new152,156,160-byte recovery archive SHA256
+`83f4f5151807b67072d99e13a89c6b5f90617d54b7a8261c55931705d6f5044d`
+passed supplied recovery65.167s, roles30.099s, TLS49.578s and supplied actual
+v0.3.1 rollback102.263s. Same unchanged bytes, no feature-checkout fallback;
+copied packet generic verification passed. Packet/checksum/trusted verifier/
+exact inventory are preserved at ignored `.local/phase-06-handoff/candidate-cgr/`.
+All six fixed synthetic projects have0 containers/networks/volumes. Parent owns
+original08 closure; no live/provider/current-head remote CI/DEPL pass is implied.
+
+The following Plan15 observations, vendor failures and old `cb766040...`
+archive remain dated history. Their old raw-image block is superseded locally
+by the measured replacement results above; historical bytes were not reused.
+
+# Historical Phase06 Plan15 image gates — bounded acceptance complete
 
 Image/build observations: 2026-11-06. Closeout checked 2026-11-07 on `feature/phase-06-deploy`. Tasks01/02 and bounded task03 acceptance are complete through source `de331fb`. Independent source/security review and both focused rechecks have zero active findings. The previously recorded export failure below was corrected and the final exact archive passed recovery/roles/TLS/actual-old rollback. **Raw vendor HIGH/CRITICAL findings still block Plan08 task03 and all downstream live gates.** No08 SUMMARY or DEPL completion is justified.
 
