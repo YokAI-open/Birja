@@ -153,6 +153,11 @@ class Backup(unittest.TestCase):
   c={'access_key_file':str(self.p/'writer-id'),'secret_key_file':str(self.p/'writer-key')}
   self.assertEqual(q.inventory(c,a,Fake()),expected)
   self.assertTrue(any(c[1]=='b2_list_parts' for c in calls))
+  # Backblaze's standard web-console Read Only key includes shareFiles.
+  # It delegates downloads, not storage/account mutations; inventory never
+  # invokes its download-authorization API.
+  allowed['capabilities'].append('shareFiles')
+  self.assertEqual(q.inventory(c,a,Fake()),expected)
   # Real HTTP adapter -> inventory -> refreshed quota -> actual Job admission.
   api=q.API(request_budget=1000,download_budget=10000000)
   response=mock.MagicMock(); response.status=200; response.__enter__.return_value=response
@@ -174,9 +179,11 @@ class Backup(unittest.TestCase):
   outside_partial=True
   with self.assertRaises(ValueError): q.inventory(c,a,Fake())
   outside_partial=False
-  allowed['capabilities'].append('writeBucketRetentions')
-  with self.assertRaises(ValueError): q.inventory(c,a,Fake())
-  allowed['capabilities'].pop()
+  for capability in ['writeFiles','deleteFiles','writeBuckets','deleteBuckets','writeKeys','deleteKeys','writeBucketRetentions','bypassGovernance','shareOtherResources']:
+   with self.subTest(capability=capability):
+    allowed['capabilities'].append(capability)
+    with self.assertRaises(ValueError): q.inventory(c,a,Fake())
+    allowed['capabilities'].pop()
   for key,value in [('buckets',[{'id':'target'}]),('namePrefix','prod/')]:
    prior=allowed[key]; allowed[key]=value
    with self.assertRaises(ValueError): q.inventory({},a,Fake())
@@ -190,6 +197,8 @@ class Backup(unittest.TestCase):
   with mock.patch.object(api.opener,'open') as opened:
    for host in ['http://api003.backblazeb2.com','https://api003.backblazeb2.com.evil','https://evil','https://user@api003.backblazeb2.com']:
     with self.assertRaises(ValueError): api.call(host,'b2_list_buckets',{},'secret')
+   for operation in ['b2_get_download_authorization','b2_create_key','b2_upload_file','b2_update_bucket','b2_delete_file_version']:
+    with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com',operation,{},'secret')
    opened.assert_not_called()
    api.calls=q.MAX_CALLS
    with self.assertRaises(ValueError): api.call('https://api003.backblazeb2.com','b2_list_buckets',{},'secret')
