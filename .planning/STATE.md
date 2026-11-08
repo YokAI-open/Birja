@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan08 task03 T3A safer-image builds; revised replacement plan checked, strict gate retained
+stopped_at: Plan08 task03 T3B passed e40f688; source review clean; execute final T3C acceptance
 last_updated: "2026-11-07T16:55:40Z"
 last_activity: 2026-11-07 -- Owner selected strict gate; live handoff prepared and exact archive preserved
 progress:
@@ -27,14 +27,14 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 08 task03, wave10 of15 (Plan15 prerequisite complete;08tasks01/02 implemented)
-Status: Executing safer-image replacement T3A; prior-image strict gate remains failed
+Status: Safer-image integration and independent source review passed; final T3C acceptance pending
 Last activity: 2026-11-07 -- Strict policy confirmed; LIVE-HANDOFF ready, no external execution authorized
 
 Progress: [████████░░] 91% of planned plans executed (63/69); Phase 6: 9/15 plans complete.
 
 ## Immediate remaining work
 
-**Latest owner scope:** fix the strict gate using safer alternative images locally. DHI login confirmed and ordinary authenticated image operations authorized, without credential extraction. Actual DHI Debian candidates all failed raw scans. Public Chainguard PG18.6/Redis8.10.3 and Wolfi base passed; Python3.14/Node24 signed-package assemblies still require proof. Read ALTERNATIVE-IMAGE-RESEARCH and checked08-IMAGE-REPLACEMENT contract. Resume T3A actual builds/strict scans before T3B consumer/data transition and T3C final acceptance. Existing08tasks01/02 and15 completion remain unchanged; no production/publication authority. Earlier no-alternate-base wording below describes the previous checkpoint and is superseded by this explicit owner request.
+**Latest owner scope:** fix the strict gate using safer alternative images locally. T3A passed b48f80e: actual Python3.14runtime/test-builder and Node24toolchain raw0H0C plus consumer/audit checks. T3B passed e40f688: CGR PostgreSQL/Redis consumers, rootlessUIDs, fixed recovery provenance and populated transition/abort/roles/TLS proofs. Independent replacement review has0active findings. Resume T3C final fresh five-target scans, full application/browser gates and ONE final new-artifact supplied recovery/roles/TLS/actualv0.3.1rollback after source freeze. No push/provider/production authority;15plans/9complete unchanged until08acceptance. Earlier no-alternate-base/old-image blocker wording below is preserved history, superseded by this explicit owner request and measured new results.
 
 
 **Owner direction2026-11-07: continue locally; do not push or ask for push during this local-only scope.** Local implementation and rehearsals are complete within the bounded independent audit (`06-LOCAL-READINESS.md`). Actual final-image browser suite passed10/1expectedproductionCSPskip/0flaky in57.391s; final frontend staticbuild passed6.353s. Throwaway birja-e2e-test has zero remaining containers/networks/volumes. No real .env/dev/prod data was used. An initial temporary-network navigation failure was corrected and retained honestly in LOCAL-GATES.
@@ -251,3 +251,21 @@ A byte-identical verified copy is preserved in ignored.local/phase-06-handoff,
 not only/tmp; no production data/secrets were copied. Strict08block remains;
 wait for concrete vendorfix/new evidence, not repeated passes/unchanged scans.
 No exception, alternatebase, push/provider/liveauthority or phasecompletion.
+
+### Replacement T3A accepted
+
+RED956d782/GREENb48f80e: actualWolfiPython3.14runtime/testbuilder andNode24
+toolchain raw0HIGH/0CRITICAL. Unchangedresolvedpackageartifacts; default
+hostCIauditretained/passed, wholeunusedauditchainabsentimages, actualnative
+imports/CLI/offlinesync/5smoke/migration/nonroot/frontendbuild/auditpass.
+Evidence06-08-T3A-EVIDENCE and ignored.local/phase-06-handoff/t3a-evidence.
+Resume checkedT3B; noCompose/CI/PG/recoverychanges accepted yet, no08SUMMARY.
+
+### Replacement T3B accepted — 2026-11-08
+
+RED59819fb/GREENe40f688; transition37.494s,roles29.322s,TLS49.347s,
+config117pass. ActualPGcollationdrift/reindex-before-refresh, unconvertedUID999
+volume rejection anduntouchedoriginalabort; RedisAOFclone/restart/abortpass.
+Actualv0.3.1retainedDockerfilebuilds18.751s, archivedlocksunchanged.
+Independent22sourcepathreviewclean0active;36focusedofflinechecks pass.
+ResumeT3C, no08SUMMARY/finalnewartifact yet. DetailedT3B-EVIDENCE/REVIEW.
