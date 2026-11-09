@@ -217,6 +217,26 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Prepare Docker platform API for recovery fixtures
+        run: |
+          set -Eeuo pipefail
+          # Recovery uses /usr/bin/docker and the default socket under a clean root env.
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 120 https://download.docker.com/linux/ubuntu/gpg -o "$RUNNER_TEMP/docker.asc"
+          sudo install -m 0644 "$RUNNER_TEMP/docker.asc" /etc/apt/keyrings/docker.asc
+          printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          docker_version=5:29.2.1-1~ubuntu.24.04~noble
+          sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version"
+          sudo systemctl restart docker
+      - name: Verify recovery image platform capability
+        run: |
+          set -Eeuo pipefail
+          sudo -- /usr/bin/docker version
+          test "$(sudo -- /usr/bin/docker version --format '{{.Client.Version}} {{.Server.Version}}')" = '29.2.1 29.2.1'
+          postgres=$(python3 -c 'import runpy; print(runpy.run_path("deploy/verify-restore.py")["REGISTRY_REF"])')
+          sudo -- /usr/bin/docker pull --platform linux/amd64 "$postgres"
+          sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker image inspect "$postgres" --platform linux/amd64
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
