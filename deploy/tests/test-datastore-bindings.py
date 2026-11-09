@@ -243,7 +243,8 @@ class Bindings(unittest.TestCase):
                 return (identity if "--no-trunc" in argv else identity[:12]).encode()
             if argv[1] == "inspect":
                 service = next(
-                    name for name, identity in container_ids.items()
+                    name
+                    for name, identity in container_ids.items()
                     if identity.startswith(argv[2])
                 )
                 return json.dumps(rows[service]).encode()

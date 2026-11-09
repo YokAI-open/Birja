@@ -216,6 +216,7 @@ def check_running(binding):
                     "/usr/bin/docker",
                     "ps",
                     "-aq",
+                    "--no-trunc",
                     "--filter",
                     "label=com.docker.compose.project=birja-prod",
                     "--filter",
