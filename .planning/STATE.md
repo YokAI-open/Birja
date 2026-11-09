@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: PR26 root-fixture fix0637b48 reviewed and serial integration passed; follow-up publication pending
-last_updated: "2026-11-09T08:42:50Z"
+stopped_at: Reviewed nginx CI privilege correction ready; bounded CI-only publication authority active
+last_updated: "2026-11-09T12:20:10Z"
 last_activity: 2026-11-09 -- Reviewed privileged CI fixtures pass full serial transition/recovery/roles/TLS/rollback
 progress:
   total_phases: 7
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
-Status: PR26 four jobs green; reviewed root-fixture fix0637b48 passes all local rehearsals; follow-up push pending
+Status: PR26 CI42588116337 failed only ops nginx privileges; reviewed correction ready for approved publication
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -46,18 +46,21 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: actualCI42585485295 on approved57b8774 passed image/backend/
-frontend/e2e, but ops/ci-pass failed required root TLS tests. Bounded REDb1dd6dd/
-GREEN0637b48 runs only required synthetic stages via explicit sudo and trusts
-only the exact checkout for fixture Git reads. Production guards unchanged.
-Independent ROOT-CI-REVIEW0findings;5CI/18prereq/actualowner-and-TLSproof pass.
-One actual root serial image-transition38.695s/allrecoveryrolesTLS151.225s/
-oldrollback106.876s pass; sourceHEAD unchanged,4fixedprojects0resources.
-Actualprevioushead GitHubrawimageartifact all5ok/exit0/findings0 verified.
-No new runtime/recoveryarchive/install/provider/timer action. Exact follow-up
-publication choice is pending; neither originalc085 nor57approval covers it.
-See ROOT-CI-EVIDENCE/REVIEW and RELEASE-CHECKPOINT. Phase6 remains10/15,
-09nightlyproof ownerdeferred, no09/10SUMMARY/DEPL completion or merge/deploy.
+Current action: continue under owner's “Publish and finish CI” standing authority.
+Actual995b464/run42588116337 passed backend/frontend/image/e2e; ops failed at
+the final offline nginx check opening /var/log/nginx/access.log without root.
+RED49df53f/GREENeec70c5 adds explicit sudo only to that existing documented-root
+configuration test; no production script change. Five CI contracts, scoped
+lint/format/diff and actual root nginx check/temporary cleanup pass. Independent
+NGINX-CI-REVIEW:0 blockers/0 warnings. Publish this reviewed correction, refresh
+PR26 and inspect all six current-head jobs before requesting merge/version.
+
+Standing authority covers reviewed/tested feature-branch CI workflow,
+deploy/tests/ and planning corrections until required CI passes, with all
+existing gates enforced. No further push question inside this scope. App,
+runtime/image/recovery/production changes, merge/release/deployment and force
+push remain excluded. No need to repeat unchanged local app/scanner/DB gates.
+Nightly proof stays owner-deferred; phase10/15. No09/10SUMMARY/DEPL advancement.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -181,8 +184,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T08:42:50Z
-Stopped at: reviewed0637b48 serial rehearsals pass; exact follow-up publication pending;09nightly deferred
+Last session: 2026-11-09T08:46:16Z
+Stopped at: PR26 new995b464 CI pending; boundedCI-onlypublication authority active;09nightly deferred
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30

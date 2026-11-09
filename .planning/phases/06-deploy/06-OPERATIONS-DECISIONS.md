@@ -802,3 +802,30 @@ follow-up corrections plus their planning records until required CI succeeds,
 with all gates intact. No application/runtime/image/recovery/production change,
 merge or deployment authority is inferred.09calendar proof stays deferred and
 10/15 plans complete; no09/10SUMMARY/DEPL advancement.
+
+
+## Bounded CI completion authorization —2026-11-09
+
+Owner selected “Publish and finish CI” for exact995b46426194a4773f24099f6bb17a4048bc34c7
+and3reviewed commits. Nonforce push and prepared PR26description refresh exited0.
+Standing authorization now covers further independently reviewed/tested fixes
+ONLY in feature/phase-06-deploy's .github/workflows/ci.yml, deploy/tests/ and
+planning records until required CI succeeds. Preserve existing security/test
+checks; no weakening/skipping tests or severity policy. Do not re-ask for pushes
+inside this explicit scope. Application/runtime/image/recovery/production code,
+merge/release/deployment and force-push are excluded and retain separate gates.
+Current actual new-head run is being observed; no green aggregate claim yet.
+Nightly proof remains deferred; no plan/requirement completion inferred.
+
+## Reviewed nginx CI privilege correction —2026-11-09
+
+Actual995b464/run42588116337 completed failure: backend/frontend/image/e2e
+passed; ops failed only at the final offline nginx check because nginx-t opens
+/var/log/nginx/access.log. The existing script explicitly documents root and
+uses a disposable config/certificate/prefix, with no install/reload/start.
+RED49df53f/GREENeec70c5 changes only the CI invocation to sudo plus regression.
+Five CI contracts, Ruff lint/format, scoped diff and actual root nginx check
+with temporary cleanup pass. Independent NGINX-CI-REVIEW reports0/0.
+Publish under existing bounded CI completion authorization; no new push
+question. Required current-head CI remains pending; no merge/deploy authority.
+Recorded 2026-11-09T12:20:10Z. Nightly proof remains deferred;10/15 plans unchanged.
