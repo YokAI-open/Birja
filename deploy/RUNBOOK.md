@@ -204,6 +204,10 @@ It has exactly these fields (supply actual measured/setup values privately):
   `/etc/birja` for an account-wide **read-only** inventory application key,
   with `listBuckets`, `listFiles`, `readBucketRetentions`, no bucket/prefix
   restrictions and no file/bucket/key write/delete capabilities.
+  The standard console Read Only preset also includes `shareFiles`, which
+  delegates downloads. This one named capability is accepted, but the inventory
+  client's fixed API allowlist never permits issuing download authorizations.
+  Account/storage mutations and other non-read/list capabilities still fail.
 - `local_request_budget`: 1..10000 actual native inventory HTTP requests per
   operation (also capped at 128); `local_download_budget_bytes`: at least
   max_stage_bytes and at most 4 GB. Size these conservatively with the owner's

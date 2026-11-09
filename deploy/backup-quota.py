@@ -182,7 +182,12 @@ def inventory(c, a, api=None):
     )
     require(
         all(
-            type(cap) is str and cap.startswith(("read", "list"))
+            # The console's Read Only preset also delegates file downloads.
+            # This cannot mutate files/buckets/keys. Our fixed API allowlist
+            # never invokes b2_get_download_authorization, so inventory does
+            # not exercise that extra capability. All mutations still reject.
+            type(cap) is str
+            and (cap.startswith(("read", "list")) or cap == "shareFiles")
             for cap in allowed["capabilities"]
         )
     )
