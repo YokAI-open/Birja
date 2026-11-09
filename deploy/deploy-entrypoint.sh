@@ -60,7 +60,7 @@ def verify(release):
                 'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                 'deploy/check-nginx-config.sh','deploy/install-nginx.sh',
                 'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml',
-                'frontend/Dockerfile'}
+                'frontend/Dockerfile','deploy/datastore-bindings.py'}
     require(required <= values['files'].keys())
     for name, sha in values['files'].items():
         require(not name.startswith('/') and '..' not in Path(name).parts)
@@ -103,7 +103,7 @@ def install(source, args):
              'deploy/cloudflare-ips.sh','deploy/smoke-prod.sh',
              'deploy/configure-db.sh','deploy/provision-db-tls.sh',
              'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
-             'frontend/Dockerfile']
+             'frontend/Dockerfile','deploy/datastore-bindings.py']
     names += call(['git','-C','/srv/birja','ls-files','deploy/nginx']).splitlines()
     names += call(['git','-C','/srv/birja','ls-files','backend']).splitlines()
     with tempfile.TemporaryDirectory(prefix='stage-', dir=base) as tmp:
@@ -155,7 +155,7 @@ def main():
     if args and args[0] == '--install':
         install(source, args)
         return
-    require(args in [[], ['--rollback'], ['--help'], ['-h']])
+    require(args in [[], ['--rollback'], ['--start-selected-datastores'], ['--help'], ['-h']])
     release = source.parent.parent
     require(release.parent == Path('/var/lib/birja/ops/releases'))
     verify(release)

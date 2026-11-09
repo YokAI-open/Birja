@@ -536,6 +536,90 @@ class Evidence(unittest.TestCase):
         self.assertFalse(attempt["ok"])
         self.assertNotEqual(attempt["run_id"], success["run_id"])
 
+    def test_startup_profile_admission_preserves_material_and_all_exact_gate_checks(
+        self,
+    ):
+        material = self.root / "prepared-config"
+        material.write_text("final-material-before-backup")
+        material.chmod(0o600)
+        self.c["recovery_files"] = [str(material)]
+        self.run_restore()
+        original_binding = b.recovery_binding
+
+        def current_binding(config):
+            return {**original_binding(config), "bundle_sha256": "c" * 64}
+
+        binding = current_binding(self.c)
+        success = json.loads((self.state / "restore-last-success.json").read_text())
+        self.manifest.update(
+            data_epoch=success["started_epoch"],
+            data_utc=b.utc(success["started_epoch"]),
+            started_utc=b.utc(success["started_epoch"]),
+            source_binding=binding,
+            recovery_sha256=success["recovery_sha256"],
+        )
+        success.update(
+            binding, manifest_sha256=b.sha_bytes(json.dumps(self.manifest).encode())
+        )
+        expected = {
+            **binding,
+            "source_release": self.manifest["release"],
+            "source_revision": "0007",
+        }
+        backup = {
+            "ok": True,
+            "run_id": "backup",
+            "snapshot_id": self.sid,
+            "data_epoch": success["started_epoch"],
+            "data_utc": b.utc(success["started_epoch"]),
+            "epoch": success["started_epoch"],
+            "utc": b.utc(success["started_epoch"]),
+        }
+        for name in ["last-success.json", "last-attempt.json"]:
+            b.atomic(self.state / name, backup)
+        for name in ["restore-last-success.json", "restore-last-attempt.json"]:
+            b.atomic(self.state / name, success)
+        with (
+            patch.object(b, "recovery_binding", side_effect=current_binding),
+            patch.object(b.Job, "quota"),
+            patch.object(b.Job, "refresh_quota"),
+            patch.object(
+                b.Job,
+                "restic",
+                lambda job, *args, **kwargs: self.remote(job, *args, **kwargs),
+            ),
+        ):
+            self.assertTrue(
+                b.recovery_gate(self.c, self.sid, expected)["recovery_verified"]
+            )
+            material.write_text("changed-after-proof")
+            with self.assertRaises(ValueError):
+                b.recovery_gate(self.c, self.sid, expected)
+            material.write_text("final-material-before-backup")
+            for field, value in [
+                ("source_release", "2" * 40),
+                ("source_revision", "0008"),
+            ]:
+                with self.subTest(field=field), self.assertRaises(ValueError):
+                    b.recovery_gate(self.c, self.sid, {**expected, field: value})
+            with self.assertRaises(ValueError):
+                b.recovery_gate(self.c, "b" * 64, expected)
+            b.atomic(self.state / "restore-last-attempt.json", {**success, "ok": False})
+            with self.assertRaises(ValueError):
+                b.recovery_gate(self.c, self.sid, expected)
+            b.atomic(self.state / "restore-last-attempt.json", success)
+            (self.state / "restore-last-success.json").unlink()
+            with self.assertRaises((ValueError, OSError)):
+                b.recovery_gate(self.c, self.sid, expected)
+            b.atomic(self.state / "restore-last-success.json", success)
+            with (
+                patch.object(
+                    b.time, "time", return_value=success["started_epoch"] + 93601
+                ),
+                self.assertRaises(ValueError),
+            ):
+                b.recovery_gate(self.c, self.sid, expected)
+
     def test_gate_rechecks_exact_remote_presence_and_all_bindings(self):
         self.run_restore()
         success = json.loads((self.state / "restore-last-success.json").read_text())

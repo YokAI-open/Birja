@@ -289,6 +289,7 @@ jobs:
           bash deploy/tests/test-restore-safety.sh
           bash deploy/tests/test-db-config.sh
           sudo -- python3 deploy/tests/test-deploy-prerequisites.py
+          sudo -- python3 deploy/tests/test-datastore-bindings.py
           bash deploy/tests/test-reexec.sh
           bash deploy/tests/test-rollback-target.sh
           bash deploy/tests/test-app-services.sh

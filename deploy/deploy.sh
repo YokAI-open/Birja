@@ -53,13 +53,20 @@ SELF_HASH=$(sha256sum 2>/dev/null < "${BASH_SOURCE[0]}" | awk '{print $1}' || tr
 
 STEP="startup"
 
+bindings() {
+  BIRJA_BACKUP_LOCK_FD=9 python3 "$BIRJA_RETAINED_DIR/deploy/datastore-bindings.py" "$@"
+}
+
 dc() {
   if [ -n "${BIRJA_RETAINED_DIR:-}" ]; then
+    bindings --write-overlay || return 1
+    if [ "${1:-}" = up ]; then bindings --check-volumes || return 1; fi
     local suffix=""
     if [ "$(git -C "$APP_DIR" rev-parse HEAD)" = "$(git -C "$APP_DIR" rev-parse 'v0.3.1^{commit}')" ]; then suffix='?ssl=verify-full'; fi
     BIRJA_OLD_TLS_SUFFIX=$suffix BIRJA_APP_DIR=$APP_DIR BIRJA_OPS_DIR=$BIRJA_RETAINED_DIR BIRJA_MIGRATOR_CONTEXT=$BIRJA_RETAINED_DIR/backend \
       docker compose -p birja-prod -f "$BIRJA_RETAINED_DIR/docker-compose.prod.yml" \
-        -f "$BIRJA_RETAINED_DIR/deploy/db-security.compose.yml" --env-file "$ENV_FILE" "$@"
+        -f "$BIRJA_RETAINED_DIR/deploy/db-security.compose.yml" \
+        -f /var/lib/birja/ops/datastore-volumes.json --env-file "$ENV_FILE" "$@"
   else
     docker compose -f "$APP_DIR/docker-compose.prod.yml" --env-file "$ENV_FILE" "$@"
   fi
@@ -112,6 +119,22 @@ assert result.returncode == 0, 'source checkout failed; diagnostics=redacted'
 PY
 }
 
+startup_revision() {
+  python3 - "$1" "$2" <<'PY'
+import json, re, stat, sys
+from pathlib import Path
+p = Path('/var/lib/birja/backup/restore-last-success.json')
+assert p == p.resolve()
+s, parent = p.lstat(), p.parent.lstat()
+assert stat.S_ISREG(s.st_mode) and s.st_uid == 0 and stat.S_IMODE(s.st_mode) == 0o600
+assert stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0 and stat.S_IMODE(parent.st_mode) == 0o700
+d = json.loads(p.read_text())
+assert d['ok'] is True and d['source_release'] == sys.argv[1] and d['snapshot_id'] == sys.argv[2]
+assert isinstance(d['source_revision'], str) and re.fullmatch('[A-Za-z0-9_]{1,64}', d['source_revision'])
+print(d['source_revision'])
+PY
+}
+
 recovery_gate() {
   local recovery snapshot source_sha revision bundle
   recovery=$(readlink -f /var/lib/birja/recovery/current)
@@ -120,12 +143,21 @@ recovery_gate() {
   source_sha=$(live_sha "$DEPLOY_LOG")
   if [ -z "$source_sha" ]; then source_sha=$(git -C "$APP_DIR" rev-parse HEAD); fi
   [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || return 1
-  revision=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"' 2>/dev/null)
-  [[ "$revision" =~ ^[A-Za-z0-9_]{1,64}$ ]] || return 1
   snapshot=$(python3 -I -c 'import json; print(json.load(open("/var/lib/birja/backup/last-success.json"))["snapshot_id"])' 2>/dev/null)
   [[ "$snapshot" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [ "${MODE:-}" = start-selected ]; then
+    # Limited first-start admission: all material was prepared before the
+    # fresh backup/restore, and remains unchanged while datastores are stopped.
+    # The unchanged gate authenticates this exact completed profile below.
+    revision=$(startup_revision "$source_sha" "$snapshot") || return 1
+  else
+    bindings --check-running || return 1
+    revision=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"' 2>/dev/null) || return 1
+  fi
+  [[ "$revision" =~ ^[A-Za-z0-9_]{1,64}$ ]] || return 1
   BIRJA_BACKUP_LOCK_FD=9 python3 "$recovery/deploy/backup-snapshot.py" recovery-gate \
-    --snapshot "$snapshot" --source-release "$source_sha" --source-revision "$revision" --bundle-sha "$bundle" >/dev/null 2>&1
+    --snapshot "$snapshot" --source-release "$source_sha" --source-revision "$revision" --bundle-sha "$bundle" >/dev/null 2>&1 || return 1
+  ADMITTED_REVISION=$revision
 }
 
 # app_services: the services deploy/rollback build and start. Releases before
@@ -148,6 +180,7 @@ Usage: deploy.sh [--rollback]
   (no args)    deploy origin/main (or the ref in DEPLOY_REF)
   DEPLOY_REF=<branch|tag|sha> deploy.sh   deploy that ref instead of main
   --rollback   return to the release that was live before the current one
+  --start-selected-datastores   start only bound existing datastores after TLS checks
                (see the header of this script for how it is chosen)
   -h, --help   this text
 Note: rollback does not undo database migrations.
@@ -193,8 +226,23 @@ preflight() {
   fi
   STEP="fresh exact recovery gate"
   recovery_gate || { echo "fresh exact recovery and completed restore required" >&2; exit 1; }
+  if [ "${MODE:-}" = start-selected ]; then return; fi
   STEP="read-only database compatibility preflight"
   BIRJA_BACKUP_LOCK_FD=9 "$BIRJA_RETAINED_DIR/deploy/configure-db.sh" --production --inspect
+}
+
+start_selected_datastores() {
+  STEP="selected datastore secure startup prerequisites"
+  bindings --check-volumes || return 1
+  BIRJA_BACKUP_LOCK_FD=9 "$BIRJA_RETAINED_DIR/deploy/provision-db-tls.sh" --production --check || return 1
+  # The entrypoint authenticated the HBA and fixed Compose bytes in MANIFEST.
+  [ -f "$BIRJA_RETAINED_DIR/deploy/db/pg_hba.conf" ] || return 1
+  dc up -d --wait postgres redis || return 1
+  bindings --check-running || return 1
+  local actual
+  actual=$(dc exec -T postgres sh -c 'exec psql -XqAt -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version_num FROM alembic_version"') || return 1
+  [ "$actual" = "$ADMITTED_REVISION" ] || { echo "candidate_revision_mismatch=true" >&2; return 1; }
+  echo "selected_datastores_started=true writers_started=false"
 }
 
 # Passes only if the API is healthy and nginx serves this release's exact
@@ -389,12 +437,14 @@ do_deploy() {
   # Go live: schema, backend, static release, nginx.
   STEP="start postgres and redis"
   dc up -d --wait postgres redis
+  bindings --check-running
   STEP="migrate"
   dc --profile migrate build migrate
   dc --profile migrate run --rm --no-deps migrate >/dev/null 2>&1
   STEP="start backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans drops a scheduler this release lacks
   dc up -d --wait --remove-orphans $services
+  bindings --check-running
   swap_current "$RELEASE_DIR"
   STEP="nginx install"
   "$BIRJA_RETAINED_DIR/deploy/install-nginx.sh"
@@ -450,6 +500,7 @@ do_rollback() {
   STEP="rollback backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans removes the scheduler when the target has none
   dc up -d --wait --remove-orphans $services
+  bindings --check-running
   echo "WARNING: migrations are NOT undone; the schema stays at the newer revision." >&2
   echo "Incompatible schema recovery requires a separately approved manual procedure." >&2
   swap_current "$RELEASE_DIR"
@@ -469,13 +520,18 @@ main() {
     "") MODE=deploy
         [ "$REF" != rollback ] || { echo "'rollback' is reserved in the deploy log, not a ref" >&2; exit 2; } ;;
     --rollback) MODE=rollback ;;
+    --start-selected-datastores) MODE=start-selected ;;
     *) usage >&2; exit 2 ;;
   esac
   trap on_err ERR
   RELEASE_DIR=""
   BUILD_TMP=""
   preflight
-  if [ "$MODE" = rollback ]; then do_rollback; else do_deploy; fi
+  case "$MODE" in
+    rollback) do_rollback ;;
+    start-selected) start_selected_datastores ;;
+    *) do_deploy ;;
+  esac
 }
 
 # Everything above only defines functions and variables; this block is parsed

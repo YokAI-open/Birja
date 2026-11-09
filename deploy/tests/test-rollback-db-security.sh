@@ -85,7 +85,7 @@ def orchestration_self_test():
         names = ['deploy/deploy.sh','deploy/deploy-entrypoint.sh','deploy/db-security.compose.yml',
                  'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                  'deploy/smoke-prod.sh','deploy/configure-db.sh','deploy/provision-db-tls.sh',
-                 'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
+                 'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql','deploy/datastore-bindings.py',
                  'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml','frontend/Dockerfile']
         for name in names:
             dest=app/name

@@ -352,7 +352,67 @@ index through approved maintenance, and follow its reviewed recovery procedure
 before retry. Do not automatically downgrade or drop arbitrary objects; a
 schema-changing repair needs a reviewed migration and scoped approval.
 
-### PostgreSQL image and collation transition
+### Protected selected volumes and initial secure startup (local correction)
+
+The retained deployment now requires root-owned mode0600
+`/etc/birja/datastore-bindings.json`, with trusted root-owned parents and no
+symlinks. Its exact schema is `format: 1`, `project: "birja-prod"`, and
+`volumes` containing exactly `pgdata` and `redisdata`. Each has `original` and
+`candidate` records with exactly `name`, `created_at`, `driver`, `scope` from
+approved measured Docker volume metadata. All four names must be distinct;
+driver/scope are local, without driver options. Do not guess names, copy
+documentation defaults into this file or replace/delete a measured volume.
+
+The immutable retained `datastore-bindings.py` accepts only `--check-volumes`,
+`--write-overlay` and `--check-running`, under the inherited held operation lock.
+It creates no volumes and performs no copy/chown/reindex. Its fixed protected
+`/var/lib/birja/ops/datastore-volumes.json` maps only those logical volumes to
+existing external candidates. Every retained create/recreate/rollback uses
+that overlay. Missing candidates fail instead of silently creating empty
+databases. Existing overlay forgery or a changed binding stops for review.
+Data probes bind-mount the inspected existing local volume directory read-only;
+they do not use an implicitly creating named-volume mount or `-v`.
+
+The new `/usr/local/sbin/birja-deploy --start-selected-datastores` mode is for
+separately approved first-start maintenance, not normal app deploy. It checks
+real candidate data and provisioned TLS/HBA BEFORE starting only PG/Redis,
+then verifies the exact sole service/mounted identities and actual revision.
+It starts no app/scheduler and runs no role/migration SQL. Provision TLS with
+the reviewed retained provisioner's existing custody/lock gates before use;
+never introduce a plaintext bootstrap or bypass collation maintenance.
+
+Required order under one continuously held operation lock: stop all app writers
+but retain old datastores; prepare reviewed ops source, final protected prod /
+role / TLS / binding material and recovery_files; verify old source service /
+original mounts read-only; use the SAME installed backup and exact isolated
+restore AFTER those preparations. Keep backup release bound to the actual old
+live deploy-log SHA, not the new checkout. Only then stop datastores, copy and
+convert approved candidates, and start them without changing bound material.
+The backup's fixed project/service exec does not create or select a volume.
+Production accepts no source_compose override; that option is synthetic only.
+Use existing recovery_files for the canonical root0400 retained MANIFEST,
+private binding and approved private custody/configuration files. Live server
+key0640 and CA certificate0644 cannot be listed directly as private_file and
+are not intrinsically hash-bound; the existing TLS check validates the actual
+pair/CA/hostname before startup. Confirm custody/coverage during preflight.
+
+The first-start admission uses the protected completed restore's revision for
+the exact snapshot/source as input to the unchanged strict recovery gate. That
+gate still authenticates remote/profile/source/config/tool binding and data
+freshness, including latest failed/missing attempts. After startup the actual
+candidate revision MUST equal the admitted revision before further operations.
+Normal deploy/rollback still uses the actual running revision. This limited
+stopped-source admission is not a waiver or a full application deployment gate.
+
+Then perform approved collation/index maintenance before guarded role apply,
+regenerate any now-invalidated recovery proof, and use the normal retained
+deploy with its separate migrator. After successful deployment only, synchronize
+backup release to the actual deployed SHA and prove fresh recovery again with
+the unchanged independent archive. A material change after proof fails closed.
+These interfaces are local code awaiting independent source and real isolated
+cutover/recreate/old-app rollback proof; no live authority follows from them.
+
+### PostgreSQL and Redis clone compatibility
 
 The reviewed PostgreSQL18.6 image uses glibc2.44 and postgres UID/GID70;
 the old Debian image used glibc2.41 and UID/GID999. PGDATA is explicitly
