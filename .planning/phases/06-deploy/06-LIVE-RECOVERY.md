@@ -1,10 +1,10 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: approved548-installed-d5fe2059-tested-install-decision-pending
+status: real-backup-restore-passed-timer-enabled-awaiting-first-calendar-run
 updated: 2026-11-09
 installation_complete: true
-remote_restore_complete: false
+remote_restore_complete: true
 calendar_trigger_verified: false
 ---
 
@@ -12,32 +12,60 @@ calendar_trigger_verified: false
 
 ## Current authoritative observation —2026-11-09
 
-Owner explicitly answered “Approve replacement installation” for exact
-548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118.
-Trusted bundle install exited0; recovery/current and the signed-restic link
-now resolve into that immutable release. Original83... remains preserved.
-Protected backup-controls.json, backup-recovery-config.json and backup.env
-were created under /etc/birja; live configuration validates. The static recovery
-template is included in recovery_files instead of volatile live backup.env,
-so quota refresh cannot invalidate file binding. No secret value was displayed.
+Owner approved exactd5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401 replacement installation on DE189274.
+Trusted immutable install exited0; all20payload/inventory hashes, current,
+3root-only launchers and identical signed-restic link pass. Existing protected
+configuration was validated/reused. Corrected system lock and actual bounded
+B2inventory/headroom pass; initial visible/hidden/unfinished/other account bytes
+were0, private bucket/ObjectLock-off/lifecycle policy validated. Empty encrypted
+repository initialization succeeded2.634s. No credential value was displayed.
 
-Controls record the existing owner screenshot and approved daily checks,
-exclusive writes,64native requests and64MiB local download ceiling. Actual
-staging/deadline are32MiB/600s; freshness93600s. No provider-remaining allowance
-is asserted. Off-server custody and no-other-writers confirmation persist.
+First installed backup completed2026-11-09T07:43:40Z in11.817s,11tool calls;
+60,773bytes staged backup data, private staging removed. Exact remote snapshot:
+`bed51816831081a195e4b3ef5b39f8f4059cd8feb1b4e51289f9bed05da46194`.
+Installed exact-snapshot retrieval/isolated restore passed12.211s, completed
+2026-11-09T07:44:22Z. Private table/schema/financial/session/sequence invariants
+and source/config/tool-bundle binding pass; installed exact-source recovery gate
+also passes. Source remains exactv0.3.1/0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7,
+revision0007. Fixedbirja-restore-check has0containers/networks/volumes and no
+private restore staging. No production restore or app operation occurred.
 
-The fresh inventory attempt failed before provider HTTP at Job.lock(): exact
-/var/lock/birja-deploy.lock resolves via the standard Ubuntu alias to
-/run/lock/birja-deploy.lock. Existing root-owned0644 lock was not altered.
-Opaque failure record is replacement-install-config-inventory.json under the
-ignored plan09-evidence directory. No repository init, upload, real backup,
-restore, unit installation/enable or app operation occurred.
+After restore passed, systemd-analyze verify exited0 on both exact retained
+units; installed root-owned0644 under /etc/systemd/system, daemon-reload and
+only enable--now birja-backup.timer succeeded. Timer enabled/active/waiting,
+OnCalendar03:00UTC daily, randomized15m, accuracy1m, persistentyes. Actual next
+trigger: **Tue 2026-11-10 03:11:32 UTC**. LastTrigger is empty; backup.service has
+no InvocationID/start/exit timestamp. No manual service start occurred. Genuine
+calendar-run evidence is PENDING; default service Result=success is not a run.
 
-Source correction REDae16a95/GREEN0e47c50 and independent review are clean;
-18prerequisite/25backup/4safety checks pass. Exact newd5fe2059... archive passed all four serial rehearsals/copy verification;
-all3fixed projects have0resources and production ref/all4running IDs unchanged. Installed548... stays immutable; another exact-checksum installation
-decision is required by09task02 after the replacement is concrete and tested.
-Earlier approval/setup-pending statements below are retained history.
+Installed birja-backup-status exits0. Final checks confirm actualproduction
+ref/all4original running container IDs unchanged and fixedclone/staging clean.
+Sanitized immediate exit/time/ID metadata in ignored plan09-evidence files:
+lockalias-approved-install-inventory.json, repository-init.json,
+first-live-backup.json, first-live-restore.json, nightly-timer-install.json,
+first-live-final-status.json; unit-verify/operation logs remain private there.
+A final bookkeeping attempt to directly parse backup configuration was rejected
+by automatic approval review before execution; the accepted replacement uses
+only the installed sanitized status interface plus IDs/ref/counts. No direct
+configuration read was needed for final health evidence.
+
+### Resume after the first actual calendar activation
+
+Recheck installed status and systemd timer/service metadata. The timer's actual
+LastTrigger must correspond to service ExecMainStart/Exit and a successful
+InvocationID/Result/ExecMainStatus, with a new completed remote snapshot ID/data
+UTC inside that activation window. Validate exact remote existence/integrity
+through installed bounded tools; preserve the previous copy on failure. A manual
+service invocation is not calendar proof. Do not print private config, credentials,
+rows, balances or private invariant hashes. Existing one-verified-copy rotation
+is explicitly approved in OPERATIONS-DECISIONS; no unrelated deletion allowed.
+
+Do not wait in a blocking tool overnight or repeat already passing source/image/
+application suites. Keep09SUMMARY absent and DEPL-02 pending until the genuine
+nightly evidence passes. Then close09 accurately and proceed to10's separate
+actualCI/publication checkpoint. Existing no-push/no-pushquestion preference
+persists. Phase6 remains10/15; later release/deployment/friend gates are separate.
+Earlier installation/setup/approval-pending entries below are retained history.
 
 The owner explicitly approved Plan09 backup setup and verification on DE189274,
 bound to archive SHA256

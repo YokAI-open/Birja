@@ -80,22 +80,20 @@ Independent source review has0 active findings; six synthetic projects are clean
 The verified packet is preserved locally at ignored
 `.local/phase-06-handoff/candidate-cgr/`; details in08SUMMARY/T3C-EVIDENCE.
 
-Plan09 backup setup and verification is explicitly approved on the same VDS,
-DE189274. Exact recovery tools/image/launchers and signed restic are installed
-and verified. Both corrected restricted B2 pairs authenticate; off-server
-custody/no other writers are confirmed. A narrow standard ReadOnly compatibility
-fix passed independent review/tests and four exact replacement-artifact replays.
-Owner approved exact548bc494 replacement; it is installed/current with private
-configuration created and valid. Fresh inventory then stopped before provider
-HTTP because the lock guard rejected Ubuntu's standard /var/lock alias. Bounded
-REDae16a95/GREEN0e47c50 and independent review are clean; affected tests pass.
-New exactd5fe2059 archive passed all four serial rehearsals and copied verification;
-checksum-specific installation approval is pending. Authentication-only provider requests and opaque source-size checks
-occurred; no production backup/restore or timer activation has occurred. The production
-release and four existing container IDs remain unchanged. Actual current-head
-CI, release, datastore transition/role/TLS rollout and Gmail/Outlook acceptance
-remain pending. DEPL-01/02 and Phase6 are not complete. No publication or app
-restart/deployment authority is included. See LIVE-RECOVERY/HANDOFF and STATE.
+Plan09 is partially executed with explicit owner approval on same VDS DE189274.
+Exact d5fe2059 recovery replacement is installed/current; immutable payloads,
+launchers and signed restic pass. Actual B2 policy/inventory/headroom checks,
+empty encrypted repository initialization and first backup passed. Exact remote
+snapshot retrieval and isolated restore passed with private invariants and
+source/config/tool-bundle binding; temporary clone/staging is gone. Source
+remains v0.3.1/revision0007 and all four original production IDs are unchanged.
+After restore, the verified nightly timer was enabled; first actual trigger is
+2026-11-10T03:11:32Z. Genuine calendar-run proof is still pending; no09SUMMARY or
+DEPL-02 completion yet. No extra key/custody/installation approval is needed.
+Actual current-head CI, release, datastore/role/TLS rollout and Gmail/Outlook
+acceptance remain separate pending boundaries. Phase6 stays10/15; DEPL-01/02
+and whole phase remain open. Existing no-push/no-pushquestion preference persists.
+See06-LIVE-RECOVERY/HANDOFF and STATE for current proof and next action.
 
 ## Constraints
 
@@ -146,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-08 after Plan08 local acceptance; live phase acceptance pending*
+*Last updated: 2026-11-09 after real backup/restore and timer setup; first calendar run and phase acceptance pending*

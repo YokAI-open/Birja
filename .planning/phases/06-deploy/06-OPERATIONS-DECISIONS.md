@@ -634,3 +634,48 @@ TLS51.936s/actualoldrollback104.093s and copied verification pass;3synthetic
 projects0resources, production ref/all4running IDs unchanged. No new live action.
 Request only the new exact checksum installation decision required by09task02;
 existing named09scope, caps, corrected keys and off-server custody persist.
+
+
+## Approved replacement, actual recovery and timer —2026-11-09
+
+Owner approved exactd5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401 replacement installation on DE189274.
+Trusted immutable install exited0; all20payload/inventory hashes, current,
+3root-only launchers and identical signed-restic link pass. Existing protected
+configuration was validated/reused. Corrected system lock and actual bounded
+B2inventory/headroom pass; initial visible/hidden/unfinished/other account bytes
+were0, private bucket/ObjectLock-off/lifecycle policy validated. Empty encrypted
+repository initialization succeeded2.634s. No credential value was displayed.
+
+First installed backup completed2026-11-09T07:43:40Z in11.817s,11tool calls;
+60,773bytes staged backup data, private staging removed. Exact remote snapshot:
+`bed51816831081a195e4b3ef5b39f8f4059cd8feb1b4e51289f9bed05da46194`.
+Installed exact-snapshot retrieval/isolated restore passed12.211s, completed
+2026-11-09T07:44:22Z. Private table/schema/financial/session/sequence invariants
+and source/config/tool-bundle binding pass; installed exact-source recovery gate
+also passes. Source remains exactv0.3.1/0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7,
+revision0007. Fixedbirja-restore-check has0containers/networks/volumes and no
+private restore staging. No production restore or app operation occurred.
+
+After restore passed, systemd-analyze verify exited0 on both exact retained
+units; installed root-owned0644 under /etc/systemd/system, daemon-reload and
+only enable--now birja-backup.timer succeeded. Timer enabled/active/waiting,
+OnCalendar03:00UTC daily, randomized15m, accuracy1m, persistentyes. Actual next
+trigger: **Tue 2026-11-10 03:11:32 UTC**. LastTrigger is empty; backup.service has
+no InvocationID/start/exit timestamp. No manual service start occurred. Genuine
+calendar-run evidence is PENDING; default service Result=success is not a run.
+
+Installed birja-backup-status exits0. Final checks confirm actualproduction
+ref/all4original running container IDs unchanged and fixedclone/staging clean.
+Sanitized immediate exit/time/ID metadata in ignored plan09-evidence files:
+lockalias-approved-install-inventory.json, repository-init.json,
+first-live-backup.json, first-live-restore.json, nightly-timer-install.json,
+first-live-final-status.json; unit-verify/operation logs remain private there.
+A final bookkeeping attempt to directly parse backup configuration was rejected
+by automatic approval review before execution; the accepted replacement uses
+only the installed sanitized status interface plus IDs/ref/counts. No direct
+configuration read was needed for final health evidence.
+
+All actions stayed within named09authority and previously approved rolling
+replacement policy (latest-only instruction explicitly superseded disabled
+pruning). No unrelated snapshot/provider/production deletion was performed.
+Keep Plan09 pending for actual calendar evidence; no new owner input needed.

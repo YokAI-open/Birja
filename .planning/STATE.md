@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan09 approved548bc494 installed; trusted Ubuntu lock alias fixed and reviewed; replacementd5fe2059 tested; exact install decision pending
-last_updated: "2026-11-09T07:39:46Z"
-last_activity: 2026-11-09 -- Installed ReadOnly replacement and corrected standard Ubuntu lock alias
+stopped_at: Plan09 real encrypted B2 backup and isolated restore passed; timer enabled; first actual calendar run pending
+last_updated: "2026-11-09T07:50:09Z"
+last_activity: 2026-11-09 -- Real B2 backup/restore verified and nightly timer enabled
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,66 +27,47 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 09 task02, wave11 of15 — private credential/setup checkpoint
-Status: Approved548bc494 installed; protected configuration valid; lock-alias replacementd5fe2059 validated; exact install approval pending
-Last activity: 2026-11-09 -- Lock compatibility correction passed tests and independent review
+Status: Actual backup/restore passed; timer enabled; first scheduled run due2026-11-10T03:11:32Z
+Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
 
 ## Immediate remaining work
 
-Plan09 task01 and its backup/configuration/isolated-restore/timer scope are
-explicitly approved on same VDS DE189274. Owner also approved exact548bc494...
-replacement installation; trusted install exited0, recovery/current and the
-signed-restic link now select that immutable release. Original83... is retained.
-Protected backup-controls.json, static backup-recovery-config.json and live
-backup.env are created under /etc/birja; configuration validates. Static recovery
-config is included in recovery_files instead of volatile live backup.env, so
-quota refresh does not invalidate recovery-file binding.
+Plan09 task01 and all exact replacement installation decisions are APPROVED.
+New d5fe2059... archive is installed/current;20payload hashes,3launchers and
+signed-restic link pass. The bounded Ubuntu lock alias correction now works on
+this VDS. Actual private B2 bucket/ObjectLock/lifecycle/account inventory and
+headroom checks pass; initial account bytes0. Both restricted keypairs, existing
+password, controls and protected config validate. Do not re-ask keys/caps/custody,
+card/bucket setup, installation or already approved backup/restore/timer scope.
 
-The first fresh inventory attempt stopped before provider HTTP at Job.lock():
-Ubuntu's root-owned /var/lock alias resolves to /run/lock, which the old canonical
-path guard rejected. Existing root-owned0644 shared inode was not changed.
-Bounded REDae16a95/GREEN0e47c50 accepts only this exact trusted system alias,
-retaining safe parents/sticky directory, root ownership, regular file/mode,
-same-inode/O_NOFOLLOW, exclusive and inherited-flock proof.18prerequisites,
-25backup,4safety and lint pass. Independent focused review has0BLOCKER/0WARNING.
-New exact archive d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401
-passed recovery66.973s/roles30.711s/TLS51.936s/actualoldrollback104.093s,
-copied verification and0synthetic resources. Only snapshot helper/checksum
-differ; preserved candidate-lock-alias with bindings in09-LOCK-ALIAS-EVIDENCE.
-Supplemental exact installation decision is pending; never patch548inplace.
+Real encrypted B2 repository initialized. First installed backup passed11.817s,
+60,773bytes staged, exact snapshot
+bed51816831081a195e4b3ef5b39f8f4059cd8feb1b4e51289f9bed05da46194.
+Exact remote retrieval/isolated restore passed12.211s; full private invariants
+and source/config/tool-bundle binding pass. Completed2026-11-09T07:44:22Z.
+Clone resources/staging absent; source exactv0.3.1/revision0007 and all4original
+production IDs unchanged. No production restore, apprestart or deployment.
+Detailed approved SHA/UTC/ID/results in06-LIVE-RECOVERY and ignored evidence.
 
-Both corrected restricted B2 pairs authenticate on the exact same account/
-endpoint. Writer is Birja-backup/prod/; inventory standard ReadOnly shareFiles
-compatibility fix3804ec6 passed independent review851bafe and four548artifact
-replays. Owner confirmed “Saved off-server; no other writers” for password and
-both keypairs; do not re-ask custody or corrected credentials. Screenshot caps
-remain $0/10GBstorage/$0/1GBdaydownload/2500dayClassB/C. No card/cap editing,
-bucket recreation or master key is needed. Actual policy/keys/config values
-must never be printed.
+After real restore, both exact units passed systemd-analyze verify and were
+installed; only nightly timer enabled. Active/waiting,03UTC+up to15min jitter,
+next actual trigger2026-11-10T03:11:32Z. LastTrigger empty; service never started
+under systemd yet. **Resume after that real calendar activation:** correlate
+LastTrigger/service invocation/start/exit with a new completed remote snapshot
+and validate installed status/remote integrity. Never count a manual service run
+as nightly proof; do not block tools overnight. Owner's daily status checking
+and one-verified-copy/create-before-delete policy remain in force. No new owner
+input is required for the scheduled run. On failure, preserve old snapshot and
+record exact status; no source/image/app retest without changed need.
 
-Approved opaque source check: exact unchangedv0.3.1 commit
-0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7, PG18/revision0007,
-8574655bytes database. Config limits32MiB staging/600s deadline/64MiB local
-download/64native requests per operation,26h freshness. These are local ceilings,
-not provider remaining allowances. After the new exact archive is reviewed,
-replayed and explicitly approved for installation, verify installed payloads/
-launchers/restic link, refresh actual provider inventory/headroom, then perform
-already approved exact encrypted backup/retrieval/fixed isolated restore. Only
-after actual restore passes enable03UTC+15min jitter timer; observe a genuine
-calendar activation separately. No B2 upload, actual backup/restore or timer yet.
-
-Plan08 stays complete: five fresh raw0HIGH/0CRITICAL, backend616/frontend264,
-critical100%, actual browser10pass/1expectedskip, builds/audits, populated clone
-transition and same-artifact recovery/roles/TLS/oldrollback passed. Unchanged
-application/image gates are not repeated. Candidate-cgr/T3C-EVIDENCE remain
-historical accepted proof.
-
-Phase6 remains10/15, overall64/69. No09SUMMARY or DEPL completion. Plans10..13
-retain separate actualCI/publication/release/datastore transition/friend gates.
-No app restart/deployment, engine/volume/role/TLS/schema change, private record
-inspection, realOTP/email/trade or publication is authorized. Existing
-no-push/no-pushquestion preference persists. Older checkpoints below are history.
+Phase6 remains10/15, overall64/69.09SUMMARY/DEPL-02 remain pending solely for
+calendar evidence; then10's distinct actualCI/publication checkpoint follows.
+DEPL-01/release/live role/TLS/datastore rollout/friend gates remain pending.
+Existing no-push/no-pushquestion preference persists; no private record inspection,
+realOTP/email/trade, role/TLS/schema/engine/volume transition or app operation
+is authorized by09. Do not reopen completed08 or add remediation plans.
 
 ## Performance Metrics
 
@@ -175,8 +156,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T07:39:46Z
-Stopped at: Plan09 approved548 installed; trusted lock-alias replacementd5fe2059 tested; exact install decision pending
+Last session: 2026-11-09T07:50:09Z
+Stopped at: Plan09 real backup/restore passed; first timer run due2026-11-10T03:11:32Z
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -375,3 +356,15 @@ helperfix3804ec6 reviewedclean851bafe;25backup4safetyand all4exactnewarchive
 replays pass. Packet548bc494... prepared; existing83...stillinstalled. Await
 supplementalexactchecksum install decision, not renewed09scope. Evidencefile
 09-READONLY-EVIDENCE. No providerwrites/timer/appchange,10/15unchanged.
+
+
+### Plan09 real backup and restore —2026-11-09
+
+Owner approved d5fe2059 replacement; immutable install/current20payloads and
+signed-restic link pass. Actual B2 controls/headroom passed; encrypted repo init,
+backup11.817s and exact isolated restore12.211s/private invariant gate pass.
+Both exact units verified/installed and nightly timer enabled after restore.
+Next trigger2026-11-10T03:11:32Z; no prior systemd invocation/calendar proof yet.
+Installed status0, source/all4IDs unchanged, clone/staging clean. No09SUMMARY/
+DEPLadvance/push/appoperation;10/15 unchanged. Current facts supersede older
+approval-pending records. Final health uses installed status, no direct config read.

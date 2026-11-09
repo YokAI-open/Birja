@@ -1,48 +1,60 @@
 ---
 phase: 06-deploy
 prepared: 2026-11-09
-status: approved548-installed-tested-d5fe2059-exact-install-decision-pending
+status: real-backup-restore-passed-nightly-timer-enabled-calendar-proof-pending
 execution_authorized: true
-replacement_install_authorized: false
+replacement_install_authorized: true
 ---
 
 # Phase06 live handoff
 
-## Current lock-alias replacement —2026-11-09
+## Current approved operating state —2026-11-09
 
-Owner approved exact548bc494 replacement installation; trusted install exited0,
-recovery/current and signed-restic link select that immutable release. Protected
-controls/static recovery/live backup JSON are created and valid. Original83...
-is retained. Both corrected keys authenticate; owner confirmed off-server
-custody/nootherwriters. Existing09backup/restore/timer authority remains in force.
+Owner approved exactd5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401 replacement installation on DE189274.
+Trusted immutable install exited0; all20payload/inventory hashes, current,
+3root-only launchers and identical signed-restic link pass. Existing protected
+configuration was validated/reused. Corrected system lock and actual bounded
+B2inventory/headroom pass; initial visible/hidden/unfinished/other account bytes
+were0, private bucket/ObjectLock-off/lifecycle policy validated. Empty encrypted
+repository initialization succeeded2.634s. No credential value was displayed.
 
-Fresh inventory stopped before provider HTTP: Ubuntu's trusted /var/lock alias
-resolves to /run/lock and the old guard rejected this standard system spelling.
-Bounded REDae16a95/GREEN0e47c50 preserves root ownership, directory/sticky safety,
-file mode/inode/O_NOFOLLOW and exclusive/inherited flock proof.18prereq25backup
-4safety/lint pass; independent review0BLOCKER/0WARNING. Exact read-only host
-metadata also meets the new guard; the shared lock was not opened or changed.
+First installed backup completed2026-11-09T07:43:40Z in11.817s,11tool calls;
+60,773bytes staged backup data, private staging removed. Exact remote snapshot:
+`bed51816831081a195e4b3ef5b39f8f4059cd8feb1b4e51289f9bed05da46194`.
+Installed exact-snapshot retrieval/isolated restore passed12.211s, completed
+2026-11-09T07:44:22Z. Private table/schema/financial/session/sequence invariants
+and source/config/tool-bundle binding pass; installed exact-source recovery gate
+also passes. Source remains exactv0.3.1/0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7,
+revision0007. Fixedbirja-restore-check has0containers/networks/volumes and no
+private restore staging. No production restore or app operation occurred.
 
-New replacement SHA256:
-`d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401`
+After restore passed, systemd-analyze verify exited0 on both exact retained
+units; installed root-owned0644 under /etc/systemd/system, daemon-reload and
+only enable--now birja-backup.timer succeeded. Timer enabled/active/waiting,
+OnCalendar03:00UTC daily, randomized15m, accuracy1m, persistentyes. Actual next
+trigger: **Tue 2026-11-10 03:11:32 UTC**. LastTrigger is empty; backup.service has
+no InvocationID/start/exit timestamp. No manual service start occurred. Genuine
+calendar-run evidence is PENDING; default service Result=success is not a run.
 
-Preserved packet `.local/phase-06-handoff/candidate-lock-alias/`,152156160bytes,
-separate checksum/inventory/trusted verifier. Only deploy/backup-snapshot.py
-and embedded SHA256SUMS differ from installed548; every image/tool/verifier/unit
-and other payload is byte-identical. Generic and copied verification pass;
-serial recovery66.973s/roles30.711s/TLS51.936s/actualoldrollback104.093s pass.
-All3fixed projects have0resources; production ref/all4running IDs unchanged.
-Detailed final proof is in06-09-LOCK-ALIAS-EVIDENCE.md. No app/image/dependency change or new scan needed.
+Installed birja-backup-status exits0. Final checks confirm actualproduction
+ref/all4original running container IDs unchanged and fixedclone/staging clean.
+Sanitized immediate exit/time/ID metadata in ignored plan09-evidence files:
+lockalias-approved-install-inventory.json, repository-init.json,
+first-live-backup.json, first-live-restore.json, nightly-timer-install.json,
+first-live-final-status.json; unit-verify/operation logs remain private there.
+A final bookkeeping attempt to directly parse backup configuration was rejected
+by automatic approval review before execution; the accepted replacement uses
+only the installed sanitized status interface plus IDs/ref/counts. No direct
+configuration read was needed for final health evidence.
 
-All exact-artifact checks passed; request only this checksum-specific
-installation decision, as09task02 says execute “only the scope and exact final
-recovery archive SHA approved by06-09-01”. Do not re-request existing09scope,
-keys/custody/caps. Install via the trusted verifier into a new immutable release,
-verify payloads/launchers/current, atomically repoint restic at the same signed
-binary. Never patch installed548inplace. Then continue approved actual provider
-inventory/headroom, encrypted backup, exact retrieval and fixed isolated restore;
-enable03UTC+15min timer only after restore passes. Genuine calendar evidence
-remains required. Actual backup/restore/timer have not started. Phase6 stays10/15.
+All named09scope and exactd5fe2059 installation approval is recorded. No extra
+key/caps/custody/install decision remains. Resume after the timer activation
+above: prove LastTrigger/service invocation/new successful remote snapshot;
+then09 can close. Do not manually start service to simulate calendar proof.
+Do not block tools overnight. Exact immutable packet remains preserved at
+candidate-lock-alias; source fix/tests/review/replays are in09-LOCK-ALIAS-EVIDENCE.
+No new archive/scan/rehearsal needed for unchanged code/images. Older pending
+setup/approval descriptions below are historical.10/15 remains unchanged.
 
 ## Original Plan09 installation and authority — retained record
 

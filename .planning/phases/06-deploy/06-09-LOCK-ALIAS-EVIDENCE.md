@@ -1,7 +1,7 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: replacement-reviewed-tested-exact-install-decision-pending
+status: replacement-approved-installed-real-backup-restore-passed
 source_commit: 0e47c50
 red_commit: ae16a95
 tested: 2026-11-09
@@ -139,3 +139,14 @@ that assumes absence. Then continue fresh inventory/headroom and the approved
 backup/retrieval/fixed isolated restore, timer only after actual restore passes.
 No actual upload/backup/restore/timer/app deployment has occurred. No09SUMMARY,
 DEPL acceptance or whole-phase completion;10/15 plans remain complete.
+
+
+## Installation and live continuation —2026-11-09
+
+Owner explicitly approved exactd5fe2059 replacement. Trusted immutable install
+and20payload/current/launcher/restic checks passed; corrected system lock and
+actual B2 preflight work. First encrypted backup and exact isolated restore
+passed11.817s/12.211s, private recovery gate passed; timer enabled only afterward.
+First actual calendar run due2026-11-10T03:11:32Z, still pending. Full sanitized
+proof/current scope in06-LIVE-RECOVERY. This supersedes pending-install wording
+above; no09SUMMARY or phase/requirement advancement occurred.
