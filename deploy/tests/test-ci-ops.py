@@ -58,6 +58,22 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_ops_prepares_locked_host_backend_before_db_config_contracts(self):
+        ops = jobs()["ops"]
+        self.assertIn("uses: astral-sh/setup-uv@v10.3.2", ops)
+        setup = ops.index("uses: astral-sh/setup-uv@v10.3.2")
+        install = ops.index("uv python install")
+        sync = ops.index("uv sync --locked")
+        contracts = ops.index("- name: Offline operational contracts")
+        self.assertLess(setup, install)
+        self.assertLess(install, sync)
+        self.assertLess(sync, contracts)
+        environment = ops[setup:contracts]
+        self.assertIn("working-directory: backend", environment)
+        self.assertIn("cache-dependency-glob: backend/uv.lock", environment)
+        for excluded in ["--no-default-groups", "--no-dev", "--only-group"]:
+            self.assertNotIn(excluded, environment)
+
     def test_image_policy_and_mutation_regressions(self):
         j = jobs()
         image_policy(j["image"], j["ci-pass"])

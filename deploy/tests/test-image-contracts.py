@@ -672,14 +672,24 @@ class Scans(unittest.TestCase):
                         argv, 0, b'{"Version":"0.76.1"}', b""
                     )
                 self.assertIn(producer.SCANNER, argv)
+                self.assertEqual(argv[argv.index("--user") + 1], "1001:1002")
                 self.assertIn("--read-only", argv)
                 self.assertIn("--cap-drop=ALL", argv)
+                self.assertIn("--security-opt=no-new-privileges", argv)
                 self.assertNotIn("/var/run/docker.sock", " ".join(argv))
                 self.assertIn("HIGH,CRITICAL", argv)
+                self.assertNotIn("--ignore-unfixed", argv)
                 seen.append(argv)
                 # The fake scanner writes the real mounted cache DB metadata.
                 mount = next(arg for arg in argv if arg.endswith(",dst=/cache"))
                 cache = Path(mount.split("src=", 1)[1].split(",dst=", 1)[0])
+                self.assertEqual(cache.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(cache.parent.stat().st_mode & 0o777, 0o700)
+                archive_mount = next(
+                    arg for arg in argv if arg.endswith(",dst=/scan/image.tar,readonly")
+                )
+                archive = Path(archive_mount.split("src=", 1)[1].split(",dst=", 1)[0])
+                self.assertEqual(archive.stat().st_mode & 0o777, 0o600)
                 (cache / "db").mkdir(exist_ok=True)
                 (cache / "db/metadata.json").write_text(
                     json.dumps(
@@ -739,6 +749,8 @@ class Scans(unittest.TestCase):
             with (
                 tempfile.TemporaryDirectory() as tmp,
                 patch.object(producer, "command", side_effect=command),
+                patch.object(producer.os, "geteuid", return_value=1001),
+                patch.object(producer.os, "getegid", return_value=1002),
             ):
                 selected = dict(inputs)
                 unavailable = {
