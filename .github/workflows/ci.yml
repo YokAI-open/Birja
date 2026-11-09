@@ -228,6 +228,14 @@ jobs:
           sudo apt-get update
           docker_version=5:29.2.1-1~ubuntu.24.04~noble
           sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version"
+          sudo python3 -c '
+          import json
+          from pathlib import Path
+          config = Path("/etc/docker/daemon.json")
+          configuration = json.loads(config.read_text()) if config.exists() else {}
+          configuration.setdefault("features", {})["containerd-snapshotter"] = True
+          config.write_text(json.dumps(configuration) + "\n")
+          '
           sudo systemctl restart docker
       - name: Verify recovery image platform capability
         run: |
@@ -237,6 +245,7 @@ jobs:
           postgres=$(python3 -c 'import runpy; print(runpy.run_path("deploy/verify-restore.py")["REGISTRY_REF"])')
           sudo -- /usr/bin/docker pull --platform linux/amd64 "$postgres"
           sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker image inspect "$postgres" --platform linux/amd64
+          sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 python3 deploy/tests/check-recovery-image.py
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
