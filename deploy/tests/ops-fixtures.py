@@ -26,6 +26,12 @@ spec = importlib.util.spec_from_file_location(
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
 
+
+def source_git(*args):
+    """Trust only this checkout for root-run synthetic fixture source reads."""
+    return r.call(["git", "-c", "safe.directory=" + str(ROOT), "-C", str(ROOT), *args])
+
+
 SEED = r"""
 import asyncio, uuid
 from datetime import datetime, UTC
@@ -304,7 +310,7 @@ def config(root, release):
         "repository": str(root / "repository"),
         "password_file": str(root / "password"),
         "recovery_files": [str(root / "credentials")],
-        "release": r.call(["git", "rev-parse", "v0.3.1"]).decode().strip(),
+        "release": source_git("rev-parse", "v0.3.1").decode().strip(),
         "db_user": r.BOOT,
         "db_name": "birja_source_test",
         "max_stage_bytes": 10000000,
@@ -332,7 +338,7 @@ def installed_recovery(archive_arg=None):
         old.mkdir(mode=0o700)
         app = old / "app"
         app.mkdir(mode=0o700)
-        old_tar = r.call(["git", "archive", "v0.3.1"])
+        old_tar = source_git("archive", "v0.3.1")
         with tarfile.open(fileobj=__import__("io").BytesIO(old_tar)) as t:
             t.extractall(app, filter="data")
         shutil.copyfile(

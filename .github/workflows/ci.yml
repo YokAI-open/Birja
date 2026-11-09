@@ -259,7 +259,7 @@ jobs:
           bash deploy/tests/test-backup.sh
           bash deploy/tests/test-restore-safety.sh
           bash deploy/tests/test-db-config.sh
-          python3 deploy/tests/test-deploy-prerequisites.py
+          sudo -- python3 deploy/tests/test-deploy-prerequisites.py
           bash deploy/tests/test-reexec.sh
           bash deploy/tests/test-rollback-target.sh
           bash deploy/tests/test-app-services.sh
@@ -269,9 +269,9 @@ jobs:
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         run: |
           set -Eeuo pipefail
-          bash deploy/tests/test-db-operations.sh --image-transition
-          bash deploy/tests/test-db-operations.sh --all
-          bash deploy/tests/test-rollback-db-security.sh
+          sudo -- bash deploy/tests/test-db-operations.sh --image-transition
+          sudo -- bash deploy/tests/test-db-operations.sh --all
+          sudo -- bash deploy/tests/test-rollback-db-security.sh
       - name: Clean fixed synthetic projects
         if: always()
         run: |

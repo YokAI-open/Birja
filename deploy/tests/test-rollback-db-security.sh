@@ -178,8 +178,8 @@ do_rollback
 def integration(archive_arg):
     started = time.monotonic()
     # This exact locally available ref is required; never fetch or change host HEAD.
-    old_sha = r.call(['git', 'rev-parse', '--verify', 'v0.3.1^{commit}']).decode().strip()
-    current_sha = r.call(['git', 'rev-parse', 'HEAD']).decode().strip()
+    old_sha = f.source_git('rev-parse', '--verify', 'v0.3.1^{commit}').decode().strip()
+    current_sha = f.source_git('rev-parse', 'HEAD').decode().strip()
     original_head = current_sha
     dc0 = r.compose()
     with f.installed_recovery(archive_arg) as session:
@@ -187,7 +187,7 @@ def integration(archive_arg):
         old = root / 'old/app'
         # Preserve immutable release bytes; current audit-group metadata differs.
         for name in ['backend/uv.lock', 'backend/pyproject.toml', 'frontend/package-lock.json']:
-            assert (old / name).read_bytes() == r.call(['git', 'show', old_sha + ':' + name])
+            assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
         old_lock = tomllib.loads((old / 'backend/uv.lock').read_text())
         current_lock = tomllib.loads((ROOT / 'backend/uv.lock').read_text())
         def artifacts(lock):
@@ -200,7 +200,7 @@ def integration(archive_arg):
         # Actual old source and lock, production-only deps, reviewed build file.
         run(['/usr/bin/docker', 'build', '--pull=false', '--target', 'runtime', '-f', str(ROOT / 'backend/Dockerfile'), '-t', 'birja-rollback-test:v0.3.1', str(old / 'backend')])
         for name in ['backend/uv.lock', 'backend/pyproject.toml']:
-            assert (old / name).read_bytes() == r.call(['git', 'show', old_sha + ':' + name])
+            assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
         env = {**r.ENV, 'POSTGRES_USER': r.BOOT, 'POSTGRES_PASSWORD': 'synthetic-ops-only',
                'POSTGRES_DB': 'birja_source_test', 'REDIS_PASSWORD': 'synthetic-redis-only',
                'OTP_HMAC_SECRET': 'synthetic-only-otp-secret-00000000000000',
@@ -357,7 +357,7 @@ def integration(archive_arg):
             assert b'CERTIFICATE_VERIFY_FAILED' in result.stderr
             print('old_image_services_tls=true bad_ca_hostname_plaintext_rejected=true', flush=True)
             f.recovery_roundtrip(session, source_revision='0008', source_release=old_sha)
-            assert r.call(['git','rev-parse','HEAD']).decode().strip() == original_head
+            assert f.source_git('rev-parse','HEAD').decode().strip() == original_head
             print('old_image_rollback_same_installed_recovery=true revision_0008_preserved=true', flush=True)
             print('rollback_integration_seconds=%.3f' % (time.monotonic()-started), flush=True)
         finally:
