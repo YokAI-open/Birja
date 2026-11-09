@@ -58,6 +58,35 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_ops_prepares_default_socket_docker_platform_api_before_fixtures(self):
+        ops = jobs()["ops"]
+        setup = ops.index("- name: Prepare Docker platform API for recovery fixtures")
+        verify = ops.index("- name: Verify recovery image platform capability")
+        build = ops.index("- name: Build locked operations fixture image")
+        self.assertLess(setup, verify)
+        self.assertLess(verify, build)
+        preparation = ops[setup:verify]
+        for required in [
+            "https://download.docker.com/linux/ubuntu/gpg",
+            "signed-by=/etc/apt/keyrings/docker.asc",
+            "docker_version=5:29.2.1-1~ubuntu.24.04~noble",
+            '"docker-ce=$docker_version"',
+            '"docker-ce-cli=$docker_version"',
+            "sudo systemctl restart docker",
+        ]:
+            self.assertIn(required, preparation)
+        preflight = ops[verify:build]
+        for required in [
+            "sudo -- /usr/bin/docker version",
+            "29.2.1 29.2.1",
+            "sudo -- /usr/bin/docker pull --platform linux/amd64",
+            "env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8",
+            'image inspect "$postgres" --platform linux/amd64',
+        ]:
+            self.assertIn(required, preflight)
+        for forbidden in ["trusted=yes", "--allow-unauthenticated", "DOCKER_HOST="]:
+            self.assertNotIn(forbidden, ops[setup:build])
+
     def test_ops_prepares_locked_host_backend_before_db_config_contracts(self):
         ops = jobs()["ops"]
         self.assertIn("uses: astral-sh/setup-uv@v10.3.2", ops)
