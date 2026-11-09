@@ -216,7 +216,9 @@ class Bindings(unittest.TestCase):
         ]:
             manifest.write_text(base + row + "\n")
             with self.subTest(row=row):
-                result = subprocess.run(["sh", "-ec", probe], check=False, capture_output=True)
+                result = subprocess.run(
+                    ["sh", "-ec", probe], check=False, capture_output=True
+                )
                 self.assertNotEqual(result.returncode, 0)
 
     def test_running_identity_rejects_foreign_wrong_mount_and_ambiguity(self):

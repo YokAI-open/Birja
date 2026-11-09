@@ -31,8 +31,8 @@ test ! -L /selected/appendonlydir/appendonly.aof.manifest
 test -s /selected/appendonlydir/appendonly.aof.manifest
 test "$(stat -c '%u:%g' /selected/appendonlydir)" = 65532:65532
 test "$(stat -c '%u:%g' /selected/appendonlydir/appendonly.aof.manifest)" = 65532:65532
-awk 'NF != 6 || $1 != "file" || $3 != "seq" || $5 != "type" || $2 !~ /^[A-Za-z0-9_.-]+$/ || $2 == "." || $2 == ".." || ($6 != "b" && $6 != "i") {exit 1} END {if (NR == 0) exit 1}' /selected/appendonlydir/appendonly.aof.manifest
-while read -r kind file seq number type role; do
+awk '(NF != 6 && NF != 10) || $1 != "file" || $3 != "seq" || $4 !~ /^[0-9]+$/ || $5 != "type" || $2 !~ /^[A-Za-z0-9_.-]+$/ || $2 == "." || $2 == ".." || ($6 != "b" && $6 != "i") || (NF == 10 && ($6 != "i" || $7 != "startoffset" || $8 !~ /^[0-9]+$/ || $9 != "endoffset" || $10 !~ /^(-1|[0-9]+)$/)) {exit 1} END {if (NR == 0) exit 1}' /selected/appendonlydir/appendonly.aof.manifest
+while read -r kind file seq number type role offsets; do
  test ! -L "/selected/appendonlydir/$file"
  test -f "/selected/appendonlydir/$file"
  test "$(stat -c '%u:%g' "/selected/appendonlydir/$file")" = 65532:65532
