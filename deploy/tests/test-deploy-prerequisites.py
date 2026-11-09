@@ -132,7 +132,9 @@ class Locks(unittest.TestCase):
 
         def fstat(fd):
             return metadata(
-                original_fstat(fd), uid=1234 if mutation == "file-owner" else 0
+                original_fstat(fd),
+                mode=stat.S_IFREG | 0o666 if mutation == "file-mode" else None,
+                uid=1234 if mutation == "file-owner" else 0,
             )
 
         with (
@@ -146,6 +148,7 @@ class Locks(unittest.TestCase):
             yield production
 
     def test_trusted_production_alias_preserves_real_kernel_lock(self):
+        self.lock.chmod(0o644)
         with self.production_alias() as path, b.acquire_operation_lock(path) as held:
             self.assertTrue(os.path.samestat(os.fstat(held.fileno()), self.lock.stat()))
             with self.assertRaises(BlockingIOError):

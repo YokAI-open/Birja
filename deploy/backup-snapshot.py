@@ -201,15 +201,31 @@ def load_config(args):
 def acquire_operation_lock(path, inherited_fd=None):
     """Return an owned handle; never unlock a parent's open-file description."""
     path = Path(path)
-    require(path.is_absolute() and path == path.resolve())
+    production = path == Path("/var/lock/birja-deploy.lock")
+    require(path.is_absolute())
+    resolved = path.resolve()
+    if path != resolved:
+        # Ubuntu's system alias is the sole exception to canonical lock paths.
+        # Its ancestors cannot be writable by other users. A shared /run/lock
+        # is safe only with sticky deletion protection for the root-owned file.
+        require(production and resolved == Path("/run/lock/birja-deploy.lock"))
+        alias = Path("/var/lock")
+        info = alias.lstat()
+        require(stat.S_ISLNK(info.st_mode) and info.st_uid == 0)
+        require(alias.readlink() in [Path("/run/lock"), Path("../run/lock")])
+        for parent in [Path("/"), Path("/var"), Path("/run"), Path("/run/lock")]:
+            info = parent.lstat()
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0)
+            require(
+                info.st_mode & 0o022 == 0
+                or (parent == Path("/run/lock") and info.st_mode & stat.S_ISVTX)
+            )
+        path = resolved
 
     def validate(fd):
         current, held = path.lstat(), os.fstat(fd)
         require(stat.S_ISREG(current.st_mode) and stat.S_ISREG(held.st_mode))
-        require(
-            held.st_uid
-            == (0 if path == Path("/var/lock/birja-deploy.lock") else os.geteuid())
-        )
+        require(held.st_uid == (0 if production else os.geteuid()))
         require(held.st_mode & 0o022 == 0 and os.path.samestat(current, held))
 
     inherited = (
