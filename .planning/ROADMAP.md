@@ -370,7 +370,7 @@ Plans:
 
 **Wave 12** *(owner permits proceeding while09calendar observation is deferred; actual backup/restore passed)*
 
-- [ ] 06-10-PLAN.md — Review feature push, actual CI and integration choices
+- [x] 06-10-PLAN.md — Review feature push, actual CI and integration choices
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
@@ -394,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 10/15 | Executing — local gates passed; live recovery pending | - |
+| 6. Deploy | 11/15 | In Progress|  |

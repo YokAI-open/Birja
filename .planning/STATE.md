@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Reviewed CI containerd alignment and strict archive preflight ready for approved publication
-last_updated: "2026-11-09T12:38:20Z"
-last_activity: 2026-11-09 -- Reviewed privileged CI fixtures pass full serial transition/recovery/roles/TLS/rollback
+status: PR26 a7d5dcb actual CI42618704350 all six jobs passed; merge/version scope pending
+stopped_at: PR26 exacta7d5dcb all CI passed;06-10-03 merge/version decision pending;09nightly deferred
+last_updated: "2026-11-09T12:54:35.758Z"
+last_activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
-  completed_plans: 64
-  percent: 93
+  completed_plans: 65
+  percent: 86
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
-Status: PR26 run42617492782 passed Docker API setup; recovery classic archive rejected; reviewed store alignment ready
+Plan: 10 task03 integration/version checkpoint;09 actual calendar observation deferred by owner
+Status: PR26 a7d5dcb actual CI42618704350 all six jobs passed; merge/version scope pending
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
-Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
+Progress: [█████████░] 94%
 
 ## Immediate remaining work
 
@@ -46,22 +46,21 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: publish reviewed CI-only containerd alignment/preflight.
-Actual58c4258/run42617492782 passed Docker29.2.1/platform setup, offline ops,
-app/browser/image jobs and transition33.549s. Packaging rejects classic archive
-membership; raw member list unavailable. Docker upgrades retain the old store.
-REDb44f381/GREEN57974aa preserves daemonJSON/features while enablingcontainerd
-onlyin disposableCIbeforefixtures. Newtest-only strict publicimage export/
-provenance/archive preflight uses original verifier; no guards changed.
-SevenCI/lint/format/diff and actuallocalexportverify4.929s pass; independent
-STORE-CI-REVIEW0/0. Actualrunner replay and aggregate pending.
+Current action:06-10-03 explicit integration and release-version decision.
+PR26 OPEN/MERGEABLE into develop at exacta7d5dcb01d40a916c9cbf9d6ff51525c70c50833.
+ActualCI42618704350 SUCCESS; backend/frontend/image/e2e/ops/ci-pass allpass.
+Backend616/99.80%/critical100; frontend264; browser10pass1expectedproductionCSP
+skip, actualtrade andportfolio/historywholepositionflow+all4widths pass.
+Five raw reports hashverified:each0HIGH/CRITICAL. Opsstrictcontainerdexport/
+transition34.051s/recovery62.533s/roles24.112s+65denials/TLS23.141s/actualold
+rollback96.232s pass, cleanup success. CI-onlyfixes independently reviewed0/0.
+Allsecurity/testgates intact; noVDSdaemon/install/recovery/provider/appchange.
 
-Standing authority covers reviewed/tested feature-branch CI workflow,
-deploy/tests/ and planning corrections until required CI passes, with all
-existing gates enforced. No further push question inside this scope. App,
-runtime/image/recovery/production changes, merge/release/deployment and force
-push remain excluded. No need to repeat unchanged local app/scanner/DB gates.
-Nightly proof stays owner-deferred; phase10/15. No09/10SUMMARY/DEPL advancement.
+Ask concrete Create-a-merge-commit into develop and separately release version/
+preparation choice. Suggested0.4.0 unselected. BoundedCI authority fulfilled;
+no merge/release/deploy authority. Localfinal trackingedits stay unpushed to
+preserve exactgreenPRhead; carrythrough approvedintegration/release, no discard.
+Nightlyproof owner-deferred;phase10/15,no09/10SUMMARY/DEPLadvance.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -185,8 +184,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T08:46:16Z
-Stopped at: PR26 new995b464 CI pending; boundedCI-onlypublication authority active;09nightly deferred
+Last session: 2026-11-09T12:49:22Z
+Stopped at: PR26 exacta7d5dcb all CI passed;06-10-03 merge/version decision pending;09nightly deferred
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -385,7 +384,6 @@ helperfix3804ec6 reviewedclean851bafe;25backup4safetyand all4exactnewarchive
 replays pass. Packet548bc494... prepared; existing83...stillinstalled. Await
 supplementalexactchecksum install decision, not renewed09scope. Evidencefile
 09-READONLY-EVIDENCE. No providerwrites/timer/appchange,10/15unchanged.
-
 
 ### Plan09 real backup and restore —2026-11-09
 
