@@ -56,6 +56,8 @@ def isolated():
         "--rm",
         "--pull",
         "never",
+        "--user",
+        f"{os.geteuid()}:{os.getegid()}",
         "--read-only",
         "--tmpfs",
         "/tmp:rw,noexec,nosuid,size=512m",

@@ -217,6 +217,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install Python and dependencies
+        working-directory: backend
+        run: |
+          uv python install
+          uv sync --locked
       - name: Acquire approved restic with signed checksum verification
         shell: bash
         run: |
