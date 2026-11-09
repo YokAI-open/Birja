@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: PR26 a7d5dcb actual CI42618704350 all six jobs passed; merge/version scope pending
-stopped_at: PR26 exacta7d5dcb all CI passed;06-10-03 merge/version decision pending;09nightly deferred
-last_updated: "2026-11-09T12:54:35.758Z"
-last_activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
+status: executing
+stopped_at: Local release0.4.0 versions524080f validated and independently reviewed;11-02 publication choice pending
+last_updated: "2026-11-09T13:02:00Z"
+last_activity: 2026-11-09 -- Local release0.4.0 metadata/lockedchecks/backup/safety/build passed; review0findings
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
   completed_plans: 65
-  percent: 86
+  percent: 94
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 10 task03 integration/version checkpoint;09 actual calendar observation deferred by owner
-Status: PR26 a7d5dcb actual CI42618704350 all six jobs passed; merge/version scope pending
+Plan: 11 task02 releasepush/mainPR checkpoint;09 calendar observation owner-deferred
+Status: Localrelease0.4.0 prepared and independently reviewed; exactpublicationchoice pending
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 94%
@@ -46,21 +46,18 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action:06-10-03 explicit integration and release-version decision.
-PR26 OPEN/MERGEABLE into develop at exacta7d5dcb01d40a916c9cbf9d6ff51525c70c50833.
-ActualCI42618704350 SUCCESS; backend/frontend/image/e2e/ops/ci-pass allpass.
-Backend616/99.80%/critical100; frontend264; browser10pass1expectedproductionCSP
-skip, actualtrade andportfolio/historywholepositionflow+all4widths pass.
-Five raw reports hashverified:each0HIGH/CRITICAL. Opsstrictcontainerdexport/
-transition34.051s/recovery62.533s/roles24.112s+65denials/TLS23.141s/actualold
-rollback96.232s pass, cleanup success. CI-onlyfixes independently reviewed0/0.
-Allsecurity/testgates intact; noVDSdaemon/install/recovery/provider/appchange.
-
-Ask concrete Create-a-merge-commit into develop and separately release version/
-preparation choice. Suggested0.4.0 unselected. BoundedCI authority fulfilled;
-no merge/release/deploy authority. Localfinal trackingedits stay unpushed to
-preserve exactgreenPRhead; carrythrough approvedintegration/release, no discard.
-Nightlyproof owner-deferred;phase10/15,no09/10SUMMARY/DEPLadvance.
+Current action:06-11-02 exact releasebranch push/mainPR decision.
+PR26 merged5ebf62b after approvedexactgreenhead recheck. release-0.4.0 from
+updateddevelop includesPhase5/6. Carriedcloseout0e0a6eb; version524080f changes
+only5versionvalues in4files. All74backend/638frontend dependency/artifact
+records unchanged. Local7CI/25backup/4safety/lockeduv/frontendlinttypesformat/
+build pass; independentLOCAL-REVIEW0/0 independentlychecks metadata/ancestry/
+lock.11-01 complete.11-02 needs exactthreecommit publicationapproval after
+planningcheckpointcommit. No releaseupstream/push/mainPR or currentreleaseCI.
+Preparedtitle/body ignoredprivate; proposeorigin/release-0.4.0 -> mainPR.
+No release/mainmerge/tag/backmerge/deploy authority. Beforelaterrollout recheck
+actual recoveryfreshness; firstnight proof remainsowner-deferred.
+Phase11/15 and65/69=94%;09/11SUMMARY andDEPLwholephasecompletion remainpending.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -90,10 +87,10 @@ and one-verified-copy/create-before-delete policy remain in force. No new owner
 input is required for the scheduled run. On failure, preserve old snapshot and
 record exact status; no source/image/app retest without changed need.
 
-Phase6 remains10/15, overall64/69.09SUMMARY/DEPL-02 remain pending solely for
+Phase6 now11/15, overall65/69.09SUMMARY/DEPL-02 remain pending solely for
 calendar evidence; owner permits10's distinct actualCI/publication work meanwhile.
 DEPL-01/release/live role/TLS/datastore rollout/friend gates remain pending.
-The exact10push/PR choice is complete; merge/deploy remain unapproved; no private record inspection,
+Plan10featuremerge approved/completed; releasepublication/deploy remain unapproved; no private record inspection,
 realOTP/email/trade, role/TLS/schema/engine/volume transition or app operation
 is authorized by09. Do not reopen completed08 or add remediation plans.
 
@@ -184,8 +181,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T12:49:22Z
-Stopped at: PR26 exacta7d5dcb all CI passed;06-10-03 merge/version decision pending;09nightly deferred
+Last session: 2026-11-09T13:02:00Z
+Stopped at: Localrelease0.4.0 validated/reviewed;11-02 exactpush/mainPR approval pending
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30

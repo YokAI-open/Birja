@@ -321,7 +321,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: 10/15 plans complete
+**Plans**: 11/15 plans complete
 
 Plans:
 **Wave 1**

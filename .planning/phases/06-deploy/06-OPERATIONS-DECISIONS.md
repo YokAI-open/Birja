@@ -924,3 +924,31 @@ Preserve local final CI records/Plan10closeout through updateddevelop into
 releasebranch. Plan10complete; Plan11task01 prepares four version metadata
 files using locked tools, no dependency or application changes. Keep actual
 nightlyproof deferred and09/DEPL-02 pending.
+
+
+## Local release0.4.0 ready for publication choice —2026-11-09
+
+Branch release-0.4.0 was created from updateddevelop5ebf62b after approvedPR26
+merge. Carries final featurecloseout0e0a6eb and reviewed versioncommit
+524080f5414b71de336239c008c3ddcecaefd3dc. BothPhase5/6merge ancestors verified.
+Four files/five versionvalues0.3.1->0.4.0 only; parsed complete metadata
+normalization and74backend/638frontend inventory hashes prove all dependency
+records/artifacts unchanged. No source/image/recovery/runtime change.
+
+Local7CI/25backup/4restore-safety tests, uvlockedofflinesync/check, frontend
+lint/types/metadataformat/build passed. Independent06-11-LOCAL-REVIEW0blockers/
+0warnings independently verified full metadata equality, ancestry and lock.
+No repeated fullapp/DB/browser/image runs; actualrelease-head CI must stillrun.
+Fresh featureCI42618704350 remains evidence only for unchangedimplementation.
+
+Last recorded installed recovery archive is d5fe2059...; actualB2backup at
+07:43:40Z and exactisolatedrestore at07:44:22Z on09November passed. Freshness
+has not been rechecked in this local release task and must be rechecked before
+any approved rollout. First genuine nightly observation remainsowner-deferred.
+No provider/private/production action or archive rebuild occurred.
+
+Task11-01 complete;11-02 awaits explicit publication choice. Resolve exact
+publicationHEAD after this planningcommit; show three local releasecommits
+(closeout,versions,evidence), target origin/release-0.4.0 and mainPR. Prepared
+PRbody/title are ignored/private. Owner approval sofar covers localprep only,
+not releasepush/mainPR/mainmerge/tag/backmerge/deployment. No11SUMMARY yet.

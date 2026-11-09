@@ -1,16 +1,43 @@
 ---
 phase: 06-deploy
-plan: "10"
-status: current-head-ci-passed-awaiting-integration-version-decision
+plan: "11"
+status: local-release-0.4.0-validated-awaiting-publication-choice
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
 base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 nightly_observation: owner-deferred-pending
-publication_authorized: true
+publication_authorized: false
 ci_head: a7d5dcb01d40a916c9cbf9d6ff51525c70c50833
 ci_run: 42618704350
-ci_status: success
+ci_status: feature-success-release-pending
 ---
+
+## Local release0.4.0 ready for publication choice —2026-11-09
+
+Branch release-0.4.0 was created from updateddevelop5ebf62b after approvedPR26
+merge. Carries final featurecloseout0e0a6eb and reviewed versioncommit
+524080f5414b71de336239c008c3ddcecaefd3dc. BothPhase5/6merge ancestors verified.
+Four files/five versionvalues0.3.1->0.4.0 only; parsed complete metadata
+normalization and74backend/638frontend inventory hashes prove all dependency
+records/artifacts unchanged. No source/image/recovery/runtime change.
+
+Local7CI/25backup/4restore-safety tests, uvlockedofflinesync/check, frontend
+lint/types/metadataformat/build passed. Independent06-11-LOCAL-REVIEW0blockers/
+0warnings independently verified full metadata equality, ancestry and lock.
+No repeated fullapp/DB/browser/image runs; actualrelease-head CI must stillrun.
+Fresh featureCI42618704350 remains evidence only for unchangedimplementation.
+
+Last recorded installed recovery archive is d5fe2059...; actualB2backup at
+07:43:40Z and exactisolatedrestore at07:44:22Z on09November passed. Freshness
+has not been rechecked in this local release task and must be rechecked before
+any approved rollout. First genuine nightly observation remainsowner-deferred.
+No provider/private/production action or archive rebuild occurred.
+
+Task11-01 complete;11-02 awaits explicit publication choice. Resolve exact
+publicationHEAD after this planningcommit; show three local releasecommits
+(closeout,versions,evidence), target origin/release-0.4.0 and mainPR. Prepared
+PRbody/title are ignored/private. Owner approval sofar covers localprep only,
+not releasepush/mainPR/mainmerge/tag/backmerge/deployment. No11SUMMARY yet.
 
 ## Current green CI and integration decision —2026-11-09
 
