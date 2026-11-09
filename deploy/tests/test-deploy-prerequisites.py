@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import os
+import stat
 import subprocess
 import sys
 import tarfile
@@ -60,6 +61,127 @@ class Locks(unittest.TestCase):
     def tearDown(self):
         self.parent.close()
         self.tmp.cleanup()
+
+    @contextlib.contextmanager
+    def production_alias(self, mutation=None):
+        """Map fixed system metadata to a private inode; keep real kernel locks."""
+        production = Path("/var/lock/birja-deploy.lock")
+        canonical = Path("/run/lock/birja-deploy.lock")
+        original_resolve, original_lstat = Path.resolve, Path.lstat
+        original_readlink, original_open, original_fstat = (
+            Path.readlink,
+            os.open,
+            os.fstat,
+        )
+
+        def metadata(value, *, mode=None, uid=0):
+            values = list(value)
+            values[0] = value.st_mode if mode is None else mode
+            values[4] = uid
+            return os.stat_result(values)
+
+        def resolve(path, *args, **kwargs):
+            if path == production:
+                return (
+                    Path("/untrusted/birja-deploy.lock")
+                    if mutation == "target"
+                    else canonical
+                )
+            return original_resolve(path, *args, **kwargs)
+
+        def lstat(path, *args, **kwargs):
+            if path in [production, canonical]:
+                mode = stat.S_IFLNK | 0o777 if mutation == "final-link" else None
+                if mutation == "file-mode":
+                    mode = stat.S_IFREG | 0o666
+                return metadata(
+                    original_lstat(self.lock),
+                    mode=mode,
+                    uid=1234 if mutation == "file-owner" else 0,
+                )
+            if path in [Path("/"), Path("/var"), Path("/run"), Path("/run/lock")]:
+                mode = stat.S_IFDIR | (0o1777 if path == Path("/run/lock") else 0o755)
+                if mutation == "parent-write" and path == Path("/run"):
+                    mode = stat.S_IFDIR | 0o777
+                if mutation == "parent-link" and path == Path("/run"):
+                    mode = stat.S_IFLNK | 0o777
+                if mutation == "nonsticky" and path == Path("/run/lock"):
+                    mode = stat.S_IFDIR | 0o777
+                return metadata(
+                    original_lstat(self.root),
+                    mode=mode,
+                    uid=1234 if mutation == "parent-owner" else 0,
+                )
+            if path == Path("/var/lock"):
+                return metadata(
+                    original_lstat(self.root),
+                    mode=stat.S_IFLNK | 0o777,
+                    uid=1234 if mutation == "alias-owner" else 0,
+                )
+            return original_lstat(path, *args, **kwargs)
+
+        def readlink(path, *args, **kwargs):
+            if path == Path("/var/lock"):
+                return Path("/elsewhere" if mutation == "alias-target" else "/run/lock")
+            return original_readlink(path, *args, **kwargs)
+
+        def opened(path, flags, mode=0o777, **kwargs):
+            self.assertEqual(Path(path), canonical)
+            self.assertTrue(flags & os.O_NOFOLLOW)
+            return original_open(self.lock, flags, mode, **kwargs)
+
+        def fstat(fd):
+            return metadata(
+                original_fstat(fd), uid=1234 if mutation == "file-owner" else 0
+            )
+
+        with (
+            patch.object(Path, "resolve", resolve),
+            patch.object(Path, "lstat", lstat),
+            patch.object(Path, "readlink", readlink),
+            patch.object(b.os, "open", opened),
+            patch.object(b.os, "fstat", fstat),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            yield production
+
+    def test_trusted_production_alias_preserves_real_kernel_lock(self):
+        with self.production_alias() as path, b.acquire_operation_lock(path) as held:
+            self.assertTrue(os.path.samestat(os.fstat(held.fileno()), self.lock.stat()))
+            with self.assertRaises(BlockingIOError):
+                b.acquire_operation_lock(path)
+            with b.acquire_operation_lock(path, str(held.fileno())):
+                pass
+            with self.lock.open("a") as other, self.assertRaises(BlockingIOError):
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with self.lock.open("a") as other:
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_production_alias_rejects_unsafe_system_metadata(self):
+        for mutation in [
+            "target",
+            "alias-owner",
+            "alias-target",
+            "parent-owner",
+            "parent-write",
+            "parent-link",
+            "nonsticky",
+            "final-link",
+            "file-mode",
+            "file-owner",
+        ]:
+            with (
+                self.subTest(mutation=mutation),
+                self.production_alias(mutation) as path,
+                self.assertRaises((ValueError, OSError)),
+            ):
+                b.acquire_operation_lock(path)
+
+    def test_synthetic_directory_alias_is_still_rejected(self):
+        alias = self.root / "alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            b.acquire_operation_lock(alias / "operation.lock")
 
     def caller(self, name, inherited=True):
         code = """import runpy,sys,os
@@ -155,7 +277,9 @@ except BaseException as error:
                 patch.object(
                     subprocess,
                     "run",
-                    return_value=subprocess.CompletedProcess([], 0, b"collation_ok\n", b""),
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, b"collation_ok\n", b""
+                    ),
                 ),
             ):
                 scope["main"]()
