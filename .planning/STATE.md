@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Reviewed nginx CI privilege correction ready; bounded CI-only publication authority active
-last_updated: "2026-11-09T12:20:10Z"
+stopped_at: Reviewed Docker CI capability setup ready; bounded publication authority active
+last_updated: "2026-11-09T12:29:41Z"
 last_activity: 2026-11-09 -- Reviewed privileged CI fixtures pass full serial transition/recovery/roles/TLS/rollback
 progress:
   total_phases: 7
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
-Status: PR26 CI42588116337 failed only ops nginx privileges; reviewed correction ready for approved publication
+Status: PR26 run42616168904 passed offline ops/app/image/browser; recovery blocked by runner Docker API; reviewed fix ready
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -46,14 +46,16 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: continue under owner's “Publish and finish CI” standing authority.
-Actual995b464/run42588116337 passed backend/frontend/image/e2e; ops failed at
-the final offline nginx check opening /var/log/nginx/access.log without root.
-RED49df53f/GREENeec70c5 adds explicit sudo only to that existing documented-root
-configuration test; no production script change. Five CI contracts, scoped
-lint/format/diff and actual root nginx check/temporary cleanup pass. Independent
-NGINX-CI-REVIEW:0 blockers/0 warnings. Publish this reviewed correction, refresh
-PR26 and inspect all six current-head jobs before requesting merge/version.
+Current action: publish independently reviewed Docker runner capability setup.
+Actual1bbaa69/run42616168904 passed all offline ops (including nginx), app/image/
+browser jobs and populated transition30.200s. Recovery package preparation
+failed pinned Docker image inspect --platform: exactrunner Docker28.0.4/API1.48
+does not support the existing1.49+ command. RED8d3466f/GREENf5ad5cc installs
+official signed/pinned matchingDocker29.2.1 packages only in disposableCI;
+standard /usr/bin/defaultsocket clean-root pull/inspect preflight precedes
+fixtures. SixCI/focusedlint/diff and actualreadonly APIrejection/newcommand+
+unchangedidentityproof pass. Independent DOCKER-CI-REVIEW0/0. Hostedsetup and
+new-head aggregate pending. NoVDSinstall/restart/recoverychange/imagepinchange.
 
 Standing authority covers reviewed/tested feature-branch CI workflow,
 deploy/tests/ and planning corrections until required CI passes, with all
