@@ -191,6 +191,7 @@ class Bindings(unittest.TestCase):
 
     def test_running_identity_rejects_foreign_wrong_mount_and_ambiguity(self):
         images = {"postgres": "sha256:" + "1" * 64, "redis": "sha256:" + "2" * 64}
+        container_ids = {"postgres": "a" * 64, "redis": "b" * 64}
         rows = {}
         for service, logical in [("postgres", "pgdata"), ("redis", "redisdata")]:
             mounts = [
@@ -219,7 +220,7 @@ class Bindings(unittest.TestCase):
                     },
                 ]
             rows[service] = {
-                "Id": service,
+                "Id": container_ids[service],
                 "Image": images[service],
                 "Platform": "linux",
                 "State": {"Running": True},
@@ -238,9 +239,14 @@ class Bindings(unittest.TestCase):
         def docker(argv):
             if argv[1:3] == ["ps", "-aq"]:
                 service = argv[-1].split("=")[-1]
-                return service.encode()
+                identity = container_ids[service]
+                return (identity if "--no-trunc" in argv else identity[:12]).encode()
             if argv[1] == "inspect":
-                return json.dumps(rows[argv[2]]).encode()
+                service = next(
+                    name for name, identity in container_ids.items()
+                    if identity.startswith(argv[2])
+                )
+                return json.dumps(rows[service]).encode()
             if argv[1:3] == ["image", "inspect"]:
                 service = "postgres" if "postgres@" in argv[3] else "redis"
                 return json.dumps(
