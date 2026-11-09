@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Reviewed Docker CI capability setup ready; bounded publication authority active
-last_updated: "2026-11-09T12:29:41Z"
+stopped_at: Reviewed CI containerd alignment and strict archive preflight ready for approved publication
+last_updated: "2026-11-09T12:38:20Z"
 last_activity: 2026-11-09 -- Reviewed privileged CI fixtures pass full serial transition/recovery/roles/TLS/rollback
 progress:
   total_phases: 7
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
-Status: PR26 run42616168904 passed offline ops/app/image/browser; recovery blocked by runner Docker API; reviewed fix ready
+Status: PR26 run42617492782 passed Docker API setup; recovery classic archive rejected; reviewed store alignment ready
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -46,16 +46,15 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: publish independently reviewed Docker runner capability setup.
-Actual1bbaa69/run42616168904 passed all offline ops (including nginx), app/image/
-browser jobs and populated transition30.200s. Recovery package preparation
-failed pinned Docker image inspect --platform: exactrunner Docker28.0.4/API1.48
-does not support the existing1.49+ command. RED8d3466f/GREENf5ad5cc installs
-official signed/pinned matchingDocker29.2.1 packages only in disposableCI;
-standard /usr/bin/defaultsocket clean-root pull/inspect preflight precedes
-fixtures. SixCI/focusedlint/diff and actualreadonly APIrejection/newcommand+
-unchangedidentityproof pass. Independent DOCKER-CI-REVIEW0/0. Hostedsetup and
-new-head aggregate pending. NoVDSinstall/restart/recoverychange/imagepinchange.
+Current action: publish reviewed CI-only containerd alignment/preflight.
+Actual58c4258/run42617492782 passed Docker29.2.1/platform setup, offline ops,
+app/browser/image jobs and transition33.549s. Packaging rejects classic archive
+membership; raw member list unavailable. Docker upgrades retain the old store.
+REDb44f381/GREEN57974aa preserves daemonJSON/features while enablingcontainerd
+onlyin disposableCIbeforefixtures. Newtest-only strict publicimage export/
+provenance/archive preflight uses original verifier; no guards changed.
+SevenCI/lint/format/diff and actuallocalexportverify4.929s pass; independent
+STORE-CI-REVIEW0/0. Actualrunner replay and aggregate pending.
 
 Standing authority covers reviewed/tested feature-branch CI workflow,
 deploy/tests/ and planning corrections until required CI passes, with all
