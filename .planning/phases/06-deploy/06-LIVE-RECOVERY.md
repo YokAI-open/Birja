@@ -1,14 +1,43 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: replacement-tested-awaiting-install-decision
-updated: 2026-11-08
+status: approved548-installed-d5fe2059-tested-install-decision-pending
+updated: 2026-11-09
 installation_complete: true
 remote_restore_complete: false
 calendar_trigger_verified: false
 ---
 
 # Plan09 recovery installation and remaining setup
+
+## Current authoritative observation —2026-11-09
+
+Owner explicitly answered “Approve replacement installation” for exact
+548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118.
+Trusted bundle install exited0; recovery/current and the signed-restic link
+now resolve into that immutable release. Original83... remains preserved.
+Protected backup-controls.json, backup-recovery-config.json and backup.env
+were created under /etc/birja; live configuration validates. The static recovery
+template is included in recovery_files instead of volatile live backup.env,
+so quota refresh cannot invalidate file binding. No secret value was displayed.
+
+Controls record the existing owner screenshot and approved daily checks,
+exclusive writes,64native requests and64MiB local download ceiling. Actual
+staging/deadline are32MiB/600s; freshness93600s. No provider-remaining allowance
+is asserted. Off-server custody and no-other-writers confirmation persist.
+
+The fresh inventory attempt failed before provider HTTP at Job.lock(): exact
+/var/lock/birja-deploy.lock resolves via the standard Ubuntu alias to
+/run/lock/birja-deploy.lock. Existing root-owned0644 lock was not altered.
+Opaque failure record is replacement-install-config-inventory.json under the
+ignored plan09-evidence directory. No repository init, upload, real backup,
+restore, unit installation/enable or app operation occurred.
+
+Source correction REDae16a95/GREEN0e47c50 and independent review are clean;
+18prerequisite/25backup/4safety checks pass. Exact newd5fe2059... archive passed all four serial rehearsals/copy verification;
+all3fixed projects have0resources and production ref/all4running IDs unchanged. Installed548... stays immutable; another exact-checksum installation
+decision is required by09task02 after the replacement is concrete and tested.
+Earlier approval/setup-pending statements below are retained history.
 
 The owner explicitly approved Plan09 backup setup and verification on DE189274,
 bound to archive SHA256

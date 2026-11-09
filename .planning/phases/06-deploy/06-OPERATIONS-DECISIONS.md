@@ -604,3 +604,33 @@ Approvedopaquesource-sizing query measured8574655bytes/PG18/revision0007 and
 unchangedexactv0.3.1. Propose32MiBstaging/600s/64MiBdownload/64nativecalls per
 operation under observed1GBdaydownload cap, actualheadroom stillneeds fresh
 inventory. No actual remaining allowance claim or private data shown.
+
+
+## Approved548 replacement installed; trusted lock alias correction —2026-11-09
+
+Owner explicitly approved replacement installation for548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118.
+Trusted immutable bundle install exited0; current/root-only launchers and signed
+restic route to that release. Protected controls/static recovery/live backup JSON
+were created and load successfully. Existing keys, generated password, source
+checkout and services were not replaced; original83...release remains.
+
+Fresh inventory failed at shared lock acquisition, before provider HTTP:
+Ubuntu's trusted /var/lock -> /run/lock alias violated canonical equality.
+No production lock inode/mode change. Bounded REDae16a95/GREEN0e47c50 supports
+only the exact trusted alias and retains directory/owner/mode/inode/O_NOFOLLOW/
+exclusive and inherited-flock guards.18prereq25backup4safety/lint pass;
+independent review has0BLOCKER/0WARNING. A new exact archive is being replayed
+before checksum-specific installation approval under09task02. Do not patch
+installed548inplace or re-ask09scope/caps/keys/custody. No actual backup/upload,
+restore, timer or app/publication operation occurred. Phase6 remains10/15.
+
+
+## New lock-alias packet ready for exact installation decision —2026-11-09
+
+Archived5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401 is preserved candidate-lock-alias.
+Only snapshot helper/checksum differ from installed548; independent review clean,
+18prereq25backup4safety pass. One exact packet recovery66.973s/roles30.711s/
+TLS51.936s/actualoldrollback104.093s and copied verification pass;3synthetic
+projects0resources, production ref/all4running IDs unchanged. No new live action.
+Request only the new exact checksum installation decision required by09task02;
+existing named09scope, caps, corrected keys and off-server custody persist.

@@ -1,40 +1,48 @@
 ---
 phase: 06-deploy
 prepared: 2026-11-09
-status: reviewed-replacement-awaiting-exact-install-decision
+status: approved548-installed-tested-d5fe2059-exact-install-decision-pending
 execution_authorized: true
 replacement_install_authorized: false
 ---
 
 # Phase06 live handoff
 
-## Current supplemental decision —2026-11-09
+## Current lock-alias replacement —2026-11-09
 
-The original83f4f515... release described below is approved and installed.
-Both restricted keys now authenticate; off-server custody/nootherwriters are
-ownerconfirmed. Standard ReadOnly compatibility fix3804ec6 passed focused
-independentreview0findings and25backup/4safety plus all four new exact-artifact
-replays. No app/image/dependency/role/TLS change; only inventoryhelper and
-embeddedchecksum payload differ. Existing named09backup/restore/timer authority
-persists; the supplemental decision concerns installing these new executable bytes.
+Owner approved exact548bc494 replacement installation; trusted install exited0,
+recovery/current and signed-restic link select that immutable release. Protected
+controls/static recovery/live backup JSON are created and valid. Original83...
+is retained. Both corrected keys authenticate; owner confirmed off-server
+custody/nootherwriters. Existing09backup/restore/timer authority remains in force.
 
-Replacement SHA256:
-`548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118`
+Fresh inventory stopped before provider HTTP: Ubuntu's trusted /var/lock alias
+resolves to /run/lock and the old guard rejected this standard system spelling.
+Bounded REDae16a95/GREEN0e47c50 preserves root ownership, directory/sticky safety,
+file mode/inode/O_NOFOLLOW and exclusive/inherited flock proof.18prereq25backup
+4safety/lint pass; independent review0BLOCKER/0WARNING. Exact read-only host
+metadata also meets the new guard; the shared lock was not opened or changed.
 
-Preserved packet `.local/phase-06-handoff/candidate-b2-readonly/`,152156160bytes,
-separatechecksum/inventory/trustedverifier; exact bindings and commands in
-`06-09-READONLY-EVIDENCE.md`. Restore67.437s/roles31.076s/TLS51.252s/actualold
-rollback102.176s pass on identicalbytes;3fixedprojects0resources.
+New replacement SHA256:
+`d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401`
 
-Proposed installation uses the trusted verifier/immutable installer on DE189274,
-checks payloads/launchers, changes recovery/current to releases/<newSHA> and
-atomically points /usr/local/bin/restic at the same signed binary in that root.
-Original83...release remains available. No in-place edit or app restart.
-After approval, continue already approved exactB2 inventory/backup/isolatedrestore
-and timer-after-success flow. Current actualsource check remainsv0.3.1/PG18/
-0007,8574655bytes; proposed32MiBstage/600s/64MiBdownload/64nativecalls.
-No newB2upload/realbackup/restore/timeractivation yet. Supplemental replacement
-install approval is pending; do not treat original83...approval as this548...decision.
+Preserved packet `.local/phase-06-handoff/candidate-lock-alias/`,152156160bytes,
+separate checksum/inventory/trusted verifier. Only deploy/backup-snapshot.py
+and embedded SHA256SUMS differ from installed548; every image/tool/verifier/unit
+and other payload is byte-identical. Generic and copied verification pass;
+serial recovery66.973s/roles30.711s/TLS51.936s/actualoldrollback104.093s pass.
+All3fixed projects have0resources; production ref/all4running IDs unchanged.
+Detailed final proof is in06-09-LOCK-ALIAS-EVIDENCE.md. No app/image/dependency change or new scan needed.
+
+All exact-artifact checks passed; request only this checksum-specific
+installation decision, as09task02 says execute “only the scope and exact final
+recovery archive SHA approved by06-09-01”. Do not re-request existing09scope,
+keys/custody/caps. Install via the trusted verifier into a new immutable release,
+verify payloads/launchers/current, atomically repoint restic at the same signed
+binary. Never patch installed548inplace. Then continue approved actual provider
+inventory/headroom, encrypted backup, exact retrieval and fixed isolated restore;
+enable03UTC+15min timer only after restore passes. Genuine calendar evidence
+remains required. Actual backup/restore/timer have not started. Phase6 stays10/15.
 
 ## Original Plan09 installation and authority — retained record
 
