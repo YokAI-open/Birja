@@ -93,8 +93,10 @@ DEPL-02 completion yet. Owner explicitly deferred this observation to proceed
 with10review/publication work meanwhile. No extra key/custody/installation approval is needed.
 PR26 initial actualCI passed backend/frontend/browser but failed scanner-cache
 permissions and missingopsuv. Minimal CI corrections passed independent review,
-focused contracts and all5fresh0HIGH/0CRITICAL scans. Exactfollow-up push/CI is
-pending; release, datastore/role/TLS rollout and Gmail/Outlook remain separate. Phase6 stays10/15; DEPL-01/02
+focused contracts and all5fresh0HIGH/0CRITICAL scans. The approvedfollow-up CI passed all image/application/browser jobs but exposed
+root-required TLS fixture tests. CI/test-only root/exact-Git-trust correction
+passed independent review and all serial local rehearsals; nextpush/CI remains
+pending approval. Release, datastore/role/TLS rollout and friends stay separate. Phase6 stays10/15; DEPL-01/02
 and whole phase remain open. Publication still needs the explicit10push/PR choice.
 See06-LIVE-RECOVERY/HANDOFF and STATE for current proof and next action.
 

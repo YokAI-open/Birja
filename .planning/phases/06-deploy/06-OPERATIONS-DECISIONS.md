@@ -738,3 +738,67 @@ candidate after the evidence commit, then request its follow-up push/PR-body
 update before publishing. Actual corrective-head GitHub CI remains pending;
 no merge/release/deploy approval.09nightly proof remains owner-deferred and
 10/15plans remain complete. No09/10SUMMARY or DEPL completion.
+
+
+## Corrective publication approved and executed —2026-11-09
+
+Owner chose “Push fixes and check CI” for exact57b8774cc93f26000f3e691421c9fefd0020e375,
+three local commits. Nonforce feature push and prepared PR26 description refresh
+both exited0. Read-back PR head equals that approved SHA. New actual pull_request
+CI42585485295 was created2026-11-09T08:22:34Z:
+https://github.com/YokAI-open/Birja/actions/runs/42585485295.
+Backend/frontend already pass; image/browser/ops remain in progress at this
+observation. No passing aggregate, merge/version/release/deploy authority yet.
+Initial CI42583320799 failures remain retained; no claim they passed. Actual
+corrective-head result must be inspected. Nightly proof remains owner-deferred.
+
+
+## Second CI result and reviewed root-fixture correction —2026-11-09
+
+Approved57b8774 push/PR-description refresh succeeded. Actual CI42585485295
+completedFAILURE: image/backend/frontend/e2e PASS, ops/ci-pass FAIL. The scanner
+cache correction is proven on GitHub; no vulnerability gate exception needed.
+Ops reached18prerequisites and failed two actual TLS lock caller tests because
+this real provisioner correctly requires root. Later syntheticTLS also chowns
+private server keys0:70. Keep these production guards; explicitly use sudo only
+for privileged synthetic prerequisites and serial image/recovery/role/TLS/old
+rollback CI fixtures. Hostuv/dbconfig checks stay in the prepared runner env.
+
+REDb1dd6dd/GREEN0637b48 implements that bounded5file workflow/test-only change.
+Fixture source reads use -c safe.directory=<canonical ROOT> -C ROOT; no wildcard,
+global config or shared checkout ownership/mode changes. Actual private repo
+proof reproduces root/runner ownership rejection and verifies exact exception
+plus unrelatedrepo denial. Actual TLS nonroot denial/rootcreatecheck/key0:70
+mode0640 passes.18prereq/5CI tests pass; independent ROOT-CI-REVIEW has0BLOCKER/
+0WARNING and reran them. No installed recovery/runtime/image/provider/timer
+change. One serial local root integration is in progress; actual new-head CI
+and follow-up publication approval remain pending. Firstnight proof deferred.
+
+
+## Root-fixture correction ready for publication —2026-11-09
+
+Independent06-10-ROOT-CI-REVIEW reports0BLOCKER/0WARNING and independently reran
+5CI/18prerequisite tests. Actual private owner/TLS proof and focused source
+checks pass; production root/owner/mode guards remain unchanged.
+
+One serial local run of the exact CI synthetic producers as actual UID0 passed:
+image-transition38.695s; --all recovery/roles/TLS151.225s; actualold rollback
+106.876s, all exit0. Current source0637b48df9d88bbda7ad0141029febde30a296ad
+remained unchanged during those runs. Final label queries confirm0containers/
+networks/volumes across birja-ops-test, birja-restore-check,
+birja-image-transition-test and birja-rollback-test. Immediate command/result/
+elapsed logs are retained in ignored pr-preparation/root-ci-* records.
+No production/provider/installed recovery/timer change or new image scan.
+
+Actual GitHub image artifact for previous approved57b8774/run42585485295 was
+downloaded and checked: all5targets reportok=true/exit0/qualifyingfindings0.
+Backend/frontend/browser also passed that actualrun. Only ops/ci-pass failed
+the newly corrected root setup. Current root-fix head has not run on GitHub
+and is not approved to push yet. Do not call the required aggregate green.
+
+Prepare exact next3commit candidate (RED/GREEN/evidence) for explicit follow-up
+push. The owner may authorize this update only, or reviewed/tested CI/test-only
+follow-up corrections plus their planning records until required CI succeeds,
+with all gates intact. No application/runtime/image/recovery/production change,
+merge or deployment authority is inferred.09calendar proof stays deferred and
+10/15 plans complete; no09/10SUMMARY/DEPL advancement.

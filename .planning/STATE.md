@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan10 PR26 CI failed two runner checks; reviewed tested corrections ready for follow-up push choice
-last_updated: "2026-11-09T08:20:00Z"
-last_activity: 2026-11-09 -- CI fixes reviewed; real nonroot proof and five fresh image scans pass
+stopped_at: PR26 root-fixture fix0637b48 reviewed and serial integration passed; follow-up publication pending
+last_updated: "2026-11-09T08:42:50Z"
+last_activity: 2026-11-09 -- Reviewed privileged CI fixtures pass full serial transition/recovery/roles/TLS/rollback
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
-Status: PR26 initial CI failed image/ops setup; corrective7d5d8c2 reviewed/tested; follow-up push approval pending
+Status: PR26 four jobs green; reviewed root-fixture fix0637b48 passes all local rehearsals; follow-up push pending
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -46,15 +46,18 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: actualCI42583320799 on approved/pushedc085a766/PR26 failed
-imagecache permissions and missingopsuv setup; backend616/100%critical,
-frontend264,browser10pass1expectedCSPskip allpassed. REDc5fc244/GREEN7d5d8c2
-fixes4CI/scanner/testfiles39lines. Independentreview0BLOCKER/0WARNING;
-5CI/13imagecontracts, realnonrootDockerproof and actualfresh5image scans32.416s
-allpass0HIGH/0CRITICAL. See06-10-CI-FIX-EVIDENCE/REVIEW and RELEASE-CHECKPOINT.
-Exact follow-up publication choice is pending; originalapproval namedc085only.
-No remote corrective push/merge/deploy or archive/install/provider/timer change.
-Nightlyproof remains deferred; Phase6 stays10/15, no09/10SUMMARY/DEPL completion.
+Current action: actualCI42585485295 on approved57b8774 passed image/backend/
+frontend/e2e, but ops/ci-pass failed required root TLS tests. Bounded REDb1dd6dd/
+GREEN0637b48 runs only required synthetic stages via explicit sudo and trusts
+only the exact checkout for fixture Git reads. Production guards unchanged.
+Independent ROOT-CI-REVIEW0findings;5CI/18prereq/actualowner-and-TLSproof pass.
+One actual root serial image-transition38.695s/allrecoveryrolesTLS151.225s/
+oldrollback106.876s pass; sourceHEAD unchanged,4fixedprojects0resources.
+Actualprevioushead GitHubrawimageartifact all5ok/exit0/findings0 verified.
+No new runtime/recoveryarchive/install/provider/timer action. Exact follow-up
+publication choice is pending; neither originalc085 nor57approval covers it.
+See ROOT-CI-EVIDENCE/REVIEW and RELEASE-CHECKPOINT. Phase6 remains10/15,
+09nightlyproof ownerdeferred, no09/10SUMMARY/DEPL completion or merge/deploy.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -178,8 +181,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T08:20:00Z
-Stopped at: Plan10 corrective follow-up push pending; initialCI failed;09nightly check deferred
+Last session: 2026-11-09T08:42:50Z
+Stopped at: reviewed0637b48 serial rehearsals pass; exact follow-up publication pending;09nightly deferred
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
