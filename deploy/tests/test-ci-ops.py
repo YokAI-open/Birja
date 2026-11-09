@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Stdlib structural/behavioral CI contracts; no YAML package dependency."""
 
+import importlib.util
+import json
 import re
+import subprocess
+import sys
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -58,6 +65,74 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_ops_preserves_daemon_settings_and_checks_strict_archive_before_build(self):
+        ops = jobs()["ops"]
+        merge = ops.split("sudo python3 -c '\n", 1)[1].split("\n          '\n", 1)[0]
+        merge = textwrap.dedent(merge)
+        for initial in [None, {"log-driver": "local", "features": {"buildkit": True}}]:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "daemon.json"
+                if initial is not None:
+                    path.write_text(json.dumps(initial))
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        merge.replace("/etc/docker/daemon.json", str(path)),
+                    ],
+                    check=True,
+                )
+                expected = initial or {}
+                expected.setdefault("features", {})["containerd-snapshotter"] = True
+                self.assertEqual(json.loads(path.read_text()), expected)
+        self.assertLess(
+            ops.index("containerd-snapshotter"),
+            ops.index("sudo systemctl restart docker"),
+        )
+        check = "sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 python3 deploy/tests/check-recovery-image.py"
+        self.assertIn(check, ops)
+        self.assertLess(
+            ops.index(check), ops.index("- name: Build locked operations fixture image")
+        )
+        spec = importlib.util.spec_from_file_location(
+            "image_preflight", ROOT / "deploy/tests/check-recovery-image.py"
+        )
+        preflight = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(preflight)
+        for store in [[], [["driver-type", "io.containerd.snapshotter.v1"]]]:
+            with (
+                patch.object(
+                    preflight.r, "call", return_value=json.dumps(store).encode()
+                ),
+                patch.object(preflight.subprocess, "run") as save,
+                patch.object(
+                    preflight.r,
+                    "registry_manifests",
+                    return_value=(b"index", b"manifest"),
+                ) as manifests,
+                patch.object(preflight.r, "verify_saved_image") as verify,
+            ):
+                if not store:
+                    with self.assertRaises(ValueError):
+                        preflight.main()
+                    save.assert_not_called()
+                    manifests.assert_not_called()
+                    verify.assert_not_called()
+                else:
+                    preflight.main()
+                    self.assertEqual(
+                        save.call_args.args[0],
+                        [
+                            "/usr/bin/docker",
+                            "image",
+                            "save",
+                            "--platform",
+                            "linux/amd64",
+                            preflight.r.REGISTRY_REF,
+                        ],
+                    )
+                    self.assertEqual(verify.call_args.args[1:], (b"index", b"manifest"))
+
     def test_ops_prepares_default_socket_docker_platform_api_before_fixtures(self):
         ops = jobs()["ops"]
         setup = ops.index("- name: Prepare Docker platform API for recovery fixtures")
