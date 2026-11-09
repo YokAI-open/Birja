@@ -189,6 +189,36 @@ class Bindings(unittest.TestCase):
             )
             self.assertNotEqual(rejected.returncode, 0)
 
+    def test_real_redis_88_offset_manifest_and_malformed_rows(self):
+        selected = self.root / "selected"
+        data = selected / "appendonlydir"
+        data.mkdir(parents=True)
+        manifest = data / "appendonly.aof.manifest"
+        base = "file appendonly.aof.1.base.rdb seq 1 type b\n"
+        incremental = "file appendonly.aof.1.incr.aof seq 1 type i"
+        (data / "appendonly.aof.1.base.rdb").write_bytes(b"existing-base")
+        (data / "appendonly.aof.1.incr.aof").write_bytes(b"")
+        manifest.write_text(base)
+        for path in [data, *data.iterdir()]:
+            os.chown(path, 65532, 65532)
+        probe = self.m.PROBES["redisdata"].replace("/selected", str(selected))
+        for row in [incremental, incremental + " startoffset 0 endoffset 1"]:
+            manifest.write_text(base + row + "\n")
+            with self.subTest(row=row):
+                subprocess.run(["sh", "-ec", probe], check=True, capture_output=True)
+        for row in [
+            incremental + " startoffset nope endoffset 1",
+            incremental + " startoffset 0 endoffset 1 extra 2",
+            incremental + " startoffset 0 wronglabel 1",
+            incremental.replace("seq 1", "seq -1"),
+            incremental.replace("appendonly.aof.1.incr.aof", "../outside"),
+            base.strip() + " startoffset 0 endoffset 1",
+        ]:
+            manifest.write_text(base + row + "\n")
+            with self.subTest(row=row):
+                result = subprocess.run(["sh", "-ec", probe], check=False, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+
     def test_running_identity_rejects_foreign_wrong_mount_and_ambiguity(self):
         images = {"postgres": "sha256:" + "1" * 64, "redis": "sha256:" + "2" * 64}
         container_ids = {"postgres": "a" * 64, "redis": "b" * 64}
