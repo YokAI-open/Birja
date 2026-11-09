@@ -1,7 +1,7 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: awaiting-corrected-b2-authentication
+status: replacement-tested-awaiting-install-decision
 updated: 2026-11-08
 installation_complete: true
 remote_restore_complete: false
@@ -213,3 +213,17 @@ open: obtain a minimally scoped key or review a justified source correction;
 never filter/misreport authorization capabilities, silently bypass the guard
 or modify the installed exact approved archive. No source changes made now.
 Prior pair-wide auth failure is superseded only for inventory authentication.
+
+## Current checkpoint —2026-11-09
+
+Both corrected pairs authenticate; ownerconfirmed actual off-server custody
+and nootherwriters. Those prior gates are closed. Narrow standardReadOnly
+compatibility fix3804ec6 reviewed0active851bafe;25backup/4safety pass. New
+548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118 archive
+passed suppliedrecovery67.437s/roles31.076s/TLS51.252s/actualoldrollback102.176s,
+copiedgenericverify and0threeprojectresources. Only helper/checksum payload
+changed. Installed83...untouched; supplemental exactchecksum installation
+decision pending. Fullbindings/source/limits are in06-09-READONLY-EVIDENCE.
+Read-onlysource measurement8574655bytes,PG18/revision0007/exactv0.3.1; no
+private rows/secrets displayed. No B2upload/realbackup/restore/timer yet.
+Earlier authentication/custody pending entries are historical, superseded here.

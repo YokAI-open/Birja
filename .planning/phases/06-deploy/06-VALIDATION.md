@@ -69,7 +69,7 @@ measured local results are distinct from unavailable live/remote evidence.
 | 06-08-02 | Both/SC3 | test-ci-ops.py and required ops job; prior backup/safety | implemented/tested locally; CI wiring verified; actual Phase06 CI pending |
 | 06-08-03 | Both | full suites/image/audit/coverage, serial ops/rollback, separate reviews | complete locally: five raw scans0HIGH/0CRITICAL, full suites/reviews and10-pass browser;08SUMMARY exists |
 | 06-09-01 | DEPL-02 | Explicit scoped host/backup/private-manifest/retrieval/timer approval | approved2026-11-08 for DE189274/exact83f4f515...; no app rollout |
-| 06-09-02 | DEPL-02/SC2 | Approved exact recovery artifact/hash verification/install on unchanged v0.3.1, then real remote restore/calendar activation | tools installed/20filehashes pass; sameVDS/noSSH; B2 keys/controls and real restore/night pending |
+| 06-09-02 | DEPL-02/SC2 | Approved exact recovery artifact/hash verification/install on unchanged v0.3.1, then real remote restore/calendar activation | original tools installed/20filehashes pass; keys/custody valid; reviewed548bc494 replacement install decision, real restore/night pending |
 | 06-10-01,03 | Both | Explicit feature push/merge/version-preparation choices | pending human |
 | 06-10-02 | DEPL-01/SC3 | Prior CI contract + actual feature-head all-job/browser/ops CI | pending remote |
 | 06-11-01 | DEPL-01 | Git diff + prior CI/backup/safety; selected-version candidate gates | pending approved integration/version; no release candidate authorized |

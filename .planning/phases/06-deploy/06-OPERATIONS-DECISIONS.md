@@ -582,3 +582,25 @@ Owner asked what to write in restic-password: existing random password already
 generated during approved setup must remain unchanged and be copied privately
 off-server. Custody/exclusive account write readiness remain unconfirmed.
 Existing09approval/$0limits persist; no controls attestation/config/timer yet.
+
+## Corrected credentials, custody and replacement candidate —2026-11-09
+
+Both corrected standardkeys authenticate on exactendpoint/sameaccount; writer
+Birja-backup/prod/ valid. Owner answered “Saved off-server; no other writers”.
+Credential/custody/exclusivewrite gates resolved; no repeatedconfirmationneeded.
+Source guard rejected vendorReadOnly shareFiles. Narrow3804ec6 fix recognizes
+only that name, no account/storagewrite allowance and no token-issuing API.
+Independent focusedreview0findings851bafe;25backup4safetylint/format and four
+same-new-archive suppliedreplays pass. See09-READONLY-EVIDENCE for details.
+
+Candidate548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118
+is a concretely reviewed/tested152156160byte replacement. Only helper and its
+checksum differ; oldapproved83... remainsinstalled. Because the explicit09
+installation named83..., supplemental548... install approval is pending;
+existingbackup/restore/timer scope persists. No new approval inferred from
+“continue”. No automatic live patch, snapshot, provider write or timer action.
+
+Approvedopaquesource-sizing query measured8574655bytes/PG18/revision0007 and
+unchangedexactv0.3.1. Propose32MiBstaging/600s/64MiBdownload/64nativecalls per
+operation under observed1GBdaydownload cap, actualheadroom stillneeds fresh
+inventory. No actual remaining allowance claim or private data shown.

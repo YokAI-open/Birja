@@ -82,8 +82,12 @@ The verified packet is preserved locally at ignored
 
 Plan09 backup setup and verification is explicitly approved on the same VDS,
 DE189274. Exact recovery tools/image/launchers and signed restic are installed
-and verified; private B2 key/control setup is pending. No provider request,
-production backup/restore or timer activation has occurred. The production
+and verified. Both corrected restricted B2 pairs authenticate; off-server
+custody/no other writers are confirmed. A narrow standard ReadOnly compatibility
+fix passed independent review/tests and four exact replacement-artifact replays;
+supplemental checksum installation decision is pending. Authentication-only
+provider requests and opaque source-size checks occurred; no production
+backup/restore or timer activation has occurred. The production
 release and four existing container IDs remain unchanged. Actual current-head
 CI, release, datastore transition/role/TLS rollout and Gmail/Outlook acceptance
 remain pending. DEPL-01/02 and Phase6 are not complete. No publication or app

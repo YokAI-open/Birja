@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan09 writer pair still401; inventory authenticates but strict permission validation pending
-last_updated: "2026-11-08T10:57:21+00:00"
-last_activity: 2026-11-08 -- Approved Plan09 recovery tools installed; private B2 setup pending
+stopped_at: Plan09 corrected keys authenticate; reviewed replacement548bc494 ready for exact install approval
+last_updated: "2026-11-09T07:11:00Z"
+last_activity: 2026-11-09 -- ReadOnly compatibility fix reviewed and exact replacement replayed
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 09 task02, wave11 of15 — private credential/setup checkpoint
-Status: Plan09 approved/tools installed; B2 authentication gate before first inventory/upload
+Status: Keys/custody ready; replacement artifact tested; supplemental checksum install approval pending
 Last activity: 2026-11-08 -- Final strict scans and exact-artifact replays passed
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -48,32 +48,35 @@ inventory hashes verified, signed restic0.19.1 checked link/version, protected
 backup state. Four empty root-only credential files plus generated unseen
 `/etc/birja/restic-password` prepared. No source artifact/code changes.
 
-**Awaiting corrected B2 authentication and off-server custody/exclusive writes.**
-Owner saidkeysready; all four private files now populated/plain/single-line.
-Earlier both pairs failed. After owner corrected secret values, fresh writer
-authentication remains401/unauthorized; inventory now authenticates. Inventory
-UIReadOnly also includes shareFiles, rejected by installed read/list-only guard;
-resolve minimally scoped key or reviewed correction before full acceptance.
-Do not bypass capabilities or modify installed approved bytes. Earlier four plus
-two fresh bounded authentication-only requests,
-no bucket inventory/remote mutation/backup. Stop retries until owner privately
-corrects the matched WRITER keyID/applicationKey pair (both files if replaced).
-Existing random restic-password is
-already generated; owner should retain/copy it privately off-server, not write
-a B2 key into it. Actual custody/no-other-writers readiness remains unconfirmed.
+**Both corrected key pairs now authenticate** with exact endpoint/account and
+writerBirja-backup/prod/ restrictions. Owner confirmed actual off-server custody
+of password/keypairs and no other account writers; do not re-ask either.
+The supplied console ReadOnly inventory key includes shareFiles. A narrow
+source compatibility fix now accepts that exact download-delegation capability,
+while rejecting storage/account mutations and blocking download-authorization
+API calls. RED3280a6c/GREEN3804ec6; independent review851bafe0active findings.
+Full25backup/4safety/lint/format and four new exact-artifact replays passed.
 
-Existing screenshot caps accepted: $0/10GBstorage, $0/1GBdaydownload,
-2500/dayeachClassB/C. No card/cap edit/bucket recreation or approval re-ask.
-Protected JSON/controls inactive, timer absent. Exact destination and09scope
-persist. Details and private sanitized diagnostic paths in LIVE-RECOVERY.
+**Supplemental exact-artifact install decision pending:** new archive
+548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118,
+152156160bytes, preserved candidate-b2-readonly with checksum/inventory/verifier.
+Only helper and embedded checksum differ from installed83f4f515...; every other
+payload/image/tool is byte-identical. Supplied recovery67.437s/roles31.076s/
+TLS51.252s/actualoldrollback102.176s pass on samebytes;3fixedprojects0resources.
+See09-READONLY-EVIDENCE/REVIEW. Do not mutate installed83... in place or claim
+new548... approved/installed before its displayed supplemental decision.
+Existing named09backup/restore/timer approval persists; only checksum changes.
 
-Once files/controls are ready, validate opaquely, measure actual inventory and
-source aggregate size, set conservative limits and protected JSON, then run
-approved exact-repository backup/exact retrieval/fixed isolated restore through
-installed entrypoints only. Enable timer only after full restore succeeds;
-complete09 only after genuine calendar trigger and remote snapshot evidence.
-No hours-long blocking wait. Preserve old point until verified replacement;
-unknown budget/headroom/controls stops remote work, no paid use.
+Owner screenshot caps remain $0/10GBstorage/$0/1GBdaydownload/2500dayClassB/C;
+no card, cap edit, bucket recreation or new master key needed. Approved read-only
+source size preflight: unchangedv0.3.1, PG18/revision0007,8574655bytes database.
+Proposed32MiBstage/600sdeadline/64MiBdownload/64native requests peroperation.
+These are local ceilings, not claimed provider remaining allowance. On approved
+replacement install, verify all payloads/current/launchers and same restic
+binary link; then fresh actual provider inventory/controls, protected JSON and
+already approved exact backup/retrieve/fixed isolated restore. Only after real
+restore passes enable03UTC+15min timer and observe genuine calendar evidence.
+No B2upload/realbackup/restore/timer yet, no apprestart/deployment/publication.
 
 Plan08 remains complete: five fresh raw0HIGH/0CRITICAL, backend616/frontend264,
 critical100%, actual browser10pass/1expectedskip, native/build/audits/ops,
@@ -175,8 +178,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-08T10:33:37Z
-Stopped at: Plan09 approved/tools installed; awaiting private B2 key/control setup
+Last session: 2026-11-09T07:11:00Z
+Stopped at: Plan09 replacement548bc494 tested; supplemental exact install decision pending
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
@@ -367,3 +370,11 @@ no bucket inventory/upload. Writer ID+secret must match samecreationresult.
 Inventory shareFiles permission fromUIReadOnly conflicts with installed guard;
 full permission acceptance pending, no workaround/sourcechange. LIVE-RECOVERY
 records exact sanitized reports; remainingcustody/exclusivewriters pending.
+
+### ReadOnly compatibility closeout —2026-11-09
+
+Corrected pairsauthenticate; custody/exclusivewriters ownerconfirmed. Narrow
+helperfix3804ec6 reviewedclean851bafe;25backup4safetyand all4exactnewarchive
+replays pass. Packet548bc494... prepared; existing83...stillinstalled. Await
+supplementalexactchecksum install decision, not renewed09scope. Evidencefile
+09-READONLY-EVIDENCE. No providerwrites/timer/appchange,10/15unchanged.

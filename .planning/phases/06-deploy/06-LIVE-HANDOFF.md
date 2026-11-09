@@ -1,11 +1,42 @@
 ---
 phase: 06-deploy
-prepared: 2026-11-08
-status: approved-installed-awaiting-private-setup
+prepared: 2026-11-09
+status: reviewed-replacement-awaiting-exact-install-decision
 execution_authorized: true
+replacement_install_authorized: false
 ---
 
 # Phase06 live handoff
+
+## Current supplemental decision —2026-11-09
+
+The original83f4f515... release described below is approved and installed.
+Both restricted keys now authenticate; off-server custody/nootherwriters are
+ownerconfirmed. Standard ReadOnly compatibility fix3804ec6 passed focused
+independentreview0findings and25backup/4safety plus all four new exact-artifact
+replays. No app/image/dependency/role/TLS change; only inventoryhelper and
+embeddedchecksum payload differ. Existing named09backup/restore/timer authority
+persists; the supplemental decision concerns installing these new executable bytes.
+
+Replacement SHA256:
+`548bc494e81dbc719d6db0d0c809c49c018bde5c202d5493d73843870c442118`
+
+Preserved packet `.local/phase-06-handoff/candidate-b2-readonly/`,152156160bytes,
+separatechecksum/inventory/trustedverifier; exact bindings and commands in
+`06-09-READONLY-EVIDENCE.md`. Restore67.437s/roles31.076s/TLS51.252s/actualold
+rollback102.176s pass on identicalbytes;3fixedprojects0resources.
+
+Proposed installation uses the trusted verifier/immutable installer on DE189274,
+checks payloads/launchers, changes recovery/current to releases/<newSHA> and
+atomically points /usr/local/bin/restic at the same signed binary in that root.
+Original83...release remains available. No in-place edit or app restart.
+After approval, continue already approved exactB2 inventory/backup/isolatedrestore
+and timer-after-success flow. Current actualsource check remainsv0.3.1/PG18/
+0007,8574655bytes; proposed32MiBstage/600s/64MiBdownload/64nativecalls.
+No newB2upload/realbackup/restore/timeractivation yet. Supplemental replacement
+install approval is pending; do not treat original83...approval as this548...decision.
+
+## Original Plan09 installation and authority — retained record
 
 The owner explicitly approved the concrete Plan09 backup setup and verification
 on DE189274 with the exact archive below. Recovery tools are installed; private
