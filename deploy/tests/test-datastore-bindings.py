@@ -320,6 +320,29 @@ class Bindings(unittest.TestCase):
                 with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                     self.m.check_running(self.binding)
                 rows["postgres"] = saved
+            # Docker29 containerd records the index in container.Image, while
+            # platform image inspect and this actual descriptor name its child.
+            for service in rows:
+                rows[service]["Image"] = self.m.images()[service].split("@", 1)[1]
+                rows[service]["ImageManifestDescriptor"] = {
+                    "digest": images[service],
+                    "platform": {"architecture": "amd64", "os": "linux"},
+                }
+            self.m.check_running(self.binding)
+            for mutation in ["missing", "digest", "architecture", "os", "index"]:
+                saved = copy.deepcopy(rows["postgres"])
+                descriptor = rows["postgres"]["ImageManifestDescriptor"]
+                if mutation == "missing":
+                    rows["postgres"]["ImageManifestDescriptor"] = None
+                elif mutation == "digest":
+                    descriptor["digest"] = "sha256:" + "3" * 64
+                elif mutation in {"architecture", "os"}:
+                    descriptor["platform"][mutation] = "unknown"
+                else:
+                    rows["postgres"]["Image"] = "sha256:" + "3" * 64
+                with self.subTest(descriptor=mutation), self.assertRaises(ValueError):
+                    self.m.check_running(self.binding)
+                rows["postgres"] = saved
         with (
             patch.object(self.m, "command", return_value=b"one\ntwo\n"),
             self.assertRaises(ValueError),
