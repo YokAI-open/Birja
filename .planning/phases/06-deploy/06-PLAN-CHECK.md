@@ -15,9 +15,9 @@ initial_warnings: 3
 
 # VERIFICATION PASSED — Revision 2
 
-**Phase:** 6 — Deploy  
-**Plans checked:** 13 / 30 tasks / 13 serial waves  
-**Active issues:** 0 BLOCKERs, 0 WARNINGs, 0 info  
+**Phase:** 6 — Deploy
+**Plans checked:** 13 / 30 tasks / 13 serial waves
+**Active issues:** 0 BLOCKERs, 0 WARNINGs, 0 info
 **Status:** All planning checks passed; B3 and the initial 2 BLOCKERs / 3 WARNINGs are resolved.
 
 Focused independent static recheck of the final-artifact producer/consumer
@@ -93,9 +93,9 @@ historical, superseded by the Revision 2 assessment above.
 
 # ISSUES FOUND — Revision 1
 
-**Phase:** 6 — Deploy  
-**Plans checked:** 13 / 30 tasks / 13 serial waves  
-**Active issues:** 1 BLOCKER, 0 WARNINGs, 0 info  
+**Phase:** 6 — Deploy
+**Plans checked:** 13 / 30 tasks / 13 serial waves
+**Active issues:** 1 BLOCKER, 0 WARNINGs, 0 info
 **Initial findings:** 2 BLOCKERs and 3 WARNINGs, all resolved below.
 
 Independent static recheck. All 13 fresh `gsd-sdk query verify.plan-structure`
@@ -218,8 +218,8 @@ Revision1 assessment above.
 
 # ISSUES FOUND
 
-**Phase:** 6 — Deploy  
-**Plans checked:** 13 / 30 tasks / 13 serial waves  
+**Phase:** 6 — Deploy
+**Plans checked:** 13 / 30 tasks / 13 serial waves
 **Issues:** 2 BLOCKERs, 3 WARNINGs, 0 info
 
 Static planning review only. No application/test execution, service start,

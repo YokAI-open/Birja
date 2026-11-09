@@ -83,4 +83,3 @@ Existing deferred product features, managed infrastructure/Terraform, continuous
 1. False recovery proof: retrieve exact remote snapshot and compare private same-snapshot state; deliberate corruption must fail.
 2. Unsafe downgrade/role rollout: prove populated PG18 grants + real old-image TLS adapter before live changes; reject unsupported refs.
 3. Approval or evidence leakage: per-boundary current authority; no historical approval inheritance or manual-run nightly substitute.
-

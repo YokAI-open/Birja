@@ -89,10 +89,11 @@ source/config/tool-bundle binding; temporary clone/staging is gone. Source
 remains v0.3.1/revision0007 and all four original production IDs are unchanged.
 After restore, the verified nightly timer was enabled; first actual trigger is
 2026-11-10T03:11:32Z. Genuine calendar-run proof is still pending; no09SUMMARY or
-DEPL-02 completion yet. No extra key/custody/installation approval is needed.
+DEPL-02 completion yet. Owner explicitly deferred this observation to proceed
+with10review/publication work meanwhile. No extra key/custody/installation approval is needed.
 Actual current-head CI, release, datastore/role/TLS rollout and Gmail/Outlook
 acceptance remain separate pending boundaries. Phase6 stays10/15; DEPL-01/02
-and whole phase remain open. Existing no-push/no-pushquestion preference persists.
+and whole phase remain open. Publication still needs the explicit10push/PR choice.
 See06-LIVE-RECOVERY/HANDOFF and STATE for current proof and next action.
 
 ## Constraints

@@ -679,3 +679,21 @@ All actions stayed within named09authority and previously approved rolling
 replacement policy (latest-only instruction explicitly superseded disabled
 pruning). No unrelated snapshot/provider/production deletion was performed.
 Keep Plan09 pending for actual calendar evidence; no new owner input needed.
+
+
+## Owner sequencing update —2026-11-09
+
+Owner explicitly said “let's not wait for it, will check it later”. Proceed
+with Plan10 review/publication preparation while the first genuine scheduled
+backup observation remains deferred. The real encrypted backup, exact isolated
+restore/private invariants and installed timer are already proven. Keep09 and
+DEPL-02 pending; do not fabricate nightly success or create a completed09SUMMARY.
+This instruction changes sequencing only. Actual CI, publication approval,
+merge/release/deployment approval, fresh recovery gates before rollout, and
+final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
+This supersedes the requirement to wait for the first night before preparing10.
+
+Prepared local review package only; user has not selected push/PR/merge/release
+or deployment. Earlier no-push/no-pushquestion preference applies to the prior
+local-only work; the requested forward work now reaches10's explicit publication
+checkpoint after concrete preparation. No remote write is inferred from deferral.

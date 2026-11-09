@@ -368,7 +368,7 @@ Plans:
 
 - [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
 
-**Wave 12** *(blocked on Wave 11 completion)*
+**Wave 12** *(owner permits proceeding while09calendar observation is deferred; actual backup/restore passed)*
 
 - [ ] 06-10-PLAN.md — Review feature push, actual CI and integration choices
 

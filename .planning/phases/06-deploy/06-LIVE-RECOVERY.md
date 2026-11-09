@@ -10,6 +10,18 @@ calendar_trigger_verified: false
 
 # Plan09 recovery installation and remaining setup
 
+## Owner sequencing update —2026-11-09
+
+Owner explicitly said “let's not wait for it, will check it later”. Proceed
+with Plan10 review/publication preparation while the first genuine scheduled
+backup observation remains deferred. The real encrypted backup, exact isolated
+restore/private invariants and installed timer are already proven. Keep09 and
+DEPL-02 pending; do not fabricate nightly success or create a completed09SUMMARY.
+This instruction changes sequencing only. Actual CI, publication approval,
+merge/release/deployment approval, fresh recovery gates before rollout, and
+final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
+This supersedes the requirement to wait for the first night before preparing10.
+
 ## Current authoritative observation —2026-11-09
 
 Owner approved exactd5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401 replacement installation on DE189274.

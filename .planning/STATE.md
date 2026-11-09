@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan09 real encrypted B2 backup and isolated restore passed; timer enabled; first actual calendar run pending
-last_updated: "2026-11-09T07:50:09Z"
-last_activity: 2026-11-09 -- Real B2 backup/restore verified and nightly timer enabled
+stopped_at: Owner deferred first nightly observation; Plan10 review prepared pending publication choice
+last_updated: "2026-11-09T08:01:06Z"
+last_activity: 2026-11-09 -- Owner deferred timer observation and continued to feature review
 progress:
   total_phases: 7
   completed_phases: 6
@@ -26,13 +26,30 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 09 task02, wave11 of15 — private credential/setup checkpoint
-Status: Actual backup/restore passed; timer enabled; first scheduled run due2026-11-10T03:11:32Z
+Plan: 10 task01 review preparation;09 actual calendar observation deferred by owner
+Status: Concrete feature PR package prepared; publication choice pending;09 remains open
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
 
 ## Immediate remaining work
+
+## Owner sequencing update —2026-11-09
+
+Owner explicitly said “let's not wait for it, will check it later”. Proceed
+with Plan10 review/publication preparation while the first genuine scheduled
+backup observation remains deferred. The real encrypted backup, exact isolated
+restore/private invariants and installed timer are already proven. Keep09 and
+DEPL-02 pending; do not fabricate nightly success or create a completed09SUMMARY.
+This instruction changes sequencing only. Actual CI, publication approval,
+merge/release/deployment approval, fresh recovery gates before rollout, and
+final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
+This supersedes the requirement to wait for the first night before preparing10.
+
+Current action: Plan10 feature review package and explicit publication choice;
+see06-RELEASE-CHECKPOINT. Existing no-push preference is not push authority;
+request the concrete10decision only after preparation, per CLAUDE.md.
+
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -54,7 +71,7 @@ Detailed approved SHA/UTC/ID/results in06-LIVE-RECOVERY and ignored evidence.
 After real restore, both exact units passed systemd-analyze verify and were
 installed; only nightly timer enabled. Active/waiting,03UTC+up to15min jitter,
 next actual trigger2026-11-10T03:11:32Z. LastTrigger empty; service never started
-under systemd yet. **Resume after that real calendar activation:** correlate
+under systemd yet. **Deferred follow-up after the real calendar activation:** correlate
 LastTrigger/service invocation/start/exit with a new completed remote snapshot
 and validate installed status/remote integrity. Never count a manual service run
 as nightly proof; do not block tools overnight. Owner's daily status checking
@@ -63,9 +80,9 @@ input is required for the scheduled run. On failure, preserve old snapshot and
 record exact status; no source/image/app retest without changed need.
 
 Phase6 remains10/15, overall64/69.09SUMMARY/DEPL-02 remain pending solely for
-calendar evidence; then10's distinct actualCI/publication checkpoint follows.
+calendar evidence; owner permits10's distinct actualCI/publication work meanwhile.
 DEPL-01/release/live role/TLS/datastore rollout/friend gates remain pending.
-Existing no-push/no-pushquestion preference persists; no private record inspection,
+Publication still requires an explicit10choice; no private record inspection,
 realOTP/email/trade, role/TLS/schema/engine/volume transition or app operation
 is authorized by09. Do not reopen completed08 or add remediation plans.
 
@@ -156,8 +173,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T07:50:09Z
-Stopped at: Plan09 real backup/restore passed; first timer run due2026-11-10T03:11:32Z
+Last session: 2026-11-09T08:01:06Z
+Stopped at: Plan10 review package ready; exact publication choice pending;09 timer observation deferred
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30

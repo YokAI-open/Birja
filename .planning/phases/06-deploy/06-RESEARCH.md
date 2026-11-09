@@ -1,7 +1,7 @@
 # Phase 6: Deploy — Research
 
-**Researched:** 2026-10-30  
-**Domain:** Existing Compose deployment, PostgreSQL privilege/TLS transition, off-server backup and recovery  
+**Researched:** 2026-10-30
+**Domain:** Existing Compose deployment, PostgreSQL privilege/TLS transition, off-server backup and recovery
 **Confidence:** HIGH for repository findings and documented APIs; MEDIUM for the proposed operational design until isolated integration tests and owner decisions are complete.
 
 ## User Constraints
