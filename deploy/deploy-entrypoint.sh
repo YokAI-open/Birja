@@ -115,6 +115,10 @@ def install(source, args):
             dest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             shutil.copyfile(original, dest)
             dest.chmod(0o500 if name.endswith('.sh') else 0o400)
+        # PostgreSQL70 reads this public policy through a directory bind mount.
+        # Keep it root-owned and immutable, while allowing the service to read.
+        (stage/'deploy/db').chmod(0o555)
+        (stage/'deploy/db/pg_hba.conf').chmod(0o444)
         manifest = {'profile':'retained-deploy-v1','tested_source':tested,'files':{n:digest(stage/n) for n in sorted(names)}}
         (stage/'MANIFEST.json').write_text(json.dumps(manifest, sort_keys=True, separators=(',',':')))
         (stage/'MANIFEST.json').chmod(0o400)
