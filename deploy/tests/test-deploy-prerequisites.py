@@ -976,6 +976,19 @@ class Fixtures(unittest.TestCase):
         )
         ops = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ops)
+        with patch.object(ops.r, "call", return_value=b"source") as source:
+            self.assertEqual(ops.source_git("rev-parse", "HEAD"), b"source")
+            source.assert_called_once_with(
+                [
+                    "git",
+                    "-c",
+                    "safe.directory=" + str(ops.ROOT),
+                    "-C",
+                    str(ops.ROOT),
+                    "rev-parse",
+                    "HEAD",
+                ]
+            )
         with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
             root = Path(tmp)
             (root / "state").mkdir(mode=0o700)

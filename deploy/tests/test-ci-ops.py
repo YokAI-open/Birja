@@ -107,6 +107,16 @@ class CI(unittest.TestCase):
 
     def test_ops_runs_real_serial_producers_with_verified_tool(self):
         ops = jobs().get("ops", "")
+        self.assertIn("sudo -- python3 deploy/tests/test-deploy-prerequisites.py", ops)
+        for arguments in [
+            "test-db-operations.sh --image-transition",
+            "test-db-operations.sh --all",
+            "test-rollback-db-security.sh",
+        ]:
+            self.assertIn("sudo -- bash deploy/tests/" + arguments, ops)
+        self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
+        for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
+            self.assertNotIn(forbidden, ops)
         self.assertIn("timeout-minutes: 30", ops)
         self.assertNotIn("secrets.", ops)
         self.assertIn("fetch-depth: 0", ops)
