@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Local release0.4.0 versions524080f validated and independently reviewed;11-02 publication choice pending
-last_updated: "2026-11-09T13:02:00Z"
-last_activity: 2026-11-09 -- Local release0.4.0 metadata/lockedchecks/backup/safety/build passed; review0findings
+stopped_at: Ownerapproved localclonebinding/TLSstartup correction; prepare bounded contract then tests/review
+last_updated: "2026-11-09T13:26:17Z"
+last_activity: 2026-11-09 -- ReleaseCIgreen; browserrerunclean; independentrolloutreadiness found missingclonebinding
 progress:
   total_phases: 7
   completed_phases: 6
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 11 task02 releasepush/mainPR checkpoint;09 calendar observation owner-deferred
-Status: Localrelease0.4.0 prepared and independently reviewed; exactpublicationchoice pending
+Plan: 11 task03 releaseCIpassed/readinessdisposition;09 calendar observation owner-deferred
+Status: Ownerapproved localrolloutfix; PR27 exact166 stayspublishedgreen; no updatedpush/liveauthority
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 94%
@@ -46,18 +46,20 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action:06-11-02 exact releasebranch push/mainPR decision.
-PR26 merged5ebf62b after approvedexactgreenhead recheck. release-0.4.0 from
-updateddevelop includesPhase5/6. Carriedcloseout0e0a6eb; version524080f changes
-only5versionvalues in4files. All74backend/638frontend dependency/artifact
-records unchanged. Local7CI/25backup/4safety/lockeduv/frontendlinttypesformat/
-build pass; independentLOCAL-REVIEW0/0 independentlychecks metadata/ancestry/
-lock.11-01 complete.11-02 needs exactthreecommit publicationapproval after
-planningcheckpointcommit. No releaseupstream/push/mainPR or currentreleaseCI.
-Preparedtitle/body ignoredprivate; proposeorigin/release-0.4.0 -> mainPR.
-No release/mainmerge/tag/backmerge/deploy authority. Beforelaterrollout recheck
-actual recoveryfreshness; firstnight proof remainsowner-deferred.
-Phase11/15 and65/69=94%;09/11SUMMARY andDEPLwholephasecompletion remainpending.
+Current action: prepare/test/review localrolloutfix.
+Owner selected “Prepare local rollout fix” for confirmedCR-01protectedpersistent
+clonevolumerouting andTLSstartupprerequisites. Useboundedlocalcontract with
+existingplan11-03/12readiness; no newplan/counterreset. Preserveoriginalvolumes,
+externalexistingcandidates, trustedpersistentroutingacrossdeploy/rollback,
+verifiedsolecandidateexecidentity, TLS/HBAbeforePGstartup, kernelheldlock and
+independentinstalledrecoveryunchanged. Meaningfulsyntheticnegatives/cutover/
+rollback plusindependentreview required; no gatewaivers.
+
+PR27remains16623a8 actualCI42622430042 allsixgreen; targetedbrowserattempt2
+10pass/1expectedskip/0retries; initialhealthflake retained. Localfixauthorization
+doesnotpermit updatedreleasepush/mainmerge/tag/backmerge/privateVDS/provider/
+service/volume/role/TLSproductionoperation orarchiveinstall. Prepareconcrete
+reviewedcandidate before newpushchoice. Phase11/15,65/69=94%;09nightlydeferred.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -181,8 +183,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T13:02:00Z
-Stopped at: Localrelease0.4.0 validated/reviewed;11-02 exactpush/mainPR approval pending
+Last session: 2026-11-09T13:20:46Z
+Stopped at: PR27exact166 allCIgreen; localclonebinding/startupfix versuspublish-onlydecision pending
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
