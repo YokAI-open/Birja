@@ -322,9 +322,9 @@ class Bindings(unittest.TestCase):
                 rows["postgres"] = saved
             # Docker29 containerd records the index in container.Image, while
             # platform image inspect and this actual descriptor name its child.
-            for service in rows:
-                rows[service]["Image"] = self.m.images()[service].split("@", 1)[1]
-                rows[service]["ImageManifestDescriptor"] = {
+            for service, row in rows.items():
+                row["Image"] = self.m.images()[service].split("@", 1)[1]
+                row["ImageManifestDescriptor"] = {
                     "digest": images[service],
                     "platform": {"architecture": "amd64", "os": "linux"},
                 }

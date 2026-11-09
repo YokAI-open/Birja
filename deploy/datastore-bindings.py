@@ -205,7 +205,7 @@ def write_overlay(binding):
 
 
 def check_running(binding):
-    projection = '{"Id":{{json .Id}},"Image":{{json .Image}},"Platform":{{json .Platform}},"State":{"Running":{{json .State.Running}}},"Config":{"User":{{json .Config.User}},"Labels":{{json .Config.Labels}}},"HostConfig":{"PortBindings":{{json .HostConfig.PortBindings}},"Privileged":{{json .HostConfig.Privileged}}},"Mounts":{{json .Mounts}},"NetworkSettings":{"Networks":{{json .NetworkSettings.Networks}}}}'
+    projection = '{"Id":{{json .Id}},"Image":{{json .Image}},"ImageManifestDescriptor":{{json .ImageManifestDescriptor}},"Platform":{{json .Platform}},"State":{"Running":{{json .State.Running}}},"Config":{"User":{{json .Config.User}},"Labels":{{json .Config.Labels}}},"HostConfig":{"PortBindings":{{json .HostConfig.PortBindings}},"Privileged":{{json .HostConfig.Privileged}}},"Mounts":{{json .Mounts}},"NetworkSettings":{"Networks":{{json .NetworkSettings.Networks}}}}'
     for service, logical, destination, user in [
         ("postgres", "pgdata", "/var/lib/postgresql", "70:70"),
         ("redis", "redisdata", "/data", "65532"),
@@ -253,7 +253,16 @@ def check_running(binding):
             and approved[0]["Os"] == "linux"
             and approved[0]["Architecture"] == "amd64"
         )
-        require(row["Image"] == approved[0]["Id"] and row["Platform"] == "linux")
+        if row["Image"] != approved[0]["Id"]:
+            descriptor = row.get("ImageManifestDescriptor")
+            require(row["Image"] == images()[service].split("@", 1)[1])
+            require(
+                isinstance(descriptor, dict)
+                and descriptor.get("digest") == approved[0]["Id"]
+                and descriptor.get("platform")
+                == {"architecture": "amd64", "os": "linux"}
+            )
+        require(row["Platform"] == "linux")
         require(
             row["Config"]["User"] == user and row["HostConfig"]["Privileged"] is False
         )
