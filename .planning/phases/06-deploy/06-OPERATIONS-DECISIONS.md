@@ -697,3 +697,44 @@ Prepared local review package only; user has not selected push/PR/merge/release
 or deployment. Earlier no-push/no-pushquestion preference applies to the prior
 local-only work; the requested forward work now reaches10's explicit publication
 checkpoint after concrete preparation. No remote write is inferred from deferral.
+
+
+## Exact feature push and PR authorized/executed —2026-11-09
+
+Owner chose “Push and open PR” for exactc085a766a056b017fce1d9d6e2f737541867ae79,
+feature/phase-06-deploy,112local commits, targetdevelop. Nonforce feature push
+and prepared PR creation both exited0. PR26/head verified; actual CI42583320799
+running. No integration/version/release/deployment authority is inferred. New
+pushed source commits require an explicit scope-consistent choice; checkpoint
+bookkeeping stays local. Nightly observation remains deferred, not passed.
+
+
+## Actual CI and corrective validation —2026-11-09
+
+CI42583320799 on approved/pushedc085a766 completed FAILURE. Backend616 tests/
+99.80%overall/100%critical, frontend264 and browser10passes/1expectedproduction
+CSPskip succeeded. Actual trade.spec and complete portfolio-history buy/sell
+flow executed. Image/ops/ci-pass failed; no green aggregate claim.
+
+All5original image logs show mkdir/cache/db permission denied and empty reports,
+not vulnerability findings. Ops lacked hostuv/locked dependencies required by
+test-db-config.sh. REDc5fc244/GREEN7d5d8c2 adds the established setup-uv and
+uvpythoninstall/uvsync--locked to ops, and effectiveUID:GID to scanner Docker
+runs. Four source/test files,39added lines,11implementation lines. Private
+0700cache/0600input and all readonly/capdrop/no-new-privileges/pin/rawseverity
+checks remain intact. No suppression or image/application changes.
+
+Independent06-10-CI-FIX-REVIEW reports0BLOCKER/0WARNING;5CI/13image tests pass.
+Real nonroot hostUID1001:GID1002 Docker proof reproduces old denial and proves
+corrected private access in0.972s. Existing S102/untouched formatting baseline
+was reproduced and left unchanged; changed source/sections pass focused checks.
+One fresh actual5image scan passed32.416s, every target0HIGH/0CRITICAL,
+DBUpdatedAt2026-11-09T06:57:06.372182267Z/DownloadedAt08:17:06.729314674Z.
+Original CI logs/artifacts and new raw reports remain ignored/private under
+pr-preparation. No recovery archive/replay/install, provider/timer/prod action.
+
+The original publication approval namedc085a766. Prepare the exact corrective
+candidate after the evidence commit, then request its follow-up push/PR-body
+update before publishing. Actual corrective-head GitHub CI remains pending;
+no merge/release/deploy approval.09nightly proof remains owner-deferred and
+10/15plans remain complete. No09/10SUMMARY or DEPL completion.

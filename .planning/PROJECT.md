@@ -91,8 +91,10 @@ After restore, the verified nightly timer was enabled; first actual trigger is
 2026-11-10T03:11:32Z. Genuine calendar-run proof is still pending; no09SUMMARY or
 DEPL-02 completion yet. Owner explicitly deferred this observation to proceed
 with10review/publication work meanwhile. No extra key/custody/installation approval is needed.
-Actual current-head CI, release, datastore/role/TLS rollout and Gmail/Outlook
-acceptance remain separate pending boundaries. Phase6 stays10/15; DEPL-01/02
+PR26 initial actualCI passed backend/frontend/browser but failed scanner-cache
+permissions and missingopsuv. Minimal CI corrections passed independent review,
+focused contracts and all5fresh0HIGH/0CRITICAL scans. Exactfollow-up push/CI is
+pending; release, datastore/role/TLS rollout and Gmail/Outlook remain separate. Phase6 stays10/15; DEPL-01/02
 and whole phase remain open. Publication still needs the explicit10push/PR choice.
 See06-LIVE-RECOVERY/HANDOFF and STATE for current proof and next action.
 

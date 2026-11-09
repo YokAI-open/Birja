@@ -1,12 +1,12 @@
 ---
 phase: 06-deploy
 plan: "10"
-status: local-review-ready-awaiting-publication-choice
+status: initial-ci-failed-reviewed-corrections-tested-followup-push-pending
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
 base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 nightly_observation: owner-deferred-pending
-publication_authorized: false
+publication_authorized: true
 ---
 
 # Feature review and publication checkpoint
@@ -86,3 +86,51 @@ and production rollout retain their own concrete checkpoints; never use prior
 phase approvals. Plan10 has noSUMMARY and Phase6 stays10/15 until its actual
 CI/integration tasks complete. Plan09/DEPL-02 remain pending until real calendar
 proof is checked later; no09SUMMARY created.
+
+
+## Approved publication and current CI —2026-11-09
+
+Owner chose “Push and open PR” for exactc085a766a056b017fce1d9d6e2f737541867ae79,
+112local commits. Push--set-upstream origin feature/phase-06-deploy withoutforce
+exited0. Prepared PR creation exited0; PR26 targetsdevelop:
+https://github.com/YokAI-open/Birja/pull/26.
+Read-back PR head matches the approved SHA. Actual pull_request CI42583320799
+created2026-11-09T08:04:16Z is running:
+https://github.com/YokAI-open/Birja/actions/runs/42583320799.
+Backend/frontend/image/e2e/ops are in progress; no green result claimed yet.
+Publication evidence and exact live job observations are private at ignored
+pr-preparation/publication.json, ci-initial.json and ci-current.json.
+These local checkpoint edits are not included in the already approved/pushed
+head. No new source push, merge, release or deployment is authorized. The first
+scheduled backup observation remains deferred by owner.
+
+
+## Actual CI and corrective validation —2026-11-09
+
+CI42583320799 on approved/pushedc085a766 completed FAILURE. Backend616 tests/
+99.80%overall/100%critical, frontend264 and browser10passes/1expectedproduction
+CSPskip succeeded. Actual trade.spec and complete portfolio-history buy/sell
+flow executed. Image/ops/ci-pass failed; no green aggregate claim.
+
+All5original image logs show mkdir/cache/db permission denied and empty reports,
+not vulnerability findings. Ops lacked hostuv/locked dependencies required by
+test-db-config.sh. REDc5fc244/GREEN7d5d8c2 adds the established setup-uv and
+uvpythoninstall/uvsync--locked to ops, and effectiveUID:GID to scanner Docker
+runs. Four source/test files,39added lines,11implementation lines. Private
+0700cache/0600input and all readonly/capdrop/no-new-privileges/pin/rawseverity
+checks remain intact. No suppression or image/application changes.
+
+Independent06-10-CI-FIX-REVIEW reports0BLOCKER/0WARNING;5CI/13image tests pass.
+Real nonroot hostUID1001:GID1002 Docker proof reproduces old denial and proves
+corrected private access in0.972s. Existing S102/untouched formatting baseline
+was reproduced and left unchanged; changed source/sections pass focused checks.
+One fresh actual5image scan passed32.416s, every target0HIGH/0CRITICAL,
+DBUpdatedAt2026-11-09T06:57:06.372182267Z/DownloadedAt08:17:06.729314674Z.
+Original CI logs/artifacts and new raw reports remain ignored/private under
+pr-preparation. No recovery archive/replay/install, provider/timer/prod action.
+
+The original publication approval namedc085a766. Prepare the exact corrective
+candidate after the evidence commit, then request its follow-up push/PR-body
+update before publishing. Actual corrective-head GitHub CI remains pending;
+no merge/release/deploy approval.09nightly proof remains owner-deferred and
+10/15plans remain complete. No09/10SUMMARY or DEPL completion.

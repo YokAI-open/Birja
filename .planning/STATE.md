@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Owner deferred first nightly observation; Plan10 review prepared pending publication choice
-last_updated: "2026-11-09T08:01:06Z"
-last_activity: 2026-11-09 -- Owner deferred timer observation and continued to feature review
+stopped_at: Plan10 PR26 CI failed two runner checks; reviewed tested corrections ready for follow-up push choice
+last_updated: "2026-11-09T08:20:00Z"
+last_activity: 2026-11-09 -- CI fixes reviewed; real nonroot proof and five fresh image scans pass
 progress:
   total_phases: 7
   completed_phases: 6
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 10 task01 review preparation;09 actual calendar observation deferred by owner
-Status: Concrete feature PR package prepared; publication choice pending;09 remains open
+Plan: 10 task02 actual CI;09 actual calendar observation deferred by owner
+Status: PR26 initial CI failed image/ops setup; corrective7d5d8c2 reviewed/tested; follow-up push approval pending
 Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
 
 Progress: [█████████░] 93% of planned plans executed (64/69); Phase6:10/15 plans complete.
@@ -46,10 +46,15 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: Plan10 feature review package and explicit publication choice;
-see06-RELEASE-CHECKPOINT. Existing no-push preference is not push authority;
-request the concrete10decision only after preparation, per CLAUDE.md.
-
+Current action: actualCI42583320799 on approved/pushedc085a766/PR26 failed
+imagecache permissions and missingopsuv setup; backend616/100%critical,
+frontend264,browser10pass1expectedCSPskip allpassed. REDc5fc244/GREEN7d5d8c2
+fixes4CI/scanner/testfiles39lines. Independentreview0BLOCKER/0WARNING;
+5CI/13imagecontracts, realnonrootDockerproof and actualfresh5image scans32.416s
+allpass0HIGH/0CRITICAL. See06-10-CI-FIX-EVIDENCE/REVIEW and RELEASE-CHECKPOINT.
+Exact follow-up publication choice is pending; originalapproval namedc085only.
+No remote corrective push/merge/deploy or archive/install/provider/timer change.
+Nightlyproof remains deferred; Phase6 stays10/15, no09/10SUMMARY/DEPL completion.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -82,7 +87,7 @@ record exact status; no source/image/app retest without changed need.
 Phase6 remains10/15, overall64/69.09SUMMARY/DEPL-02 remain pending solely for
 calendar evidence; owner permits10's distinct actualCI/publication work meanwhile.
 DEPL-01/release/live role/TLS/datastore rollout/friend gates remain pending.
-Publication still requires an explicit10choice; no private record inspection,
+The exact10push/PR choice is complete; merge/deploy remain unapproved; no private record inspection,
 realOTP/email/trade, role/TLS/schema/engine/volume transition or app operation
 is authorized by09. Do not reopen completed08 or add remediation plans.
 
@@ -173,8 +178,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T08:01:06Z
-Stopped at: Plan10 review package ready; exact publication choice pending;09 timer observation deferred
+Last session: 2026-11-09T08:20:00Z
+Stopped at: Plan10 corrective follow-up push pending; initialCI failed;09nightly check deferred
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30
