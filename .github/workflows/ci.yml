@@ -265,7 +265,7 @@ jobs:
           bash deploy/tests/test-app-services.sh
           bash deploy/tests/test-smoke-ports.sh
           bash deploy/tests/test-smoke-trading.sh
-          bash deploy/check-nginx-config.sh
+          sudo -- bash deploy/check-nginx-config.sh
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         run: |
           set -Eeuo pipefail
