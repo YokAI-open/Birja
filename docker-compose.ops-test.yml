@@ -1,0 +1,27 @@
+# Recovery-only definition; source/clone databases share this disposable server.
+name: birja-ops-test
+services:
+  postgres:
+    # Run the entrypoint as70: existing UID999 data must fail, never auto-chown.
+    user: "70:70"
+    image: birja-recovery-postgres:verified-91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4
+    pull_policy: never
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+      POSTGRES_USER: birja_ops_bootstrap
+      POSTGRES_PASSWORD: synthetic-ops-only
+      POSTGRES_DB: birja_ops_test
+    tmpfs:
+      - /var/lib/postgresql:size=268435456,uid=70,gid=70,mode=0750
+    networks: [isolated]
+    mem_limit: 512m
+    cpus: 2
+    pids_limit: 128
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U birja_ops_bootstrap -d birja_ops_test]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+networks:
+  isolated:
+    internal: true

@@ -140,6 +140,7 @@ wheels = [
 name = "birja-backend"
 version = "0.3.1"
 source = { virtual = "." }
+default-groups = ["audit", "dev"]
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
@@ -154,9 +155,11 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+audit = [
+    { name = "pip-audit" },
+]
 dev = [
     { name = "mypy" },
-    { name = "pip-audit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -179,9 +182,9 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+audit = [{ name = "pip-audit", specifier = ">=2.10.1" }]
 dev = [
     { name = "mypy", specifier = "==2.4.0" },
-    { name = "pip-audit", specifier = ">=2.10.1" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-asyncio", specifier = "==1.4.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },

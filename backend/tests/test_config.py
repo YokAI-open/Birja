@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from app.core.config import Settings
+from tests.test_db_connection import create_test_ca
 
 VALID_SECRET = "x" * 40
 JWT = "j" * 40
@@ -144,12 +147,13 @@ def test_prod_rejects_console_backend() -> None:
         _base(env="prod")
 
 
-def test_prod_with_resend_is_valid_and_hides_key() -> None:
+def test_prod_with_resend_is_valid_and_hides_key(tmp_path: Path) -> None:
     s = _base(
         env="prod",
         email_backend="resend",
         resend_api_key=FAKE_KEY,
         email_from=FROM,
+        database_ssl_ca_file=create_test_ca(tmp_path),
     )
     assert s.email_backend == "resend"
     assert FAKE_KEY not in repr(s)

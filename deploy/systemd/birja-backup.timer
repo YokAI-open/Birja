@@ -1,0 +1,12 @@
+[Unit]
+Description=Birja nightly backup at 03:00 UTC with bounded jitter
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+RandomizedDelaySec=15m
+AccuracySec=1m
+Persistent=true
+Unit=birja-backup.service
+
+[Install]
+WantedBy=timers.target

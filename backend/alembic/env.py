@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import app.models  # noqa: F401
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.connection import database_connect_args
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -25,7 +26,8 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -81,6 +83,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=database_connect_args(settings, migration=True),
     )
 
     async with connectable.connect() as connection:

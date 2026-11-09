@@ -120,6 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
+
 **Plans:** 10/10 plans complete
 
 Plans:
@@ -253,6 +254,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
+
 **UI hint**: yes
 
 ### Phase 5: Portfolio and History
@@ -308,7 +310,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 
 ### Phase 6: Deploy
 
-**Goal**: Friends can sign up and trade on the live site, with data safely backed up
+**Goal**: As a friend, I want to sign up and trade on the live site, so that I can practise investing with safely backed-up data.
 **Mode:** mvp
 **Depends on**: Phase 5 (public hosting itself is done in Phase 2.1)
 **Requirements**: DEPL-01, DEPL-02
@@ -319,7 +321,68 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: TBD
+**Plans**: 10/15 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — Choose operating policy/provenance and prepare the feature branch
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 06-02-PLAN.md — Produce consistent encrypted backups and honest status
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 06-03-PLAN.md — Retrieve and prove isolated PostgreSQL 18 restores
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 06-04-PLAN.md — Prove populated ownership transfer and runtime roles
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 06-05-PLAN.md — Verify TLS in backend, scheduler and migration engines
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [x] 06-06-PLAN.md — Rehearse the production role/TLS/migrator stack
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [x] 06-14-PLAN.md — Add validated lock reuse, durable recovery evidence and continuous recovery fixture hooks
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [x] 06-07-PLAN.md — Retain secure deployment and actual v0.3.1 rollback compatibility
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [x] 06-15-PLAN.md — Apply available image fixes and strict CI enforcement; retain vendor blockers
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [x] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
+
+**Wave 12** *(owner permits proceeding while09calendar observation is deferred; actual backup/restore passed)*
+
+- [ ] 06-10-PLAN.md — Review feature push, actual CI and integration choices
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 06-11-PLAN.md — Prepare the selected release and verify release CI
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [ ] 06-13-PLAN.md — Verify Gmail/Outlook friends and all four live criteria
 
 ## Progress
 
@@ -331,4 +394,4 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 0/TBD | Not started | - |
+| 6. Deploy | 10/15 | Executing — local gates passed; live recovery pending | - |

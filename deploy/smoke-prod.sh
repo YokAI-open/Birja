@@ -273,7 +273,12 @@ fi
 # runs (image, env file, compose, imports); the refusal must be the specific
 # validation error, not any failure. Output is matched, never printed.
 settings_run() {
-  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps "$@" backend \
+  local assignments=()
+  while [ "$#" -gt 0 ]; do
+    [ "$1" = -e ] && [ "$#" -ge 2 ] || return 2
+    assignments+=("$2"); shift 2
+  done
+  docker exec "$BACKEND" env "${assignments[@]}" \
     python -c "from app.core.config import Settings; Settings()" 2>&1
 }
 if ! settings_run >/dev/null; then
@@ -424,6 +429,42 @@ else
 fi
 prices_requires_auth
 trading_requires_auth
+
+# Own-session checks print no URL, username, role attributes or rows. The old
+# supported image uses the retained verify-full URL and public CA; current
+# images use the shared SSLContext helper.
+for svc in backend scheduler; do
+  cid=$(container "$svc")
+  if [ -n "$cid" ] && docker exec -i "$cid" python - >/dev/null 2>&1 <<'PY'
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+async def check():
+    url = os.environ['DATABASE_URL']
+    try:
+        from app.db.connection import database_connect_args
+    except ModuleNotFoundError:
+        assert url.endswith('?ssl=verify-full')
+        args = {}
+    else:
+        from app.core.config import SchedulerSettings
+        args = database_connect_args(SchedulerSettings())
+    engine = create_async_engine(url, connect_args=args)
+    async with engine.connect() as db:
+        assert (await db.execute(text("SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()"))).scalar_one()
+        assert (await db.execute(text("SELECT NOT (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname=current_user"))).scalar_one()
+        assert not (await db.execute(text("SELECT EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relowner=(SELECT oid FROM pg_roles WHERE rolname=current_user))"))).scalar_one()
+    await engine.dispose()
+asyncio.run(check())
+PY
+  then pass "$svc own session uses TLS and a restricted non-owner role"
+  else fail "$svc database security check failed (diagnostics withheld)"; fi
+done
+if /usr/local/sbin/birja-backup-status >/dev/null 2>&1; then
+  pass "latest backup status is fresh"
+else
+  fail "backup status is missing, failed or stale"
+fi
 
 # 13. Deploy record
 if [ -f "$DEPLOY_LOG" ]; then

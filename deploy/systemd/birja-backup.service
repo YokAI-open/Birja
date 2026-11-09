@@ -1,0 +1,25 @@
+[Unit]
+Description=Birja encrypted nightly backup with fresh inventory
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/birja-backup
+TimeoutStartSec=65m
+TimeoutStopSec=30s
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+CPUQuota=200%
+MemoryMax=768M
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/birja /var/lib/birja/backup /var/lock
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

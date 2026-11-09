@@ -74,10 +74,17 @@ jobs:
 
   image:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
+      - name: Offline image contracts
+        run: |
+          set -Eeuo pipefail
+          mkdir -m 700 image-reports
+          echo '{"ok":false,"stage":"build-not-completed"}' > image-reports/status.json
+          python3 deploy/tests/test-image-contracts.py
+          python3 deploy/tests/test-ci-ops.py
       - name: Build test image from uv.lock
         uses: docker/build-push-action@v7
         with:
@@ -93,13 +100,47 @@ jobs:
         with:
           context: backend
           target: runtime
-          load: false
+          tags: birja-backend-runtime:ci
+          load: true
           push: false
           cache-from: type=gha
+      - name: Build verified Node toolchain
+        uses: docker/build-push-action@v7
+        with:
+          context: frontend
+          target: toolchain
+          load: true
+          push: false
+          tags: birja-node-toolchain:ci
+          cache-from: type=gha
+      - name: Acquire immutable datastore and scanner images
+        run: |
+          set -Eeuo pipefail
+          docker pull --platform linux/amd64 cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4
+          docker pull --platform linux/amd64 cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48
+          docker pull --platform linux/amd64 aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df
       - name: Start test stack
         run: docker compose -f docker-compose.test.yml up -d --wait
       - name: In-image smoke test
         run: docker run --rm --network host birja-backend-test:ci pytest tests/test_smoke.py -q
+      - name: Scan all five actual images
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          python3 deploy/scan-images.py --output image-reports \
+            --runtime "$(docker image inspect birja-backend-runtime:ci --format '{{.Id}}' 2> image-reports/runtime-resolve.log)" \
+            --builder "$(docker image inspect birja-backend-test:ci --format '{{.Id}}' 2> image-reports/builder-resolve.log)" \
+            --postgres cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4 \
+            --redis cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48 \
+            --node "$(docker image inspect birja-node-toolchain:ci --format '{{.Id}}' 2> image-reports/node-resolve.log)"
+      - name: Upload public image evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-reports
+          path: image-reports
+          if-no-files-found: error
+          retention-days: 7
       - name: Stop test stack
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
@@ -169,8 +210,109 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  ops:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Prepare Docker platform API for recovery fixtures
+        run: |
+          set -Eeuo pipefail
+          # Recovery uses /usr/bin/docker and the default socket under a clean root env.
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 120 https://download.docker.com/linux/ubuntu/gpg -o "$RUNNER_TEMP/docker.asc"
+          sudo install -m 0644 "$RUNNER_TEMP/docker.asc" /etc/apt/keyrings/docker.asc
+          printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          docker_version=5:29.2.1-1~ubuntu.24.04~noble
+          sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version"
+          sudo python3 -c '
+          import json
+          from pathlib import Path
+          config = Path("/etc/docker/daemon.json")
+          configuration = json.loads(config.read_text()) if config.exists() else {}
+          configuration.setdefault("features", {})["containerd-snapshotter"] = True
+          config.write_text(json.dumps(configuration) + "\n")
+          '
+          sudo systemctl restart docker
+      - name: Verify recovery image platform capability
+        run: |
+          set -Eeuo pipefail
+          sudo -- /usr/bin/docker version
+          test "$(sudo -- /usr/bin/docker version --format '{{.Client.Version}} {{.Server.Version}}')" = '29.2.1 29.2.1'
+          postgres=$(python3 -c 'import runpy; print(runpy.run_path("deploy/verify-restore.py")["REGISTRY_REF"])')
+          sudo -- /usr/bin/docker pull --platform linux/amd64 "$postgres"
+          sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker image inspect "$postgres" --platform linux/amd64
+          sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 python3 deploy/tests/check-recovery-image.py
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install Python and dependencies
+        working-directory: backend
+        run: |
+          uv python install
+          uv sync --locked
+      - name: Acquire approved restic with signed checksum verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tools=/tmp/birja-test-tools/restic-0.19.1
+          mkdir -p "$tools/gnupg"
+          chmod 700 "$tools" "$tools/gnupg"
+          base=https://github.com/restic/restic/releases/download/v0.19.1
+          for name in restic_0.19.1_linux_amd64.bz2 SHA256SUMS SHA256SUMS.asc; do
+            curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 120 "$base/$name" -o "$tools/$name"
+          done
+          curl --fail --silent --show-error --proto '=https' --max-time 120 https://restic.net/gpg-key-alex.asc -o "$tools/gpg-key-alex.asc"
+          echo 'e4f09134173fdd60ece4454d30e38459d172f3ea9a97b32a37324b4f0515a289  '"$tools/gpg-key-alex.asc" | sha256sum --check --status
+          gpg --homedir "$tools/gnupg" --batch --no-autostart --import "$tools/gpg-key-alex.asc"
+          gpg --homedir "$tools/gnupg" --batch --no-autostart --status-fd 1 --verify "$tools/SHA256SUMS.asc" "$tools/SHA256SUMS" > "$tools/signature-status"
+          grep -Eq '^\[GNUPG:\] VALIDSIG CF8F18F2844575973F79D4E191A6868BD3F7A907 ' "$tools/signature-status"
+          echo 'fb520966ee01d2a3d4219c66762c66efa56300833b6f639f36082b7462f91cb8  '"$tools/SHA256SUMS" | sha256sum --check --status
+          echo '649f3a48d322c3d7a457ef58e2dc4c5094b1f823192cdbac3f092ea23e194d9a  '"$tools/SHA256SUMS.asc" | sha256sum --check --status
+          echo 'f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c  '"$tools/restic_0.19.1_linux_amd64.bz2" | sha256sum --check --status
+          bzcat "$tools/restic_0.19.1_linux_amd64.bz2" > "$tools/restic"
+          echo '20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639  '"$tools/restic" | sha256sum --check --status
+          chmod 700 "$tools/restic"
+          "$tools/restic" version
+      - name: Build locked operations fixture image
+        run: docker build --target test-builder -t birja-backend-test:phase05-07 backend
+      - name: Offline operational contracts
+        run: |
+          set -Eeuo pipefail
+          python3 deploy/tests/test-ci-ops.py
+          bash deploy/tests/test-backup.sh
+          bash deploy/tests/test-restore-safety.sh
+          bash deploy/tests/test-db-config.sh
+          sudo -- python3 deploy/tests/test-deploy-prerequisites.py
+          bash deploy/tests/test-reexec.sh
+          bash deploy/tests/test-rollback-target.sh
+          bash deploy/tests/test-app-services.sh
+          bash deploy/tests/test-smoke-ports.sh
+          bash deploy/tests/test-smoke-trading.sh
+          sudo -- bash deploy/check-nginx-config.sh
+      - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
+        run: |
+          set -Eeuo pipefail
+          sudo -- bash deploy/tests/test-db-operations.sh --image-transition
+          sudo -- bash deploy/tests/test-db-operations.sh --all
+          sudo -- bash deploy/tests/test-rollback-db-security.sh
+      - name: Clean fixed synthetic projects
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          result=0
+          for project in birja-ops-test birja-restore-check; do
+            docker compose -p "$project" --env-file /dev/null -f "$GITHUB_WORKSPACE/docker-compose.ops-test.yml" down --volumes --remove-orphans --timeout 10 || result=1
+          done
+          exit "$result"
+
   ci-pass:
-    needs: [backend, frontend, image, e2e]
+    needs: [backend, frontend, image, e2e, ops]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
