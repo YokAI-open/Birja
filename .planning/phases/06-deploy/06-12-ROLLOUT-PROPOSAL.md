@@ -1,39 +1,36 @@
 # Release 0.4.0 publication and later rollout proposal
 
-Prepared 2026-11-09 from source and recorded evidence only. No command below
-was executed. This document does not grant authority or claim release CI passed.
+Updated 2026-11-10 for the owner-authorized local routing/startup correction.
+Production commands below remain a proposed maintenance sequence requiring
+measured preflight inputs and separate approval.
 
 ## Current release boundary
 
-PR [27](https://github.com/YokAI-open/Birja/pull/27) targets main from
-release-0.4.0 at exact `16623a8638407eeab27c2879f0a9396764a68e89`.
-Actual release CI [42622430042](https://github.com/YokAI-open/Birja/actions/runs/42622430042)
-is being monitored separately by the parent; its result must be recorded before
-publication approval. Prior feature CI is not a substitute. Current authority
-covers release branch push, main PR creation and CI inspection only.
+PR [27](https://github.com/YokAI-open/Birja/pull/27) still publishes
+`16623a8638407eeab27c2879f0a9396764a68e89` from release-0.4.0 into main.
+Its six required jobs passed in actual release CI
+[42622430042](https://github.com/YokAI-open/Birja/actions/runs/42622430042).
+That result covers the published source only. The local retained routing,
+TLS startup and test corrections require a new publication decision and new
+exact-head CI before merge.
 
-The release contains approved Phase 5 and Phase 6 integration. Since the
-reviewed recovery payload, changes are limited to CI/tests, planning and project
-version metadata; no changed recovery payload or new image pin is proposed.
-The independently installed recovery archive remains
+The unchanged independently installed recovery archive is
 `d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401`.
-This is the **recovery** archive identity, not an already installed/approved
-retained deployment bundle identity. The latter must be recorded separately
-from the final selected source and its MANIFEST.json.
+This identifies recovery, not the future retained deployment MANIFEST.
+No app, dependency, image pin, base Compose or recovery CORE changes are
+included in the local correction.
 
-| Separate decision | Concrete scope and prerequisite | Present authority |
+| Separate decision | Required scope and evidence | Present authority |
 |---|---|---|
-| Merge release PR27 | Recheck exact head above, all six required jobs green and independent review; Create a merge commit into main | Not granted |
-| Tag v0.4.0 | Bind the tag to the resulting verified main merge SHA, record tag object and target; present SHA again if owner wants exact resulting-SHA approval | Not granted |
-| Publish GitHub release | Separately review notes/assets and whether a GitHub release is desired; tagging alone is not that publication | Not granted |
-| Release back-merge PR | Propose release-0.4.0 into develop, recheck exact source/target; any additional branch push requires its own scope | Not granted |
-| Back-merge PR merge | Wait for that PR's own exact-head green CI and applicable explicit approval; use a merge commit | Not granted |
-| Production rollout | Requires the missing routing/preflight decisions below, then a distinct concrete approval | Not ready for approval |
+| Updated release push | Reviewed local candidate, publish to release-0.4.0 and refresh PR27; new exact-head CI | Pending |
+| Main PR merge | Exact updated head, six green jobs, Create a merge commit | Pending |
+| Tag / GitHub release | Resulting verified main SHA and reviewed release notes | Pending |
+| Back-merge PR / merge | Release into develop; own exact-head CI and merge approval | Pending |
+| Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
 
-Publication can be approved separately after release CI succeeds. The main
-merge, tag/publication and back-merge do not authorize any live operation.
-The final main SHA and tag do not exist yet; do not fabricate them or accept
-a different release PR head without renewed review.
+The owner authorized preparing and testing the local correction. Existing
+publication approval for 16623a8 does not publish later source changes.
+Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits
 
@@ -56,36 +53,30 @@ The enabled timer was recorded awaiting its first genuine activation on Nov 10
 at 03:11:32Z. Owner explicitly deferred that observation. No scheduled success
 is inferred; Plan09/DEPL-02 remain pending. No timer change is proposed.
 
-## Independent readiness review
+## Local routing and startup correction
 
-06-12-READINESS-REVIEW confirms one rollout blocker (persistent clone-volume
-routing) and one startup-order warning. This remains a non-executable draft.
-Role and installed backup helpers use compose exec, so they need a proven sole
-candidate container/mount identity rather than independent volume selectors.
-The warning is made explicit below: TLS/HBA prerequisites must exist before
-candidate PostgreSQL startup. No implementation or live fix is claimed.
+The original readiness review found missing persistent selected-clone routing
+and TLS/HBA startup ordering. The local correction provides a fixed protected
+`/etc/birja/datastore-bindings.json`, an external-volume-only retained overlay,
+actual sole-container/mount/image/user/network guards, and the limited
+`--start-selected-datastores` entrypoint. Deploy, recreation and old-app rollback
+consume the same selected candidates. Source reviews and test outcomes are in
+06-12-LOCAL-FINAL-REVIEW and 06-12-LOCAL-FIX-EVIDENCE.
 
-## Production blocker: selected-clone routing
+Prepare final retained source, TLS/HBA, role/prod/binding and approved recovery
+material while old datastores remain available with writers stopped. Then take
+a fresh backup/exact isolated restore using unchanged installed tools and the
+actual old live deploy-log SHA. Hold the shared lock without bound-material
+changes through stop/copy/start. First-start admission authenticates the exact
+completed profile through the unchanged recovery gate, then compares actual
+candidate revision before role SQL, migrations or writers. Normal deploy and
+rollback use the actual running revision.
 
-`docker-compose.prod.yml` declares pgdata/redisdata without configurable
-external names. The retained helper fixes its Compose paths and project;
-`deploy-entrypoint.sh` does not accept a caller-selected Compose file/volume
-override. `configure-db.sh` independently uses its retained base Compose too.
-Therefore new clone names cannot presently be substituted through a supported
-retained deployment interface while preserving the untouched originals.
-
-Do not invent a volume-selector flag, rely on COMPOSE_FILE/ambient environment,
-silently patch an immutable bundle, delete/reuse the original volume names, or
-let a later `compose up` reattach originals after manually starting clones.
-The runbook supplies the maintenance policy and synthetic clone rehearsal;
-it does not supply this missing production routing mechanism.
-
-Before requesting production approval, choose and independently review an
-explicit protected volume binding consumed by retained deploy/rollback service
-creation. Prove the sole candidate container and its actual mounts before role
-SQL or installed backup exec operations. A separately specified logical-restore/
-cutover alternative would still need persistent routing and a preserved original. Any implementation/test/artifact
-change is new work requiring its own scope. This proposal makes no such change.
+Production source_compose overrides remain forbidden. Existing recovery_files
+can bind canonical root0400 MANIFEST, root0600 bindings and approved private
+custody/configuration files. Live server key0640 and CA certificate0644 do not
+qualify directly; the TLS checker validates their actual pair/CA/hostname before
+startup. Production measurements and custody coverage remain preflight inputs.
 
 ## Required preflight bindings before a production decision
 
@@ -116,89 +107,52 @@ below require measured, reviewed values before any action. All mutations must
 be serialized under `/var/lock/birja-deploy.lock`, with kernel-validated inherited
 lock descriptors where the supported helper accepts them. Do not disable locks.
 
-1. Revalidate target, immutable recovery installation and independent custody.
-   Use installed `/usr/local/sbin/birja-backup-status`; if recovery is stale or
-   mismatched, obtain/perform the scoped fresh backup and exact retrieval/restore
-   before maintenance. Supported interfaces are `/usr/local/sbin/birja-backup`
-   and `/usr/local/sbin/birja-restore-check --snapshot <exact-64-hex-ID>
-   --approved-clone`. Only fixed isolated birja-restore-check is a restore target;
-   never restore directly over production. Preserve a completed point on failure.
-2. Close admissions and stop **all** writers. For the recorded old production
-   orchestration, the runbook's explicit Compose path/env/project can stop
-   backend and scheduler; confirm no external writers. Then cleanly stop
-   postgres and redis before the physical copies. Record the stopped-source
-   baseline privately and preserve both original volumes plus old pinned images.
-   Do not perform the copy against a running PostgreSQL cluster or active AOF.
-3. Create only the explicitly approved new empty volumes. Reuse the tested
-   filesystem-copy shape: `docker run --rm --network none --read-only` with
-   original mounted `/original,readonly`, candidate mounted `/clone`, and the
-   exact pinned reviewed PostgreSQL image as the filesystem tool. The tested
-   shell operations are `cp -a /original/. /clone/ && chown -R 70:70
-   /clone/18/docker` for PG and `cp -a /original/. /clone/ && chown -R
-   65532:65532 /clone` for Redis. Bind those mount sources only to the measured
-   originals and approved candidates; never recursively chown an original.
-   This is not authorization to run the synthetic fixture against real data.
-4. Before candidate PostgreSQL startup, bind the selected retained helper
-   source and validate/provision its required TLS server/key/HBA mounts under
-   the exact lock/custody gates. If a distinct maintenance bootstrap is needed,
-   specify and independently review it; no ambient plaintext override. This
-   prerequisite cannot be postponed until role SQL in step 6. Actual existing
-   TLS state is unmeasured.
-   Start only candidate datastores through the newly reviewed routing. PG uses
-   the pinned PG18.6/glibc2.44 image as 70:70, with PGDATA at
-   `/var/lib/postgresql/18/docker`. Compare exact private data/schema/session/
-   financial/sequence invariants with the stopped source. Inspect actual used
-   collation drift; rebuild affected indexes with reviewed REINDEX maintenance
-   **before** any `ALTER COLLATION ... REFRESH VERSION` or database collation
-   refresh. The synthetic `REINDEX DATABASE birja_source_test` is not a command
-   for production; select production database/index scope after inspection.
-   Verify locale-sensitive indexed results against sequential results and all
-   index validity flags. Do not merely refresh catalog version strings.
-5. Verify Redis candidate owner 65532, authenticated reload and restart, AOF,
-   noeviction and retained TTL behavior. An unauthenticated request must fail.
-   Do not discard OTP/rate-limit state or insert synthetic keys into production
-   without separately approving that exact check. Both original volumes remain
-   stopped and unchanged after their recorded baseline.
-6. Apply role SQL after collation/index checks, against the **selected
-   candidate** only. Final TLS/HBA startup prerequisites must already have been
-   satisfied before step 4; complete final mount/verification checks here. Existing exact helper interfaces are retained
-   `configure-db.sh --production --inspect`, then `--production --apply
-   --approved-operation populated-role-transition`, and `provision-db-tls.sh
-   --production --create --approved-operation production-db-tls
-   --approved-custody owner-off-server-password-manager` (use renew/check only
-   if actual existing state calls for it). Resolve source routing and custody
-   first. The TLS helper does not restart PostgreSQL. Mount server material
-   only into PostgreSQL, CA only into clients; verify hostname/CA, local HBA and
-   expiry, and owner off-server signing-CA/credential custody before restart.
-7. Select the approved clean source and install the retained deployment bundle
-   with `/srv/birja/deploy/deploy-entrypoint.sh --install --approved-operation
-   install-retained-deploy --tested-source <approved-main-SHA>`. Its precondition
-   is that exact clean `/srv/birja` HEAD; review the source-selection procedure
-   under the shared lock before doing so. Record the resulting deployment
-   MANIFEST identity separately; leave recovery/current at d5fe2059… unchanged.
-   The installer changes managed sparse checkout/launcher routing, not database
-   volume selection; it does not resolve the blocker above.
-8. After config/security/custody transitions, regenerate any recovery binding
-   invalidated by those transitions, using the same installed independent
-   backup/restore tools. Never patch evidence. Require the strict pre-deploy
-   recovery gate to pass for actual current source/revision/configuration.
-   Proposed deploy interface is `DEPLOY_REF=<approved-main-SHA>
-   /usr/local/sbin/birja-deploy`, with that SHA installed as tested_source.
-   The current allowlist accepts main, v0.3.1 or tested_source, **not v0.4.0**;
-   do not propose the latter as DEPLOY_REF without a separately reviewed change.
-9. The retained deploy performs the separate one-shot migrator and 0007→0008,
-   then starts backend and exactly one scheduler and swaps the frontend/nginx.
-   Runtime app/scheduler are non-owner least-privilege roles; the migrator is
-   a separate DDL login. Verify actual role/catalog/pg_stat_ssl booleans and
-   origin/public smoke using `/var/lib/birja/ops/current/deploy/smoke-prod.sh`
-   and its `--public` mode. Do not print rows, credentials or service logs.
-10. Synchronize protected backup JSON release identity to the actually deployed
-    full SHA, preserving the independently retained recovery tool hash. Use
-    the **same** installed birja-backup and birja-restore-check for a fresh
-    post-rollout backup/exact isolated restore. Verify tool identities and
-    socket-based source access still work independently of hardened app logins.
-    Post-rollout recovery failure leaves acceptance pending; neither old proof
-    nor a successful HTTP smoke replaces this evidence.
+1. Revalidate target, unchanged recovery installation, off-server custody,
+   writer inventory and disk/B2 headroom. Under one held operation lock, close
+   admissions and stop all app/external writers while old PG/Redis remain up.
+2. Select the exact approved clean main source and install retained deployment
+   through `deploy-entrypoint.sh --install --approved-operation
+   install-retained-deploy --tested-source <approved-main-SHA>`. Record its
+   MANIFEST separately. Prepare the measured original/candidate binding records
+   for four distinct existing volumes and final prod/role/recovery configuration.
+3. Provision/check final TLS/HBA before any candidate start, using retained
+   `provision-db-tls.sh --production --create --approved-operation
+   production-db-tls --approved-custody owner-off-server-password-manager`
+   (existing material uses its reviewed check/renew procedure). Confirm readable
+   nonsecret retained HBA, protected server key and actual CA/hostname checks.
+4. Verify old sole service/original mount identities read-only. Keep backup
+   release equal to actual old live_sha, include approved final private material,
+   and invoke installed `birja-backup`, then `birja-restore-check --snapshot
+   <exact-64-hex-ID> --approved-clone`. Require full exact restore success after
+   all bound changes. Upload and repository verification precede one-copy
+   rotation; a later isolated-restore failure blocks cutover and acceptance
+   but does not guarantee the previous snapshot remains after rotation.
+5. Cleanly stop old datastores, record private stopped fingerprints, and copy
+   each original read-only into its approved empty candidate. Convert only
+   candidate PG18/docker ownership to70:70 and Redis data to65532:65532.
+   Preserve originals and old images. No running physical copy, original chown,
+   bound-material changes, or converted-data reuse under old libc.
+6. Invoke `/usr/local/sbin/birja-deploy --start-selected-datastores` under the
+   inherited held lock. It starts only PG/Redis after strict recovery/TLS/data
+   admission and verifies actual selected mounts and admitted revision equality.
+   Compare private invariants; inspect collation drift and rebuild approved
+   affected indexes BEFORE refreshing collation versions. Verify indexed versus
+   sequential results and index validity. Confirm Redis AOF/auth/TTL/noeviction.
+   Do not insert synthetic keys in production without separate approval.
+7. Inspect/apply roles through retained `configure-db.sh --production --inspect`
+   and `--production --apply --approved-operation populated-role-transition`.
+   Refresh any invalidated recovery proof using the same installed tools.
+   Normal deploy must pass the strict gate against actual source/revision.
+8. Deploy using `DEPLOY_REF=<approved-main-SHA> /usr/local/sbin/birja-deploy`.
+   The allowlist accepts main, v0.3.1 or tested_source, not v0.4.0. The retained
+   orchestrator runs the separate 0007→0008 migrator before app/scheduler startup.
+   Verify least-privilege roles, actual TLS and origin/public smoke through
+   retained `smoke-prod.sh` and `--public`; print only sanitized results.
+9. Set protected backup release identity to actual deployed SHA and take a fresh
+   backup/exact isolated restore using the same unchanged independent archive.
+   Post-rollout recovery failure leaves acceptance pending. Recheck original
+   fingerprints, selected mounts and immutable retained source. Resume admissions
+   only at the approved maintenance acceptance point.
 
 ## Maintenance duration and undo
 
@@ -228,11 +182,9 @@ restore is an undo method.
 
 ## Scope of this preparation
 
-Only this proposal was written. No live/private/network inspection, replay,
-source edit, branch operation, commit or remote write occurred. Evidence comes
-from 06-12-PLAN, RUNBOOK's retained operations/image-collation/recovery sections,
-current retained deployment/role/TLS code, synthetic transition source and
-06-LIVE-HANDOFF/06-LIVE-RECOVERY records. Parent-owned state and .claude/ remain
-untouched. Release publication can advance through its own approvals after
-actual CI; production approval must wait for the routing gap and measured
-preflight bindings to become concrete.
+Local source, tests, independent reviews and synthetic evidence are tracked
+separately. No production volume/TLS/role/app operation, provider inspection,
+updated release push, merge or tag is included. Plan09's first actual nightly
+observation remains explicitly deferred; no scheduled success is inferred.
+Production approval requires measured preflight bindings and an exact final
+source/MANIFEST/window, even after local proof and new release CI pass.

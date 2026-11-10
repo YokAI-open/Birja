@@ -1,10 +1,10 @@
-# Local rollout fix contract — design only
+# Local rollout fix contract
 
 Scope: existing Plan11 task03 / Plan12 readiness closure, following the owner's
 “Prepare local rollout fix” decision. Address only readiness CR-01 (durable
-selected-clone routing) and WR-01 (TLS/HBA before PG startup). Stop after this
-contract for independent design review. No implementation, new phase/plan,
-counter change, publication or live operation is authorized by this document.
+selected-clone routing) and WR-01 (TLS/HBA before PG startup). Design review passed before implementation;
+subsequent local source and synthetic proof follow this bounded contract.
+No new phase/plan, counter change, publication or live operation is authorized.
 
 Current published PR27 head remains
 `16623a8638407eeab27c2879f0a9396764a68e89`, with all required release CI green.
@@ -101,31 +101,51 @@ stop and demonstrate that requirement before proposing any CORE/archive change.
 
 ## Secure first startup and maintenance order
 
-Fix WR-01 through ordering, not a plaintext bootstrap definition:
+Fix WR-01 through ordering, not a plaintext bootstrap definition. The following
+ordering supersedes the original design's fresh-proof-before-config sequence:
 
-1. Approved future preflight obtains fresh installed backup/exact isolated
-   restore proof and independent custody; validate target and stopped-writer
-   maintenance authority. Preserve originals and their old pinned images.
-2. Under the shared lock, stop writers and cleanly stop old datastores; copy
-   only into separately approved candidates using the previously rehearsed
-   read-only-original copy/ownership operations. No original mutation or
-   automatic engine/data migration belongs in this local fix.
-3. Select/verify the exact retained source first. Prepare protected role
-   password files and prod configuration privately. Invoke that source's
+1. Validate target/custody/maintenance authority. Under the shared held lock,
+   stop application/external writers, keeping old datastores running. Select
+   the exact retained ops source; prepare fixed bindings for already existing
+   distinct candidate volumes and all final protected role/prod/recovery
+   material. Candidates may still be empty: no start/data probe occurs yet.
+2. Invoke that retained source's
    existing `provision-db-tls.sh --production --create --approved-operation
    production-db-tls --approved-custody owner-off-server-password-manager`
    before any candidate PG start (existing state instead requires check/renew
    according to measured evidence). It already supports the held lock and
    does not need a running cluster or perform a service restart.
-4. Verify CA/server key/certificate modes, UID0:GID70 server-key access,
+3. Verify CA/server key/certificate modes, UID0:GID70 server-key access,
    matching/valid trusted pair and hostname, independent CA custody, and exact
    retained HBA bytes/mounts. Use the existing final secure PG definition from
    first start. Missing material, bad modes/HBA or custody stops before start.
-5. The narrow candidate-start path consumes the validated overlay, validates
+4. Verify the sole old PG service/original mount identity read-only immediately
+   before unchanged installed backup exec. Take a fresh exact backup/isolated
+   restore AFTER all bound material changes. Keep c.release equal to the old
+   actual live_sha(deploys.log), not the new checkout. Include the protected
+   binding and canonical root0400 retained MANIFEST in recovery_files, plus
+   approved private custody/role/prod files compatible with private_file.
+   Live server.key0640 and CA certificate0644 do not qualify directly and are
+   not intrinsically hash-bound by that list; the existing TLS check validates
+   their actual pair/CA/hostname before startup. Production does
+   not accept the synthetic-only source_compose override; fixed source exec
+   and immutable retained source review supply that orchestration boundary.
+   Then stop both datastores and copy only into separately approved candidates.
+   Preserve originals/old images, hold the lock continuously, and change no
+   bound config/material between this proof and startup. No automatic copy,
+   chown, reindex or engine migration belongs in this local helper.
+5. First-start admission reads only the protected successful completed-restore
+   profile for the exact latest snapshot and actual old source. The UNCHANGED
+   recovery-gate then independently authenticates source/revision/config/tools,
+   remote snapshot/profile, latest attempts and conservative data age. There
+   is no caller revision/fallback or stale-proof exception. Normal deploy and
+   rollback still read the actual running revision and selected identities.
+   The narrow candidate-start path consumes the validated overlay, validates
    data presence, starts only PG/Redis with final TLS/HBA/noeviction/AOF settings,
    and proves actual mounts/identity. It does **not** call role apply, run
-   migrations or start backend/scheduler; this avoids the existing full-deploy
-   role-inspection precondition during initial maintenance.
+   migrations or start backend/scheduler. After start, require actual candidate
+   revision equality with the just-admitted profile before any role/migration
+   operation or writers; a mismatch stops with candidate services only.
 6. Inspect candidate collations/indexes, perform separately approved affected
    REINDEX before version refresh, and verify private equality/validity. Keep
    configure-db's collation guard intact; then inspect/apply role SQL using
@@ -136,7 +156,7 @@ Fix WR-01 through ordering, not a plaintext bootstrap definition:
    resume. Old-app rollback retains selected candidates and TLS/least privilege;
    never downgrade 0008 or put converted data under old libc.
 
-These new CLI modes are proposed, not implemented or authorized for live use.
+These CLI modes are implemented locally; production use requires separate approval.
 Fixed-path relocation exists only in synthetic tests; production has no
 arbitrary project/Compose/source/target arguments.
 
@@ -206,8 +226,10 @@ future authorized preflight inputs, not facts supplied by this local work.
 
 ## Review checkpoint
 
-Design only; no implementation/tests/replay/commit performed. Root independently
-reviews the fixed JSON/runtime overlay trust boundary, candidate-start interface,
-backup exec-only proof boundary and test ownership before execution. Any demand
+Original design checkpoint passed before implementation. Source reviews and
+current operational evidence are recorded separately in LOCAL-FINAL-REVIEW
+and LOCAL-FIX-EVIDENCE. The fixed JSON/runtime overlay trust boundary,
+candidate-start interface, backup exec-only boundary and fixture ownership
+remain within that reviewed scope. Any demand
 for CORE changes or general routing/bootstrap infrastructure stops for a newly
 bounded decision rather than silently expanding this contract.

@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Ownerapproved localclonebinding/TLSstartup correction; prepare bounded contract then tests/review
-last_updated: "2026-11-09T13:26:17Z"
-last_activity: 2026-11-09 -- ReleaseCIgreen; browserrerunclean; independentrolloutreadiness found missingclonebinding
+stopped_at: Local rollout fix complete; updated release publication approval pending
+last_updated: "2026-11-10T08:15:00Z"
+last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
   completed_phases: 6
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 11 task03 releaseCIpassed/readinessdisposition;09 calendar observation owner-deferred
-Status: Ownerapproved localrolloutfix; PR27 exact166 stayspublishedgreen; no updatedpush/liveauthority
-Last activity: 2026-11-09 -- Approved replacement installed; real off-server recovery verified
+Status: Local rollout fix reviewed and proven; ready for updated PR27 push choice
+Last activity: 2026-11-10 -- Local retained cutover and actual old-app rollback passed; production unchanged
 
 Progress: [█████████░] 94%
 
@@ -46,20 +46,23 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: prepare/test/review localrolloutfix.
-Owner selected “Prepare local rollout fix” for confirmedCR-01protectedpersistent
-clonevolumerouting andTLSstartupprerequisites. Useboundedlocalcontract with
-existingplan11-03/12readiness; no newplan/counterreset. Preserveoriginalvolumes,
-externalexistingcandidates, trustedpersistentroutingacrossdeploy/rollback,
-verifiedsolecandidateexecidentity, TLS/HBAbeforePGstartup, kernelheldlock and
-independentinstalledrecoveryunchanged. Meaningfulsyntheticnegatives/cutover/
-rollback plusindependentreview required; no gatewaivers.
+Current action: present the reviewed local release candidate for updated PR27
+publication approval. Local rollout correction and compatibility are complete.
+Protected persistent clone routing and TLS-first startup are implemented and
+independently reviewed. Real supplied-archive run12 passed254.099s: retained
+startup, forced recreation, full0008 deploy, actual v0.3.1 app rollback,
+Redis GET/TTL/auth, unchanged original fingerprints and three exact recovery
+roundtrips. Cleanup passed. Final source/fixture commitb6b717c includes the
+reviewed unterminated-manifest hardening; serial compatibility passed (recovery73.141s/roles32.694s/TLS32.389s,
+existing rollback99.487s, final selected cutover239.459s). Cleanup confirmed.
+See06-12-LOCAL-FIX-EVIDENCE and LOCAL-FINAL-REVIEW. Focused13/19/7 and shell
+14/18/8 pass; backup25/safety4 pass. Preserve strict recovery/image/security gates.
 
-PR27remains16623a8 actualCI42622430042 allsixgreen; targetedbrowserattempt2
-10pass/1expectedskip/0retries; initialhealthflake retained. Localfixauthorization
-doesnotpermit updatedreleasepush/mainmerge/tag/backmerge/privateVDS/provider/
-service/volume/role/TLSproductionoperation orarchiveinstall. Prepareconcrete
-reviewedcandidate before newpushchoice. Phase11/15,65/69=94%;09nightlydeferred.
+PR27 remains16623a8 with all six CI jobs green at that published head only.
+Updated release push requires a concrete new owner decision after local gates.
+Main merge/tag/back-merge, private production/preflight, service/volume/role/TLS
+operations and deployment remain separate. Phase11/15,65/69=94%;09 calendar
+observation remains owner-deferred. No09/11SUMMARY or DEPL completion yet.
 
 Plan09 task01 and all exact replacement installation decisions are APPROVED.
 New d5fe2059... archive is installed/current;20payload hashes,3launchers and
@@ -183,8 +186,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-09T13:20:46Z
-Stopped at: PR27exact166 allCIgreen; localclonebinding/startupfix versuspublish-onlydecision pending
+Last session: 2026-11-10T08:15:00Z
+Stopped at: Reviewed local rollout fix; local rollout fix complete; updated PR27 push choice pending
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30

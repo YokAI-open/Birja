@@ -69,36 +69,27 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase6 has10/15 plans complete. Plan08 now passes its original local acceptance:
-reviewed Wolfi Python3.14/Node24 and pinned Chainguard PostgreSQL18.6/Redis8.10.3
-images each pass fresh raw scans with0HIGH/0CRITICAL, including unfixed findings.
-Fresh backend616/99.80%overall/100%critical, frontend264, audits/builds and actual
-browser10passed/1expectedproduction-CSPskip pass. One exact new recovery archive
-passed serial restore/roles/TLS/actualv0.3.1rollback; populated ownership/collation
-and RedisAOF clone transitions plus untouched-original abort are rehearsed.
-Independent source review has0 active findings; six synthetic projects are clean.
-The verified packet is preserved locally at ignored
-`.local/phase-06-handoff/candidate-cgr/`; details in08SUMMARY/T3C-EVIDENCE.
+Phase 6 has 11/15 plans complete. Accepted local image/application gates,
+feature PR26 and release PR27 history are recorded in phase artifacts.
+PR26 merged into develop after approval and green exact-head CI. Release0.4.0
+PR27 publishes16623a8 with all six jobs green; it remains unmerged.
 
-Plan09 is partially executed with explicit owner approval on same VDS DE189274.
-Exact d5fe2059 recovery replacement is installed/current; immutable payloads,
-launchers and signed restic pass. Actual B2 policy/inventory/headroom checks,
-empty encrypted repository initialization and first backup passed. Exact remote
-snapshot retrieval and isolated restore passed with private invariants and
-source/config/tool-bundle binding; temporary clone/staging is gone. Source
-remains v0.3.1/revision0007 and all four original production IDs are unchanged.
-After restore, the verified nightly timer was enabled; first actual trigger is
-2026-11-10T03:11:32Z. Genuine calendar-run proof is still pending; no09SUMMARY or
-DEPL-02 completion yet. Owner explicitly deferred this observation to proceed
-with10review/publication work meanwhile. No extra key/custody/installation approval is needed.
-PR26 initial actualCI passed backend/frontend/browser but failed scanner-cache
-permissions and missingopsuv. Minimal CI corrections passed independent review,
-focused contracts and all5fresh0HIGH/0CRITICAL scans. The approvedfollow-up CI passed all image/application/browser jobs but exposed
-root-required TLS fixture tests. CI/test-only root/exact-Git-trust correction
-passed independent review and all serial local rehearsals; nextpush/CI remains
-pending approval. Release, datastore/role/TLS rollout and friends stay separate. Phase6 stays10/15; DEPL-01/02
-and whole phase remain open. Publication still needs the explicit10push/PR choice.
-See06-LIVE-RECOVERY/HANDOFF and STATE for current proof and next action.
+The owner authorized a local correction for protected persistent clone-volume
+routing and TLS/HBA startup ordering. The retained deployment, role checks and
+old-app rollback now use the selected candidates. Independent source reviews
+are clean; the real populated supplied-archive cutover passed, including0008,
+actual v0.3.1 rollback, Redis persistence/authentication, unchanged original
+fingerprints and pre/post exact restores. Final committed compatibility gates
+passed; the updated candidate is tracked in LOCAL-FIX-EVIDENCE/STATE.
+No updated push, main merge, tag, back-merge or deployment has been approved.
+
+Plan09's actual encrypted B2 backup and exact isolated restore passed on
+9November using the installed d5fe2059 recovery archive; timer enabled only
+after restore. Its first genuine scheduled-run observation remains explicitly
+owner-deferred and has not been inferred from the calendar. Plan09/DEPL-02
+remain pending. Production was last recorded at v0.3.1/revision0007; no local
+proof establishes current production state. DEPL-01 and whole-phase acceptance
+still require separately authorized rollout and friend verification.
 
 ## Constraints
 
@@ -149,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-09 after real backup/restore and timer setup; first calendar run and phase acceptance pending*
+*Last updated: 2026-11-10 during local rollout correction; release publication and live acceptance pending*

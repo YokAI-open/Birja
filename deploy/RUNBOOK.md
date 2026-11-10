@@ -409,8 +409,10 @@ regenerate any now-invalidated recovery proof, and use the normal retained
 deploy with its separate migrator. After successful deployment only, synchronize
 backup release to the actual deployed SHA and prove fresh recovery again with
 the unchanged independent archive. A material change after proof fails closed.
-These interfaces are local code awaiting independent source and real isolated
-cutover/recreate/old-app rollback proof; no live authority follows from them.
+These interfaces passed independent source review and a real isolated retained
+cutover/recreate/old-app rollback proof with the same recovery archive. See
+06-12-LOCAL-FIX-EVIDENCE for exact source and test limits. Production identities,
+capacity, custody and maintenance approval still require separate preflight.
 
 ### PostgreSQL and Redis clone compatibility
 

@@ -1002,3 +1002,22 @@ or production service/volume change. Existing16623a8 PR27 stays unchanged.
 Retain the accepted image/security/recovery gates and installed independent
 recovery payload. No new phase plans/counter reset; scoped closure of the
 confirmed readiness findings is part of pending11-03/12preparation.
+
+## Local rollout correction verification —2026-11-10
+
+The owner's “Prepare local rollout fix” scope was executed locally on
+release-0.4.0. Protected persistent selected-volume routing, exact running
+identity checks and TLS-before-first-start are implemented; initial and
+follow-up independent source reviews have no open findings. Real supplied
+archive cutover run12 passed, including current0008 deploy, actual v0.3.1
+app rollback, Redis state/authentication, unchanged originals and pre/post
+exact restores. Final committed compatibility evidence is recorded separately
+in06-12-LOCAL-FIX-EVIDENCE; this entry does not replace those results.
+
+PR27 still publishes16623a8; refreshed Git/PR metadata confirms OPEN into main.
+Preparing/reviewing/testing local fixes does not extend the earlier exact-head
+push approval. Updated release publication requires the next concrete candidate
+choice. Main merge, tagging, back-merge and deployment remain separate.
+No production preflight, private configuration read, volume/role/TLS/app change,
+provider operation, timer change or recovery installation occurred in this scope.
+Plan09 actual scheduled-run observation stays owner-deferred; counters11/15.

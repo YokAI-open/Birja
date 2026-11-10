@@ -1,16 +1,38 @@
 ---
 phase: 06-deploy
 plan: "11"
-status: release-current-head-ci-passed-rollout-readiness-decision-pending
+status: reviewed-local-rollout-candidate-awaiting-push-approval
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
 base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 nightly_observation: owner-deferred-pending
-publication_authorized: true
+publication_authorized: false
+prior_publication_authorized_head: 16623a8638407eeab27c2879f0a9396764a68e89
 ci_head: 16623a8638407eeab27c2879f0a9396764a68e89
 ci_run: 42622430042
 ci_status: success-attempt2-browser-clean-initial-flake-retained
 ---
+
+## Local rollout correction —2026-11-10
+
+Owner approved local correction before merge. Protected persistent candidate
+routing, TLS-first startup and actual running-identity guards are implemented;
+independent source review has no open findings. Source/fixtureb6b717c includes
+strict observed Redis manifest formats, final-record file checks, nonsecret
+HBA readability and pinned containerd platform identity.
+
+Real supplied-archive run12 passed254.099s with current0008 deployment, actual
+v0.3.1 rollback, Redis persistence/authentication, unchanged originals and three
+same-archive backup/exact restore stages. Final committed serial compatibility
+passed, including full retained cutover239.459s; results recorded in
+06-12-LOCAL-FIX-EVIDENCE. The revised proposal prepares all
+bound material before fresh first-start recovery proof; live preflight values
+remain unmeasured and require separate approval.
+
+PR27 still publishes16623a8. Its existing CI is historical for that head only.
+The local candidate requires a new push decision and new actual CI before
+main merge. No main merge/tag/back-merge/deploy authority is implied; no
+11SUMMARY/DEPL advancement until current candidate requirements pass.
 
 ## Published release CI and rollout readiness decision —2026-11-09
 
