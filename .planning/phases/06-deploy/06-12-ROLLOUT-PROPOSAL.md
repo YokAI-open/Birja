@@ -27,7 +27,7 @@ included in the local correction.
 | Main PR merge | Owner-approved9457911; six green jobs; merge commit `46d24c8591de2207cf219429aac0768962bed4c3` | Complete |
 | Tag / GitHub release | v0.4.0 published at46d24c8; annotated remote tag verified | Complete |
 | Back-merge PR / merge | PR28 exact6097085; six checks green; approved merge63c9b47 | Complete |
-| Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
+| Production rollout | Explicit approved packet executed;46d24c8/0008, fresh recovery/smoke pass | Complete |
 
 The owner authorized local correction and bounded reviewed/tested CI follow-ups.
 Publication, exact-head CI and owner-approved main merge are complete.
@@ -211,3 +211,10 @@ updated release push, merge or tag is included. Plan09's first actual nightly
 observation remains explicitly deferred; no scheduled success is inferred.
 Production approval requires measured preflight bindings and an exact final
 source/MANIFEST/window, even after local proof and new release CI pass.
+
+## Executed rollout supersedes this proposal
+
+Owner approved06-12-MAINTENANCE and actual rollout completed; see06-ROLLOUT and
+06-12-SUMMARY for identities/proofs. Earlier pending/proposed text above is
+historical preparation, not current execution status. Friend acceptance and
+owner-deferred nightly observation remain outstanding.

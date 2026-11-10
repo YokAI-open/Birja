@@ -1222,3 +1222,25 @@ new app writers, abort can use originals; after any app startup preserve candida
 data and allow only reviewed secure app rollback. No live operations performed
 this turn. Scope approval is still pending; publication/window/custody are not
 rollout permission. Phase remains12/15;09/12/13 and DEPL remain incomplete.
+
+## Plan12 rollout COMPLETE —2026-11-10
+
+Owner-approved v0.4.0 is LIVE at exact46d24c8, schema0008. Installed MANIFEST70e568a8
+and independent recoveryd5fe2059 unchanged. Three real backup/exact restore gates
+passed (pre-copy eac31e13..., post-roles c1e1d901..., post-deploy50008a08...).
+Originals preserved/fingerprints equal; candidate-only conversion/collation,
+3restricted roles/9migrator-owned tables and both runtime SSL sessions verified.
+Origin41/41 and public9/9 smoke pass, all4services healthy. Outage365.719s.
+Focused backup25/restore-safety4/CI9 tests pass; independent closeout clean0/0.
+Operation lock released, restore resources clean. See12SUMMARY/ROLLOUT.
+
+Refreshed26member encrypted7z is verified and available for owner download:
+birja-offserver-recovery-20261110T104354Z-v040.7z, same restic password.
+No new secret/CA values generated; prior off-server custody stays confirmed.
+It contains final configuration and should update the owner's saved copy.
+Next: Plan13 Gmail AND Outlook friend signup/buy/portfolio/history/persistence /
+signout acceptance. No assistant messages/OTP extraction or live trades.
+Plan09 genuine nightly-run observation remains explicitly deferred; do not
+read timer/provider or infer scheduled success from three manual recoveries.
+Phase13/15, overall67/69=97%; DEPL-01/02 remain unchecked. Preserve all local
+planning receipts; no new push/merge/publication permission inferred.

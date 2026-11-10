@@ -378,7 +378,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
+- [x] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
@@ -394,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 12/15 | In Progress|  |
+| 6. Deploy | 13/15 | In Progress|  |

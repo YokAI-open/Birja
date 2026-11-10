@@ -69,30 +69,32 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 has12/15 plans complete. Published v0.4.0 at main
-46d24c8591de2207cf219429aac0768962bed4c3 after owner-approved PR27 merge;
-owner-approved release back-merge PR28 is merged into develop as63c9b47.
-Actual source/back-merge CI runs42787743632/42791351766 passed all six jobs.
-Latest browser run10passed without retries,1expectedCSPskip; prior release-run
-health retry remains historical. Backend616/critical100%, frontend264,
-strict image scans and real retained cutover/recovery/TLS/old-app rollback pass.
+Phase 6 has13/15 plans complete. Owner-approved v0.4.0 is live at main
+46d24c8591de2207cf219429aac0768962bed4c3, schema0008. PR27 publication/main
+merge/tag and PR28 develop back-merge63c9b47 completed under separate approvals.
+Source/back-merge CI all six jobs pass. Latest browser10pass/1expectedskip;
+previous health retry remains historical. Backend616/critical100%, frontend264,
+strict scans and reviewed synthetic cutover/rollback gates pass.
 
-Approved production host preparation is complete: selected released source,
-retained MANIFEST70e568a8/all129files, validated staged TLS/credentials and two
-empty candidate volumes with protected routing. Current live services remain
-oldv0.3.1/revision0007, as verified at preflight/preparation. Independent recovery
-remains approvedd5fe2059. No data copy/collation/role/migration/app transition.
-Owner confirmed the encrypted7z recovery export saved off-server, then confirmed
-maintenance may occur now and only Birja's backend/scheduler write. These close
-custody/window/inventory questions; rollout itself requires separate approval.
-See06-12-MAINTENANCE for the exact proposed fresh-recovery/candidate/security /
-deployment sequence and pre/post-writer abort boundary.
+Plan12 actual deployment completed after explicit exact-scope approval, confirmed
+custody/immediate outage window and sole writer inventory. Protected candidates
+preserve original volumes. Candidate-only ownership/collation transition, private
+data/schema/sequence checks and5index comparisons pass. Three restricted roles,
+9migrator-owned tables, separate0008 migrator and actual app/scheduler SSL sessions
+verified. Origin41/41/public9/9 smoke pass, all4services healthy. Outage365.719s.
 
-Plan09 encrypted B2 backup/exact restore and timer installation passed9November;
-first genuine calendar-run observation remains owner-deferred.09/12/13 and
-DEPL-01/02 remain incomplete. No deployment or phase completion is implied by
-publication, preparation or off-server custody. Local planning receipts remain
-preserved on the release branch pending a later approved integration.
+Real pre-copy/post-role/post-deploy B2 backup/exact restores pass with unchanged
+independent recoveryd5fe2059. Installed retained MANIFEST70e568a8 unchanged.
+Original fingerprints equal, isolated resources clean, lock released. Focused
+25backup/4restore-safety/9CI contracts and independent closeout review pass.
+Updated encrypted26member7z contains final configuration; offered for owner to
+refresh saved copy, with no new secret values beyond confirmed off-server custody.
+
+Remaining: Plan13 Gmail/Outlook friend signup/trade/persistence acceptance and
+owner-deferred Plan09 real calendar-run observation. DEPL-01/02 stay incomplete;
+manual recovery proofs do not substitute for nightly proof. No whole-phase or
+milestone acceptance. Local planning receipts preserved pending later approved
+integration; no new push permission inferred.
 
 ## Constraints
 

@@ -1,6 +1,6 @@
 # Phase 6 production maintenance packet
 
-Status: REVIEWED; explicit production rollout approval pending.
+Status: APPROVED AND EXECUTED; see06-ROLLOUT.md/06-12-SUMMARY.md for actual results.
 Owner confirmed “Any time now; only Birja writes”. This supplies window/writer
 inventory, not deployment approval. New material off-server custody is confirmed.
 

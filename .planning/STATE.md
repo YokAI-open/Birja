@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Reviewed maintenance packet ready; explicit production rollout approval pending
-last_updated: "2026-11-10T10:30:44Z"
-last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
+stopped_at: Plan12 complete; Plan13 friend acceptance pending; Plan09 nightly observation deferred
+last_updated: "2026-11-10T10:51:05Z"
+last_activity: 2026-11-10 -- Approved v0.4.0 rollout and post-recovery verified; Plan12 complete
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
-  completed_plans: 66
-  percent: 96
+  completed_plans: 67
+  percent: 97
 ---
 
 # Project State
@@ -26,84 +26,41 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 maintenance scope checkpoint;09 calendar observation owner-deferred
-Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- Maintenance packet independently reviewed clean; immediate window confirmed.
+Plan:13 friend acceptance checkpoint;09 calendar observation owner-deferred
+Status: Plan12 COMPLETE. v0.4.0 is live at46d24c8/revision0008, fresh recovery verified.
+Last activity:2026-11-10 -- Live rollout, role/TLS/smoke/recovery and closeout review pass.
 
-Progress: [█████████░] 96%
+Progress: [█████████░] 97%
 
 ## Immediate remaining work
 
-Plan11 complete at published release head
-945791115c0bd88fd0cf62835aca3e03c395659f, actualCI42787743632: all six jobs
-SUCCESS. Backend616/critical100%, frontend264, five hash/config-verified raw
-reports each0HIGH/CRITICAL. Browser9passed,1flaky health test passed on retry,
-1expectedCSPskip; do not erase the retry or call the flake fixed. Actual ops
-transition35.842s/recovery58.140s/roles18.595s+65denials/TLS20.069s/prior-old
-rollback85.653s/new selected cutover206.439s and cleanup pass. Source reviews
-clean;09/12/13 remain incomplete. Phase12/15, overall66/69=96%.
+## Plan12 rollout COMPLETE —2026-11-10
 
-Owner-approved PR27 main merge completed2026-11-10T09:24:42Z as
-46d24c8591de2207cf219429aac0768962bed4c3; both parents verified through GitHub.
-The approved9457911 head and all six successful checks were rechecked first.
-Owner separately approved and published v0.4.0 at that main SHA. Remote annotated
-tag bb64990ba6be425e66e0a560cbd6a6d3589e4a79 peels to46d24c8; GitHub release
-published2026-11-10T09:29:02Z, non-draft/non-prerelease. No deployment occurred.
-Owner-approved PR28 back-merge completed2026-11-10T09:44:22Z as
-63c9b479209aaa180fc1f41314a367dd79fab2f8. Both parents verified; exact6097085
-and all six green checks were rechecked before merging. Release/tag publication
-and develop integration are complete. Main/tag remains46d24c8. Preserve local
-CI receipt51c7b8d and subsequent merge records before release-branch deletion;
-these records are unpushed, with no further publication permission inferred.
+Owner-approved v0.4.0 is LIVE at exact46d24c8, schema0008. Installed MANIFEST70e568a8
+and independent recoveryd5fe2059 unchanged. Three real backup/exact restore gates
+passed (pre-copy eac31e13..., post-roles c1e1d901..., post-deploy50008a08...).
+Originals preserved/fingerprints equal; candidate-only conversion/collation,
+3restricted roles/9migrator-owned tables and both runtime SSL sessions verified.
+Origin41/41 and public9/9 smoke pass, all4services healthy. Outage365.719s.
+Focused backup25/restore-safety4/CI9 tests pass; independent closeout clean0/0.
+Operation lock released, restore resources clean. See12SUMMARY/ROLLOUT.
 
-Owner-approved read-only production preflight completed: see06-12-PREFLIGHT.
-Actual baseline clean010770/0007, four healthy services, sole original volumes;
-~63GiB free versus~66.2MiB live volumes. PG SSLoff/bootstrap superuser; roles /
-TLS/routing/retained deploy not provisioned. PG locale2.41 matches,18valid
-indexes/5default-collation indexes; candidate collation maintenance remains.
-Redis AOF/auth/noeviction pass; no TTL sample. Installed20payload hashes and
-three exact launchers match approvedd5fe2059 archive. No provider/timer checks,
-production mutation, backup/restore or deployment performed.
-
-Owner-approved host preparation completed; see06-12-HOST-PREPARATION.
-Actual retained MANIFEST70e568a8 matches approved source46d24c8/all129files;
-TLS created/checked, private app/scheduler/migrator credentials staged, empty
-candidate volumes and protected routing identities prepared. Original live
-containers/images/mounts remain identical and healthy; prod.env metadata and
-installed independent recovery unchanged. No SQL role, live TLS, data copy /
-conversion, provider/timer, backup/restore, restart or deployment operation.
-
-Owner requested a single archive including prod.env: created/verified encrypted
-25member archive in private ignored offserver-export directory; owner-requested
-7z replacement is ready and fully verified (127260957bytes); see
-HOST-PREPARATION for exact filename/digest. Existing restic password decrypts it.
-Owner confirmed “ok, done, i saved it” after7z download/opening guidance.
-New recovery material off-server custody is COMPLETE; restic/B2 custody was
-already confirmed. Do not repeat this gate or infer deployment authorization.
-Owner confirmed immediate maintenance window and only Birja writes. Concrete
-06-12-MAINTENANCE packet is ready; independent MAINTENANCE-REVIEW clean0/0.
-It binds source46d24c8, MANIFEST70e568a8 and recoveryd5fe2059; source identity /
-diff checks pass. No live operation this turn. Next: explicit approval of the
-packet's writer-stop/final-config/three recovery rounds/candidate copy/collation /
-roles/TLS/0008/deploy/smoke/refreshed export scope. Pre-writer abort preserves
-originals; after app startup never switch to stale originals. Do not repeat
-custody/window checks. No approval inferred from “continue the phase”.
-
-Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
-passed on9November with installed d5fe2059 archive; details remain in
-LIVE-RECOVERY. Owner explicitly deferred first genuine scheduled activation
-observation. Do not infer nightly success from the calendar, create09SUMMARY,
-check DEPL-02 or perform provider/private production reads for this closeout.
-The last recorded production baseline is v0.3.1/revision0007, not a fresh read.
-No production role/TLS/volume/app operation occurred during Plan11.
-DEPL-01 remains incomplete until approved rollout and friend verification.
-
+Refreshed26member encrypted7z is verified and available for owner download:
+birja-offserver-recovery-20261110T104354Z-v040.7z, same restic password.
+No new secret/CA values generated; prior off-server custody stays confirmed.
+It contains final configuration and should update the owner's saved copy.
+Next: Plan13 Gmail AND Outlook friend signup/buy/portfolio/history/persistence /
+signout acceptance. No assistant messages/OTP extraction or live trades.
+Plan09 genuine nightly-run observation remains explicitly deferred; do not
+read timer/provider or infer scheduled success from three manual recoveries.
+Phase13/15, overall67/69=97%; DEPL-01/02 remain unchecked. Preserve all local
+planning receipts; no new push/merge/publication permission inferred.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 66
+- Total plans completed: 67
 - Average duration: -
 - Total execution time: -
 
