@@ -1012,7 +1012,9 @@ def image_transition():
                                 service, "redis-cli", *args]).strip()
 
         def canonical(service):
-            data = json.loads(query(service, "SET TIME ZONE 'UTC';\n" + (ROOT / "deploy/backup-manifest.sql").read_text()))
+            revision = query(service, "SELECT version_num FROM alembic_version").decode()
+            contract = r.backup_module()
+            data = json.loads(query(service, "SET TIME ZONE 'UTC';\n" + contract.schema_guard_sql(revision) + contract.manifest_sql(revision)))
             # Debian appends its package build to server_version. Existing
             # recovery equality compares schema/data/money/revision, not that
             # distro label; actual PG/libc majors are separately checked.
@@ -1072,11 +1074,11 @@ def image_transition():
                                "JWT_SECRET": "synthetic-only-jwt-secret-00000000000000", "EMAIL_BACKEND": "console"}.items():
                 seed += ["-e", key + "=" + value]
             r.call(seed + ["--entrypoint", "python", "birja-backend-test:phase05-07", "-"], SEED.encode())
-            query("original", "CREATE COLLATION public.transition_locale (provider=libc, locale='en_US.utf8'); CREATE TABLE public.locale_probe(value text COLLATE public.transition_locale PRIMARY KEY); INSERT INTO public.locale_probe VALUES ('a'),('A'),('ä'),('å'),('ae'),('é'),('z'),('Z'),('ß'),('ss'),('Ω'),('Ж');")
+            query("original", "CREATE COLLATION public.transition_locale (provider=libc, locale='en_US.utf8'); CREATE SCHEMA transition_fixture; CREATE TABLE transition_fixture.locale_probe(value text COLLATE public.transition_locale PRIMARY KEY); INSERT INTO transition_fixture.locale_probe VALUES ('a'),('A'),('ä'),('å'),('ae'),('é'),('z'),('Z'),('ß'),('ss'),('Ω'),('Ж');")
             before = canonical("original")
             versions = query("original", "SELECT datcollversion FROM pg_database WHERE datname=current_database()")
             assert query("original", check) == b"collation_ok"
-            ordered = query("original", "SELECT json_agg(value ORDER BY value) FROM locale_probe")
+            ordered = query("original", "SELECT json_agg(value ORDER BY value) FROM transition_fixture.locale_probe")
             dump = r.call(dc + ["exec", "-T", "original", "pg_dump", "-U", r.BOOT, "-d", "birja_source_test", "-Fc"])
             r.call(dc + ["stop", "original"])
             original_hash = readonly_original_fingerprint()
@@ -1110,8 +1112,8 @@ def image_transition():
             query("postgres", "REINDEX DATABASE birja_source_test")
             query("postgres", "ALTER COLLATION public.transition_locale REFRESH VERSION; ALTER DATABASE birja_source_test REFRESH COLLATION VERSION")
             assert query("postgres", check) == b"collation_ok"
-            assert query("postgres", "SET enable_seqscan=off; SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
-            assert query("postgres", "SET enable_seqscan=off; SELECT count(*) FROM locale_probe WHERE value IN ('ä','ß','Ω')") == b"3"
+            assert query("postgres", "SET enable_seqscan=off; SELECT json_agg(value ORDER BY value) FROM transition_fixture.locale_probe") == ordered
+            assert query("postgres", "SET enable_seqscan=off; SELECT count(*) FROM transition_fixture.locale_probe WHERE value IN ('ä','ß','Ω')") == b"3"
             assert canonical("postgres") == before
             # Full existing money/FK/index/identity verifier on the physical clone.
             # canonical includes complete existing financial/schema invariants;
@@ -1127,14 +1129,14 @@ def image_transition():
                          "--no-owner", "--no-acl", "--exit-on-error", "--single-transaction"], dump)
             assert canonical("fresh") == before
             assert query("fresh", check) == b"collation_ok"
-            assert query("fresh", "SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
+            assert query("fresh", "SELECT json_agg(value ORDER BY value) FROM transition_fixture.locale_probe") == ordered
             assert readonly_original_fingerprint() == original_hash
             r.call(dc + ["stop", "postgres", "fresh"])
             r.call(dc + ["up", "-d", "--wait", "original"], timeout=120)
             assert canonical("original") == before
             assert query("original", check) == b"collation_ok"
             assert query("original", "SELECT datcollversion FROM pg_database WHERE datname=current_database()") == versions
-            assert query("original", "SELECT json_agg(value ORDER BY value) FROM locale_probe") == ordered
+            assert query("original", "SELECT json_agg(value ORDER BY value) FROM transition_fixture.locale_probe") == ordered
             assert r.call(dc + ["exec", "-T", "original", "stat", "-c", "%u", environment["PGDATA"]]).strip() == b"999"
             print("image_transition_populated=true original_uid999_glibc241=true clone_uid70_glibc244=true actual_collation_drift=" + str(drift).lower() + " reindex_before_refresh=true logical_restore=true untouched_original_abort=true")
             print(f"image_transition_seconds={time.monotonic() - started:.3f}")

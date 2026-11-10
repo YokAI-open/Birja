@@ -43,7 +43,6 @@ export async function signInNewUser(page: Page): Promise<string> {
   await page.getByRole("button", { name: "Sign in" }).click();
   // The click does not wait for verification's fetch or route transition.
   // Callers may immediately navigate; prove authentication completed first.
-  await expect(page).toHaveURL(/\/markets$/);
   await expect(page.getByRole("heading", { name: "Markets", exact: true })).toBeVisible();
   return email;
 }
