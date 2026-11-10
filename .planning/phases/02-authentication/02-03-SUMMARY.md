@@ -17,7 +17,7 @@ key-files:
 key-decisions:
   - "Route allow-list test reads app.openapi() paths because this FastAPI version includes routers lazily (app.routes has no path for them)"
   - "migrated fixture is a sync session fixture (alembic upgrade head) that running_app depends on"
-requirements-completed: []
+requirements-completed: [ACCT-01, ACCT-02]
 duration: 25min
 completed: 2026-10-27
 ---
@@ -50,5 +50,9 @@ A user who got a code can sign in: the first success creates one user and one $1
 None.
 
 ## Self-Check: PASSED
+
+Milestone audit reconciliation (2026-11-10): account requirement metadata
+now reflects the recorded concurrency/allow-list checks and passed phase
+verification. This is metadata reconciliation, not a fresh test run.
 
 - Files present, commit 90df75e and e797c9d exist, suite green.

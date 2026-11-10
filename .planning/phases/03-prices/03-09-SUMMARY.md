@@ -2,6 +2,7 @@
 phase: 03-prices
 plan: 09
 subsystem: verification
+requirements-completed: [PRICE-01, PRICE-02, PRICE-03, PRICE-04]
 tags: [full-suite, dev-stack, push-gate]
 requires: [03-08]
 provides:
@@ -40,3 +41,7 @@ completed: 2026-10-28
 **1. Dev-command documentation (commit ea2a4ca).** CLAUDE.md "Common commands" now says to run `docker compose up --build -d --wait --renew-anon-volumes` after frontend dependency changes, because a plain `up --build` reuses the stale `node_modules` volume.
 
 ## Self-Check: PASSED
+
+Milestone audit reconciliation (2026-11-10): price requirement metadata
+added from the recorded suite/user approval and 03-VERIFICATION.md;
+no new execution or changed historical result.

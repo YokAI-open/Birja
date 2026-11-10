@@ -30,7 +30,7 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-None — all v1 requirements verified; milestone audit/archive is separate.
+None — v1.0 archived; next milestone scope has not been selected.
 
 ### Out of Scope
 
@@ -55,42 +55,36 @@ None — all v1 requirements verified; milestone audit/archive is separate.
 
 ## Current State
 
-Phase 4 is complete: market buys/sells, itemized previews, atomic execution,
-idempotent retries and actual fills are verified against all five roadmap
-criteria and TRADE-01..08. Release v0.3.1 is live at https://birja.nist.one
-with the reviewed price-freshness correction, green release/back-merge CI,
-481 passing backend tests, 100% critical-path coverage and passing origin
-and public smoke checks. The user approved live buy/sell verification.
+The v1.0 MVP milestone is shipped and archived (2026-11-10): all 7 phases,
+69 plans and 31 requirements validated. Software release v0.4.0 is live at
+https://birja.nist.one from main 46d24c8, schema 0008. This archive does not
+publish or deploy a new software version.
 
-Phase 5 is complete: portfolio valuation/performance/allocation, used-price
-freshness and stored paginated history satisfy all four roadmap criteria
-and PORT-01..05/HIST-01..02. All eight plans and human checkpoints are
-complete. Final local suites: 573 backend and 264 frontend tests; independent
-review is clean. CI run 41066672894 passed at 0595c89, including 10 actual
-browser tests (one production-only CSP target intentionally skipped).
-PR #25 merged into develop as 8a76a68 after explicit approval and green
-final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
-Production was last verified at v0.3.1; revalidate it at execution.
+The app delivers email OTP, $10,000 once, fifteen crypto prices, exact atomic
+market buys/sells, mid-valued portfolio performance/allocation and stored seek
+history. Required CI and independent milestone integration review pass; owner
+confirmed both Gmail and Outlook full live flows.
 
-Phase 6 is COMPLETE:15/15plans,4/4roadmap criteria and35/35merged must-haves
-independently verified with0blockers/warnings/no human checks. DEPL-01/02 and
-all31v1requirements complete. Livev0.4.0 is exactmain46d24c8/schema0008;
-release/back-merge approvals and green CI precede the approved rollout. Runtime
-roles use verified TLS, originals are preserved,41origin/9public smoke and all
-three exact B2 restores passed. Outage365.719s. No further runtime/source change.
+Production uses distinct restricted verified-TLS DB roles, immutable recovery
+and retained deployment tooling. Actual rollout passed 41 origin / 9 public
+smoke checks and three exact encrypted B2 restores; originals were preserved.
+One genuine nightly upload was observed and later rotated under the approved
+one-copy policy; the retained post-rollout point was separately fully restored.
+Daily backup freshness and certificate-expiry checking remain owner operations.
 
-Owner confirms both Gmail/Outlook full recipient flows. Actual nightly timer /
-service invocation10November06:11:51–06:12:15Moscow created verified8d15d199...;
-that point later rotated under the approved one-copy policy. Current50008a08...
-is remotely present and fully restored independently. One night is observed,
-not a future reliability/billing guarantee; daily status/expiry checks remain
-owner operations. Final independent report:06-VERIFICATION.md.
+The owner explicitly accepted W01–W08 and four incomplete historical validation
+records as follow-up debt, without claiming fixes. See
+[milestone audit](milestones/v1.0-MILESTONE-AUDIT.md),
+[integration audit](milestones/v1.0-INTEGRATION-AUDIT.md) and
+[retrospective](RETROSPECTIVE.md). Historical accepted logout/protection caveats
+remain recorded there. All phase execution history remains in `phases/`.
 
-All7phases/69plans complete. Updated final-config encrypted7z is available for
-owner to refresh saved settings; no new secret/CA values were generated after
-confirmed off-server custody. Local closing records are not yet published.
-Milestone audit/archive and any new product work remain separate requests;
-no automatic new phase/publication follows completion.
+## Next Milestone Goals
+
+Not selected. The deferred v2 ideas in the
+[requirements archive](milestones/v1.0-REQUIREMENTS.md#v2-requirements)
+are candidates only. A future `$gsd-new-milestone` will choose scope and create
+fresh active requirements; no new phase is automatically started.
 
 ## Constraints
 
@@ -141,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-10 during local rollout correction; release publication and live acceptance pending*
+*Last updated: 2026-11-10 after v1.0 milestone archival*
