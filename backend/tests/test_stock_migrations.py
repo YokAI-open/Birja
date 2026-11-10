@@ -325,6 +325,7 @@ async def test_schema_downgrade_refuses_stock_financial_references(
     engine: AsyncEngine, migrated: None, financial_table: str
 ) -> None:
     await migrate("head")
+    await migrate("0009", down=True)
     async with engine.begin() as conn:
         uid = (
             await conn.execute(

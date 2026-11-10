@@ -148,3 +148,20 @@ async def clean_auth_redis(redis_client: Redis) -> None:
     for pattern in ("sim:otp:*", "sim:rl:*", "sim:lock:*"):
         async for key in redis_client.scan_iter(match=pattern):
             await redis_client.delete(key)
+
+
+@pytest_asyncio.fixture
+async def clean_stock_discovery(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
+    """Clear synthetic mutable discovery state, preserving both seeded catalogues."""
+    from sqlalchemy import delete
+
+    from app.models.stock import StockDataAdmission, StockQuote, StockSession
+
+    async def _wipe() -> None:
+        async with engine.begin() as conn:
+            for model in (StockQuote, StockSession, StockDataAdmission):
+                await conn.execute(delete(model))
+
+    await _wipe()
+    yield
+    await _wipe()

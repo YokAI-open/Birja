@@ -61,7 +61,7 @@ async def _crypto(engine: AsyncEngine) -> list[tuple]:
 
 
 async def test_exact_twenty_stock_identities_default_unverified(
-    engine: AsyncEngine, migrated: None
+    engine: AsyncEngine, clean_stock_discovery: None
 ) -> None:
     stocks = await _catalogue(engine)
     assert [row[:3] for row in stocks] == EXPECTED
