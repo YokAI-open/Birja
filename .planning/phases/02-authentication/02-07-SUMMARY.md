@@ -17,7 +17,7 @@ key-files:
 key-decisions:
   - "Refresh keeps the existing yk_csrf value so in-flight requests keep working"
   - "Logout finds the session via the access cookie sid (decoded with verify_exp=False)"
-requirements-completed: []
+requirements-completed: [AUTH-04, AUTH-05]
 duration: 40min
 completed: 2026-10-27
 ---
@@ -59,5 +59,9 @@ Logout without an access cookie (cookie deleted or cleared by the browser) canno
 None.
 
 ## Self-Check: PASSED
+
+Milestone audit reconciliation (2026-11-10): session/logout requirement
+metadata now reflects the recorded checks and 02-VERIFICATION.md. Existing
+accepted risks and execution history above remain unchanged.
 
 Commits 7e3ee2f and deab068 exist; modified files verified present.

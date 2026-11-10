@@ -1,7 +1,8 @@
 ---
 phase: 06-deploy
 plan: "13"
-status: owner-confirmed-pass
+status: complete
+evidence_type: owner-confirmed-pass
 release: v0.4.0
 source: 46d24c8591de2207cf219429aac0768962bed4c3
 ---

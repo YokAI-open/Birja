@@ -2,6 +2,7 @@
 phase: 01-skeleton-and-ci
 plan: 07
 subsystem: ci
+requirements-completed: [FOUND-02]
 tags: [github-actions, ci-pass, branch-protection, docs]
 requires: [01-06]
 provides:
@@ -60,3 +61,6 @@ completed: 2026-10-26
 - No throwaway PR with a deliberate lint error was opened to watch `ci-pass` go red. Blocking is shown by the protection settings (required check `ci-pass`, strict). The first, genuinely red run on PR #2 also proved that `ci-pass` fails when any job fails.
 
 ## Self-Check: PASSED
+
+Milestone audit reconciliation (2026-11-10): requirement frontmatter added
+from the existing FOUND-02 result and 01-VERIFICATION.md; no new execution.
