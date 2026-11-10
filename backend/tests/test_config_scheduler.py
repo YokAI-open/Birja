@@ -1,9 +1,11 @@
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from app.core.config import SchedulerSettings, get_scheduler_settings
+from tests.test_db_connection import create_test_ca
 
 DB = "postgresql+asyncpg://u:pw@h/db"
 REDIS = "redis://:pw@h:6379/0"
@@ -19,13 +21,14 @@ def _settings(env: str = "test", **extra: object) -> SchedulerSettings:
     )
 
 
-def test_needs_no_app_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_needs_no_app_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     for name in APP_SECRETS:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("ENV", "prod")
     monkeypatch.setenv("DATABASE_URL", DB)
     monkeypatch.setenv("REDIS_URL", REDIS)
     monkeypatch.setenv("PRICE_SOURCE", "kraken")
+    monkeypatch.setenv("DATABASE_SSL_CA_FILE", create_test_ca(tmp_path))
     get_scheduler_settings.cache_clear()
     try:
         s = get_scheduler_settings()

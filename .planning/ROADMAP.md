@@ -10,8 +10,8 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 2: Authentication** - Email one-time-code sign-in, persistent session, $10,000 account created once (completed 2026-10-27)
 - [x] **Phase 2.1: Deploy to nist.one** (INSERTED) - Production build on https://birja.nist.one with real secrets, nginx, Cloudflare TLS and a renewed certificate (completed 2026-10-27)
 - [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
-- [ ] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result
-- [ ] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history
+- [x] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result (completed 2026-10-29)
+- [x] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history (completed 2026-10-30)
 - [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
 
 ## Phase Details
@@ -120,6 +120,7 @@ Plans:
   3. A visitor requests a code on the public site, receives it by real email from the verified domain and signs in; no codes or keys appear in logs
   4. The expired `*.nist.one` certificate is re-issued (once, via the Cloudflare DNS API) and the manual renewal procedure is documented with the next renewal date
   5. Redeploying from `main` is one documented command
+
 **Plans:** 10/10 plans complete
 
 Plans:
@@ -211,7 +212,7 @@ Plans:
 
 ### Phase 4: Trading
 
-**Goal**: Users can buy and sell coins at real recent prices, with cost shown up front and the result correct to the cent
+**Goal**: As a signed-in Birja user, I want to buy and sell coins at real, recent market prices with the full cost shown before I confirm, so that I can practise trading and get a result that is correct to the cent.
 **Mode:** mvp
 **Depends on**: Phase 2, Phase 3
 **Requirements**: TRADE-01, TRADE-02, TRADE-03, TRADE-04, TRADE-05, TRADE-06, TRADE-07, TRADE-08
@@ -223,7 +224,7 @@ Plans:
   4. Trades are refused for insufficient cash or coins or below the minimum order size (selling a whole position is always allowed), and a double-click or retry executes only once
   5. Many parallel buys against real Postgres never push cash below zero and exactly the affordable number succeed
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -252,12 +253,13 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
+- [x] 04-10-PLAN.md — Conditional: release-0.3 via git-flow, tag v0.3.0, pre-deploy cents check, one deploy + smoke, live trade check
+
 **UI hint**: yes
 
 ### Phase 5: Portfolio and History
 
-**Goal**: Users can see what their holdings are worth now, their profit or loss, and every past trade
+**Goal**: As a signed-in Birja user, I want to see my current portfolio value and profit or loss alongside every past trade, so that I can understand how my practice investments are performing.
 **Mode:** mvp
 **Depends on**: Phase 4
 **Requirements**: PORT-01, PORT-02, PORT-03, PORT-04, PORT-05, HIST-01, HIST-02
@@ -268,12 +270,47 @@ Plans:
   3. For each holding, user sees quantity, average cost (fees included), current value, unrealized P/L in dollars and percent, and its allocation share
   4. User sees past trades newest first (date/time, coin, side, quantity, execution price, fee, total), and a long history loads page by page
 
-**Plans**: TBD
+**Plans:** 8/8 plans complete
+
+Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup and destructive migration state):
+
+**Wave 1**
+
+- [x] 05-01-PLAN.md — Wave 1: Real portfolio summary, full Decimal valuation response and RED happy path
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 05-02-PLAN.md — Wave 2: Complete holding performance and cash-inclusive allocation
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 05-03-PLAN.md — Wave 3: Used-price freshness/availability and real-PG snapshot proof
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 05-04-PLAN.md — Wave 4: Actual stored trade history with strict user-scoped cursor API
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 05-05-PLAN.md — Wave 5: Load more/retry/end focus and reversible concurrent history index
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [x] 05-06-PLAN.md — Wave 6: Fill/replay invalidation and private-cache identity isolation
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [x] 05-07-PLAN.md — Wave 7: Responsive navigation, CI happy path, coverage and full quality gates
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [x] 05-08-PLAN.md — Wave 8: Fresh dev/browser approval and scoped push/release handoff
+
 **UI hint**: yes
 
 ### Phase 6: Deploy
 
-**Goal**: Friends can sign up and trade on the live site, with data safely backed up
+**Goal**: As a friend, I want to sign up and trade on the live site, so that I can practise investing with safely backed-up data.
 **Mode:** mvp
 **Depends on**: Phase 5 (public hosting itself is done in Phase 2.1)
 **Requirements**: DEPL-01, DEPL-02
@@ -284,7 +321,68 @@ Plans:
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: TBD
+**Plans**: 11/15 plans complete
+
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — Choose operating policy/provenance and prepare the feature branch
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 06-02-PLAN.md — Produce consistent encrypted backups and honest status
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 06-03-PLAN.md — Retrieve and prove isolated PostgreSQL 18 restores
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 06-04-PLAN.md — Prove populated ownership transfer and runtime roles
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [x] 06-05-PLAN.md — Verify TLS in backend, scheduler and migration engines
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [x] 06-06-PLAN.md — Rehearse the production role/TLS/migrator stack
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [x] 06-14-PLAN.md — Add validated lock reuse, durable recovery evidence and continuous recovery fixture hooks
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [x] 06-07-PLAN.md — Retain secure deployment and actual v0.3.1 rollback compatibility
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [x] 06-15-PLAN.md — Apply available image fixes and strict CI enforcement; retain vendor blockers
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [x] 06-08-PLAN.md — Deliver nightly scheduling, operational CI and local quality gates
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
+
+**Wave 12** *(owner permits proceeding while09calendar observation is deferred; actual backup/restore passed)*
+
+- [x] 06-10-PLAN.md — Review feature push, actual CI and integration choices
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 06-11-PLAN.md — Prepare the selected release and verify release CI
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 06-12-PLAN.md — Approve and perform recoverable role/TLS deployment
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [ ] 06-13-PLAN.md — Verify Gmail/Outlook friends and all four live criteria
 
 ## Progress
 
@@ -294,6 +392,6 @@ Plans:
 | 2. Authentication | 9/9 | Complete    | 2026-10-27 |
 | 2.1. Deploy to nist.one | 10/10 | Complete   | 2026-10-27 |
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
-| 4. Trading | 9/10 | In Progress|  |
-| 5. Portfolio and History | 0/TBD | Not started | - |
-| 6. Deploy | 0/TBD | Not started | - |
+| 4. Trading | 10/10 | Complete    | 2026-10-29 |
+| 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
+| 6. Deploy | 11/15 | In Progress|  |

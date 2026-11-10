@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.db.connection import database_ssl_context, validate_database_url
+
 
 class Settings(BaseSettings):
     # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
@@ -14,6 +16,7 @@ class Settings(BaseSettings):
 
     env: Literal["dev", "test", "prod"]
     database_url: str = Field(repr=False)
+    database_ssl_ca_file: str | None = Field(default=None, repr=False)
     redis_url: str = Field(repr=False)
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
@@ -136,9 +139,7 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _check_database_url(cls, v: str) -> str:
-        if not v.startswith("postgresql+asyncpg://"):
-            raise ValueError("database_url must start with 'postgresql+asyncpg://'")
-        return v
+        return validate_database_url(v)
 
     @field_validator("otp_hmac_secret", "jwt_secret")
     @classmethod
@@ -187,6 +188,11 @@ class Settings(BaseSettings):
                     raise ValueError(f"{name} is still a placeholder; set a real secret in prod")
         return self
 
+    @model_validator(mode="after")
+    def _check_database_trust(self) -> Settings:
+        database_ssl_context(self)
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -205,6 +211,7 @@ class SchedulerSettings(BaseSettings):
 
     env: Literal["dev", "test", "prod"]
     database_url: str = Field(repr=False)
+    database_ssl_ca_file: str | None = Field(default=None, repr=False)
     redis_url: str = Field(repr=False)
 
     price_source: Literal["kraken", "fake"] = "kraken"
@@ -216,9 +223,7 @@ class SchedulerSettings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _check_database_url(cls, v: str) -> str:
-        if not v.startswith("postgresql+asyncpg://"):
-            raise ValueError("database_url must start with 'postgresql+asyncpg://'")
-        return v
+        return validate_database_url(v)
 
     @field_validator("price_max_move", "price_confirm_tolerance")
     @classmethod
@@ -245,6 +250,11 @@ class SchedulerSettings(BaseSettings):
     def _check_price_source(self) -> SchedulerSettings:
         if self.env == "prod" and self.price_source == "fake":
             raise ValueError("price_source 'fake' is not allowed in prod")
+        return self
+
+    @model_validator(mode="after")
+    def _check_database_trust(self) -> SchedulerSettings:
+        database_ssl_context(self)
         return self
 
 

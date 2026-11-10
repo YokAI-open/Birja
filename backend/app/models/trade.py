@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     Numeric,
     Text,
     UniqueConstraint,
@@ -43,9 +44,9 @@ class Trade(Base):
     """Append-only fill record with the exact price and as-of used (D-03)."""
 
     __tablename__ = "trades"
-    # UNIQUE(user_id, idempotency_key) also covers the user_id FK. The history
-    # index (user_id, created_at, id) belongs to Phase 5.
+    # Equality on user first, then the history seek/order boundary.
     __table_args__ = (
+        Index("ix_trades_user_created_id", "user_id", "created_at", "id"),
         UniqueConstraint("user_id", "idempotency_key", name="uq_trades_user_idempotency_key"),
         CheckConstraint("side IN ('buy', 'sell')", name="side_known"),
         CheckConstraint("input_kind IN ('usd', 'quantity')", name="input_kind_known"),
