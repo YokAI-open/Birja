@@ -1160,3 +1160,15 @@ values remain private; no container environment/raw rows/logs, provider access,
 backup/restore, timer inspection, writes/restarts or deployment are included.
 Preflight requires its own checkpoint answer before access. Actual nightly
 observation remains owner-deferred. Phase12/15;09/12/13 and DEPL-01/02 pending.
+
+## Read-only preflight completed —2026-11-10
+
+Owner approved exact fixed-host/project read-only scope. Actual results and
+concrete next preparation proposal are in06-12-PREFLIGHT.md. Baseline remains
+clean010770/0007 with original volumes/services unchanged. Recovery integrity
+passed; disk capacity is ample. PG TLS/roles and retained deploy/routing are
+not provisioned; five indexes use default collation. No provider/timer access,
+backup/restore, production file write, service or database mutation occurred.
+No new authority follows from successful preflight. Next checkpoint is the
+exact host-preparation scope and expected MANIFEST in that report. Phase stays
+12/15 with09/12/13 and DEPL-01/02 incomplete; nightly observation deferred.

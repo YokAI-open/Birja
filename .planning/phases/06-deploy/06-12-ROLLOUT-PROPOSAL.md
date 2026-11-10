@@ -80,6 +80,17 @@ custody/configuration files. Live server key0640 and CA certificate0644 do not
 qualify directly; the TLS checker validates their actual pair/CA/hostname before
 startup. Production measurements and custody coverage remain preflight inputs.
 
+## Actual read-only preflight —2026-11-10
+
+Owner-authorized measurements are recorded in [06-12-PREFLIGHT.md](06-12-PREFLIGHT.md).
+The table below retains required bindings; measured baseline values are now in
+that report. Private equality baseline, candidate identities, final private
+configuration, remote headroom/fresh recovery and maintenance window remain
+pending. Expected retained MANIFEST computed from final main46d24c8 is
+`70e568a8c0f9953926e40de4ed79ec25272b3cdd777e474b3967a09849edb0b2`;
+no installation occurred. Read-only preflight does not authorize preparation
+or rollout. The report defines the next concrete host-preparation checkpoint.
+
 ## Required preflight bindings before a production decision
 
 Collect only after an explicitly authorized read-only preflight. Keep private

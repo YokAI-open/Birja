@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: PR28 merged as63c9b47; read-only production preflight checkpoint pending
+stopped_at: Read-only production preflight complete; host preparation approval pending
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 production preflight checkpoint;09 calendar observation owner-deferred
+Plan:12 host preparation checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- Approved PR28 develop merge verified as63c9b47; no deployment.
+Last activity:2026-11-10 -- Approved read-only preflight completed; no production mutation.
 
 Progress: [█████████░] 96%
 
@@ -56,12 +56,19 @@ and develop integration are complete. Main/tag remains46d24c8. Preserve local
 CI receipt51c7b8d and subsequent merge records before release-branch deletion;
 these records are unpushed, with no further publication permission inferred.
 
-Next: explicit read-only production preflight checkpoint in ROLLOUT-PROPOSAL.
-Measure fixed-project mount/image identities, disk/volume sizes, installed
-recovery integrity and sanitized datastore compatibility. No provider access,
-backup/restore, timer inspection, writes/restarts or deployment is included.
-Retained MANIFEST, fresh recovery and maintenance window remain rollout inputs.
-No live operation follows from the back-merge approval.
+Owner-approved read-only production preflight completed: see06-12-PREFLIGHT.
+Actual baseline clean010770/0007, four healthy services, sole original volumes;
+~63GiB free versus~66.2MiB live volumes. PG SSLoff/bootstrap superuser; roles /
+TLS/routing/retained deploy not provisioned. PG locale2.41 matches,18valid
+indexes/5default-collation indexes; candidate collation maintenance remains.
+Redis AOF/auth/noeviction pass; no TTL sample. Installed20payload hashes and
+three exact launchers match approvedd5fe2059 archive. No provider/timer checks,
+production mutation, backup/restore or deployment performed.
+
+Next: authorize concrete host preparation in06-12-PREFLIGHT (exact main source /
+expected retained MANIFEST, TLS/credential files and empty candidate volumes).
+Maintenance/writer stop/fresh remote recovery/cutover/deploy remain separate;
+new credentials/CA require off-server custody before any rollout.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in
