@@ -241,3 +241,113 @@ async def test_python_m_entrypoint_logs_cycles_to_stderr(
     text = "".join(lines)
     assert "INFO app.tasks.scheduler: price scheduler started source=fake" in text
     assert "INFO app.tasks.scheduler: price cycle: status=ok accepted=15" in text
+
+
+async def test_enabled_amain_runs_independent_stock_loop_and_private_http(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.tasks import stock_scheduler
+
+    monkeypatch.setenv("PRICE_SOURCE", "fake")
+    monkeypatch.setenv("STOCK_DATA_ENABLED", "true")
+    monkeypatch.setenv("ALPACA_API_KEY", "synthetic-private-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "synthetic-private-secret")
+    get_scheduler_settings.cache_clear()
+    stop = asyncio.Event()
+    stock_started = asyncio.Event()
+    crypto_calls = []
+    stock_cancelled = asyncio.Event()
+
+    async def crypto(**kw: Any) -> CycleResult:
+        assert not kw["source"].__dict__.get("headers")
+        crypto_calls.append(asyncio.get_running_loop().time())
+        if len(crypto_calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def hanging_stock(**kw: Any) -> CycleResult:
+        assert kw["http"].headers["APCA-API-KEY-ID"] == "synthetic-private-key"
+        assert kw["http"].headers["APCA-API-SECRET-KEY"] == "synthetic-private-secret"
+        stock_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stock_cancelled.set()
+        return CycleResult("ok")
+
+    real_run = scheduler.run
+
+    async def accelerated_run(**kw: Any) -> None:
+        await real_run(**{**kw, "interval": 0.04, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", hanging_stock)
+    monkeypatch.setattr(scheduler, "run", accelerated_run)
+    try:
+        async with asyncio.timeout(2):
+            await scheduler.amain(stop)
+    finally:
+        get_scheduler_settings.cache_clear()
+    assert stock_started.is_set()
+    assert stock_cancelled.is_set()
+    assert len(crypto_calls) == 3
+    assert 0.06 <= crypto_calls[-1] - crypto_calls[0] < 1
+    assert (tmp_path / "hb").exists()
+
+
+async def test_stock_exception_does_not_kill_crypto_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.tasks import stock_scheduler
+
+    monkeypatch.setenv("PRICE_SOURCE", "fake")
+    monkeypatch.setenv("STOCK_DATA_ENABLED", "true")
+    monkeypatch.setenv("ALPACA_API_KEY", "synthetic-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "synthetic-secret")
+    get_scheduler_settings.cache_clear()
+    stop = asyncio.Event()
+    calls = []
+
+    async def crypto(**kw: Any) -> CycleResult:
+        calls.append(1)
+        if len(calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def broken(**kw: Any) -> CycleResult:
+        raise RuntimeError("synthetic")
+
+    real_run = scheduler.run
+
+    async def accelerated_run(**kw: Any) -> None:
+        await real_run(**{**kw, "interval": 0.04, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", broken)
+    monkeypatch.setattr(scheduler, "run", accelerated_run)
+    try:
+        async with asyncio.timeout(2):
+            await scheduler.amain(stop)
+    finally:
+        get_scheduler_settings.cache_clear()
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None:
+    content = (BACKEND_DIR.parent / filename).read_text()
+    # Service-local indentation avoids a new YAML dependency for this contract.
+    import re
+
+    services = re.split(r"(?m)^  ([a-z][a-z_]*):\s*$", content)
+    found = {}
+    for i in range(1, len(services), 2):
+        found[services[i]] = services[i + 1]
+    stock = found["scheduler"]
+    assert "STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}" in stock
+    assert "ALPACA_API_KEY: ${ALPACA_API_KEY:-}" in stock
+    assert "ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}" in stock
+    for name, value in found.items():
+        if name != "scheduler":
+            assert "ALPACA_" not in value
+    assert "VITE_ALPACA" not in content
