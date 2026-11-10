@@ -1,7 +1,7 @@
 # Feature Research: v1.1 US Stock Trading
 
-**Domain:** Virtual-money stock trading added to Birja's existing crypto simulator  
-**Researched:** 2026-11-10  
+**Domain:** Virtual-money stock trading added to Birja's existing crypto simulator
+**Researched:** 2026-11-10
 **Confidence:** HIGH on exchange mechanics and confirmed scope; MEDIUM on the proposed MVP boundary; stock-feed feasibility and public display rights remain unresolved by this features research.
 
 ## Scope and evidence
