@@ -117,9 +117,116 @@ async def cycle(state: dict, redis: Redis, http: httpx.AsyncClient):
     )
 
 
+async def test_configured_budget_bounds_pre_fetch_work(state, redis_client, monkeypatch):
+    async def hang(*args, **kwargs):
+        await asyncio.sleep(1.05)
+        return stock_scheduler.CycleResult("ok")
+
+    monkeypatch.setattr(stock_scheduler, "_refresh", hang)
+    state["settings"] = state["settings"].model_copy(update={"stock_cycle_budget_seconds": 1})
+    async with httpx.AsyncClient() as http:
+        result = await cycle(state, redis_client, http)
+    assert result.status == "source_error"
+    assert not await redis_client.exists(stock_scheduler.LOCK_KEY)
+
+
+async def test_nondefault_configured_scope_survives_every_nested_check(state, redis_client):
+    scope = {"account": "reviewed-account", "server": "reviewed-server"}
+    async with state["factory"]() as db:
+        await db.execute(update(StockDataAdmission).values(scope={**admitted().scope, **scope}))
+        await db.commit()
+    state["settings"] = state["settings"].model_copy(update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]})
+    with respx.mock as router:
+        route = router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
+        async with httpx.AsyncClient() as http:
+            result = await cycle(state, redis_client, http)
+    assert result.accepted == 20
+    assert route.call_count == 1
+
+
 async def rows(state: dict, model=StockQuote):
     async with state["factory"]() as db:
         return (await db.execute(select(model))).scalars().all()
+
+
+@pytest.mark.parametrize("boundary", ["calendar_build", "session_persist", "lease"])
+async def test_calendar_async_boundaries_recheck_authority_and_lease(
+    state, redis_client, monkeypatch, boundary
+):
+    import threading
+
+    entered, release = threading.Event(), threading.Event()
+    if boundary == "calendar_build":
+        original = stock_scheduler.build_sessions
+
+        def held(*args):
+            result = original(*args)
+            entered.set()
+            assert release.wait(5)
+            return result
+
+        monkeypatch.setattr(stock_scheduler, "build_sessions", held)
+    else:
+        original = stock_scheduler.persist_sessions
+
+        async def held(*args):
+            result = await original(*args)
+            entered.set()
+            if boundary == "lease":
+                await redis_client.set(stock_scheduler.LOCK_KEY, "replacement", px=1000)
+            else:
+                # DB-clock/authority is re-read after the awaited derived write.
+                await args[0].execute(
+                    update(StockDataAdmission)
+                    .where(StockDataAdmission.product == "calendar")
+                    .values(state="revoked")
+                )
+            return result
+
+        monkeypatch.setattr(stock_scheduler, "persist_sessions", held)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: pytest.fail("must not fetch"))
+    ) as http:
+        task = asyncio.create_task(cycle(state, redis_client, http))
+        try:
+            if boundary == "calendar_build":
+                assert await asyncio.to_thread(entered.wait, 5)
+                async with state["factory"]() as db:
+                    await db.execute(
+                        update(StockDataAdmission)
+                        .where(StockDataAdmission.product == "calendar")
+                        .values(state="revoked")
+                    )
+                    await db.commit()
+                release.set()
+            result = await asyncio.wait_for(task, 5)
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    assert result.status == ("locked" if boundary == "lease" else "ok")
+    assert not await rows(state)
+    if boundary == "lease":
+        assert await redis_client.get(stock_scheduler.LOCK_KEY) == "replacement"
+        await redis_client.delete(stock_scheduler.LOCK_KEY)
+
+
+async def test_redis_release_failure_is_safe_and_sanitized(
+    state, redis_client, monkeypatch, caplog
+):
+    from redis.exceptions import RedisError
+
+    async def fail(*args, **kwargs):
+        raise RedisError("secret-provider-token")
+
+    monkeypatch.setattr(redis_client, "eval", fail)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=body(state)))
+    ) as http:
+        await cycle(state, redis_client, http)
+    assert "stock lock release failed" in caplog.text
+    assert "secret-provider-token" not in caplog.text
 
 
 async def test_permitted_batch_persists_source_times_without_idle_http_transaction(

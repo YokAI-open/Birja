@@ -61,6 +61,56 @@ async def test_catalogue_survives_absent_authority(engine, settings, clean_stock
     assert all(row["execution_enabled"] is False for row in result["items"])
 
 
+async def test_denied_persisted_row_with_null_times_keeps_metadata(
+    engine, settings, clean_stock_discovery
+):
+    async with engine.begin() as conn:
+        await conn.execute(insert(StockDataAdmission).values(product="quotes"))
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    assert len(result["items"]) == 20
+    assert all(item["quote"] is None for item in result["items"])
+    assert result["admission"]["state"] == "unavailable"
+
+
+async def test_repeatable_read_cannot_serve_old_authority(engine, settings, clean_stock_discovery):
+    await seed(engine)
+    async with engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="REPEATABLE READ")
+        async with AsyncSession(bind=conn) as db:
+            result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    assert len(result["items"]) == 20
+    assert all(item["quote"] is None for item in result["items"])
+    assert result["admission"]["state"] == "unavailable"
+
+
+@pytest.mark.parametrize("condition", ["denied", "expired", "boundary", "valid"])
+async def test_current_retention_controls_disclosure_and_client_deadline(engine, settings, clean_stock_discovery, condition):
+    await seed(engine)
+    async with engine.begin() as conn:
+        await conn.execute(update(StockDataAdmission).where(StockDataAdmission.product == "quotes").values(retention_allowed=condition != "denied", quota={**admitted().quota, "retention_seconds": 2}))
+    elapsed = {"denied": 0, "expired": 3, "boundary": 2, "valid": 1}[condition]
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW + timedelta(seconds=elapsed)))
+    if condition == "valid":
+        assert result["items"][0]["quote"] is not None
+        assert datetime.fromisoformat(result["admission"]["valid_until"]) == NOW + timedelta(seconds=2)
+    else:
+        assert result["items"][0]["quote"] is None
+
+
+async def test_nondefault_verified_scope_projects_quotes(engine, settings, clean_stock_discovery):
+    await seed(engine)
+    scope = {"account": "reviewed-account", "server": "reviewed-server"}
+    async with engine.begin() as conn:
+        await conn.execute(update(StockDataAdmission).values(scope={**admitted().scope, **scope}))
+    configured = settings.model_copy(update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]})
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, configured, now=lambda: NOW))
+    assert result["items"][0]["session"]["state"] == "open"
+    assert result["items"][0]["quote"] is not None
+
+
 async def test_exact_quote_and_independent_facts(engine, settings, clean_stock_discovery):
     await seed(engine)
     async with async_sessionmaker(engine)() as db:
