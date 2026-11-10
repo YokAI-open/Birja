@@ -96,8 +96,8 @@ or rollout. The report defines the next concrete host-preparation checkpoint.
 [06-12-HOST-PREPARATION.md](06-12-HOST-PREPARATION.md) records completed
 owner-authorized tooling/TLS/credential/empty-volume preparation and successful
 postchecks. Installed MANIFEST equals70e568a8; released source46d24c8 selected.
-Existing live services, original data and prod.env are unchanged. New recovery
-material still needs off-server custody confirmation. No copying, role apply,
+Existing live services, original data and prod.env are unchanged. Owner confirmed the new recovery
+material saved off-server after the7z export; custody is complete. No copying, role apply,
 backup/restore, restart or deployment has occurred. The maintenance sequence
 below remains a proposal requiring its own authorization.
 

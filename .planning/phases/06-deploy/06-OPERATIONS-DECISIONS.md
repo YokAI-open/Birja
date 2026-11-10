@@ -1187,3 +1187,20 @@ backup/restore, provider/timer operation or deployment occurred.
 Next: save only the NEW material off-server and confirm custody, then prepare
 the separate exact maintenance/rollout decision. Custody confirmation alone is
 not production restart/deploy approval. Phase12/15;09/12/13 and DEPL pending.
+
+## Off-server custody confirmed —2026-11-10
+
+After downloading/opening instructions for the requested encrypted7z archive,
+owner replied “ok, done, i saved it”. Record custody of the new recovery material
+as confirmed; the existing restic password/B2 custody was already confirmed.
+No secret values were shared. Archive identity remains
+4b67c3fec44a3fd8ce85c30cf22a4b022f4a214e33ccb8d308a9ed56886f9584.
+Do not ask the owner to repeat this custody step. Confirmation authorizes no
+service restart, role/data transition, backup/restore or deployment.
+
+Next: finalize a concrete maintenance run sheet bound to main46d24c8 and retained
+MANIFEST70e568a8, approved candidate volumes and installed recoveryd5fe2059.
+Obtain a maintenance window/writer inventory and explicit rollout approval.
+Fresh bounded B2 recovery proof, candidate-only copy/collation maintenance,
+role/TLS/migration/deploy, smoke and post-rollout recovery remain pending.
+Phase12/15;09/12/13 and DEPL-01/02 remain incomplete; nightly observation deferred.

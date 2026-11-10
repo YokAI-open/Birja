@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Verified encrypted 7z recovery archive ready; off-server saving pending
-last_updated: "2026-11-10T09:58:50Z"
+stopped_at: Off-server custody confirmed; final maintenance run sheet and approval pending
+last_updated: "2026-11-10T10:21:58Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 new material custody checkpoint;09 calendar observation owner-deferred
+Plan:12 maintenance scope checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- Approved host preparation and postchecks pass; live services unchanged.
+Last activity:2026-11-10 -- Owner confirmed recovery archive saved off-server; live services unchanged.
 
 Progress: [█████████░] 96%
 
@@ -77,11 +77,12 @@ Owner requested a single archive including prod.env: created/verified encrypted
 25member archive in private ignored offserver-export directory; owner-requested
 7z replacement is ready and fully verified (127260957bytes); see
 HOST-PREPARATION for exact filename/digest. Existing restic password decrypts it.
-Next: owner downloads and saves this archive off-server with the password
-independently available, then confirms custody.
-Paths are listed in HOST-PREPARATION. Existing B2/restic custody is already
-confirmed; no need to repeat it. Confirmation does not authorize rollout.
-Then present exact final maintenance/recovery/collation/cutover scope separately.
+Owner confirmed “ok, done, i saved it” after7z download/opening guidance.
+New recovery material off-server custody is COMPLETE; restic/B2 custody was
+already confirmed. Do not repeat this gate or infer deployment authorization.
+Next: finalize concrete maintenance run sheet, resolve maintenance window and
+writer inventory, then request explicit rollout approval. Fresh remote recovery,
+clone/collation/security transition, deployment and acceptance remain pending.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in
