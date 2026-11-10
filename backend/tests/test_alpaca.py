@@ -1,5 +1,6 @@
 """External I/O is mocked exclusively at HTTP; no actual provider requests."""
 
+import asyncio
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
@@ -164,3 +165,13 @@ async def test_permission_expiring_during_await_never_returns_quotes() -> None:
         async with httpx.AsyncClient() as http:
             with pytest.raises(AlpacaError, match="admission"):
                 await fetch_iex_quotes(http, [MAPPING], evidence, lambda: next(times))
+
+
+async def test_slow_stream_is_cancelled_by_overall_deadline() -> None:
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(1)
+        return httpx.Response(200, content=BODY)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(slow)) as http:
+        with pytest.raises(AlpacaError, match="cycle_budget"):
+            await fetch_iex_quotes(http, [MAPPING], admitted(), lambda: NOW, budget_seconds=0.01)

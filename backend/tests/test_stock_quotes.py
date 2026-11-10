@@ -200,6 +200,15 @@ async def test_current_catalogue_verification_and_empty_batch(
     assert await upsert_stock_quotes(db, [quote], 0, now=lambda: NOW) == 0
 
 
+async def test_default_utc_clock_persists_a_current_observation(
+    db: AsyncSession,
+    stock_state: list[StockMapping],
+) -> None:
+    observed = datetime.now(UTC)
+    quote = replace(accepted(stock_state[0]), event_at=observed, collected_at=observed)
+    assert await upsert_stock_quotes(db, [quote], 4) == 1
+
+
 async def test_concurrent_reordered_writes_only_keep_newest_source_event(
     engine: AsyncEngine,
     stock_state: list[StockMapping],

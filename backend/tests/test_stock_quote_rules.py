@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import pytest
 
@@ -90,6 +90,12 @@ def test_refuse_invalid_source_values(changes: dict[str, object]) -> None:
 
 def test_regular_condition_can_apply_to_both_sides() -> None:
     assert validate_quote(raw(conditions=["R", "R"]), NOW, 4) is not None
+
+
+def test_unrepresentable_decimal_context_is_refused_instead_of_raising() -> None:
+    with localcontext() as context:
+        context.prec = 1
+        assert validate_quote(raw(), NOW, 4) is None
 
 
 @pytest.mark.parametrize("generation", [0, -1, True])
