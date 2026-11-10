@@ -1,13 +1,39 @@
 ---
 phase: 6
 slug: deploy
-status: executing
+status: completed
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-30
 ---
 
 # Phase 6 — Validation Strategy
+
+## Final execution reconciliation —2026-11-10
+
+Final evidence: initial real B2 exact restore and genuine calendar invocation
+correlation pass; nightly snapshot was rotated under approved one-copy retention,
+with current exact restore/presence proven separately. Released source/back-merge
+CI all six jobs green (42787743632/42791351766);616backend/100%critical,264frontend,
+actual trading/portfolio/history browser flows, strict five-image scans and real
+recovery/role/TLS/old-app rollback gates pass. Latest browser10pass/no retries /
+1expectedskip; previous health retry remains historical.
+
+Actual approved Plan12 source46d24c8/revision0008 rollout pass: candidate-only
+conversion/collation5index comparisons,3restricted roles/9migrator-owned tables,
+app+scheduler verified SSL sessions,41origin/9public smoke,3exact B2 recoveries,
+original fingerprints equal and isolated cleanup. Required focused checks:
+backup25tests51.218s, restore-safety4tests1.371s, CI9tests0.419s. Outage365.719s;
+this is recorded elapsed time, not a future SLA. Owner now explicitly confirms
+both Gmail and Outlook complete recipient flows. No extra broad test rerun needed
+because source and accepted CI artifacts did not change during live execution.
+
+Source/code/security reviews and bounded maintenance/rollout/calendar reviews
+have no active blockers/warnings. Separate06-VERIFICATION passed4/4criteria and35/35merged truths with no
+blockers/warnings; this strategy file does not self-certify the phase. Older entries below are dated
+history, not pending operations to repeat. No raw private evidence is published.
+
+## Earlier execution reconciliation
 
 Execution reconciliation2026-11-08: plans01..08,14,15 complete (10/15).
 The owner-authorized safer-image replacement passed independent source review

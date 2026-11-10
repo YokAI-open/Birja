@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Plan12 complete; Plan13 friend acceptance pending; Plan09 nightly observation deferred
-last_updated: "2026-11-10T10:51:05Z"
-last_activity: 2026-11-10 -- Approved v0.4.0 rollout and post-recovery verified; Plan12 complete
+status: milestone_complete
+stopped_at: Phase06 verified complete; local closeout publication and milestone audit/archive remain separate
+last_updated: 2026-11-10T11:16:57.631Z
+last_activity: 2026-11-10 -- Both live provider flows and genuine nightly evidence verified; Phase6 complete
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 69
-  completed_plans: 67
-  percent: 97
+  completed_plans: 69
+  percent: 100
 ---
 
 # Project State
@@ -21,46 +21,45 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-02)
 
 **Core value:** Making a trade at a real, recent market price and then seeing what it's worth now, correct to the cent.
-**Current focus:** Phase 06 — Deploy
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 06 (Deploy) — EXECUTING
-Plan:13 friend acceptance checkpoint;09 calendar observation owner-deferred
-Status: Plan12 COMPLETE. v0.4.0 is live at46d24c8/revision0008, fresh recovery verified.
-Last activity:2026-11-10 -- Live rollout, role/TLS/smoke/recovery and closeout review pass.
+Phase: 06
+Plan:15/15 complete
+Status: All v1 phases verified; milestone audit/archive not yet performed
+Last activity:2026-11-10
 
-Progress: [█████████░] 97%
+Progress: [██████████] 100%
 
-## Immediate remaining work
+## Completion and next action
 
-## Plan12 rollout COMPLETE —2026-11-10
+## Phase6 COMPLETE —2026-11-10
 
-Owner-approved v0.4.0 is LIVE at exact46d24c8, schema0008. Installed MANIFEST70e568a8
-and independent recoveryd5fe2059 unchanged. Three real backup/exact restore gates
-passed (pre-copy eac31e13..., post-roles c1e1d901..., post-deploy50008a08...).
-Originals preserved/fingerprints equal; candidate-only conversion/collation,
-3restricted roles/9migrator-owned tables and both runtime SSL sessions verified.
-Origin41/41 and public9/9 smoke pass, all4services healthy. Outage365.719s.
-Focused backup25/restore-safety4/CI9 tests pass; independent closeout clean0/0.
-Operation lock released, restore resources clean. See12SUMMARY/ROLLOUT.
+All15plans and DEPL-01/02 verified. Owner explicitly reports BOTH current
+Gmail/Outlook flows passed, and resumed actual nightly observation. Timer/service
+06:11:51–06:12:15Moscow genuinely produced verified remote8d15d199...;
+that historical point rotated under approved one-copy policy. Current50008a08...
+remains remotely present and fully restored in Plan12; do not conflate these.
+Independent calendar review0/0 and final goal verifier4/4roadmap criteria,
+35/35merged truths,0blockers/warnings/no human checks passed.
 
-Refreshed26member encrypted7z is verified and available for owner download:
-birja-offserver-recovery-20261110T104354Z-v040.7z, same restic password.
-No new secret/CA values generated; prior off-server custody stays confirmed.
-It contains final configuration and should update the owner's saved copy.
-Next: Plan13 Gmail AND Outlook friend signup/buy/portfolio/history/persistence /
-signout acceptance. No assistant messages/OTP extraction or live trades.
-Plan09 genuine nightly-run observation remains explicitly deferred; do not
-read timer/provider or infer scheduled success from three manual recoveries.
-Phase13/15, overall67/69=97%; DEPL-01/02 remain unchecked. Preserve all local
-planning receipts; no new push/merge/publication permission inferred.
+Livev0.4.0/source46d24c8/schema0008, restricted runtime TLS roles, original
+volumes preserved,41/9origin/public smoke and three exact recoveries pass.
+All7phases/69plans complete (100%); no core work remains. Ongoing daily backup
+status/expiry checks remain owner operations. Refreshed final-config7z available
+for optional update of saved copy; secret custody already confirmed.
+
+Next: publish local closeout documentation only if owner approves underCLAUDE.md;
+then milestone audit/archive can be separately requested. No new phase auto-
+advance, no milestone archival or remote push/merge inferred. Deployment complete.
+Preserve unpushed metadata until carried into approved integration.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 67
+- Total plans completed: 82
 - Average duration: -
 - Total execution time: -
 
@@ -75,6 +74,7 @@ planning receipts; no new push/merge/publication permission inferred.
 | 3 | 10 | - | - |
 | 4 | 10 | - | - |
 | 5 | 8 | - | - |
+| 06 | 15 | - | - |
 
 ## Accumulated Context
 

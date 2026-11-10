@@ -1,14 +1,52 @@
 ---
 phase: 06-deploy
 plan: "09"
-status: real-backup-restore-passed-timer-enabled-awaiting-first-calendar-run
-updated: 2026-11-09
+status: real-recovery-and-genuine-nightly-observation-passed
+updated: 2026-11-10
 installation_complete: true
 remote_restore_complete: true
-calendar_trigger_verified: false
+calendar_trigger_verified: true
 ---
 
 # Plan09 recovery installation and remaining setup
+
+## Current accepted calendar observation —2026-11-10
+
+Owner explicitly resumed the previously deferred read-only nightly verification.
+Actual timer LastTrigger and service start both2026-11-10T03:11:51Z; service
+exit03:12:15Z withResult=success, ExecMainCode=1(CLD_EXITED), status0. For the
+owner these are **06:11:51–06:12:15 Moscow time** on10November. Invocation
+`cba2df6f9fd349e1ab82058d34e5c601` has exactly one journal completion record:
+`8d15d199f1f2da34e0b0576f5cb9a500c93ad33c5be4bbb5d654a4b248037cac`,
+UTC03:12:15. The timer remains enabled/active/waiting; recorded next trigger is
+11November06:14:52Moscow (03:14:52Z), subject to systemd scheduling.
+
+Loaded unit fragments match the exact unchanged retained unit hashes, no dropins;
+service ExecStart is the approved birja-backup entrypoint. All installed payload
+hashes were reverified during rollout; source prints complete only after exact
+remote snapshot/file set/byte-equal manifest/repository check, scoped one-copy
+rotation/check, cleanup and persisted success. This proves the actual historical
+nightly remote creation, not merely a default inactive unit Result or manual run.
+
+**Retention distinction:** nightly8d15... is no longer retained. Approved one-copy
+rotation during the three later rollout recovery rounds replaced it. It was not
+individually isolated-restore-tested, and no claim is made that it still exists
+or that repository-check alone proves restore. The separately proven real restore
+requirement was met by initialbed518... and current post-rollout exact50008a08...
+full retrieval/isolated restore. Current bounded read-only snapshots/ls/dump
+inspection confirms exactly1snapshot50008a08... remotely present, expected three
+profile files and released46d24c8/revision0008. Historical nightly creation and
+present recoverability are distinct evidence, consistent with approved retention.
+
+Only authorized sanitized systemd/journal metadata and installed quota-bounded
+read-only snapshots/ls/dump tools ran in this observation. No backup/restore was
+started, no timer/config/data change, no raw journal/private rows/secrets printed.
+Private sanitized receipts under ignorednightly-verification cover calendar,
+repository, unit provenance and exact normalized systemd metadata.
+
+This supersedes the deferred/awaiting-night entries below; they remain history.
+Final calendar review and goal verification determine closure; do not repeat
+already-complete rollout/recovery or claim the rotated nightly snapshot exists.
 
 ## Owner sequencing update —2026-11-09
 

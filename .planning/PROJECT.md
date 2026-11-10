@@ -25,9 +25,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 - [x] Stored newest-first trade history with exact signed totals and keyset pagination — Phase 5
 
+- [x] Public HTTPS deployment with Gmail/Outlook signup and live trade acceptance — Phase 6
+- [x] Nightly encrypted off-server backups and successful exact restores — Phase 6
+
 ### Active
 
-- [ ] Deployed on a server with a domain and TLS, so friends can sign up and use it
+None — all v1 requirements verified; milestone audit/archive is separate.
 
 ### Out of Scope
 
@@ -69,32 +72,25 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 has13/15 plans complete. Owner-approved v0.4.0 is live at main
-46d24c8591de2207cf219429aac0768962bed4c3, schema0008. PR27 publication/main
-merge/tag and PR28 develop back-merge63c9b47 completed under separate approvals.
-Source/back-merge CI all six jobs pass. Latest browser10pass/1expectedskip;
-previous health retry remains historical. Backend616/critical100%, frontend264,
-strict scans and reviewed synthetic cutover/rollback gates pass.
+Phase 6 is COMPLETE:15/15plans,4/4roadmap criteria and35/35merged must-haves
+independently verified with0blockers/warnings/no human checks. DEPL-01/02 and
+all31v1requirements complete. Livev0.4.0 is exactmain46d24c8/schema0008;
+release/back-merge approvals and green CI precede the approved rollout. Runtime
+roles use verified TLS, originals are preserved,41origin/9public smoke and all
+three exact B2 restores passed. Outage365.719s. No further runtime/source change.
 
-Plan12 actual deployment completed after explicit exact-scope approval, confirmed
-custody/immediate outage window and sole writer inventory. Protected candidates
-preserve original volumes. Candidate-only ownership/collation transition, private
-data/schema/sequence checks and5index comparisons pass. Three restricted roles,
-9migrator-owned tables, separate0008 migrator and actual app/scheduler SSL sessions
-verified. Origin41/41/public9/9 smoke pass, all4services healthy. Outage365.719s.
+Owner confirms both Gmail/Outlook full recipient flows. Actual nightly timer /
+service invocation10November06:11:51–06:12:15Moscow created verified8d15d199...;
+that point later rotated under the approved one-copy policy. Current50008a08...
+is remotely present and fully restored independently. One night is observed,
+not a future reliability/billing guarantee; daily status/expiry checks remain
+owner operations. Final independent report:06-VERIFICATION.md.
 
-Real pre-copy/post-role/post-deploy B2 backup/exact restores pass with unchanged
-independent recoveryd5fe2059. Installed retained MANIFEST70e568a8 unchanged.
-Original fingerprints equal, isolated resources clean, lock released. Focused
-25backup/4restore-safety/9CI contracts and independent closeout review pass.
-Updated encrypted26member7z contains final configuration; offered for owner to
-refresh saved copy, with no new secret values beyond confirmed off-server custody.
-
-Remaining: Plan13 Gmail/Outlook friend signup/trade/persistence acceptance and
-owner-deferred Plan09 real calendar-run observation. DEPL-01/02 stay incomplete;
-manual recovery proofs do not substitute for nightly proof. No whole-phase or
-milestone acceptance. Local planning receipts preserved pending later approved
-integration; no new push permission inferred.
+All7phases/69plans complete. Updated final-config encrypted7z is available for
+owner to refresh saved settings; no new secret/CA values were generated after
+confirmed off-server custody. Local closing records are not yet published.
+Milestone audit/archive and any new product work remain separate requests;
+no automatic new phase/publication follows completion.
 
 ## Constraints
 
@@ -115,7 +111,7 @@ integration; no new push permission inferred.
 | $10k start, no reset | Mistakes stay, like real investing | ✓ Good — Phase 2 account invariants verified |
 | Curated ~10–20 coins | Keeps API calls within free rate limits | ✓ Good — 15 coins live in Phase 3 |
 | Resend for one-time-code email | Free tier, simple API | ✓ Good — real delivery approved in Phases 2.1/4 |
-| v1 done = deployed for friends | Real use by real people is the validation | — Pending |
+| v1 done = deployed for friends | Real use by real people is the validation | ✓ Verified in Phase 6: Gmail/Outlook flows and backup recovery |
 | `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | ✓ Good — release/hotfix PR and back-merge flow verified |
 | Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | ✓ Good — Phase 3 live data verified |
 | Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | ✓ Good — Phase 5 valuation, exact performance and browser flow verified |

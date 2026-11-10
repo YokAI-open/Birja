@@ -12,7 +12,7 @@ Six vertical slices, each ending with a runnable, usable app. Skeleton and CI co
 - [x] **Phase 3: Prices** - Curated coins with fresh prices refreshed every minute and visible "as of" ages (completed 2026-10-28)
 - [x] **Phase 4: Trading** - Market buy/sell with itemized preview, safe execution and actual fill result (completed 2026-10-29)
 - [x] **Phase 5: Portfolio and History** - Cash, holdings, P/L against the $10k start, and paginated trade history (completed 2026-10-30)
-- [ ] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore
+- [x] **Phase 6: Deploy** - Trading verified on the live site, nightly off-server backups with a tested restore (completed 2026-11-10)
 
 ## Phase Details
 
@@ -321,7 +321,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: 12/15 plans complete
+**Plans**: 15/15 plans complete
 
 Plans:
 **Wave 1**
@@ -366,7 +366,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
+- [x] 06-09-PLAN.md — Approve and prove real off-server recovery and timer execution
 
 **Wave 12** *(owner permits proceeding while09calendar observation is deferred; actual backup/restore passed)*
 
@@ -382,7 +382,7 @@ Plans:
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 06-13-PLAN.md — Verify Gmail/Outlook friends and all four live criteria
+- [x] 06-13-PLAN.md — Verify Gmail/Outlook friends and all four live criteria
 
 ## Progress
 
@@ -394,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 13/15 | In Progress|  |
+| 6. Deploy | 15/15 | Complete   | 2026-11-10 |
