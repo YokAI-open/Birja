@@ -167,10 +167,23 @@ installation/deployment, push/PR/merge remain separate. If declined, stop before
 installation and request a scoped calendar-source/dependency decision; do not
 invent an exchange holiday algorithm.
 
-Resume at **07-07-02**, record the owner's actual answer, then finish Plan 07's
-summary/state only if approved before beginning Plan 08. No summary has been
-created because approval is pending. Six completed plans remain 6/14; requirements
-remain pending whole-phase verification. Root removed only the disposable
+### Recorded owner approval — 2026-11-10
+
+The owner answered **“Approve reviewed dependencies and continue local execution”**
+to the explicit 07-07-02 question naming exchange-calendars 4.13.2, numpy 2.5.4,
+pandas 3.1.1, pyluach 2.3.0, toolz 1.2.0, tzdata 2026.6,
+korean-lunar-calendar 0.4.0 and python-dateutil 4.0.0. The question disclosed the
+unsigned source commit, missing wheel attestation and unverified installed
+legitimacy protocol, and retained runtime/image compatibility and strict scans.
+This is actual explicit approval, not inferred from yolo mode or silence.
+
+The package checkpoint is satisfied for this exact resolution and bounded project
+lock changes plus isolated local installation/testing in Plan 08. This record
+does not change ASSUMED protocol status or establish package safety. Materially
+different resolution still requires review before installation. Production,
+provider access, payment, publication and waiver of any security gate are excluded.
+No package or project lock was changed while closing Plan 07. Plan 08 is next;
+requirements remain pending whole-phase verification. Root removed only the disposable
 birja-test containers/network after Plan 06; start the isolated test stack again
 when subsequent DB tests need it. Temporary public-only review inputs/resolutions
 are under `/tmp/birja-phase07-*`; committed evidence is this packet.
