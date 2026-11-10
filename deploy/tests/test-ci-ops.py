@@ -65,6 +65,23 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_ops_pins_compose_with_explicit_retained_dockerfile_consent(self):
+        ops = jobs()["ops"]
+        self.assertIn("compose_version=5.7.0-1~ubuntu.24.04~noble", ops)
+        self.assertIn('"docker-compose-plugin=$compose_version"', ops)
+        check = "test \"$(sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker compose version --short)\" = '5.7.0'"
+        self.assertIn(check, ops)
+        self.assertLess(
+            ops.index(check), ops.index("- name: Build locked operations fixture image")
+        )
+        for bypass in [
+            "BUILDX_BAKE_ENTITLEMENTS_FS",
+            "COMPOSE_BAKE=false",
+            "fs.read=*",
+            "fs=*",
+        ]:
+            self.assertNotIn(bypass, ops)
+
     def test_ops_preserves_daemon_settings_and_checks_strict_archive_before_build(self):
         ops = jobs()["ops"]
         merge = ops.split("sudo python3 -c '\n", 1)[1].split("\n          '\n", 1)[0]
