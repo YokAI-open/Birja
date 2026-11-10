@@ -113,7 +113,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 07-11-PLAN.md — Validate and isolate stock client state.
+- [x] 07-11-PLAN.md — Validate and isolate stock client state.
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
@@ -201,7 +201,7 @@ remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 10/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 11/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
