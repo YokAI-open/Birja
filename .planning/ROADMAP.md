@@ -88,7 +88,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07-04-PLAN.md — Prove restricted-role TLS upgrade and exact restore.
+- [x] 07-04-PLAN.md — Prove restricted-role TLS upgrade and exact restore.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -193,12 +193,14 @@ Plans:
 ## Progress
 
 **Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase7 execution is underway:
-07-01schema/catalogue,07-02crypto boundaries and07-03revisioned recovery contracts
-are complete;07-04restricted-role TLS and exact restore proof is next.
+07-01schema/catalogue,07-02crypto boundaries,07-03revisioned recovery contracts
+and07-04restricted-role TLS/exact retained restore proofs are complete;
+07-05product-specific admission is next. Genuine calendar consumer semantics
+remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 3/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 4/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |

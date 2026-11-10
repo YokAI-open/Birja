@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 07-03 revisioned recovery contracts; next 07-04 TLS/role/restore proof
-last_updated: "2026-11-10T14:32:15.186Z"
+stopped_at: Completed 07-04 actual TLS and exact retained restore; next07-05 admission
+last_updated: "2026-11-10T14:59:12.565Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 3
-  percent: 21
+  completed_plans: 4
+  percent: 29
 ---
 
 # Project State
@@ -26,19 +26,16 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 4 of 14
-Status: Executing Phase 7; Plans 07-01 through 07-03 complete
-Last activity: 2026-11-10 -- Plan07-03 four-revision recovery contracts and corruption controls verified
-Progress: [██░░░░░░░░] 21%
+Plan: 5 of 14
+Status: Executing Phase 7; Plans 07-01 through 07-04 complete
+Last activity: 2026-11-10 -- Plan07-04 actual restricted TLS and exact retained recovery verified
+Progress: [███░░░░░░░] 29%
 
 ## Completion and next action
 
-Phase7 planning is complete:14plans/29tasks/13waves cover all6requirements and
-5roadmap success criteria. Phase-specific research, pattern mapping, approved
-existing-system UI contract, task-level validation and source audit are saved.
-Independent final plan check after two revisions:0blockers/0active warnings.
-Initial grant ownership, current-request expiry/revocation/clock checks, and
-calendar authority separation were fixed in the plan contracts before execution.
+Phase7 has14plans/29tasks/13waves, covering all6requirements/5success criteria.
+Research, patterns, approved UI contract, validation and source audit are saved;
+independent final plan check passed with0blockers/0active warnings.
 
 Plan07-01 completed schema0009 and separate catalogue0010 with49isolated
 PostgreSQL tests passed, scoped lint/format and model types passed. Both tasks
@@ -46,8 +43,12 @@ have meaningful RED/GREEN commits. Plan07-02 preserves crypto boundaries and
 refuses stock execution/replay;137scoped regressions and service static checks
 passed. Plan07-03 adds revision-selected exact recovery contracts:25backup tests,
 6restore-safety tests and actual isolated four-revision PostgreSQL field/schema/
-identity corruption proof passed. Next:07-04 restricted-role verified-TLS upgrade
-and exact dump/restore/retained-artifact proof. Successor canonical callers must
+identity corruption proof passed. Plan07-04 proves actual restricted-role TLS
+upgrade without grant repair, fresh-bootstrap parity and exact retained encrypted
+dump/retrieval/restore0007/0008/0009/0010 including identities/corruption checks.
+Calendar evaluator and restricted-TLS consumer semantics remain required07-08/13;
+SQL authority denial is proven now. Next:07-05 product-specific admission.
+Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 New package legitimacy is a blocking pre-install checkpoint; actual provider permission,
 access,20symbol coverage/freshness and UI acceptance remain explicit later gates.
@@ -61,7 +62,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 3/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes.
+- v1.1: 4/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -126,6 +127,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 07 P01 | 14min | 2 tasks | 10 files |
 | Phase 07 P02 | 7min | 2 tasks | 4 files |
 | Phase 07 P03 | 16min | 2 tasks | 7 files |
+| Phase 07 P04 | 25min | 2 tasks | 3 files |
 
 ## Operations
 
@@ -135,10 +137,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T14:32:15.159Z
-Stopped at: Completed 07-03 revisioned recovery contracts; next07-04 TLS/role/restore proof
-Resume: Continue authorized Phase7 execution at07-04.
+Last session:2026-11-10T14:59:12.549Z
+Stopped at: Completed 07-04 actual TLS and exact retained restore; next07-05 admission
+Resume: Continue authorized Phase7 execution at07-05.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03 summaries committed; whole-phase requirements remain pending. Isolated test
+07-01/02/03/04 summaries committed; whole-phase requirements remain pending. Isolated test
 stack stopped/removed; no production services changed or provider data activated.
