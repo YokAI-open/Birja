@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: completed
-stopped_at: 07-07-01 package packet complete; awaiting blocking-human07-07-02 approval
-last_updated: "2026-11-10T15:28:37.142Z"
+status: executing
+stopped_at: Completed 07-07; ready for 07-08 calendar implementation
+last_updated: "2026-11-10T18:26:38.297Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 6
-  percent: 0
+  completed_plans: 7
+  percent: 50
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 7 of 14
-Status: Awaiting 07-07-02 package approval; Plans 07-01 through 07-06 complete
+Plan: 8 of 14
+Status: Ready for 07-08; Plans 07-01 through 07-07 complete
 Last activity: 2026-11-10
-Progress: [████░░░░░░] 43%
+Progress: [█████░░░░░] 50%
 
 ## Completion and next action
 
@@ -52,16 +52,17 @@ configuration pass74admission/114combined configuration tests and scoped static
 checks; private migrator-only evidence import/revoke/TLS rehearsal packet saved.
 Plan07-06 exact IEX adapter/predicates and monotonic PostgreSQL persistence pass
 94tests,100% scoped critical coverage and scoped static checks. Session bounds
-are structural only; genuine authority/evaluator remains07-08. Next:07-07
-calendar dependency approval at07-07-02. Task07-07-01's committed package packet
-records official registry/tag/wheel identities and the actual eight-package
-prospective resolution, with no existing lock-version changes or installation.
+are structural only; genuine authority/evaluator remains07-08. Plan07-07's
+official registry/tag/wheel review and exact eight-package prospective resolution
+received explicit owner approval for project uv lock changes and isolated local
+installation/testing. No lock mutation or installation occurred in07-07.
 Legitimacy protocol remains ASSUMED; unsigned source and absent PyPI attestation,
 runtime/native compatibility and actual security scans remain explicit limitations.
-See07-PACKAGE-REVIEW.md; no07-07summary or plan advancement before owner approval.
+See07-PACKAGE-REVIEW.md and07-07-SUMMARY.md. Next:07-08 approved resolution
+comparison, wheels-only installation, calendar implementation and image proof.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
-New package legitimacy is a blocking pre-install checkpoint; actual provider permission,
+Exact reviewed calendar-package approval is recorded; actual provider permission,
 access,20symbol coverage/freshness and UI acceptance remain explicit later gates.
 Stock execution remains disabled through Phase8; no real stock orders in Phase7.
 Live data or completed acceptance cannot be claimed from fixtures/disabled state.
@@ -73,7 +74,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 6/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes;07-05 approximately8minutes;07-06 approximately11minutes.
+- v1.1: 7/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes;07-05 approximately8minutes;07-06 approximately11minutes;07-07 continuation approximately5minutes, excluding prior review and approval waiting.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -101,6 +102,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 - [Phase 7]: 07-01 authoritative calendar evidence stays in migrator-owned admissions; derived sessions have no review or override authority.
 - [Phase 7]: 07-02 unsupported stock holdings remain visible/unpriced; crypto-only replay and holding lookups reject injected stock state.
 - [Phase 7]: 07-03 preserves byte-compatible legacy SQL; successor recovery dispatch includes exact evidence/generations without repairing authority.
+- [Phase 7]: 07-07 owner approved the exact eight-package calendar resolution for local uv lock/install/tests; provenance limitations and all runtime/image/security gates remain.
 
 ### Blockers/Concerns
 
@@ -141,6 +143,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 07 P04 | 25min | 2 tasks | 3 files |
 | Phase 07 P05 | 8min | 2 tasks | 5 files |
 | Phase 7 P06 | 11min | 2 tasks | 6 files |
+| Phase 7 P07 | 5min continuation | 2 tasks | 2 plan artifacts |
 
 ## Operations
 
@@ -150,11 +153,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T15:28:37.118Z
-Stopped at: 07-07-01 package packet complete; awaiting blocking-human07-07-02 approval
-Resume: Record explicit package decision at07-07-02 before Plan08 uv/lock changes; no installation yet.
+Last session:2026-11-10T18:26:38.273Z
+Stopped at: Completed 07-07; ready for 07-08 calendar implementation
+Resume: Execute07-08 using the explicitly approved exact resolution; review lock before wheels-only install and retain runtime/security gates.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05/06 summaries committed; whole-phase requirements remain pending.
+07-01/02/03/04/05/06/07 summaries committed; whole-phase requirements remain pending.
 Isolated birja-test PostgreSQL/Redis removed after07-06; restart only when subsequent DB tests need it;
 no production services changed or provider data activated.
