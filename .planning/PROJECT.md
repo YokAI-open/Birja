@@ -69,27 +69,30 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 has12/15 plans complete. Plan11 release preparation and actual CI pass
-at published945791115c0bd88fd0cf62835aca3e03c395659f, run42787743632.
-PR27 remains open into main. Backend616/critical100%, frontend264, all five
-raw image reports0HIGH/CRITICAL and secure retained cutover/old-app rollback
-pass. Browser health test passed on retry; its known flake is retained.
-Independent source reviews are clean; exact evidence is in11SUMMARY/RELEASE-CI.
+Phase 6 has12/15 plans complete. Published v0.4.0 at main
+46d24c8591de2207cf219429aac0768962bed4c3 after owner-approved PR27 merge;
+owner-approved release back-merge PR28 is merged into develop as63c9b47.
+Actual source/back-merge CI runs42787743632/42791351766 passed all six jobs.
+Latest browser run10passed without retries,1expectedCSPskip; prior release-run
+health retry remains historical. Backend616/critical100%, frontend264,
+strict image scans and real retained cutover/recovery/TLS/old-app rollback pass.
 
-Protected persistent candidate routing and TLS-first startup passed actual
-runner proof, including0008, selected-volume recreation, actualv0.3.1 rollback,
-Redis persistence/authentication, unchanged originals and independent recovery.
-CI-only Git configuration isolation and Compose5.7.0 precise Dockerfile consent
-fixes are verified. Production plugins, app/recovery/image pins were not changed
-by those CI fixes. Local planning closeout can accompany the next approved
-integration; published PR27 stays at its CI-proven source until merge approval.
+Approved production host preparation is complete: selected released source,
+retained MANIFEST70e568a8/all129files, validated staged TLS/credentials and two
+empty candidate volumes with protected routing. Current live services remain
+oldv0.3.1/revision0007, as verified at preflight/preparation. Independent recovery
+remains approvedd5fe2059. No data copy/collation/role/migration/app transition.
+Owner confirmed the encrypted7z recovery export saved off-server, then confirmed
+maintenance may occur now and only Birja's backend/scheduler write. These close
+custody/window/inventory questions; rollout itself requires separate approval.
+See06-12-MAINTENANCE for the exact proposed fresh-recovery/candidate/security /
+deployment sequence and pre/post-writer abort boundary.
 
-Plan09 actual encrypted B2 backup/exact restore and timer installation passed
-on9November using installed d5fe2059 archive. First genuine calendar-run
-observation remains owner-deferred;09/DEPL-02 are not complete. Main merge,
-tag/release, back-merge and production rollout are separate decisions. Last
-recorded production isv0.3.1/revision0007, not a new inspection. DEPL-01 awaits
-approved deployment/friend verification. No whole-phase acceptance is implied.
+Plan09 encrypted B2 backup/exact restore and timer installation passed9November;
+first genuine calendar-run observation remains owner-deferred.09/12/13 and
+DEPL-01/02 remain incomplete. No deployment or phase completion is implied by
+publication, preparation or off-server custody. Local planning receipts remain
+preserved on the release branch pending a later approved integration.
 
 ## Constraints
 

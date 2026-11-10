@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Off-server custody confirmed; final maintenance run sheet and approval pending
-last_updated: "2026-11-10T10:21:58Z"
+stopped_at: Reviewed maintenance packet ready; explicit production rollout approval pending
+last_updated: "2026-11-10T10:30:44Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 Phase: 06 (Deploy) — EXECUTING
 Plan:12 maintenance scope checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- Owner confirmed recovery archive saved off-server; live services unchanged.
+Last activity:2026-11-10 -- Maintenance packet independently reviewed clean; immediate window confirmed.
 
 Progress: [█████████░] 96%
 
@@ -80,9 +80,14 @@ HOST-PREPARATION for exact filename/digest. Existing restic password decrypts it
 Owner confirmed “ok, done, i saved it” after7z download/opening guidance.
 New recovery material off-server custody is COMPLETE; restic/B2 custody was
 already confirmed. Do not repeat this gate or infer deployment authorization.
-Next: finalize concrete maintenance run sheet, resolve maintenance window and
-writer inventory, then request explicit rollout approval. Fresh remote recovery,
-clone/collation/security transition, deployment and acceptance remain pending.
+Owner confirmed immediate maintenance window and only Birja writes. Concrete
+06-12-MAINTENANCE packet is ready; independent MAINTENANCE-REVIEW clean0/0.
+It binds source46d24c8, MANIFEST70e568a8 and recoveryd5fe2059; source identity /
+diff checks pass. No live operation this turn. Next: explicit approval of the
+packet's writer-stop/final-config/three recovery rounds/candidate copy/collation /
+roles/TLS/0008/deploy/smoke/refreshed export scope. Pre-writer abort preserves
+originals; after app startup never switch to stale originals. Do not repeat
+custody/window checks. No approval inferred from “continue the phase”.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in

@@ -1204,3 +1204,21 @@ Obtain a maintenance window/writer inventory and explicit rollout approval.
 Fresh bounded B2 recovery proof, candidate-only copy/collation maintenance,
 role/TLS/migration/deploy, smoke and post-rollout recovery remain pending.
 Phase12/15;09/12/13 and DEPL-01/02 remain incomplete; nightly observation deferred.
+
+## Reviewed production maintenance checkpoint —2026-11-10
+
+Owner confirmed immediate outage window and that only Birja backend/scheduler
+write production data. Custody already confirmed; do not repeat either question.
+06-12-MAINTENANCE binds the exact released main46d24c8, installed MANIFEST70e568a8,
+unchanged recoveryd5fe2059 and measured original/candidate volumes. Independent
+06-12-MAINTENANCE-REVIEW reports0blockers/0warnings. Source identity checks and
+diff checks pass; no runtime/source changes or repeated broad suites needed.
+
+Request explicit approval for that complete packet: stop writers, finalize
+protected configuration, three bounded recovery rounds (before copy, after roles,
+after deploy), candidate-only copy/ownership/collation, roles/TLS/0008 migration,
+restart/deploy and smoke, refreshed private7z export. Preserve originals. Before
+new app writers, abort can use originals; after any app startup preserve candidate
+data and allow only reviewed secure app rollback. No live operations performed
+this turn. Scope approval is still pending; publication/window/custody are not
+rollout permission. Phase remains12/15;09/12/13 and DEPL remain incomplete.
