@@ -48,17 +48,31 @@ def test_exact_half_even_mid_and_distinct_receipt() -> None:
 @pytest.mark.parametrize(
     "changes",
     [
-        {"bid": Decimal("0")}, {"ask": Decimal("-1")},
-        {"bid": Decimal("NaN")}, {"ask": Decimal("Infinity")},
-        {"bid": 100.0}, {"ask": "100"}, {"bid": True},
-        {"ask": Decimal("1e12")}, {"bid": Decimal("101")},
-        {"bid": Decimal("0.000000001")}, {"ask": Decimal("100.000000021")},
-        {"conditions": []}, {"conditions": None}, {"conditions": "R"},
-        {"conditions": ["R", "H"]}, {"conditions": ["?"]},
+        {"bid": Decimal("0")},
+        {"ask": Decimal("-1")},
+        {"bid": Decimal("NaN")},
+        {"ask": Decimal("Infinity")},
+        {"bid": 100.0},
+        {"ask": "100"},
+        {"bid": True},
+        {"ask": Decimal("1e12")},
+        {"bid": Decimal("101")},
+        {"bid": Decimal("0.000000001")},
+        {"ask": Decimal("100.000000021")},
+        {"conditions": []},
+        {"conditions": None},
+        {"conditions": "R"},
+        {"conditions": ["R", "H"]},
+        {"conditions": ["?"]},
         {"conditions": ["R", "R", "R"]},
-        {"bid_exchange": "Q"}, {"ask_exchange": "N"},
-        {"tape": "A"}, {"source": "other"}, {"feed": "sip"},
-        {"bid_size": 0}, {"ask_size": True}, {"ask_size": -1},
+        {"bid_exchange": "Q"},
+        {"ask_exchange": "N"},
+        {"tape": "A"},
+        {"source": "other"},
+        {"feed": "sip"},
+        {"bid_size": 0},
+        {"ask_size": True},
+        {"ask_size": -1},
         {"event_at": NOW.replace(tzinfo=None)},
         {"event_at": NOW.astimezone(timezone(timedelta(hours=1)))},
         {"event_at": NOW + timedelta(microseconds=1)},
@@ -84,8 +98,13 @@ def test_invalid_generation(generation: int) -> None:
 
 
 @pytest.mark.parametrize(
-    "age,eligible", [(timedelta(0), True), (timedelta(seconds=119, microseconds=999999), True),
-                     (timedelta(seconds=120), False), (timedelta(microseconds=-1), False)],
+    "age,eligible",
+    [
+        (timedelta(0), True),
+        (timedelta(seconds=119, microseconds=999999), True),
+        (timedelta(seconds=120), False),
+        (timedelta(microseconds=-1), False),
+    ],
 )
 def test_exact_age_boundary(age: timedelta, eligible: bool) -> None:
     quote = validate_quote(raw(), NOW, 4)
@@ -99,8 +118,8 @@ def test_previous_session_closed_unknown_and_exact_boundaries() -> None:
     assert quote_eligibility(quote, Session(opens_at=NOW), NOW)
     assert not quote_eligibility(quote, Session(closes_at=NOW), NOW)
     assert not quote_eligibility(quote, Session(opens_at=NOW + timedelta(microseconds=1)), NOW)
-    assert not quote_eligibility(quote, Session(session_date=NOW.date()-timedelta(days=1)), NOW)
+    assert not quote_eligibility(quote, Session(session_date=NOW.date() - timedelta(days=1)), NOW)
     assert not quote_eligibility(quote, Session(opens_at=None, closes_at=None), NOW)
     assert not quote_eligibility(quote, None, NOW)
     assert not quote_eligibility(quote, Session(), NOW.replace(tzinfo=None))
-    assert not quote_eligibility(replace(quote, event_at=NOW-timedelta(days=1)), Session(), NOW)
+    assert not quote_eligibility(replace(quote, event_at=NOW - timedelta(days=1)), Session(), NOW)
