@@ -370,6 +370,9 @@ def installed_recovery(archive_arg=None):
         shutil.copyfile(
             ROOT / "deploy/verify-restore.py", bootstrap / "verify-restore.py"
         )
+        shutil.copyfile(
+            ROOT / "deploy/backup-snapshot.py", bootstrap / "backup-snapshot.py"
+        )
         target(
             root,
             [
@@ -638,6 +641,7 @@ def roundtrip(archive_arg=None):
             assert all(r.digest(root / p) == h for p, h in unchanged.items())
             assert r.canonical(dc, "birja_source_test")["revision"] == "0007"
             print("old_checkout_credentials_compose_revision_unchanged=true")
+            assert r.canonical(dc, "birja_source_test")["revision"] == "0010", "retained recovery rehearsal never exercised populated successor state"
             print(
                 "integration_elapsed_seconds="
                 + str(round(time.monotonic() - started, 3))
