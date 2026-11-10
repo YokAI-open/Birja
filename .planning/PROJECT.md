@@ -32,11 +32,13 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 - [ ] Trade 20 curated NYSE/Nasdaq stocks in whole-share quantities during regular market sessions.
 - [ ] Use the existing USD cash balance and combined portfolio/history for crypto and stocks.
-- [ ] Stock quotes target crypto-like freshness (about one-minute updates; feasibility and display rights to verify).
+- [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
+- [ ] Stock commission and added percentage spread are zero; simulate buys at IEX ask and sells at bid, disclosing omitted regulatory fees.
+- [ ] Credit verified cash dividends to shared USD and show separate Dividend history events, with revision, correction and duplicate-payment safeguards.
 
 ### Out of Scope
 
-- Stocks, gold/metals, FX, bonds: v2+. Each needs its own data source and market-hours handling. Crypto first proves the core loop.
+- Gold/metals, FX and bonds: deferred. US stocks are now selected for v1.1; other asset classes remain outside its scope.
 - Portfolio value-over-time chart: v2. It needs a snapshot job and stored history.
 - Limit/stop orders: v2+. They need a background matcher. Market orders cover the core loop.
 - Short selling, leverage, margin: not planned. Too complex for a learning tool aimed at beginners.
@@ -44,14 +46,14 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - Portfolio reset: deliberately excluded. Mistakes stay, like real investing.
 - Streaming tick-by-tick prices (websockets): not planned for v1. Prices about 1 minute old are enough and work on free data tiers.
 - Real money, deposits, brokerage integration: never. This is a simulator.
-- Real bid/ask order books: not available on free tiers, so the spread is simulated.
+- Full order-book execution and real order routing: excluded. Stock fills use eligible IEX bid/ask quotes; crypto retains its configured simulated spread.
 
 ## Context
 
 - Motivation: most people learn investing by losing real money. This removes that risk. No hindsight or time travel: you decide today and find out over weeks and months.
 - Users: the author plus friends. Small scale (tens of users), but it is public on the internet, so security still matters (see CLAUDE.md Security).
 - Market data: free tiers only. The curated coin list keeps API calls within free rate limits. Prices are fetched by a single scheduled job and cached in Redis, with the latest price also persisted in Postgres, which is the source of truth.
-- Simulated pricing: buy price = mid × (1 + spread), sell price = mid × (1 − spread), plus fee = % of notional. The exact values are config. The executed price, fee and price timestamp are recorded on every trade.
+- Crypto pricing: buy = mid × (1 + spread), sell = mid × (1 − spread), plus configured fee. Approved stock policy: simulated buy at eligible IEX ask, sell at bid; zero commission, zero added spread and no regulatory fees, with clear disclosure. Executed price and source timestamp remain recorded.
 - The repo started with only `main`. Git-flow is mapped as `main` = production (the "master" role in CLAUDE.md) and `develop` = integration.
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
@@ -97,9 +99,25 @@ using the same virtual USD balance and combined portfolio.
   free-tier quota and user display rights must be researched before committing
   to an implementation/provider. User approved research first.
 
-**Research decisions still open:** suitable affordable licensed feed, exact quote
-age/coverage semantics, calendar/halts, corporate actions and fee/spread policy.
-Do not infer consent to a paid plan or lower freshness from provider constraints.
+**Approved follow-up decisions (2026-11-10):**
+- Alpaca IEX feed is selected conditionally on access/display permission. User
+  accepts single-venue coverage and explicitly requires an IEX prices label.
+  Show it on stock listings, previews and valuations; explain simulated execution.
+- No stock commission, added percentage spread or regulatory fees. Buys use
+  eligible ask, sells use bid; crypto fees/spread stay unchanged.
+- Include cash dividends as shared-USD credits and separate History events.
+  Regularly refresh structured announcements and known events for corrections;
+  preserve revisions, calculate historical eligibility and pay each event once.
+  Record post-payment corrections separately; hold uncertain/conflicting cases
+  for review rather than guess. Owner accepted this monitoring approach.
+
+**Open scoping choices:** ordinary versus complex corporate-action automation,
+stock settlement simplification, final gross-USD/no-tax/no-reinvestment boundary
+and complete requirements approval. Proposed freshness matches crypto's source
+age <120 seconds with about 60-second collection; quotes carry source-event
+rather than fetch time. Provider rights, quote/status and dividend-event access
+remain activation gates, not assumed satisfied by selecting IEX. No paid plan,
+provider contact, signup or deployment is authorized.
 
 **Scope confirmation:** Owner approved the above feature summary, whole-share
 approach and milestone v1.1 name on 2026-11-10. Start roadmap numbering at Phase 7.

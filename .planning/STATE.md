@@ -38,16 +38,22 @@ feed delay. Phase numbering will start at 7. Research first was explicitly chose
 
 All four research dimensions and synthesis are complete; see
 [research summary](research/SUMMARY.md) and [provider feasibility](research/FEASIBILITY.md).
-No researched free plan established the full freshness/access/public-display
-contract. Alpaca Basic/IEX is a technical candidate only; limited-venue coverage
-needs owner acceptance and display rights remain unconfirmed. No provider has
-been selected, contacted or paid; no signup, credential access or installs.
+Owner accepted labelled IEX prices as the planned feed, subject to display
+permission. No researched free arrangement yet establishes the full public-app
+entitlement; selection is not permission or a paid-provider authorization.
 
-Pending owner question: accept labelled IEX subject to permission, require
-consolidated pricing with researched costs, or defer stocks. Then resolve stock
-costs, corporate actions/dividend policy and settlement simplification before
-final requirements approval and roadmap creation. Do not infer a paid budget,
-15-minute delay acceptance or licensed access from research approval.
+Approved stock costs: zero commission, zero added spread/regulatory fees;
+simulated buy at IEX ask, sell at bid, crypto costs unchanged. Owner also chose
+cash dividend credits with separate History events and accepted structured
+announcement monitoring, revisions, historical eligibility, duplicate prevention
+and separately recorded payment adjustments with uncertain cases held for review.
+
+Two owner questions are pending: automatic ordinary events with suspension of
+uncertain/complex events, and immediate virtual sale proceeds versus settlement
+restrictions. After responses, present complete scoped requirements (including
+recommended gross USD/no tax/no reinvestment policy) for approval, then roadmap.
+Do not re-ask IEX feed or fee decisions. No implementation/provider account access,
+spend, contact, signup, service change or stock activation has occurred.
 
 v1 milestone archival PR #30 merged into develop as 7d81010 after six green CI
 checks. All original phases/research are preserved under milestones/v1.0-phases
@@ -83,7 +89,7 @@ separately exact-restored retained snapshot; no future success/billing guarantee
 
 ## Session Continuity
 
-Resume `$gsd-new-milestone` at the data-feasibility owner decision, then complete
+Resume `$gsd-new-milestone` at corporate-action/settlement scoping, then complete
 requirements and roadmap approval gates. Do not repeat confirmed scope/research
 questions. New phase plans are not yet created. v1 history is archived rather
 than deleted, and existing accepted advisory debt remains above.
