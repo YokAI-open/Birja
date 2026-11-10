@@ -84,7 +84,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-03-PLAN.md — Version exact recovery contracts with the schema.
+- [x] 07-03-PLAN.md — Version exact recovery contracts with the schema.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -193,11 +193,12 @@ Plans:
 ## Progress
 
 **Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase7 execution is underway:
-07-01schema/catalogue complete;07-02crypto-boundary preservation is next.
+07-01schema/catalogue,07-02crypto boundaries and07-03revisioned recovery contracts
+are complete;07-04restricted-role TLS and exact restore proof is next.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 2/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 3/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
