@@ -11,7 +11,7 @@ progress:
   completed_phases: 0
   total_plans: 14
   completed_plans: 9
-  percent: 0
+  percent: 64
 ---
 
 # Project State
@@ -64,7 +64,9 @@ calendar/session decisions plus atomic generation/snapshot guarded derived refre
 100% scoped statement/branch coverage, static checks and pip-audit pass. Actual
 network-free nonroot runtime session smoke and five final strict image scans pass.
 See07-08-SUMMARY.md for exact identities and Task1's explicit TDD limitation.
-Next:07-09 independent bounded stock scheduling; actual restricted-TLS consumer,
+Plan07-09 independent bounded stock scheduling and concurrent loops pass90focused
+tests, static/Compose checks and real simultaneous lease/cancellation proof.
+Next:07-10 authenticated discovery API; actual restricted-TLS consumer,
 full phase gates and provider/live acceptance remain07-13/14.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
@@ -80,7 +82,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 8/14 Phase7 plans completed;07-08 approximately14minutes; prior07-01–07 metrics and summaries retain actual timings.
+- v1.1: 9/14 Phase7 plans completed;07-09 approximately12minutes; prior summaries retain actual timings.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -163,9 +165,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Last session:2026-11-10T18:54:55.361Z
 Stopped at: Completed 07-09; ready for authenticated discovery API
-Resume: Execute07-09 using genuine07-08 session helpers and current authoritative admissions; keep crypto scheduling independent.
+Resume: Execute07-10 using current admission/session/quote interfaces; stock execution stays disabled.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05/06/07/08 summaries committed; whole-phase requirements remain pending.
-Healthy disposable birja-test PostgreSQL/Redis explicitly handed to immediate07-09 by orchestrator;
+07-01/02/03/04/05/06/07/08/09 summaries committed; whole-phase requirements remain pending.
+Healthy disposable birja-test PostgreSQL/Redis retained for immediate serial07-10;
 no production services changed or provider data activated.
