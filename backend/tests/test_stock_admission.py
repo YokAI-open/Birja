@@ -2,9 +2,12 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
+from pydantic import SecretStr, ValidationError
 
+from app.core.config import SchedulerSettings, Settings
 from app.services.stock_admission import ProductAdmission, evaluate_admission
 
 NOW = datetime(2026, 11, 10, 15, tzinfo=UTC)
@@ -214,3 +217,85 @@ async def test_calendar_override_requires_verified_unique_dated_utc_bounds(
         evidence, calendar={**evidence.calendar, "overrides": evidence.calendar["overrides"] * 2}
     )
     assert not evaluate_admission(duplicate, "calendar", "derived", NOW).allowed
+
+
+def scheduler_config(**extra: object) -> SchedulerSettings:
+    return SchedulerSettings(
+        env="test",
+        database_url="postgresql+asyncpg://u:pw@h/db",
+        redis_url="redis://:pw@h:6379/0",
+        **extra,
+    )  # type: ignore[arg-type]
+
+
+async def test_disabled_configuration_needs_no_provider_secrets() -> None:
+    settings = scheduler_config()
+    assert settings.stock_data_enabled is False
+    assert settings.stock_feed == "iex"
+    assert settings.stock_poll_interval_seconds == 60
+    assert settings.alpaca_api_key is None
+    assert settings.alpaca_secret_key is None
+
+
+async def test_enabled_scheduler_requires_both_keys_and_sanitizes_errors() -> None:
+    for values in ({}, {"alpaca_api_key": "private-marker"}):
+        with pytest.raises(ValidationError) as exc:
+            scheduler_config(stock_data_enabled=True, **values)
+        assert "private-marker" not in str(exc.value)
+    settings = scheduler_config(
+        stock_data_enabled=True, alpaca_api_key="private-marker", alpaca_secret_key="secret-marker"
+    )
+    assert isinstance(settings.alpaca_api_key, SecretStr)
+    assert "private-marker" not in repr(settings)
+    assert "secret-marker" not in settings.model_dump_json()
+    # Configured keys and enable flag never replace product evidence.
+    assert not evaluate_admission(None, "quotes", "collection", NOW).allowed
+
+
+async def test_api_settings_ignore_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ALPACA_API_KEY", "private-marker")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "secret-marker")
+    settings = Settings()
+    assert settings.stock_data_enabled is False
+    assert "alpaca_api_key" not in settings.model_dump()
+    assert "alpaca_secret_key" not in settings.model_dump()
+    assert "private-marker" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"stock_feed": "sip"},
+        {"stock_feed": "fake"},
+        {"stock_poll_interval_seconds": 59},
+        {"stock_poll_interval_seconds": 121},
+        {"stock_request_timeout_seconds": 0},
+        {"stock_request_timeout_seconds": 11},
+        {"stock_max_retries": -1},
+        {"stock_max_retries": 3},
+        {"stock_cycle_budget_seconds": 21},
+        {"stock_max_response_bytes": 1048577},
+        {"stock_data_account": ""},
+        {"stock_data_server": ""},
+        {"stock_request_timeout_seconds": 10, "stock_max_retries": 2},
+    ],
+)
+async def test_invalid_stock_configuration_is_rejected(values: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        scheduler_config(**values)
+
+
+async def test_activation_document_has_concrete_transaction_and_dry_run() -> None:
+    doc = (Path(__file__).resolve().parents[2] / "deploy/STOCK-DATA-ADMISSION.md").read_text()
+    for text in (
+        "FOR UPDATE",
+        "generation = generation + 1",
+        "ROLLBACK",
+        "COMMIT",
+        "evaluate_admission",
+        "MIGRATOR_DATABASE_URL",
+        "STOCK_EVIDENCE_FILE",
+        "No provider permission has been established",
+        "SELECT-only",
+    ):
+        assert text in doc
