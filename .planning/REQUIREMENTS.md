@@ -1,0 +1,119 @@
+# Requirements: Birja
+
+**Milestone:** v1.1 — US Stock Trading
+**Defined:** 2026-11-10
+**Status:** Approved requirements — roadmap pending approval (2026-11-10)
+**Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
+
+## v1.1 Requirements
+
+Owner approved all 26 requirements and the exact boundaries below, including a strict source age below 120 seconds, midpoint stock valuation, gross ordinary USD dividends without tax/reinvestment, and safe handling of post-payment corrections. No implementation or external account action is authorized by requirements approval.
+
+### Catalogue and permitted market data
+
+- [ ] **STOCK-01**: User can browse exactly 20 curated NYSE/Nasdaq USD common stocks alongside crypto, with stable identities, company names, symbols and listing exchanges.
+- [ ] **STOCK-02**: User sees “IEX prices” on stock listings, trade previews and stock valuations, with an explanation of single-venue coverage and simulated execution.
+- [ ] **STOCK-03**: User sees stock bid/ask prices and their source-event timestamp, refreshed about every 60 seconds; stock execution refuses source quotes aged 120 seconds or more, invalid quotes and previous-session quotes at reopening.
+- [ ] **DATA-01**: Users receive live stock quotes and corporate-action information only after the selected products’ access, display/derived-data rights, quotas and required attribution are verified for Birja; otherwise stock activation remains disabled without affecting crypto.
+
+### Market availability
+
+- [ ] **MKT-01**: User can execute stocks only during the applicable regular US session, with holidays, early closes and America/New_York daylight-saving changes applied server-side.
+- [ ] **MKT-02**: User sees a clear refusal for closed, halted, frozen or unknown/stale eligibility state; new fills recheck eligibility and quote age after blocking database waits, while crypto remains independently available.
+
+### Stock trading and shared cash
+
+- [ ] **STKTR-01**: User can buy and sell positive whole-share quantities only; fractional-stock and dollar-input stock orders are rejected, while existing fractional and dollar-based crypto orders retain their behavior.
+- [ ] **STKTR-02**: User receives a simulated stock buy at an eligible IEX ask and sell at an eligible IEX bid, with zero commission and zero additional spread; omitted regulatory fees and simulated execution are disclosed.
+- [ ] **STKTR-03**: User sees an itemized server preview before confirmation and the actual persisted fill afterward; a relevant executable-price change returns a revised preview requiring renewed confirmation.
+- [ ] **STKTR-04**: User spends and receives the same existing virtual USD balance across stocks and crypto, without another starting grant; concurrent cross-asset orders cannot overspend cash or holdings.
+- [ ] **STKTR-05**: User can retry an uncertain stock order without duplicate execution; replay returns the stored original fill even after the market closes, and a changed payload conflicts.
+- [ ] **STKTR-06**: User can immediately reuse stock-sale proceeds for stocks or crypto, with the absence of real settlement restrictions disclosed.
+
+### Combined portfolio and event history
+
+- [ ] **PORT-06**: User sees combined cash, crypto and stock holdings, allocation and portfolio return against the original stored starting cash; eligible stock valuation uses IEX bid/ask midpoint and dividend cash is counted once.
+- [ ] **PORT-07**: User can inspect dated stock marks while the market is closed; missing or corporate-action-uncertain valuations are explicitly unavailable and make aggregate totals incomplete rather than silently zero or fresh.
+- [ ] **HIST-03**: User sees stock fills, Dividend credits, forward-split events and explicit corrections in a private, deterministic newest-first paginated History, with event-specific details and preserved existing crypto fills.
+
+### Dividends
+
+- [ ] **DIV-01**: User dividend entitlements use structured ordinary USD cash-dividend announcements whose identities, dates, amounts and revisions are retained and regularly rechecked; conflicting, incomplete, cancelled or uncertain events do not cause guessed payments.
+- [ ] **DIV-02**: User dividend entitlement is based on holdings at the verified eligibility cutoff for that event, accounting for historical trades and processed splits; buying after the cutoff does not earn the dividend and selling afterward does not erase it.
+- [ ] **DIV-03**: User receives the verified gross ordinary USD cash dividend into shared cash on or after its payable date, without tax withholding or automatic reinvestment; the Dividend event shows stock, relevant dates, eligible quantity, per-share rate and credited amount.
+- [ ] **DIV-04**: User cannot receive duplicate dividend cash from retries, concurrent processing, revised announcements or recovery; credit and History publication are one atomic accounting operation.
+- [ ] **DIV-05**: User can trace a verified post-payment correction through a separate adjustment linked to the original event; prior history is retained, duplicate deltas are prevented and uncertain or unaffordable negative adjustments are held for reconciliation instead of making cash negative.
+
+### Splits and uncertain corporate actions
+
+- [ ] **ACT-01**: User holdings are automatically reconciled for verified straightforward forward splits when entitlements are unambiguous and preserve supported whole-share quantities; total holding basis is conserved, unit basis changes correctly and historical trade fills remain unchanged.
+- [ ] **ACT-02**: User cannot trade an affected stock while a reverse split, merger, fractional entitlement, disputed action or other unsupported event requires reconciliation; its uncertain valuation is unavailable until a verified, auditable resolution, without guessed liquidation or cash-in-lieu.
+- [ ] **ACT-03**: User cannot receive repeated split adjustments after retries or recovery; action processing is ordered with trades and dividend eligibility, and source-monitoring failures have explicit suspension/recovery rules.
+
+### Compatibility and acceptance
+
+- [ ] **SAFE-01**: Existing users retain their accounts, balances, instrument identities, holdings and immutable crypto history through reviewed migrations; mixed-asset services continue to work with restricted PostgreSQL roles and verified TLS.
+- [ ] **SAFE-02**: Operator can recover mixed stock/crypto holdings, dividend entitlements/payments, action revisions and event history from an exact encrypted backup with consistent totals and duplicate-prevention state; schema, grant and retained recovery-tool compatibility are proven before rollout.
+- [ ] **SAFE-03**: User stock journeys are verified through real isolated PostgreSQL accounting/concurrency tests and browser flows for open/closed sessions, dividends, splits, stale data and crypto coexistence; applicable CI coverage/security gates remain enforced.
+
+## Future Requirements
+
+- Portfolio value-over-time and per-stock price charts, watchlists, fundamentals and broad symbol search.
+- ETFs, options, other equity markets and asset classes.
+- Full automation of reverse splits, mergers and other complex entitlements.
+- Fractional-stock orders, extended hours, queued/limit/stop orders and real settlement restrictions.
+- Realistic regulatory fees, tax withholding and dividend reinvestment.
+- Unrelated accepted v1.0 W01–W08 debt remains in the milestone archive; no new cleanup phase is inferred.
+
+## Out of Scope
+
+| Feature | Reason |
+|---|---|
+| Real brokerage orders, funds or deposits | Birja remains a virtual-money simulator |
+| Margin, short selling and leverage | Outside the agreed whole-share cash-account scope |
+| Consolidated SIP feed or 15-minute-delay fallback | Owner selected labelled IEX with crypto-like freshness |
+| Unapproved paid subscriptions, provider contact or agreement acceptance | Feed selection does not authorize external commitments |
+| Guessing missing corporate-action amounts or fractional cash-in-lieu | Suspend uncertain affected instruments for verified reconciliation |
+| Rewriting or resetting existing accounts/fills | Existing balances and financial history must be preserved |
+
+## Traceability
+
+Roadmapper will map every approved requirement to exactly one phase, starting at Phase 7.
+
+| Requirement | Phase | Status |
+|---|---|---|
+| STOCK-01 | Unassigned | Pending |
+| STOCK-02 | Unassigned | Pending |
+| STOCK-03 | Unassigned | Pending |
+| DATA-01 | Unassigned | Pending |
+| MKT-01 | Unassigned | Pending |
+| MKT-02 | Unassigned | Pending |
+| STKTR-01 | Unassigned | Pending |
+| STKTR-02 | Unassigned | Pending |
+| STKTR-03 | Unassigned | Pending |
+| STKTR-04 | Unassigned | Pending |
+| STKTR-05 | Unassigned | Pending |
+| STKTR-06 | Unassigned | Pending |
+| PORT-06 | Unassigned | Pending |
+| PORT-07 | Unassigned | Pending |
+| HIST-03 | Unassigned | Pending |
+| DIV-01 | Unassigned | Pending |
+| DIV-02 | Unassigned | Pending |
+| DIV-03 | Unassigned | Pending |
+| DIV-04 | Unassigned | Pending |
+| DIV-05 | Unassigned | Pending |
+| ACT-01 | Unassigned | Pending |
+| ACT-02 | Unassigned | Pending |
+| ACT-03 | Unassigned | Pending |
+| SAFE-01 | Unassigned | Pending |
+| SAFE-02 | Unassigned | Pending |
+| SAFE-03 | Unassigned | Pending |
+
+**Coverage:** 26 approved requirements; 0 mapped until roadmap creation. No requirement is implemented or validated by writing this file.
+
+## Decision and evidence notes
+
+- Owner confirmed IEX labels, zero stock fees/added spread, buys at ask/sells at bid, dividend credits and separate History events, structured announcement/correction monitoring, automatic ordinary events with uncertain-event suspension, and immediate virtual proceeds.
+- Quote/event display permission, actual feed coverage/access, timely action/status availability and quota compliance remain activation gates; no free public-use entitlement has been obtained.
+- Research remains dated evidence; later user decisions above supersede its formerly open policy options. See [research summary](research/SUMMARY.md).
+- Full requirements were explicitly approved on 2026-11-10; roadmap approval remains a separate GSD checkpoint.

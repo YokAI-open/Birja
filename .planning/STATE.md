@@ -48,10 +48,13 @@ cash dividend credits with separate History events and accepted structured
 announcement monitoring, revisions, historical eligibility, duplicate prevention
 and separately recorded payment adjustments with uncertain cases held for review.
 
-Two owner questions are pending: automatic ordinary events with suspension of
-uncertain/complex events, and immediate virtual sale proceeds versus settlement
-restrictions. After responses, present complete scoped requirements (including
-recommended gross USD/no tax/no reinvestment policy) for approval, then roadmap.
+Owner approved automatic ordinary cash dividends/forward splits with suspension
+of uncertain/complex events, and immediately reusable virtual sale proceeds.
+Owner approved the full 26 requirements and authorized roadmap creation on
+2026-11-10, including source age <120 seconds, gross ordinary USD/no tax/no
+reinvestment, midpoint valuation and holding unaffordable negative corrections
+for review. Commit requirements, create the proposed Phase 7+ roadmap, then
+request its separate approval before committing the phase structure.
 Do not re-ask IEX feed or fee decisions. No implementation/provider account access,
 spend, contact, signup, service change or stock activation has occurred.
 
@@ -89,7 +92,7 @@ separately exact-restored retained snapshot; no future success/billing guarantee
 
 ## Session Continuity
 
-Resume `$gsd-new-milestone` at corporate-action/settlement scoping, then complete
+Resume `$gsd-new-milestone` at roadmap creation and approval, then complete
 requirements and roadmap approval gates. Do not repeat confirmed scope/research
 questions. New phase plans are not yet created. v1 history is archived rather
 than deleted, and existing accepted advisory debt remains above.

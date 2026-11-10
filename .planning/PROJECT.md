@@ -111,9 +111,17 @@ using the same virtual USD balance and combined portfolio.
   Record post-payment corrections separately; hold uncertain/conflicting cases
   for review rather than guess. Owner accepted this monitoring approach.
 
-**Open scoping choices:** ordinary versus complex corporate-action automation,
-stock settlement simplification, final gross-USD/no-tax/no-reinvestment boundary
-and complete requirements approval. Proposed freshness matches crypto's source
+**Additional confirmed choices:** automatically process ordinary cash dividends
+and straightforward forward splits; suspend the affected stock and mark its
+valuation unavailable for uncertain/unsupported events requiring reconciliation.
+Virtual sale proceeds are immediately reusable, with real settlement restrictions
+outside this milestone and the simplification disclosed.
+
+**Requirements approved (2026-11-10):** all 26 requirements, including gross
+ordinary USD dividends without tax/reinvestment, source quote age below 120
+seconds, midpoint valuation and holding uncertain or unaffordable negative
+corrections for review. Proposed roadmap creation is authorized; approval of
+its phase structure remains the next checkpoint. Proposed freshness matches crypto's source
 age <120 seconds with about 60-second collection; quotes carry source-event
 rather than fetch time. Provider rights, quote/status and dividend-event access
 remain activation gates, not assumed satisfied by selecting IEX. No paid plan,
