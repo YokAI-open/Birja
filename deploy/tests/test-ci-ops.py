@@ -211,6 +211,8 @@ class CI(unittest.TestCase):
 
     def test_ops_runs_real_serial_producers_with_verified_tool(self):
         ops = jobs().get("ops", "")
+        rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
+        self.assertIn("selected.integration(args.recovery_bundle)", rollback)
         self.assertIn("sudo -- python3 deploy/tests/test-deploy-prerequisites.py", ops)
         self.assertIn("sudo -- python3 deploy/tests/test-datastore-bindings.py", ops)
         self.assertRegex(

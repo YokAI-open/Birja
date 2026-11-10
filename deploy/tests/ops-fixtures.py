@@ -121,15 +121,29 @@ def restrict_to_old_host(root, allowed_files=()):
         os.close(fd)
 
 
-def target(root, argv, ok=True, allowed_files=()):
+def target(root, argv, ok=True, allowed_files=(), inherited=None):
+    started = time.monotonic()
     result = subprocess.run(
         argv,
         check=False,
-        env={**r.ENV, "HOME": str(root)},
+        env={
+            **r.ENV,
+            "HOME": str(root),
+            **(
+                {"BIRJA_BACKUP_LOCK_FD": str(inherited)}
+                if inherited is not None
+                else {}
+            ),
+        },
         cwd=root / "old/app",
         capture_output=True,
         timeout=180,
         preexec_fn=lambda: restrict_to_old_host(root, allowed_files),
+        pass_fds=() if inherited is None else (inherited,),
+    )
+    print(
+        f"fixture_target={Path(argv[0]).name} seconds={time.monotonic() - started:.3f} exit={result.returncode}",
+        flush=True,
     )
     if ok:
         assert result.returncode == 0, result.stdout.decode() + result.stderr.decode()
@@ -417,7 +431,7 @@ def installed_recovery(archive_arg=None):
             )
 
 
-def recovery_roundtrip(session, *, source_revision, source_release):
+def recovery_roundtrip(session, *, source_revision, source_release, inherited=None):
     """Use installed launchers and a fixed separate clone; never own the source."""
     import re
 
@@ -430,12 +444,17 @@ def recovery_roundtrip(session, *, source_revision, source_release):
     c["quota"]["observed_at"] = int(time.time())
     session.config_path.write_text(json.dumps(c))
     common = ["--synthetic", str(session.config_path)]
-    target(root, [str(tools / "birja-backup"), *common])
+
+    def invoke(argv):
+        if inherited is None:
+            return target(root, argv)
+        return target(root, argv, inherited=inherited)
+
+    invoke([str(tools / "birja-backup"), *common])
     assert not (root / "state/stage").exists()
-    target(root, [str(tools / "birja-backup-status"), *common])
+    invoke([str(tools / "birja-backup-status"), *common])
     sid = json.loads((root / "state/last-success.json").read_text())["snapshot_id"]
-    target(
-        root,
+    invoke(
         [
             str(tools / "birja-restore-check"),
             *common,
@@ -444,8 +463,7 @@ def recovery_roundtrip(session, *, source_revision, source_release):
             "--isolated-clone",
         ],
     )
-    target(
-        root,
+    invoke(
         [
             "python3",
             str(session.release / "deploy/backup-snapshot.py"),
