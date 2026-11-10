@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Encrypted owner-requested recovery archive ready; off-server saving pending
+stopped_at: Verified encrypted 7z recovery archive ready; off-server saving pending
 last_updated: "2026-11-10T09:58:50Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -74,7 +74,8 @@ installed independent recovery unchanged. No SQL role, live TLS, data copy /
 conversion, provider/timer, backup/restore, restart or deployment operation.
 
 Owner requested a single archive including prod.env: created/verified encrypted
-25member archive in private ignored offserver-export directory; see
+25member archive in private ignored offserver-export directory; owner-requested
+7z replacement is ready and fully verified (127260957bytes); see
 HOST-PREPARATION for exact filename/digest. Existing restic password decrypts it.
 Next: owner downloads and saves this archive off-server with the password
 independently available, then confirms custody.

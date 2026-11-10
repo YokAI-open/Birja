@@ -82,3 +82,18 @@ The archive is configuration/tool custody, not a database backup; actual data
 remains in encrypted B2. No production configuration/service change or provider
 access. Owner must download/save it off-server and retain the existing restic
 password independently; off-server custody confirmation is still pending.
+
+## Owner-requested 7z replacement —2026-11-10
+
+Owner requested 7z format. Created private root0600 ignored
+`offserver-export/birja-offserver-recovery-20261110T100419Z.7z`
+(127,260,957bytes), AES256 with encrypted headers using the same existing
+restic password. Contains all25members from the verified GPG export; only
+README instructions and its internal checksum changed for7-Zip. Full private
+extraction and all25file hashes passed, including original source checksums
+before conversion; opening without password rejected. Plaintext temporary
+staging removed. No production/service/config/provider changes.
+SHA256:`4b67c3fec44a3fd8ce85c30cf22a4b022f4a214e33ccb8d308a9ed56886f9584`.
+Isolated temporary py7zr1.1.4 used; no project/global package changes.
+Use this7z for owner download; earlier encrypted GPG copy remains private.
+Off-server custody confirmation remains pending.
