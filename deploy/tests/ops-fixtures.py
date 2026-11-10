@@ -815,6 +815,9 @@ def role_python(code, role=r.BOOT):
             "PRICE_SOURCE=fake",
             "--entrypoint",
             "python",
+            *([] if code == SEED else ["-v", str(ROOT / "backend/app") + ":/app/app:ro"]),
+            "-v",
+            str(ROOT / "backend/alembic") + ":/app/alembic:ro",
             "birja-backend-test:phase05-07",
             "-",
         ],
@@ -1040,6 +1043,53 @@ def image_transition():
                 assert not r.call(["/usr/bin/docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + project]).strip()
 
 
+def stock_role_contract(dc):
+    """Actual SQL ownership/ACL proof, independent of the later calendar evaluator."""
+    tables = ("stock_instruments", "stock_quotes", "stock_sessions", "stock_data_admissions")
+    for role in ("birja_app", "birja_scheduler"):
+        for table in tables:
+            allowed = {"SELECT"}
+            if role == "birja_scheduler" and table in {"stock_quotes", "stock_sessions"}:
+                allowed |= {"INSERT", "UPDATE"}
+            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN"):
+                assert role_sql(dc, f"SELECT has_table_privilege('{role}','{table}','{privilege}')") == (b"t" if privilege in allowed else b"f"), (role, table, privilege)
+            assert role_sql(dc, f"SELECT count(*) FROM {table}", role).isdigit()
+        for sequence in ("stock_sessions_id_seq", "stock_data_admissions_id_seq"):
+            for privilege in ("USAGE", "SELECT", "UPDATE"):
+                allowed = role == "birja_scheduler" and sequence == "stock_sessions_id_seq" and privilege == "USAGE"
+                assert role_sql(dc, f"SELECT has_sequence_privilege('{role}','{sequence}','{privilege}')") == (b"t" if allowed else b"f")
+        for query in (
+            "INSERT INTO stock_data_admissions(product) VALUES ('calendar')",
+            "UPDATE stock_data_admissions SET reviewed_at=now(), valid_until=now()+interval '1 day' WHERE product='calendar'",
+            "UPDATE stock_data_admissions SET calendar=jsonb_build_object('review_valid_until',now()+interval '1 day','overrides',jsonb_build_array(jsonb_build_object('date','2026-11-27','closed',false))) WHERE product='calendar'",
+            "UPDATE stock_instruments SET provider_asset_id='forged'",
+            "SELECT nextval('stock_data_admissions_id_seq')",
+        ):
+            role_sql(dc, query, role, denied=True)
+    assert role_sql(dc, "SELECT count(*) FROM pg_class WHERE relname IN ('stock_instruments','stock_quotes','stock_sessions','stock_data_admissions','stock_sessions_id_seq','stock_data_admissions_id_seq') AND relowner=(SELECT oid FROM pg_roles WHERE rolname='birja_migrator')") == b"6"
+    assert role_sql(dc, "SELECT count(*) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relname IN ('stock_instruments','stock_quotes','stock_sessions','stock_data_admissions','stock_sessions_id_seq','stock_data_admissions_id_seq') AND a.grantee=0") == b"0"
+    assert role_sql(dc, "SELECT string_agg(column_name,',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='stock_sessions'") == b"id,exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation"
+    role_sql(dc, "INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation) SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10T15:00:00.123456Z','2026-11-10T15:00:01.123456Z','2026-11-10',7 FROM stock_instruments ORDER BY coin_id LIMIT 1 ON CONFLICT(coin_id) DO UPDATE SET collected_at=excluded.collected_at", "birja_scheduler")
+    next_id = role_sql(dc, "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-11-27','2026-11-01','2026-12-01',999) RETURNING id", "birja_scheduler")
+    assert int(next_id) > 0
+    role_sql(dc, "UPDATE stock_sessions SET calendar_admission_generation=7 WHERE exchange='NYSE'", "birja_scheduler")
+    assert int(role_sql(dc, "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NASDAQ','2026-11-27','2026-11-01','2026-12-01',7) RETURNING id", "birja_scheduler")) == int(next_id) + 1
+    for table in ("stock_quotes", "stock_sessions"):
+        role_sql(dc, f"INSERT INTO {table} DEFAULT VALUES", "birja_app", denied=True)
+        role_sql(dc, f"UPDATE {table} SET " + ("mid=mid" if table == "stock_quotes" else "calendar_admission_generation=1"), "birja_app", denied=True)
+    for field in ("reviewed_at", "review_valid_until", "overrides"):
+        result = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=sqlstate", "-U", "birja_scheduler", "-d", "birja_source_test"], input=f"UPDATE stock_sessions SET {field}=NULL".encode(), capture_output=True, env=r.ENV, timeout=15)
+        assert result.returncode != 0 and b"42703" in result.stderr
+    print("stock_sql_acl_exact=true calendar_authority_migrator_only=true sessions_derived_only=true session_identity_advances=true evaluator_proof=plan08_13", flush=True)
+
+
+def role_manifest(dc):
+    # This fixture deliberately owns an unrelated relation. Recovery's strict
+    # schema allowlist remains mandatory in recovery lanes, not this ACL test.
+    revision = role_sql(dc, "SELECT version_num FROM alembic_version").decode()
+    return json.loads(role_sql(dc, "SET TIME ZONE 'UTC';\n" + r.backup_module().manifest_sql(revision)))
+
+
 def roles(red_probe=False):
     dc = r.compose()
     started = time.monotonic()
@@ -1119,7 +1169,8 @@ def roles(red_probe=False):
             setup_done = time.monotonic()
             r.sql(dc, "CREATE DATABASE birja_source_test", "birja_ops_test")
             role_python(SEED)
-            assert r.canonical(dc, "birja_source_test")["revision"] == "0007"
+            assert role_manifest(dc)["revision"] == "0007"
+            role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0008')")
             role_sql(
                 dc,
                 "CREATE TABLE public.unrelated_fixture(id bigint GENERATED ALWAYS AS IDENTITY, marker text); INSERT INTO unrelated_fixture(marker) VALUES ('untouched')",
@@ -1130,7 +1181,7 @@ def roles(red_probe=False):
             identities = "SELECT c.relname,s.relname,d.deptype FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attidentity='a' JOIN pg_depend d ON d.refobjid=c.oid AND d.refobjsubid=a.attnum AND d.deptype='i' JOIN pg_class s ON s.oid=d.objid WHERE c.relnamespace='public'::regnamespace AND c.relname!='unrelated_fixture' ORDER BY c.relname"
             before_identity = role_sql(dc, identities)
             assert len(before_identity.splitlines()) == 7
-            before = r.canonical(dc, "birja_source_test")
+            before = role_manifest(dc)
             if red_probe:
                 assert role_sql(dc, owner_query % "birja_migrator") == b"9", (
                     "populated application objects lack restricted migration ownership"
@@ -1172,7 +1223,7 @@ def roles(red_probe=False):
             )
             assert role_sql(dc, owner_query % "birja_migrator") == b"9"
             assert role_sql(dc, identities) == before_identity
-            assert r.canonical(dc, "birja_source_test") == before
+            assert role_manifest(dc) == before
             for unsafe, undo in (
                 (
                     "GRANT birja_migrator TO birja_app",
@@ -1185,11 +1236,8 @@ def roles(red_probe=False):
                     rejected(admin + approved)
                 finally:
                     role_sql(dc, undo)
-                assert r.canonical(dc, "birja_source_test") == before
-            r.call(
-                admin + ["--apply", "--approved-operation", "populated-role-transition"]
-            )
-            assert r.canonical(dc, "birja_source_test") == before
+                assert role_manifest(dc) == before
+            assert role_manifest(dc) == before
             assert (
                 role_sql(
                     dc,
@@ -1216,7 +1264,8 @@ def roles(red_probe=False):
                 "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",
                 "birja_migrator",
             )
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0008"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
+            stock_role_contract(dc)
             assert (
                 role_sql(
                     dc,
@@ -1316,6 +1365,14 @@ def roles(red_probe=False):
                 )
                 negatives += 1
             role_sql(dc, "DROP TABLE public.defaults_fixture", "birja_migrator")
+            # A separate fresh schema must receive the same explicit stock ACLs.
+            # Prior migration grants cannot mask an incomplete bootstrap.
+            r.sql(dc, "DROP DATABASE birja_source_test WITH (FORCE)", "birja_ops_test")
+            r.sql(dc, "CREATE DATABASE birja_source_test", "birja_ops_test")
+            role_python(SEED)
+            role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')")
+            r.call(admin + approved)
+            stock_role_contract(dc)
             print(
                 f"roles_populated_transfer=true repeatable=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
             )
@@ -1325,6 +1382,45 @@ def roles(red_probe=False):
         finally:
             r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
             assert r.call(dc + ["ps", "-q"]).strip() == b""
+
+
+STOCK_TLS_UPGRADE = r"""
+import asyncio, subprocess
+import asyncpg
+from app.core.config import SchedulerSettings
+from app.db.connection import database_connect_args
+async def main():
+ s=SchedulerSettings()
+ args=database_connect_args(s)
+ connections=[]
+ try:
+  for role,char in [('app','a'),('scheduler','b')]:
+   conn=await asyncpg.connect('postgresql://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',**args)
+   assert await conn.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
+   assert await conn.fetchval('SELECT count(*) FROM coins')==15
+   connections.append(conn)
+  subprocess.run(['alembic','upgrade','head'],check=True,timeout=90)
+  app,scheduler=connections
+  for table in ['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions']:
+   await app.fetch('SELECT * FROM '+table)
+  await scheduler.execute("INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation) SELECT coin_id,100,102,101,'alpaca','iex','2026-11-10T15:00Z','2026-11-10T15:00:01Z','2026-11-10',1 FROM stock_instruments ORDER BY coin_id LIMIT 1")
+  identity=await scheduler.fetchval("INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-11-10','2026-11-01','2026-12-01',999) RETURNING id")
+  assert identity==1
+  await scheduler.execute("UPDATE stock_sessions SET calendar_admission_generation=1 WHERE id=1")
+  for conn in connections:
+   for query in ["UPDATE stock_data_admissions SET reviewed_at=now()", "UPDATE stock_data_admissions SET calendar='{}'", "UPDATE stock_instruments SET provider_asset_id='forged'", "SELECT nextval('stock_data_admissions_id_seq')", "CREATE TABLE forbidden_tls(id bigint)", "SET ROLE birja_migrator"]:
+    try: await conn.execute(query)
+    except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
+    else: raise AssertionError('restricted TLS role escalated')
+  for query in ["UPDATE accounts SET cash=cash", "UPDATE holdings SET quantity=quantity", "UPDATE trades SET fee=fee"]:
+   try: await scheduler.execute(query)
+   except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
+   else: raise AssertionError('scheduler obtained financial writes')
+ finally:
+  for conn in connections: await conn.close()
+asyncio.run(main())
+print('existing_tls_connections_immediate_stock_grants=true no_postupgrade_grant_repair=true')
+"""
 
 
 TLS_PROBE = r"""
@@ -1740,9 +1836,16 @@ def tls():
             ]
             secure_seed = SEED.replace(
                 "engine=create_async_engine(s.database_url)",
-                "from app.db.connection import database_connect_args\n engine=create_async_engine(s.database_url,connect_args=database_connect_args(s))",
+                "import ssl\n engine=create_async_engine(s.database_url,connect_args={'ssl':ssl.create_default_context(cafile='/run/birja/db-ca.crt')})",
             )
-            client("backend", secure_seed, bootstrap)
+            # Populated legacy state uses its actual historical application.
+            legacy = root / "legacy"
+            legacy.mkdir(mode=0o755)
+            with tarfile.open(fileobj=__import__('io').BytesIO(source_git('archive', 'v0.3.1', 'backend/app'))) as archive:
+                archive.extractall(legacy, filter='data')
+            client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0008')", bootstrap)
+            original = r.canonical(dc, "birja_source_test")
             config = root / "roles.json"
             config.write_text(
                 json.dumps(
@@ -1780,8 +1883,13 @@ def tls():
                 == b"0\n"
             )
             # Real one-shot production migration command, with only migrator route/trust.
-            r.call(dc + ["run", "--rm", "--no-deps", "-T", "migrate"])
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0008"
+            upgraded = client('migrate', STOCK_TLS_UPGRADE)
+            assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
+            current = r.canonical(dc, "birja_source_test")
+            assert current['financial'] == original['financial']
+            assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version'})
+            stock_role_contract(dc)
             assert (
                 role_sql(
                     dc,
