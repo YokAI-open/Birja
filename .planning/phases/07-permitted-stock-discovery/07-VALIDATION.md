@@ -65,10 +65,15 @@ Durations are estimates to measure. Q=pure/HTTP/component target<30s; D=DB/API/m
 | Admission scope/generation/expiry races | 07-05-01 | Not executed |
 | Raw exact number/event/condition HTTP fixtures and realPG monotonic races | 07-06-01/02 | Not executed |
 | Official dated DST/holiday/earlyclose/exception fixtures and actualruntime; current authoritative calendar evidence/overrides versus derived session generation, expired-review fresh-row and forged-generation refusal | 07-08-01/02 | Not executed |
+| Actual restricted-TLS persisted-state generation/expiry evaluation using genuine session_at in both upgrade-without-grant-repair and fresh-bootstrap lanes | 07-13-01/02 | Not executed |
 | Hanging/revoked stock collection with independent crypto/cancellation | 07-09-01/02 | Not executed |
 | Authenticated no-store leftjoin/API redaction; final committed evidence/clock after awaits and same-request blocked-DB revoke/expiry/age120/close/review-expiry tests | 07-10-01/02 | Not executed |
 | Client validator/late-response/auth purge; full request RTT and conservative server-time boundary intervals at first render; shared attribution | 07-11-01/02 | Not executed |
 | UI state matrix, responsive realbrowser coexistence | 07-12-01/02 | Not executed |
+
+## Execution ordering correction — 2026-11-10
+
+07-04 executes actual SQL ACL/sequence/authority-write denials, verified TLS and independent exact restore before any calendar runtime exists. Its former genuine session predicate assertion depended on07-08, which transitively depends on07-04. Required evaluator generation/expiry cases remain in07-08-02; actual persisted cross-role integration belongs to07-13-01 (ops-fixtures.py/test-db-operations.sh) after the genuine evaluator exists. Both --roles and --all then execute it without a fixture-only substitute or silent skip, and07-13-02 must record passing evidence before activation/completion. No security/coverage gate or architecture changes.
 
 ## Complete final gate (07-13-02)
 

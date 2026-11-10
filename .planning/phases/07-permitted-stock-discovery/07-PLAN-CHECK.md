@@ -65,3 +65,18 @@ provider permission or working live source is inferred from a planning pass.
 
 No implementation tests, private/provider calls, service changes or production
 operations occurred during the independent reviews. No user override was needed.
+
+## Execution-order correction — 2026-11-10
+
+Executor07-04 found that its genuine session_at generation/expiry proof preceded
+the helper's creation in07-08, a transitive dependency cycle. Retain07-04 actual
+SQL ACL/sequence/authority-write-denial/TLS and independent restore proof. Keep
+genuine evaluator semantics in07-08-02 and require actual persisted cross-role
+integration in07-13-01/02, covering both upgrade without grant repair and fresh
+bootstrap with --roles/--all, no copied predicate or silent skip.
+
+Independent gsd-plan-checker narrow review: **VERIFICATION PASSED, 0 blockers,
+0 warnings.** All assertions retained with executable ownership; original
+14plans/29tasks/13waves and package/provider/acceptance checkpoints unchanged.
+Plan13's seven-file/two-task scope remains bounded. No architecture or gate
+change, no implementation/service/private operations during review.
