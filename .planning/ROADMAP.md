@@ -105,7 +105,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 07-09-PLAN.md — Collect stocks independently inside the single scheduler.
+- [x] 07-09-PLAN.md — Collect stocks independently inside the single scheduler.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -201,7 +201,7 @@ remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 8/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 9/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
