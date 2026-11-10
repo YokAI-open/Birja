@@ -17,5 +17,5 @@ four early validation-record gaps in the
 [milestone audit](milestones/v1.0-MILESTONE-AUDIT.md) and
 [integration audit](milestones/v1.0-INTEGRATION-AUDIT.md).
 
-Phase plans, summaries, design contracts and reviews remain in `phases/` as
+Phase plans, summaries, design contracts and reviews remain in `milestones/v1.0-phases/` as
 execution history. Production operations continue under `deploy/RUNBOOK.md`.

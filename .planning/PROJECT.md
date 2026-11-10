@@ -30,7 +30,9 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-None — v1.0 archived; next milestone scope has not been selected.
+- [ ] Trade 20 curated NYSE/Nasdaq stocks in whole-share quantities during regular market sessions.
+- [ ] Use the existing USD cash balance and combined portfolio/history for crypto and stocks.
+- [ ] Stock quotes target crypto-like freshness (about one-minute updates; feasibility and display rights to verify).
 
 ### Out of Scope
 
@@ -77,14 +79,32 @@ records as follow-up debt, without claiming fixes. See
 [milestone audit](milestones/v1.0-MILESTONE-AUDIT.md),
 [integration audit](milestones/v1.0-INTEGRATION-AUDIT.md) and
 [retrospective](RETROSPECTIVE.md). Historical accepted logout/protection caveats
-remain recorded there. All phase execution history remains in `phases/`.
+remain recorded there. All v1 phase execution history is preserved in `milestones/v1.0-phases/`.
 
-## Next Milestone Goals
+## Current Milestone: v1.1 US Stock Trading
 
-Not selected. The deferred v2 ideas in the
-[requirements archive](milestones/v1.0-REQUIREMENTS.md#v2-requirements)
-are candidates only. A future `$gsd-new-milestone` will choose scope and create
-fresh active requirements; no new phase is automatically started.
+**Goal:** Let users practise trading 20 curated US stocks alongside crypto,
+using the same virtual USD balance and combined portfolio.
+
+**Confirmed target features:**
+- NYSE/Nasdaq common stocks; curated list of 20 for the first stock version.
+- Whole-share market buy/sell orders; fractional stock orders are excluded.
+- One shared USD cash balance, holdings valuation and stored history across assets.
+- Regular US trading sessions only; refuse stock orders while closed, including
+  holidays and early closes, while preserving crypto's independent availability.
+- Stock prices target crypto-like recency (about one-minute refresh rather than
+  fifteen-minute-delayed data). Actual source timestamps, permitted feed coverage,
+  free-tier quota and user display rights must be researched before committing
+  to an implementation/provider. User approved research first.
+
+**Research decisions still open:** suitable affordable licensed feed, exact quote
+age/coverage semantics, calendar/halts, corporate actions and fee/spread policy.
+Do not infer consent to a paid plan or lower freshness from provider constraints.
+
+**Scope confirmation:** Owner approved the above feature summary, whole-share
+approach and milestone v1.1 name on 2026-11-10. Start roadmap numbering at Phase 7.
+Research then requirements and roadmap approval precede implementation. Existing
+v1 advisory debt remains separately recorded, not added to this scope by default.
 
 ## Constraints
 
@@ -135,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-10 after v1.0 milestone archival*
+*Last updated: 2026-11-10 after v1.1 stock milestone scope confirmation*

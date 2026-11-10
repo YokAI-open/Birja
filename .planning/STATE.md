@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Birja MVP
-status: milestone_complete
-stopped_at: v1.0 archived locally with owner-approved follow-up debt; publication pending
-last_updated: 2026-11-10
-last_activity: 2026-11-10 -- Audited and archived v1.0; next milestone not selected
+milestone: v1.1
+milestone_name: US Stock Trading
+status: planning
+last_updated: "2026-11-10T12:10:24.693Z"
+last_activity: 2026-11-10
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 69
-  completed_plans: 69
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,9 +24,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 ## Current Position
 
-Phase: 6 complete; next phase number is 7 when scope is selected.
-Status: All 31 v1 requirements verified; milestone archived locally.
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-10 — Milestone v1.1 started
 
 ## Completion and next action
 
