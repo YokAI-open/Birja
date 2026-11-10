@@ -290,5 +290,82 @@ class CI(unittest.TestCase):
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])
 
 
+class FixtureGitIsolation(unittest.TestCase):
+    def test_generated_launcher_git_ignores_denied_host_config(self):
+        spec = importlib.util.spec_from_file_location(
+            "selected_cutover", ROOT / "deploy/tests/selected-cutover.py"
+        )
+        selected = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selected)
+        with (
+            tempfile.TemporaryDirectory(prefix="birja-backup-test-git-") as tmp,
+            tempfile.TemporaryDirectory(
+                prefix="birja-backup-test-host-config-"
+            ) as host,
+        ):
+            root = Path(tmp)
+            app = root / "old/app"
+            app.mkdir(parents=True)
+            (root / "home").mkdir()
+            (root / "tmp").mkdir()
+            subprocess.run(["git", "init", "-q", str(app)], check=True)
+            subprocess.run(
+                ["git", "-C", str(app), "config", "fixture.marker", "local-only"],
+                check=True,
+            )
+            denied = Path(host) / "gitconfig"
+            denied.write_text("[fixture]\nmarker=host-only\n")
+            result = selected.f.target(
+                root,
+                [
+                    "env",
+                    "GIT_CONFIG_SYSTEM=" + str(denied),
+                    "git",
+                    "-C",
+                    str(app),
+                    "rev-parse",
+                    "--git-dir",
+                ],
+                ok=False,
+            )
+            self.assertIn(b"Permission denied", result.stderr)
+            # Execute the actual generated launcher's clean environment block,
+            # not a hand-built approximation. Production source is unchanged.
+            source = (
+                (ROOT / "deploy/deploy-entrypoint.sh")
+                .read_text()
+                .replace("/root", str(root / "home"))
+            )
+            generated = selected.isolate_entrypoint_environment(source, root)
+            block = (
+                "env = {"
+                + generated.split("    env = {", 1)[1].split(
+                    "\n    if 'DEPLOY_REF'", 1
+                )[0]
+            )
+            script = (
+                "import os, subprocess\nfrom pathlib import Path\nrelease=Path("
+                + repr(str(root / "ops"))
+                + ")\n"
+                + textwrap.dedent(block)
+                + "\nenv['GIT_CONFIG_SYSTEM']="
+                + repr(str(denied))
+                + "\nsubprocess.run(['/usr/bin/git','-C',"
+                + repr(str(app))
+                + ",'rev-parse','--git-dir'],env=env,check=True,stdout=subprocess.DEVNULL)"
+                + "\nos.execve('/usr/bin/git',['git','-C',"
+                + repr(str(app))
+                + ",'config','fixture.marker'],env)"
+            )
+            result = selected.f.target(root, ["/usr/bin/python3", "-c", script])
+            self.assertEqual(result.stdout.strip(), b"local-only")
+            self.assertEqual(
+                (ROOT / "deploy/deploy-entrypoint.sh")
+                .read_text()
+                .count("GIT_CONFIG_NOSYSTEM"),
+                0,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

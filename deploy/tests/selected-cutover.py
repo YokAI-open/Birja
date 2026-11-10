@@ -52,6 +52,14 @@ def call(argv, data=None, ok=True, timeout=180, env=None):
     return result.stdout
 
 
+def isolate_entrypoint_environment(text, root):
+    # Compose writes client metadata via os.TempDir. Keep it inside the
+    # Landlock-protected synthetic host, independent of caller environment.
+    anchor = "'LANG':'C.UTF-8',"
+    assert text.count(anchor) == 1
+    return text.replace(anchor, anchor + "'TMPDIR':" + repr(str(root / "tmp")) + ",")
+
+
 def integration(archive=None):
     started = time.monotonic()
     owned = [
@@ -172,13 +180,7 @@ def integration(archive=None):
                 text,
             )
             if name == "deploy/deploy-entrypoint.sh":
-                # Compose writes build metadata via os.TempDir. Keep that
-                # client output within the Landlock-protected fake host.
-                anchor = "'LANG':'C.UTF-8',"
-                assert text.count(anchor) == 1
-                text = text.replace(
-                    anchor, anchor + "'TMPDIR':" + repr(str(root / "tmp")) + ","
-                )
+                text = isolate_entrypoint_environment(text, root)
             if name == "deploy/deploy.sh":
                 text = text.replace("HOST=birja.nist.one", "HOST=postgres")
                 text = text.replace(":443:127.0.0.1", ":" + str(port) + ":127.0.0.1")
