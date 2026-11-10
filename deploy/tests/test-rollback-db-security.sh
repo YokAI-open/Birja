@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 exec python3 - "$ROOT" "$@" <<'PY'
 import argparse
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -186,8 +187,8 @@ def integration(archive_arg):
     started = time.monotonic()
     # This exact locally available ref is required; never fetch or change host HEAD.
     old_sha = f.source_git('rev-parse', '--verify', 'v0.3.1^{commit}').decode().strip()
-    current_sha = f.source_git('rev-parse', 'HEAD').decode().strip()
-    original_head = current_sha
+    current_sha = f.source_git('rev-parse', '--verify', 'v0.4.0^{commit}').decode().strip()
+    original_head = f.source_git('rev-parse', 'HEAD').decode().strip()
     dc0 = r.compose()
     with f.installed_recovery(archive_arg) as session:
         root = session.root
@@ -199,15 +200,28 @@ def integration(archive_arg):
         current_lock = tomllib.loads((ROOT / 'backend/uv.lock').read_text())
         def artifacts(lock):
             return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
-        assert artifacts(old_lock) == artifacts(current_lock)
+        approved = {'exchange-calendars':'4.13.2','numpy':'2.5.4','pandas':'3.1.1','pyluach':'2.3.0','toolz':'1.2.0','tzdata':'2026.6','korean-lunar-calendar':'0.4.0','python-dateutil':'4.0.0'}
+        current_artifacts = artifacts(current_lock)
+        additions = {name:current_artifacts.pop(name) for name in approved}
+        assert {name:package['version'] for name,package in additions.items()} == approved
+        assert artifacts(old_lock) == current_artifacts
+        # Same exact independently reviewed addition-artifact fingerprint.
+        addition_digest = hashlib.sha256(json.dumps(additions,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        assert addition_digest == 'e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7'
         old_project = tomllib.loads((old / 'backend/pyproject.toml').read_text())
         current_project = tomllib.loads((ROOT / 'backend/pyproject.toml').read_text())
-        assert old_project['project']['dependencies'] == current_project['project']['dependencies']
+        assert sorted(old_project['project']['dependencies'] + ['exchange-calendars==4.13.2']) == sorted(current_project['project']['dependencies'])
         assert sorted(d for d in old_project['dependency-groups']['dev'] if not d.startswith('pip-audit')) == sorted(current_project['dependency-groups']['dev'])
         # Actual old source and lock, production-only deps, reviewed build file.
         run(['/usr/bin/docker', 'build', '--pull=false', '--target', 'runtime', '-f', str(ROOT / 'backend/Dockerfile'), '-t', 'birja-rollback-test:v0.3.1', str(old / 'backend')])
         for name in ['backend/uv.lock', 'backend/pyproject.toml']:
             assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
+        # This is the legacy0008 rollback lane. Actual successor0010 services
+        # and recovery are independently exercised by test-db-operations --all.
+        legacy = root/'legacy-current'
+        legacy.mkdir(mode=0o700)
+        with tarfile.open(fileobj=io.BytesIO(f.source_git('archive','v0.4.0','backend/app','backend/alembic'))) as archive:
+            archive.extractall(legacy,filter='data')
         env = {**r.ENV, 'POSTGRES_USER': r.BOOT, 'POSTGRES_PASSWORD': 'synthetic-ops-only',
                'POSTGRES_DB': 'birja_source_test', 'REDIS_PASSWORD': 'synthetic-redis-only',
                'OTP_HMAC_SECRET': 'synthetic-only-otp-secret-00000000000000',
@@ -298,7 +312,7 @@ def integration(archive_arg):
                     s['image'] = 'birja-rollback-test:v0.3.1' if name != 'migrate' else 'birja-backend-test:phase05-07'
                     s['volumes'] = [str(root/'db-tls/ca.crt')+':/run/birja/db-ca.crt:ro']
                     if name == 'migrate':
-                        s['volumes'] += [str(ROOT/'backend/app')+':/app/app:ro',str(ROOT/'backend/alembic')+':/app/alembic:ro']
+                        s['volumes'] += [str(legacy/'backend/app')+':/app/app:ro',str(legacy/'backend/alembic')+':/app/alembic:ro']
                     else: s['command'] = ['sleep','infinity']
                 fixture['services'][name] = s
             file = root/'rollback-compose.json'
@@ -330,7 +344,7 @@ def integration(archive_arg):
             for service,key in [('backend','APP'),('scheduler','SCHEDULER')]:
                 s=fixture['services'][service]
                 s['image']='birja-backend-test:phase05-07'
-                s['volumes'] += [str(ROOT/'backend/app')+':/app/app:ro']
+                s['volumes'] += [str(legacy/'backend/app')+':/app/app:ro']
                 s['environment']['DATABASE_URL']=env[key+'_DATABASE_URL']
             file.write_text(json.dumps(fixture))
             current_probe=PROBE.replace('e=create_async_engine(s.database_url)',
@@ -366,7 +380,7 @@ def integration(archive_arg):
             print('old_image_services_tls=true bad_ca_hostname_plaintext_rejected=true', flush=True)
             f.recovery_roundtrip(session, source_revision='0008', source_release=old_sha)
             assert f.source_git('rev-parse','HEAD').decode().strip() == original_head
-            print('old_image_rollback_same_installed_recovery=true revision_0008_preserved=true', flush=True)
+            print('old_image_rollback_same_installed_recovery=true revision_0008_preserved=true legacy_runtime_scope=v0.4.0_to_v0.3.1 successor0010_proof=separate_all_lane', flush=True)
             print('rollback_integration_seconds=%.3f' % (time.monotonic()-started), flush=True)
         finally:
             run(dc0+['down','-v','--remove-orphans'])

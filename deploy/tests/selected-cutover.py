@@ -5,12 +5,14 @@ import fcntl
 import hashlib
 import http.server
 import importlib.util
+import io
 import json
 import os
 import re
 import shutil
 import ssl
 import subprocess
+import tarfile
 import threading
 import time
 from pathlib import Path
@@ -116,6 +118,14 @@ def integration(archive=None):
         git("config", "user.email", "synthetic@example.invalid")
         git("config", "user.name", "Synthetic")
         old = git("rev-parse", "v0.3.1^{commit}")
+        # Preserve the actual legacy0008 rollout/old-runtime rollback lane.
+        # Only this private clone receives immutable v0.4.0 application/schema
+        # bytes; reviewed current retained ops and build instructions remain.
+        for directory in ("backend/app", "backend/alembic"):
+            shutil.rmtree(app / directory)
+        with tarfile.open(fileobj=io.BytesIO(f.source_git("archive", "v0.4.0", "backend/app", "backend/alembic"))) as archive:
+            archive.extractall(app, filter="data")
+        git("add", "backend/app", "backend/alembic")
         etc = root / "etc"
         etc.mkdir(mode=0o700)
         (root / "bin").mkdir(mode=0o700)
@@ -429,7 +439,7 @@ def integration(archive=None):
 
             query(
                 dc0,
-                "CREATE COLLATION public.cutover_locale (provider=libc, locale='en_US.utf8'); CREATE TABLE public.cutover_probe(value text COLLATE public.cutover_locale PRIMARY KEY); INSERT INTO cutover_probe VALUES ('ä'),('ß'),('Ω');",
+                "CREATE COLLATION public.cutover_locale (provider=libc, locale='en_US.utf8'); CREATE SCHEMA transition_fixture; CREATE TABLE transition_fixture.cutover_probe(value text COLLATE public.cutover_locale PRIMARY KEY); INSERT INTO transition_fixture.cutover_probe VALUES ('ä'),('ß'),('Ω');",
             )
 
             def redis(command, *args, auth=True):
@@ -742,7 +752,7 @@ m.main(['--check-volumes'])
             )
             check_redis_state()
             assert selected_query("SELECT version_num FROM alembic_version") == b"0008"
-            assert selected_query("SELECT count(*) FROM cutover_probe") == b"3"
+            assert selected_query("SELECT count(*) FROM transition_fixture.cutover_probe") == b"3"
             assert all(fingerprint(name) == value for name, value in originals.items())
             assert all(r.digest(path) == value for path, value in retained.items())
             f.recovery_roundtrip(
