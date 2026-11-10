@@ -153,3 +153,23 @@ it("renders independent loading and actionable retry without raw error details",
   await user.click(screen.getByRole("button", { name: "Retry stock prices" }));
   expect(state.refetch).toHaveBeenCalledOnce();
 });
+
+it("reserves the full twenty-record loading catalogue", () => {
+  state.data = undefined;
+  state.isPending = true;
+  const { container } = renderWithClient(<StockSection />);
+  const skeletons = container.querySelectorAll('[aria-hidden="true"] > div');
+  expect(skeletons).toHaveLength(20);
+});
+
+it("restores keyboard position to the stock heading after successful retry", async () => {
+  state.data = undefined;
+  state.isPending = false;
+  state.isError = true;
+  state.refetch.mockResolvedValue({ isError: false });
+  const { user } = renderWithClient(<StockSection />);
+  const retry = screen.getByRole("button", { name: "Retry stock prices" });
+  retry.focus();
+  await user.keyboard("{Enter}");
+  expect(screen.getByRole("heading", { name: "US stocks · 20" })).toHaveFocus();
+});

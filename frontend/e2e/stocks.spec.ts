@@ -127,6 +127,7 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
   failed = false;
   await page.keyboard.press("Enter");
   await expect(section(page).getByRole("status")).not.toContainText("Couldn’t refresh");
+  await expect(section(page).getByRole("heading", { name: "US stocks · 20" })).toBeFocused();
   await expect(page.getByRole("link", { name: "Trade BTC" })).toBeVisible();
 });
 
