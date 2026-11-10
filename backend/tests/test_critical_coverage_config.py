@@ -14,6 +14,11 @@ def test_critical_coverage_gate_includes_all_financial_services() -> None:
         for name in ("portfolio_math", "portfolio", "history"):
             assert f"app/services/{name}.py" in modules
         assert "app/api/v1/history.py" in modules
+        for name in (
+            "stock_admission", "stock_quote_rules", "stock_quotes", "stock_sessions", "stocks"
+        ):
+            assert f"app/services/{name}.py" in modules
+        assert "app/api/v1/stocks.py" in modules
         assert len(modules) == len(set(modules))
         assert all((root / "backend" / module).is_file() for module in modules)
         lists.append(matches[0])

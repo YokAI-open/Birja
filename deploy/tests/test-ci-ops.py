@@ -65,6 +65,18 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_stock_safety_and_real_tls_evaluator_are_required(self):
+        j = jobs()
+        for module in ["stock_admission", "stock_quote_rules", "stock_quotes", "stock_sessions", "stocks"]:
+            self.assertIn("app/services/" + module + ".py", j["backend"])
+        self.assertIn("app/api/v1/stocks.py", j["backend"])
+        fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
+        self.assertIn("from app.services.stock_sessions import", fixture)
+        self.assertIn("await calendar_consumer_contract(app,scheduler,migrator)", fixture)
+        self.assertIn("tls(fresh_bootstrap=True)", fixture)
+        self.assertIn("calendar_runtime_tls_consumer=true", fixture)
+        self.assertNotIn("evaluator_proof=plan08_13", fixture)
+
     def test_ops_pins_compose_with_explicit_retained_dockerfile_consent(self):
         ops = jobs()["ops"]
         self.assertIn("compose_version=5.7.0-1~ubuntu.24.04~noble", ops)
