@@ -48,7 +48,7 @@ async def get_portfolio(
             Account.starting_cash,
             Coin.symbol,
             Coin.name,
-            Coin.is_active,
+            (Coin.is_active & (Coin.asset_class == "crypto")).label("is_active"),
             Holding.quantity,
             Holding.cost_basis,
             Price.mid,
@@ -57,7 +57,7 @@ async def get_portfolio(
         .select_from(Account)
         .outerjoin(Holding, and_(Holding.user_id == Account.user_id, Holding.quantity > 0))
         .outerjoin(Coin, Coin.id == Holding.coin_id)
-        .outerjoin(Price, Price.coin_id == Coin.id)
+        .outerjoin(Price, and_(Price.coin_id == Coin.id, Coin.asset_class == "crypto"))
         .where(Account.user_id == user_id)
         .order_by(Coin.sort_order, Coin.id)
     )
