@@ -406,6 +406,7 @@ def bundle_verify(archive, sha, required_profile=None):
         require(set(expected) == names - {"SHA256SUMS"})
         for name, h in expected.items():
             require(hashlib.file_digest(t.extractfile(name), "sha256").hexdigest() == h)
+        verify_contract_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
         require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
         require(all(expected["provenance/" + n] == h for n, h in PROVENANCE.items()))
@@ -431,6 +432,20 @@ def bundle_verify(archive, sha, required_profile=None):
             )
     runtime()
     return inventory
+
+
+CONTRACT_PAYLOAD = [
+    "deploy/backup-manifest.sql", "deploy/backup-snapshot.py", "deploy/verify-restore.py"
+]
+
+
+def verify_contract_inventory(inventory, expected):
+    """Old immutable artifacts remain readable; successor metadata is exact."""
+    if "schema_contract" in inventory:
+        require(inventory["schema_contract"] == {
+            "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+            "payload_sha256": {name: expected[name] for name in CONTRACT_PAYLOAD},
+        })
 
 
 def bundle_package(output, units=False):
@@ -497,6 +512,10 @@ def bundle_package(output, units=False):
             "platform_manifest_digest": PLATFORM_DIGEST,
             "restic_sha256": RESTIC_SHA,
             "runtime": versions,
+            "schema_contract": {
+                "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+                "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
+            },
         }
         (stage / "INVENTORY.json").write_text(json.dumps(inventory, sort_keys=True))
         files.append("INVENTORY.json")
@@ -752,14 +771,17 @@ def canonical(dc, db=CLONE):
     return json.loads(
         sql(
             dc,
-            "SET TIME ZONE 'UTC';\n" + contract.manifest_sql(revision),
+            "SET TIME ZONE 'UTC';\n" + contract.schema_guard_sql(revision) + contract.manifest_sql(revision),
             db,
         )
     )
 
 
 def verify(dc, manifest):
+    contract = recovery_contract()
+    contract.validate_manifest(manifest)
     actual = canonical(dc)
+    contract.validate_manifest(actual)
     require(
         all(
             actual[k] == manifest[k]
@@ -778,7 +800,8 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    require(constraints == b"8")
+    stock = manifest["revision"] in ("0009", "0010")
+    require(constraints == (b"10" if stock else b"8"))
     require(
         sql(
             dc,
@@ -803,7 +826,7 @@ def verify(dc, manifest):
     )
     # Check identity progression without consuming sequence values. MVCC sequence
     # state need not equal the source; every future generated id must be safe.
-    for table in [
+    identities = [
         "users",
         "accounts",
         "auth_sessions",
@@ -811,12 +834,17 @@ def verify(dc, manifest):
         "coins",
         "holdings",
         "trades",
-    ]:
+    ]
+    if stock:
+        identities += ["stock_sessions", "stock_data_admissions"]
+    for table in identities:
         sequence = f"{table}_id_seq"
         require(
             sql(
                 dc,
-                f"SELECT (CASE WHEN is_called THEN last_value+1 ELSE last_value END) > coalesce((SELECT max(id) FROM {table}),0) FROM {sequence};",
+                f"SELECT pg_get_serial_sequence('public.{table}','id')='public.{sequence}' "
+                f"AND (CASE WHEN is_called THEN last_value+1 ELSE last_value END) "
+                f"> coalesce((SELECT max(id) FROM {table}),0) FROM {sequence};",
             ).strip()
             == b"t"
         )

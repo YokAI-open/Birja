@@ -126,22 +126,60 @@ def manifest_sql(revision):
 
     old = next(line for line in legacy.splitlines() if "SELECT 'coins'," in line)
     result = legacy.replace(old, " UNION ALL" + fragment("STOCK_COINS"))
-    result = result.replace("), names(name) AS (", fragment("STOCK_ROWS") + "\n), names(name) AS (")
+    result = result.replace(
+        "), names(name) AS (", fragment("STOCK_ROWS") + "\n), names(name) AS ("
+    )
     result = result.replace(
         "('alembic_version')\n",
-        "('alembic_version')," + ",".join("('" + t + "')" for t in STOCK_COLUMNS) + "\n",
+        "('alembic_version'),"
+        + ",".join("('" + t + "')" for t in STOCK_COLUMNS)
+        + "\n",
     )
     result = result.replace(
         " 'schema',json_build_object(",
-        " 'stock_invalid',(" + fragment("STOCK_INVALID") + "),\n 'schema',json_build_object(",
+        " 'stock_invalid',("
+        + fragment("STOCK_INVALID")
+        + "),\n 'schema',json_build_object(",
     )
     result = result.replace(
         "  'constraints',",
+        "  'relations',(SELECT json_agg(json_build_array(relname,relkind) ORDER BY relname) FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN ('r','p','v','m','f')),\n"
         "  'columns',(SELECT json_agg(json_build_array(table_name,column_name,data_type,is_nullable,column_default,numeric_precision,numeric_scale) ORDER BY table_name,ordinal_position) FROM information_schema.columns WHERE table_schema='public'),\n"
         "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
         "  'constraints',",
     )
     return result
+
+
+def schema_guard_sql(revision):
+    """Bound all public tables/sequences without changing legacy hash bytes.
+
+    SQL identifiers derive only from reviewed constants, never operator input.
+    """
+    tables = contract_columns(revision)
+    identities = [
+        "users",
+        "accounts",
+        "auth_sessions",
+        "refresh_tokens",
+        "coins",
+        "holdings",
+        "trades",
+    ]
+    if revision in ("0009", "0010"):
+        identities += ["stock_sessions", "stock_data_admissions"]
+    table_names = ",".join("'" + t + "'" for t in sorted(tables))
+    sequence_names = ",".join("'" + t + "_id_seq'" for t in sorted(identities))
+    return (
+        "DO $contract$ BEGIN IF ARRAY(SELECT relname::text FROM pg_class WHERE "
+        "relnamespace='public'::regnamespace AND relkind IN ('r','p','v','m','f') "
+        "ORDER BY relname) IS DISTINCT FROM ARRAY[" + table_names + "]::text[] OR "
+        "ARRAY(SELECT relname::text FROM pg_class WHERE relnamespace='public'::regnamespace "
+        "AND relkind='S' ORDER BY relname) IS DISTINCT FROM ARRAY["
+        + sequence_names
+        + "]::text[] "
+        "THEN RAISE EXCEPTION 'unsupported recovery catalog'; END IF; END $contract$;\n"
+    )
 
 
 def validate_manifest(manifest):
@@ -159,14 +197,29 @@ def validate_manifest(manifest):
         require(isinstance(data_type, str) and identity in ("", "a"))
     require(actual == expected)
     for key in ("negative_cash", "fractional_cents", "negative_holdings"):
-        require(type(manifest["financial"][key]) is int and manifest["financial"][key] == 0)
-    for key in ("cash", "starting_cash", "quantity", "cost_basis", "fees", "cash_delta"):
+        require(
+            type(manifest["financial"][key]) is int and manifest["financial"][key] == 0
+        )
+    for key in (
+        "cash",
+        "starting_cash",
+        "quantity",
+        "cost_basis",
+        "fees",
+        "cash_delta",
+    ):
         require(
             isinstance(manifest["financial"][key], str)
             and Decimal(manifest["financial"][key]).is_finite()
         )
     if manifest["revision"] in ("0009", "0010"):
-        require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
+        require(
+            type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0
+        )
+        require(
+            manifest["schema"]["relations"]
+            == [[table, "r"] for table in sorted(expected)]
+        )
         identities = {
             "users",
             "accounts",
@@ -249,6 +302,31 @@ def validate_manifest(manifest):
             "uq_stock_data_admissions_product",
         }
         require(required <= {row[1] for row in constraints})
+        checks = {
+            "stock_instruments": "usd_only exchange_known common_stock_only source_length source_ref_length provider_id_length verification_identity",
+            "stock_quotes": "finite_positive source_feed generation_positive spread_mid event_not_future",
+            "stock_sessions": "boundaries exchange_known generation_positive coverage",
+            "stock_data_admissions": "fields_bounded calendar_bounded quota_bounded scope_bounded calendar_product_only product_known approved_evidence state_known evidence_ref_length generation_positive attribution_length terms_version_length validity",
+        }
+        for table, suffixes in checks.items():
+            require(
+                {row[1] for row in constraints if row[0] == table and row[2] == "c"}
+                == {"ck_" + table + "_" + suffix for suffix in suffixes.split()}
+            )
+        indexes = manifest["schema"]["indexes"]
+        require(all(row[1] is True and row[2] is True for row in indexes))
+        require(
+            {row[0] for row in indexes if row[0].startswith(("pk_stock_", "uq_stock_"))}
+            == {
+                "pk_stock_instruments",
+                "uq_stock_instruments_provider_asset_id",
+                "pk_stock_quotes",
+                "pk_stock_sessions",
+                "uq_stock_sessions_exchange_date",
+                "pk_stock_data_admissions",
+                "uq_stock_data_admissions_product",
+            }
+        )
 
 
 def strict_json(data):
@@ -345,7 +423,10 @@ def load_config(args):
         for p in c["recovery_files"]:
             contained(p, root)
     else:
-        require(c["production_enabled"] is True and c["approved_host"] == socket.gethostname())
+        require(
+            c["production_enabled"] is True
+            and c["approved_host"] == socket.gethostname()
+        )
         require(c["state_dir"] == "/var/lib/birja/backup")
         require(c["repository"] == DESTINATION)
         require(c["docker_binary"] == "/usr/bin/docker")
@@ -396,7 +477,9 @@ def acquire_operation_lock(path, inherited_fd=None):
         require(held.st_uid == (0 if production else os.geteuid()))
         require(held.st_mode & 0o022 == 0 and os.path.samestat(current, held))
 
-    inherited = os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
+    inherited = (
+        os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
+    )
     if inherited is not None:
         require(
             type(inherited) is str
@@ -407,7 +490,9 @@ def acquire_operation_lock(path, inherited_fd=None):
         fd = int(inherited)
         validate(fd)
         lines = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
-        require(any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines))
+        require(
+            any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines)
+        )
         owned = os.dup(fd)
     else:
         owned = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -423,9 +508,9 @@ def acquire_operation_lock(path, inherited_fd=None):
 
 
 def utc(epoch=None):
-    return dt.datetime.fromtimestamp(time.time() if epoch is None else epoch, dt.UTC).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    return dt.datetime.fromtimestamp(
+        time.time() if epoch is None else epoch, dt.UTC
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def atomic(path, obj):
@@ -467,7 +552,9 @@ def config_digest(c):
             "dedicated_repository",
         ]
     }
-    stable["material"] = {str(p): file_sha(private_file(p)) for p in c["recovery_files"]}
+    stable["material"] = {
+        str(p): file_sha(private_file(p)) for p in c["recovery_files"]
+    }
     for k in ["password_file", "access_key_file", "secret_key_file"]:
         if k in c:
             stable[k] = {"path": c[k], "sha256": file_sha(private_file(c[k]))}
@@ -577,7 +664,10 @@ def recovery_gate(c, snapshot_id, expected):
         require(backup_attempt == backup)
         data_time(backup, c)
         require(backup["utc"] == utc(backup["epoch"]))
-        require(type(success["format"]) is int and re.fullmatch(r"[0-9a-f]{32}", success["run_id"]))
+        require(
+            type(success["format"]) is int
+            and re.fullmatch(r"[0-9a-f]{32}", success["run_id"])
+        )
         require(backup["snapshot_id"] == success["snapshot_id"] == snapshot_id)
         require(all(success[k] == value for k, value in expected.items()))
         now = time.time()
@@ -586,14 +676,19 @@ def recovery_gate(c, snapshot_id, expected):
             success["started_epoch"],
             success["completed_epoch"],
         ]:
-            require(type(epoch) is int and 0 <= now - epoch <= c["freshness_seconds"] <= 93600)
-        require(backup["epoch"] <= success["started_epoch"] <= success["completed_epoch"])
+            require(
+                type(epoch) is int
+                and 0 <= now - epoch <= c["freshness_seconds"] <= 93600
+            )
+        require(
+            backup["epoch"] <= success["started_epoch"] <= success["completed_epoch"]
+        )
         for prefix in ["started", "completed"]:
             require(
                 success[prefix + "_utc"]
-                == dt.datetime.fromtimestamp(success[prefix + "_epoch"], dt.UTC).strftime(
-                    "%Y-%m-%dT%H:%M:%SZ"
-                )
+                == dt.datetime.fromtimestamp(
+                    success[prefix + "_epoch"], dt.UTC
+                ).strftime("%Y-%m-%dT%H:%M:%SZ")
             )
         job.refresh_quota(lock)  # Fresh inventory, without changing recovery evidence.
         rows = strict_json(job.restic("snapshots", snapshot_id))
@@ -601,7 +696,9 @@ def recovery_gate(c, snapshot_id, expected):
         remote_time = dt.datetime.fromisoformat(rows[0]["time"])
         require(remote_time.tzinfo is not None)
         epoch = remote_time.timestamp()
-        require(0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1)
+        require(
+            0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1
+        )
         raw = job.restic("dump", snapshot_id, "/manifest.json")
         require(sha_bytes(raw) == success["manifest_sha256"])
         manifest = strict_json(raw)
@@ -659,7 +756,10 @@ def status(c):
         require(ID.fullmatch(s["snapshot_id"]))
         data_time(s, c)
         require(
-            s["utc"] == dt.datetime.fromtimestamp(s["epoch"], dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+            s["utc"]
+            == dt.datetime.fromtimestamp(s["epoch"], dt.UTC).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
         )
         print(f"utc={s['utc']} id={s['snapshot_id']} step=complete")
         return 0
@@ -708,7 +808,9 @@ class Job:
             "-f",
             "/srv/birja/docker-compose.prod.yml"
             if not c["_synthetic"]
-            else c.get("source_compose", str(HERE.parent / "docker-compose.ops-test.yml")),
+            else c.get(
+                "source_compose", str(HERE.parent / "docker-compose.ops-test.yml")
+            ),
         ]
         if not c["_synthetic"]:
             self.dc += ["--env-file", "/etc/birja/prod.env"]
@@ -772,7 +874,9 @@ class Job:
 
     def quota(self, *, fresh=True):
         q = self.c["quota"]
-        require(q["free_controls_verified"] is True and q["dedicated_repository"] is True)
+        require(
+            q["free_controls_verified"] is True and q["dedicated_repository"] is True
+        )
         if fresh:
             require(0 <= time.time() - q["observed_at"] <= 300)
         used = sum(
@@ -785,7 +889,8 @@ class Job:
             ]
         )
         require(
-            used + q["upload_reserve_bytes"] + q["repack_reserve_bytes"] <= q["storage_limit_bytes"]
+            used + q["upload_reserve_bytes"] + q["repack_reserve_bytes"]
+            <= q["storage_limit_bytes"]
         )
         require(q["upload_reserve_bytes"] >= self.c["max_stage_bytes"])
         api = self.c.get("_inventory_api")
@@ -881,10 +986,14 @@ class Job:
             proc.stdin.flush()
             snapshot = self.line(proc)
             require(re.fullmatch(r"[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+", snapshot))
-            proc.stdin.write(b"SELECT version_num FROM alembic_version ORDER BY version_num;\n")
+            proc.stdin.write(
+                b"SELECT version_num FROM alembic_version ORDER BY version_num;\n"
+            )
             proc.stdin.flush()
             revision = self.line(proc)
-            proc.stdin.write(manifest_sql(revision).encode() + b"\n")
+            proc.stdin.write(
+                (schema_guard_sql(revision) + manifest_sql(revision)).encode() + b"\n"
+            )
             proc.stdin.flush()
             manifest = json.loads(self.line(proc))
             require(manifest["revision"] == revision)
@@ -905,11 +1014,15 @@ class Job:
             with archive.open("rb") as f:
                 require(archive.stat().st_size > 5 and f.read(5) == b"PGDMP")
             with archive.open("rb") as f:
-                require(self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip())
+                require(
+                    self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
+                )
             proc.stdin.write(b"ROLLBACK;\n")
             proc.stdin.close()
             require(proc.wait(timeout=5) == 0)
-            require(manifest["revision"] and manifest["server_version"].startswith("18."))
+            require(
+                manifest["revision"] and manifest["server_version"].startswith("18.")
+            )
             with archive.open("rb") as f:
                 digest = hashlib.file_digest(f, "sha256").hexdigest()
             manifest.update(
@@ -972,7 +1085,9 @@ class Job:
                 self.quota()
                 self.step = "tools"
                 require(
-                    self.call([self.c["restic_binary"], "version"]).startswith(b"restic 0.19.1 ")
+                    self.call([self.c["restic_binary"], "version"]).startswith(
+                        b"restic 0.19.1 "
+                    )
                 )
                 self.step = "repository-scope"
                 previous = self.check_scope(json.loads(self.restic("snapshots")))
@@ -983,7 +1098,9 @@ class Job:
                 self.step = "recovery-config"
                 # Tar padding/header allowance; refuse before writing config data.
                 required = sum(p.stat().st_size for p in self.bundle.iterdir())
-                required += sum(private_file(p).stat().st_size for p in self.c["recovery_files"])
+                required += sum(
+                    private_file(p).stat().st_size for p in self.c["recovery_files"]
+                )
                 required += 20480 + len(self.c["recovery_files"]) * 2048
                 require(required <= self.c["max_stage_bytes"])
                 with tarfile.open(self.bundle / "recovery.tar", "w") as tar:
@@ -1011,7 +1128,9 @@ class Job:
                     "backup", "--host", HOST, "--tag", TAG, ".", cwd=self.bundle
                 ).splitlines()
                 summaries = [
-                    j for line in lines if (j := json.loads(line)).get("message_type") == "summary"
+                    j
+                    for line in lines
+                    if (j := json.loads(line)).get("message_type") == "summary"
                 ]
                 require(len(summaries) == 1)
                 sid = summaries[0]["snapshot_id"]
@@ -1019,10 +1138,14 @@ class Job:
                 self.step = "verify"
                 exact = self.check_scope(json.loads(self.restic("snapshots", sid)))
                 require(exact == [sid])
-                nodes = [json.loads(line) for line in self.restic("ls", sid).splitlines()]
+                nodes = [
+                    json.loads(line) for line in self.restic("ls", sid).splitlines()
+                ]
                 files = {n["path"]: n["size"] for n in nodes if n.get("type") == "file"}
                 # Backing up '.' gives rooted relative snapshot contents (/name).
-                expected = {"/" + p.name: p.stat().st_size for p in self.bundle.iterdir()}
+                expected = {
+                    "/" + p.name: p.stat().st_size for p in self.bundle.iterdir()
+                }
                 require(files == expected)
                 require(
                     self.restic("dump", sid, "/manifest.json")
@@ -1046,7 +1169,9 @@ class Job:
                     "run_id": self.run_id,
                     "ok": True,
                     "step": "complete",
-                    "utc": dt.datetime.fromtimestamp(now, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "utc": dt.datetime.fromtimestamp(now, dt.UTC).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
                     "epoch": now,
                     "data_epoch": self.data_epoch,
                     "data_utc": self.start_utc,
@@ -1062,7 +1187,9 @@ class Job:
                         )
                         * 1000
                     ),
-                    "peak_child_rss_kib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
+                    "peak_child_rss_kib": resource.getrusage(
+                        resource.RUSAGE_CHILDREN
+                    ).ru_maxrss,
                     "network_requests_measured": False,
                     "network_bytes_measured": False,
                     "assurance": "upload-verified+metadata+manifest+structural;restore-not-proven",

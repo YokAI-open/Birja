@@ -24,7 +24,7 @@ ROOT = Path(sys.argv[1])
 SID = 'a' * 64
 OLD = 'b' * 64
 MOCK = r'''#!/usr/bin/env python3
-import json, os, signal, sys, time
+import json, os, signal, sys, time, importlib.util
 from pathlib import Path
 a=sys.argv[1:]; root=Path(os.environ['MOCK_ROOT']); fail=os.environ.get('FAIL','')
 def stopped(*args):
@@ -36,12 +36,16 @@ if Path(sys.argv[0]).name=='docker':
   for line in sys.stdin:
    if 'pg_export_snapshot' in line:
     (root/'exporter').write_text('alive'); print('00000001-00000001-1',flush=True)
+   elif 'SELECT version_num' in line:
+    print('9999' if fail=='unknown-schema' else '0008',flush=True)
    elif line.startswith('SELECT json_build_object'):
     tables={k:{'count':0,'sha256':'0'*64} for k in ['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version']}
     financial={k:'0.00000000' for k in ['cash','starting_cash','quantity','cost_basis','fees','cash_delta']}
     financial.update({k:0 for k in ['negative_cash','fractional_cents','negative_holdings']})
     if fail=='manifest': financial['negative_cash']=1
-    print(json.dumps({'tables':tables,'revision':'0008','server_version':'18.6','financial':financial}),flush=True)
+    spec=importlib.util.spec_from_file_location('contract',(root/'contract-source').read_text()); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    identities=[[table,column,'a' if column=='id' else '', 'bigint' if column=='id' else 'text'] for table,columns in module.contract_columns('0008').items() for column in sorted(columns)]
+    print(json.dumps({'tables':tables,'revision':'0008','server_version':'18.6','financial':financial,'schema':{'identities':identities,'indexes':[],'constraints':[]}}),flush=True)
    elif 'ROLLBACK' in line: break
   (root/'exporter').unlink(missing_ok=True)
  elif 'pg_dump' in a:
@@ -284,6 +288,7 @@ class Backup(unittest.TestCase):
     'other_bytes':1000,'upload_reserve_bytes':1000000,'repack_reserve_bytes':1000000,
     'download_remaining_bytes':10000000,'request_remaining':10000,
     'request_reserve':1000,'free_controls_verified':True,'dedicated_repository':True}}
+  (self.p/'contract-source').write_text(str(ROOT/'deploy/backup-snapshot.py'))
   self.env={**os.environ,'MOCK_ROOT':str(self.p)}
   self.save()
  def tearDown(self): self.tmp.cleanup()
@@ -302,7 +307,7 @@ class Backup(unittest.TestCase):
   self.assertFalse((self.p/'exporter').exists())
   self.assertFalse((self.p/'state'/'stage').exists())
  def test_failures_preserve_previous_success_and_redact(self):
-  for failure in ['dump','empty','archive','manifest','upload','partial','identity','contents','verify']:
+  for failure in ['dump','empty','archive','manifest','unknown-schema','upload','partial','identity','contents','verify']:
    with self.subTest(failure=failure):
     self.assertEqual(self.run_script().returncode,0)
     prior=(self.p/'state'/'last-success.json').read_bytes(); (self.p/'calls').unlink()
