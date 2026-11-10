@@ -87,7 +87,9 @@ async def test_source_age_refuses_at_120(engine, settings, clean_stock_discovery
         result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
     item = result["items"][0]
     assert item["quote_reason"] == reason
-    assert (item["quote"] is not None) is (seconds < 120)
+    assert item["quote"] is not None
+    assert item["quote"]["age_seconds"] == seconds
+    assert datetime.fromisoformat(item["quote"]["event_at"]) == NOW - timedelta(seconds=seconds)
 
 
 async def login(auth_client, outbox):
@@ -248,13 +250,47 @@ async def test_same_request_uses_final_clock(
     data = response.json()
     assert datetime.fromisoformat(data["server_now"]) == clock[0]
     item = data["items"][0]
-    assert item["quote"] is None
     if boundary == "permission":
+        assert item["quote"] is None
         assert item["quote_reason"] == "permission_unavailable"
     elif boundary == "age":
+        assert item["quote"]["age_seconds"] == 120
         assert item["quote_reason"] == "stale"
     else:
         assert item["session"]["state"] == ("closed" if boundary == "close" else "unknown")
+        if boundary == "close":
+            assert item["quote"] is not None
+            assert item["quote_reason"] == "session_unavailable"
+        else:
+            assert item["quote"] is None
+
+
+@pytest.mark.parametrize("condition", ["closed", "previous_session", "unknown_calendar"])
+async def test_historical_quotes_never_claim_recent_or_enable_execution(
+    engine, settings, clean_stock_discovery, condition
+):
+    clock = NOW.replace(hour=21) if condition == "closed" else NOW
+    event_at = NOW - timedelta(days=1) if condition == "previous_session" else NOW
+    await seed(engine, now=clock, event_at=event_at)
+    if condition == "unknown_calendar":
+        async with engine.begin() as admin:
+            await admin.execute(
+                update(StockDataAdmission)
+                .where(StockDataAdmission.product == "calendar")
+                .values(state="revoked")
+            )
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: clock))
+    item = result["items"][0]
+    assert not item["execution_enabled"]
+    assert item["quote_reason"] != "recent"
+    if condition == "unknown_calendar":
+        assert item["quote"] is None
+    else:
+        assert datetime.fromisoformat(item["quote"]["event_at"]) == event_at
+        assert datetime.fromisoformat(item["quote"]["collected_at"]) == clock
+        assert item["quote"]["age_seconds"] == int((clock - event_at).total_seconds())
+        assert item["session"]["state"] == ("closed" if condition == "closed" else "open")
 
 
 async def test_previous_request_revocation_and_failure_isolation(
