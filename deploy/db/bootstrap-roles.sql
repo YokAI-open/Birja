@@ -11,10 +11,10 @@ BEGIN
     (SELECT rolsuper FROM pg_roles WHERE rolname=current_user) THEN
     RAISE EXCEPTION 'administrative identity mismatch';
   END IF;
-  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008') THEN
+  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010') THEN
     RAISE EXCEPTION 'unsupported populated revision';
   END IF;
-  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] LOOP
+  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END LOOP
     SELECT pg_get_userbyid(c.relowner) INTO owner_name FROM pg_class c
       WHERE c.oid=to_regclass(format('public.%I',t)) AND c.relkind='r';
     IF owner_name IS NULL OR owner_name NOT IN (current_user,'birja_migrator') THEN
@@ -71,7 +71,7 @@ REVOKE CREATE, TEMPORARY ON DATABASE :"db_name" FROM PUBLIC, birja_migrator, bir
 DO $transfer$
 DECLARE t text; s record;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] LOOP
+  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END LOOP
     -- ALTER TABLE transfers its identity sequences as a dependency. Never
     -- ALTER an identity-owned sequence independently or reassign other objects.
     EXECUTE format('ALTER TABLE public.%I OWNER TO birja_migrator',t);
@@ -95,6 +95,17 @@ GRANT SELECT ON coins, prices TO birja_app;
 GRANT SELECT ON coins TO birja_scheduler;
 GRANT SELECT, INSERT, UPDATE ON prices TO birja_scheduler;
 GRANT USAGE ON SEQUENCE users_id_seq,accounts_id_seq,auth_sessions_id_seq,refresh_tokens_id_seq,holdings_id_seq,trades_id_seq TO birja_app;
+-- Mirror revision0009 exactly; legacy schemas must never parse absent objects.
+DO $stock_grants$
+BEGIN
+  IF (SELECT version_num FROM public.alembic_version) IN ('0009','0010') THEN
+    GRANT SELECT ON stock_instruments,stock_quotes,stock_sessions,stock_data_admissions TO birja_app;
+    GRANT SELECT ON stock_instruments,stock_data_admissions TO birja_scheduler;
+    GRANT SELECT,INSERT,UPDATE ON stock_quotes,stock_sessions TO birja_scheduler;
+    GRANT USAGE ON SEQUENCE stock_sessions_id_seq TO birja_scheduler;
+  END IF;
+END
+$stock_grants$;
 -- New tables stay private until a migration deliberately grants access.
 -- Both global and schema defaults are reset, for the actual creator only.
 ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN ON TABLES FROM PUBLIC,birja_app,birja_scheduler;

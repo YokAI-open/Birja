@@ -1265,6 +1265,9 @@ def roles(red_probe=False):
                 "birja_migrator",
             )
             assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
+            after = role_manifest(dc)
+            assert after['financial'] == before['financial']
+            assert all(after['tables'][table] == state for table,state in before['tables'].items() if table not in {'coins','alembic_version'})
             stock_role_contract(dc)
             assert (
                 role_sql(
@@ -1374,7 +1377,7 @@ def roles(red_probe=False):
             r.call(admin + approved)
             stock_role_contract(dc)
             print(
-                f"roles_populated_transfer=true repeatable=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
+                f"roles_populated_transfer=true fresh_bootstrap_parity=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
             )
             print(
                 f"fixture_setup_seconds={setup_done - started:.3f} roles_integration_seconds={time.monotonic() - started:.3f}"
@@ -1799,6 +1802,12 @@ def tls():
         ]
 
         def client(service, code, overrides=(), ok=True):
+            if service == 'migrate':
+                # Preserve the real one-shot command's inert Settings fields
+                # when replacing only its entrypoint with the test probe.
+                command = prod['services']['migrate']['command']
+                inert = dict(value.split('=', 1) for value in command[1:] if '=' in value)
+                code = 'import os\nos.environ.update(' + repr(inert) + ')\n' + code
             result = subprocess.run(
                 dc
                 + ["run", "--rm", "--no-deps", "-T"]
@@ -1811,7 +1820,7 @@ def tls():
                 timeout=120,
             )
             assert (result.returncode == 0) == ok, (
-                "TLS client assertion failed: " + service
+                "TLS synthetic client assertion failed: " + service + " " + result.stderr.decode()[-1500:]
             )
             return result
 
@@ -1843,6 +1852,8 @@ def tls():
             legacy.mkdir(mode=0o755)
             with tarfile.open(fileobj=__import__('io').BytesIO(source_git('archive', 'v0.3.1', 'backend/app'))) as archive:
                 archive.extractall(legacy, filter='data')
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0007')", bootstrap)
+            secure_seed = secure_seed.replace("command.upgrade(Config('/app/alembic.ini'), '0007')", "")
             client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
             client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0008')", bootstrap)
             original = r.canonical(dc, "birja_source_test")
