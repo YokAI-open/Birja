@@ -1,0 +1,270 @@
+import { expect, test, type Page } from "@playwright/test";
+import { signInNewUser } from "./helpers.js";
+
+const symbols = [
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "AMZN",
+  "GOOGL",
+  "META",
+  "TSLA",
+  "AVGO",
+  "AMD",
+  "COST",
+  "JPM",
+  "V",
+  "JNJ",
+  "PG",
+  "KO",
+  "XOM",
+  "CVX",
+  "HD",
+  "MCD",
+  "DIS",
+];
+function stocks({
+  state = "approved",
+  generation = 1,
+  age = 10,
+  lifetime = 3600,
+  now = "2026-11-10T15:00:00Z",
+  close = "2026-11-10T21:00:00Z",
+  open = "2026-11-10T14:30:00Z",
+}: {
+  state?: "approved" | "unavailable";
+  generation?: number;
+  age?: number;
+  lifetime?: number;
+  now?: string;
+  close?: string;
+  open?: string;
+} = {}) {
+  const stamp = (seconds: number) => new Date(Date.parse(now) + seconds * 1000).toISOString();
+  return {
+    server_now: now,
+    admission: {
+      state,
+      generation: state === "approved" ? generation : null,
+      valid_until: state === "approved" ? stamp(lifetime) : null,
+    },
+    attribution: {
+      label: "IEX prices",
+      explanation: "Single venue",
+      required_text: "Fixture provider attribution",
+    },
+    items: symbols.map((symbol, i) => ({
+      id: i + 16,
+      symbol,
+      company_name:
+        i === 0
+          ? "Apple Inc. Long Company Name for Responsive Layout Verification"
+          : "Company " + symbol,
+      listing_exchange: i < 10 ? "NASDAQ" : "NYSE",
+      currency: "USD",
+      quote:
+        state === "approved"
+          ? {
+              bid: "100.00000000",
+              ask: "102.00000000",
+              mid: "101.00000000",
+              event_at: stamp(-age),
+              collected_at: stamp(-1),
+              source: "alpaca",
+              feed: "iex",
+              age_seconds: Math.floor(age),
+            }
+          : null,
+      session: {
+        state: "open",
+        opens_at: open as string | null,
+        closes_at: close as string | null,
+        next_open_at: null,
+        valid_until: stamp(lifetime) as string | null,
+        timezone: "America/New_York",
+      },
+      status: { state: "unknown", observed_at: null, valid_until: null },
+      execution_enabled: false,
+      execution_reason: "phase_disabled",
+      quote_reason: state === "approved" ? "recent" : "permission_unavailable",
+      session_reason: "open",
+      status_reason: "unknown",
+    })),
+  };
+}
+const section = (page: Page) => page.getByRole("region", { name: "US stocks · 20" });
+const records = (page: Page) =>
+  page.viewportSize()!.width >= 1024
+    ? section(page)
+        .getByRole("row")
+        .filter({ has: page.locator("td") })
+    : section(page).getByRole("listitem");
+async function refocus(page: Page) {
+  // Exercise the real TanStack focus/refetch path without reloading its cache.
+  await page.evaluate('window.dispatchEvent(new Event("visibilitychange"))');
+  await page.evaluate('window.dispatchEvent(new Event("focus"))');
+}
+
+test("independent stock HTTP errors can retry while crypto remains usable", async ({ page }) => {
+  await page.clock.install();
+  let failed = false;
+  await page.route("**/api/v1/stocks", (route) =>
+    failed
+      ? route.fulfill({ status: 503, json: { detail: "unavailable" } })
+      : route.fulfill({ json: stocks() }),
+  );
+  await signInNewUser(page);
+  await expect(records(page)).toHaveCount(20);
+  failed = true;
+  await page.clock.fastForward(30_001);
+  await page.clock.runFor(100);
+  await expect(section(page).getByRole("status")).toContainText("Couldn’t refresh stock prices");
+  await expect(records(page).first()).toContainText("$100.00");
+  const retry = section(page).getByRole("button", { name: "Retry stock prices" });
+  await expect(retry).toBeVisible();
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  failed = false;
+  await page.keyboard.press("Enter");
+  await expect(section(page).getByRole("status")).not.toContainText("Couldn’t refresh");
+  await expect(page.getByRole("link", { name: "Trade BTC" })).toBeVisible();
+});
+
+for (const width of [320, 375, 768, 1280])
+  test(`read-only catalogue at ${width}px with one accessible representation`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks() }));
+    await signInNewUser(page);
+    await expect(records(page)).toHaveCount(20);
+    await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
+    await expect(section(page).getByRole("link")).toHaveCount(0);
+    await expect(section(page).getByRole("button")).toHaveCount(0);
+    await expect(section(page).getByRole("table", { name: "US stocks" })).toHaveCount(
+      width >= 1024 ? 1 : 0,
+    );
+    await expect(section(page).getByRole("list", { name: "US stocks" })).toHaveCount(
+      width < 1024 ? 1 : 0,
+    );
+    await expect(section(page).getByRole("note")).toContainText("IEX prices");
+    await expect(section(page).getByRole("note")).toContainText("Fixture provider attribution");
+    await expect(section(page).getByText(/Stock trading coming later/)).toBeVisible();
+    await expect(records(page).first()).toContainText("NASDAQ");
+    await expect(records(page).last()).toContainText("NYSE");
+    await expect(records(page).first().locator("time").first()).toHaveAttribute(
+      "datetime",
+      "2026-11-10T14:59:50.000Z",
+    );
+    expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
+    // Half the effective viewport width is the browser-zoom reflow equivalent.
+    if (width === 1280) {
+      await page.setViewportSize({ width: 640, height: 450 });
+      await expect(section(page).getByRole("listitem")).toHaveCount(20);
+      expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
+    }
+    const trade = page.getByRole("link", { name: "Trade BTC" });
+    await trade.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/trade\/BTC$/);
+  });
+
+test("denied, admitted and revoked generations retain identities and purge provider material", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let body = stocks({ state: "unavailable" });
+  await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
+  await signInNewUser(page);
+  await expect(records(page)).toHaveCount(20);
+  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
+  await expect(section(page).getByText("$100.00")).toHaveCount(0);
+  body = stocks({ generation: 2 });
+  await page.clock.fastForward(30_001);
+  await page.clock.runFor(100);
+  await expect(records(page).first()).toContainText("$100.00");
+  body = stocks({ state: "unavailable", generation: 3 });
+  await page.clock.fastForward(30_001);
+  await page.clock.runFor(100);
+  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
+  await expect(section(page).getByText("$100.00")).toHaveCount(0);
+  await expect(section(page).locator("time")).toHaveCount(80); // session bounds are public, quote times absent
+  await expect(records(page)).toHaveCount(20);
+});
+
+test("local admission expiry and a late expired response cannot reintroduce quote values", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let calls = 0;
+  await page.route("**/api/v1/stocks", async (route) => {
+    calls++;
+    if (calls > 1) await new Promise((resolve) => setTimeout(resolve, 100));
+    await route.fulfill({ json: stocks({ lifetime: calls === 1 ? 5 : -1 }) });
+  });
+  await signInNewUser(page);
+  await expect(records(page).first()).toContainText("$100.00");
+  await page.clock.fastForward(6000);
+  await page.clock.runFor(100);
+  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
+  await page.clock.fastForward(30_001);
+  await refocus(page);
+  await expect.poll(() => calls).toBeGreaterThan(1);
+  await expect(section(page).getByText("$100.00")).toHaveCount(0);
+  await expect(records(page)).toHaveCount(20);
+});
+
+test("source 119.999 to120 stays nonexecutable and does not announce each second", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/stocks", (route) =>
+    route.fulfill({ json: stocks({ age: 119.999 }) }),
+  );
+  await signInNewUser(page);
+  await expect(records(page).first()).toContainText("Out of date"); // conservative full RTT reaches120
+  await expect(section(page).getByRole("button")).toHaveCount(0);
+  await page.clock.install();
+  const before = await section(page).getByRole("status").textContent();
+  await page.clock.fastForward(1000);
+  expect(await section(page).getByRole("status").textContent()).toBe(before);
+});
+
+test("missing, previous-session, early-close, DST and unknown calendars remain separate from status", async ({
+  page,
+}) => {
+  await page.clock.install();
+  const body = stocks({
+    now: "2026-11-27T17:59:59Z",
+    close: "2026-11-27T18:00:00Z",
+    open: "2026-11-27T14:30:00Z",
+  });
+  body.items[0].quote = null;
+  body.items[0].quote_reason = "missing";
+  body.items[1].quote_reason = "session_unavailable";
+  body.items[1].quote!.event_at = "2026-11-25T20:59:00Z";
+  body.items[2].session = {
+    ...body.items[2].session,
+    state: "unknown",
+    opens_at: null,
+    closes_at: null,
+    valid_until: null,
+  };
+  body.items[2].quote = null;
+  // Winter NY session14:30Z and summer13:30Z are explicit server-provided bounds.
+  body.items[3].session.opens_at = "2026-07-06T13:30:00Z";
+  body.items[3].session.closes_at = "2026-07-06T20:00:00Z";
+  body.items[3].session.state = "closed";
+  body.items[3].quote_reason = "session_unavailable";
+  await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
+  await signInNewUser(page);
+  await expect(records(page)).toHaveCount(20);
+  await expect(records(page).nth(0)).toContainText("Waiting for an IEX quote");
+  await expect(records(page).nth(1)).toContainText("Previous session");
+  await expect(records(page).nth(2)).toContainText("Session unavailable");
+  await expect(records(page).nth(3)).toContainText("Last quote");
+  await expect(records(page).nth(4)).toContainText("Market open");
+  await expect(records(page).nth(4)).toContainText("America/New_York");
+  await expect(records(page).nth(4)).toContainText("Stock status unverified");
+  await page.clock.fastForward(2000);
+  await page.clock.runFor(100);
+  await expect(records(page).nth(4)).toContainText("Market closed");
+  await expect(records(page).nth(4)).toContainText("Last quote");
+});
