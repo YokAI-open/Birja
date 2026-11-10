@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Backmerge PR28 exact6097085 all six CI green; merge approval pending
+stopped_at: PR28 merged as63c9b47; read-only production preflight checkpoint pending
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 backmerge merge checkpoint;09 calendar observation owner-deferred
+Plan:12 production preflight checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- PR28 published and all six CI checks passed; no deployment.
+Last activity:2026-11-10 -- Approved PR28 develop merge verified as63c9b47; no deployment.
 
 Progress: [█████████░] 96%
 
@@ -49,17 +49,19 @@ The approved9457911 head and all six successful checks were rechecked first.
 Owner separately approved and published v0.4.0 at that main SHA. Remote annotated
 tag bb64990ba6be425e66e0a560cbd6a6d3589e4a79 peels to46d24c8; GitHub release
 published2026-11-10T09:29:02Z, non-draft/non-prerelease. No deployment occurred.
-Owner approved release-branch push through6097085 and back-merge PR creation /
-CI. PR28 into develop is OPEN/MERGEABLE/CLEAN at exact6097085; actual
-CI42791351766 all six jobs SUCCESS. Backend616/frontend264/browser10passed,
-1expected skip, no browser retries. Recovery/TLS/old-app rollback and cleanup
-pass. No source changes were needed. Back-merge merge and deployment remain
-unapproved; request exact-head6097085 merge commit separately. Preserve local
-receipt before branch deletion; keep published head at its proven CI.
+Owner-approved PR28 back-merge completed2026-11-10T09:44:22Z as
+63c9b479209aaa180fc1f41314a367dd79fab2f8. Both parents verified; exact6097085
+and all six green checks were rechecked before merging. Release/tag publication
+and develop integration are complete. Main/tag remains46d24c8. Preserve local
+CI receipt51c7b8d and subsequent merge records before release-branch deletion;
+these records are unpushed, with no further publication permission inferred.
 
-Measured production identities/capacity/collation/custody, retained MANIFEST
-and maintenance window remain pending. Read ROLLOUT-PROPOSAL before any
-production approval request; publication is not production permission.
+Next: explicit read-only production preflight checkpoint in ROLLOUT-PROPOSAL.
+Measure fixed-project mount/image identities, disk/volume sizes, installed
+recovery integrity and sanitized datastore compatibility. No provider access,
+backup/restore, timer inspection, writes/restarts or deployment is included.
+Retained MANIFEST, fresh recovery and maintenance window remain rollout inputs.
+No live operation follows from the back-merge approval.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in

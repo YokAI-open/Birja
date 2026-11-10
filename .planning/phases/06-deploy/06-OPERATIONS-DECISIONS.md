@@ -1137,3 +1137,26 @@ approval under CLAUDE.md. This local receipt stays unpushed so the proven PR
 head remains6097085; preserve it before deleting the local release branch.
 No additional code changes, production reads or deployment. Phase12/15 and
 09/12/13, DEPL-01/02 remain pending; nightly observation remains deferred.
+
+## Back-merge completed —2026-11-10
+
+Owner selected “Approve back-merge into develop” for PR28 exact
+6097085e9d5ca897bed7ec76aeee7b61071509e8. Immediately rechecked base develop,
+OPEN/MERGEABLE/CLEAN, matching head and all six current checks SUCCESS.
+Merge-commit operation succeeded2026-11-10T09:44:22Z. PR28 is MERGED as
+63c9b479209aaa180fc1f41314a367dd79fab2f8. GitHub commit readback verified
+parents5ebf62b33b190aaf04a48b107a222e906fbf4c99 and approved6097085.
+
+Release publication and develop integration are complete. Main/tag v0.4.0 stays
+46d24c8591de2207cf219429aac0768962bed4c3. Local CI receipt51c7b8d and this
+merge record remain preserved on the release branch; do not delete that branch
+until they are carried into subsequent authorized integration. No further push
+is inferred from this merge approval.
+
+Next is the explicit read-only production preflight in ROLLOUT-PROPOSAL:
+fixed birja-prod container mount/image identities, volume/disk sizes, installed
+recovery integrity and sanitized PG/Redis compatibility/catalog checks. Private
+values remain private; no container environment/raw rows/logs, provider access,
+backup/restore, timer inspection, writes/restarts or deployment are included.
+Preflight requires its own checkpoint answer before access. Actual nightly
+observation remains owner-deferred. Phase12/15;09/12/13 and DEPL-01/02 pending.
