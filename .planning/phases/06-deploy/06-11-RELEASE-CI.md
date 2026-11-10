@@ -1,3 +1,29 @@
+# Accepted published release CI —2026-11-10
+
+[PR27](https://github.com/YokAI-open/Birja/pull/27) is OPEN into main at exact
+`945791115c0bd88fd0cf62835aca3e03c395659f`.
+[Run42787743632](https://github.com/YokAI-open/Birja/actions/runs/42787743632)
+completed SUCCESS: backend/frontend/image/e2e/ops/ci-pass all green.
+GitHub reports MERGEABLE/CLEAN against main0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7.
+No merge/tag/deployment occurred. Closing planning metadata stays local for
+next approved integration; it does not change this verified published head.
+
+Backend616/critical100%, frontend264, five raw reports hash/config-ID verified
+and each0HIGH/CRITICAL. Browser9passed +1flaky health test passed on retry,
+1expectedproductionCSPskip. Preserve the known retry; no claimed flake fix.
+Actual ops transition35.842s/recovery58.140s/roles18.595s+65denials/TLS20.069s/
+existing old-app rollback85.653s/new retained selected cutover206.439s pass.
+Real secure startup, forced recreation,0008, actualv0.3.1 app rollback, Redis
+state/authentication, untouched original fingerprints and same installed
+pre/post backup/exact restore all pass. Mandatory fixture cleanup succeeded.
+The CI-only Git and precise Compose consent corrections are confirmed on the
+actual runner. Independent reviews and full supplied d5fe2059 proof retained.
+
+Public job metadata/logs and raw reports are preserved in ignored private
+pr-preparation/release-compose-pin-* evidence. Prior failures below remain
+historical; final accepted source and outcomes above supersede pending text.
+Plan11 complete;09nightly remains deferred; no DEPL/whole-phase completion.
+
 # Current CI tooling correction —2026-11-10
 
 Published38eb25c/run42785059635 passed backend616/critical100%, frontend264,

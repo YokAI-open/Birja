@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Compose5.7 CI pin proof passed; publish under existing bounded CI authority
+stopped_at: Plan11 complete; PR27 exact9457911 all CI green; main merge approval pending
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 69
-  completed_plans: 65
-  percent: 94
+  completed_plans: 66
+  percent: 96
 ---
 
 # Project State
@@ -26,113 +26,54 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan: 11 task03 releaseCIpassed/readinessdisposition;09 calendar observation owner-deferred
-Status: Reviewed/tested CI Compose pin ready for authorized publication and new CI
-Last activity: 2026-11-10 -- Local retained cutover and actual old-app rollback passed; production unchanged
+Plan:12 publication/merge checkpoint;09 calendar observation owner-deferred
+Status: Plan11 COMPLETE. Published PR27 exact9457911 has all six CI jobs green.
+Last activity:2026-11-10 -- Final CI and real retained cutover accepted; no merge/deploy.
 
-Progress: [█████████░] 94%
+Progress: [█████████░] 96%
 
 ## Immediate remaining work
 
-Owner selected “Publish and finish CI” for38eb25c plus further independently
-reviewed/tested CI/test/planning follow-ups on release-0.4.0 until CI passes,
-with existing gates retained. No app/runtime/image/recovery/production changes,
-merge or deployment. Approved push/PR27 update completed; actualCI42785059635
-completed at38eb25ca2457cb05299e08ef668ffebd5bd6551d: four jobs passed, ops
-failed at external retained Dockerfile Bake consent, aggregate failed, cleanup
-passed. Git correction confirmed actual secure startup/roles/recreation.
-Reviewed b31f3dd/d7f0cf5 pins CI-only Compose5.7.0 and verifies the actual
-clean-root version; no filesystem bypass.9contracts pass; full local proof
-with private verified5.7.0 passed257.676s, including full deploy/old-app
-rollback/three restores, unchanged originals and cleanup. Continue without re-asking
-for in-scope CI publication. Only after actual current-head success record
-Plan11 summary and prepare the separate publication/merge boundary. Older
-push-pending/failure entries below are historical.
+Plan11 complete at published release head
+945791115c0bd88fd0cf62835aca3e03c395659f, actualCI42787743632: all six jobs
+SUCCESS. Backend616/critical100%, frontend264, five hash/config-verified raw
+reports each0HIGH/CRITICAL. Browser9passed,1flaky health test passed on retry,
+1expectedCSPskip; do not erase the retry or call the flake fixed. Actual ops
+transition35.842s/recovery58.140s/roles18.595s+65denials/TLS20.069s/prior-old
+rollback85.653s/new selected cutover206.439s and cleanup pass. Source reviews
+clean;09/12/13 remain incomplete. Phase12/15, overall66/69=96%.
 
+Owner authorized exact38eb25c plus reviewed/tested CI/test/planning follow-ups
+until CI passes. Completed pin9457911 is in scope; app/runtime/image/recovery /
+production changes, main merge/tag/back-merge/deployment remain excluded.
+No repeated push permission is needed for that completed CI correction.
+The planning closeout is committed LOCALLY for next approved integration;
+keep published PR27 at its verified9457911 while requesting main merge approval.
+Do not delete the local release branch before preserving/carrying its closeout.
 
-Owner approved pushing all18 commits through77dcd44e852a079d4541c78f724717a0dd13afba,
-updating PR27 and checking CI. Push/PR update completed; PR remains OPEN into
-main at that exact head. Run42782054013 completed with backend/frontend/image/e2e
-green; ops failed at the new fixture checkout check and aggregate failed. Five downloaded raw image reports have
-verified hashes and0HIGH/CRITICAL. Actual browser10passed/1expectedskip.
-Reviewed CI-only correction7d3f8a4/c343f6b passes8 contracts; full affected
-proof passed246.010s with unchanged originals, actual0008/old-app rollback,
-three same-archive restores and cleanup. Ready for concrete new push choice. No Plan11 summary. Merge,
-tag/back-merge and deployment remain unapproved. Prior push-pending text below
-is historical and superseded only for this exact published candidate.
+Next: Plan12 checkpoint. Recheck current PR head/base/green CI and obtain
+explicit approval before a Create-a-merge-commit into main. Tag/GitHub release,
+back-merge publication/merge and production rollout remain separate. Measured
+production identities/capacity/collation/custody, final main SHA/MANIFEST and
+maintenance window are not yet supplied by local evidence. Read the revised
+ROLLOUT-PROPOSAL before any request for production approval; no private preflight
+or production operation is authorized by current CI scope.
 
+Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
+passed on9November with installed d5fe2059 archive; details remain in
+LIVE-RECOVERY. Owner explicitly deferred first genuine scheduled activation
+observation. Do not infer nightly success from the calendar, create09SUMMARY,
+check DEPL-02 or perform provider/private production reads for this closeout.
+The last recorded production baseline is v0.3.1/revision0007, not a fresh read.
+No production role/TLS/volume/app operation occurred during Plan11.
+DEPL-01 remains incomplete until approved rollout and friend verification.
 
-## Owner sequencing update —2026-11-09
-
-Owner explicitly said “let's not wait for it, will check it later”. Proceed
-with Plan10 review/publication preparation while the first genuine scheduled
-backup observation remains deferred. The real encrypted backup, exact isolated
-restore/private invariants and installed timer are already proven. Keep09 and
-DEPL-02 pending; do not fabricate nightly success or create a completed09SUMMARY.
-This instruction changes sequencing only. Actual CI, publication approval,
-merge/release/deployment approval, fresh recovery gates before rollout, and
-final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
-This supersedes the requirement to wait for the first night before preparing10.
-
-Current action: obtain publication scope for the reviewed CI-only correction.
-Earlier rollout correction remains complete; current CI failure and correction
-are authoritative above. Old push-pending text below is historical.
-Protected persistent clone routing and TLS-first startup are implemented and
-independently reviewed. Real supplied-archive run12 passed254.099s: retained
-startup, forced recreation, full0008 deploy, actual v0.3.1 app rollback,
-Redis GET/TTL/auth, unchanged original fingerprints and three exact recovery
-roundtrips. Cleanup passed. Final source/fixture commitb6b717c includes the
-reviewed unterminated-manifest hardening; serial compatibility passed (recovery73.141s/roles32.694s/TLS32.389s,
-existing rollback99.487s, final selected cutover239.459s). Cleanup confirmed.
-See06-12-LOCAL-FIX-EVIDENCE and LOCAL-FINAL-REVIEW. Focused13/19/7 and shell
-14/18/8 pass; backup25/safety4 pass. Preserve strict recovery/image/security gates.
-
-PR27 remains16623a8 with all six CI jobs green at that published head only.
-Updated release push requires a concrete new owner decision after local gates.
-Main merge/tag/back-merge, private production/preflight, service/volume/role/TLS
-operations and deployment remain separate. Phase11/15,65/69=94%;09 calendar
-observation remains owner-deferred. No09/11SUMMARY or DEPL completion yet.
-
-Plan09 task01 and all exact replacement installation decisions are APPROVED.
-New d5fe2059... archive is installed/current;20payload hashes,3launchers and
-signed-restic link pass. The bounded Ubuntu lock alias correction now works on
-this VDS. Actual private B2 bucket/ObjectLock/lifecycle/account inventory and
-headroom checks pass; initial account bytes0. Both restricted keypairs, existing
-password, controls and protected config validate. Do not re-ask keys/caps/custody,
-card/bucket setup, installation or already approved backup/restore/timer scope.
-
-Real encrypted B2 repository initialized. First installed backup passed11.817s,
-60,773bytes staged, exact snapshot
-bed51816831081a195e4b3ef5b39f8f4059cd8feb1b4e51289f9bed05da46194.
-Exact remote retrieval/isolated restore passed12.211s; full private invariants
-and source/config/tool-bundle binding pass. Completed2026-11-09T07:44:22Z.
-Clone resources/staging absent; source exactv0.3.1/revision0007 and all4original
-production IDs unchanged. No production restore, apprestart or deployment.
-Detailed approved SHA/UTC/ID/results in06-LIVE-RECOVERY and ignored evidence.
-
-After real restore, both exact units passed systemd-analyze verify and were
-installed; only nightly timer enabled. Active/waiting,03UTC+up to15min jitter,
-next actual trigger2026-11-10T03:11:32Z. LastTrigger empty; service never started
-under systemd yet. **Deferred follow-up after the real calendar activation:** correlate
-LastTrigger/service invocation/start/exit with a new completed remote snapshot
-and validate installed status/remote integrity. Never count a manual service run
-as nightly proof; do not block tools overnight. Owner's daily status checking
-and one-verified-copy/create-before-delete policy remain in force. No new owner
-input is required for the scheduled run. On failure, preserve old snapshot and
-record exact status; no source/image/app retest without changed need.
-
-Phase6 now11/15, overall65/69.09SUMMARY/DEPL-02 remain pending solely for
-calendar evidence; owner permits10's distinct actualCI/publication work meanwhile.
-DEPL-01/release/live role/TLS/datastore rollout/friend gates remain pending.
-Plan10featuremerge approved/completed; releasepublication/deploy remain unapproved; no private record inspection,
-realOTP/email/trade, role/TLS/schema/engine/volume transition or app operation
-is authorized by09. Do not reopen completed08 or add remediation plans.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 64
+- Total plans completed: 66
 - Average duration: -
 - Total execution time: -
 
@@ -215,8 +156,8 @@ Certificate renewal remains an operational task in deploy/RUNBOOK.md.
 
 ## Session Continuity
 
-Last session: 2026-11-10T08:15:00Z
-Stopped at: Reviewed local rollout fix; local rollout fix complete; updated PR27 push choice pending
+Last session:2026-11-10
+Stopped at: Plan11 complete; exact9457911 all CI green; request separate main merge approval
 Resume file: .planning/phases/06-deploy/.continue-here.md
 
 ### Phase 5 Closeout — 2026-10-30

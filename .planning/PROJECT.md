@@ -69,30 +69,27 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 has 11/15 plans complete. Accepted local image/application gates,
-feature PR26 and release PR27 history are recorded in phase artifacts.
-PR26 merged into develop after approval and green exact-head CI. Release0.4.0
-PR27 publishes77dcd44 after explicit approval; four CI jobs passed, while
-operations failed at the new isolated fixture Git checkout check. It remains
-unmerged. Reviewed CI-only correction and full local rerun pass; corrected
-actual CI requires a new approved push.
+Phase 6 has12/15 plans complete. Plan11 release preparation and actual CI pass
+at published945791115c0bd88fd0cf62835aca3e03c395659f, run42787743632.
+PR27 remains open into main. Backend616/critical100%, frontend264, all five
+raw image reports0HIGH/CRITICAL and secure retained cutover/old-app rollback
+pass. Browser health test passed on retry; its known flake is retained.
+Independent source reviews are clean; exact evidence is in11SUMMARY/RELEASE-CI.
 
-The owner authorized a local correction for protected persistent clone-volume
-routing and TLS/HBA startup ordering. The retained deployment, role checks and
-old-app rollback now use the selected candidates. Independent source reviews
-are clean; the real populated supplied-archive cutover passed, including0008,
-actual v0.3.1 rollback, Redis persistence/authentication, unchanged original
-fingerprints and pre/post exact restores. Final committed compatibility gates
-passed; the updated candidate is tracked in LOCAL-FIX-EVIDENCE/STATE.
-No updated push, main merge, tag, back-merge or deployment has been approved.
+Protected persistent candidate routing and TLS-first startup passed actual
+runner proof, including0008, selected-volume recreation, actualv0.3.1 rollback,
+Redis persistence/authentication, unchanged originals and independent recovery.
+CI-only Git configuration isolation and Compose5.7.0 precise Dockerfile consent
+fixes are verified. Production plugins, app/recovery/image pins were not changed
+by those CI fixes. Local planning closeout can accompany the next approved
+integration; published PR27 stays at its CI-proven source until merge approval.
 
-Plan09's actual encrypted B2 backup and exact isolated restore passed on
-9November using the installed d5fe2059 recovery archive; timer enabled only
-after restore. Its first genuine scheduled-run observation remains explicitly
-owner-deferred and has not been inferred from the calendar. Plan09/DEPL-02
-remain pending. Production was last recorded at v0.3.1/revision0007; no local
-proof establishes current production state. DEPL-01 and whole-phase acceptance
-still require separately authorized rollout and friend verification.
+Plan09 actual encrypted B2 backup/exact restore and timer installation passed
+on9November using installed d5fe2059 archive. First genuine calendar-run
+observation remains owner-deferred;09/DEPL-02 are not complete. Main merge,
+tag/release, back-merge and production rollout are separate decisions. Last
+recorded production isv0.3.1/revision0007, not a new inspection. DEPL-01 awaits
+approved deployment/friend verification. No whole-phase acceptance is implied.
 
 ## Constraints
 

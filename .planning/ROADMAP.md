@@ -321,7 +321,7 @@ Plans (eight serial waves; fixed PostgreSQL/Redis fixtures share auth cleanup an
   3. The Playwright e2e in CI covers the trading happy path
   4. Production Postgres uses a least-privilege app role (not superuser); DB SSL decision recorded
 
-**Plans**: 11/15 plans complete
+**Plans**: 12/15 plans complete
 
 Plans:
 **Wave 1**
@@ -374,7 +374,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 06-11-PLAN.md — Prepare the selected release and verify release CI
+- [x] 06-11-PLAN.md — Prepare the selected release and verify release CI
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
@@ -394,4 +394,4 @@ Plans:
 | 3. Prices | 10/10 | Complete    | 2026-10-28 |
 | 4. Trading | 10/10 | Complete    | 2026-10-29 |
 | 5. Portfolio and History | 8/8 | Complete    | 2026-10-30 |
-| 6. Deploy | 11/15 | In Progress|  |
+| 6. Deploy | 12/15 | In Progress|  |

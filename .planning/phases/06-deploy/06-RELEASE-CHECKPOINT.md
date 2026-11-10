@@ -1,17 +1,32 @@
 ---
 phase: 06-deploy
 plan: "11"
-status: authorized-ci-tooling-correction-ready
+status: current-head-ci-passed-main-merge-approval-pending
 prepared: 2026-11-09T08:01:06Z
-implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
-base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
+implementation_head: 945791115c0bd88fd0cf62835aca3e03c395659f
+base: 5ebf62b33b190aaf04a48b107a222e906fbf4c99
 nightly_observation: owner-deferred-pending
-publication_authorized: false
+publication_authorized: true
 prior_publication_authorized_head: 77dcd44e852a079d4541c78f724717a0dd13afba
-ci_head: 38eb25ca2457cb05299e08ef668ffebd5bd6551d
-ci_run: 42785059635
-ci_status: failure-ops-bake-retained-dockerfile-consent
+ci_head: 945791115c0bd88fd0cf62835aca3e03c395659f
+ci_run: 42787743632
+ci_status: success-all-six-browser-health-retry-retained
 ---
+
+## Accepted current release checkpoint —2026-11-10
+
+Published945791115c0bd88fd0cf62835aca3e03c395659f / actual42787743632 has
+all six required jobs green. Plan11 SUMMARY records verified code/ops, explicit
+authorizations and retained browser health retry. PR27 OPEN/MERGEABLE/CLEAN;
+main base0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7. No merge performed.
+
+Current CI scope is fulfilled. Plan12 requires separate explicit main merge
+approval and Create-a-merge-commit after rechecking exact head and green CI.
+Tag/GitHub release, back-merge and production rollout remain separate.
+Local planning closeout can be carried through next approved integration;
+keep CI-proven published9457911 unchanged for the merge decision.
+No09SUMMARY/DEPL completion or calendar proof is inferred. Production preflight
+values/window and resulting main SHA/MANIFEST remain future scoped inputs.
 
 ## Bounded CI completion —2026-11-10
 

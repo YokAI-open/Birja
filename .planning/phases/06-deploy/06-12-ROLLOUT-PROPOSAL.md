@@ -6,13 +6,14 @@ measured preflight inputs and separate approval.
 
 ## Current release boundary
 
-PR [27](https://github.com/YokAI-open/Birja/pull/27) still publishes
-`77dcd44e852a079d4541c78f724717a0dd13afba` from release-0.4.0 into main.
-[Current CI42782054013](https://github.com/YokAI-open/Birja/actions/runs/42782054013)
-passed backend/frontend/image/e2e but failed the new operations fixture checkout
-check; merge remains blocked. A reviewed locally proven CI-only correction
-requires a new publication decision and corrected exact-head CI. Prior16623a8
-had six green jobs; that historical result does not cover the correction.
+PR [27](https://github.com/YokAI-open/Birja/pull/27) publishes exact
+`945791115c0bd88fd0cf62835aca3e03c395659f` from release-0.4.0 into main.
+[Actual CI42787743632](https://github.com/YokAI-open/Birja/actions/runs/42787743632)
+passed all six jobs. Independent source reviews and actual retained cutover /
+old-app rollback proof pass. The known health-screen retry is preserved in
+RELEASE-CI. Closing planning metadata is local for next approved integration;
+published9457911 remains the merge candidate. Prior16623a8/77dcd44/38eb25c
+results and corrected failures remain historical evidence.
 
 The unchanged independently installed recovery archive is
 `d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401`.
@@ -22,14 +23,15 @@ included in the local correction.
 
 | Separate decision | Required scope and evidence | Present authority |
 |---|---|---|
-| Updated release push | Reviewed local candidate, publish to release-0.4.0 and refresh PR27; new exact-head CI | Pending |
+| Release publication | Approved9457911 pushed; six actual CI jobs green | Complete |
 | Main PR merge | Exact updated head, six green jobs, Create a merge commit | Pending |
 | Tag / GitHub release | Resulting verified main SHA and reviewed release notes | Pending |
 | Back-merge PR / merge | Release into develop; own exact-head CI and merge approval | Pending |
 | Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
 
-The owner authorized preparing and testing the local correction. Existing
-publication approval for77dcd44 does not publish later CI corrections.
+The owner authorized local correction and bounded reviewed/tested CI follow-ups.
+Publication and exact-head CI are complete at9457911; main merge needs its own
+approval.
 Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits
