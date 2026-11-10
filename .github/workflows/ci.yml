@@ -227,7 +227,9 @@ jobs:
           printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
           docker_version=5:29.2.1-1~ubuntu.24.04~noble
-          sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version"
+          # Includes exact retained Dockerfile paths in Bake filesystem consent.
+          compose_version=5.7.0-1~ubuntu.24.04~noble
+          sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version" "docker-compose-plugin=$compose_version"
           sudo python3 -c '
           import json
           from pathlib import Path
@@ -242,6 +244,7 @@ jobs:
           set -Eeuo pipefail
           sudo -- /usr/bin/docker version
           test "$(sudo -- /usr/bin/docker version --format '{{.Client.Version}} {{.Server.Version}}')" = '29.2.1 29.2.1'
+          test "$(sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker compose version --short)" = '5.7.0'
           postgres=$(python3 -c 'import runpy; print(runpy.run_path("deploy/verify-restore.py")["REGISTRY_REF"])')
           sudo -- /usr/bin/docker pull --platform linux/amd64 "$postgres"
           sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker image inspect "$postgres" --platform linux/amd64
