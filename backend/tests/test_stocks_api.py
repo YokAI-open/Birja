@@ -85,16 +85,29 @@ async def test_repeatable_read_cannot_serve_old_authority(engine, settings, clea
 
 
 @pytest.mark.parametrize("condition", ["denied", "expired", "boundary", "valid"])
-async def test_current_retention_controls_disclosure_and_client_deadline(engine, settings, clean_stock_discovery, condition):
+async def test_current_retention_controls_disclosure_and_client_deadline(
+    engine, settings, clean_stock_discovery, condition
+):
     await seed(engine)
     async with engine.begin() as conn:
-        await conn.execute(update(StockDataAdmission).where(StockDataAdmission.product == "quotes").values(retention_allowed=condition != "denied", quota={**admitted().quota, "retention_seconds": 2}))
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "quotes")
+            .values(
+                retention_allowed=condition != "denied",
+                quota={**admitted().quota, "retention_seconds": 2},
+            )
+        )
     elapsed = {"denied": 0, "expired": 3, "boundary": 2, "valid": 1}[condition]
     async with async_sessionmaker(engine)() as db:
-        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW + timedelta(seconds=elapsed)))
+        result = body(
+            await stocks.list_stocks(db, settings, now=lambda: NOW + timedelta(seconds=elapsed))
+        )
     if condition == "valid":
         assert result["items"][0]["quote"] is not None
-        assert datetime.fromisoformat(result["admission"]["valid_until"]) == NOW + timedelta(seconds=2)
+        assert datetime.fromisoformat(result["admission"]["valid_until"]) == NOW + timedelta(
+            seconds=2
+        )
     else:
         assert result["items"][0]["quote"] is None
 
@@ -104,11 +117,49 @@ async def test_nondefault_verified_scope_projects_quotes(engine, settings, clean
     scope = {"account": "reviewed-account", "server": "reviewed-server"}
     async with engine.begin() as conn:
         await conn.execute(update(StockDataAdmission).values(scope={**admitted().scope, **scope}))
-    configured = settings.model_copy(update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]})
+    configured = settings.model_copy(
+        update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]}
+    )
     async with async_sessionmaker(engine)() as db:
         result = body(await stocks.list_stocks(db, configured, now=lambda: NOW))
     assert result["items"][0]["session"]["state"] == "open"
     assert result["items"][0]["quote"] is not None
+
+
+async def test_mixed_retention_windows_use_earliest_disclosed_deadline(
+    engine, settings, clean_stock_discovery
+):
+    await seed(engine)
+    async with engine.begin() as conn:
+        coin_id = (await conn.execute(select(Coin.id).where(Coin.symbol == "MSFT"))).scalar_one()
+        await conn.execute(
+            insert(StockQuote).values(
+                coin_id=coin_id,
+                bid=100,
+                ask=102,
+                mid=101,
+                source="alpaca",
+                feed="iex",
+                event_at=NOW - timedelta(seconds=1),
+                collected_at=NOW - timedelta(seconds=1),
+                session_date=NOW.date(),
+                admission_generation=4,
+            )
+        )
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "quotes")
+            .values(quota={**admitted().quota, "retention_seconds": 2})
+        )
+    async with async_sessionmaker(engine)() as db:
+        first = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+        second = body(
+            await stocks.list_stocks(db, settings, now=lambda: NOW + timedelta(seconds=1))
+        )
+    assert len([item for item in first["items"] if item["quote"]]) == 2
+    assert datetime.fromisoformat(first["admission"]["valid_until"]) == NOW + timedelta(seconds=1)
+    assert len([item for item in second["items"] if item["quote"]]) == 1
+    assert datetime.fromisoformat(second["admission"]["valid_until"]) == NOW + timedelta(seconds=2)
 
 
 async def test_exact_quote_and_independent_facts(engine, settings, clean_stock_discovery):

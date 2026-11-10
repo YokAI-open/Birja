@@ -336,3 +336,24 @@ it("purges expired numbers from the cache on its display tick without fetching",
   );
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+it("spends transport time against the server's shortened retention deadline before caching", async () => {
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      now = 2000;
+      return new Response(JSON.stringify(payload({ lifetime: 2 })));
+    }),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items).toHaveLength(20));
+  expect(result.current.data?.admission.state).toBe("unavailable");
+  expect(result.current.data?.items.every((item) => item.quote === null)).toBe(true);
+  expect(
+    client
+      .getQueryData<TimedStocks>(["stocks", "first@example.test"])
+      ?.items.every((item) => item.quote === null),
+  ).toBe(true);
+});

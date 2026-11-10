@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -176,13 +176,10 @@ def evaluate_admission(
             )
         ):
             return denied
-        if (
-            evidence.reviewed_at is None
-            or evidence.valid_from is None
-            or evidence.valid_until is None
+        if not (
+            cast(datetime, evidence.reviewed_at) <= now
+            and cast(datetime, evidence.valid_from) <= now < cast(datetime, evidence.valid_until)
         ):
-            return denied
-        if not (evidence.reviewed_at <= now and evidence.valid_from <= now < evidence.valid_until):
             return denied
         if (
             not _text(evidence.evidence_ref, 2048)
@@ -224,7 +221,7 @@ def evaluate_admission(
             for key, (low, high) in bounds.items()
         ):
             return denied
-        expiry = evidence.valid_until
+        expiry = cast(datetime, evidence.valid_until)
         if product == "calendar":
             expiry = min(expiry, _calendar_expiry(evidence, now))
         elif evidence.calendar:

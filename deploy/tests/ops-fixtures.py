@@ -69,6 +69,19 @@ asyncio.run(seed())
 print('seed_services=true buy_sell_replay=true revision=0007')
 """
 
+# Populate historical schemas with their actual release models even when CI's
+# fixture image contains current successor code. No feature source is consulted
+# by retained recovery children; the old source is embedded only in seed input.
+SEED = (
+    "import base64,io,sys,tarfile,tempfile\n"
+    "legacy=tempfile.mkdtemp(prefix='birja-synthetic-legacy-')\n"
+    "with tarfile.open(fileobj=io.BytesIO(base64.b64decode("
+    + repr(__import__('base64').b64encode(source_git('archive', 'v0.3.1', 'backend/app', 'backend/alembic')).decode())
+    + "))) as archive: archive.extractall(legacy,filter='data')\n"
+    "sys.path.insert(0,legacy+'/backend')\n"
+    + SEED.replace("command.upgrade(Config('/app/alembic.ini'), '0007')", "cfg=Config('/app/alembic.ini');cfg.set_main_option('script_location',legacy+'/backend/alembic');command.upgrade(cfg,'0007')")
+)
+
 
 def restrict_to_old_host(root, allowed_files=()):
     """Landlock denies the entire feature checkout to target launcher children.
@@ -881,7 +894,7 @@ asyncio.run(main())
 def role_python(code, role=r.BOOT):
     # Only synthetic credentials on the fixed internal network, no host ports.
     password = "synthetic-ops-only" if role == r.BOOT else "a" * 64
-    return r.call(
+    result = subprocess.run(
         [
             "/usr/bin/docker",
             "run",
@@ -911,8 +924,10 @@ def role_python(code, role=r.BOOT):
             "birja-backend-test:phase05-07",
             "-",
         ],
-        code.encode(),
+        input=code.encode(), capture_output=True, env=r.ENV, timeout=120,
     )
+    assert result.returncode == 0, "synthetic role client: " + result.stderr.decode()[-2500:]
+    return result.stdout
 
 
 def role_sql(dc, query, role=r.BOOT, denied=False):
@@ -1170,7 +1185,7 @@ def stock_role_contract(dc):
     for field in ("reviewed_at", "review_valid_until", "overrides"):
         result = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=sqlstate", "-U", "birja_scheduler", "-d", "birja_source_test"], input=f"UPDATE stock_sessions SET {field}=NULL".encode(), capture_output=True, env=r.ENV, timeout=15)
         assert result.returncode != 0 and b"42703" in result.stderr
-    print("stock_sql_acl_exact=true calendar_authority_migrator_only=true sessions_derived_only=true session_identity_advances=true evaluator_proof=plan08_13", flush=True)
+    print("stock_sql_acl_exact=true calendar_authority_migrator_only=true sessions_derived_only=true session_identity_advances=true evaluator_proof=required_tls_consumer", flush=True)
 
 
 def role_manifest(dc):
@@ -1477,6 +1492,91 @@ def roles(red_probe=False):
             assert r.call(dc + ["ps", "-q"]).strip() == b""
 
 
+STOCK_TLS_CALENDAR = r"""
+import asyncio, json
+from dataclasses import asdict, fields, replace
+from datetime import UTC, datetime, timedelta
+import asyncpg
+from app.core.config import SchedulerSettings
+from app.db.connection import database_connect_args
+from app.services.stock_admission import ProductAdmission
+from app.services.stock_sessions import RegularSession, build_sessions, session_at
+
+async def calendar_consumer_contract(app,scheduler,migrator):
+ now=datetime(2026,11,10,15,tzinfo=UTC)
+ authority=ProductAdmission(product='calendar',state='approved',generation=4,
+  reviewed_at=now-timedelta(hours=1),valid_from=now-timedelta(hours=2),valid_until=now+timedelta(hours=8),
+  evidence_ref='secure-review:synthetic-only',terms_version='synthetic-v1',collection_allowed=True,
+  display_allowed=True,derived_allowed=True,retention_allowed=True,
+  scope={'application':'birja','audience':'authenticated-users','account':'birja','server':'birja','feed':'iex'},
+  quota={'requests_per_minute':20,'symbols_per_request':20,'max_response_bytes':262144,'retention_seconds':86400},
+  allowed_fields=['exchange','session_date','opens_at','closes_at'],attribution='IEX prices',
+  calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/official-2026',
+   'sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],
+   'review_valid_until':(now+timedelta(hours=8)).isoformat(),
+   'coverage_start':(now.date()-timedelta(days=45)).isoformat(),
+   'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
+ await migrator.execute('DELETE FROM stock_sessions')
+ await migrator.execute("DELETE FROM stock_data_admissions WHERE product='calendar'")
+ names=list(asdict(authority))
+ values=[json.dumps(v) if isinstance(v,(dict,list)) else v for v in asdict(authority).values()]
+ await migrator.execute('INSERT INTO stock_data_admissions('+','.join(names)+') VALUES ('+','.join('$'+str(i+1) for i in range(len(names)))+')',*values)
+ async def current():
+  record=dict(await app.fetchrow("SELECT * FROM stock_data_admissions WHERE product='calendar'"))
+  for name in ('scope','quota','allowed_fields','calendar'): record[name]=json.loads(record[name])
+  return ProductAdmission(**{f.name:record[f.name] for f in fields(ProductAdmission)})
+ async def decision():
+  records=await app.fetch('SELECT exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation FROM stock_sessions ORDER BY exchange,session_date')
+  rows=[RegularSession(**dict(row)) for row in records]
+  return session_at('NYSE',now,rows,await current()).state
+ async def refresh(evidence):
+  rows=build_sessions(now,evidence)
+  assert len(rows)==272
+  await scheduler.executemany('INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(exchange,session_date) DO UPDATE SET opens_at=excluded.opens_at,closes_at=excluded.closes_at,coverage_start=excluded.coverage_start,coverage_end=excluded.coverage_end,calendar_admission_generation=excluded.calendar_admission_generation',[tuple(asdict(row).values()) for row in rows])
+ await refresh(await current())
+ assert await decision()=='open'
+ await scheduler.execute('UPDATE stock_sessions SET calendar_admission_generation=999')
+ assert await decision()=='unknown'
+ await refresh(await current())
+ assert await decision()=='open'
+ await migrator.execute("UPDATE stock_data_admissions SET generation=5 WHERE product='calendar'")
+ assert await decision()=='unknown'
+ await refresh(await current())
+ assert await decision()=='open'
+ # Rewriting derived rows cannot renew the current authoritative review.
+ await refresh(await current())
+ await migrator.execute("UPDATE stock_data_admissions SET calendar=jsonb_set(calendar,'{review_valid_until}',to_jsonb($1::text)) WHERE product='calendar'",now.isoformat())
+ assert await decision()=='unknown'
+ await migrator.execute("UPDATE stock_data_admissions SET calendar=jsonb_set(calendar,'{review_valid_until}',to_jsonb($1::text)) WHERE product='calendar'",(now+timedelta(hours=8)).isoformat())
+ assert await decision()=='open'
+ before=await app.fetchval("SELECT calendar FROM stock_data_admissions WHERE product='calendar'")
+ await refresh(await current())
+ assert await decision()=='open'
+ assert before==await app.fetchval("SELECT calendar FROM stock_data_admissions WHERE product='calendar'")
+ for conn in (app,scheduler):
+  for query in ["UPDATE stock_data_admissions SET reviewed_at=now()", "UPDATE stock_data_admissions SET calendar='{}'", "UPDATE stock_instruments SET provider_asset_id='forged'"]:
+   try: await conn.execute(query)
+   except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
+   else: raise AssertionError('runtime wrote authoritative evidence')
+ await migrator.execute('DELETE FROM stock_sessions')
+
+async def main():
+ args=database_connect_args(SchedulerSettings())
+ connections=[]
+ try:
+  for role,char in [('app','a'),('scheduler','b'),('migrator','c')]:
+   conn=await asyncpg.connect('postgresql://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',**args)
+   assert await conn.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
+   connections.append(conn)
+  app,scheduler,migrator=connections
+  await calendar_consumer_contract(app,scheduler,migrator)
+ finally:
+  for conn in connections: await conn.close()
+asyncio.run(main())
+print('calendar_runtime_tls_consumer=true forged_generation_refused=true replacement_invalidates=true expired_authority_refused=true same_generation_refresh=true authority_write_denied=true')
+"""
+
+
 STOCK_TLS_UPGRADE = r"""
 import asyncio, subprocess
 import asyncpg
@@ -1580,7 +1680,7 @@ def tls_red_probe():
         r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
 
 
-def tls():
+def tls(fresh_bootstrap=False):
     if not (ROOT / "deploy/provision-db-tls.sh").exists():
         return tls_red_probe()
     started = time.monotonic()
@@ -1943,9 +2043,9 @@ def tls():
             with tarfile.open(fileobj=__import__('io').BytesIO(source_git('archive', 'v0.3.1', 'backend/app'))) as archive:
                 archive.extractall(legacy, filter='data')
             client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0007')", bootstrap)
-            secure_seed = secure_seed.replace("command.upgrade(Config('/app/alembic.ini'), '0007')", "")
+            secure_seed = secure_seed.replace("cfg=Config('/app/alembic.ini');cfg.set_main_option('script_location',legacy+'/backend/alembic');command.upgrade(cfg,'0007')", "")
             client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
-            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0008')", bootstrap)
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0008') + ")", bootstrap)
             original = r.canonical(dc, "birja_source_test")
             config = root / "roles.json"
             config.write_text(
@@ -1984,13 +2084,17 @@ def tls():
                 == b"0\n"
             )
             # Real one-shot production migration command, with only migrator route/trust.
-            upgraded = client('migrate', STOCK_TLS_UPGRADE)
-            assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
+            upgraded = client('migrate', STOCK_TLS_UPGRADE) if not fresh_bootstrap else None
+            if upgraded is not None:
+                assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
             assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
             current = r.canonical(dc, "birja_source_test")
             assert current['financial'] == original['financial']
             assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version'})
             stock_role_contract(dc)
+            consumer = client('migrate', STOCK_TLS_CALENDAR)
+            assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
+            print('calendar_runtime_tls_consumer=true lane=' + ('fresh_bootstrap' if fresh_bootstrap else 'populated0008_no_grant_repair'), flush=True)
             assert (
                 role_sql(
                     dc,
@@ -2107,6 +2211,8 @@ if __name__ == "__main__":
         input_self_test()
     elif sys.argv[1:] == ["--roles"]:
         roles()
+        tls()
+        tls(fresh_bootstrap=True)
     elif sys.argv[1:] == ["--image-transition"]:
         image_transition()
     elif sys.argv[1:] == ["--roles-red-probe"]:
@@ -2117,6 +2223,7 @@ if __name__ == "__main__":
         roundtrip()
         roles()
         tls()
+        tls(fresh_bootstrap=True)
     else:
         args = options(sys.argv[1:])
         roundtrip(args.recovery_bundle)

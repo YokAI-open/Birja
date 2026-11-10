@@ -156,6 +156,45 @@ def calendar_evidence() -> ProductAdmission:
     )
 
 
+@pytest.mark.parametrize("value", [None, "2026-11-10", 4, NOW.replace(tzinfo=None)])
+@pytest.mark.parametrize("field", ["reviewed_at", "valid_from", "valid_until"])
+def test_non_utc_authority_times_fail_closed(field, value):
+    assert not evaluate_admission(
+        replace(admitted(), **{field: value}), "quotes", "display", NOW
+    ).allowed
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"sources": ["", "https://www.nasdaq.com/calendar"]},
+        {"sources": ["https://www.nyse.com/calendar", "https://www.nyse.com/other"]},
+        {"overrides": "not-a-list"},
+        {
+            "overrides": [
+                {
+                    "exchange": "XNYS",
+                    "date": "2026-11-27",
+                    "state": "closed",
+                    "source": "https://www.nyse.com/calendar",
+                    "opens_at": "2026-11-27T14:30:00Z",
+                }
+            ]
+        },
+    ],
+)
+def test_calendar_provenance_and_closed_override_refusal(changes):
+    authority = calendar_evidence()
+    authority = replace(authority, calendar={**authority.calendar, **changes})
+    assert not evaluate_admission(authority, "calendar", "derived", NOW).allowed
+
+
+def test_quote_product_cannot_smuggle_calendar_authority():
+    assert not evaluate_admission(
+        replace(admitted(), calendar={"version": "forged"}), "quotes", "display", NOW
+    ).allowed
+
+
 async def test_calendar_authority_is_bounded_and_limits_decision_expiry() -> None:
     evidence = calendar_evidence()
     evidence = replace(

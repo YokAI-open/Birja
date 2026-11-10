@@ -138,17 +138,18 @@ async def list_stocks(
     permitted = (
         permission.allowed
         and evaluate_admission(quote_authority, "quotes", "derived", checked_at, **scope).allowed
+        and evaluate_admission(quote_authority, "quotes", "retention", checked_at, **scope).allowed
     )
-    # Calendar evaluator currently uses Birja's canonical scope. Never substitute
-    # a default-scope authority for an API configured with another scope.
+    # Trusted configured scope reaches every nested evaluation.
     calendar = authority.get("calendar")
     if not evaluate_admission(calendar, "calendar", "derived", checked_at, **scope).allowed:
         calendar = None
     decisions = {
-        exchange: session_at(exchange, checked_at, sessions, calendar)
+        exchange: session_at(exchange, checked_at, sessions, calendar, **scope)
         for exchange in ("NYSE", "NASDAQ")
     }
     items = []
+    disclosure_deadline = permission.valid_until
     for row in catalogue:
         session = decisions[row.listing_exchange]
         current = session.current
@@ -170,6 +171,10 @@ async def list_stocks(
                     expected_generation=candidate.admission_generation,
                     **scope,
                 ).allowed
+                retained_until = candidate.collected_at + timedelta(
+                    seconds=cast(ProductAdmission, quote_authority).quota["retention_seconds"]
+                )
+                matched = matched and checked_at < retained_until
                 if not matched:
                     reason = "permission_unavailable"
                 elif not 0 <= (checked_at - candidate.event_at).total_seconds() < 120:
@@ -188,6 +193,7 @@ async def list_stocks(
                     and session.state != "unknown"
                     and candidate.event_at <= candidate.collected_at <= checked_at
                 ):
+                    disclosure_deadline = min(cast(datetime, disclosure_deadline), retained_until)
                     quote = StockQuoteOut(
                         bid=candidate.bid,
                         ask=candidate.ask,
@@ -219,7 +225,7 @@ async def list_stocks(
         admission=StockAdmission(
             state="approved" if permitted else "unavailable",
             generation=permission.generation if permitted else None,
-            valid_until=permission.valid_until if permitted else None,
+            valid_until=disclosure_deadline if permitted else None,
         ),
         attribution=StockAttribution(required_text=permission.attribution if permitted else ""),
         items=tuple(items),

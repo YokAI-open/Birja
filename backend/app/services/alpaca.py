@@ -39,8 +39,12 @@ class QuoteBatch:
     rejected: dict[str, str]
 
 
-def _admitted(admission: ProductAdmission, now: datetime) -> None:
-    if not evaluate_admission(admission, "quotes", "collection", now).allowed:
+def _admitted(
+    admission: ProductAdmission, now: datetime, *, account: str = "birja", server: str = "birja"
+) -> None:
+    if not evaluate_admission(
+        admission, "quotes", "collection", now, account=account, server=server
+    ).allowed:
         raise AlpacaError("admission")
 
 
@@ -56,7 +60,10 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def _number(token: str) -> Decimal:
     if len(token) > 128:
         raise ValueError("number_limit")
-    value = Decimal(token)
+    try:
+        value = Decimal(token)
+    except ArithmeticError:
+        raise ValueError("invalid_number") from None
     if not value.is_finite():
         raise ValueError("nonfinite")
     return value
@@ -190,6 +197,8 @@ async def fetch_iex_quotes(
     jitter: Callable[[], float] | None = None,
     max_bytes: int = 262144,
     budget_seconds: float = 10,
+    account: str = "birja",
+    server: str = "birja",
 ) -> QuoteBatch:
     """Use only a verified curated mapping; injected client owns private headers.
 
@@ -200,7 +209,7 @@ async def fetch_iex_quotes(
     Unknown conditions fail closed; real permitted account coverage is07-14.
     """
     started = now()
-    _admitted(admission, started)
+    _admitted(admission, started, account=account, server=server)
     if (
         not 1 <= len(symbols) <= 20
         or len({m.symbol for m in symbols}) != len(symbols)
@@ -222,7 +231,7 @@ async def fetch_iex_quotes(
     try:
         async with asyncio.timeout(budget_seconds):
             for attempt in range(attempts):
-                _admitted(admission, now())
+                _admitted(admission, now(), account=account, server=server)
                 retry_after = 0.0
                 try:
                     async with http.stream(
@@ -250,7 +259,7 @@ async def fetch_iex_quotes(
                             if len(content) > max_bytes:
                                 raise AlpacaError("response_limit")
                     collected_at = now()
-                    _admitted(admission, collected_at)
+                    _admitted(admission, collected_at, account=account, server=server)
                     return _batch(_decode(bytes(content)), symbols, admission, collected_at)
                 except httpx.TransportError as exc:
                     last = AlpacaError(type(exc).__name__, retryable=True)

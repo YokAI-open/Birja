@@ -188,6 +188,21 @@ App/scheduler must never receive these operations/credentials. A denied retentio
 decision also forbids reusing previously stored values; approved deletion/cleanup
 policy is separate and cannot silently erase financial evidence.
 
+Quote disclosure now additionally requires current retention permission and a
+strict age below quota.retention_seconds measured from the immutable accepted
+collected_at. An equal/older source observation cannot renew that timestamp.
+The existing response admission.valid_until is conservatively shortened to the
+earliest retained-value deadline among disclosed quotes; the client spends full
+transport time against it and purges all provider values at that deadline.
+This is an exposure control, not deletion or a storage-rights attestation.
+
+Before actual activation, independently verified rights must cover retained
+database and encrypted recovery copies for their actual lifetimes, or an
+explicitly approved and verified privileged cleanup process must satisfy every
+storage deadline. Stopped/failed collectors do not suspend those obligations.
+Until that prerequisite is met, keep activation disabled. No app/scheduler DELETE
+grant or new deletion job is added here; no financial evidence may be erased.
+
 ## Positive/negative rehearsal and later activation
 
 Run `cd backend && uv run pytest tests/test_stock_admission.py

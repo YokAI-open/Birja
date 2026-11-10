@@ -6,6 +6,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import exchange_calendars as calendars
 import httpx
 import pytest
 import pytest_asyncio
@@ -23,6 +24,28 @@ from tests.test_stock_admission import admitted
 from tests.test_stock_sessions import evidence
 
 
+def next_regular_clock(actual: datetime) -> datetime:
+    now = actual.replace(hour=15, minute=0, second=0, microsecond=0)
+    calendar = calendars.get_calendar(
+        "XNYS", start=now.date().isoformat(), end=(now.date() + timedelta(days=14)).isoformat()
+    )
+    open_dates = {stamp.date() for stamp in calendar.sessions}
+    while now.date() not in open_dates:
+        now += timedelta(days=1)
+    return now
+
+
+@pytest.mark.parametrize(
+    "day,expected",
+    [("2026-11-26", "2026-11-27"), ("2026-12-25", "2026-12-28"), ("2026-11-14", "2026-11-16")],
+)
+def test_scheduler_fixture_selects_verified_session(day, expected):
+    assert (
+        next_regular_clock(datetime.fromisoformat(day + "T15:00:00+00:00")).date().isoformat()
+        == expected
+    )
+
+
 @pytest_asyncio.fixture
 async def state(
     engine: AsyncEngine, clean_stock_discovery: None, redis_client: Redis
@@ -31,9 +54,7 @@ async def state(
     await redis_client.delete(stock_scheduler.WINDOW_KEY)
     # Fixed open-session clock; expiry guards additionally use actual DB UTC.
     actual = datetime.now(UTC)
-    now = actual.replace(hour=15, minute=0, second=0, microsecond=0)
-    while now.weekday() >= 5:
-        now += timedelta(days=1)
+    now = next_regular_clock(actual)
     async with factory() as db:
         originals = (await db.execute(select(StockInstrument))).scalars().all()
         saved = [(r.coin_id, r.provider_asset_id, r.provider_verified_at) for r in originals]
@@ -130,12 +151,36 @@ async def test_configured_budget_bounds_pre_fetch_work(state, redis_client, monk
     assert not await redis_client.exists(stock_scheduler.LOCK_KEY)
 
 
+async def test_configured_budget_cancels_post_fetch_write_and_rolls_back(
+    state, redis_client, monkeypatch
+):
+    original = stock_scheduler.upsert_stock_quotes
+
+    async def held(*args, **kwargs):
+        count = await original(*args, **kwargs)
+        assert count == 20
+        await asyncio.sleep(1.1)
+        return count
+
+    monkeypatch.setattr(stock_scheduler, "upsert_stock_quotes", held)
+    state["settings"] = state["settings"].model_copy(update={"stock_cycle_budget_seconds": 1})
+    with respx.mock as router:
+        router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
+        async with httpx.AsyncClient() as http:
+            result = await cycle(state, redis_client, http)
+    assert result.status == "source_error"
+    assert not await rows(state)
+    assert not await redis_client.exists(stock_scheduler.LOCK_KEY)
+
+
 async def test_nondefault_configured_scope_survives_every_nested_check(state, redis_client):
     scope = {"account": "reviewed-account", "server": "reviewed-server"}
     async with state["factory"]() as db:
         await db.execute(update(StockDataAdmission).values(scope={**admitted().scope, **scope}))
         await db.commit()
-    state["settings"] = state["settings"].model_copy(update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]})
+    state["settings"] = state["settings"].model_copy(
+        update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]}
+    )
     with respx.mock as router:
         route = router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
         async with httpx.AsyncClient() as http:
@@ -159,8 +204,8 @@ async def test_calendar_async_boundaries_recheck_authority_and_lease(
     if boundary == "calendar_build":
         original = stock_scheduler.build_sessions
 
-        def held(*args):
-            result = original(*args)
+        def held(*args, **kwargs):
+            result = original(*args, **kwargs)
             entered.set()
             assert release.wait(5)
             return result
@@ -169,8 +214,8 @@ async def test_calendar_async_boundaries_recheck_authority_and_lease(
     else:
         original = stock_scheduler.persist_sessions
 
-        async def held(*args):
-            result = await original(*args)
+        async def held(*args, **kwargs):
+            result = await original(*args, **kwargs)
             entered.set()
             if boundary == "lease":
                 await redis_client.set(stock_scheduler.LOCK_KEY, "replacement", px=1000)

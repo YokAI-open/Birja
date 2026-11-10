@@ -38,11 +38,17 @@ class SessionDecision:
 
 
 def build_sessions(
-    now: datetime, current_calendar_admission: ProductAdmission | None
+    now: datetime,
+    current_calendar_admission: ProductAdmission | None,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> list[RegularSession]:
     if (
         current_calendar_admission is None
-        or not evaluate_admission(current_calendar_admission, "calendar", "derived", now).allowed
+        or not evaluate_admission(
+            current_calendar_admission, "calendar", "derived", now, account=account, server=server
+        ).allowed
     ):
         return []
     evidence = current_calendar_admission
@@ -100,15 +106,20 @@ def session_at(
     now: datetime,
     sessions: Sequence[RegularSession],
     current_calendar_admission: ProductAdmission | None,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> SessionDecision:
     if exchange not in EXCHANGES or not utc(now) or len(sessions) > 272:
         return SessionDecision()
-    admission = evaluate_admission(current_calendar_admission, "calendar", "derived", now)
+    admission = evaluate_admission(
+        current_calendar_admission, "calendar", "derived", now, account=account, server=server
+    )
     if not admission.allowed:
         return SessionDecision()
     expected = {
         row.session_date: row
-        for row in build_sessions(now, current_calendar_admission)
+        for row in build_sessions(now, current_calendar_admission, account=account, server=server)
         if row.exchange == exchange
     }
     selected = [row for row in sessions if row.exchange == exchange]
@@ -187,6 +198,9 @@ async def persist_sessions(
     sessions: Sequence[RegularSession],
     current_calendar_admission: ProductAdmission,
     now: datetime,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> int:
     """Caller owns a short commit; INSERT SELECT rechecks current authority.
 
@@ -194,11 +208,13 @@ async def persist_sessions(
     authoritative snapshot, generation and DB-clock review expiry in the write
     statement. A later revocation/generation change is refused by session_at.
     """
-    expected = build_sessions(now, current_calendar_admission)
+    expected = build_sessions(now, current_calendar_admission, account=account, server=server)
     if not sessions or len(sessions) > 272 or list(sessions) != expected:
         return 0
     if not all(
-        evaluate_admission(current_calendar_admission, "calendar", purpose, now).allowed
+        evaluate_admission(
+            current_calendar_admission, "calendar", purpose, now, account=account, server=server
+        ).allowed
         for purpose in ("derived", "retention", "collection")
     ):
         return 0

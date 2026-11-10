@@ -393,6 +393,11 @@ class Identity(unittest.TestCase):
         }
         # Canonical pre-regrouping inventory from e728855, including artifacts.
         # A digest keeps this contract usable in shallow CI checkouts.
+        approved = {"exchange-calendars": "4.13.2", "numpy": "2.5.4", "pandas": "3.1.1", "pyluach": "2.3.0", "toolz": "1.2.0", "tzdata": "2026.6", "korean-lunar-calendar": "0.4.0", "python-dateutil": "4.0.0"}
+        self.assertEqual({name: distributions[name]["version"] for name in approved}, approved)
+        additions = {name: distributions.pop(name) for name in approved}
+        # Exact reviewed wheels/sdist/source metadata, not just name/version.
+        self.assertEqual(hashlib.sha256(json.dumps(additions, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7")
         encoded = json.dumps(distributions, sort_keys=True, separators=(",", ":"))
         self.assertEqual(
             hashlib.sha256(encoded.encode()).hexdigest(),

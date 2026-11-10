@@ -16,7 +16,8 @@ from app.models.stock import StockDataAdmission, StockInstrument, StockQuote
 from app.services.stock_quote_rules import RawStockQuote, StockMapping, validate_quote
 from app.services.stock_quotes import load_stock_catalog, upsert_stock_quotes
 from tests.test_stock_admission import admitted
-from tests.test_stock_quote_rules import NOW
+
+NOW = datetime.now(UTC)
 
 
 @pytest_asyncio.fixture
@@ -38,7 +39,18 @@ async def stock_state(
         for instrument in originals:
             instrument.provider_asset_id = f"synthetic-{instrument.coin_id}"
             instrument.provider_verified_at = NOW - timedelta(days=1)
-        db.add(StockDataAdmission(**asdict(admitted())))
+        db.add(
+            StockDataAdmission(
+                **asdict(
+                    replace(
+                        admitted(),
+                        reviewed_at=NOW - timedelta(hours=1),
+                        valid_from=NOW - timedelta(hours=2),
+                        valid_until=NOW + timedelta(hours=8),
+                    )
+                )
+            )
+        )
         await db.commit()
         rows = await db.execute(
             select(

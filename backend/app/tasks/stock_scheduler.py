@@ -62,12 +62,18 @@ def _allowed(
 
 
 def _open_exchanges(
-    now: datetime, sessions: Sequence[RegularSession], authority: ProductAdmission
+    now: datetime,
+    sessions: Sequence[RegularSession],
+    authority: ProductAdmission,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> set[str]:
     return {
         exchange
         for exchange in ("NYSE", "NASDAQ")
-        if session_at(exchange, now, sessions, authority).state == "open"
+        if session_at(exchange, now, sessions, authority, account=account, server=server).state
+        == "open"
     }
 
 
@@ -79,6 +85,7 @@ async def _refresh(
     now: Callable[[], datetime],
     token: str,
 ) -> CycleResult:
+    scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
     async with sessionmaker() as db:
         original = await _admissions(db)
         mappings = await load_stock_catalog(db)
@@ -86,20 +93,22 @@ async def _refresh(
     if not _allowed(original, settings, checked):
         return CycleResult("ok")
     # Calendar package initialization/cold calculations must never block crypto.
-    sessions = await asyncio.to_thread(build_sessions, checked, original["calendar"])
+    sessions = await asyncio.to_thread(build_sessions, checked, original["calendar"], **scope)
     async with sessionmaker() as db:
         current = await _admissions(db)
         checked = now()
         if current != original or not _allowed(current, settings, checked):
             return CycleResult("ok")
-        await persist_sessions(db, sessions, current["calendar"], checked)
+        await persist_sessions(db, sessions, current["calendar"], checked, **scope)
         if await redis.get(LOCK_KEY) != token:
             return CycleResult("locked")
         latest = await _admissions(db)
         if latest != current or not _allowed(latest, settings, now()):
             return CycleResult("ok")
         await db.commit()
-    opened = await asyncio.to_thread(_open_exchanges, now(), sessions, original["calendar"])
+    opened = await asyncio.to_thread(
+        _open_exchanges, now(), sessions, original["calendar"], **scope
+    )
     async with sessionmaker() as db:
         current = await _admissions(db)
         current_mappings = await load_stock_catalog(db)
@@ -115,7 +124,7 @@ async def _refresh(
     ):
         return CycleResult("ok")
     # Fresh pure check after awaited reads (calendar bounds already warmed above).
-    opened &= _open_exchanges(checked, sessions, current["calendar"])
+    opened &= _open_exchanges(checked, sessions, current["calendar"], **scope)
     selected = [m for m in mappings if m.listing_exchange in opened]
     quota = current["quotes"].quota["requests_per_minute"] - RESERVED_REQUESTS
     if not selected or quota < 1 or await redis.get(LOCK_KEY) != token:
@@ -140,7 +149,7 @@ async def _refresh(
             or live_mappings != mappings
             or not owned
             or not _allowed(latest, settings, checked)
-            or not opened <= _open_exchanges(checked, sessions, latest["calendar"])
+            or not opened <= _open_exchanges(checked, sessions, latest["calendar"], **scope)
         ):
             raise AlpacaError("current_admission")
 
@@ -154,6 +163,8 @@ async def _refresh(
                 now,
                 attempts=min(settings.stock_max_retries + 1, quota),
                 max_bytes=settings.stock_max_response_bytes,
+                account=settings.stock_data_account,
+                server=settings.stock_data_server,
                 budget_seconds=min(
                     10,
                     settings.stock_cycle_budget_seconds,
@@ -167,7 +178,7 @@ async def _refresh(
         checked = now()
         if latest != original or not _allowed(latest, settings, checked):
             return CycleResult("ok")
-        opened = _open_exchanges(checked, sessions, latest["calendar"])
+        opened = _open_exchanges(checked, sessions, latest["calendar"], **scope)
         quotes = [
             q
             for q in batch.quotes
@@ -189,7 +200,7 @@ async def _refresh(
             latest != original
             or not _allowed(latest, settings, now())
             or not owned
-            or _open_exchanges(now(), sessions, latest["calendar"]) != opened
+            or _open_exchanges(now(), sessions, latest["calendar"], **scope) != opened
         ):
             return CycleResult("ok")
         await db.commit()
@@ -215,7 +226,7 @@ async def run_stock_cycle(
     if not acquired:
         return CycleResult("locked")
     try:
-        async with asyncio.timeout(CYCLE_TIMEOUT_S):
+        async with asyncio.timeout(min(CYCLE_TIMEOUT_S, settings.stock_cycle_budget_seconds)):
             return await _refresh(sessionmaker, redis, http, settings, now, token)
     except Exception as exc:
         # No provider bodies, request headers, URLs or private evidence in logs.
