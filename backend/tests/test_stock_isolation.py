@@ -41,10 +41,10 @@ async def stock_id(engine: AsyncEngine, migrated: None) -> AsyncIterator[int]:
         await conn.execute(update(Coin).where(Coin.id == cid).values(symbol="AAPL", is_active=True))
 
 
-async def inject_price(engine: AsyncEngine, cid: int) -> None:
+async def inject_price(engine: AsyncEngine, cid: int, as_of: datetime = NOW) -> None:
     async with engine.begin() as conn:
         await conn.execute(
-            insert(Price).values(coin_id=cid, mid=D("200"), as_of=NOW, source="fake")
+            insert(Price).values(coin_id=cid, mid=D("200"), as_of=as_of, source="fake")
         )
 
 
@@ -236,7 +236,13 @@ async def test_stock_http_bypasses_are_refused_without_mutation(
     headers = await csrf_headers(auth_client)
     async with engine.connect() as conn:
         user_id = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
-    await inject_price(engine, stock_id)
+    await inject_price(engine, stock_id, datetime.now(UTC))
+    async with engine.begin() as conn:
+        await conn.execute(
+            insert(Holding).values(
+                user_id=user_id, coin_id=stock_id, quantity=D("2"), cost_basis=D("300")
+            )
+        )
     before = await financial_rows(engine, user_id)
     for side in ("buy", "sell"):
         body = {"symbol": "AAPL", "side": side, "quantity": "1"}

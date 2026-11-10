@@ -98,7 +98,11 @@ def _costs(settings: Settings) -> TradeCosts:
 
 async def _load_coin(db: AsyncSession, symbol: str) -> Coin:
     coin = (
-        await db.execute(select(Coin).where(Coin.symbol == symbol.upper(), Coin.is_active))
+        await db.execute(
+            select(Coin).where(
+                Coin.symbol == symbol.upper(), Coin.is_active, Coin.asset_class == "crypto"
+            )
+        )
     ).scalar_one_or_none()
     if coin is None:
         raise TradeRefused("unknown_coin", "Unknown coin.")
@@ -110,7 +114,7 @@ async def _load_coin_price(db: AsyncSession, symbol: str) -> tuple[Coin, Price]:
         await db.execute(
             select(Coin, Price)
             .outerjoin(Price, Price.coin_id == Coin.id)
-            .where(Coin.symbol == symbol.upper(), Coin.is_active)
+            .where(Coin.symbol == symbol.upper(), Coin.is_active, Coin.asset_class == "crypto")
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
@@ -140,7 +144,11 @@ async def _find_trade(db: AsyncSession, user_id: int, key: uuid.UUID) -> tuple[T
         await db.execute(
             select(Trade, Coin.symbol)
             .join(Coin, Coin.id == Trade.coin_id)
-            .where(Trade.user_id == user_id, Trade.idempotency_key == key)
+            .where(
+                Trade.user_id == user_id,
+                Trade.idempotency_key == key,
+                Coin.asset_class == "crypto",
+            )
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
@@ -189,7 +197,13 @@ def _replay(found: tuple[Trade, str], order: Order) -> tuple[Fill, bool]:
 async def _held(db: AsyncSession, user_id: int, coin_id: int) -> Decimal:
     qty = (
         await db.execute(
-            select(Holding.quantity).where(Holding.user_id == user_id, Holding.coin_id == coin_id)
+            select(Holding.quantity)
+            .join(Coin, Coin.id == Holding.coin_id)
+            .where(
+                Holding.user_id == user_id,
+                Holding.coin_id == coin_id,
+                Coin.asset_class == "crypto",
+            )
         )
     ).scalar_one_or_none()
     return _ZERO if qty is None else qty
