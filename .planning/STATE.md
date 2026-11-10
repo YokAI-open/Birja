@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 07-05 scoped admission; next07-06 quote rules and persistence
-last_updated: "2026-11-10T15:08:43.792Z"
+stopped_at: Completed 07-06 exact quotes; next07-07 package review checkpoint
+last_updated: "2026-11-10T15:22:57.059Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 5
-  percent: 36
+  completed_plans: 6
+  percent: 43
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 6 of 14
-Status: Executing Phase 7; Plans 07-01 through 07-05 complete
+Plan: 7 of 14
+Status: Executing Phase 7; Plans 07-01 through 07-06 complete
 Last activity: 2026-11-10
-Progress: [████░░░░░░] 36%
+Progress: [████░░░░░░] 43%
 
 ## Completion and next action
 
@@ -50,7 +50,10 @@ Calendar evaluator and restricted-TLS consumer semantics remain required07-08/13
 SQL authority denial is proven now. Plan07-05 pure scoped admission and disabled
 configuration pass74admission/114combined configuration tests and scoped static
 checks; private migrator-only evidence import/revoke/TLS rehearsal packet saved.
-Next:07-06 quote rules and persistence.
+Plan07-06 exact IEX adapter/predicates and monotonic PostgreSQL persistence pass
+94tests,100% scoped critical coverage and scoped static checks. Session bounds
+are structural only; genuine authority/evaluator remains07-08. Next:07-07
+calendar dependency review and its explicit pre-install checkpoint.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 New package legitimacy is a blocking pre-install checkpoint; actual provider permission,
@@ -65,7 +68,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 5/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes;07-05 approximately8minutes.
+- v1.1: 6/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes;07-05 approximately8minutes;07-06 approximately11minutes.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -132,6 +135,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 07 P03 | 16min | 2 tasks | 7 files |
 | Phase 07 P04 | 25min | 2 tasks | 3 files |
 | Phase 07 P05 | 8min | 2 tasks | 5 files |
+| Phase 7 P06 | 11min | 2 tasks | 6 files |
 
 ## Operations
 
@@ -141,11 +145,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T15:08:43.778Z
-Stopped at: Completed 07-05 scoped admission; next07-06 quote rules and persistence
-Resume: Continue authorized Phase7 execution at07-06.
+Last session:2026-11-10T15:22:57.042Z
+Stopped at: Completed 07-06 exact quotes; next07-07 package review checkpoint
+Resume: Continue authorized Phase7 execution at07-07; package installation requires its checkpoint.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05 summaries committed; whole-phase requirements remain pending.
+07-01/02/03/04/05/06 summaries committed; whole-phase requirements remain pending.
 Isolated birja-test PostgreSQL/Redis healthy and retained for next plan's tests;
 no production services changed or provider data activated.

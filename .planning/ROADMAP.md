@@ -96,7 +96,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07-06-PLAN.md — Validate exact IEX quotes and monotonic persistence.
+- [x] 07-06-PLAN.md — Validate exact IEX quotes and monotonic persistence.
 - [ ] 07-07-PLAN.md — Review calendar dependency before installation.
 
 **Wave 7** *(blocked on Wave 6 completion)*
@@ -194,13 +194,14 @@ Plans:
 
 **Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase7 execution is underway:
 07-01schema/catalogue,07-02crypto boundaries,07-03revisioned recovery contracts
-and07-04restricted-role TLS/exact retained restore proofs are complete;
-07-05product-specific admission is next. Genuine calendar consumer semantics
+and07-04restricted-role TLS/exact retained restore proofs are complete, together
+with07-05product admission and07-06exact quote/persistence rules.07-07calendar
+dependency review is next. Genuine calendar consumer semantics
 remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 5/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 6/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
