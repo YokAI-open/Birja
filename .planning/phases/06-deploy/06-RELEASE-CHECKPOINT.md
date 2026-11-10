@@ -1,13 +1,225 @@
 ---
 phase: 06-deploy
-plan: "10"
-status: root-fixture-correction-reviewed-serial-integration-passed-publication-pending
+plan: "11"
+status: release-published-backmerge-rollout-pending
 prepared: 2026-11-09T08:01:06Z
-implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
-base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
+implementation_head: 945791115c0bd88fd0cf62835aca3e03c395659f
+base: 5ebf62b33b190aaf04a48b107a222e906fbf4c99
 nightly_observation: owner-deferred-pending
 publication_authorized: true
+prior_publication_authorized_head: 77dcd44e852a079d4541c78f724717a0dd13afba
+ci_head: 945791115c0bd88fd0cf62835aca3e03c395659f
+ci_run: 42787743632
+ci_status: success-all-six-browser-health-retry-retained
 ---
+
+## Release publication completed —2026-11-10
+
+Owner explicitly selected “Publish v0.4.0 release” at main commit
+46d24c8591de2207cf219429aac0768962bed4c3 using the prepared release notes.
+Rechecked main SHA and no existing v0.4.0 tag/release before publication.
+Created annotated tag v0.4.0 (tag object
+bb64990ba6be425e66e0a560cbd6a6d3589e4a79), pushed only that tag, and published
+https://github.com/YokAI-open/Birja/releases/tag/v0.4.0
+at2026-11-10T09:29:02Z. GitHub readback confirms public/non-draft/non-prerelease;
+remote peeled tag matches the approved main SHA exactly.
+
+No back-merge push/PR/merge or production operation was authorized/performed.
+Local planning commits remain preserved on release-0.4.0 for the next approved
+integration. Next: request release-branch push and PR into develop, inspect its
+own exact-head CI, then request merge approval. Keep the branch until both
+integration and its planning records are preserved. Phase12/15 and pending
+09/12/13, DEPL-01/02 remain unchanged; nightly observation is still deferred.
+
+## Main merge completed —2026-11-10
+
+Owner explicitly selected “Approve main merge” for PR27 head
+945791115c0bd88fd0cf62835aca3e03c395659f. Before merging, GitHub readback
+confirmed exact head, main base, OPEN/MERGEABLE/CLEAN and all six checks SUCCESS.
+`gh pr merge --merge --match-head-commit` completed successfully at
+2026-11-10T09:24:42Z. PR27 is MERGED; resulting main commit is
+46d24c8591de2207cf219429aac0768962bed4c3.
+GitHub commit readback verified both parents: previous main0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7
+and approved release945791115c0bd88fd0cf62835aca3e03c395659f.
+
+Only main merge was authorized/performed. No tag, GitHub release, back-merge,
+production inspection, restart or deployment occurred. Keep the release branch
+and local planning closeout9f4bf5f plus this record for the next approved
+integration. Phase remains12/15;09/12/13 and DEPL-01/02 remain incomplete.
+Next publication candidate: v0.4.0 at the resulting main SHA, using prepared
+release notes; requires separate explicit tag/release authorization. Back-merge
+push/PR and its eventual green-CI merge require their own scope decisions.
+Production still needs measured preflight, final retained MANIFEST, fresh
+recovery proof and an approved maintenance window. Nightly observation remains
+owner-deferred.
+
+## Accepted current release checkpoint —2026-11-10
+
+Published945791115c0bd88fd0cf62835aca3e03c395659f / actual42787743632 has
+all six required jobs green. Plan11 SUMMARY records verified code/ops, explicit
+authorizations and retained browser health retry. PR27 OPEN/MERGEABLE/CLEAN;
+main base0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7. No merge performed.
+
+Current CI scope is fulfilled. Plan12 requires separate explicit main merge
+approval and Create-a-merge-commit after rechecking exact head and green CI.
+Tag/GitHub release, back-merge and production rollout remain separate.
+Local planning closeout can be carried through next approved integration;
+keep CI-proven published9457911 unchanged for the merge decision.
+No09SUMMARY/DEPL completion or calendar proof is inferred. Production preflight
+values/window and resulting main SHA/MANIFEST remain future scoped inputs.
+
+## Bounded CI completion —2026-11-10
+
+Owner approved38eb25c plus reviewed/tested CI/test/planning follow-ups until CI
+passes. Actual42785059635 confirmed the Git fix and four other green jobs,
+but operations failed missing Bake read consent for the retained Dockerfile.
+Reviewed d7f0cf5 pins CI-only Compose5.7.0 with exact version assertion, no
+wildcard/bypass.9contracts and full supplied-archive local proof257.676s pass.
+Publish under existing authority and require new actual CI. No production tool
+change, main merge/tag/deployment,11SUMMARY or DEPL advancement yet.
+
+## Approved publication and actual CI —2026-11-10
+
+Owner approved all18 commits through77dcd44e852a079d4541c78f724717a0dd13afba.
+Nonforce push and PR27 update succeeded; remote PR head is exactly77dcd44.
+Run42782054013 completed with backend/frontend/image/e2e SUCCESS and ops /
+ci-pass FAILURE. Actual backend616/critical100%, frontend264, browser10pass /
+1expectedCSPskip/no retry; all5raw image reports hashverify with0HIGH/CRITICAL.
+
+Ops passed transition34.841s, recovery58.758s, roles22.158s/65denials,
+TLS21.576s and prior actual-old rollback94.821s. New selected-cutover fixture
+failed at the real retained first-start launcher: private app “is not a git
+checkout”. Owned fixture cleanup passed. No successful current-head CI or
+Plan11 completion is inferred.
+
+RED7d3f8a4 / GREENc343f6b isolates Git system configuration only in the
+synthetic generated launcher, with a regression reproducing denied host config
+under Landlock. Real Git rev-parse and local config pass afterward, while a
+missing .git still fails. Independent review clean; affected full supplied-
+archive proof passed246.010s including deployment, rollback, three restores
+and unchanged originals/cleanup. No production/runtime/image/CORE changes.
+Actual runner confirmation needs a separately approved correction push;77dcd44
+approval did not cover later commits. No11SUMMARY, merge/tag or deployment.
+
+## Local rollout correction —2026-11-10
+
+Owner approved local correction before merge. Protected persistent candidate
+routing, TLS-first startup and actual running-identity guards are implemented;
+independent source review has no open findings. Source/fixtureb6b717c includes
+strict observed Redis manifest formats, final-record file checks, nonsecret
+HBA readability and pinned containerd platform identity.
+
+Real supplied-archive run12 passed254.099s with current0008 deployment, actual
+v0.3.1 rollback, Redis persistence/authentication, unchanged originals and three
+same-archive backup/exact restore stages. Final committed serial compatibility
+passed, including full retained cutover239.459s; results recorded in
+06-12-LOCAL-FIX-EVIDENCE. The revised proposal prepares all
+bound material before fresh first-start recovery proof; live preflight values
+remain unmeasured and require separate approval.
+
+PR27 still publishes16623a8. Its existing CI is historical for that head only.
+The local candidate requires a new push decision and new actual CI before
+main merge. No main merge/tag/back-merge/deploy authority is implied; no
+11SUMMARY/DEPL advancement until current candidate requirements pass.
+
+## Published release CI and rollout readiness decision —2026-11-09
+
+Owner explicitly selected “Push and open main PR” for16623a8638407eeab27c2879f0a9396764a68e89.
+Nonforce release-0.4.0 push and PR27 into main succeeded:
+https://github.com/YokAI-open/Birja/pull/27.
+Actual release CI42622430042 completedSUCCESS at that exacthead; all six
+backend/frontend/image/e2e/ops/ci-pass checks green. No mainmerge/tag/release/
+backmerge/deployment authority was granted or exercised.
+
+Backend616/99.80%overall/100%critical; frontend264. Actual trading/portfolio/
+history flows passed. Browserattempt1:9passed,1health-screen first-attempt
+timeout then successonretry,1expectedproductionCSPskip. Targeted same-head
+browser+aggregate rerunattempt2:10passed,1expectedskip,0retries,aggregatepass.
+Initial flaky result retained, not erased or called fixed by a clean rerun.
+Five raw image reports hashverify and each0HIGH/CRITICAL; original strictgate
+unchanged. Ops populatedtransition34.239s/recovery59.159s/roles21.387s+65denials/
+TLS21.221s/actualoldrollback89.555s pass; mandatorycleanup succeeded.
+
+Plan11releaseCI requirement is proven. Subsequent source-only rolloutreadiness
+review found CR-01: productionCompose/deploy/rollback lack protected persistent
+selection of new datastore clone volumes while preserving originals. WR-01:
+candidate startup requires TLS/HBA material before startup; proposal revised
+to make this explicit, actual bootstrap/material state still unmeasured.
+Role/backup exec helpers need verified solecandidate identity/mountmapping,
+not necessarily separatevolume selectors. See06-12-READINESS-REVIEW and revised
+ROLLOUT-PROPOSAL. No highfinding waived, no executableliveproposal is ready.
+
+Next scope decision: prepare/test/independently review a protected clonebinding
+and concrete TLS startup procedure locally before changing the release, or
+consider publishing currentrelease without any deployment. Recommend fixfirst.
+Any changedreleasehead needs a new concrete reviewedpushchoice and ownCI;
+current166approval does not authorize unreviewedsourcepublication.
+Keep PR27open/unmerged; do not request productionapproval against placeholders.
+11SUMMARY remains pending readiness disposition;phase11/15,65/69=94%.
+09nightlyproof still owner-deferred; no09SUMMARY/DEPLadvance.
+
+## Local release0.4.0 ready for publication choice —2026-11-09
+
+Branch release-0.4.0 was created from updateddevelop5ebf62b after approvedPR26
+merge. Carries final featurecloseout0e0a6eb and reviewed versioncommit
+524080f5414b71de336239c008c3ddcecaefd3dc. BothPhase5/6merge ancestors verified.
+Four files/five versionvalues0.3.1->0.4.0 only; parsed complete metadata
+normalization and74backend/638frontend inventory hashes prove all dependency
+records/artifacts unchanged. No source/image/recovery/runtime change.
+
+Local7CI/25backup/4restore-safety tests, uvlockedofflinesync/check, frontend
+lint/types/metadataformat/build passed. Independent06-11-LOCAL-REVIEW0blockers/
+0warnings independently verified full metadata equality, ancestry and lock.
+No repeated fullapp/DB/browser/image runs; actualrelease-head CI must stillrun.
+Fresh featureCI42618704350 remains evidence only for unchangedimplementation.
+
+Last recorded installed recovery archive is d5fe2059...; actualB2backup at
+07:43:40Z and exactisolatedrestore at07:44:22Z on09November passed. Freshness
+has not been rechecked in this local release task and must be rechecked before
+any approved rollout. First genuine nightly observation remainsowner-deferred.
+No provider/private/production action or archive rebuild occurred.
+
+Task11-01 complete;11-02 awaits explicit publication choice. Resolve exact
+publicationHEAD after this planningcommit; show three local releasecommits
+(closeout,versions,evidence), target origin/release-0.4.0 and mainPR. Prepared
+PRbody/title are ignored/private. Owner approval sofar covers localprep only,
+not releasepush/mainPR/mainmerge/tag/backmerge/deployment. No11SUMMARY yet.
+
+## Current green CI and integration decision —2026-11-09
+
+PR26 https://github.com/YokAI-open/Birja/pull/26 remains OPEN/MERGEABLE into
+develop at exact a7d5dcb01d40a916c9cbf9d6ff51525c70c50833.
+Actual run42618704350 completedSUCCESS:
+https://github.com/YokAI-open/Birja/actions/runs/42618704350.
+All six required jobs backend/frontend/image/e2e/ops/ci-pass passed; no required
+job skipped. Job logs and raw public reports are preserved in ignored
+pr-preparation/passed-ci-* and final-image-reports.
+
+Backend616pass/99.80% overall/100% critical; frontend264pass. Browser10pass,
+one expected csp.spec production-only skip because E2E_PROD_URL is absent.
+Actual trade.spec buy/sell and full buy->portfolio->history->whole-sell pass,
+including375/768/1024/1440 widths. Five raw runtime/builder/Node/Postgres/Redis
+reports hash-match successful status records and each contain0HIGH/CRITICAL.
+No ignores/waivers or severity changes.
+
+Ops proves pinned29.2.1/clean-root containerd export through unchanged strict
+verification. Populated transition34.051s, encrypted recovery62.533s, roles
+24.112s/65permission denials, TLS23.141s and actualold rollback96.232s pass.
+Old checkout/credentials/Compose/revision unchanged; missing/failed/stale
+evidence and bad CA/hostname/plaintext reject; immutable routing/lock and0008
+preservation pass. Mandatory cleanup succeeded. No VDS daemon/recovery change.
+
+06-10-02 complete. Next06-10-03 requires explicit Create-a-merge-commit into
+develop and separately selects release preparation/version. Suggested0.4.0
+is a proposal only; not selected. No merge/release/deploy authority inferred.
+Production remains reportedv0.3.1. Exact installed recovery d5fe2059... and
+actualB2backup/restore remain dated09November. First genuine nightly observation
+is owner-deferred;09/DEPL-02 pending. Phase10/15; no09/10SUMMARY/completion.
+
+This supersedes older publication/CI-pending entries. Final local tracking
+edits stay unpushed so greenPRhead remains exacta7d5dcb. Preserve/carry edits
+through any approved integration/release; never discard or publish silently.
+
 
 # Feature review and publication checkpoint
 
@@ -269,3 +481,31 @@ Publish under existing bounded CI completion authority. Actual runner replay
 remains pending; no VDS daemon change, recovery code/image pin/installed bundle
 change or new production action. Merge/deployment and deferred nightly proof
 remain separate; phase10/15 unchanged.
+
+
+## Approved feature integration and release preparation —2026-11-09
+
+Owner selected “Merge and prepare0.4.0” for exact green PR26/a7d5dcb.
+All six exact-head checks reverified before gh pr merge --merge
+--match-head-commit. PR26 is now MERGED into develop as 5ebf62b33b190aaf04a48b107a222e906fbf4c99,
+at 2026-11-09T12:53:43Z. Explicit permission covers this feature integration and
+local release-0.4.0 preparation only. Release push/main PR, merge/tag/backmerge
+and production rollout remain separate unapproved gates.
+
+Preserve local final CI records/Plan10closeout through updateddevelop into
+releasebranch. Plan10complete; Plan11task01 prepares four version metadata
+files using locked tools, no dependency or application changes. Keep actual
+nightlyproof deferred and09/DEPL-02 pending.
+
+
+## Local rollout correction authorized —2026-11-09
+
+Owner selected “Prepare local rollout fix”. Prepare a protected persistent
+clone-volume binding and concrete TLS-before-startup procedure, with meaningful
+synthetic cutover/rollback/negative tests and independent review. This permits
+local source/test/documentation work on release-0.4.0; no updated releasepush,
+mainmerge/tag/backmerge, VDS/private/provider operation, archive installation
+or production service/volume change. Existing16623a8 PR27 stays unchanged.
+Retain the accepted image/security/recovery gates and installed independent
+recovery payload. No new phase plans/counter reset; scoped closure of the
+confirmed readiness findings is part of pending11-03/12preparation.

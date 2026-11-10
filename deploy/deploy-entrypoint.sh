@@ -60,7 +60,7 @@ def verify(release):
                 'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                 'deploy/check-nginx-config.sh','deploy/install-nginx.sh',
                 'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml',
-                'frontend/Dockerfile'}
+                'frontend/Dockerfile','deploy/datastore-bindings.py'}
     require(required <= values['files'].keys())
     for name, sha in values['files'].items():
         require(not name.startswith('/') and '..' not in Path(name).parts)
@@ -103,7 +103,7 @@ def install(source, args):
              'deploy/cloudflare-ips.sh','deploy/smoke-prod.sh',
              'deploy/configure-db.sh','deploy/provision-db-tls.sh',
              'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
-             'frontend/Dockerfile']
+             'frontend/Dockerfile','deploy/datastore-bindings.py']
     names += call(['git','-C','/srv/birja','ls-files','deploy/nginx']).splitlines()
     names += call(['git','-C','/srv/birja','ls-files','backend']).splitlines()
     with tempfile.TemporaryDirectory(prefix='stage-', dir=base) as tmp:
@@ -115,6 +115,10 @@ def install(source, args):
             dest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             shutil.copyfile(original, dest)
             dest.chmod(0o500 if name.endswith('.sh') else 0o400)
+        # PostgreSQL70 reads this public policy through a directory bind mount.
+        # Keep it root-owned and immutable, while allowing the service to read.
+        (stage/'deploy/db').chmod(0o555)
+        (stage/'deploy/db/pg_hba.conf').chmod(0o444)
         manifest = {'profile':'retained-deploy-v1','tested_source':tested,'files':{n:digest(stage/n) for n in sorted(names)}}
         (stage/'MANIFEST.json').write_text(json.dumps(manifest, sort_keys=True, separators=(',',':')))
         (stage/'MANIFEST.json').chmod(0o400)
@@ -155,7 +159,7 @@ def main():
     if args and args[0] == '--install':
         install(source, args)
         return
-    require(args in [[], ['--rollback'], ['--help'], ['-h']])
+    require(args in [[], ['--rollback'], ['--start-selected-datastores'], ['--help'], ['-h']])
     release = source.parent.parent
     require(release.parent == Path('/var/lib/birja/ops/releases'))
     verify(release)

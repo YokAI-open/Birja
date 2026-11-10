@@ -65,6 +65,23 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_ops_pins_compose_with_explicit_retained_dockerfile_consent(self):
+        ops = jobs()["ops"]
+        self.assertIn("compose_version=5.7.0-1~ubuntu.24.04~noble", ops)
+        self.assertIn('"docker-compose-plugin=$compose_version"', ops)
+        check = "test \"$(sudo -- env -i PATH=/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 /usr/bin/docker compose version --short)\" = '5.7.0'"
+        self.assertIn(check, ops)
+        self.assertLess(
+            ops.index(check), ops.index("- name: Build locked operations fixture image")
+        )
+        for bypass in [
+            "BUILDX_BAKE_ENTITLEMENTS_FS",
+            "COMPOSE_BAKE=false",
+            "fs.read=*",
+            "fs=*",
+        ]:
+            self.assertNotIn(bypass, ops)
+
     def test_ops_preserves_daemon_settings_and_checks_strict_archive_before_build(self):
         ops = jobs()["ops"]
         merge = ops.split("sudo python3 -c '\n", 1)[1].split("\n          '\n", 1)[0]
@@ -211,7 +228,10 @@ class CI(unittest.TestCase):
 
     def test_ops_runs_real_serial_producers_with_verified_tool(self):
         ops = jobs().get("ops", "")
+        rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
+        self.assertIn("selected.integration(args.recovery_bundle)", rollback)
         self.assertIn("sudo -- python3 deploy/tests/test-deploy-prerequisites.py", ops)
+        self.assertIn("sudo -- python3 deploy/tests/test-datastore-bindings.py", ops)
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
@@ -285,6 +305,88 @@ class CI(unittest.TestCase):
         self.assertIn("target: test-builder", j["image"])
         self.assertIn("target: runtime", j["image"])
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])
+
+
+class FixtureGitIsolation(unittest.TestCase):
+    def test_generated_launcher_git_ignores_denied_host_config(self):
+        spec = importlib.util.spec_from_file_location(
+            "selected_cutover", ROOT / "deploy/tests/selected-cutover.py"
+        )
+        selected = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selected)
+        with (
+            tempfile.TemporaryDirectory(prefix="birja-backup-test-git-") as tmp,
+            tempfile.TemporaryDirectory(
+                prefix="birja-backup-test-host-config-"
+            ) as host,
+        ):
+            root = Path(tmp)
+            app = root / "old/app"
+            app.mkdir(parents=True)
+            (root / "home").mkdir()
+            (root / "tmp").mkdir()
+            subprocess.run(["git", "init", "-q", str(app)], check=True)
+            subprocess.run(
+                ["git", "-C", str(app), "config", "fixture.marker", "local-only"],
+                check=True,
+            )
+            denied = Path(host) / "gitconfig"
+            denied.write_text("[fixture]\nmarker=host-only\n")
+            result = selected.f.target(
+                root,
+                [
+                    "env",
+                    "GIT_CONFIG_SYSTEM=" + str(denied),
+                    "git",
+                    "-C",
+                    str(app),
+                    "rev-parse",
+                    "--git-dir",
+                ],
+                ok=False,
+            )
+            self.assertIn(b"Permission denied", result.stderr)
+            # Execute the actual generated launcher's clean environment block,
+            # not a hand-built approximation. Production source is unchanged.
+            source = (
+                (ROOT / "deploy/deploy-entrypoint.sh")
+                .read_text()
+                .replace("/root", str(root / "home"))
+            )
+            generated = selected.isolate_entrypoint_environment(source, root)
+            block = (
+                "env = {"
+                + generated.split("    env = {", 1)[1].split(
+                    "\n    if 'DEPLOY_REF'", 1
+                )[0]
+            )
+            script = (
+                "import os, subprocess\nfrom pathlib import Path\nrelease=Path("
+                + repr(str(root / "ops"))
+                + ")\n"
+                + textwrap.dedent(block)
+                + "\nenv['GIT_CONFIG_SYSTEM']="
+                + repr(str(denied))
+                + "\nsubprocess.run(['/usr/bin/git','-C',"
+                + repr(str(app))
+                + ",'rev-parse','--git-dir'],env=env,check=True,stdout=subprocess.DEVNULL)"
+                + "\nos.execve('/usr/bin/git',['git','-C',"
+                + repr(str(app))
+                + ",'config','fixture.marker'],env)"
+            )
+            result = selected.f.target(root, ["/usr/bin/python3", "-c", script])
+            self.assertEqual(result.stdout.strip(), b"local-only")
+            (app / ".git").rename(app / "hidden-git")
+            result = selected.f.target(
+                root, ["/usr/bin/python3", "-c", script], ok=False
+            )
+            self.assertIn(b"not a git repository", result.stderr)
+            self.assertEqual(
+                (ROOT / "deploy/deploy-entrypoint.sh")
+                .read_text()
+                .count("GIT_CONFIG_NOSYSTEM"),
+                0,
+            )
 
 
 if __name__ == "__main__":

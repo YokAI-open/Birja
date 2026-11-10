@@ -31,10 +31,13 @@ def options(argv):
     p = argparse.ArgumentParser()
     p.add_argument('--recovery-bundle')
     p.add_argument('--self-test-recovery-bundle-inputs', action='store_true')
+    p.add_argument('--self-test-retained-install', action='store_true')
     a = p.parse_args(argv)
     assert sum(arg=='--recovery-bundle' or arg.startswith('--recovery-bundle=') for arg in argv) <= 1
     assert argv.count('--self-test-recovery-bundle-inputs') <= 1
     assert not (a.self_test_recovery_bundle_inputs and a.recovery_bundle is not None)
+    assert argv.count('--self-test-retained-install') <= 1
+    assert not a.self_test_retained_install or not (a.self_test_recovery_bundle_inputs or a.recovery_bundle)
     if a.recovery_bundle is not None:
         assert a.recovery_bundle
         archive = r.synthetic_path(a.recovery_bundle)
@@ -85,7 +88,7 @@ def orchestration_self_test():
         names = ['deploy/deploy.sh','deploy/deploy-entrypoint.sh','deploy/db-security.compose.yml',
                  'deploy/db/pg_hba.conf','docker-compose.prod.yml',
                  'deploy/smoke-prod.sh','deploy/configure-db.sh','deploy/provision-db-tls.sh',
-                 'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql',
+                 'deploy/backup-snapshot.py','deploy/db/bootstrap-roles.sql','deploy/datastore-bindings.py',
                  'backend/Dockerfile','backend/uv.lock','backend/pyproject.toml','frontend/Dockerfile']
         for name in names:
             dest=app/name
@@ -122,6 +125,8 @@ def orchestration_self_test():
         launcher=root/'bin/birja-deploy'
         legacy=app/'deploy/deploy.sh'
         release=(root/'ops/current').resolve()
+        assert (release/'deploy/db').stat().st_mode & 0o777 == 0o555
+        assert (release/'deploy/db/pg_hba.conf').stat().st_mode & 0o777 == 0o444
         retained={p:r.digest(p) for p in release.rglob('*') if p.is_file()}
         def checkout(ref):
             result=subprocess.run(['bash','-c','. "$1"; exec 9>"$LOCK"; flock -n 9; checkout_source "$2"; ! flock -n "$LOCK" true','_',str(release/'deploy/deploy.sh'),ref],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},capture_output=True)
@@ -147,8 +152,8 @@ def orchestration_self_test():
         legacy.chmod(0o500)
         run(['bash','-c','. "$1"; checkout_source main','_',str(release/'deploy/deploy.sh')],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
         assert legacy.read_bytes() == saved and git('rev-parse','HEAD') == old
-        # Run retained rollback's real checkout/stack/static/pending behavior;
-        # service actions alone are no-ops in this offline Git fixture.
+        # Real checkout remains safe, but an offline service mock must fail
+        # the selected-runtime guard before static swap or successful record.
         checkout(current)
         state=root/'state'
         web=root/'web'; (web/'releases/old').mkdir(parents=True)
@@ -167,12 +172,14 @@ do_rollback
 [ "$(live_sha "$DEPLOY_LOG")" = "$3" ]
 [ "$(readlink -f "$WEB_ROOT/current")" = "$WEB_ROOT/releases/old" ]
 '''
-        run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)})
+        # An offline service mock cannot satisfy the real selected identity
+        # guard. Preserve that rejection; real success is exercised below.
+        run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
         assert git('rev-parse','HEAD') == old
         assert b'Usage:' in run([str(legacy),'--help']).stdout
         assert git('status','--porcelain') in ['', 'M deploy/deploy.sh']
         assert all(r.digest(p)==sha for p,sha in retained.items())
-        print('retained_installer_real_git_rollbacks=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
+        print('retained_installer_real_git_checkout=true offline_rollback_mock_identity_rejected=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
 
 
 def integration(archive_arg):
@@ -232,13 +239,14 @@ def integration(archive_arg):
             gate_text=gate_text.replace('[[ "$recovery" =~ ^/var/lib/birja/recovery/releases/[0-9a-f]{64}$ ]]',
                 '[ "$recovery" = '+shlex.quote(str(session.release))+' ]')
             gate_text=gate_text.replace('/var/lib/birja/backup/last-success.json',str(root/'state/last-success.json'))
+            gate_text=gate_text.replace('/var/lib/birja/backup/restore-last-success.json',str(root/'state/restore-last-success.json'))
             gate_text=gate_text.replace('recovery-gate \\\n','recovery-gate --synthetic '+shlex.quote(str(session.config_path))+' \\\n')
             gate=root/'deploy-gate.sh'; gate.write_text(gate_text)
             history=root/'gate-deploys.log'; history.write_text('t '+old_sha+' unused main\n')
             gate_dc=['/usr/bin/docker','compose','--env-file','/dev/null','-p','birja-ops-test','-f',str(root/'old/docker-compose.ops-test.yml')]
             # Fixture server's maintenance DB differs from the populated source;
             # match production's POSTGRES_DB=source for the gate's socket query.
-            shell='. '+shlex.quote(str(gate))+'; DEPLOY_LOG='+shlex.quote(str(history))+'; dc() { shift 2; '+shlex.join(gate_dc)+' exec -T -e POSTGRES_DB=birja_source_test "$@"; }; exec 9>'+shlex.quote(str(root/'operation.lock'))+'; flock -n 9; recovery_gate'
+            shell='. '+shlex.quote(str(gate))+'; MODE=start-selected; DEPLOY_LOG='+shlex.quote(str(history))+'; dc() { shift 2; '+shlex.join(gate_dc)+' exec -T -e POSTGRES_DB=birja_source_test "$@"; }; exec 9>'+shlex.quote(str(root/'operation.lock'))+'; flock -n 9; recovery_gate'
             f.target(root,['bash','-c',shell])
             evidence=root/'state/restore-last-success.json'
             saved=evidence.read_bytes()
@@ -369,7 +377,9 @@ def integration(archive_arg):
 
 
 args = options(sys.argv[2:])
-if args.self_test_recovery_bundle_inputs:
+if args.self_test_retained_install:
+    orchestration_self_test()
+elif args.self_test_recovery_bundle_inputs:
     f.input_self_test()
     for bad in [['--recovery-bundle'], ['--recovery-bundle',''], ['--unknown'], ['--self-test-recovery-bundle-inputs']*2, ['--recovery-bundle','a','--recovery-bundle','b'], ['--recovery-bundle=a','--recovery-bundle=b']]:
         try: options(bad)
@@ -379,4 +389,8 @@ if args.self_test_recovery_bundle_inputs:
 else:
     orchestration_self_test()
     integration(args.recovery_bundle)
+    spec = importlib.util.spec_from_file_location('selected_cutover', ROOT / 'deploy/tests/selected-cutover.py')
+    selected = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(selected)
+    selected.integration(args.recovery_bundle)
 PY

@@ -106,7 +106,12 @@ def main():
     backup = importlib.util.module_from_spec(spec)
     sys.dont_write_bytecode = True
     spec.loader.exec_module(backup)
-    with backup.acquire_operation_lock(lock):
+    with backup.acquire_operation_lock(lock) as held:
+        if not synthetic:
+            binding_spec = importlib.util.spec_from_file_location("bindings", source / "datastore-bindings.py")
+            bindings = importlib.util.module_from_spec(binding_spec)
+            binding_spec.loader.exec_module(bindings)
+            bindings.main(["--check-running"], inherited=str(held.fileno()))
         # Read-only and bounded: never refresh catalog versions or rebuild an
         # index here. Unknown versions require separately approved maintenance.
 
