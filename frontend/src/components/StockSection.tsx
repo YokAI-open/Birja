@@ -28,8 +28,8 @@ function StockTime({ value, exchange = false }: { value: string; exchange?: bool
 function Identity({ item }: { item: StockItem }) {
   return (
     <>
-      <span className="block font-medium">{item.symbol}</span>
-      <span className="block break-words">{item.company_name}</span>
+      <span className="block text-[15px] leading-[22px] font-medium">{item.symbol}</span>
+      <span className="block text-[15px] leading-[22px] break-words">{item.company_name}</span>
       <span className="block text-[13px] leading-[18px] text-muted-foreground">
         {item.listing_exchange} · USD
       </span>
@@ -87,7 +87,7 @@ function QuoteTime({ item, allowed }: { item: StockItem; allowed: boolean }) {
 }
 function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side: "bid" | "ask" }) {
   return (
-    <span className="font-medium tabular-nums">
+    <span className="text-[15px] leading-[22px] font-medium tabular-nums">
       {allowed && item.quote ? formatUnitPrice(item.quote[side]) : "Unavailable"}
     </span>
   );
@@ -141,6 +141,16 @@ export function StockSection() {
           >
             {message}
           </p>
+          {data && allowed && isError && (
+            <Button
+              variant="secondary"
+              disabled={isFetching}
+              className="min-h-11 self-start whitespace-normal"
+              onClick={() => void refetch()}
+            >
+              {isFetching ? "Retrying stock prices…" : "Retry stock prices"}
+            </Button>
+          )}
           {isPending ? (
             <div aria-hidden="true" className="flex flex-col gap-4">
               {Array.from({ length: 5 }, (_, i) => (

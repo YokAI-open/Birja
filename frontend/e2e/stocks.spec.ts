@@ -131,7 +131,9 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
 });
 
 for (const width of [320, 375, 768, 1280])
-  test(`read-only catalogue at ${width}px with one accessible representation`, async ({ page }) => {
+  test(`read-only catalogue at ${width}px with one accessible representation`, async ({
+    page,
+  }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks() }));
     await signInNewUser(page);
@@ -155,6 +157,7 @@ for (const width of [320, 375, 768, 1280])
       "2026-11-10T14:59:50.000Z",
     );
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`stocks-${width}.png`), fullPage: true });
     // Half the effective viewport width is the browser-zoom reflow equivalent.
     if (width === 1280) {
       await page.setViewportSize({ width: 640, height: 450 });
@@ -195,19 +198,22 @@ test("local admission expiry and a late expired response cannot reintroduce quot
 }) => {
   await page.clock.install();
   let calls = 0;
+  let expiredResponse = false;
   await page.route("**/api/v1/stocks", async (route) => {
     calls++;
-    if (calls > 1) await new Promise((resolve) => setTimeout(resolve, 100));
-    await route.fulfill({ json: stocks({ lifetime: calls === 1 ? 5 : -1 }) });
+    if (expiredResponse) await new Promise((resolve) => setTimeout(resolve, 100));
+    await route.fulfill({ json: stocks({ lifetime: expiredResponse ? -1 : 5 }) });
   });
   await signInNewUser(page);
   await expect(records(page).first()).toContainText("$100.00");
+  const initialCalls = calls;
+  expiredResponse = true;
   await page.clock.fastForward(6000);
   await page.clock.runFor(100);
   await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
   await page.clock.fastForward(30_001);
   await refocus(page);
-  await expect.poll(() => calls).toBeGreaterThan(1);
+  await expect.poll(() => calls).toBeGreaterThan(initialCalls);
   await expect(section(page).getByText("$100.00")).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
 });
@@ -225,6 +231,22 @@ test("source 119.999 to120 stays nonexecutable and does not announce each second
   const before = await section(page).getByRole("status").textContent();
   await page.clock.fastForward(1000);
   expect(await section(page).getByRole("status").textContent()).toBe(before);
+});
+
+test("source age crossing120 changes the contextual announcement only at the boundary", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks({ age: 119 }) }));
+  await signInNewUser(page);
+  await expect(records(page).first()).toContainText("Recent · 1m ago");
+  const recent = await section(page).getByRole("status").textContent();
+  await page.clock.runFor(1000);
+  await expect(records(page).first()).toContainText("Out of date · 2m ago");
+  const stale = await section(page).getByRole("status").textContent();
+  expect(stale).not.toBe(recent);
+  await page.clock.runFor(1000);
+  expect(await section(page).getByRole("status").textContent()).toBe(stale);
 });
 
 test("missing, previous-session, early-close, DST and unknown calendars remain separate from status", async ({
