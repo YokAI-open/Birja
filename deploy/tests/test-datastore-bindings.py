@@ -229,6 +229,27 @@ class Bindings(unittest.TestCase):
                 )
                 self.assertNotEqual(result.returncode, 0)
 
+    def test_unterminated_manifest_record_still_checks_referenced_file(self):
+        data = self.root / "selected/appendonlydir"
+        data.mkdir(parents=True)
+        manifest = data / "appendonly.aof.manifest"
+        manifest.write_text("file appendonly.aof.1.incr.aof seq 1 type i startoffset 0")
+        for path in [data, manifest]:
+            os.chown(path, 65532, 65532)
+        probe = self.m.PROBES["redisdata"].replace("/selected", str(data.parent))
+        referenced = data / "appendonly.aof.1.incr.aof"
+        for kind in ["missing", "symlink", "wrong-owner", "valid"]:
+            referenced.unlink(missing_ok=True)
+            if kind == "symlink":
+                referenced.symlink_to(manifest)
+            elif kind != "missing":
+                referenced.write_bytes(b"")
+                if kind == "valid":
+                    os.chown(referenced, 65532, 65532)
+            with self.subTest(kind=kind):
+                result = subprocess.run(["sh", "-ec", probe], capture_output=True)
+                self.assertEqual(result.returncode == 0, kind == "valid")
+
     def test_running_identity_rejects_foreign_wrong_mount_and_ambiguity(self):
         images = {"postgres": "sha256:" + "1" * 64, "redis": "sha256:" + "2" * 64}
         container_ids = {"postgres": "a" * 64, "redis": "b" * 64}
