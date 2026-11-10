@@ -17,6 +17,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+EXPECTED_HEAD = "0009"
 
 
 def _config() -> Config:
@@ -37,18 +38,18 @@ async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0008"]
+    assert await _versions(engine) == [EXPECTED_HEAD]
 
     await asyncio.to_thread(command.downgrade, cfg, "base")
     assert await _versions(engine) == []
 
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0008"]
+    assert await _versions(engine) == [EXPECTED_HEAD]
 
 
 def test_baseline_is_head() -> None:
     script = ScriptDirectory.from_config(_config())
-    assert script.get_heads() == ["0008"]
+    assert script.get_heads() == [EXPECTED_HEAD]
 
 
 async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
@@ -134,7 +135,7 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
             ).scalar_one() is None
         assert await snapshot() == before
         await asyncio.to_thread(command.upgrade, cfg, "head")
-        assert await _versions(engine) == ["0008"]
+        assert await _versions(engine) == [EXPECTED_HEAD]
         assert await snapshot() == before
     finally:
         await asyncio.to_thread(command.upgrade, cfg, "head")

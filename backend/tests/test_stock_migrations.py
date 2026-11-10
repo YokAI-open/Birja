@@ -3,12 +3,12 @@
 import asyncio
 import io
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 
 import pytest
 from alembic import command
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.test_migrations import _config, _versions
@@ -26,7 +26,8 @@ async def test_head_has_separate_stock_storage(engine: AsyncEngine, migrated: No
             (
                 await conn.execute(
                     text(
-                        "SELECT column_name FROM information_schema.columns WHERE table_name='coins'"
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name='coins'"
                     )
                 )
             ).scalars()
@@ -78,7 +79,8 @@ async def test_populated_0008_preserves_exact_financial_identity(engine: AsyncEn
             uid = (
                 await conn.execute(
                     text(
-                        "INSERT INTO users(email) VALUES ('stock-migration@example.test') RETURNING id"
+                        "INSERT INTO users(email) VALUES ('stock-migration@example.test') "
+                        "RETURNING id"
                     )
                 )
             ).scalar_one()
@@ -151,21 +153,20 @@ async def test_invalid_asset_discriminator_refused(
 async def test_same_symbol_distinct_classes_and_unique_crypto_mapping(
     engine: AsyncEngine, migrated: None
 ) -> None:
-    async with engine.connect() as conn:
-        async with conn.begin():
+    async with engine.connect() as conn, conn.begin():
+        await conn.execute(
+            text(
+                "INSERT INTO coins(symbol,name,kraken_pair,sort_order,asset_class) "
+                "VALUES ('BTC','Stock BTC',NULL,99,'stock')"
+            )
+        )
+        with pytest.raises(IntegrityError):
             await conn.execute(
                 text(
-                    "INSERT INTO coins(symbol,name,kraken_pair,sort_order,asset_class) "
-                    "VALUES ('BTC','Stock BTC',NULL,99,'stock')"
+                    "INSERT INTO coins(symbol,name,kraken_pair,sort_order) "
+                    "VALUES ('OTHER','Other','XXBTZUSD',99)"
                 )
             )
-            with pytest.raises(IntegrityError):
-                await conn.execute(
-                    text(
-                        "INSERT INTO coins(symbol,name,kraken_pair,sort_order) "
-                        "VALUES ('OTHER','Other','XXBTZUSD',99)"
-                    )
-                )
 
 
 @pytest.mark.parametrize(
@@ -190,13 +191,20 @@ async def test_invalid_quote_refused(
                 )
             )
         ).scalar_one()
-        with pytest.raises(IntegrityError):
+        await conn.execute(
+            text("""INSERT INTO stock_instruments
+            (coin_id,listing_exchange,source,source_ref)
+            VALUES (:c,'NYSE','sec','test-fixture')"""),
+            {"c": cid},
+        )
+        with pytest.raises(DBAPIError) as error:
             await conn.execute(
                 text("""INSERT INTO stock_quotes
                 (coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation)
                 VALUES (:c,:b,:a,:m,'alpaca','iex',now(),now(),current_date,1)"""),
                 {"c": cid, "b": Decimal(bid), "a": Decimal(ask), "m": Decimal(mid)},
             )
+        assert error.value.orig.sqlstate in {"23514", "22003"}
 
 
 @pytest.mark.parametrize(
@@ -253,6 +261,51 @@ async def test_sessions_have_no_authority_columns(engine: AsyncEngine, migrated:
         }
 
 
+@pytest.mark.parametrize("bid,ask", [("1", "3"), ("1", "1.00000001"), ("1.00000001", "1.00000002")])
+async def test_valid_quote_and_derived_session_accept_half_even_midpoints(
+    engine: AsyncEngine, migrated: None, bid: str, ask: str
+) -> None:
+    async with engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            cid = (
+                await conn.execute(
+                    text(
+                        "INSERT INTO coins(symbol,name,asset_class,sort_order) "
+                        "VALUES ('VLD','Valid','stock',99) RETURNING id"
+                    )
+                )
+            ).scalar_one()
+            await conn.execute(
+                text("""INSERT INTO stock_instruments
+                (coin_id,listing_exchange,source,source_ref)
+                VALUES (:c,'NYSE','sec','test-fixture')"""),
+                {"c": cid},
+            )
+            midpoint = ((Decimal(bid) + Decimal(ask)) / 2).quantize(
+                Decimal("0.00000001"), rounding=ROUND_HALF_EVEN
+            )
+            await conn.execute(
+                text("""INSERT INTO stock_quotes
+                (coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation)
+                VALUES (:c,:b,:a,:m,'alpaca','iex',now(),now(),current_date,1)"""),
+                {"c": cid, "b": Decimal(bid), "a": Decimal(ask), "m": midpoint},
+            )
+            assert (
+                await conn.execute(
+                    text("SELECT mid FROM stock_quotes WHERE coin_id=:c"), {"c": cid}
+                )
+            ).scalar_one() == midpoint
+            await conn.execute(
+                text("""INSERT INTO stock_sessions
+                (exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,
+                 calendar_admission_generation)
+                VALUES ('NYSE',current_date,NULL,NULL,current_date,current_date,1)""")
+            )
+        finally:
+            await transaction.rollback()
+
+
 def test_migration_owns_conditional_least_privilege_grants() -> None:
     output = io.StringIO()
     cfg = _config()
@@ -265,3 +318,85 @@ def test_migration_owns_conditional_least_privilege_grants() -> None:
     assert "GRANT SELECT, INSERT, UPDATE ON TABLE" in sql
     assert "GRANT USAGE ON SEQUENCE public.stock_sessions_id_seq TO birja_scheduler" in sql
     assert "ALTER DEFAULT PRIVILEGES" not in sql and "CREATE ROLE" not in sql
+
+
+@pytest.mark.parametrize("financial_table", ["holdings", "trades"])
+async def test_schema_downgrade_refuses_stock_financial_references(
+    engine: AsyncEngine, migrated: None, financial_table: str
+) -> None:
+    await migrate("head")
+    async with engine.begin() as conn:
+        uid = (
+            await conn.execute(
+                text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                {"e": f"stock-downgrade-{financial_table}@example.test"},
+            )
+        ).scalar_one()
+        cid = (
+            await conn.execute(
+                text(
+                    "INSERT INTO coins(symbol,name,asset_class,sort_order) "
+                    "VALUES ('GRD','Guard','stock',99) RETURNING id"
+                )
+            )
+        ).scalar_one()
+        if financial_table == "holdings":
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) VALUES (:u,:c,1,10)"
+                ),
+                {"u": uid, "c": cid},
+            )
+        else:
+            await conn.execute(
+                text("""INSERT INTO trades
+                (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+                 exec_price,fee,cash_delta,cash_after,idempotency_key)
+                VALUES (:u,:c,'buy','quantity',1,1,10,now(),10,0,-10,9990,gen_random_uuid())"""),
+                {"u": uid, "c": cid},
+            )
+    before = await _financial_snapshot(engine)
+    try:
+        # Direct schema downgrade also catches unseeded stock identities.
+        with pytest.raises(DBAPIError, match="stock financial references prevent downgrade"):
+            await migrate("0008", down=True)
+        assert await _financial_snapshot(engine) == before
+    finally:
+        async with engine.begin() as conn:
+            for table in ("holdings", "trades"):
+                await conn.execute(text(f"DELETE FROM {table} WHERE user_id=:u"), {"u": uid})  # noqa: S608 - fixed allowlist
+            await conn.execute(text("DELETE FROM users WHERE id=:u"), {"u": uid})
+            await conn.execute(text("DELETE FROM coins WHERE id=:c"), {"c": cid})
+        await migrate("head")
+
+
+@pytest.mark.parametrize(
+    "column,value",
+    [
+        ("product", "'anything'"),
+        ("state", "'anything'"),
+        ("generation", "0"),
+        ("scope", "'[]'::jsonb"),
+        ("quota", "'[]'::jsonb"),
+        ("allowed_fields", "'{}'::jsonb"),
+        ("calendar", "'[]'::jsonb"),
+        ("state", "'approved'"),
+    ],
+)
+async def test_invalid_admission_refused(
+    engine: AsyncEngine, migrated: None, column: str, value: str
+) -> None:
+    # Identifiers and expressions are a fixed test matrix, never external inputs.
+    async with engine.begin() as conn:
+        with pytest.raises(IntegrityError):
+            if column == "product":
+                await conn.execute(
+                    text(f"INSERT INTO stock_data_admissions(product) VALUES ({value})")  # noqa: S608 - fixed matrix
+                )
+            else:
+                await conn.execute(
+                    text(
+                        f"INSERT INTO stock_data_admissions(product,{column}) "  # noqa: S608 - fixed matrix
+                        f"VALUES ('quotes',{value})"
+                    )
+                )
