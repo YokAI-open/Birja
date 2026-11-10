@@ -59,8 +59,8 @@ Requirements for the initial release. Each maps to a roadmap phase.
 
 ### Deployment
 
-- [ ] **DEPL-01**: Friends can open the app at a public domain over HTTPS, sign up and trade
-- [ ] **DEPL-02**: Production data is backed up nightly off the server, and a restore has been tested once
+- [x] **DEPL-01**: Friends can open the app at a public domain over HTTPS, sign up and trade
+- [x] **DEPL-02**: Production data is backed up nightly off the server, and a restore has been tested once
 
 ## v2 Requirements
 
@@ -143,8 +143,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-05 | Phase 5 | Complete |
 | HIST-01 | Phase 5 | Complete |
 | HIST-02 | Phase 5 | Complete |
-| DEPL-01 | Phase 6 | Pending (partly delivered in Phase 2.1: public HTTPS + sign-in) |
-| DEPL-02 | Phase 6 | Pending |
+| DEPL-01 | Phase 6 | Complete — current Gmail/Outlook live acceptance verified |
+| DEPL-02 | Phase 6 | Complete — genuine nightly upload and exact restore verified |
 
 **Coverage:**
 - v1 requirements: 31 total
@@ -153,4 +153,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-10-20*
-*Last updated: 2026-10-20 after initial definition*
+*Last updated: 2026-11-10 after Phase 6 final independent verification*

@@ -25,9 +25,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 - [x] Stored newest-first trade history with exact signed totals and keyset pagination — Phase 5
 
+- [x] Public HTTPS deployment with Gmail/Outlook signup and live trade acceptance — Phase 6
+- [x] Nightly encrypted off-server backups and successful exact restores — Phase 6
+
 ### Active
 
-- [ ] Deployed on a server with a domain and TLS, so friends can sign up and use it
+None — all v1 requirements verified; milestone audit/archive is separate.
 
 ### Out of Scope
 
@@ -69,27 +72,25 @@ PR #25 merged into develop as 8a76a68 after explicit approval and green
 final-head CI (run 41067761375). No Phase 5 release/deployment was requested.
 Production was last verified at v0.3.1; revalidate it at execution.
 
-Phase 6 has12/15 plans complete. Plan11 release preparation and actual CI pass
-at published945791115c0bd88fd0cf62835aca3e03c395659f, run42787743632.
-PR27 remains open into main. Backend616/critical100%, frontend264, all five
-raw image reports0HIGH/CRITICAL and secure retained cutover/old-app rollback
-pass. Browser health test passed on retry; its known flake is retained.
-Independent source reviews are clean; exact evidence is in11SUMMARY/RELEASE-CI.
+Phase 6 is COMPLETE:15/15plans,4/4roadmap criteria and35/35merged must-haves
+independently verified with0blockers/warnings/no human checks. DEPL-01/02 and
+all31v1requirements complete. Livev0.4.0 is exactmain46d24c8/schema0008;
+release/back-merge approvals and green CI precede the approved rollout. Runtime
+roles use verified TLS, originals are preserved,41origin/9public smoke and all
+three exact B2 restores passed. Outage365.719s. No further runtime/source change.
 
-Protected persistent candidate routing and TLS-first startup passed actual
-runner proof, including0008, selected-volume recreation, actualv0.3.1 rollback,
-Redis persistence/authentication, unchanged originals and independent recovery.
-CI-only Git configuration isolation and Compose5.7.0 precise Dockerfile consent
-fixes are verified. Production plugins, app/recovery/image pins were not changed
-by those CI fixes. Local planning closeout can accompany the next approved
-integration; published PR27 stays at its CI-proven source until merge approval.
+Owner confirms both Gmail/Outlook full recipient flows. Actual nightly timer /
+service invocation10November06:11:51–06:12:15Moscow created verified8d15d199...;
+that point later rotated under the approved one-copy policy. Current50008a08...
+is remotely present and fully restored independently. One night is observed,
+not a future reliability/billing guarantee; daily status/expiry checks remain
+owner operations. Final independent report:06-VERIFICATION.md.
 
-Plan09 actual encrypted B2 backup/exact restore and timer installation passed
-on9November using installed d5fe2059 archive. First genuine calendar-run
-observation remains owner-deferred;09/DEPL-02 are not complete. Main merge,
-tag/release, back-merge and production rollout are separate decisions. Last
-recorded production isv0.3.1/revision0007, not a new inspection. DEPL-01 awaits
-approved deployment/friend verification. No whole-phase acceptance is implied.
+All7phases/69plans complete. Updated final-config encrypted7z is available for
+owner to refresh saved settings; no new secret/CA values were generated after
+confirmed off-server custody. Local closing records are not yet published.
+Milestone audit/archive and any new product work remain separate requests;
+no automatic new phase/publication follows completion.
 
 ## Constraints
 
@@ -110,7 +111,7 @@ approved deployment/friend verification. No whole-phase acceptance is implied.
 | $10k start, no reset | Mistakes stay, like real investing | ✓ Good — Phase 2 account invariants verified |
 | Curated ~10–20 coins | Keeps API calls within free rate limits | ✓ Good — 15 coins live in Phase 3 |
 | Resend for one-time-code email | Free tier, simple API | ✓ Good — real delivery approved in Phases 2.1/4 |
-| v1 done = deployed for friends | Real use by real people is the validation | — Pending |
+| v1 done = deployed for friends | Real use by real people is the validation | ✓ Verified in Phase 6: Gmail/Outlook flows and backup recovery |
 | `main` acts as master; `develop` created from it | Repo started with `main`; avoids renaming the default branch | ✓ Good — release/hotfix PR and back-merge flow verified |
 | Kraken public Ticker as the price source | No key, one batched call, real bid/ask; CoinGecko's free 10k calls/month can't sustain a 60s poll | ✓ Good — Phase 3 live data verified |
 | Holdings valued at mid price | Simple; a fresh buy shows the cost of spread + fee, which teaches that trading costs money | ✓ Good — Phase 5 valuation, exact performance and browser flow verified |

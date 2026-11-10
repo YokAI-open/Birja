@@ -1117,3 +1117,151 @@ integration. Next: request release-branch push and PR into develop, inspect its
 own exact-head CI, then request merge approval. Keep the branch until both
 integration and its planning records are preserved. Phase12/15 and pending
 09/12/13, DEPL-01/02 remain unchanged; nightly observation is still deferred.
+
+## Back-merge PR ready —2026-11-10
+
+Owner approved pushing release-0.4.0 through
+6097085e9d5ca897bed7ec76aeee7b61071509e8 (three local planning commits),
+opening the PR into develop and checking CI. Nonforce push and PR creation
+succeeded. PR28 https://github.com/YokAI-open/Birja/pull/28 is OPEN,
+MERGEABLE/CLEAN at that exact head, base develop.
+Actual CI https://github.com/YokAI-open/Birja/actions/runs/42791351766
+completed SUCCESS: backend/frontend/image/e2e/ops/ci-pass all six green.
+Public logs confirm backend616 passed, frontend264 passed, browser10 passed
+without retries and1expected skip. Real recovery/TLS/old-image rollback and
+finally cleanup passed. Previous release-run health retry remains historical;
+this passing run does not claim a source fix for that flake.
+
+Merge remains unapproved: require separate exact-head Create-a-merge-commit
+approval under CLAUDE.md. This local receipt stays unpushed so the proven PR
+head remains6097085; preserve it before deleting the local release branch.
+No additional code changes, production reads or deployment. Phase12/15 and
+09/12/13, DEPL-01/02 remain pending; nightly observation remains deferred.
+
+## Back-merge completed —2026-11-10
+
+Owner selected “Approve back-merge into develop” for PR28 exact
+6097085e9d5ca897bed7ec76aeee7b61071509e8. Immediately rechecked base develop,
+OPEN/MERGEABLE/CLEAN, matching head and all six current checks SUCCESS.
+Merge-commit operation succeeded2026-11-10T09:44:22Z. PR28 is MERGED as
+63c9b479209aaa180fc1f41314a367dd79fab2f8. GitHub commit readback verified
+parents5ebf62b33b190aaf04a48b107a222e906fbf4c99 and approved6097085.
+
+Release publication and develop integration are complete. Main/tag v0.4.0 stays
+46d24c8591de2207cf219429aac0768962bed4c3. Local CI receipt51c7b8d and this
+merge record remain preserved on the release branch; do not delete that branch
+until they are carried into subsequent authorized integration. No further push
+is inferred from this merge approval.
+
+Next is the explicit read-only production preflight in ROLLOUT-PROPOSAL:
+fixed birja-prod container mount/image identities, volume/disk sizes, installed
+recovery integrity and sanitized PG/Redis compatibility/catalog checks. Private
+values remain private; no container environment/raw rows/logs, provider access,
+backup/restore, timer inspection, writes/restarts or deployment are included.
+Preflight requires its own checkpoint answer before access. Actual nightly
+observation remains owner-deferred. Phase12/15;09/12/13 and DEPL-01/02 pending.
+
+## Read-only preflight completed —2026-11-10
+
+Owner approved exact fixed-host/project read-only scope. Actual results and
+concrete next preparation proposal are in06-12-PREFLIGHT.md. Baseline remains
+clean010770/0007 with original volumes/services unchanged. Recovery integrity
+passed; disk capacity is ample. PG TLS/roles and retained deploy/routing are
+not provisioned; five indexes use default collation. No provider/timer access,
+backup/restore, production file write, service or database mutation occurred.
+No new authority follows from successful preflight. Next checkpoint is the
+exact host-preparation scope and expected MANIFEST in that report. Phase stays
+12/15 with09/12/13 and DEPL-01/02 incomplete; nightly observation deferred.
+
+## Approved host preparation completed —2026-11-10
+
+Owner approved the exact preparation scope in06-12-PREFLIGHT. Execution and
+separate postchecks succeeded; see06-12-HOST-PREPARATION for measured results
+and off-server custody paths. Actual retained MANIFEST70e568a8/all129files
+matches released main46d24c8. TLS and staged role credentials created; two
+approved empty unused candidate volumes and protected routing records exist.
+Live container IDs/images/mounts remain identical and healthy; prod.env metadata
+and independent recovery unchanged. No live data/role/TLS/service transition,
+backup/restore, provider/timer operation or deployment occurred.
+
+Next: save only the NEW material off-server and confirm custody, then prepare
+the separate exact maintenance/rollout decision. Custody confirmation alone is
+not production restart/deploy approval. Phase12/15;09/12/13 and DEPL pending.
+
+## Off-server custody confirmed —2026-11-10
+
+After downloading/opening instructions for the requested encrypted7z archive,
+owner replied “ok, done, i saved it”. Record custody of the new recovery material
+as confirmed; the existing restic password/B2 custody was already confirmed.
+No secret values were shared. Archive identity remains
+4b67c3fec44a3fd8ce85c30cf22a4b022f4a214e33ccb8d308a9ed56886f9584.
+Do not ask the owner to repeat this custody step. Confirmation authorizes no
+service restart, role/data transition, backup/restore or deployment.
+
+Next: finalize a concrete maintenance run sheet bound to main46d24c8 and retained
+MANIFEST70e568a8, approved candidate volumes and installed recoveryd5fe2059.
+Obtain a maintenance window/writer inventory and explicit rollout approval.
+Fresh bounded B2 recovery proof, candidate-only copy/collation maintenance,
+role/TLS/migration/deploy, smoke and post-rollout recovery remain pending.
+Phase12/15;09/12/13 and DEPL-01/02 remain incomplete; nightly observation deferred.
+
+## Reviewed production maintenance checkpoint —2026-11-10
+
+Owner confirmed immediate outage window and that only Birja backend/scheduler
+write production data. Custody already confirmed; do not repeat either question.
+06-12-MAINTENANCE binds the exact released main46d24c8, installed MANIFEST70e568a8,
+unchanged recoveryd5fe2059 and measured original/candidate volumes. Independent
+06-12-MAINTENANCE-REVIEW reports0blockers/0warnings. Source identity checks and
+diff checks pass; no runtime/source changes or repeated broad suites needed.
+
+Request explicit approval for that complete packet: stop writers, finalize
+protected configuration, three bounded recovery rounds (before copy, after roles,
+after deploy), candidate-only copy/ownership/collation, roles/TLS/0008 migration,
+restart/deploy and smoke, refreshed private7z export. Preserve originals. Before
+new app writers, abort can use originals; after any app startup preserve candidate
+data and allow only reviewed secure app rollback. No live operations performed
+this turn. Scope approval is still pending; publication/window/custody are not
+rollout permission. Phase remains12/15;09/12/13 and DEPL remain incomplete.
+
+## Plan12 rollout COMPLETE —2026-11-10
+
+Owner-approved v0.4.0 is LIVE at exact46d24c8, schema0008. Installed MANIFEST70e568a8
+and independent recoveryd5fe2059 unchanged. Three real backup/exact restore gates
+passed (pre-copy eac31e13..., post-roles c1e1d901..., post-deploy50008a08...).
+Originals preserved/fingerprints equal; candidate-only conversion/collation,
+3restricted roles/9migrator-owned tables and both runtime SSL sessions verified.
+Origin41/41 and public9/9 smoke pass, all4services healthy. Outage365.719s.
+Focused backup25/restore-safety4/CI9 tests pass; independent closeout clean0/0.
+Operation lock released, restore resources clean. See12SUMMARY/ROLLOUT.
+
+Refreshed26member encrypted7z is verified and available for owner download:
+birja-offserver-recovery-20261110T104354Z-v040.7z, same restic password.
+No new secret/CA values generated; prior off-server custody stays confirmed.
+It contains final configuration and should update the owner's saved copy.
+Next: Plan13 Gmail AND Outlook friend signup/buy/portfolio/history/persistence /
+signout acceptance. No assistant messages/OTP extraction or live trades.
+Plan09 genuine nightly-run observation remains explicitly deferred; do not
+read timer/provider or infer scheduled success from three manual recoveries.
+Phase13/15, overall67/69=97%; DEPL-01/02 remain unchecked. Preserve all local
+planning receipts; no new push/merge/publication permission inferred.
+
+## Phase6 COMPLETE —2026-11-10
+
+All15plans and DEPL-01/02 verified. Owner explicitly reports BOTH current
+Gmail/Outlook flows passed, and resumed actual nightly observation. Timer/service
+06:11:51–06:12:15Moscow genuinely produced verified remote8d15d199...;
+that historical point rotated under approved one-copy policy. Current50008a08...
+remains remotely present and fully restored in Plan12; do not conflate these.
+Independent calendar review0/0 and final goal verifier4/4roadmap criteria,
+35/35merged truths,0blockers/warnings/no human checks passed.
+
+Livev0.4.0/source46d24c8/schema0008, restricted runtime TLS roles, original
+volumes preserved,41/9origin/public smoke and three exact recoveries pass.
+All7phases/69plans complete (100%); no core work remains. Ongoing daily backup
+status/expiry checks remain owner operations. Refreshed final-config7z available
+for optional update of saved copy; secret custody already confirmed.
+
+Next: publish local closeout documentation only if owner approves underCLAUDE.md;
+then milestone audit/archive can be separately requested. No new phase auto-
+advance, no milestone archival or remote push/merge inferred. Deployment complete.
+Preserve unpushed metadata until carried into approved integration.

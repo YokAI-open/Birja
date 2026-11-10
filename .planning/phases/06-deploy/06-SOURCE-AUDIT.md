@@ -1,5 +1,24 @@
 # Phase 06 — Multi-source coverage audit
 
+## Execution reconciliation —2026-11-10
+
+All four roadmap criteria have concrete evidence accepted by separate final
+goal verification06-VERIFICATION (4/4criteria,35/35truths,0blockers/warnings): owner-confirmed Gmail+Outlook flow (LIVE-UAT), actual calendar /
+remote creation plus exact real restores (LIVE-RECOVERY/09SUMMARY), actual green
+CI browser trading (11SUMMARY/RELEASE-CI), and live restricted roles/verified TLS
+(ROLLOUT/12SUMMARY). B2 free-tier/one-copy policy, actual measured source/storage,
+explicit scoped approvals and off-server custody are recorded, not assumptions.
+No unplanned product feature, provider message or invented human acceptance.
+Final phase acceptance is supported by06-VERIFICATION. UI review N/A because
+this operations phase changes no interface/design system. Changed source and
+bounded live evidence have independent reviews; no additional secret access.
+
+The coverage table below preserves planning dispositions. Historical “pending”
+phrases describe the planning snapshot and are superseded by execution links
+above; they do not erase actual approvals/installation/rollout evidence.
+
+## Original planning coverage
+
 Planning coverage only, 2026-10-30. **0 unplanned source items.** No implementation, tests, installations, live data processing or deployment has occurred. All execution/live results remain pending. No Phase06 CONTEXT exists; user chose continuation without it and research first. No locked decisions were fabricated.
 
 | Source | ID / item | Plan / task | Status | Disposition |
@@ -61,7 +80,8 @@ Planning coverage only, 2026-10-30. **0 unplanned source items.** No implementat
 
 ## Dependency / producer audit
 
-13 sequential waves, one plan per wave, 30 tasks. Each plan depends on its immediate predecessor; file overlap and shared destructive fixtures intentionally serialize. Every automatic command refers to an existing runner or a runner produced in the same task's RED phase / an earlier plan. First execution task prepares the feature branch before source mutation/commits. Planning remains uncommitted on develop under the parent assignment.
+Original13 sequential waves were extended by the reviewed14/15 corrections;
+current15plans/36tasks execute serially in the recorded dependency order. Each plan depends on its immediate predecessor; file overlap and shared destructive fixtures intentionally serialize. Every automatic command refers to an existing runner or a runner produced in the same task's RED phase / an earlier plan. First execution task prepares the feature branch before source mutation/commits. Planning remains uncommitted on develop under the parent assignment.
 
 - 06-02-01 produces test-backup.sh; 06-02-02 produces all backup commands.
 - 06-03-01 produces restore-safety and real ops lifecycle; 06-03-02 adds real fixture cases plus recovery-bundle.sh and old-checkout-only populated0007 installation proof. Verifier uses stdlib+included PG18 client, no feature/app dependencies.

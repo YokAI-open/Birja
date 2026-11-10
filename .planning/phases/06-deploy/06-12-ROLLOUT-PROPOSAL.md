@@ -26,12 +26,12 @@ included in the local correction.
 | Release publication | Approved9457911 pushed; six actual CI jobs green | Complete |
 | Main PR merge | Owner-approved9457911; six green jobs; merge commit `46d24c8591de2207cf219429aac0768962bed4c3` | Complete |
 | Tag / GitHub release | v0.4.0 published at46d24c8; annotated remote tag verified | Complete |
-| Back-merge PR / merge | Release into develop; own exact-head CI and merge approval | Pending |
-| Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
+| Back-merge PR / merge | PR28 exact6097085; six checks green; approved merge63c9b47 | Complete |
+| Production rollout | Explicit approved packet executed;46d24c8/0008, fresh recovery/smoke pass | Complete |
 
 The owner authorized local correction and bounded reviewed/tested CI follow-ups.
 Publication, exact-head CI and owner-approved main merge are complete.
-Resulting main SHA is `46d24c8591de2207cf219429aac0768962bed4c3`; v0.4.0 tag/release publication is approved and complete; back-merge/deploy remain unapproved.
+Resulting main SHA is `46d24c8591de2207cf219429aac0768962bed4c3`; v0.4.0 tag/release publication is approved and complete; back-merge is approved and complete as63c9b47; production remains unapproved.
 Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits
@@ -79,6 +79,27 @@ can bind canonical root0400 MANIFEST, root0600 bindings and approved private
 custody/configuration files. Live server key0640 and CA certificate0644 do not
 qualify directly; the TLS checker validates their actual pair/CA/hostname before
 startup. Production measurements and custody coverage remain preflight inputs.
+
+## Actual read-only preflight —2026-11-10
+
+Owner-authorized measurements are recorded in [06-12-PREFLIGHT.md](06-12-PREFLIGHT.md).
+The table below retains required bindings; measured baseline values are now in
+that report. Private equality baseline, candidate identities, final private
+configuration, remote headroom/fresh recovery and maintenance window remain
+pending. Expected retained MANIFEST computed from final main46d24c8 is
+`70e568a8c0f9953926e40de4ed79ec25272b3cdd777e474b3967a09849edb0b2`;
+no installation occurred. Read-only preflight does not authorize preparation
+or rollout. The report defines the next concrete host-preparation checkpoint.
+
+## Approved host preparation —2026-11-10
+
+[06-12-HOST-PREPARATION.md](06-12-HOST-PREPARATION.md) records completed
+owner-authorized tooling/TLS/credential/empty-volume preparation and successful
+postchecks. Installed MANIFEST equals70e568a8; released source46d24c8 selected.
+Existing live services, original data and prod.env are unchanged. Owner confirmed the new recovery
+material saved off-server after the7z export; custody is complete. No copying, role apply,
+backup/restore, restart or deployment has occurred. The maintenance sequence
+below remains a proposal requiring its own authorization.
 
 ## Required preflight bindings before a production decision
 
@@ -190,3 +211,10 @@ updated release push, merge or tag is included. Plan09's first actual nightly
 observation remains explicitly deferred; no scheduled success is inferred.
 Production approval requires measured preflight bindings and an exact final
 source/MANIFEST/window, even after local proof and new release CI pass.
+
+## Executed rollout supersedes this proposal
+
+Owner approved06-12-MAINTENANCE and actual rollout completed; see06-ROLLOUT and
+06-12-SUMMARY for identities/proofs. Earlier pending/proposed text above is
+historical preparation, not current execution status. Friend acceptance and
+owner-deferred nightly observation remain outstanding.

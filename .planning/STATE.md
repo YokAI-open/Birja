@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: v0.4.0 published at46d24c8; backmerge/rollout approval pending
-last_updated: "2026-11-10T08:38:49Z"
-last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
+status: milestone_complete
+stopped_at: Phase06 verified complete; local closeout publication and milestone audit/archive remain separate
+last_updated: 2026-11-10T11:16:57.631Z
+last_activity: 2026-11-10 -- Both live provider flows and genuine nightly evidence verified; Phase6 complete
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 69
-  completed_plans: 66
-  percent: 96
+  completed_plans: 69
+  percent: 100
 ---
 
 # Project State
@@ -21,58 +21,45 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-02)
 
 **Core value:** Making a trade at a real, recent market price and then seeing what it's worth now, correct to the cent.
-**Current focus:** Phase 06 — Deploy
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Phase: 06 (Deploy) — EXECUTING
-Plan:12 backmerge/rollout checkpoint;09 calendar observation owner-deferred
-Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- v0.4.0 tag/release published and verified; no deployment.
+Phase: 06
+Plan:15/15 complete
+Status: All v1 phases verified; milestone audit/archive not yet performed
+Last activity:2026-11-10
 
-Progress: [█████████░] 96%
+Progress: [██████████] 100%
 
-## Immediate remaining work
+## Completion and next action
 
-Plan11 complete at published release head
-945791115c0bd88fd0cf62835aca3e03c395659f, actualCI42787743632: all six jobs
-SUCCESS. Backend616/critical100%, frontend264, five hash/config-verified raw
-reports each0HIGH/CRITICAL. Browser9passed,1flaky health test passed on retry,
-1expectedCSPskip; do not erase the retry or call the flake fixed. Actual ops
-transition35.842s/recovery58.140s/roles18.595s+65denials/TLS20.069s/prior-old
-rollback85.653s/new selected cutover206.439s and cleanup pass. Source reviews
-clean;09/12/13 remain incomplete. Phase12/15, overall66/69=96%.
+## Phase6 COMPLETE —2026-11-10
 
-Owner-approved PR27 main merge completed2026-11-10T09:24:42Z as
-46d24c8591de2207cf219429aac0768962bed4c3; both parents verified through GitHub.
-The approved9457911 head and all six successful checks were rechecked first.
-Owner separately approved and published v0.4.0 at that main SHA. Remote annotated
-tag bb64990ba6be425e66e0a560cbd6a6d3589e4a79 peels to46d24c8; GitHub release
-published2026-11-10T09:29:02Z, non-draft/non-prerelease. No deployment occurred.
-Back-merge push/PR/merge and deployment remain unapproved. Local planning
-closeout and publication records remain unpushed on release-0.4.0; preserve them.
+All15plans and DEPL-01/02 verified. Owner explicitly reports BOTH current
+Gmail/Outlook flows passed, and resumed actual nightly observation. Timer/service
+06:11:51–06:12:15Moscow genuinely produced verified remote8d15d199...;
+that historical point rotated under approved one-copy policy. Current50008a08...
+remains remotely present and fully restored in Plan12; do not conflate these.
+Independent calendar review0/0 and final goal verifier4/4roadmap criteria,
+35/35merged truths,0blockers/warnings/no human checks passed.
 
-Next: request release branch push/PR into develop; verify that PR's own current
-CI before a separate approved merge. Measured production identities/capacity /
-collation/custody, retained MANIFEST and maintenance window remain pending.
-Read ROLLOUT-PROPOSAL before any production approval request; no production
-preflight or operation follows from release publication approval.
+Livev0.4.0/source46d24c8/schema0008, restricted runtime TLS roles, original
+volumes preserved,41/9origin/public smoke and three exact recoveries pass.
+All7phases/69plans complete (100%); no core work remains. Ongoing daily backup
+status/expiry checks remain owner operations. Refreshed final-config7z available
+for optional update of saved copy; secret custody already confirmed.
 
-Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
-passed on9November with installed d5fe2059 archive; details remain in
-LIVE-RECOVERY. Owner explicitly deferred first genuine scheduled activation
-observation. Do not infer nightly success from the calendar, create09SUMMARY,
-check DEPL-02 or perform provider/private production reads for this closeout.
-The last recorded production baseline is v0.3.1/revision0007, not a fresh read.
-No production role/TLS/volume/app operation occurred during Plan11.
-DEPL-01 remains incomplete until approved rollout and friend verification.
-
+Next: publish local closeout documentation only if owner approves underCLAUDE.md;
+then milestone audit/archive can be separately requested. No new phase auto-
+advance, no milestone archival or remote push/merge inferred. Deployment complete.
+Preserve unpushed metadata until carried into approved integration.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 66
+- Total plans completed: 82
 - Average duration: -
 - Total execution time: -
 
@@ -87,6 +74,7 @@ DEPL-01 remains incomplete until approved rollout and friend verification.
 | 3 | 10 | - | - |
 | 4 | 10 | - | - |
 | 5 | 8 | - | - |
+| 06 | 15 | - | - |
 
 ## Accumulated Context
 
