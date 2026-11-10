@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Completed07-13; ready for explicit activation checkpoint07-14
-last_updated: "2026-11-10T20:25:00.545Z"
+status: Awaiting blocking-human checkpoint07-14-01
+stopped_at: Awaiting blocking-human07-14-01; concrete activation packet prepared.
+last_updated: "2026-11-10T20:29:14.122Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
 Plan: 14 of 14
-Status: Ready to execute
+Status: Awaiting blocking-human checkpoint07-14-01
 Last activity: 2026-11-10
 Progress: [█████████░] 93%
 
@@ -91,8 +91,17 @@ on0010 claim. Independent code/security/UI review findings are fixed and
 re-reviewed:0active code findings,47/47local threats closed,UI24/24. Existing
 response deadlines bound retained-value exposure; actual DB/recovery storage
 rights or approved verified cleanup remain prerequisites before live activation.
-Next:07-14 explicit provider/storage-rights and bounded measurement checkpoint,
-then owner UI acceptance. No phase-complete or live criteria claim from fixtures.
+Plan07-14's concrete07-ACTIVATION.md packet is prepared. Task07-14-01 remains
+unresolved (0/3tasks complete): first establish whether the owner has an Alpaca
+account and applicable Birja multi-user/display/DB-and-recovery-storage rights,
+or needs setup/permission guidance. Only after verifiable scope exists request
+separate approval for at most30private HTTP attempts (20reference/10quote samples).
+No credentials read, private calls, admission import or collection activation.
+Owner UI acceptance remains later07-14-03. No completed07-14SUMMARY and no
+phase-complete or live criteria claim from fixtures. See07-ACTIVATION.md for
+reviewed source/locks/images/tools, product checklist, exact call bounds and
+continuation handoff. Actions/status remain separately disabled and unverified;
+their rights are required before those products are used, not invented now.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 Exact reviewed calendar-package approval is recorded; actual provider permission,
@@ -193,11 +202,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T20:25:00.521Z
-Stopped at: Completed07-13; ready for explicit activation checkpoint07-14
-Resume: Execute07-14 from reviewed07-LOCAL-PROOF; prepare explicit activation checkpoint. Stock execution stays disabled; actual provider/storage rights and owner UI acceptance remain pending.
+Last session:2026-11-10T20:29:14.102Z
+Stopped at: Awaiting blocking-human07-14-01; concrete activation packet prepared.
+Resume: Read07-ACTIVATION.md and preparation commit. Obtain sanitized account/applicable product-and-storage evidence or provide requested setup guidance; only then seek separate bounded30-attempt approval. Do not execute07-14-02/03 or write a completedSUMMARY before their gates pass. Stock execution stays disabled; owner UI acceptance remains pending.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.
-Healthy disposable birja-test PostgreSQL/Redis retained for the orchestrator;
-no production services changed or provider data activated.
+Plan13 proof resources were cleaned; no stack started for this documentation
+checkpoint. No production services changed or provider data activated.
