@@ -1,7 +1,7 @@
 """Authenticated discovery projection; no provider requests or execution."""
 
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import func, select
@@ -28,8 +28,14 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _json_rows(model: Any, maximum: int) -> Any:
-    bounded = select(model.__table__).limit(maximum).subquery()
+def _json_rows(model: Any, maximum: int, anchor: datetime | None = None) -> Any:
+    query = select(model.__table__).order_by(*model.__table__.primary_key.columns)
+    if model is StockSession and anchor is not None:
+        query = query.where(
+            StockSession.session_date >= anchor.date() - timedelta(days=45),
+            StockSession.session_date <= anchor.date() + timedelta(days=90),
+        )
+    bounded = query.limit(maximum).subquery()
     return select(func.jsonb_agg(func.to_jsonb(bounded.table_valued()))).scalar_subquery()
 
 
@@ -59,7 +65,7 @@ def _sessions(rows: list[dict[str, Any]]) -> list[RegularSession]:
 
 
 async def list_stocks(
-    db: AsyncSession, settings: Settings, *, now: Callable[[], datetime] = _now
+    db: AsyncSession, settings: Settings, *, now: Callable[[], datetime] | None = None
 ) -> StocksResponse:
     """Three bounded reads; only the final committed evidence snapshot authorizes.
 
@@ -69,6 +75,7 @@ async def list_stocks(
     statement: UTC evaluation, projection and the router return are synchronous.
     The boundary cannot predict changes committed after its statement snapshot.
     """
+    now = now or _now
     quote_columns = [
         column.label("quote_" + column.name) for column in StockQuote.__table__.columns
     ]
@@ -100,7 +107,8 @@ async def list_stocks(
         .all()
     )
     # All potentially blocking preparatory reads precede the authority boundary.
-    await load_sessions(db, now())
+    staged_at = now()
+    await load_sessions(db, staged_at)
     authority: dict[str, ProductAdmission] = {}
     sessions: list[RegularSession] = []
     try:
@@ -108,7 +116,7 @@ async def list_stocks(
             await db.execute(
                 select(
                     _json_rows(StockDataAdmission, 6).label("admissions"),
-                    _json_rows(StockSession, 273).label("sessions"),
+                    _json_rows(StockSession, 273, staged_at).label("sessions"),
                     func.current_setting("transaction_isolation").label("isolation"),
                 ).execution_options(stock_final_evidence=True)
             )
@@ -172,6 +180,14 @@ async def list_stocks(
                     reason = "session_unavailable"
                 else:
                     reason = "recent"
+                # Permission and session authority govern disclosure; freshness
+                # governs the independent recent claim. The UI may show a dated
+                # last quote while closed/stale, never imply a tradable price.
+                if (
+                    matched
+                    and session.state != "unknown"
+                    and candidate.event_at <= candidate.collected_at <= checked_at
+                ):
                     quote = StockQuoteOut(
                         bid=candidate.bid,
                         ask=candidate.ask,
