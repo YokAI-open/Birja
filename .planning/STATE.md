@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Completed 07-06 exact quotes; next07-07 package review checkpoint
-last_updated: "2026-11-10T15:22:57.059Z"
+status: completed
+stopped_at: 07-07-01 package packet complete; awaiting blocking-human07-07-02 approval
+last_updated: "2026-11-10T15:28:37.142Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
   completed_plans: 6
-  percent: 43
+  percent: 0
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
 Plan: 7 of 14
-Status: Executing Phase 7; Plans 07-01 through 07-06 complete
+Status: Awaiting 07-07-02 package approval; Plans 07-01 through 07-06 complete
 Last activity: 2026-11-10
 Progress: [████░░░░░░] 43%
 
@@ -53,7 +53,12 @@ checks; private migrator-only evidence import/revoke/TLS rehearsal packet saved.
 Plan07-06 exact IEX adapter/predicates and monotonic PostgreSQL persistence pass
 94tests,100% scoped critical coverage and scoped static checks. Session bounds
 are structural only; genuine authority/evaluator remains07-08. Next:07-07
-calendar dependency review and its explicit pre-install checkpoint.
+calendar dependency approval at07-07-02. Task07-07-01's committed package packet
+records official registry/tag/wheel identities and the actual eight-package
+prospective resolution, with no existing lock-version changes or installation.
+Legitimacy protocol remains ASSUMED; unsigned source and absent PyPI attestation,
+runtime/native compatibility and actual security scans remain explicit limitations.
+See07-PACKAGE-REVIEW.md; no07-07summary or plan advancement before owner approval.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 New package legitimacy is a blocking pre-install checkpoint; actual provider permission,
@@ -145,11 +150,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T15:22:57.042Z
-Stopped at: Completed 07-06 exact quotes; next07-07 package review checkpoint
-Resume: Continue authorized Phase7 execution at07-07; package installation requires its checkpoint.
+Last session:2026-11-10T15:28:37.118Z
+Stopped at: 07-07-01 package packet complete; awaiting blocking-human07-07-02 approval
+Resume: Record explicit package decision at07-07-02 before Plan08 uv/lock changes; no installation yet.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01/02/03/04/05/06 summaries committed; whole-phase requirements remain pending.
-Isolated birja-test PostgreSQL/Redis healthy and retained for next plan's tests;
+Isolated birja-test PostgreSQL/Redis removed after07-06; restart only when subsequent DB tests need it;
 no production services changed or provider data activated.
