@@ -487,6 +487,87 @@ def recovery_roundtrip(session, *, source_revision, source_release, inherited=No
     return sid
 
 
+STOCK_RECOVERY_SEED = """
+INSERT INTO stock_data_admissions(product,state,generation,reviewed_at,valid_from,valid_until,evidence_ref,terms_version,collection_allowed,display_allowed,derived_allowed,retention_allowed,scope,quota,allowed_fields,attribution,calendar) VALUES
+ ('calendar','approved',3,'2026-11-10T10:00Z','2026-11-01Z','2026-12-01Z','https://example.invalid/calendar-evidence','fixture-v2',true,true,true,true,'{"exchanges":["NYSE","NASDAQ"]}','{"requests":20}','["opens_at","closes_at"]','Official calendar fixture','{"official_source":["https://www.nyse.com/trade/hours-calendars","https://www.nasdaqtrader.com/Trader.aspx?id=Calendar"],"version":"fixture-v2","review_valid_until":"2026-11-10T11:00:00Z","coverage_start":"2026-11-01","coverage_end":"2026-12-01","overrides":[{"date":"2026-11-26","closed":true,"revision":1,"provenance":"https://example.invalid/closure"},{"date":"2026-11-27","opens_at":"2026-11-27T14:30:00Z","closes_at":"2026-11-27T18:00:00Z","revision":2,"provenance":"https://example.invalid/shortened"}]}'),
+ ('quotes','approved',7,'2026-11-10T10:00Z','2026-11-01Z','2026-12-01Z','https://example.invalid/quote-evidence','fixture-v1',true,true,true,true,'{"symbols":["AAPL","MSFT"],"feed":"iex"}','{"requests":20}','["bid","ask"]','IEX prices','{}'),
+ ('status','denied',1,NULL,NULL,NULL,NULL,NULL,false,false,false,false,'{}','{}','[]','','{}'),
+ ('actions','revoked',2,'2026-01-01Z','2026-01-01Z','2026-01-02Z','https://example.invalid/expired-evidence','fixture-v1',false,false,false,true,'{}','{}','[]','','{}');
+INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation)
+ SELECT exchange,'2026-11-26',NULL,NULL,'2026-11-01','2026-12-01',3 FROM (VALUES ('NYSE'),('NASDAQ')) AS x(exchange);
+INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation)
+ SELECT exchange,'2026-11-27','2026-11-27T14:30Z','2026-11-27T18:00Z','2026-11-01','2026-12-01',3 FROM (VALUES ('NYSE'),('NASDAQ')) AS x(exchange);
+INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation)
+ VALUES ('NYSE','2026-11-10','2026-11-10T14:30Z','2026-11-10T21:00Z','2026-11-01','2026-12-01',999);
+"""
+
+
+def identity_state(dc, db):
+    names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
+    if role_sql(dc, "SELECT version_num FROM alembic_version").decode() in ('0009','0010'):
+        names += ["stock_sessions", "stock_data_admissions"]
+    return {name: r.sql(dc, f"SELECT last_value,is_called FROM {name}_id_seq", db).strip() for name in names}
+
+
+def successor_roundtrips(dc, session, unchanged):
+    """Fresh retained bytes perform real dump/retrieval/restore of every revision."""
+    release = source_git('rev-parse', 'HEAD').decode().strip()
+    source_container = r.call(dc + ['ps','-q','postgres']).strip()
+    source_mounts = r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()])
+    for revision in ('0008','0009','0010'):
+        role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")")
+        if revision == '0009':
+            r.sql(dc, STOCK_RECOVERY_SEED, 'birja_source_test')
+        if revision == '0010':
+            r.sql(dc, """UPDATE stock_instruments SET provider_asset_id='synthetic-'||coin_id,provider_verified_at='2026-11-10T14:00Z' WHERE mod(coin_id,2)=0;
+INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation)
+SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10T15:00:00.123456Z','2026-11-10T15:00:01.654321Z','2026-11-10',7 FROM stock_instruments;""", 'birja_source_test')
+        before = r.canonical(dc, 'birja_source_test')
+        if revision == '0010':
+            assert before['tables']['stock_instruments']['count'] == 20
+            assert before['tables']['stock_quotes']['count'] == 20
+            assert before['tables']['stock_sessions']['count'] == 5
+            assert before['tables']['stock_data_admissions']['count'] == 4
+        sequences = identity_state(dc, 'birja_source_test')
+        sid = recovery_roundtrip(session, source_revision=revision, source_release=release)
+        config_hash = r.digest(session.config_path)
+        directory = session.root / ('retrieved-' + revision)
+        directory.mkdir(mode=0o700)
+        producer = r.backup_module()
+        job = producer.Job(producer.load_config(['--synthetic',str(session.config_path)]))
+        job.restic('restore', sid, '--target', str(directory), '--verify')
+        manifest = json.loads((directory / 'manifest.json').read_text())
+        assert all(manifest[key] == before[key] for key in ('tables','financial','revision','schema'))
+        with r.restored(dc, (directory / 'database.dump').read_bytes()):
+            r.verify(dc, manifest)
+            assert identity_state(dc, r.CLONE) == sequences
+            if revision in ('0009','0010'):
+                r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
+                try:
+                    r.verify(dc, manifest)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError('changed authoritative calendar generation accepted')
+                r.sql(dc, "UPDATE stock_data_admissions SET generation=generation-1 WHERE product='calendar'")
+                r.verify(dc, manifest)
+                for table, query in (
+                    ('stock_sessions', "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-12-01','2026-11-01','2026-12-01',3) RETURNING id"),
+                    ('stock_data_admissions', "INSERT INTO stock_data_admissions(product) VALUES ('reference') RETURNING id"),
+                ):
+                    value, called = sequences[table].decode().split('|')
+                    expected = int(value) + (called == 't')
+                    assert int(r.sql(dc, query).strip()) == expected
+        assert r.canonical(dc, 'birja_source_test') == before
+        assert identity_state(dc, 'birja_source_test') == sequences
+        assert r.digest(session.config_path) == config_hash
+        assert all(r.digest(session.root / path) == digest for path,digest in unchanged.items())
+        assert r.call(dc + ['ps','-q','postgres']).strip() == source_container
+        assert r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()]) == source_mounts
+        shutil.rmtree(directory)
+        print(f'retained_revision={revision} exact_rows_schema_sequences=true source_identity_unchanged=true stock_authority_repaired=false', flush=True)
+
+
 def roundtrip(archive_arg=None):
     dc = r.compose()
     started = time.monotonic()
@@ -641,6 +722,11 @@ def roundtrip(archive_arg=None):
             assert all(r.digest(root / p) == h for p, h in unchanged.items())
             assert r.canonical(dc, "birja_source_test")["revision"] == "0007"
             print("old_checkout_credentials_compose_revision_unchanged=true")
+            # The deliberate legacy concurrent writer has already been proven.
+            # Even ON CONFLICT consumes identity values; successor equality is
+            # intentionally measured with no writers in this isolated source.
+            wrapper.write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
+            successor_roundtrips(dc, session, unchanged)
             assert r.canonical(dc, "birja_source_test")["revision"] == "0010", "retained recovery rehearsal never exercised populated successor state"
             print(
                 "integration_elapsed_seconds="
