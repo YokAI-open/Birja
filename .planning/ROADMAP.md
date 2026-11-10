@@ -101,7 +101,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 07-08-PLAN.md — Implement verified regular-session calendars.
+- [x] 07-08-PLAN.md — Implement verified regular-session calendars.
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -201,7 +201,7 @@ remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 7/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 8/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |

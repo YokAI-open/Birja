@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 07-07; ready for 07-08 calendar implementation
-last_updated: "2026-11-10T18:26:38.297Z"
+stopped_at: Completed 07-08; ready for 07-09 with healthy isolated test stack
+last_updated: "2026-11-10T18:41:58.454Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 7
-  percent: 50
+  completed_plans: 8
+  percent: 57
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 8 of 14
-Status: Ready for 07-08; Plans 07-01 through 07-07 complete
+Plan: 9 of 14
+Status: Ready to execute
 Last activity: 2026-11-10
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 57%
 
 ## Completion and next action
 
@@ -46,20 +46,26 @@ passed. Plan07-03 adds revision-selected exact recovery contracts:25backup tests
 identity corruption proof passed. Plan07-04 proves actual restricted-role TLS
 upgrade without grant repair, fresh-bootstrap parity and exact retained encrypted
 dump/retrieval/restore0007/0008/0009/0010 including identities/corruption checks.
-Calendar evaluator and restricted-TLS consumer semantics remain required07-08/13;
+Calendar evaluator is now proven07-08; restricted-TLS consumer semantics remain07-13;
 SQL authority denial is proven now. Plan07-05 pure scoped admission and disabled
 configuration pass74admission/114combined configuration tests and scoped static
 checks; private migrator-only evidence import/revoke/TLS rehearsal packet saved.
 Plan07-06 exact IEX adapter/predicates and monotonic PostgreSQL persistence pass
 94tests,100% scoped critical coverage and scoped static checks. Session bounds
-are structural only; genuine authority/evaluator remains07-08. Plan07-07's
+are structural only in07-06; genuine authority/evaluator is now proven07-08. Plan07-07's
 official registry/tag/wheel review and exact eight-package prospective resolution
 received explicit owner approval for project uv lock changes and isolated local
 installation/testing. No lock mutation or installation occurred in07-07.
-Legitimacy protocol remains ASSUMED; unsigned source and absent PyPI attestation,
-runtime/native compatibility and actual security scans remain explicit limitations.
-See07-PACKAGE-REVIEW.md and07-07-SUMMARY.md. Next:07-08 approved resolution
-comparison, wheels-only installation, calendar implementation and image proof.
+Legitimacy protocol remains ASSUMED; unsigned source and absent PyPI attestation
+remain explicit limitations. Plan07-08 installed the exact approved eight-wheel
+resolution, preserving all existing versions, and implements genuine reviewed
+calendar/session decisions plus atomic generation/snapshot guarded derived refresh.
+88tests pass on host and actual nonroot hardened test-builder; session service has
+100% scoped statement/branch coverage, static checks and pip-audit pass. Actual
+network-free nonroot runtime session smoke and five final strict image scans pass.
+See07-08-SUMMARY.md for exact identities and Task1's explicit TDD limitation.
+Next:07-09 independent bounded stock scheduling; actual restricted-TLS consumer,
+full phase gates and provider/live acceptance remain07-13/14.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 Exact reviewed calendar-package approval is recorded; actual provider permission,
@@ -74,7 +80,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 7/14 Phase7 plans completed;07-01 approximately14minutes;07-02 approximately7minutes;07-03 approximately16minutes;07-04 approximately25minutes;07-05 approximately8minutes;07-06 approximately11minutes;07-07 continuation approximately5minutes, excluding prior review and approval waiting.
+- v1.1: 8/14 Phase7 plans completed;07-08 approximately14minutes; prior07-01–07 metrics and summaries retain actual timings.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -144,6 +150,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 07 P05 | 8min | 2 tasks | 5 files |
 | Phase 7 P06 | 11min | 2 tasks | 6 files |
 | Phase 7 P07 | 5min continuation | 2 tasks | 2 plan artifacts |
+| Phase 7 P08 | 14min | 2 tasks | 5 files |
 
 ## Operations
 
@@ -153,11 +160,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T18:26:38.273Z
-Stopped at: Completed 07-07; ready for 07-08 calendar implementation
-Resume: Execute07-08 using the explicitly approved exact resolution; review lock before wheels-only install and retain runtime/security gates.
+Last session:2026-11-10T18:41:58.437Z
+Stopped at: Completed 07-08; ready for 07-09 with healthy isolated test stack
+Resume: Execute07-09 using genuine07-08 session helpers and current authoritative admissions; keep crypto scheduling independent.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05/06/07 summaries committed; whole-phase requirements remain pending.
-Isolated birja-test PostgreSQL/Redis removed after07-06; restart only when subsequent DB tests need it;
+07-01/02/03/04/05/06/07/08 summaries committed; whole-phase requirements remain pending.
+Healthy disposable birja-test PostgreSQL/Redis explicitly handed to immediate07-09 by orchestrator;
 no production services changed or provider data activated.

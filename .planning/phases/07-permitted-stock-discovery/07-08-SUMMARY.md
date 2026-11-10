@@ -161,6 +161,10 @@ service/timer changes, B2 access, payment, publication or deployment occurred.
 
 ## Next Plan Readiness
 
+The orchestrator explicitly requested retaining the healthy disposable birja-test
+PostgreSQL/Redis stack for immediate07-09 reuse. Only these synthetic test containers
+are handed off; their fixture cleanup passed. Production containers are untouched.
+
 07-09 can call these real helpers from its bounded stock cycle, keeping package
 calendar construction off the async loop on cold calculations. Re-read current
 calendar evidence after awaits and use fresh UTC; derived rows never grant
