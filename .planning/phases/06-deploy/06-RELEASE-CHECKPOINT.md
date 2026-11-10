@@ -1,17 +1,40 @@
 ---
 phase: 06-deploy
 plan: "11"
-status: reviewed-local-rollout-candidate-awaiting-push-approval
+status: reviewed-tested-ci-fixture-correction-awaiting-publication
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
 base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 nightly_observation: owner-deferred-pending
 publication_authorized: false
-prior_publication_authorized_head: 16623a8638407eeab27c2879f0a9396764a68e89
-ci_head: 16623a8638407eeab27c2879f0a9396764a68e89
-ci_run: 42622430042
-ci_status: success-attempt2-browser-clean-initial-flake-retained
+prior_publication_authorized_head: 77dcd44e852a079d4541c78f724717a0dd13afba
+ci_head: 77dcd44e852a079d4541c78f724717a0dd13afba
+ci_run: 42782054013
+ci_status: failure-ops-fixture-git-checkout
 ---
+
+## Approved publication and actual CI —2026-11-10
+
+Owner approved all18 commits through77dcd44e852a079d4541c78f724717a0dd13afba.
+Nonforce push and PR27 update succeeded; remote PR head is exactly77dcd44.
+Run42782054013 completed with backend/frontend/image/e2e SUCCESS and ops /
+ci-pass FAILURE. Actual backend616/critical100%, frontend264, browser10pass /
+1expectedCSPskip/no retry; all5raw image reports hashverify with0HIGH/CRITICAL.
+
+Ops passed transition34.841s, recovery58.758s, roles22.158s/65denials,
+TLS21.576s and prior actual-old rollback94.821s. New selected-cutover fixture
+failed at the real retained first-start launcher: private app “is not a git
+checkout”. Owned fixture cleanup passed. No successful current-head CI or
+Plan11 completion is inferred.
+
+RED7d3f8a4 / GREENc343f6b isolates Git system configuration only in the
+synthetic generated launcher, with a regression reproducing denied host config
+under Landlock. Real Git rev-parse and local config pass afterward, while a
+missing .git still fails. Independent review clean; affected full supplied-
+archive proof passed246.010s including deployment, rollback, three restores
+and unchanged originals/cleanup. No production/runtime/image/CORE changes.
+Actual runner confirmation needs a separately approved correction push;77dcd44
+approval did not cover later commits. No11SUMMARY, merge/tag or deployment.
 
 ## Local rollout correction —2026-11-10
 

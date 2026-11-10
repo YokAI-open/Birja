@@ -1021,3 +1021,15 @@ choice. Main merge, tagging, back-merge and deployment remain separate.
 No production preflight, private configuration read, volume/role/TLS/app change,
 provider operation, timer change or recovery installation occurred in this scope.
 Plan09 actual scheduled-run observation stays owner-deferred; counters11/15.
+
+
+## Approved77dcd44 publication and CI correction —2026-11-10
+
+Owner selected “Push fixes and check CI” for all18 commits through77dcd44.
+Nonforce publication/PR27 update completed; actualCI42782054013 had four jobs
+green, ops fixture-checkout failure and aggregate failure, successful cleanup.
+No main merge/tag/deployment occurred. Reviewed local7d3f8a4/c343f6b isolates
+synthetic Git system config without changing production/runtime/security
+policy.8contracts and full same-archive cutover246.010s pass; see RELEASE-CI.
+New publication authority remains pending; previous approval named77dcd44.
+No nightly observation, phase/DEPL acceptance or source-image rescan inferred.

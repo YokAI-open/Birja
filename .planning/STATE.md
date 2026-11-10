@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Local rollout fix complete; updated release publication approval pending
-last_updated: "2026-11-10T08:15:00Z"
+stopped_at: PR27 CI ops failed; reviewed tested CI-only correction awaits new push approval
+last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
@@ -27,12 +27,24 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 11 task03 releaseCIpassed/readinessdisposition;09 calendar observation owner-deferred
-Status: Local rollout fix reviewed and proven; ready for updated PR27 push choice
+Status: PR27 CI ops failed; correction reviewed and locally proven, awaiting publication approval
 Last activity: 2026-11-10 -- Local retained cutover and actual old-app rollback passed; production unchanged
 
 Progress: [█████████░] 94%
 
 ## Immediate remaining work
+
+Owner approved pushing all18 commits through77dcd44e852a079d4541c78f724717a0dd13afba,
+updating PR27 and checking CI. Push/PR update completed; PR remains OPEN into
+main at that exact head. Run42782054013 completed with backend/frontend/image/e2e
+green; ops failed at the new fixture checkout check and aggregate failed. Five downloaded raw image reports have
+verified hashes and0HIGH/CRITICAL. Actual browser10passed/1expectedskip.
+Reviewed CI-only correction7d3f8a4/c343f6b passes8 contracts; full affected
+proof passed246.010s with unchanged originals, actual0008/old-app rollback,
+three same-archive restores and cleanup. Ready for concrete new push choice. No Plan11 summary. Merge,
+tag/back-merge and deployment remain unapproved. Prior push-pending text below
+is historical and superseded only for this exact published candidate.
+
 
 ## Owner sequencing update —2026-11-09
 
@@ -46,8 +58,9 @@ merge/release/deployment approval, fresh recovery gates before rollout, and
 final friend/calendar acceptance are retained. Timer scheduling stays unchanged.
 This supersedes the requirement to wait for the first night before preparing10.
 
-Current action: present the reviewed local release candidate for updated PR27
-publication approval. Local rollout correction and compatibility are complete.
+Current action: obtain publication scope for the reviewed CI-only correction.
+Earlier rollout correction remains complete; current CI failure and correction
+are authoritative above. Old push-pending text below is historical.
 Protected persistent clone routing and TLS-first startup are implemented and
 independently reviewed. Real supplied-archive run12 passed254.099s: retained
 startup, forced recreation, full0008 deploy, actual v0.3.1 app rollback,

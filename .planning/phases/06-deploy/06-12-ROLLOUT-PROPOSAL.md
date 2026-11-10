@@ -7,12 +7,12 @@ measured preflight inputs and separate approval.
 ## Current release boundary
 
 PR [27](https://github.com/YokAI-open/Birja/pull/27) still publishes
-`16623a8638407eeab27c2879f0a9396764a68e89` from release-0.4.0 into main.
-Its six required jobs passed in actual release CI
-[42622430042](https://github.com/YokAI-open/Birja/actions/runs/42622430042).
-That result covers the published source only. The local retained routing,
-TLS startup and test corrections require a new publication decision and new
-exact-head CI before merge.
+`77dcd44e852a079d4541c78f724717a0dd13afba` from release-0.4.0 into main.
+[Current CI42782054013](https://github.com/YokAI-open/Birja/actions/runs/42782054013)
+passed backend/frontend/image/e2e but failed the new operations fixture checkout
+check; merge remains blocked. A reviewed locally proven CI-only correction
+requires a new publication decision and corrected exact-head CI. Prior16623a8
+had six green jobs; that historical result does not cover the correction.
 
 The unchanged independently installed recovery archive is
 `d5fe2059b3e984ffcd0dff6b1763dd5a97deddb0be638ca23e49381d35a54401`.
@@ -29,7 +29,7 @@ included in the local correction.
 | Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
 
 The owner authorized preparing and testing the local correction. Existing
-publication approval for 16623a8 does not publish later source changes.
+publication approval for77dcd44 does not publish later CI corrections.
 Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits

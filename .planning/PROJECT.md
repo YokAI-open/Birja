@@ -72,7 +72,10 @@ Production was last verified at v0.3.1; revalidate it at execution.
 Phase 6 has 11/15 plans complete. Accepted local image/application gates,
 feature PR26 and release PR27 history are recorded in phase artifacts.
 PR26 merged into develop after approval and green exact-head CI. Release0.4.0
-PR27 publishes16623a8 with all six jobs green; it remains unmerged.
+PR27 publishes77dcd44 after explicit approval; four CI jobs passed, while
+operations failed at the new isolated fixture Git checkout check. It remains
+unmerged. Reviewed CI-only correction and full local rerun pass; corrected
+actual CI requires a new approved push.
 
 The owner authorized a local correction for protected persistent clone-volume
 routing and TLS/HBA startup ordering. The retained deployment, role checks and
