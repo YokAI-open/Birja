@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 07-11; ready for read-only stock discovery UI
-last_updated: "2026-11-10T19:19:11.018Z"
+stopped_at: Completed 07-12; ready for complete local gates
+last_updated: "2026-11-10T19:35:52.919Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 12 of 14
+Plan: 13 of 14
 Status: Ready to execute
 Last activity: 2026-11-10
-Progress: [████████░░] 79%
+Progress: [█████████░] 86%
 
 ## Completion and next action
 
@@ -74,8 +74,14 @@ historical quotes retain truthful original times without recent/executable claim
 Plan07-11 strict twenty-stock validation, auth/generation-isolated queries and
 conservative monotonic full-RTT deadlines pass34client tests; visible escaped
 IEX/simulation attribution passes4component tests. Scoped static checks pass.
-Next:07-12 read-only stock discovery UI; actual restricted-TLS consumer,
-full phase gates and provider/live acceptance remain07-13/14.
+Plan07-12 read-only stock discovery UI preserves crypto trading, twenty stock
+identities, visible IEX attribution and separate quote/session/status facts.
+16required component tests (20with attribution) and11real authenticated Chromium
+stories pass, including responsive/keyboard recovery, permission expiry/revocation,
+120second boundary and early close. Scoped static checks pass. Dedicated tmpfs
+e2e project cleanup is verified empty; provider fixture data is not live permission.
+Next:07-13 complete local gates and actual restricted-TLS consumer proof;
+provider/live and owner UI acceptance remain07-14.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 Exact reviewed calendar-package approval is recorded; actual provider permission,
@@ -90,7 +96,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 11/14 Phase7 plans completed;07-11 approximately10minutes; prior summaries retain actual timings.
+- v1.1: 12/14 Phase7 plans completed;07-12 approximately16minutes; prior summaries retain actual timings.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -164,6 +170,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 7 P09 | 12min | 2 tasks | 7 files |
 | Phase 7 P10 | 10min | 2 tasks | 5 files |
 | Phase 7 P11 | 10min | 2 tasks | 6 files |
+| Phase 7 P12 | 16min | 2 tasks | 6 files |
 
 ## Operations
 
@@ -173,11 +180,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T19:19:10.997Z
-Stopped at: Completed 07-11; ready for read-only stock discovery UI
-Resume: Execute07-12 using projected useStocks data and visible StockAttribution; stock execution stays disabled.
+Last session:2026-11-10T19:35:24.664Z
+Stopped at: Completed 07-12; ready for complete local gates
+Resume: Execute07-13 complete local proof; stock execution stays disabled and provider/UI owner acceptance remains07-14.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05/06/07/08/09/10/11 summaries committed; whole-phase requirements remain pending.
+07-01/02/03/04/05/06/07/08/09/10/11/12 summaries committed; whole-phase requirements remain pending.
 Healthy disposable birja-test PostgreSQL/Redis retained for immediate serial07-12/13;
 no production services changed or provider data activated.
