@@ -80,7 +80,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md — Preserve crypto routes and refuse stock execution.
+- [x] 07-02-PLAN.md — Preserve crypto routes and refuse stock execution.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -197,7 +197,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 1/14 | In Progress | - |
+| 7. Permitted Stock Discovery | v1.1 | 2/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
