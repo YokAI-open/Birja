@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
 import MarketsPage from "./MarketsPage";
 
-vi.mock("@/hooks/useStocks", () => ({ useStocks: () => ({ data: undefined, isPending: true, isError: false, isFetching: false, refetch: vi.fn() }) }));
+vi.mock("@/hooks/useStocks", () => ({
+  useStocks: () => ({
+    data: undefined,
+    isPending: true,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
 
 afterEach(() => {
   vi.useRealTimers();
