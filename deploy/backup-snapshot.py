@@ -80,6 +80,177 @@ def require(value):
         raise ValueError("guard")
 
 
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010")
+BASE_COLUMNS = {
+    "users": "id email created_at",
+    "accounts": "id user_id cash starting_cash created_at",
+    "auth_sessions": "id user_id created_at revoked_at",
+    "refresh_tokens": "id session_id token_hash expires_at used_at created_at",
+    "coins": "id symbol name kraken_pair sort_order is_active",
+    "prices": "coin_id mid as_of source",
+    "holdings": "id user_id coin_id quantity cost_basis",
+    "trades": "id user_id coin_id side input_kind input_value quantity mid_price price_as_of exec_price fee cash_delta cash_after idempotency_key created_at",
+    "alembic_version": "version_num",
+}
+STOCK_COLUMNS = {
+    "stock_instruments": "coin_id provider_asset_id provider_verified_at listing_exchange currency security_type source source_ref",
+    "stock_quotes": "coin_id bid ask mid source feed event_at collected_at session_date admission_generation",
+    "stock_sessions": "id exchange session_date opens_at closes_at coverage_start coverage_end calendar_admission_generation",
+    "stock_data_admissions": "id product state generation reviewed_at valid_from valid_until evidence_ref terms_version collection_allowed display_allowed derived_allowed retention_allowed scope quota allowed_fields attribution calendar",
+}
+
+
+def contract_columns(revision):
+    require(revision in SUPPORTED_REVISIONS)
+    columns = dict(BASE_COLUMNS)
+    if revision in ("0009", "0010"):
+        columns["coins"] += " asset_class"
+        columns.update(STOCK_COLUMNS)
+    return {table: set(value.split()) for table, value in columns.items()}
+
+
+def manifest_sql(revision):
+    """Select only reviewed static SQL before PostgreSQL parses absent objects.
+
+    The standalone SQL remains the byte-identical legacy query plus comments.
+    All substitutions are fixed repository fragments, never operator input.
+    """
+    contract_columns(revision)
+    source = (HERE / "backup-manifest.sql").read_text()
+    legacy = source.split("\n/* STOCK_COINS\n", 1)[0]
+    if revision in ("0007", "0008"):
+        return legacy
+
+    def fragment(name):
+        return source.split("/* " + name + "\n", 1)[1].split("\n" + name + " */", 1)[0]
+
+    old = next(line for line in legacy.splitlines() if "SELECT 'coins'," in line)
+    result = legacy.replace(old, " UNION ALL" + fragment("STOCK_COINS"))
+    result = result.replace("), names(name) AS (", fragment("STOCK_ROWS") + "\n), names(name) AS (")
+    result = result.replace(
+        "('alembic_version')\n",
+        "('alembic_version')," + ",".join("('" + t + "')" for t in STOCK_COLUMNS) + "\n",
+    )
+    result = result.replace(
+        " 'schema',json_build_object(",
+        " 'stock_invalid',(" + fragment("STOCK_INVALID") + "),\n 'schema',json_build_object(",
+    )
+    result = result.replace(
+        "  'constraints',",
+        "  'columns',(SELECT json_agg(json_build_array(table_name,column_name,data_type,is_nullable,column_default,numeric_precision,numeric_scale) ORDER BY table_name,ordinal_position) FROM information_schema.columns WHERE table_schema='public'),\n"
+        "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
+        "  'constraints',",
+    )
+    return result
+
+
+def validate_manifest(manifest):
+    """Refuse unknown/omitted shape and invalid persisted discovery state."""
+    expected = contract_columns(manifest["revision"])
+    require(set(manifest["tables"]) == set(expected))
+    for row in manifest["tables"].values():
+        require(set(row) == {"count", "sha256"})
+        require(type(row["count"]) is int and row["count"] >= 0)
+        require(isinstance(row["sha256"], str) and ID.fullmatch(row["sha256"]))
+    actual = {}
+    for table, column, identity, data_type in manifest["schema"]["identities"]:
+        require(table in expected and column not in actual.setdefault(table, set()))
+        actual[table].add(column)
+        require(isinstance(data_type, str) and identity in ("", "a"))
+    require(actual == expected)
+    for key in ("negative_cash", "fractional_cents", "negative_holdings"):
+        require(type(manifest["financial"][key]) is int and manifest["financial"][key] == 0)
+    for key in ("cash", "starting_cash", "quantity", "cost_basis", "fees", "cash_delta"):
+        require(
+            isinstance(manifest["financial"][key], str)
+            and Decimal(manifest["financial"][key]).is_finite()
+        )
+    if manifest["revision"] in ("0009", "0010"):
+        require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
+        identities = {
+            "users",
+            "accounts",
+            "auth_sessions",
+            "refresh_tokens",
+            "coins",
+            "holdings",
+            "trades",
+            "stock_sessions",
+            "stock_data_admissions",
+        }
+        found = {
+            table
+            for table, column, identity, kind in manifest["schema"]["identities"]
+            if identity == "a" and column == "id" and kind == "bigint"
+        }
+        require(found == identities)
+        sequences = manifest["schema"]["sequences"]
+        require(len(sequences) == len(identities))
+        require(
+            {tuple(row) for row in sequences}
+            == {
+                (t + "_id_seq", t, "id", "bigint", 1, 1, 9223372036854775807, 1, False)
+                for t in identities
+            }
+        )
+        columns = manifest["schema"]["columns"]
+        require(len(columns) == sum(len(value) for value in expected.values()))
+        for table, column, kind, nullable, default, precision, scale in columns:
+            require(table in expected and column in expected[table])
+            if table in STOCK_COLUMNS or (table == "coins" and column == "asset_class"):
+                optional = {
+                    ("stock_instruments", "provider_asset_id"),
+                    ("stock_instruments", "provider_verified_at"),
+                    ("stock_sessions", "opens_at"),
+                    ("stock_sessions", "closes_at"),
+                    *(
+                        ("stock_data_admissions", c)
+                        for c in (
+                            "reviewed_at",
+                            "valid_from",
+                            "valid_until",
+                            "evidence_ref",
+                            "terms_version",
+                        )
+                    ),
+                }
+                require(nullable == ("YES" if (table, column) in optional else "NO"))
+                expected_type = "text"
+                if column in (
+                    "id",
+                    "coin_id",
+                    "generation",
+                    "admission_generation",
+                    "calendar_admission_generation",
+                ):
+                    expected_type = "bigint"
+                elif column in ("bid", "ask", "mid"):
+                    expected_type = "numeric"
+                    require((precision, scale) == (20, 8))
+                elif column.endswith("_at") or column in ("valid_from", "valid_until"):
+                    expected_type = "timestamp with time zone"
+                elif column in ("session_date", "coverage_start", "coverage_end"):
+                    expected_type = "date"
+                elif column.endswith("_allowed"):
+                    expected_type = "boolean"
+                elif column in ("scope", "quota", "allowed_fields", "calendar"):
+                    expected_type = "jsonb"
+                require(kind == expected_type)
+        constraints = manifest["schema"]["constraints"]
+        require(all(row[3] is True for row in constraints))
+        require(sum(row[2] == "f" for row in constraints) == 10)
+        required = {
+            "ck_coins_asset_class_known",
+            "ck_coins_asset_kraken_mapping",
+            "uq_coins_asset_class_symbol",
+            "fk_stock_instruments_coin_id_coins",
+            "fk_stock_quotes_coin_id_stock_instruments",
+            "uq_stock_sessions_exchange_date",
+            "uq_stock_data_admissions_product",
+        }
+        require(required <= {row[1] for row in constraints})
+
+
 def strict_json(data):
     def unique(pairs):
         result = {}
@@ -174,10 +345,7 @@ def load_config(args):
         for p in c["recovery_files"]:
             contained(p, root)
     else:
-        require(
-            c["production_enabled"] is True
-            and c["approved_host"] == socket.gethostname()
-        )
+        require(c["production_enabled"] is True and c["approved_host"] == socket.gethostname())
         require(c["state_dir"] == "/var/lib/birja/backup")
         require(c["repository"] == DESTINATION)
         require(c["docker_binary"] == "/usr/bin/docker")
@@ -228,9 +396,7 @@ def acquire_operation_lock(path, inherited_fd=None):
         require(held.st_uid == (0 if production else os.geteuid()))
         require(held.st_mode & 0o022 == 0 and os.path.samestat(current, held))
 
-    inherited = (
-        os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
-    )
+    inherited = os.environ.get("BIRJA_BACKUP_LOCK_FD") if inherited_fd is None else inherited_fd
     if inherited is not None:
         require(
             type(inherited) is str
@@ -241,9 +407,7 @@ def acquire_operation_lock(path, inherited_fd=None):
         fd = int(inherited)
         validate(fd)
         lines = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
-        require(
-            any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines)
-        )
+        require(any(re.search(r"^lock:.* FLOCK +ADVISORY +WRITE ", line) for line in lines))
         owned = os.dup(fd)
     else:
         owned = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -259,9 +423,9 @@ def acquire_operation_lock(path, inherited_fd=None):
 
 
 def utc(epoch=None):
-    return dt.datetime.fromtimestamp(
-        time.time() if epoch is None else epoch, dt.UTC
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.fromtimestamp(time.time() if epoch is None else epoch, dt.UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def atomic(path, obj):
@@ -303,9 +467,7 @@ def config_digest(c):
             "dedicated_repository",
         ]
     }
-    stable["material"] = {
-        str(p): file_sha(private_file(p)) for p in c["recovery_files"]
-    }
+    stable["material"] = {str(p): file_sha(private_file(p)) for p in c["recovery_files"]}
     for k in ["password_file", "access_key_file", "secret_key_file"]:
         if k in c:
             stable[k] = {"path": c[k], "sha256": file_sha(private_file(c[k]))}
@@ -415,10 +577,7 @@ def recovery_gate(c, snapshot_id, expected):
         require(backup_attempt == backup)
         data_time(backup, c)
         require(backup["utc"] == utc(backup["epoch"]))
-        require(
-            type(success["format"]) is int
-            and re.fullmatch(r"[0-9a-f]{32}", success["run_id"])
-        )
+        require(type(success["format"]) is int and re.fullmatch(r"[0-9a-f]{32}", success["run_id"]))
         require(backup["snapshot_id"] == success["snapshot_id"] == snapshot_id)
         require(all(success[k] == value for k, value in expected.items()))
         now = time.time()
@@ -427,19 +586,14 @@ def recovery_gate(c, snapshot_id, expected):
             success["started_epoch"],
             success["completed_epoch"],
         ]:
-            require(
-                type(epoch) is int
-                and 0 <= now - epoch <= c["freshness_seconds"] <= 93600
-            )
-        require(
-            backup["epoch"] <= success["started_epoch"] <= success["completed_epoch"]
-        )
+            require(type(epoch) is int and 0 <= now - epoch <= c["freshness_seconds"] <= 93600)
+        require(backup["epoch"] <= success["started_epoch"] <= success["completed_epoch"])
         for prefix in ["started", "completed"]:
             require(
                 success[prefix + "_utc"]
-                == dt.datetime.fromtimestamp(
-                    success[prefix + "_epoch"], dt.UTC
-                ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                == dt.datetime.fromtimestamp(success[prefix + "_epoch"], dt.UTC).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
             )
         job.refresh_quota(lock)  # Fresh inventory, without changing recovery evidence.
         rows = strict_json(job.restic("snapshots", snapshot_id))
@@ -447,9 +601,7 @@ def recovery_gate(c, snapshot_id, expected):
         remote_time = dt.datetime.fromisoformat(rows[0]["time"])
         require(remote_time.tzinfo is not None)
         epoch = remote_time.timestamp()
-        require(
-            0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1
-        )
+        require(0 <= now - epoch <= c["freshness_seconds"] and epoch <= backup["epoch"] + 1)
         raw = job.restic("dump", snapshot_id, "/manifest.json")
         require(sha_bytes(raw) == success["manifest_sha256"])
         manifest = strict_json(raw)
@@ -507,10 +659,7 @@ def status(c):
         require(ID.fullmatch(s["snapshot_id"]))
         data_time(s, c)
         require(
-            s["utc"]
-            == dt.datetime.fromtimestamp(s["epoch"], dt.UTC).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            s["utc"] == dt.datetime.fromtimestamp(s["epoch"], dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
         print(f"utc={s['utc']} id={s['snapshot_id']} step=complete")
         return 0
@@ -559,9 +708,7 @@ class Job:
             "-f",
             "/srv/birja/docker-compose.prod.yml"
             if not c["_synthetic"]
-            else c.get(
-                "source_compose", str(HERE.parent / "docker-compose.ops-test.yml")
-            ),
+            else c.get("source_compose", str(HERE.parent / "docker-compose.ops-test.yml")),
         ]
         if not c["_synthetic"]:
             self.dc += ["--env-file", "/etc/birja/prod.env"]
@@ -625,9 +772,7 @@ class Job:
 
     def quota(self, *, fresh=True):
         q = self.c["quota"]
-        require(
-            q["free_controls_verified"] is True and q["dedicated_repository"] is True
-        )
+        require(q["free_controls_verified"] is True and q["dedicated_repository"] is True)
         if fresh:
             require(0 <= time.time() - q["observed_at"] <= 300)
         used = sum(
@@ -640,8 +785,7 @@ class Job:
             ]
         )
         require(
-            used + q["upload_reserve_bytes"] + q["repack_reserve_bytes"]
-            <= q["storage_limit_bytes"]
+            used + q["upload_reserve_bytes"] + q["repack_reserve_bytes"] <= q["storage_limit_bytes"]
         )
         require(q["upload_reserve_bytes"] >= self.c["max_stage_bytes"])
         api = self.c.get("_inventory_api")
@@ -737,37 +881,14 @@ class Job:
             proc.stdin.flush()
             snapshot = self.line(proc)
             require(re.fullmatch(r"[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+", snapshot))
-            proc.stdin.write((HERE / "backup-manifest.sql").read_bytes() + b"\n")
+            proc.stdin.write(b"SELECT version_num FROM alembic_version ORDER BY version_num;\n")
+            proc.stdin.flush()
+            revision = self.line(proc)
+            proc.stdin.write(manifest_sql(revision).encode() + b"\n")
             proc.stdin.flush()
             manifest = json.loads(self.line(proc))
-            require(
-                set(manifest["tables"])
-                == {
-                    "users",
-                    "accounts",
-                    "auth_sessions",
-                    "refresh_tokens",
-                    "coins",
-                    "prices",
-                    "holdings",
-                    "trades",
-                    "alembic_version",
-                }
-            )
-            for row in manifest["tables"].values():
-                require(type(row["count"]) is int and row["count"] >= 0)
-                require(ID.fullmatch(row["sha256"]))
-            for key in ["negative_cash", "fractional_cents", "negative_holdings"]:
-                require(manifest["financial"][key] == 0)
-            for key in [
-                "cash",
-                "starting_cash",
-                "quantity",
-                "cost_basis",
-                "fees",
-                "cash_delta",
-            ]:
-                require(Decimal(manifest["financial"][key]).is_finite())
+            require(manifest["revision"] == revision)
+            validate_manifest(manifest)
             archive = self.bundle / "database.dump"
             dump = self.dc + [
                 "pg_dump",
@@ -784,15 +905,11 @@ class Job:
             with archive.open("rb") as f:
                 require(archive.stat().st_size > 5 and f.read(5) == b"PGDMP")
             with archive.open("rb") as f:
-                require(
-                    self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
-                )
+                require(self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip())
             proc.stdin.write(b"ROLLBACK;\n")
             proc.stdin.close()
             require(proc.wait(timeout=5) == 0)
-            require(
-                manifest["revision"] and manifest["server_version"].startswith("18.")
-            )
+            require(manifest["revision"] and manifest["server_version"].startswith("18."))
             with archive.open("rb") as f:
                 digest = hashlib.file_digest(f, "sha256").hexdigest()
             manifest.update(
@@ -855,9 +972,7 @@ class Job:
                 self.quota()
                 self.step = "tools"
                 require(
-                    self.call([self.c["restic_binary"], "version"]).startswith(
-                        b"restic 0.19.1 "
-                    )
+                    self.call([self.c["restic_binary"], "version"]).startswith(b"restic 0.19.1 ")
                 )
                 self.step = "repository-scope"
                 previous = self.check_scope(json.loads(self.restic("snapshots")))
@@ -868,9 +983,7 @@ class Job:
                 self.step = "recovery-config"
                 # Tar padding/header allowance; refuse before writing config data.
                 required = sum(p.stat().st_size for p in self.bundle.iterdir())
-                required += sum(
-                    private_file(p).stat().st_size for p in self.c["recovery_files"]
-                )
+                required += sum(private_file(p).stat().st_size for p in self.c["recovery_files"])
                 required += 20480 + len(self.c["recovery_files"]) * 2048
                 require(required <= self.c["max_stage_bytes"])
                 with tarfile.open(self.bundle / "recovery.tar", "w") as tar:
@@ -898,9 +1011,7 @@ class Job:
                     "backup", "--host", HOST, "--tag", TAG, ".", cwd=self.bundle
                 ).splitlines()
                 summaries = [
-                    j
-                    for line in lines
-                    if (j := json.loads(line)).get("message_type") == "summary"
+                    j for line in lines if (j := json.loads(line)).get("message_type") == "summary"
                 ]
                 require(len(summaries) == 1)
                 sid = summaries[0]["snapshot_id"]
@@ -908,14 +1019,10 @@ class Job:
                 self.step = "verify"
                 exact = self.check_scope(json.loads(self.restic("snapshots", sid)))
                 require(exact == [sid])
-                nodes = [
-                    json.loads(line) for line in self.restic("ls", sid).splitlines()
-                ]
+                nodes = [json.loads(line) for line in self.restic("ls", sid).splitlines()]
                 files = {n["path"]: n["size"] for n in nodes if n.get("type") == "file"}
                 # Backing up '.' gives rooted relative snapshot contents (/name).
-                expected = {
-                    "/" + p.name: p.stat().st_size for p in self.bundle.iterdir()
-                }
+                expected = {"/" + p.name: p.stat().st_size for p in self.bundle.iterdir()}
                 require(files == expected)
                 require(
                     self.restic("dump", sid, "/manifest.json")
@@ -939,9 +1046,7 @@ class Job:
                     "run_id": self.run_id,
                     "ok": True,
                     "step": "complete",
-                    "utc": dt.datetime.fromtimestamp(now, dt.UTC).strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
+                    "utc": dt.datetime.fromtimestamp(now, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "epoch": now,
                     "data_epoch": self.data_epoch,
                     "data_utc": self.start_utc,
@@ -957,9 +1062,7 @@ class Job:
                         )
                         * 1000
                     ),
-                    "peak_child_rss_kib": resource.getrusage(
-                        resource.RUSAGE_CHILDREN
-                    ).ru_maxrss,
+                    "peak_child_rss_kib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
                     "network_requests_measured": False,
                     "network_bytes_measured": False,
                     "assurance": "upload-verified+metadata+manifest+structural;restore-not-proven",

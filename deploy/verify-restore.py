@@ -739,11 +739,20 @@ def check_running(dc):
     require(network["Internal"] is True)
 
 
+def recovery_contract():
+    spec = importlib.util.spec_from_file_location("recovery_contract", HERE / "backup-snapshot.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def canonical(dc, db=CLONE):
+    contract = recovery_contract()
+    revision = sql(dc, "SELECT version_num FROM alembic_version ORDER BY version_num;", db).decode().strip()
     return json.loads(
         sql(
             dc,
-            "SET TIME ZONE 'UTC';\n" + (HERE / "backup-manifest.sql").read_text(),
+            "SET TIME ZONE 'UTC';\n" + contract.manifest_sql(revision),
             db,
         )
     )
