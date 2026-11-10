@@ -25,13 +25,13 @@ included in the local correction.
 |---|---|---|
 | Release publication | Approved9457911 pushed; six actual CI jobs green | Complete |
 | Main PR merge | Owner-approved9457911; six green jobs; merge commit `46d24c8591de2207cf219429aac0768962bed4c3` | Complete |
-| Tag / GitHub release | Resulting verified main SHA and reviewed release notes | Pending |
+| Tag / GitHub release | v0.4.0 published at46d24c8; annotated remote tag verified | Complete |
 | Back-merge PR / merge | Release into develop; own exact-head CI and merge approval | Pending |
 | Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
 
 The owner authorized local correction and bounded reviewed/tested CI follow-ups.
 Publication, exact-head CI and owner-approved main merge are complete.
-Resulting main SHA is `46d24c8591de2207cf219429aac0768962bed4c3`; tag/release/back-merge/deploy remain unapproved.
+Resulting main SHA is `46d24c8591de2207cf219429aac0768962bed4c3`; v0.4.0 tag/release publication is approved and complete; back-merge/deploy remain unapproved.
 Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits

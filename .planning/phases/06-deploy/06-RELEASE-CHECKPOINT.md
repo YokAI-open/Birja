@@ -1,7 +1,7 @@
 ---
 phase: 06-deploy
 plan: "11"
-status: main-merged-tag-release-backmerge-rollout-pending
+status: release-published-backmerge-rollout-pending
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 945791115c0bd88fd0cf62835aca3e03c395659f
 base: 5ebf62b33b190aaf04a48b107a222e906fbf4c99
@@ -12,6 +12,24 @@ ci_head: 945791115c0bd88fd0cf62835aca3e03c395659f
 ci_run: 42787743632
 ci_status: success-all-six-browser-health-retry-retained
 ---
+
+## Release publication completed —2026-11-10
+
+Owner explicitly selected “Publish v0.4.0 release” at main commit
+46d24c8591de2207cf219429aac0768962bed4c3 using the prepared release notes.
+Rechecked main SHA and no existing v0.4.0 tag/release before publication.
+Created annotated tag v0.4.0 (tag object
+bb64990ba6be425e66e0a560cbd6a6d3589e4a79), pushed only that tag, and published
+https://github.com/YokAI-open/Birja/releases/tag/v0.4.0
+at2026-11-10T09:29:02Z. GitHub readback confirms public/non-draft/non-prerelease;
+remote peeled tag matches the approved main SHA exactly.
+
+No back-merge push/PR/merge or production operation was authorized/performed.
+Local planning commits remain preserved on release-0.4.0 for the next approved
+integration. Next: request release-branch push and PR into develop, inspect its
+own exact-head CI, then request merge approval. Keep the branch until both
+integration and its planning records are preserved. Phase12/15 and pending
+09/12/13, DEPL-01/02 remain unchanged; nightly observation is still deferred.
 
 ## Main merge completed —2026-11-10
 
