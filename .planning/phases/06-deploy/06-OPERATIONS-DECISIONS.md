@@ -1172,3 +1172,18 @@ backup/restore, production file write, service or database mutation occurred.
 No new authority follows from successful preflight. Next checkpoint is the
 exact host-preparation scope and expected MANIFEST in that report. Phase stays
 12/15 with09/12/13 and DEPL-01/02 incomplete; nightly observation deferred.
+
+## Approved host preparation completed —2026-11-10
+
+Owner approved the exact preparation scope in06-12-PREFLIGHT. Execution and
+separate postchecks succeeded; see06-12-HOST-PREPARATION for measured results
+and off-server custody paths. Actual retained MANIFEST70e568a8/all129files
+matches released main46d24c8. TLS and staged role credentials created; two
+approved empty unused candidate volumes and protected routing records exist.
+Live container IDs/images/mounts remain identical and healthy; prod.env metadata
+and independent recovery unchanged. No live data/role/TLS/service transition,
+backup/restore, provider/timer operation or deployment occurred.
+
+Next: save only the NEW material off-server and confirm custody, then prepare
+the separate exact maintenance/rollout decision. Custody confirmation alone is
+not production restart/deploy approval. Phase12/15;09/12/13 and DEPL pending.

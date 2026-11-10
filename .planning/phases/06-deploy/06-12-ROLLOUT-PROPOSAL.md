@@ -91,6 +91,16 @@ pending. Expected retained MANIFEST computed from final main46d24c8 is
 no installation occurred. Read-only preflight does not authorize preparation
 or rollout. The report defines the next concrete host-preparation checkpoint.
 
+## Approved host preparation —2026-11-10
+
+[06-12-HOST-PREPARATION.md](06-12-HOST-PREPARATION.md) records completed
+owner-authorized tooling/TLS/credential/empty-volume preparation and successful
+postchecks. Installed MANIFEST equals70e568a8; released source46d24c8 selected.
+Existing live services, original data and prod.env are unchanged. New recovery
+material still needs off-server custody confirmation. No copying, role apply,
+backup/restore, restart or deployment has occurred. The maintenance sequence
+below remains a proposal requiring its own authorization.
+
 ## Required preflight bindings before a production decision
 
 Collect only after an explicitly authorized read-only preflight. Keep private

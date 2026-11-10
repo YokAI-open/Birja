@@ -57,14 +57,15 @@ service restart, image pull, volume creation or deployment occurred.
   certificate custody or first-night evidence is inferred. Those checks remain
   gated as documented in LIVE-RECOVERY and ROLLOUT-PROPOSAL.
 
-## Concrete next preparation scope — not yet authorized
+## Preparation scope — subsequently approved and completed
 
 Use final main `46d24c8591de2207cf219429aac0768962bed4c3` (published v0.4.0).
 Computed the retained installer's exact deterministic129-file MANIFEST locally
 from this immutable git tree; expected SHA256:
 `70e568a8c0f9953926e40de4ed79ec25272b3cdd777e474b3967a09849edb0b2`.
 The JSON is private at production-preflight/expected-retained-MANIFEST.json.
-This is an expected artifact identity, not a claim of installation.
+This was computed before installation; actual installation subsequently matched
+it. See06-12-HOST-PREPARATION for current state.
 
 Proposed single preparation authorization:
 

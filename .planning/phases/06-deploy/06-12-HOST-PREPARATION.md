@@ -1,0 +1,68 @@
+# Approved host preparation — 2026-11-10
+
+Status: COMPLETE for the approved preparation scope; rollout pending.
+
+Owner selected “Approve host preparation” for the exact source, manifest,
+private material and two empty candidate volumes documented in06-12-PREFLIGHT.
+Executed the guarded preparation under the installed shared operation lock,
+including kernel-validated inherited lock handling by the reviewed installers.
+No errors; no scope expansion or replacement artifact was required.
+
+## Actual prepared state
+
+- `/srv/birja` selected released main
+  `46d24c8591de2207cf219429aac0768962bed4c3` (v0.4.0). The live application
+  containers continue running their previous v0.3.1 images; source selection
+  does not claim application deployment.
+- Installed `/usr/local/sbin/birja-deploy` and supported legacy launcher with
+  immutable retained tooling. Actual MANIFEST SHA256 equals approved
+  `70e568a8c0f9953926e40de4ed79ec25272b3cdd777e474b3967a09849edb0b2`;
+  all129retained file hashes verified. Installation uses the reviewed sparse
+  checkout/launcher mechanism; do not overwrite it with an old deploy script.
+- Private CA/server certificate created through reviewed provisioner; CA trust,
+  postgres hostname, key/certificate matching and expiry beyond30days pass.
+  No PostgreSQL reload/restart was performed; live TLS remains unchanged.
+- New random256-bit hex credentials staged separately for app/scheduler/migrator;
+  format/root0600 checks pass. db-roles.json is root0600 with fixed project,
+  database, bootstrap role and staged file references. No SQL roles applied.
+- Created only `birja-prod-phase06-pgdata` and
+  `birja-prod-phase06-redisdata`; both empty and unused. Original volumes are
+  preserved. Root0600 datastore-bindings.json records original/candidate names,
+  actual creation timestamps and local driver/scope. No copy, conversion,
+  original chown, reindex, migration, routing cutover or container recreation.
+- All four original live IDs/images/mounts match before/after and remain
+  healthy. Existing prod.env inode/size/mtime/ctime match before/after; no
+  credential values were displayed. Installed independent recovery remains
+  exactd5fe2059 archive. No backup/restore, provider or timer access occurred.
+
+## Post-verification
+
+Separate postcheck revalidated exact retained MANIFEST, generated credential
+format/permissions, role config, actual routing identities and empty/unconsumed
+candidate directories. Repeated reviewed TLS --check succeeded.
+Private sanitized result is retained at
+`.local/phase-06-handoff/production-preflight/host-preparation-result.json`;
+the guarded execution script is also private/ignored. No new application code
+or dependency/image change; the released source already has actual green CI.
+
+## Required off-server custody before rollout
+
+Copy these existing files privately into the off-server password manager as
+secure attachments/entries; preserve exact bytes and filenames. Do not invent
+replacement values and do not send contents in chat:
+
+- `/etc/birja/app`, `/etc/birja/scheduler`, `/etc/birja/migrator`:
+  newly generated database credentials (staged, not applied).
+- Entire `/etc/birja/custody/` and `/etc/birja/db-tls/` directories:
+  CA signing key, CA certificate and server certificate/key.
+- `/etc/birja/db-roles.json` and `/etc/birja/datastore-bindings.json`:
+  recovery configuration and volume identity mapping.
+
+Existing B2/restic custody remains confirmed from Plan09; this request covers
+only newly generated role/TLS/routing material. Off-server custody is not yet
+confirmed for it. Production rollout remains unapproved. After confirmation,
+prepare the exact maintenance/recovery/collation/cutover/deploy scope and ask
+for its separate checkpoint. No production restart follows from “saved”.
+
+Phase12/15;09/12/13 and DEPL-01/02 remain pending. No12SUMMARY or phase completion
+is claimed. First scheduled-backup observation remains explicitly deferred.

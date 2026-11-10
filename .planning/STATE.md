@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Read-only production preflight complete; host preparation approval pending
-last_updated: "2026-11-10T08:38:49Z"
+stopped_at: Approved host preparation complete; new material off-server custody pending
+last_updated: "2026-11-10T09:58:50Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
   total_phases: 7
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 host preparation checkpoint;09 calendar observation owner-deferred
+Plan:12 new material custody checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- Approved read-only preflight completed; no production mutation.
+Last activity:2026-11-10 -- Approved host preparation and postchecks pass; live services unchanged.
 
 Progress: [█████████░] 96%
 
@@ -65,10 +65,19 @@ Redis AOF/auth/noeviction pass; no TTL sample. Installed20payload hashes and
 three exact launchers match approvedd5fe2059 archive. No provider/timer checks,
 production mutation, backup/restore or deployment performed.
 
-Next: authorize concrete host preparation in06-12-PREFLIGHT (exact main source /
-expected retained MANIFEST, TLS/credential files and empty candidate volumes).
-Maintenance/writer stop/fresh remote recovery/cutover/deploy remain separate;
-new credentials/CA require off-server custody before any rollout.
+Owner-approved host preparation completed; see06-12-HOST-PREPARATION.
+Actual retained MANIFEST70e568a8 matches approved source46d24c8/all129files;
+TLS created/checked, private app/scheduler/migrator credentials staged, empty
+candidate volumes and protected routing identities prepared. Original live
+containers/images/mounts remain identical and healthy; prod.env metadata and
+installed independent recovery unchanged. No SQL role, live TLS, data copy /
+conversion, provider/timer, backup/restore, restart or deployment operation.
+
+Next: owner must privately save NEW credential files, custody/db-tls directories
+and role/routing configs off-server, then confirm only that they are saved.
+Paths are listed in HOST-PREPARATION. Existing B2/restic custody is already
+confirmed; no need to repeat it. Confirmation does not authorize rollout.
+Then present exact final maintenance/recovery/collation/cutover scope separately.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in
