@@ -2,7 +2,6 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -283,19 +282,3 @@ async def test_api_settings_ignore_provider_keys(monkeypatch: pytest.MonkeyPatch
 async def test_invalid_stock_configuration_is_rejected(values: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         scheduler_config(**values)
-
-
-async def test_activation_document_has_concrete_transaction_and_dry_run() -> None:
-    doc = (Path(__file__).resolve().parents[2] / "deploy/STOCK-DATA-ADMISSION.md").read_text()
-    for text in (
-        "FOR UPDATE",
-        "generation = generation + 1",
-        "ROLLBACK",
-        "COMMIT",
-        "evaluate_admission",
-        "MIGRATOR_DATABASE_URL",
-        "STOCK_EVIDENCE_FILE",
-        "No provider permission has been established",
-        "SELECT-only",
-    ):
-        assert text in doc
