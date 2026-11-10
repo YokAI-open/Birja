@@ -136,6 +136,35 @@ created by the migrator before import. For each product use a bound ORM insert
 inside one approved transaction: `session.add(StockDataAdmission(product=product,
 state='denied', generation=1))`. Unique constraints reject duplicate creation;
 never delete/reinsert to reset generation. Initial approved import uses generation2.
+
+Concrete connection wrapper for the import function above (operator-only; the
+default call still rolls back). `MIGRATOR_DATABASE_SSL_CA_FILE` is the protected
+reviewed CA pathname; scope variables must match the exact approved deployment.
+Do not invoke this wrapper until the owner approves the administrative scope.
+
+```python
+from datetime import UTC
+from types import SimpleNamespace
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from app.db.connection import database_connect_args
+
+async def rehearse():
+    config = SimpleNamespace(env='prod',
+        database_url=os.environ['MIGRATOR_DATABASE_URL'],
+        database_ssl_ca_file=os.environ['MIGRATOR_DATABASE_SSL_CA_FILE'])
+    engine = create_async_engine(config.database_url, echo=False,
+        hide_parameters=True, connect_args=database_connect_args(config, migration=True))
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            await import_packet(session, datetime.now(UTC), apply=False,
+                account=os.environ['STOCK_DATA_ACCOUNT'],
+                server=os.environ['STOCK_DATA_SERVER'])
+    finally:
+        await engine.dispose()
+# An approved operator may call asyncio.run(rehearse()) from a private script.
+# Applying the reviewed packet requires a separately approved apply=True change.
+```
+
 For restrictive changes/revocation lock the same product with FOR UPDATE and use:
 
 ```sql
