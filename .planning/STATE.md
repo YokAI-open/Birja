@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: planned
-stopped_at: Phase 7 planned and independently checked; execution not started
-last_updated: "2026-11-10T13:39:42.606Z"
-last_activity: 2026-11-10 -- Phase 7 planning complete
+status: executing
+stopped_at: Completed 07-01 stock schema/catalogue; 49 isolated tests passed
+last_updated: "2026-11-10T14:06:22.820Z"
+last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 7
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-10)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** v1.1 US Stock Trading — Phase 7 planned; ready to execute
+**Current focus:** Phase 7 — Permitted Stock Discovery
 
 ## Current Position
 
-Phase: 7 (Permitted Stock Discovery), first of 5 approved phases
-Plan: 0/14 executed; 14 plans written across 13 waves
-Status: Ready to execute
-Last activity: 2026-11-10 -- Phase 7 planning complete
-Progress: [░░░░░░░░░░] 0%
+Phase: 7 (Permitted Stock Discovery) — EXECUTING
+Plan: 2 of 14
+Status: Executing Phase 7; Plan 07-01 complete
+Last activity: 2026-11-10 -- Plan 07-01 schema/catalogue verified; 49 isolated tests passed
+Progress: [█░░░░░░░░░] 7%
 
 ## Completion and next action
 
@@ -40,20 +40,22 @@ Independent final plan check after two revisions:0blockers/0active warnings.
 Initial grant ownership, current-request expiry/revocation/clock checks, and
 calendar authority separation were fixed in the plan contracts before execution.
 
-Next: `$gsd-execute-phase 7`. No implementation or new tests have run. New package
-legitimacy is a blocking pre-install checkpoint; actual provider permission,
+Plan07-01 completed schema0009 and separate catalogue0010 with49isolated
+PostgreSQL tests passed, scoped lint/format and model types passed. Both tasks
+have meaningful RED/GREEN commits. Next:07-02 crypto boundary preservation.
+New package legitimacy is a blocking pre-install checkpoint; actual provider permission,
 access,20symbol coverage/freshness and UI acceptance remain explicit later gates.
 Stock execution remains disabled through Phase8; no real stock orders in Phase7.
 Live data or completed acceptance cannot be claimed from fixtures/disabled state.
 
-Planning commits remain local on feature/v1.1-stock-planning. Owner deferred
+Planning and execution commits remain local on feature/v1.1-stock-planning. Owner deferred
 publication; do not re-ask or push/openPR without a later request. Execution,
 provider contact/signup/agreement/payment and deployment are not inferred from
 plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 0 plans completed; durations unavailable before execution.
+- v1.1: 1/14 Phase7 plans completed;07-01 approximately14minutes,2tasks,10source/test files.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -77,6 +79,8 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 - Verified ordinary forward splits conserve basis; unsupported/uncertain actions
   suspend affected stocks and make valuations unavailable. Stock marks use midpoint.
   Capture entitlement history from the first fill and order actions with trading.
+
+- [Phase 7]: 07-01 authoritative calendar evidence stays in migrator-owned admissions; derived sessions have no review or override authority.
 
 ### Blockers/Concerns
 
@@ -111,6 +115,7 @@ Owner-approved follow-ups at close, 2026-11-10:
 Detailed impact, evidence and historical accepted risks remain in
 [milestone audit](milestones/v1.0-MILESTONE-AUDIT.md) and
 [integration audit](milestones/v1.0-INTEGRATION-AUDIT.md).
+| Phase 07 P01 | 14min | 2 tasks | 10 files |
 
 ## Operations
 
@@ -120,9 +125,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10
-Stopped at: Phase7 planned; independent checker passed0blockers/0active warnings.
-Resume: `$gsd-execute-phase 7` when owner requests execution.
+Last session:2026-11-10T14:06:22.315Z
+Stopped at: Completed 07-01 stock schema/catalogue; 49 isolated tests passed
+Resume: Continue authorized Phase7 execution at07-02.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-No summaries created, requirements completed, services changed or data activated.
+07-01 summary committed; whole-phase requirements remain pending. Isolated test
+stack stopped/removed; no production services changed or provider data activated.

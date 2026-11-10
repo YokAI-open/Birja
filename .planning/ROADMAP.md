@@ -76,7 +76,7 @@ authorize a software release or deployment.
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Expand stable instrument and discovery storage.
+- [x] 07-01-PLAN.md — Expand stable instrument and discovery storage.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -192,12 +192,12 @@ Plans:
 
 ## Progress
 
-**Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase 7 is the next planning
-target. No phase plans or implementation have been created.
+**Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase7 execution is underway:
+07-01schema/catalogue complete;07-02crypto-boundary preservation is next.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 0/TBD | Not started | - |
+| 7. Permitted Stock Discovery | v1.1 | 1/14 | In Progress | - |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
