@@ -128,6 +128,56 @@ async def test_partial_batch_keeps_valid_symbol() -> None:
     assert result.rejected == {"MSFT": "missing"}
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        BODY.replace(b"100.00000001", b"1." + b"0" * 130),
+        BODY.replace(b"100.00000001", b"1e999999999999999999999"),
+    ],
+)
+async def test_unbounded_numeric_tokens_refused_without_quotes(raw):
+    with respx.mock as router:
+        router.get(LATEST_QUOTES_URL).respond(200, content=raw)
+        async with httpx.AsyncClient() as http:
+            with pytest.raises(AlpacaError, match="invalid_json"):
+                await fetch_iex_quotes(http, [MAPPING], admitted(), lambda: NOW)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    ["not-an-object", {"S": "MSFT"}, {"t": None}, {"t": "bad"}, {"t": "2026-99-10T15:00:00Z"}],
+)
+async def test_malformed_symbol_or_source_time_refused(entry):
+    with respx.mock as router:
+        router.get(LATEST_QUOTES_URL).respond(
+            200, json={"quotes": {"AAPL": entry}, "note": 'escaped \\" bracket ['}
+        )
+        async with httpx.AsyncClient() as http:
+            result = await fetch_iex_quotes(http, [MAPPING], admitted(), lambda: NOW)
+    assert not result.quotes
+    assert result.rejected == {"AAPL": "invalid"}
+
+
+@pytest.mark.parametrize(
+    "header,delay", [("Tue, 10 Nov 2026 15:00:01 GMT", 1), ("bad", 1), ("-1", 1)]
+)
+async def test_retry_after_dates_and_invalid_values_are_bounded(header, delay):
+    sleeper = Sleeper()
+    with respx.mock as router:
+        router.get(LATEST_QUOTES_URL).mock(
+            side_effect=[
+                httpx.Response(429, headers={"Retry-After": header}),
+                httpx.Response(200, content=BODY),
+            ]
+        )
+        async with httpx.AsyncClient() as http:
+            result = await fetch_iex_quotes(
+                http, [MAPPING], admitted(), lambda: NOW, sleep=sleeper, jitter=lambda: 0
+            )
+    assert len(result.quotes) == 1
+    assert sleeper.delays == [delay]
+
+
 async def test_denied_unverified_duplicate_and_uncurated_never_call_http() -> None:
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(lambda r: pytest.fail("must not call"))
