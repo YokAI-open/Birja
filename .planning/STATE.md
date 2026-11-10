@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Approved host preparation complete; new material off-server custody pending
+stopped_at: Encrypted owner-requested recovery archive ready; off-server saving pending
 last_updated: "2026-11-10T09:58:50Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -73,8 +73,11 @@ containers/images/mounts remain identical and healthy; prod.env metadata and
 installed independent recovery unchanged. No SQL role, live TLS, data copy /
 conversion, provider/timer, backup/restore, restart or deployment operation.
 
-Next: owner must privately save NEW credential files, custody/db-tls directories
-and role/routing configs off-server, then confirm only that they are saved.
+Owner requested a single archive including prod.env: created/verified encrypted
+25member archive in private ignored offserver-export directory; see
+HOST-PREPARATION for exact filename/digest. Existing restic password decrypts it.
+Next: owner downloads and saves this archive off-server with the password
+independently available, then confirms custody.
 Paths are listed in HOST-PREPARATION. Existing B2/restic custody is already
 confirmed; no need to repeat it. Confirmation does not authorize rollout.
 Then present exact final maintenance/recovery/collation/cutover scope separately.

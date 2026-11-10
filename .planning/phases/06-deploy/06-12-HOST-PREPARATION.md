@@ -66,3 +66,19 @@ for its separate checkpoint. No production restart follows from “saved”.
 
 Phase12/15;09/12/13 and DEPL-01/02 remain pending. No12SUMMARY or phase completion
 is claimed. First scheduled-backup observation remains explicitly deferred.
+
+## Owner-requested single off-server archive —2026-11-10
+
+Owner requested one archive including production env. Created private ignored
+`offserver-export/birja-offserver-recovery-20261110T100419Z.tar.gz.gpg`
+(130,286,280bytes), encrypted AES256 through GnuPG using the existing separately
+custodied restic password. Includes all18files under/etc/birja, current HTTPS
+certificate/key, authenticated independent recovery archive, retained MANIFEST,
+runbook and recovery instructions/checksums.25members total.
+Full decrypt/MDC and every archived member hash verified; root0600 archive in
+root0700directory. No secret values printed. Archive SHA256:
+`3888fb71b23e7985cb5273ce1b9b033e98853b1250a5f9b022778285db90fe79`.
+The archive is configuration/tool custody, not a database backup; actual data
+remains in encrypted B2. No production configuration/service change or provider
+access. Owner must download/save it off-server and retain the existing restic
+password independently; off-server custody confirmation is still pending.
