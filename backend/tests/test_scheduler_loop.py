@@ -257,6 +257,7 @@ async def test_enabled_amain_runs_independent_stock_loop_and_private_http(
     stock_started = asyncio.Event()
     crypto_calls = []
     stock_cancelled = asyncio.Event()
+    clients = []
 
     async def crypto(**kw: Any) -> CycleResult:
         assert not kw["source"].__dict__.get("headers")
@@ -266,6 +267,7 @@ async def test_enabled_amain_runs_independent_stock_loop_and_private_http(
         return CycleResult("ok")
 
     async def hanging_stock(**kw: Any) -> CycleResult:
+        clients.append(kw["http"])
         assert kw["http"].headers["APCA-API-KEY-ID"] == "synthetic-private-key"
         assert kw["http"].headers["APCA-API-SECRET-KEY"] == "synthetic-private-secret"
         stock_started.set()
@@ -290,6 +292,7 @@ async def test_enabled_amain_runs_independent_stock_loop_and_private_http(
         get_scheduler_settings.cache_clear()
     assert stock_started.is_set()
     assert stock_cancelled.is_set()
+    assert clients[0].is_closed
     assert len(crypto_calls) == 3
     assert 0.06 <= crypto_calls[-1] - crypto_calls[0] < 1
     assert (tmp_path / "hb").exists()

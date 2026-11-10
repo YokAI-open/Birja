@@ -60,6 +60,11 @@ services:
       EMAIL_BACKEND: ${EMAIL_BACKEND:-console}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
+      # Nonsecret discovery scope only; credentials belong to scheduler below.
+      STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_FEED: ${STOCK_FEED:-iex}
+      STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
+      STOCK_DATA_SERVER: ${STOCK_DATA_SERVER:-birja}
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,6 +120,17 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       PRICE_SOURCE: ${PRICE_SOURCE:-kraken}
+      STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_FEED: ${STOCK_FEED:-iex}
+      STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
+      STOCK_DATA_SERVER: ${STOCK_DATA_SERVER:-birja}
+      STOCK_POLL_INTERVAL_SECONDS: ${STOCK_POLL_INTERVAL_SECONDS:-60}
+      STOCK_REQUEST_TIMEOUT_SECONDS: ${STOCK_REQUEST_TIMEOUT_SECONDS:-5}
+      STOCK_MAX_RETRIES: ${STOCK_MAX_RETRIES:-1}
+      STOCK_CYCLE_BUDGET_SECONDS: ${STOCK_CYCLE_BUDGET_SECONDS:-15}
+      STOCK_MAX_RESPONSE_BYTES: ${STOCK_MAX_RESPONSE_BYTES:-262144}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
     depends_on:
       backend:
         condition: service_healthy

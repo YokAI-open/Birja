@@ -284,6 +284,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         socket_timeout=2,
     )
     http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+    stock_http: httpx.AsyncClient | None = None
     try:
         source = build_source(settings, http)
         candidates: dict[int, Candidate] = {}
@@ -302,12 +303,48 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                 candidates=candidates,
             )
 
-        await run(
-            cycle=cycle,
-            interval=settings.price_poll_interval_seconds,
-            stop=stop,
-        )
+        if not settings.stock_data_enabled:
+            await run(cycle=cycle, interval=settings.price_poll_interval_seconds, stop=stop)
+        else:
+            from app.tasks.stock_scheduler import run_stock_cycle
+
+            # Keep credentials out of the crypto client, API and browser.
+            key, secret = settings.alpaca_api_key, settings.alpaca_secret_key
+            assert key is not None and secret is not None  # noqa: S101 - settings validates
+            stock_http = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.stock_request_timeout_seconds),
+                headers={
+                    "APCA-API-KEY-ID": key.get_secret_value(),
+                    "APCA-API-SECRET-KEY": secret.get_secret_value(),
+                },
+            )
+
+            async def stock_cycle() -> CycleResult:
+                assert stock_http is not None  # noqa: S101 - created before loop
+                try:
+                    return await run_stock_cycle(
+                        sessionmaker=sessionmaker, redis=redis, http=stock_http, settings=settings
+                    )
+                except Exception as exc:
+                    # Isolate even unexpected stock defects; never log private
+                    # provider request/response/evidence values.
+                    logger.warning("stock loop failed: %s", type(exc).__name__)
+                    return CycleResult("source_error")
+
+            async with asyncio.TaskGroup() as group:
+                group.create_task(
+                    run(cycle=cycle, interval=settings.price_poll_interval_seconds, stop=stop)
+                )
+                group.create_task(
+                    run(
+                        cycle=stock_cycle,
+                        interval=settings.stock_poll_interval_seconds,
+                        stop=stop,
+                    )
+                )
     finally:
+        if stock_http is not None:
+            await stock_http.aclose()
         await http.aclose()
         await redis.aclose()
         await engine.dispose()

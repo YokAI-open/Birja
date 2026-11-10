@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -209,12 +210,17 @@ async def test_provider_failures_keep_data_and_release_lease(
     state: dict, redis_client: Redis, status: int
 ):
     with respx.mock as router:
-        route = router.get(LATEST_QUOTES_URL).respond(status)
+        route = router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
         async with httpx.AsyncClient() as http:
+            first = await cycle(state, redis_client, http)
+            assert first.accepted == 20
+            before = [(r.coin_id, r.mid, r.event_at, r.collected_at) for r in await rows(state)]
+            await redis_client.delete(stock_scheduler.WINDOW_KEY)
+            route.respond(status)
             result = await cycle(state, redis_client, http)
-    assert route.call_count == 1
+    assert route.call_count == 2
     assert result.status == "source_error"
-    assert await rows(state) == []
+    assert [(r.coin_id, r.mid, r.event_at, r.collected_at) for r in await rows(state)] == before
     assert await redis_client.exists(stock_scheduler.LOCK_KEY) == 0
 
 
@@ -399,3 +405,74 @@ async def test_closed_day_refresh_does_not_renew_calendar_review(state: dict, re
     assert before.reviewed_at == after.reviewed_at
     assert before.calendar == after.calendar
     assert before.generation == after.generation
+
+
+async def test_hanging_stock_http_keeps_real_crypto_ticks_and_both_leases_release(
+    state: dict, redis_client: Redis, clean_prices: None, tmp_path: Path
+):
+    from app.services.kraken import TICKER_URL
+    from app.tasks import scheduler
+    from tests.test_scheduler import _body
+
+    stock_entered = asyncio.Event()
+    third_crypto = asyncio.Event()
+    stop = asyncio.Event()
+    crypto_ticks = []
+
+    async def stock_hang(request):
+        stock_entered.set()
+        await asyncio.Event().wait()
+
+    async def crypto_reply(request):
+        assert "APCA-API-KEY-ID" not in request.headers
+        crypto_ticks.append(asyncio.get_running_loop().time())
+        await stock_entered.wait()
+        if len(crypto_ticks) == 3:
+            third_crypto.set()
+            await asyncio.Event().wait()
+        return httpx.Response(200, json=_body())
+
+    with respx.mock as router:
+        router.get(LATEST_QUOTES_URL).mock(side_effect=stock_hang)
+        router.get(TICKER_URL).mock(side_effect=crypto_reply)
+        async with httpx.AsyncClient() as crypto_http, httpx.AsyncClient() as stock_http:
+            candidates = {}
+
+            async def crypto_cycle():
+                return await scheduler.run_cycle(
+                    sessionmaker=state["factory"],
+                    redis=redis_client,
+                    source=scheduler.build_source(state["settings"], crypto_http),
+                    settings=state["settings"],
+                    candidates=candidates,
+                    now=lambda: state["now"],
+                )
+
+            async def stock_cycle():
+                return await cycle(state, redis_client, stock_http)
+
+            async with asyncio.TaskGroup() as group:
+                group.create_task(
+                    scheduler.run(
+                        cycle=crypto_cycle,
+                        interval=0.04,
+                        stop=stop,
+                        heartbeat=tmp_path / "heartbeat",
+                    )
+                )
+                group.create_task(
+                    scheduler.run(
+                        cycle=stock_cycle, interval=60, stop=stop, heartbeat=tmp_path / "heartbeat"
+                    )
+                )
+                try:
+                    await asyncio.wait_for(third_crypto.wait(), 5)
+                    assert await redis_client.exists(scheduler.LOCK_KEY) == 1
+                    assert await redis_client.exists(stock_scheduler.LOCK_KEY) == 1
+                    assert (tmp_path / "heartbeat").exists()
+                finally:
+                    stop.set()
+    assert len(crypto_ticks) == 3
+    assert crypto_ticks[-1] - crypto_ticks[1] < 1
+    assert await redis_client.exists(scheduler.LOCK_KEY) == 0
+    assert await redis_client.exists(stock_scheduler.LOCK_KEY) == 0
