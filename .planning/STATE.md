@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 07-12; ready for complete local gates
-last_updated: "2026-11-10T19:35:52.919Z"
+stopped_at: Completed07-13; ready for explicit activation checkpoint07-14
+last_updated: "2026-11-10T20:25:00.545Z"
 last_activity: 2026-11-10
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 13 of 14
+Plan: 14 of 14
 Status: Ready to execute
 Last activity: 2026-11-10
-Progress: [█████████░] 86%
+Progress: [█████████░] 93%
 
 ## Completion and next action
 
@@ -46,8 +46,8 @@ passed. Plan07-03 adds revision-selected exact recovery contracts:25backup tests
 identity corruption proof passed. Plan07-04 proves actual restricted-role TLS
 upgrade without grant repair, fresh-bootstrap parity and exact retained encrypted
 dump/retrieval/restore0007/0008/0009/0010 including identities/corruption checks.
-Calendar evaluator is now proven07-08; restricted-TLS consumer semantics remain07-13;
-SQL authority denial is proven now. Plan07-05 pure scoped admission and disabled
+Calendar evaluator is proven07-08 and persisted restricted-TLS consumer semantics
+are now proven07-13; SQL authority denial remains enforced. Plan07-05 pure scoped admission and disabled
 configuration pass74admission/114combined configuration tests and scoped static
 checks; private migrator-only evidence import/revoke/TLS rehearsal packet saved.
 Plan07-06 exact IEX adapter/predicates and monotonic PostgreSQL persistence pass
@@ -80,8 +80,19 @@ identities, visible IEX attribution and separate quote/session/status facts.
 stories pass, including responsive/keyboard recovery, permission expiry/revocation,
 120second boundary and early close. Scoped static checks pass. Dedicated tmpfs
 e2e project cleanup is verified empty; provider fixture data is not live permission.
-Next:07-13 complete local gates and actual restricted-TLS consumer proof;
-provider/live and owner UI acceptance remain07-14.
+Plan07-13 completed actual local gates:969backend tests,99.68%overall and all21
+critical modules100%;310frontend tests/static/audits,20actual browser journeys
+with1expected deployed-CSP skip;158nonroot hardened-image tests and runtime
+calendar smoke; five actual strict HIGH/CRITICAL including-unfixed scans clear.
+Current --all proves exact0007/0008/0009/0010 recovery and both real persisted
+restricted-TLS calendar consumer lanes. Actual image-transition and distinct
+legacy0008 v0.4.0→v0.3.1 retained rollback/cutover pass; no unsupported old-runtime
+on0010 claim. Independent code/security/UI review findings are fixed and
+re-reviewed:0active code findings,47/47local threats closed,UI24/24. Existing
+response deadlines bound retained-value exposure; actual DB/recovery storage
+rights or approved verified cleanup remain prerequisites before live activation.
+Next:07-14 explicit provider/storage-rights and bounded measurement checkpoint,
+then owner UI acceptance. No phase-complete or live criteria claim from fixtures.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 Exact reviewed calendar-package approval is recorded; actual provider permission,
@@ -96,7 +107,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 
 ## Performance Metrics
 
-- v1.1: 12/14 Phase7 plans completed;07-12 approximately16minutes; prior summaries retain actual timings.
+- v1.1: 13/14 Phase7 plans completed;07-13 approximately46minutes; prior summaries retain actual timings.
 - v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
   main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
@@ -125,6 +136,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 - [Phase 7]: 07-02 unsupported stock holdings remain visible/unpriced; crypto-only replay and holding lookups reject injected stock state.
 - [Phase 7]: 07-03 preserves byte-compatible legacy SQL; successor recovery dispatch includes exact evidence/generations without repairing authority.
 - [Phase 7]: 07-07 owner approved the exact eight-package calendar resolution for local uv lock/install/tests; provenance limitations and all runtime/image/security gates remain.
+- [Phase 7]: Local gates pass with configured scope, retention disclosure deadlines and separate legacy0008/successor0010 proofs; provider/storage rights and owner acceptance remain07-14.
 
 ### Blockers/Concerns
 
@@ -171,6 +183,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 7 P10 | 10min | 2 tasks | 5 files |
 | Phase 7 P11 | 10min | 2 tasks | 6 files |
 | Phase 7 P12 | 16min | 2 tasks | 6 files |
+| Phase 7 P13 | 46min | 2 tasks | 35 files |
 
 ## Operations
 
@@ -180,11 +193,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T19:35:24.664Z
-Stopped at: Completed 07-12; ready for complete local gates
-Resume: Execute07-13 complete local proof; stock execution stays disabled and provider/UI owner acceptance remains07-14.
+Last session:2026-11-10T20:25:00.521Z
+Stopped at: Completed07-13; ready for explicit activation checkpoint07-14
+Resume: Execute07-14 from reviewed07-LOCAL-PROOF; prepare explicit activation checkpoint. Stock execution stays disabled; actual provider/storage rights and owner UI acceptance remain pending.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
-07-01/02/03/04/05/06/07/08/09/10/11/12 summaries committed; whole-phase requirements remain pending.
-Healthy disposable birja-test PostgreSQL/Redis retained for immediate serial07-12/13;
+07-01 through07-13 summaries committed; whole-phase requirements remain pending.
+Healthy disposable birja-test PostgreSQL/Redis retained for the orchestrator;
 no production services changed or provider data activated.

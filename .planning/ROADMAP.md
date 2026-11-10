@@ -121,7 +121,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 07-13-PLAN.md — Close local coverage, image and recovery gates.
+- [x] 07-13-PLAN.md — Close local coverage, image and recovery gates.
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
@@ -201,7 +201,7 @@ remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 12/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 13/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
