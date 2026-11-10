@@ -202,11 +202,19 @@ class Bindings(unittest.TestCase):
         for path in [data, *data.iterdir()]:
             os.chown(path, 65532, 65532)
         probe = self.m.PROBES["redisdata"].replace("/selected", str(selected))
-        for row in [incremental, incremental + " startoffset 0 endoffset 1"]:
+        for row in [
+            incremental,
+            incremental + " startoffset 0",
+            incremental + " startoffset 0 endoffset 1",
+            incremental + " startoffset 0 endoffset -1",
+        ]:
             manifest.write_text(base + row + "\n")
             with self.subTest(row=row):
                 subprocess.run(["sh", "-ec", probe], check=True, capture_output=True)
         for row in [
+            incremental + " startoffset nope",
+            incremental + " wronglabel 0",
+            incremental + " startoffset -1",
             incremental + " startoffset nope endoffset 1",
             incremental + " startoffset 0 endoffset 1 extra 2",
             incremental + " startoffset 0 wronglabel 1",
