@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { StockItem } from "@/api/stocks";
 import { StockAttribution } from "@/components/StockAttribution";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +95,12 @@ function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side
 }
 
 export function StockSection() {
+  const heading = useRef<HTMLHeadingElement>(null);
   const { data, isPending, isError, isFetching, refetch } = useStocks();
+  const retry = async () => {
+    const result = await refetch();
+    if (!result?.isError) heading.current?.focus();
+  };
   const allowed = data?.admission.state === "approved";
   const items = data?.items ?? [];
   // Only categorical transitions enter the live region. Source ages stay ordinary text.
@@ -119,7 +125,7 @@ export function StockSection() {
     <section aria-labelledby="stocks-heading" className="min-w-0">
       <Card>
         <CardContent className="gap-4">
-          <h2 id="stocks-heading" className="font-medium">
+          <h2 ref={heading} tabIndex={-1} id="stocks-heading" className="font-medium">
             US stocks · 20
           </h2>
           <StockAttribution context="listing" required_text={data?.attribution.required_text} />
@@ -146,15 +152,15 @@ export function StockSection() {
               variant="secondary"
               disabled={isFetching}
               className="min-h-11 self-start whitespace-normal"
-              onClick={() => void refetch()}
+              onClick={() => void retry()}
             >
               {isFetching ? "Retrying stock prices…" : "Retry stock prices"}
             </Button>
           )}
           {isPending ? (
             <div aria-hidden="true" className="flex flex-col gap-4">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="h-[104px] rounded-control bg-muted lg:h-[52px]" />
+              {Array.from({ length: 20 }, (_, i) => (
+                <div key={i} className="h-[320px] rounded-control bg-muted lg:h-[160px]" />
               ))}
             </div>
           ) : !data ? (
@@ -162,7 +168,7 @@ export function StockSection() {
               variant="secondary"
               disabled={isFetching}
               className="min-h-11 self-start whitespace-normal"
-              onClick={() => void refetch()}
+              onClick={() => void retry()}
             >
               {isFetching ? "Retrying stock prices…" : "Retry stock prices"}
             </Button>
