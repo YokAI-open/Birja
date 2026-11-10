@@ -4,12 +4,23 @@
 https://www.nasdaq.com/market-activity/stock-market-holiday-schedule.
 """
 
-from dataclasses import replace
-from datetime import UTC, date, datetime, timedelta
+from dataclasses import asdict, replace
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from app.services.stock_sessions import build_sessions, session_at
+from app.models.stock import StockDataAdmission
+from app.services.stock_quote_rules import ValidatedStockQuote
+from app.services.stock_sessions import (
+    build_sessions,
+    discovery_eligibility,
+    load_sessions,
+    persist_sessions,
+    session_at,
+)
 from tests.test_stock_admission import admitted
 
 
@@ -88,18 +99,35 @@ def test_generation_replacement_never_reuses_old_rows() -> None:
     assert session_at("NYSE", NOW, build_sessions(NOW, authority), authority).state == "open"
 
 
-@pytest.mark.parametrize("problem", ["missing", "expired_review", "old_review", "expired_coverage", "revoked", "no_next", "duplicate", "missing_today", "forged_bounds"])
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "missing",
+        "expired_review",
+        "old_review",
+        "expired_coverage",
+        "revoked",
+        "no_next",
+        "duplicate",
+        "missing_today",
+        "forged_bounds",
+    ],
+)
 def test_uncertain_authority_or_rows_are_unknown(problem: str) -> None:
     authority = evidence(NOW)
     rows = build_sessions(NOW, authority)
     if problem == "missing":
         authority = None
     elif problem == "expired_review":
-        authority = replace(authority, calendar={**authority.calendar, "review_valid_until": NOW.isoformat()})
+        authority = replace(
+            authority, calendar={**authority.calendar, "review_valid_until": NOW.isoformat()}
+        )
     elif problem == "old_review":
         authority = replace(authority, reviewed_at=NOW - timedelta(hours=25))
     elif problem == "expired_coverage":
-        authority = replace(authority, calendar={**authority.calendar, "coverage_end": "2026-11-09"})
+        authority = replace(
+            authority, calendar={**authority.calendar, "coverage_end": "2026-11-09"}
+        )
     elif problem == "revoked":
         authority = replace(authority, state="revoked")
     elif problem == "no_next":
@@ -109,7 +137,10 @@ def test_uncertain_authority_or_rows_are_unknown(problem: str) -> None:
     elif problem == "missing_today":
         rows = [row for row in rows if row.session_date != NOW.date()]
     else:
-        rows = [replace(row, closes_at=row.closes_at + timedelta(minutes=1)) if row.closes_at else row for row in rows]
+        rows = [
+            replace(row, closes_at=row.closes_at + timedelta(minutes=1)) if row.closes_at else row
+            for row in rows
+        ]
     assert session_at("NYSE", NOW, rows, authority).state == "unknown"
 
 
@@ -119,12 +150,16 @@ def test_migrator_override_requires_new_matching_derived_rows(state: str) -> Non
     authority = evidence(now)
     old = build_sessions(now, authority)
     override = {
-        "exchange": "XNYS", "date": "2026-11-10", "state": state,
+        "exchange": "XNYS",
+        "date": "2026-11-10",
+        "state": state,
         "source": "https://www.nyse.com/trade/hours-calendars",
     }
     if state == "shortened":
         override.update(opens_at="2026-11-10T14:30:00+00:00", closes_at="2026-11-10T18:00:00+00:00")
-    changed = replace(authority, generation=5, calendar={**authority.calendar, "overrides": [override]})
+    changed = replace(
+        authority, generation=5, calendar={**authority.calendar, "overrides": [override]}
+    )
     assert session_at("NYSE", now, old, changed).state == "unknown"
     forged = [replace(row, calendar_admission_generation=5) for row in old]
     assert session_at("NYSE", now, forged, changed).state == "unknown"
@@ -143,3 +178,119 @@ def test_scheduler_rows_cannot_supply_missing_authority() -> None:
     assert build_sessions(NOW, None) == []
     assert session_at("OTC", NOW, rows, evidence(NOW)).state == "unknown"
     assert session_at("NYSE", NOW.replace(tzinfo=None), rows, evidence(NOW)).state == "unknown"
+
+
+def test_independent_quote_status_actions_never_enable_stock_execution() -> None:
+    authority = evidence(NOW)
+    session = session_at("NYSE", NOW, build_sessions(NOW, authority), authority)
+    quote = ValidatedStockQuote(
+        1, "JPM", Decimal("100"), Decimal("102"), Decimal("101"), NOW, NOW, NOW.date(), 4
+    )
+    result = discovery_eligibility(session, quote, NOW)
+    assert result.calendar == "open"
+    assert result.quote_valid
+    assert result.status == result.actions == "unknown"
+    assert not result.executable
+    yesterday = replace(
+        quote, event_at=NOW - timedelta(days=1), session_date=NOW.date() - timedelta(days=1)
+    )
+    assert not discovery_eligibility(session, yesterday, NOW).quote_valid
+    assert not discovery_eligibility(
+        session, replace(quote, event_at=NOW - timedelta(seconds=120)), NOW
+    ).quote_valid
+    assert not discovery_eligibility(session, None, NOW).quote_valid
+    assert not discovery_eligibility(
+        session, quote, NOW, status="normal", actions="clear"
+    ).executable
+
+
+@pytest.mark.parametrize("day,close", [("2026-11-15", "18:00"), ("2026-11-27", "19:00")])
+def test_shortened_override_cannot_invent_or_extend_official_session(day: str, close: str) -> None:
+    authority = evidence(NOW)
+    override = {
+        "exchange": "XNYS",
+        "date": day,
+        "state": "shortened",
+        "opens_at": day + "T14:30:00+00:00",
+        "closes_at": day + "T" + close + ":00+00:00",
+        "source": "https://www.nyse.com/trade/hours-calendars",
+    }
+    changed = replace(authority, calendar={**authority.calendar, "overrides": [override]})
+    assert build_sessions(NOW, changed) == []
+
+
+def test_missing_intervening_derived_date_cannot_skip_next_session() -> None:
+    now = NOW.replace(hour=22)
+    authority = evidence(now)
+    rows = [
+        row
+        for row in build_sessions(now, authority)
+        if row.session_date.isoformat() != "2026-11-11"
+    ]
+    assert session_at("NYSE", now, rows, authority).state == "unknown"
+
+
+async def test_exact_persist_load_refresh_and_committed_authority_replacement(
+    engine: AsyncEngine, clean_stock_discovery: None
+) -> None:
+    now = datetime.now(UTC)
+    authority = evidence(now)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as db:
+        db.add(StockDataAdmission(**asdict(authority)))
+        await db.commit()
+        rows = build_sessions(now, authority)
+        assert await persist_sessions(db, rows, authority, now) == 272
+        await db.commit()
+        loaded = await load_sessions(db, now)
+        assert sorted(loaded, key=lambda r: (r.exchange, r.session_date)) == sorted(
+            rows, key=lambda r: (r.exchange, r.session_date)
+        )
+        assert await persist_sessions(db, rows, authority, now) == 272
+        await db.commit()
+        changed = replace(authority, generation=5)
+        async with factory() as admin:
+            await admin.execute(
+                update(StockDataAdmission)
+                .where(StockDataAdmission.product == "calendar")
+                .values(generation=5)
+            )
+            await admin.commit()
+        assert await persist_sessions(db, rows, authority, now) == 0
+        assert session_at("NYSE", now, loaded, changed).state == "unknown"
+        new_rows = build_sessions(now, changed)
+        assert await persist_sessions(db, new_rows, changed, now) == 272
+        await db.commit()
+        refreshed = await load_sessions(db, now)
+        assert session_at("NYSE", now, refreshed, changed).state != "unknown"
+        stored = (
+            await db.execute(
+                select(StockDataAdmission).where(StockDataAdmission.product == "calendar")
+            )
+        ).scalar_one()
+        assert stored.reviewed_at == authority.reviewed_at
+        assert stored.calendar == authority.calendar
+
+
+async def test_persist_rejects_forged_rows_and_expired_database_review(
+    engine: AsyncEngine, clean_stock_discovery: None
+) -> None:
+    now = datetime.now(UTC)
+    earlier = now - timedelta(hours=9)
+    authority = evidence(earlier)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as db:
+        db.add(StockDataAdmission(**asdict(authority)))
+        await db.commit()
+        rows = build_sessions(earlier, authority)
+        assert rows
+        assert await persist_sessions(db, rows, authority, earlier) == 0
+        fresh = evidence(now)
+        assert await persist_sessions(db, rows[:-1], fresh, now) == 0
+        fresh_rows = build_sessions(now, fresh)
+        assert (
+            await persist_sessions(db, fresh_rows, replace(fresh, retention_allowed=False), now)
+            == 0
+        )
+        assert await load_sessions(db, now) == []
+        assert await load_sessions(db, now.replace(tzinfo=None)) == []
