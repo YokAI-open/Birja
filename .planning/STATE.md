@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan11 complete; PR27 exact9457911 all CI green; main merge approval pending
+stopped_at: PR27 merged as46d24c8; tag/release/backmerge/rollout approval pending
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 publication/merge checkpoint;09 calendar observation owner-deferred
-Status: Plan11 COMPLETE. Published PR27 exact9457911 has all six CI jobs green.
-Last activity:2026-11-10 -- Final CI and real retained cutover accepted; no merge/deploy.
+Plan:12 tag/release/backmerge checkpoint;09 calendar observation owner-deferred
+Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
+Last activity:2026-11-10 -- Approved PR27 main merge verified as46d24c8; no tag/deploy.
 
 Progress: [█████████░] 96%
 
@@ -43,21 +43,19 @@ transition35.842s/recovery58.140s/roles18.595s+65denials/TLS20.069s/prior-old
 rollback85.653s/new selected cutover206.439s and cleanup pass. Source reviews
 clean;09/12/13 remain incomplete. Phase12/15, overall66/69=96%.
 
-Owner authorized exact38eb25c plus reviewed/tested CI/test/planning follow-ups
-until CI passes. Completed pin9457911 is in scope; app/runtime/image/recovery /
-production changes, main merge/tag/back-merge/deployment remain excluded.
-No repeated push permission is needed for that completed CI correction.
-The planning closeout is committed LOCALLY for next approved integration;
-keep published PR27 at its verified9457911 while requesting main merge approval.
-Do not delete the local release branch before preserving/carrying its closeout.
+Owner-approved PR27 main merge completed2026-11-10T09:24:42Z as
+46d24c8591de2207cf219429aac0768962bed4c3; both parents verified through GitHub.
+The approved9457911 head and all six successful checks were rechecked first.
+Tag/GitHub release, back-merge push/PR/merge and deployment are NOT authorized.
+Local planning closeout9f4bf5f and subsequent merge records remain unpushed;
+preserve the release branch until carried through an approved integration.
 
-Next: Plan12 checkpoint. Recheck current PR head/base/green CI and obtain
-explicit approval before a Create-a-merge-commit into main. Tag/GitHub release,
-back-merge publication/merge and production rollout remain separate. Measured
-production identities/capacity/collation/custody, final main SHA/MANIFEST and
-maintenance window are not yet supplied by local evidence. Read the revised
-ROLLOUT-PROPOSAL before any request for production approval; no private preflight
-or production operation is authorized by current CI scope.
+Next: present resulting main SHA and prepared v0.4.0 notes for separate tag /
+release publication approval. Back-merge requires its own publication scope,
+current green CI and merge approval. Measured production identities/capacity /
+collation/custody, retained MANIFEST and maintenance window remain pending.
+Read ROLLOUT-PROPOSAL before any production approval request; no production
+preflight or operation follows from the main merge approval.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in

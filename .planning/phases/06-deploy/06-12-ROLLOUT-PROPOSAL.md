@@ -12,7 +12,7 @@ PR [27](https://github.com/YokAI-open/Birja/pull/27) publishes exact
 passed all six jobs. Independent source reviews and actual retained cutover /
 old-app rollback proof pass. The known health-screen retry is preserved in
 RELEASE-CI. Closing planning metadata is local for next approved integration;
-published9457911 remains the merge candidate. Prior16623a8/77dcd44/38eb25c
+PR27 merged approved9457911 into main as `46d24c8591de2207cf219429aac0768962bed4c3`. Prior16623a8/77dcd44/38eb25c
 results and corrected failures remain historical evidence.
 
 The unchanged independently installed recovery archive is
@@ -24,14 +24,14 @@ included in the local correction.
 | Separate decision | Required scope and evidence | Present authority |
 |---|---|---|
 | Release publication | Approved9457911 pushed; six actual CI jobs green | Complete |
-| Main PR merge | Exact updated head, six green jobs, Create a merge commit | Pending |
+| Main PR merge | Owner-approved9457911; six green jobs; merge commit `46d24c8591de2207cf219429aac0768962bed4c3` | Complete |
 | Tag / GitHub release | Resulting verified main SHA and reviewed release notes | Pending |
 | Back-merge PR / merge | Release into develop; own exact-head CI and merge approval | Pending |
 | Production rollout | Measured preflight, retained MANIFEST and maintenance window | Pending |
 
 The owner authorized local correction and bounded reviewed/tested CI follow-ups.
-Publication and exact-head CI are complete at9457911; main merge needs its own
-approval.
+Publication, exact-head CI and owner-approved main merge are complete.
+Resulting main SHA is `46d24c8591de2207cf219429aac0768962bed4c3`; tag/release/back-merge/deploy remain unapproved.
 Main merge, tagging and deployment remain separate decisions.
 
 ## Recorded target and recovery limits

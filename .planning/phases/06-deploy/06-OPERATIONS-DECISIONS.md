@@ -1077,3 +1077,25 @@ into main. Planning closeout remains locally committed for next approved
 integration, preserving the verified published source. Do not delete local
 release branch before carrying it. Production measurements/window remain
 future scoped preflight; no private/provider/production operation occurred.
+
+## Main merge completed —2026-11-10
+
+Owner explicitly selected “Approve main merge” for PR27 head
+945791115c0bd88fd0cf62835aca3e03c395659f. Before merging, GitHub readback
+confirmed exact head, main base, OPEN/MERGEABLE/CLEAN and all six checks SUCCESS.
+`gh pr merge --merge --match-head-commit` completed successfully at
+2026-11-10T09:24:42Z. PR27 is MERGED; resulting main commit is
+46d24c8591de2207cf219429aac0768962bed4c3.
+GitHub commit readback verified both parents: previous main0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7
+and approved release945791115c0bd88fd0cf62835aca3e03c395659f.
+
+Only main merge was authorized/performed. No tag, GitHub release, back-merge,
+production inspection, restart or deployment occurred. Keep the release branch
+and local planning closeout9f4bf5f plus this record for the next approved
+integration. Phase remains12/15;09/12/13 and DEPL-01/02 remain incomplete.
+Next publication candidate: v0.4.0 at the resulting main SHA, using prepared
+release notes; requires separate explicit tag/release authorization. Back-merge
+push/PR and its eventual green-CI merge require their own scope decisions.
+Production still needs measured preflight, final retained MANIFEST, fresh
+recovery proof and an approved maintenance window. Nightly observation remains
+owner-deferred.
