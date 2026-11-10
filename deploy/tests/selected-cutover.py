@@ -57,7 +57,13 @@ def isolate_entrypoint_environment(text, root):
     # Landlock-protected synthetic host, independent of caller environment.
     anchor = "'LANG':'C.UTF-8',"
     assert text.count(anchor) == 1
-    return text.replace(anchor, anchor + "'TMPDIR':" + repr(str(root / "tmp")) + ",")
+    # Host-wide Git config is outside the synthetic host's allowlist. Keep
+    # normal repository ownership and local config checks, without allowing
+    # unrelated runner files or changing the production entrypoint.
+    return text.replace(
+        anchor,
+        anchor + "'GIT_CONFIG_NOSYSTEM':'1','TMPDIR':" + repr(str(root / "tmp")) + ",",
+    )
 
 
 def integration(archive=None):

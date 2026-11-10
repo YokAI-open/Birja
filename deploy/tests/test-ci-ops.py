@@ -359,6 +359,11 @@ class FixtureGitIsolation(unittest.TestCase):
             )
             result = selected.f.target(root, ["/usr/bin/python3", "-c", script])
             self.assertEqual(result.stdout.strip(), b"local-only")
+            (app / ".git").rename(app / "hidden-git")
+            result = selected.f.target(
+                root, ["/usr/bin/python3", "-c", script], ok=False
+            )
+            self.assertIn(b"not a git repository", result.stderr)
             self.assertEqual(
                 (ROOT / "deploy/deploy-entrypoint.sh")
                 .read_text()
