@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: planning
-last_updated: "2026-11-10T12:10:24.693Z"
+last_updated: "2026-11-10"
 last_activity: 2026-11-10
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -16,52 +16,57 @@ progress:
 # Project State
 
 ## Project Reference
-
 See: .planning/PROJECT.md (updated 2026-11-10)
 
-**Core value:** Making a trade at a real, recent market price and then seeing what it's worth now, correct to the cent.
-**Current focus:** v1.1 US Stock Trading — research complete; data/policy choices pending
+**Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
+**Current focus:** v1.1 US Stock Trading — roadmap approved; ready to plan Phase 7
 
 ## Current Position
-
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-11-10 — Milestone v1.1 started
+Phase: 7 (Permitted Stock Discovery), first of 5 approved phases
+Plan: None created
+Status: Ready for Phase 7 discussion/planning; no implementation started
+Last activity: 2026-11-10 — Owner approved 26 requirements and five-phase roadmap
+Progress: [░░░░░░░░░░] 0%
 
 ## Completion and next action
 
-Owner confirmed v1.1 US Stock Trading: 20 curated NYSE/Nasdaq common stocks,
-whole-share market orders during regular sessions, shared USD balance and
-combined portfolio/history, with crypto-like price recency rather than 15-minute
-feed delay. Phase numbering will start at 7. Research first was explicitly chosen.
+Owner approved the roadmap on 2026-11-10. Milestone setup is complete: all 26
+requirements have one approved primary owner across Phases 7–11. Next use
+gsd-discuss-phase 7 or gsd-plan-phase 7. No requirement is implemented;
+plans/counts remain TBD, not estimated.
+The approved requirements and research do not authorize implementation,
+production/provider access, contact, signup, agreement acceptance or payment.
+No push authority exists for feature/v1.1-stock-planning.
 
-All four research dimensions and synthesis are complete; see
-[research summary](research/SUMMARY.md) and [provider feasibility](research/FEASIBILITY.md).
-Owner accepted labelled IEX prices as the planned feed, subject to display
-permission. No researched free arrangement yet establishes the full public-app
-entitlement; selection is not permission or a paid-provider authorization.
+## Performance Metrics
+- v1.1: 0 plans completed; durations unavailable before execution.
+- v1.0: 7 phases / 69 plans archived; published software remains v0.4.0 at
+  main 46d24c8, schema 0008. Archival PR #30 merged as 7d81010.
 
-Approved stock costs: zero commission, zero added spread/regulatory fees;
-simulated buy at IEX ask, sell at bid, crypto costs unchanged. Owner also chose
-cash dividend credits with separate History events and accepted structured
-announcement monitoring, revisions, historical eligibility, duplicate prevention
-and separately recorded payment adjustments with uncertain cases held for review.
+## Accumulated Context
+### Decisions
+- Exactly 20 NYSE/Nasdaq USD common stocks, whole-share regular-session orders,
+  shared original USD account; sale proceeds immediately reusable with disclosure.
+- Conditional Alpaca IEX, visible labels on listings/previews/valuations;
+  about 60-second collection, source age strictly below 120 seconds.
+- Buy at eligible ask, sell at bid; zero stock commission/added spread/regulatory
+  fees, with simplifications disclosed. Existing crypto rules remain unchanged.
+- Gross ordinary USD dividends, no tax/reinvestment; historical cutoff eligibility,
+  announcement revisions, atomic once-only cash/History and separate corrections.
+  Uncertain or unaffordable negative corrections stay held for reconciliation.
+- Verified ordinary forward splits conserve basis; unsupported/uncertain actions
+  suspend affected stocks and make valuations unavailable. Stock marks use midpoint.
+  Capture entitlement history from the first fill and order actions with trading.
 
-Owner approved automatic ordinary cash dividends/forward splits with suspension
-of uncertain/complex events, and immediately reusable virtual sale proceeds.
-Owner approved the full 26 requirements and authorized roadmap creation on
-2026-11-10, including source age <120 seconds, gross ordinary USD/no tax/no
-reinvestment, midpoint valuation and holding unaffordable negative corrections
-for review. Commit requirements, create the proposed Phase 7+ roadmap, then
-request its separate approval before committing the phase structure.
-Do not re-ask IEX feed or fee decisions. No implementation/provider account access,
-spend, contact, signup, service change or stock activation has occurred.
-
-v1 milestone archival PR #30 merged into develop as 7d81010 after six green CI
-checks. All original phases/research are preserved under milestones/v1.0-phases
-and milestones/v1.0-research. Published software remains v0.4.0/46d24c8/schema0008.
-Current feature/v1.1-stock-planning commits remain local; no push authority.
+### Blockers/Concerns
+- Quote/action/status access, coverage, rights, quotas and observed freshness
+  remain activation gates. Feed selection is not display permission.
+- Phases 7–8 keep stock execution disabled; Phase 9 integrates eligibility capture
+  and monitoring/freeze safeguards before its first fill. Phase 10 pays dividends.
+- Every schema change carries migration, restricted-role/TLS and recovery-contract
+  compatibility checks. Phase 11's exact restore proof precedes public rollout.
+- Research SUMMARY retains formerly open policy alternatives; approved requirements
+  and PROJECT decisions supersede those alternatives, not unresolved provider gates.
 
 ## Deferred Items
 
@@ -84,15 +89,12 @@ Detailed impact, evidence and historical accepted risks remain in
 [integration audit](milestones/v1.0-INTEGRATION-AUDIT.md).
 
 ## Operations
-
-Continue daily backup status/freshness and certificate-expiry checks under
-`deploy/RUNBOOK.md`. Recovery keys/password/CA already have owner-confirmed
-off-server custody. Phase 6 records distinguish historical nightly upload from
-separately exact-restored retained snapshot; no future success/billing guarantee.
+Continue daily backup freshness/status and certificate-expiry checks under
+deploy/RUNBOOK.md. Recovery material has confirmed off-server custody. Historical
+nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
-
-Resume `$gsd-new-milestone` at roadmap creation and approval, then complete
-requirements and roadmap approval gates. Do not repeat confirmed scope/research
-questions. New phase plans are not yet created. v1 history is archived rather
-than deleted, and existing accepted advisory debt remains above.
+Last session: 2026-11-10
+Stopped at: v1.1 initialized; roadmap approved and committed locally.
+Resume: gsd-discuss-phase 7 or gsd-plan-phase 7; publication requires separate approval.
+No phase plans created; v1 archive/debt preserved; no stock activation or production change.

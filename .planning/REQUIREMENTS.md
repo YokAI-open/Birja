@@ -2,7 +2,7 @@
 
 **Milestone:** v1.1 — US Stock Trading
 **Defined:** 2026-11-10
-**Status:** Approved requirements — roadmap pending approval (2026-11-10)
+**Status:** Requirements and roadmap approved (2026-11-10)
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.1 Requirements
@@ -78,42 +78,42 @@ Owner approved all 26 requirements and the exact boundaries below, including a s
 
 ## Traceability
 
-Roadmapper will map every approved requirement to exactly one phase, starting at Phase 7.
+Every approved requirement has exactly one approved primary phase owner. The owner approved Phases 7–11 on 2026-11-10; integration obligations remain cross-phase.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| STOCK-01 | Unassigned | Pending |
-| STOCK-02 | Unassigned | Pending |
-| STOCK-03 | Unassigned | Pending |
-| DATA-01 | Unassigned | Pending |
-| MKT-01 | Unassigned | Pending |
-| MKT-02 | Unassigned | Pending |
-| STKTR-01 | Unassigned | Pending |
-| STKTR-02 | Unassigned | Pending |
-| STKTR-03 | Unassigned | Pending |
-| STKTR-04 | Unassigned | Pending |
-| STKTR-05 | Unassigned | Pending |
-| STKTR-06 | Unassigned | Pending |
-| PORT-06 | Unassigned | Pending |
-| PORT-07 | Unassigned | Pending |
-| HIST-03 | Unassigned | Pending |
-| DIV-01 | Unassigned | Pending |
-| DIV-02 | Unassigned | Pending |
-| DIV-03 | Unassigned | Pending |
-| DIV-04 | Unassigned | Pending |
-| DIV-05 | Unassigned | Pending |
-| ACT-01 | Unassigned | Pending |
-| ACT-02 | Unassigned | Pending |
-| ACT-03 | Unassigned | Pending |
-| SAFE-01 | Unassigned | Pending |
-| SAFE-02 | Unassigned | Pending |
-| SAFE-03 | Unassigned | Pending |
+| STOCK-01 | Phase 7 | Pending |
+| STOCK-02 | Phase 7 | Pending |
+| STOCK-03 | Phase 7 | Pending |
+| DATA-01 | Phase 7 | Pending |
+| MKT-01 | Phase 7 | Pending |
+| MKT-02 | Phase 9 | Pending |
+| STKTR-01 | Phase 9 | Pending |
+| STKTR-02 | Phase 9 | Pending |
+| STKTR-03 | Phase 9 | Pending |
+| STKTR-04 | Phase 9 | Pending |
+| STKTR-05 | Phase 9 | Pending |
+| STKTR-06 | Phase 9 | Pending |
+| PORT-06 | Phase 9 | Pending |
+| PORT-07 | Phase 9 | Pending |
+| HIST-03 | Phase 10 | Pending |
+| DIV-01 | Phase 8 | Pending |
+| DIV-02 | Phase 8 | Pending |
+| DIV-03 | Phase 10 | Pending |
+| DIV-04 | Phase 10 | Pending |
+| DIV-05 | Phase 10 | Pending |
+| ACT-01 | Phase 8 | Pending |
+| ACT-02 | Phase 8 | Pending |
+| ACT-03 | Phase 8 | Pending |
+| SAFE-01 | Phase 7 | Pending |
+| SAFE-02 | Phase 11 | Pending |
+| SAFE-03 | Phase 11 | Pending |
 
-**Coverage:** 26 approved requirements; 0 mapped until roadmap creation. No requirement is implemented or validated by writing this file.
+**Coverage:** 26/26 approved requirements mapped exactly once across approved Phases 7–11; zero orphans or duplicate owners. No requirement is implemented or validated by writing this file.
 
 ## Decision and evidence notes
 
 - Owner confirmed IEX labels, zero stock fees/added spread, buys at ask/sells at bid, dividend credits and separate History events, structured announcement/correction monitoring, automatic ordinary events with uncertain-event suspension, and immediate virtual proceeds.
 - Quote/event display permission, actual feed coverage/access, timely action/status availability and quota compliance remain activation gates; no free public-use entitlement has been obtained.
 - Research remains dated evidence; later user decisions above supersede its formerly open policy options. See [research summary](research/SUMMARY.md).
-- Full requirements were explicitly approved on 2026-11-10; roadmap approval remains a separate GSD checkpoint.
+- Requirements and the five-phase roadmap were explicitly approved on 2026-11-10. Implementation, provider agreements, publication and deployment remain separate.
