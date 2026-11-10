@@ -13,6 +13,26 @@ ci_run: 42787743632
 ci_status: success-all-six-browser-health-retry-retained
 ---
 
+## Back-merge PR ready —2026-11-10
+
+Owner approved pushing release-0.4.0 through
+6097085e9d5ca897bed7ec76aeee7b61071509e8 (three local planning commits),
+opening the PR into develop and checking CI. Nonforce push and PR creation
+succeeded. PR28 https://github.com/YokAI-open/Birja/pull/28 is OPEN,
+MERGEABLE/CLEAN at that exact head, base develop.
+Actual CI https://github.com/YokAI-open/Birja/actions/runs/42791351766
+completed SUCCESS: backend/frontend/image/e2e/ops/ci-pass all six green.
+Public logs confirm backend616 passed, frontend264 passed, browser10 passed
+without retries and1expected skip. Real recovery/TLS/old-image rollback and
+finally cleanup passed. Previous release-run health retry remains historical;
+this passing run does not claim a source fix for that flake.
+
+Merge remains unapproved: require separate exact-head Create-a-merge-commit
+approval under CLAUDE.md. This local receipt stays unpushed so the proven PR
+head remains6097085; preserve it before deleting the local release branch.
+No additional code changes, production reads or deployment. Phase12/15 and
+09/12/13, DEPL-01/02 remain pending; nightly observation remains deferred.
+
 ## Release publication completed —2026-11-10
 
 Owner explicitly selected “Publish v0.4.0 release” at main commit

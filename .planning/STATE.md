@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: v0.4.0 published at46d24c8; backmerge/rollout approval pending
+stopped_at: Backmerge PR28 exact6097085 all six CI green; merge approval pending
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 ## Current Position
 
 Phase: 06 (Deploy) — EXECUTING
-Plan:12 backmerge/rollout checkpoint;09 calendar observation owner-deferred
+Plan:12 backmerge merge checkpoint;09 calendar observation owner-deferred
 Status: Plan11 COMPLETE. PR27 merged into main as46d24c8 after all six checks passed.
-Last activity:2026-11-10 -- v0.4.0 tag/release published and verified; no deployment.
+Last activity:2026-11-10 -- PR28 published and all six CI checks passed; no deployment.
 
 Progress: [█████████░] 96%
 
@@ -49,14 +49,17 @@ The approved9457911 head and all six successful checks were rechecked first.
 Owner separately approved and published v0.4.0 at that main SHA. Remote annotated
 tag bb64990ba6be425e66e0a560cbd6a6d3589e4a79 peels to46d24c8; GitHub release
 published2026-11-10T09:29:02Z, non-draft/non-prerelease. No deployment occurred.
-Back-merge push/PR/merge and deployment remain unapproved. Local planning
-closeout and publication records remain unpushed on release-0.4.0; preserve them.
+Owner approved release-branch push through6097085 and back-merge PR creation /
+CI. PR28 into develop is OPEN/MERGEABLE/CLEAN at exact6097085; actual
+CI42791351766 all six jobs SUCCESS. Backend616/frontend264/browser10passed,
+1expected skip, no browser retries. Recovery/TLS/old-app rollback and cleanup
+pass. No source changes were needed. Back-merge merge and deployment remain
+unapproved; request exact-head6097085 merge commit separately. Preserve local
+receipt before branch deletion; keep published head at its proven CI.
 
-Next: request release branch push/PR into develop; verify that PR's own current
-CI before a separate approved merge. Measured production identities/capacity /
-collation/custody, retained MANIFEST and maintenance window remain pending.
-Read ROLLOUT-PROPOSAL before any production approval request; no production
-preflight or operation follows from release publication approval.
+Measured production identities/capacity/collation/custody, retained MANIFEST
+and maintenance window remain pending. Read ROLLOUT-PROPOSAL before any
+production approval request; publication is not production permission.
 
 Plan09 actual encrypted B2 backup/exact isolated restore and timer installation
 passed on9November with installed d5fe2059 archive; details remain in
