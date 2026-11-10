@@ -92,7 +92,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 07-05-PLAN.md — Implement product-specific fail-closed admission.
+- [x] 07-05-PLAN.md — Implement product-specific fail-closed admission.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -200,7 +200,7 @@ remain required in07-08/13 before activation or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 7. Permitted Stock Discovery | v1.1 | 4/14 | In Progress|  |
+| 7. Permitted Stock Discovery | v1.1 | 5/14 | In Progress|  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
