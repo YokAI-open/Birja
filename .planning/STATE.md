@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: PR27 CI ops failed; reviewed tested CI-only correction awaits new push approval
+stopped_at: Compose5.7 CI pin proof passed; publish under existing bounded CI authority
 last_updated: "2026-11-10T08:38:49Z"
 last_activity: 2026-11-10 -- Real retained cutover,0008,old-app rollback and same-archive restores pass; final compatibility passed
 progress:
@@ -27,12 +27,28 @@ See: .planning/PROJECT.md (updated 2026-11-02)
 
 Phase: 06 (Deploy) — EXECUTING
 Plan: 11 task03 releaseCIpassed/readinessdisposition;09 calendar observation owner-deferred
-Status: PR27 CI ops failed; correction reviewed and locally proven, awaiting publication approval
+Status: Reviewed/tested CI Compose pin ready for authorized publication and new CI
 Last activity: 2026-11-10 -- Local retained cutover and actual old-app rollback passed; production unchanged
 
 Progress: [█████████░] 94%
 
 ## Immediate remaining work
+
+Owner selected “Publish and finish CI” for38eb25c plus further independently
+reviewed/tested CI/test/planning follow-ups on release-0.4.0 until CI passes,
+with existing gates retained. No app/runtime/image/recovery/production changes,
+merge or deployment. Approved push/PR27 update completed; actualCI42785059635
+completed at38eb25ca2457cb05299e08ef668ffebd5bd6551d: four jobs passed, ops
+failed at external retained Dockerfile Bake consent, aggregate failed, cleanup
+passed. Git correction confirmed actual secure startup/roles/recreation.
+Reviewed b31f3dd/d7f0cf5 pins CI-only Compose5.7.0 and verifies the actual
+clean-root version; no filesystem bypass.9contracts pass; full local proof
+with private verified5.7.0 passed257.676s, including full deploy/old-app
+rollback/three restores, unchanged originals and cleanup. Continue without re-asking
+for in-scope CI publication. Only after actual current-head success record
+Plan11 summary and prepare the separate publication/merge boundary. Older
+push-pending/failure entries below are historical.
+
 
 Owner approved pushing all18 commits through77dcd44e852a079d4541c78f724717a0dd13afba,
 updating PR27 and checking CI. Push/PR update completed; PR remains OPEN into

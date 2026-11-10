@@ -1,17 +1,27 @@
 ---
 phase: 06-deploy
 plan: "11"
-status: reviewed-tested-ci-fixture-correction-awaiting-publication
+status: authorized-ci-tooling-correction-ready
 prepared: 2026-11-09T08:01:06Z
 implementation_head: 9e0d19e94a3a50ed4c055fed3d3b696c0d806dbb
 base: 8a76a68cf54f46fb0267c9d97f0da91d91b117e1
 nightly_observation: owner-deferred-pending
 publication_authorized: false
 prior_publication_authorized_head: 77dcd44e852a079d4541c78f724717a0dd13afba
-ci_head: 77dcd44e852a079d4541c78f724717a0dd13afba
-ci_run: 42782054013
-ci_status: failure-ops-fixture-git-checkout
+ci_head: 38eb25ca2457cb05299e08ef668ffebd5bd6551d
+ci_run: 42785059635
+ci_status: failure-ops-bake-retained-dockerfile-consent
 ---
+
+## Bounded CI completion —2026-11-10
+
+Owner approved38eb25c plus reviewed/tested CI/test/planning follow-ups until CI
+passes. Actual42785059635 confirmed the Git fix and four other green jobs,
+but operations failed missing Bake read consent for the retained Dockerfile.
+Reviewed d7f0cf5 pins CI-only Compose5.7.0 with exact version assertion, no
+wildcard/bypass.9contracts and full supplied-archive local proof257.676s pass.
+Publish under existing authority and require new actual CI. No production tool
+change, main merge/tag/deployment,11SUMMARY or DEPL advancement yet.
 
 ## Approved publication and actual CI —2026-11-10
 

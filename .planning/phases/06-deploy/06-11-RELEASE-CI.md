@@ -1,3 +1,43 @@
+# Current CI tooling correction —2026-11-10
+
+Published38eb25c/run42785059635 passed backend616/critical100%, frontend264,
+browser10/1expectedskip/no retry, and five hash-verified raw0HIGH/CRITICAL
+reports. Ops confirmed the Git fix: real retained secure startup9.693s,
+role apply and forced recreation passed. Full deployment then failed at the
+backend Bake build because its retained Dockerfile is outside app context
+and lacked explicit filesystem consent. Cleanup passed; aggregate failed.
+
+## Reviewed precise-consent tooling pin
+
+REDb31f3dd/GREENd7f0cf5 pins only the disposable ops runner's
+Docker-signed-apt docker-compose-plugin=5.7.0-1~ubuntu.24.04~noble. A clean-root
+actual version gate precedes fixtures. Nine CI contracts passed0.363s,
+focused Ruff/format/diff pass, and independent source review is clean in
+06-11-CI-COMPOSE-REVIEW. No Bake bypass, wildcard grant, recovery/runtime/image
+or production tool change is introduced.
+
+[Official Compose5.7.0 source](https://raw.githubusercontent.com/docker/compose/v5.7.0/pkg/compose/build_bake.go)
+includes the resolved Dockerfile in localBuildPaths and emits precise fs.read
+consent. Its official apt package exists with SHA256
+61dd23ec4d0f6e4a99ef841f2ea2c0dc9cbada2c6ad99ffbd4f980ae957cc691.
+For local testing only, official release binary SHA256
+7758048ad38e580f22559603312874fec8bb638d021a9e64182385fc17cc12a2
+and checksum-file digest were verified against publisher release metadata.
+The verified plugin was copied only into the temporary fixture HOME; actual
+launcher plugin5.7.0 was asserted. Host Compose5.0.0/Buildx0.30.1 were unchanged.
+This temporary wrapper did not modify fixture source or production launchers.
+
+The complete supplied d5fe2059 archive proof atd7f0cf5 passed257.676s:
+real retained TLS-first startup, full backend/frontend deployment/0008, actual
+v0.3.1 app rollback, three exact restores, Redis GET/TTL/NOAUTH, original
+fingerprints and retained source hashes all pass. Finally cleanup completed.
+Private raw log: local-rollout-evidence/cutover-compose-570.log.
+
+Owner explicitly authorized further reviewed/tested CI/test/planning follow-ups
+until CI passes. Publish this in-scope correction without re-asking, then
+require actual new-head CI. No main merge/tag/back-merge/deployment or Plan11 /
+DEPL completion is implied. Earlier evidence below remains historical.
+
 # Current release CI and reviewed fixture correction —2026-11-10
 
 Owner approved publishing18 commits through

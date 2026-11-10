@@ -1033,3 +1033,31 @@ synthetic Git system config without changing production/runtime/security
 policy.8contracts and full same-archive cutover246.010s pass; see RELEASE-CI.
 New publication authority remains pending; previous approval named77dcd44.
 No nightly observation, phase/DEPL acceptance or source-image rescan inferred.
+
+
+## Approved bounded CI completion —2026-11-10
+
+Owner selected “Publish and finish CI” for three commits through
+38eb25ca2457cb05299e08ef668ffebd5bd6551d. This explicitly permits further
+independently reviewed/tested CI workflow, test and planning fixes on the
+release branch until required CI passes. Existing test/security/recovery gates
+remain enforced. App/runtime/image/recovery/production changes, merge and
+deployment are excluded. Do not re-ask to publish follow-ups within this scope;
+a source or operational expansion still needs its own concrete decision.
+
+Approved38eb25c push/PR27 update completed. ActualCI42785059635 is running.
+No merge/tag/back-merge/deployment occurred. Preserve77dcd44's failed ops run
+as history; do not label corrected runner behavior proven until the new run.
+
+
+## In-scope precise Compose consent correction —2026-11-10
+
+Run42785059635 confirmed Git isolation but exposed Bake's missing explicit
+read consent for retained Dockerfile outside app context. The owner-approved
+CI completion scope covers REDb31f3dd/GREENd7f0cf5: ephemeral ops runner only
+pins Compose5.7.0 from Docker's signed apt repository and verifies clean-root
+actual version before fixtures. Independent review clean,9contracts pass,
+full same-archive local proof with verified private5.7.0 passed257.676s and
+cleanup. No global bypass/wildcard, production plugin update, app/runtime /
+image/recovery change. Publish/follow CI under existing scope, no repeated
+approval request. Merge/deployment stay separate;09nightly stays deferred.
