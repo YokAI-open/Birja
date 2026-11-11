@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import uuid4
 
-from sqlalchemy import exists, func, select, update
+from sqlalchemy import exists, func, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_action import (
@@ -23,26 +23,32 @@ from app.models.corporate_action import (
     StockActionRevision,
     StockActionSource,
     StockActionState,
+    StockDividendEntitlement,
     StockOwnershipMovement,
     StockSplitApplication,
 )
-from app.models.stock import StockDataAdmission
+from app.models.price import Coin
+from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.trade import Holding
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
+    CutoffEvidence,
     NormalizedAction,
     SplitOwner,
     classify_action,
+    dividend_cutoff,
     plan_forward_split,
 )
 from app.services.stock_admission import ProductAdmission, evaluate_admission
 from app.services.stock_ownership import (
+    OwnershipHeld,
     StockMovementInput,
     acquire_stock_gate,
     append_stock_movement,
     assert_ownership_consistent,
+    reconstruct_stock_quantity,
 )
-from app.services.stock_quote_rules import utc, verified_mapping
+from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
 from app.services.stock_quotes import load_stock_catalog
 
 
@@ -73,7 +79,12 @@ async def _load_admission(db: AsyncSession, product: str) -> ProductAdmission | 
 
 
 async def _authority(
-    db: AsyncSession, expected: ProductAdmission | None = None, *, capability: str = "rest"
+    db: AsyncSession,
+    expected: ProductAdmission | None = None,
+    *,
+    capability: str = "rest",
+    account: str = "birja",
+    server: str = "birja",
 ) -> ProductAdmission:
     evidence = await _load_admission(db, "actions")
     now = await _clock(db)
@@ -88,6 +99,8 @@ async def _authority(
                 now,
                 feed="alpaca-corporate-actions",
                 capability=capability,
+                account=account,
+                server=server,
             ).allowed
             for purpose in ("collection", "derived", "retention")
         )
@@ -96,7 +109,17 @@ async def _authority(
     return evidence
 
 
-async def _guard(db: AsyncSession, cid: int, evidence: ProductAdmission) -> None:
+async def _guard(
+    db: AsyncSession,
+    cid: int,
+    evidence: ProductAdmission,
+    mapping: StockMapping,
+    calendar: ProductAdmission | None = None,
+    *,
+    require_monitor: bool = False,
+    expected_units: int | None = None,
+    expected_epoch: int | None = None,
+) -> None:
     """Final SQL statement snapshots ALL permission fields and current DB time.
 
     Unlike SELECT FOR SHARE this requires no runtime UPDATE on admission. Failure
@@ -110,12 +133,49 @@ async def _guard(db: AsyncSession, cid: int, evidence: ProductAdmission) -> None
             StockDataAdmission.valid_until > func.clock_timestamp(),
         )
     )
+    identity = exists(
+        select(StockInstrument.coin_id)
+        .join(Coin, Coin.id == StockInstrument.coin_id)
+        .where(
+            StockInstrument.coin_id == mapping.coin_id,
+            StockInstrument.provider_asset_id == mapping.provider_asset_id,
+            StockInstrument.provider_verified_at == mapping.provider_verified_at,
+            StockInstrument.listing_exchange == mapping.listing_exchange,
+            Coin.symbol == mapping.symbol,
+            Coin.asset_class == "stock",
+            Coin.is_active,
+        )
+    )
+    calendar_permission = (
+        exists(
+            select(StockDataAdmission.id).where(
+                *(getattr(StockDataAdmission, k) == v for k, v in asdict(calendar).items()),
+                StockDataAdmission.valid_until > func.clock_timestamp(),
+                func.clock_timestamp()
+                < datetime.fromisoformat(calendar.calendar["review_valid_until"]),
+            )
+        )
+        if calendar is not None
+        else true()
+    )
     changed = (
         await db.execute(
             update(StockActionState)
             .where(
                 StockActionState.coin_id == cid,
                 permission,
+                identity,
+                calendar_permission,
+                StockActionState.valid_until > func.clock_timestamp()
+                if require_monitor
+                else true(),
+                StockActionState.admission_generation == evidence.generation
+                if require_monitor
+                else true(),
+                StockActionState.unit_epoch == expected_units
+                if expected_units is not None
+                else true(),
+                StockActionState.epoch == expected_epoch if expected_epoch is not None else true(),
             )
             .values(admission_generation=evidence.generation)
             .returning(StockActionState.coin_id)
@@ -123,6 +183,13 @@ async def _guard(db: AsyncSession, cid: int, evidence: ProductAdmission) -> None
     ).scalar_one_or_none()
     if changed is None:
         raise ActionHeld("admission_changed")
+
+
+async def _mapping(db: AsyncSession, cid: int) -> StockMapping:
+    mapping = next((row for row in await load_stock_catalog(db) if row.coin_id == cid), None)
+    if mapping is None or not verified_mapping(mapping, await _clock(db)):
+        raise ActionHeld("mapping")
+    return mapping
 
 
 def _digest(value: object) -> str:
@@ -192,7 +259,12 @@ async def _hold(db: AsyncSession, state: StockActionState, at: datetime) -> None
 
 
 async def persist_action_batch(
-    db: AsyncSession, batch: ActionBatch, authority: ProductAdmission
+    db: AsyncSession,
+    batch: ActionBatch,
+    authority: ProductAdmission,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> tuple[PersistedAction, ...]:
     if (
         not isinstance(batch, ActionBatch)
@@ -231,7 +303,9 @@ async def persist_action_batch(
     capability = (
         "replay" if any(row.mutation != "snapshot" for row in batch.observations) else "rest"
     )
-    evidence = await _authority(db, authority, capability=capability)
+    evidence = await _authority(
+        db, authority, capability=capability, account=account, server=server
+    )
     mapping = next((row for row in await load_stock_catalog(db) if row.coin_id == cid), None)
     now = await _clock(db)
     if mapping is None or not verified_mapping(mapping, now):
@@ -447,16 +521,22 @@ async def persist_action_batch(
         )
         await _hold(db, state, await _clock(db))
     await db.flush()
-    await _guard(db, cid, evidence)
+    await _guard(db, cid, evidence, mapping)
     return tuple(results)
 
 
 async def apply_due_actions(
-    db: AsyncSession, coin_id: int, now: datetime | None = None
+    db: AsyncSession,
+    coin_id: int,
+    now: datetime | None = None,
+    *,
+    account: str = "birja",
+    server: str = "birja",
 ) -> tuple[int, ...]:
     """Apply due splits once. Only post-lock database time is authoritative."""
     await acquire_stock_gate(db, coin_id)
-    evidence = await _authority(db)
+    evidence = await _authority(db, account=account, server=server)
+    mapping = await _mapping(db, coin_id)
     state, rows = await assert_ownership_consistent(db, coin_id)
     holders = list(
         (
@@ -497,6 +577,7 @@ async def apply_due_actions(
         ).scalars()
     )
     result = []
+    changed_effects = False
     for revision in revisions:
         existing = (
             await db.execute(
@@ -512,20 +593,20 @@ async def apply_due_actions(
         cutoff = revision.verified_cutoff
         checked = await _clock(db)
         if cutoff is None or cutoff > checked:
-            continue
+            break
         if (
             state.complete_from is None
             or cutoff < state.complete_from
             or (rows and rows[-1].economic_at >= cutoff)
         ):
             await _hold(db, state, checked)
-            continue
+            break
         owners = [SplitOwner(h.user_id, h.quantity, h.cost_basis) for h in holders]
         plan = plan_forward_split(action, owners)
         if not plan.allowed:
             await _hold(db, state, checked)
-            continue
-        await _authority(db, evidence)
+            break
+        await _authority(db, evidence, account=account, server=server)
         before = [(h.user_id, str(h.quantity), str(h.cost_basis)) for h in holders]
         after = [(h.user_id, str(h.quantity), str(h.total_basis)) for h in plan.owners]
         application = StockSplitApplication(
@@ -563,8 +644,17 @@ async def apply_due_actions(
         state, rows = await assert_ownership_consistent(db, coin_id)
         state.sequence = rows[-1].sequence if rows else 0
         result.append(application.id)
+        changed_effects = True
     await db.flush()
-    await _guard(db, coin_id, evidence)
+    await _guard(
+        db,
+        coin_id,
+        evidence,
+        mapping,
+        require_monitor=changed_effects,
+        expected_units=state.unit_epoch,
+        expected_epoch=state.epoch,
+    )
     return tuple(result)
 
 
@@ -605,5 +695,252 @@ async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, 
     return tuple(sorted(set(held)))
 
 
-async def derive_dividend_entitlements(db: AsyncSession, event_id: int) -> tuple[object, ...]:
-    return ()
+@dataclass(frozen=True)
+class EntitlementSnapshot:
+    id: int
+    event_id: int
+    user_id: int
+    revision_id: int
+    cutoff: datetime
+    cutoff_rule: str
+    units_basis: str
+    unit_epoch: int
+    last_movement_sequence: int
+    eligible_quantity: Decimal
+    state: str
+    version: int
+    supersedes_id: int | None
+    fingerprint: str
+
+
+def _snapshot(row: StockDividendEntitlement) -> EntitlementSnapshot:
+    return EntitlementSnapshot(
+        **{f.name: getattr(row, f.name) for f in fields(EntitlementSnapshot)}
+    )
+
+
+async def latest_verified_entitlements(
+    db: AsyncSession,
+    event_id: int,
+) -> tuple[EntitlementSnapshot, ...]:
+    """Latest per-owner snapshot only; a held replacement never exposes old eligibility."""
+    event = await db.get(StockActionEvent, event_id, populate_existing=True)
+    if event is None:
+        raise ActionHeld("unknown_event")
+    latest = list(
+        (
+            await db.execute(
+                select(StockDividendEntitlement)
+                .where(StockDividendEntitlement.event_id == event_id)
+                .order_by(
+                    StockDividendEntitlement.user_id,
+                    StockDividendEntitlement.version.desc(),
+                    StockDividendEntitlement.id.desc(),
+                )
+            )
+        ).scalars()
+    )
+    seen = set()
+    result = []
+    for row in latest:
+        if row.user_id in seen:
+            continue
+        seen.add(row.user_id)
+        if row.state == "eligible" and row.revision_id == event.current_revision_id:
+            result.append(_snapshot(row))
+    return tuple(result)
+
+
+async def derive_dividend_entitlements(
+    db: AsyncSession,
+    event_id: int,
+    *,
+    account: str = "birja",
+    server: str = "birja",
+) -> tuple[EntitlementSnapshot, ...]:
+    """Retain historical eligibility, never cash/payment/History publication.
+
+    Unverified snapshots carry an explicit unverified rule and zero eligible
+    quantity, not a guessed economic cutoff. Prior verified terms remain intact.
+    """
+    event = await db.get(StockActionEvent, event_id)
+    if event is None:
+        raise ActionHeld("unknown_event")
+    await acquire_stock_gate(db, event.coin_id)
+    event = cast(StockActionEvent, await db.get(StockActionEvent, event_id, populate_existing=True))
+    evidence = await _authority(db, account=account, server=server)
+    mapping = await _mapping(db, event.coin_id)
+    revision = (
+        await db.get(StockActionRevision, event.current_revision_id)
+        if event.current_revision_id
+        else None
+    )
+    if revision is None:
+        raise ActionHeld("missing_revision")
+    action = _action(revision)
+    if action.event_type != "cash_dividend":
+        raise ActionHeld("not_dividend")
+    state = await _state(db, event.coin_id, evidence.generation)
+    calendar = await _load_admission(db, "calendar")
+    instrument = cast(StockInstrument, await db.get(StockInstrument, event.coin_id))
+    now = await _clock(db)
+    cutoff = dividend_cutoff(
+        action, instrument.listing_exchange, now, calendar, account=account, server=server
+    )
+    classification = "cancelled" if action.cancelled else "eligible"
+    rows = list(
+        (
+            await db.execute(
+                select(StockOwnershipMovement)
+                .where(StockOwnershipMovement.coin_id == event.coin_id)
+                .order_by(StockOwnershipMovement.sequence)
+            )
+        ).scalars()
+    )
+    prior = list(
+        (
+            await db.execute(
+                select(StockDividendEntitlement)
+                .where(StockDividendEntitlement.event_id == event_id)
+                .order_by(
+                    StockDividendEntitlement.version.desc(), StockDividendEntitlement.id.desc()
+                )
+            )
+        ).scalars()
+    )
+    holders = (
+        (await db.execute(select(Holding.user_id).where(Holding.coin_id == event.coin_id)))
+        .scalars()
+        .all()
+    )
+    users = sorted({r.user_id for r in rows} | {r.user_id for r in prior} | set(holders))
+    applications = list(
+        (
+            await db.execute(
+                select(StockSplitApplication)
+                .where(StockSplitApplication.coin_id == event.coin_id)
+                .order_by(StockSplitApplication.new_unit_epoch)
+            )
+        ).scalars()
+    )
+    now = await _clock(db)
+    verified = (
+        cutoff is not None
+        and cutoff.cutoff <= now
+        and revision.classification == "supported_dividend"
+        and state.health == "current"
+        and state.valid_until is not None
+        and now < state.valid_until
+        and state.admission_generation == evidence.generation
+        and state.covered_until is not None
+        and cutoff.cutoff <= state.covered_until
+        and not await persistent_action_holds(db, event.coin_id)
+    )
+    units = 0
+    if cutoff is not None:
+        units = sum(a.cutoff < cutoff.cutoff for a in applications)
+        boundary = [a for a in applications if a.cutoff == cutoff.cutoff]
+        if boundary:
+            if not action.same_boundary_split:
+                verified = False
+            elif action.units == "post_split" and action.economic_order == 2:
+                units = boundary[0].new_unit_epoch
+        elif action.same_boundary_split:
+            verified = False
+        unresolved_split = (
+            await db.execute(
+                select(StockActionRevision.id)
+                .join(
+                    StockActionEvent, StockActionEvent.current_revision_id == StockActionRevision.id
+                )
+                .where(
+                    StockActionEvent.coin_id == event.coin_id,
+                    StockActionRevision.classification == "supported_forward_split",
+                    StockActionRevision.verified_cutoff <= cutoff.cutoff,
+                    ~exists(
+                        select(StockSplitApplication.id).where(
+                            StockSplitApplication.economic_event_id == StockActionEvent.id
+                        )
+                    ),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if unresolved_split is not None:
+            verified = False
+    if classification != "cancelled" and not verified:
+        classification = "held"
+    quantities = {}
+    if verified:
+        try:
+            for uid in users:
+                quantities[uid] = await reconstruct_stock_quantity(
+                    db, uid, event.coin_id, cast(CutoffEvidence, cutoff), units
+                )
+        except OwnershipHeld:
+            quantities.clear()
+            classification = "held"
+    result = []
+    for uid in users:
+        previous = next((r for r in prior if r.user_id == uid), None)
+        quantity = quantities.get(uid)
+        instant = cutoff.cutoff if cutoff else previous.cutoff if previous else revision.observed_at
+        rule = cutoff.rule if cutoff else "unverified-no-eligibility"
+        basis = "unit_epoch:" + str(units) if cutoff else "unverified"
+        amount = quantity.quantity if quantity else Decimal(0)
+        sequence = quantity.last_movement_sequence if quantity else 0
+        facts = (revision.id, instant, rule, basis, units, sequence, amount, classification)
+        if previous is not None and facts == (
+            previous.revision_id,
+            previous.cutoff,
+            previous.cutoff_rule,
+            previous.units_basis,
+            previous.unit_epoch,
+            previous.last_movement_sequence,
+            previous.eligible_quantity,
+            previous.state,
+        ):
+            result.append(_snapshot(previous))
+            continue
+        fingerprint = _digest(
+            [
+                revision.id,
+                instant.isoformat(),
+                rule,
+                basis,
+                str(amount),
+                sequence,
+                classification,
+                previous.id if previous else None,
+            ]
+        )
+        existing = StockDividendEntitlement(
+            event_id=event_id,
+            user_id=uid,
+            revision_id=revision.id,
+            cutoff=instant,
+            cutoff_rule=rule,
+            units_basis=basis,
+            unit_epoch=units,
+            last_movement_sequence=sequence,
+            eligible_quantity=amount,
+            state=classification,
+            version=previous.version + 1 if previous else 1,
+            supersedes_id=previous.id if previous else None,
+            fingerprint=fingerprint,
+        )
+        db.add(existing)
+        await db.flush()
+        result.append(_snapshot(existing))
+    await _authority(db, evidence, account=account, server=server)
+    await _guard(
+        db,
+        event.coin_id,
+        evidence,
+        mapping,
+        calendar if verified else None,
+        require_monitor=verified,
+        expected_units=state.unit_epoch,
+        expected_epoch=state.epoch,
+    )
+    return tuple(result)

@@ -39,6 +39,70 @@ from tests.test_stock_sessions import evidence as calendar_evidence
 ownership = _ownership
 
 
+async def test_ingest_source_identity_cannot_cross_instruments(actions):
+    factory, cid, _, action, auth = actions
+    async with factory.begin() as db:
+        result = (await persist_action_batch(db, batch(action), auth))[0]
+        other = (
+            await db.execute(
+                select(StockInstrument.coin_id).where(StockInstrument.coin_id != cid).limit(1)
+            )
+        ).scalar_one()
+        await db.execute(
+            update(StockActionEvent)
+            .where(StockActionEvent.id == result.event_id)
+            .values(coin_id=other)
+        )
+        try:
+            with pytest.raises(ActionHeld, match="identity_conflict"):
+                await persist_action_batch(db, batch(action), auth)
+        finally:
+            await db.execute(
+                update(StockActionEvent)
+                .where(StockActionEvent.id == result.event_id)
+                .values(coin_id=cid)
+            )
+
+
+async def test_missing_observation_remains_persistent_source_gap(actions):
+    factory, cid, _, action, auth = actions
+    async with factory.begin() as db:
+        await persist_action_batch(db, batch(action), auth)
+        await persist_action_batch(
+            db,
+            ActionBatch(
+                coverage=(
+                    ActionCoverage(
+                        "known_id",
+                        action.provider_event_id,
+                        action.provider_event_id,
+                        False,
+                        "missing_or_uncertain",
+                    ),
+                )
+            ),
+            auth,
+        )
+        assert await service.persistent_action_holds(db, cid) == ("source_gap",)
+
+
+async def test_split_earlier_late_boundary_stops_later_split(actions):
+    factory, cid, uid, action, auth = actions
+    early = action.observed_at - timedelta(days=2)
+    later = action.observed_at - timedelta(days=1)
+    async with factory.begin() as db:
+        await persist_action_batch(db, batch(split_action(action, early)), auth)
+        await persist_action_batch(
+            db, batch(replace(split_action(action, later), provider_event_id="later-split")), auth
+        )
+        await synthetic_opening(db, cid, uid, early + timedelta(hours=1))
+        assert await apply_due_actions(db, cid) == ()
+        assert (await db.get(StockActionState, cid)).unit_epoch == 0
+        assert (
+            await db.execute(select(Holding.quantity).where(Holding.coin_id == cid))
+        ).scalar_one() == 2
+
+
 @pytest.mark.parametrize("operation", ["split", "entitlement"])
 async def test_monitor_expiry_after_effect_before_final_sql_rolls_back(
     actions, operation, monkeypatch
