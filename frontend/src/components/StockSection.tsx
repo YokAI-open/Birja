@@ -1,5 +1,7 @@
 import { useRef } from "react";
 import type { StockItem } from "@/api/stocks";
+import { StockActionState } from "@/components/StockActionState";
+import { stockActionSummary } from "@/lib/stockActionCopy";
 import { StockAttribution } from "@/components/StockAttribution";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +13,7 @@ import { formatUnitPrice } from "@/lib/money";
 const permissionNotice =
   "Stock prices are unavailable while data permissions are being verified. Crypto trading is available.";
 const refreshNotice =
-  "Couldn’t refresh stock prices. Showing the last permitted update with its original time.";
+  "Couldn’t refresh stocks. Only still-permitted, currently verified prices are shown.";
 
 function StockTime({ value, exchange = false }: { value: string; exchange?: boolean }) {
   const zone = exchange ? "America/New_York" : Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -64,8 +66,13 @@ function Session({ item }: { item: StockItem }) {
   );
 }
 function QuoteTime({ item, allowed }: { item: StockItem; allowed: boolean }) {
-  const quote = allowed ? item.quote : null;
-  if (!quote) return <p>{allowed ? "Waiting for an IEX quote." : "Unavailable"}</p>;
+  const quote = allowed && item.action.state === "current" ? item.quote : null;
+  if (!quote)
+    return (
+      <p>
+        {allowed && item.action.state === "current" ? "Waiting for an IEX quote." : "Unavailable"}
+      </p>
+    );
   if (!Number.isFinite(Date.parse(quote.event_at)))
     return <p>Quote time unavailable. This quote cannot be used for trading.</p>;
   const previous = item.quote_reason === "session_unavailable" && item.session.state === "open";
@@ -89,7 +96,9 @@ function QuoteTime({ item, allowed }: { item: StockItem; allowed: boolean }) {
 function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side: "bid" | "ask" }) {
   return (
     <span className="text-[15px] leading-[22px] font-medium tabular-nums">
-      {allowed && item.quote ? formatUnitPrice(item.quote[side]) : "Unavailable"}
+      {allowed && item.action.state === "current" && item.quote
+        ? formatUnitPrice(item.quote[side])
+        : "Unavailable"}
     </span>
   );
 }
@@ -112,6 +121,17 @@ export function StockSection() {
       ),
     ),
   ].join(". ");
+  const actionGroups = new Map<string, string[]>();
+  for (const item of items) {
+    if (item.action.state === "current") continue;
+    const summary = stockActionSummary(allowed ? item.action : undefined);
+    actionGroups.set(summary, [...(actionGroups.get(summary) ?? []), item.symbol]);
+  }
+  const actionMessages = [...actionGroups]
+    .map(([summary, symbols]) => `${symbols.join(", ")}: ${summary}`)
+    .join(" ");
+  const actionNotice =
+    actionMessages || (items.length ? "Corporate actions checked for all 20 stocks." : "");
   const message = isPending
     ? "Loading stocks"
     : !data
@@ -119,8 +139,8 @@ export function StockSection() {
       : !allowed
         ? permissionNotice
         : isError
-          ? refreshNotice
-          : categories;
+          ? `${refreshNotice} ${actionNotice}`
+          : `${categories}. ${actionNotice}`;
   return (
     <section aria-labelledby="stocks-heading" className="min-w-0">
       <Card>
@@ -178,8 +198,8 @@ export function StockSection() {
                 <div>
                   <h3 className="font-medium">Stock quotes are not ready</h3>
                   <p>
-                    The stock list is available. Quotes will appear after data access is verified
-                    and an IEX update arrives.
+                    The stock list is available. Prices appear when data access, corporate-action
+                    checks and an IEX quote are verified.
                   </p>
                 </div>
               )}
@@ -223,8 +243,22 @@ export function StockSection() {
                           <Session item={item} />
                         </td>
                         <td className="py-4">
-                          <p>Stock status unverified.</p>
-                          <p>Trading coming later.</p>
+                          <div className="flex min-w-0 flex-col gap-3 break-words">
+                            <StockActionState
+                              action={allowed ? item.action : undefined}
+                              valuationAvailable={
+                                allowed && item.action.state === "current" && item.quote !== null
+                              }
+                            />
+                            <div>
+                              <p className="font-medium">Stock status</p>
+                              <p>Stock status unverified.</p>
+                            </div>
+                            <div>
+                              <p className="font-medium">Trading</p>
+                              <p>Trading coming later.</p>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -259,8 +293,22 @@ export function StockSection() {
                     </div>
                     <div className="text-[13px] leading-[18px] text-muted-foreground">
                       <Session item={item} />
-                      <p>Stock status unverified.</p>
-                      <p>Trading coming later.</p>
+                      <div className="mt-3 flex min-w-0 flex-col gap-3 break-words text-foreground">
+                        <StockActionState
+                          action={allowed ? item.action : undefined}
+                          valuationAvailable={
+                            allowed && item.action.state === "current" && item.quote !== null
+                          }
+                        />
+                        <div>
+                          <p className="font-medium">Stock status</p>
+                          <p>Stock status unverified.</p>
+                        </div>
+                        <div>
+                          <p className="font-medium">Trading</p>
+                          <p>Trading coming later.</p>
+                        </div>
+                      </div>
                     </div>
                   </li>
                 ))}

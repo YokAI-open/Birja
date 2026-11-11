@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
 import type { StocksResponse } from "@/api/stocks";
@@ -138,7 +138,7 @@ it("uses one non-ticking contextual announcement and retains original dated valu
   const { rerender } = renderWithClient(<StockSection />);
   const status = screen.getByRole("status");
   const announcement = status.textContent;
-  expect(status).toHaveTextContent("Couldn’t refresh stock prices");
+  expect(status).toHaveTextContent("Couldn’t refresh stocks");
   state.data!.items[0].quote!.age_seconds = 11;
   rerender(<StockSection />);
   expect(status.textContent).toBe(announcement);
@@ -182,11 +182,15 @@ it("restores keyboard position to the stock heading after successful retry", asy
   expect(screen.getByRole("heading", { name: "US stocks · 20" })).toHaveFocus();
 });
 
-
 it("shows a scoped corporate-action hold with fixed reason, no numeric mark, and independent status", () => {
   const held = state.data!.items[0];
-  held.action = { state: "suspended", reason: "fractional", epoch: 2,
-    checked_at: "2026-11-10T14:59:59Z", valid_until: null };
+  held.action = {
+    state: "suspended",
+    reason: "fractional",
+    epoch: 2,
+    checked_at: "2026-11-10T14:59:59Z",
+    valid_until: null,
+  };
   held.quote = null;
   held.valuation_reason = "action_unavailable";
   renderWithClient(<StockSection />);
@@ -200,4 +204,90 @@ it("shows a scoped corporate-action hold with fixed reason, no numeric mark, and
   expect(rows[2]).toHaveTextContent("$100.00");
   expect(screen.getByRole("status")).toHaveTextContent("AA");
   expect(screen.getByRole("status")).toHaveTextContent("fractional shares");
+});
+
+it.each([
+  [
+    "unknown",
+    "source_gap",
+    "Corporate-action checks unavailable.",
+    "We cannot verify complete corporate-action information",
+  ],
+  ["reconciling", "source_gap", "Checking corporate actions…", "until checks finish"],
+  [
+    "suspended",
+    "unsupported",
+    "Suspended for corporate-action review.",
+    "This corporate action needs review",
+  ],
+  [
+    "suspended",
+    "conflicting",
+    "Suspended for corporate-action review.",
+    "has changed or conflicts",
+  ],
+  [
+    "suspended",
+    "identity_change",
+    "Suspended for corporate-action review.",
+    "identity is changing",
+  ],
+  [
+    "suspended",
+    "post_split_quote_missing",
+    "Waiting for a post-split quote.",
+    "Valuation is unavailable.",
+  ],
+] as const)(
+  "renders fixed %s/%s copy without source numbers or trading controls",
+  (actionState, reason, message, detail) => {
+    const item = state.data!.items[0];
+    item.action = { state: actionState, reason, epoch: 2, checked_at: null, valid_until: null };
+    item.quote = null;
+    item.valuation_reason =
+      reason === "post_split_quote_missing" ? "post_split_quote_missing" : "action_unavailable";
+    renderWithClient(<StockSection />);
+    const first = within(screen.getByRole("table", { name: "US stocks" })).getAllByRole("row")[1];
+    expect(first).toHaveTextContent(message);
+    expect(first).toHaveTextContent(detail);
+    expect(first).toHaveTextContent("Corporate-action check time unavailable.");
+    expect(first).not.toHaveTextContent("$100.00");
+    expect(first).not.toHaveTextContent("14:59:50");
+    expect(within(first).queryByRole("button")).toBeNull();
+  },
+);
+
+it("announces contextual hold changes once without ticks or background focus movement", () => {
+  const { rerender } = render(<StockSection />);
+  const heading = screen.getByRole("heading", { name: "US stocks · 20" });
+  heading.focus();
+  const item = state.data!.items[0];
+  item.action = {
+    state: "suspended",
+    reason: "unsupported",
+    epoch: 2,
+    checked_at: null,
+    valid_until: null,
+  };
+  item.quote = null;
+  item.valuation_reason = "action_unavailable";
+  rerender(<StockSection />);
+  const announcement = screen.getByRole("status").textContent;
+  expect(announcement).toContain("AA:");
+  expect(announcement).toContain("Suspended for corporate-action review");
+  state.data!.items[1].quote!.age_seconds += 1;
+  rerender(<StockSection />);
+  expect(screen.getByRole("status").textContent).toBe(announcement);
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+  expect(heading).toHaveFocus();
+});
+
+it("keeps retry focus after failure and suppresses action-derived check times on denied permission", async () => {
+  state.isError = true;
+  state.refetch.mockResolvedValue({ isError: true });
+  const { user } = renderWithClient(<StockSection />);
+  const retry = screen.getByRole("button", { name: "Retry stock prices" });
+  retry.focus();
+  await user.keyboard("{Enter}");
+  expect(retry).toHaveFocus();
 });
