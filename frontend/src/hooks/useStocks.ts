@@ -1,18 +1,32 @@
 import { useEffect, useReducer } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
-import { fetchStocks, type StocksResponse, type TimedStocks } from "@/api/stocks";
+import { fetchStocks, stockInstant, type StocksResponse, type TimedStocks } from "@/api/stocks";
 import { useMe } from "./useMe";
+
+// Date.parse truncates fractional milliseconds. Round authority time up and
+// deadlines/source-event times down so browser precision never extends authority.
+const floorTime = (value: string) => Date.parse(value);
+const ceilTime = (value: string) =>
+  Date.parse(value) + (/\.\d{3}\d*[1-9]\d*(?:Z|\+00:00)$/.test(value) ? 1 : 0);
+const unknownAction = () =>
+  ({
+    state: "unknown",
+    reason: "monitor_unavailable",
+    epoch: 0,
+    checked_at: null,
+    valid_until: null,
+  }) as const;
 
 /** Conservative projection only reduces server authority. No browser wall clock. */
 export function projectStocks(data: TimedStocks, now = performance.now()): StocksResponse {
   const elapsed = Math.max(0, now - data.transport.received_at);
-  const lower = Date.parse(data.server_now) + elapsed;
-  const upper = lower + data.transport.round_trip_ms;
+  const lower = floorTime(data.server_now) + elapsed;
+  const upper = ceilTime(data.server_now) + elapsed + data.transport.round_trip_ms;
   const allowed =
     data.admission.state === "approved" &&
     data.admission.valid_until !== null &&
-    upper < Date.parse(data.admission.valid_until);
+    upper < floorTime(data.admission.valid_until);
   return {
     ...data,
     admission: allowed
@@ -20,23 +34,39 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
       : { state: "unavailable", generation: null, valid_until: null },
     items: data.items.map((item) => {
       const bounds = item.session;
-      const reviewed = bounds.valid_until !== null && upper < Date.parse(bounds.valid_until);
+      const reviewed = bounds.valid_until !== null && upper < floorTime(bounds.valid_until);
       let state = bounds.state;
       if (!reviewed) state = "unknown";
       else if (state === "open") {
-        if (bounds.closes_at !== null && upper >= Date.parse(bounds.closes_at)) state = "closed";
-        else if (bounds.opens_at === null || lower < Date.parse(bounds.opens_at)) state = "unknown";
+        if (bounds.closes_at !== null && upper >= floorTime(bounds.closes_at)) state = "closed";
+        else if (bounds.opens_at === null || lower < ceilTime(bounds.opens_at)) state = "unknown";
       }
-      // A closed/unknown server state is never locally promoted to open.
+      const action =
+        !allowed || !reviewed
+          ? unknownAction()
+          : item.action.state === "current" &&
+              (item.action.valid_until === null || upper >= floorTime(item.action.valid_until))
+            ? {
+                ...item.action,
+                state: "unknown" as const,
+                reason: "monitor_unavailable" as const,
+                valid_until: null,
+              }
+            : item.action;
       const age =
         item.quote === null
           ? 0
           : Math.max(
               item.quote.age_seconds,
-              (Date.parse(data.server_now) - Date.parse(item.quote.event_at)) / 1000,
+              (ceilTime(data.server_now) - floorTime(item.quote.event_at)) / 1000,
             ) +
             (data.transport.round_trip_ms + elapsed) / 1000;
-      const canDisplay = allowed && reviewed && item.quote_reason !== "permission_unavailable";
+      const canDisplay =
+        allowed &&
+        reviewed &&
+        action.state === "current" &&
+        item.quote_reason !== "permission_unavailable" &&
+        age < 120;
       const quote =
         canDisplay && item.quote
           ? { ...item.quote, age_seconds: Math.max(0, Math.floor(age)) }
@@ -54,7 +84,16 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
       return {
         ...item,
         quote,
+        action,
         quote_reason: reason,
+        valuation_reason:
+          quote !== null
+            ? "available"
+            : action.reason === "post_split_quote_missing"
+              ? "post_split_quote_missing"
+              : action.state !== "current"
+                ? "action_unavailable"
+                : "quote_unavailable",
         session_reason: state,
         session: reviewed
           ? { ...bounds, state }
@@ -76,15 +115,96 @@ function purgeExpired(data: TimedStocks): TimedStocks {
   return {
     ...data,
     admission: projected.admission,
-    items: data.items.map((item, i) => ({
+    items: projected.items.map((item, i) => ({
       ...item,
-      // Keep original ages/times: projecting a projected age would count RTT twice.
-      quote: projected.items[i].quote === null ? null : item.quote,
-      quote_reason: projected.items[i].quote_reason,
-      session: projected.items[i].session,
-      session_reason: projected.items[i].session_reason,
+      // Preserve original ages/times: repeated projection must not add RTT twice.
+      quote: item.quote === null ? null : data.items[i].quote,
     })),
   };
+}
+
+function safetyChanged(previous: TimedStocks, next: TimedStocks): boolean {
+  return (
+    previous.admission.state !== next.admission.state ||
+    previous.items.some((item, i) => {
+      const other = next.items[i];
+      return (
+        (item.quote !== null && other.quote === null) ||
+        item.action.state !== other.action.state ||
+        item.action.epoch !== other.action.epoch ||
+        item.action.reason !== other.action.reason ||
+        item.session.state !== other.session.state ||
+        item.quote_reason !== other.quote_reason
+      );
+    })
+  );
+}
+
+function nextDeadline(data: TimedStocks): number {
+  const deadlines: number[] = [];
+  const add = (value: string | null) => {
+    if (value !== null) deadlines.push(floorTime(value));
+  };
+  if (data.admission.state === "approved") add(data.admission.valid_until);
+  for (const item of data.items) {
+    add(item.session.valid_until);
+    if (item.session.state === "open") add(item.session.closes_at);
+    if (item.action.state === "current") add(item.action.valid_until);
+    if (item.quote !== null)
+      deadlines.push(
+        Math.min(
+          floorTime(item.quote.event_at) + 120_000,
+          ceilTime(data.server_now) + (120 - item.quote.age_seconds) * 1000,
+        ),
+      );
+  }
+  return (
+    Math.min(...deadlines) -
+    ceilTime(data.server_now) -
+    data.transport.round_trip_ms -
+    Math.max(0, performance.now() - data.transport.received_at)
+  );
+}
+
+type Mark = { epoch: number; at: bigint; held: boolean };
+type Guard = { email: string | null; lifecycle: number; marks: Map<number, Mark> };
+const guards = new WeakMap<ReturnType<typeof useQueryClient>, Guard>();
+const emailOf = (client: ReturnType<typeof useQueryClient>) =>
+  client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
+function remember(guard: Guard, data: TimedStocks) {
+  const at = stockInstant(data.server_now);
+  for (const item of data.items) {
+    const old = guard.marks.get(item.id);
+    guard.marks.set(item.id, {
+      epoch: Math.max(old?.epoch ?? 0, item.action.epoch),
+      at: old && old.at > at ? old.at : at,
+      held: item.action.state !== "current",
+    });
+  }
+}
+function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
+  const existing = guards.get(client);
+  if (existing) return existing;
+  const guard: Guard = { email: emailOf(client), lifecycle: 0, marks: new Map() };
+  guards.set(client, guard);
+  client.getQueryCache().subscribe((event) => {
+    const email = emailOf(client);
+    if (email !== guard.email) {
+      guard.email = email;
+      guard.lifecycle++;
+      guard.marks.clear();
+    }
+    if (
+      email !== null &&
+      event.query.queryKey[0] === "stocks" &&
+      event.query.queryKey[1] === email &&
+      event.type === "updated"
+    ) {
+      const data = event.query.state.data as TimedStocks | undefined;
+      if (data) remember(guard, data);
+    }
+  });
+  return guard;
 }
 
 export function useStocks() {
@@ -95,7 +215,9 @@ export function useStocks() {
     queryKey: key,
     enabled: Boolean(me),
     queryFn: async ({ signal }) => {
-      const identity = client.getQueryData(["me"]);
+      const guard = guardFor(client);
+      const lifecycle = guard.lifecycle;
+      const identity = emailOf(client);
       const owner = client.getQueryCache().find({ queryKey: key, exact: true });
       const initial = client.getQueryData<TimedStocks>(key);
       const superseded = new AbortController();
@@ -104,11 +226,17 @@ export function useStocks() {
         const current = client.getQueryData<TimedStocks>(key);
         if (
           (event.query === owner && event.type === "removed") ||
-          client.getQueryData(["me"]) !== identity ||
+          emailOf(client) !== identity ||
+          guard.lifecycle !== lifecycle ||
           (current &&
             current !== initial &&
             (current.admission.state === "unavailable" ||
-              (current.admission.generation ?? 0) > (initial?.admission.generation ?? 0)))
+              (current.admission.generation ?? 0) > (initial?.admission.generation ?? 0) ||
+              current.items.some(
+                (item, i) =>
+                  item.action.state !== "current" ||
+                  item.action.epoch > (initial?.items[i].action.epoch ?? 0),
+              )))
         )
           superseded.abort();
       });
@@ -117,7 +245,8 @@ export function useStocks() {
         requestSignal.throwIfAborted();
         if (
           !identity ||
-          client.getQueryData(["me"]) !== identity ||
+          emailOf(client) !== identity ||
+          guard.lifecycle !== lifecycle ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
         )
           throw new Error("Stock session changed");
@@ -130,16 +259,29 @@ export function useStocks() {
             (current !== initial &&
               current.admission.state === "unavailable" &&
               response.admission.state === "approved") ||
-            Date.parse(current.server_now) > Date.parse(response.server_now))
+            (stockInstant(current.server_now) > stockInstant(response.server_now) &&
+              response.items.some((item) => item.action.state === "current")))
         )
           throw new Error("Superseded stock response");
+        for (const item of response.items) {
+          const mark = guard.marks.get(item.id);
+          if (
+            item.action.state === "current" &&
+            mark &&
+            (item.action.epoch < mark.epoch ||
+              stockInstant(response.server_now) < mark.at ||
+              (item.action.epoch === mark.epoch &&
+                stockInstant(response.server_now) === mark.at &&
+                mark.held))
+          )
+            throw new Error("Superseded stock action response");
+        }
         // Purge expired permission/review material before entering the cache.
         return purgeExpired(response);
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           client.setQueryData(["me"], null);
-          client.removeQueries({ queryKey: ["stocks"] });
-          void client.invalidateQueries({ queryKey: ["me"] });
+              void client.invalidateQueries({ queryKey: ["me"] });
         }
         throw error;
       } finally {
@@ -154,22 +296,46 @@ export function useStocks() {
   });
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
-    // Display clock only; TanStack owns all networking and cancellation.
-    const timer = setInterval(() => {
-      const queryKey = ["stocks", me?.email ?? null];
+    guardFor(client);
+    const queryKey = ["stocks", me?.email ?? null];
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    let purging = false;
+    const update = () => {
+      clearTimeout(deadline);
       const cached = client.getQueryData<TimedStocks>(queryKey);
-      if (cached) {
-        const projected = projectStocks(cached);
-        if (
-          cached.admission.state !== projected.admission.state ||
-          cached.items.some((item, i) => item.quote !== null && projected.items[i].quote === null)
-        ) {
-          client.setQueryData<TimedStocks>(queryKey, purgeExpired(cached));
-        }
+      if (!cached || queryKey[1] === null) return;
+      const purged = purgeExpired(cached);
+      if (safetyChanged(cached, purged)) {
+        purging = true;
+        client.setQueryData(queryKey, purged);
+        purging = false;
       }
+      const delay = nextDeadline(purged);
+      if (Number.isFinite(delay))
+        deadline = setTimeout(update, Math.min(2_147_483_647, Math.max(1, delay)));
       tick();
-    }, 1000);
-    return () => clearInterval(timer);
+    };
+    const unsubscribe = client.getQueryCache().subscribe((event) => {
+      if (
+        !purging &&
+        (event.type === "updated" || event.type === "removed") &&
+        event.query.queryKey[0] === "stocks" &&
+        event.query.queryKey[1] === queryKey[1]
+      )
+        update();
+    });
+    // Display age updates are independent of exact safety-boundary timers.
+    const display = setInterval(update, 1000);
+    window.addEventListener("focus", update);
+    window.addEventListener("visibilitychange", update);
+    update();
+    return () => {
+      clearTimeout(deadline);
+      clearInterval(display);
+      unsubscribe();
+      window.removeEventListener("focus", update);
+      window.removeEventListener("visibilitychange", update);
+    };
   }, [client, me?.email]);
   return { ...query, data: me && query.data ? projectStocks(query.data) : undefined };
 }

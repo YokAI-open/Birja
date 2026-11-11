@@ -375,40 +375,79 @@ it("spends transport time against the server's shortened retention deadline befo
   ).toBe(true);
 });
 
-
 it("removes monitor-expired numbers at exact millisecond equality, from projection and cache", async () => {
   let now = 0;
   vi.spyOn(performance, "now").mockImplementation(() => now);
   const body = payload();
-  body.items.forEach((x) => { x.action.valid_until = stamp(0.125); });
+  body.items.forEach((x) => {
+    x.action.valid_until = stamp(0.125);
+  });
   const fetch = vi.fn(async () => new Response(JSON.stringify(body)));
   vi.stubGlobal("fetch", fetch);
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].quote).not.toBeNull());
   now = 124;
-  expect(projectStocks(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])!, now).items[0].quote).not.toBeNull();
+  expect(
+    projectStocks(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])!, now).items[0]
+      .quote,
+  ).not.toBeNull();
   now = 125;
-  await waitFor(() => expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull(), { timeout: 500 });
+  await waitFor(
+    () =>
+      expect(
+        client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+      ).toBeNull(),
+    { timeout: 500 },
+  );
   expect(result.current.data?.items[0].action.state).toBe("unknown");
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 it("accepts generic epoch-zero redaction then refuses an older healthy epoch", async () => {
-  const healthy = payload(); healthy.items.forEach((x) => { x.action.epoch = 7; });
-  const redacted = payload(); redacted.server_now = stamp(1);
-  redacted.items.forEach((x) => {
-    x.action = { state: "unknown", reason: "monitor_unavailable", epoch: 0, checked_at: null, valid_until: null } as never;
-    x.quote = null; x.quote_reason = "permission_unavailable"; x.valuation_reason = "action_unavailable";
+  const healthy = payload();
+  healthy.items.forEach((x) => {
+    x.action.epoch = 7;
   });
-  const stale = payload(); stale.server_now = stamp(2); stale.items.forEach((x) => { x.action.epoch = 6; });
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(healthy))).mockResolvedValueOnce(new Response(JSON.stringify(redacted))).mockResolvedValueOnce(new Response(JSON.stringify(stale))));
+  const redacted = payload();
+  redacted.server_now = stamp(1);
+  redacted.items.forEach((x) => {
+    x.action = {
+      state: "unknown",
+      reason: "monitor_unavailable",
+      epoch: 0,
+      checked_at: null,
+      valid_until: null,
+    } as never;
+    x.quote = null;
+    x.quote_reason = "permission_unavailable";
+    x.valuation_reason = "action_unavailable";
+  });
+  const stale = payload();
+  stale.server_now = stamp(2);
+  stale.items.forEach((x) => {
+    x.action.epoch = 6;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(healthy)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(redacted)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(stale))),
+  );
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(7));
-  await act(async () => { await result.current.refetch(); });
+  await act(async () => {
+    await result.current.refetch();
+  });
   expect(result.current.data?.items[0].quote).toBeNull();
   expect(result.current.data?.items[0].action.epoch).toBe(0);
-  await act(async () => { await result.current.refetch(); });
-  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull();
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
 });
 
 it("uses sub-millisecond timestamps conservatively and purges source age at120", () => {

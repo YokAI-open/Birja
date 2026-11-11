@@ -100,6 +100,12 @@ function timestamp(value: unknown): value is string {
 }
 const nullableTime = (value: unknown) => value === null || timestamp(value);
 
+/** Exact ordering of validated UTC instants, retaining sub-millisecond facts. */
+export function stockInstant(value: string): bigint {
+  const fraction = /\.(\d+)(?:Z|\+00:00)$/.exec(value)?.[1] ?? "";
+  return BigInt(Date.parse(value)) * 1_000_000n + BigInt(fraction.padEnd(9, "0").slice(3));
+}
+
 /** Exact NUMERIC(20,8) comparison; money never enters JS Number arithmetic. */
 function units(value: unknown): bigint | null {
   if (typeof value !== "string" || !/^\d{1,12}(?:\.\d{1,8})?$/.test(value)) return null;
@@ -154,7 +160,7 @@ function action(value: unknown, now: string): value is StockAction {
     !nullableTime(value.valid_until)
   )
     return false;
-  if (value.checked_at !== null && Date.parse(value.checked_at as string) > Date.parse(now))
+  if (value.checked_at !== null && stockInstant(value.checked_at as string) > stockInstant(now))
     return false;
   if (value.epoch === 0)
     return (
@@ -168,7 +174,7 @@ function action(value: unknown, now: string): value is StockAction {
       value.reason === "none" &&
       value.checked_at !== null &&
       value.valid_until !== null &&
-      Date.parse(value.valid_until as string) > Date.parse(now)
+      stockInstant(value.valid_until as string) > stockInstant(now)
     );
   if (value.valid_until !== null) return false;
   return (
