@@ -17,7 +17,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0012"
+EXPECTED_HEAD = "0013"
 
 
 def _config() -> Config:
@@ -68,13 +68,16 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
             ):
                 rows.append((await conn.execute(text(query))).all())
             # Compare the original financial rules. Successor0011 adds a
-            # composite causal key without changing these legacy constraints.
+            # composite causal key and0013 adds a stock-only constraint trigger.
+            # Their separate successor tests verify both; retain the original
+            # crypto financial CHECK/FK comparison at the history-index boundary.
             constraints = (
                 await conn.execute(
                     text("""SELECT conrelid::regclass::text, conname,
                 pg_get_constraintdef(oid) FROM pg_constraint
                 WHERE conrelid IN ('accounts'::regclass, 'holdings'::regclass, 'trades'::regclass)
                   AND conname <> 'uq_trades_id_coin_user'
+                  AND NOT (contype='t' AND conname='stock_fill_integrity')
                 ORDER BY conrelid, conname""")
                 )
             ).all()

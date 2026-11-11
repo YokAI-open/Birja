@@ -2,18 +2,20 @@
 
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import httpx
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, insert, select, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.models.corporate_action import StockOwnershipMovement
 from app.models.price import Coin, Price
 from app.models.stock import StockQuote
+from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding, Trade
 from app.models.user import Account, User
 from app.services import trading
@@ -21,6 +23,7 @@ from app.services.portfolio import get_portfolio
 from app.services.prices import AcceptedPrice, list_prices, load_active_coins, upsert_prices
 from app.services.trade_math import TradeRefused
 from tests.helpers import OutboxSender, csrf_headers, put_price, sign_in, unique_email
+from tests.stock_action_fixtures import synthetic_corruption
 
 NewUser = Callable[[], Awaitable[int]]
 
@@ -33,9 +36,12 @@ async def stock_id(engine: AsyncEngine, migrated: None) -> AsyncIterator[int]:
     async with engine.connect() as conn:
         cid = (await conn.execute(select(Coin.id).where(Coin.symbol == "AAPL"))).scalar_one()
     yield cid
-    async with engine.begin() as conn:
+    async with async_sessionmaker(engine).begin() as conn:
         await conn.execute(delete(StockQuote).where(StockQuote.coin_id == cid))
-        await conn.execute(delete(Trade).where(Trade.coin_id == cid))
+        # Privileged test cleanup only. Runtime immutable DML stays enforced.
+        for model in (StockFillFacts, StockOwnershipMovement, Trade):
+            async with synthetic_corruption(conn, model.__tablename__):
+                await conn.execute(delete(model).where(model.coin_id == cid))
         await conn.execute(delete(Holding).where(Holding.coin_id == cid))
         await conn.execute(delete(Price).where(Price.coin_id == cid))
         await conn.execute(update(Coin).where(Coin.id == cid).values(symbol="AAPL", is_active=True))
@@ -283,21 +289,76 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
     user_id = await new_user()
     key = uuid.uuid4()
     async with engine.begin() as conn:
+        trade_id = (
+            await conn.execute(
+                insert(Trade)
+                .values(
+                    user_id=user_id,
+                    coin_id=stock_id,
+                    side="buy",
+                    input_kind="quantity",
+                    input_value=D("1"),
+                    quantity=D("1"),
+                    mid_price=D("200"),
+                    price_as_of=NOW,
+                    exec_price=D("200"),
+                    fee=D("0"),
+                    cash_delta=D("-200"),
+                    cash_after=D("9800"),
+                    idempotency_key=key,
+                )
+                .returning(Trade.id)
+            )
+        ).scalar_one()
         await conn.execute(
-            insert(Trade).values(
-                user_id=user_id,
+            insert(StockFillFacts).values(
+                trade_id=trade_id,
                 coin_id=stock_id,
-                side="buy",
-                input_kind="quantity",
-                input_value=D("1"),
-                quantity=D("1"),
-                mid_price=D("200"),
-                price_as_of=NOW,
-                exec_price=D("200"),
-                fee=D("0"),
-                cash_delta=D("-200"),
-                cash_after=D("9800"),
-                idempotency_key=key,
+                user_id=user_id,
+                provider_asset_id="synthetic-aapl",
+                symbol="AAPL",
+                company_name="Synthetic Apple",
+                listing_exchange="NASDAQ",
+                source="alpaca",
+                feed="iex",
+                bid=D(200),
+                ask=D(200),
+                exact_mid=D(200),
+                held_after=D(1),
+                event_at=NOW,
+                collected_at=NOW,
+                observed_at=NOW,
+                session_date=NOW.date(),
+                opens_at=NOW - timedelta(hours=1),
+                closes_at=NOW + timedelta(hours=1),
+                authority={},
+            )
+        )
+        await conn.execute(
+            insert(StockOwnershipMovement).values(
+                coin_id=stock_id,
+                user_id=user_id,
+                sequence=1,
+                economic_at=NOW,
+                recorded_at=NOW,
+                quantity=D(1),
+                before_quantity=D(0),
+                after_quantity=D(1),
+                before_basis=D(0),
+                after_basis=D(200),
+                unit_epoch=0,
+                cause_kind="fill",
+                trade_id=trade_id,
+                causal_key="synthetic-fill:" + str(trade_id),
+            )
+        )
+        await conn.execute(update(Account).where(Account.user_id == user_id).values(cash=D(9800)))
+        await conn.execute(
+            insert(Holding).values(
+                coin_id=stock_id,
+                user_id=user_id,
+                quantity=D(1),
+                cost_basis=D(200),
             )
         )
     before = await financial_rows(engine, user_id)
