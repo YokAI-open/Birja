@@ -702,3 +702,33 @@ async def test_action_calendar_revocation_hides_all_derived_authority(engine, se
     assert action == dict(
         state="unknown", reason="monitor_unavailable", epoch=0, checked_at=None, valid_until=None
     )
+
+
+@pytest.mark.parametrize("shape", ["overbound", "malformed_time"])
+async def test_action_malformed_final_projection_is_failclosed(
+    engine, settings, monkeypatch, shape
+):
+    from types import SimpleNamespace
+
+    await seed(engine)
+    original = AsyncSession.execute
+
+    async def malformed(db, statement, *args, **kwargs):
+        result = await original(db, statement, *args, **kwargs)
+        if statement.get_execution_options().get("stock_final_evidence"):
+            values = dict(result.one()._mapping)
+            if shape == "overbound":
+                values["actions"] = values["actions"] * 2
+            else:
+                values["actions"][0]["checked_at"] = "not-a-timestamp"
+            return SimpleNamespace(one=lambda: SimpleNamespace(**values))
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", malformed)
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    assert result["items"][0]["quote"] is None
+    assert result["items"][0]["action"] == dict(
+        state="unknown", reason="monitor_unavailable", epoch=0, checked_at=None, valid_until=None
+    )
+    assert len(result["items"]) == 20

@@ -613,3 +613,47 @@ async def test_multiple_valid_instruments_require_explicit_caller_transactions(d
     with pytest.raises(OwnershipHeld, match="one_instrument_per_transaction"):
         await upsert_stock_quotes(db, [accepted(m) for m in stock_state[:2]], 4, now=lambda: NOW)
     assert (await db.execute(select(StockQuote))).scalars().all() == []
+
+
+@pytest.mark.parametrize("change", ["revocation", "age"])
+async def test_postgate_authority_and_age_are_rechecked_after_real_wait(split_quotes, change):
+    from app.services.stock_ownership import acquire_stock_gate
+
+    factory, mapping = split_quotes
+    clock = [NOW]
+    started, pid = asyncio.Event(), []
+
+    async def write():
+        async with factory.begin() as db:
+            pid.append((await db.execute(text("SELECT pg_backend_pid()"))).scalar_one())
+            started.set()
+            return await upsert_stock_quotes(db, [accepted(mapping)], 4, now=lambda: clock[0])
+
+    async with factory() as owner:
+        await acquire_stock_gate(owner, mapping.coin_id)
+        task = asyncio.create_task(write())
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            await wait_for_advisory_wait(factory, pid[0])
+            if change == "revocation":
+                await owner.execute(
+                    update(StockDataAdmission)
+                    .where(StockDataAdmission.product == "quotes")
+                    .values(state="revoked", generation=5)
+                )
+            else:
+                clock[0] = NOW + timedelta(seconds=120)
+            await owner.commit()
+            assert await asyncio.wait_for(task, 5) == 0
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    async with factory() as db:
+        assert await db.get(StockQuote, mapping.coin_id) is None
+
+
+async def test_nonzero_unit_sql_proof_without_action_authority_is_false(db):
+    from app.services.stock_quotes import _unit_authority
+
+    assert (await db.execute(select(_unit_authority(None, 1, None)))).scalar_one() is False
