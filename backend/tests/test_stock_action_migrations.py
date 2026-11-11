@@ -351,3 +351,31 @@ async def test_populated_accounting_downgrade_refuses_before_alter(
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM stock_action_events WHERE id=:e"), {"e": eid})
+
+
+@pytest_asyncio.fixture
+async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
+    await migrate("0010", down=True)
+    async with engine.begin() as conn:
+        for role in ("birja_app", "birja_scheduler"):
+            await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
+            await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))  # noqa: S608
+    try:
+        await migrate("head")
+        yield
+    finally:
+        async with engine.begin() as conn:
+            for role in ("birja_app", "birja_scheduler", "birja_action_operator"):
+                exists = (await conn.execute(text("SELECT count(*) FROM pg_roles WHERE rolname=:r"), {"r":role})).scalar_one()
+                if exists:
+                    await conn.execute(text(f"DROP OWNED BY {role}"))  # noqa: S608 - fixed isolated roles
+                    await conn.execute(text(f"DROP ROLE {role}"))  # noqa: S608
+
+
+async def test_upgrade_grants_support_quantity_but_deny_cash_and_authority(
+    engine: AsyncEngine, runtime_roles: None,
+) -> None:
+    async with engine.connect() as conn:
+        assert (await conn.execute(text("SELECT has_column_privilege('birja_scheduler','holdings','quantity','UPDATE')"))).scalar_one(), "Splits require precisely quantity-only UPDATE"
+        assert not (await conn.execute(text("SELECT has_column_privilege('birja_scheduler','holdings','cost_basis','UPDATE')"))).scalar_one()
+        assert (await conn.execute(text("SELECT has_table_privilege('birja_app','stock_ownership_movements','INSERT')"))).scalar_one()
