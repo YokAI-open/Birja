@@ -857,6 +857,9 @@ def restore_resolution_authority(dc):
     definition = json.loads(sql(dc, "SELECT to_json(pg_get_functiondef('" + contract.RESOLUTION_SIGNATURE + "'::regprocedure))"))
     require(hashlib.sha256(definition.encode()).hexdigest() == contract.RESOLUTION_FUNCTION_SHA256)
     require(sql(dc,"SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='" + contract.RESOLUTION_SIGNATURE + "'::regprocedure").strip() == b'birja_migrator')
+    # A fresh recovery server has no operator role. Only the existing trusted
+    # bootstrap connection may preprovision this fixed role; the clone owner
+    # remains restricted. Existing unsafe attributes/memberships are refused.
     sql(dc,"""DO $$ BEGIN
       IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
         CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
@@ -872,7 +875,7 @@ def restore_resolution_authority(dc):
           pg_has_role(r.oid,'birja_action_operator','MEMBER')) THEN
         RAISE EXCEPTION 'unsafe restored operator boundary';
       END IF;
-    END $$;""")
+    END $$;""", "birja_ops_test")
     sql(dc,"REVOKE ALL ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " FROM PUBLIC;\n"
         "GRANT EXECUTE ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " TO birja_action_operator;\n"
         "GRANT USAGE ON SCHEMA public TO birja_action_operator;\n"
