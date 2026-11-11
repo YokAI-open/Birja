@@ -142,9 +142,14 @@ class StockActionObservation(Base):
     __tablename__ = "stock_action_observations"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["revision_id", "source_id"],
-            ["stock_action_revisions.id", "stock_action_revisions.source_id"],
-            name="fk_stock_action_observation_revision_source",
+            ["revision_id", "event_id"],
+            ["stock_action_revisions.id", "stock_action_revisions.event_id"],
+            name="fk_stock_action_observation_revision_event",
+        ),
+        ForeignKeyConstraint(
+            ["source_id", "event_id"],
+            ["stock_action_sources.id", "stock_action_sources.event_id"],
+            name="fk_stock_action_observation_source_event",
         ),
         Index("ix_stock_action_observations_revision_id", "revision_id"),
         Index(
@@ -160,6 +165,7 @@ class StockActionObservation(Base):
         bounded("cycle_id", 128),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("stock_action_events.id"), index=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("stock_action_sources.id"), index=True)
     revision_id: Mapped[int] = mapped_column(BigInteger)
     mutation_id: Mapped[str | None] = mapped_column(Text)
@@ -215,6 +221,14 @@ class StockActionState(Base):
 class StockSplitApplication(Base):
     __tablename__ = "stock_split_applications"
     __table_args__ = (
+        UniqueConstraint(
+            "id", "coin_id", "new_unit_epoch", name="uq_stock_split_application_units"
+        ),
+        ForeignKeyConstraint(
+            ["economic_event_id", "coin_id"],
+            ["stock_action_events.id", "stock_action_events.coin_id"],
+            name="fk_stock_split_event_coin",
+        ),
         ForeignKeyConstraint(
             ["revision_id", "economic_event_id"],
             ["stock_action_revisions.id", "stock_action_revisions.event_id"],
@@ -246,6 +260,7 @@ class StockSplitApplication(Base):
         ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
     economic_event_id: Mapped[int] = mapped_column(
         ForeignKey("stock_action_events.id"), unique=True
     )
@@ -264,6 +279,20 @@ class StockSplitApplication(Base):
 class StockOwnershipMovement(Base):
     __tablename__ = "stock_ownership_movements"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["trade_id", "coin_id", "user_id"],
+            ["trades.id", "trades.coin_id", "trades.user_id"],
+            name="fk_stock_ownership_trade_owner_coin",
+        ),
+        ForeignKeyConstraint(
+            ["application_id", "coin_id", "unit_epoch"],
+            [
+                "stock_split_applications.id",
+                "stock_split_applications.coin_id",
+                "stock_split_applications.new_unit_epoch",
+            ],
+            name="fk_stock_ownership_split_coin_units",
+        ),
         UniqueConstraint("trade_id", name="uq_stock_ownership_trade"),
         UniqueConstraint("application_id", "user_id", name="uq_stock_ownership_application_user"),
         UniqueConstraint("coin_id", "sequence", name="uq_stock_ownership_sequence"),

@@ -67,11 +67,14 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
                 "SELECT * FROM trades ORDER BY id",
             ):
                 rows.append((await conn.execute(text(query))).all())
+            # Compare the original financial rules. Successor0011 adds a
+            # composite causal key without changing these legacy constraints.
             constraints = (
                 await conn.execute(
                     text("""SELECT conrelid::regclass::text, conname,
                 pg_get_constraintdef(oid) FROM pg_constraint
                 WHERE conrelid IN ('accounts'::regclass, 'holdings'::regclass, 'trades'::regclass)
+                  AND conname <> 'uq_trades_id_coin_user'
                 ORDER BY conrelid, conname""")
                 )
             ).all()

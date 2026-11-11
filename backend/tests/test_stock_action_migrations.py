@@ -184,7 +184,7 @@ async def test_movement_economic_uniqueness(ledger, changes) -> None:
 
 async def test_event_revision_source_and_current_pointer_match(ledger) -> None:
     conn, cid, _ = ledger
-    eid, _, rid = await event(conn, cid)
+    eid, origin, rid = await event(conn, cid)
     other, _, _ = await event(conn, cid)
     await conn.execute(
         text("UPDATE stock_action_events SET current_revision_id=:r WHERE id=:e"),
@@ -205,7 +205,7 @@ async def test_event_revision_source_and_current_pointer_match(ledger) -> None:
 async def test_durable_event_duplicate_refused(ledger, target) -> None:
     conn, cid, uid = ledger
     eid, sid, rid = await event(conn, cid)
-    params = {"e": eid, "s": sid, "r": rid, "u": uid, "f": "a" * 64}
+    params = {"e": eid, "s": sid, "r": rid, "u": uid, "f": "a" * 64, "c": cid}
     if target.startswith("revision"):
         params["ordinal"] = 1 if target == "revision_ordinal" else 2
         params["f"] = "b" * 64 if target == "revision_ordinal" else "a" * 64
@@ -223,14 +223,14 @@ async def test_durable_event_duplicate_refused(ledger, target) -> None:
     elif target == "observation":
         sql = (
             "INSERT INTO "
-            "stock_action_observations(source_id,revision_id,mutation_id,observed_at,admission_generation,source_kind,cycle_id)"
-            " VALUES (:s,:r,'m',now(),1,'replay','cycle')"
+            "stock_action_observations(event_id,source_id,revision_id,mutation_id,observed_at,admission_generation,source_kind,cycle_id)"
+            " VALUES (:e,:s,:r,'m',now(),1,'replay','cycle')"
         )
     elif target == "split":
         sql = (
             "INSERT INTO "
-            "stock_split_applications(economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)"
-            " VALUES (:e,:r,'2','1',now(),0,1,0,:f,:f,now())"
+            "stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)"
+            " VALUES (:c,:e,:r,'2','1',now(),0,1,0,:f,:f,now())"
         )
     else:
         sql = (
@@ -499,11 +499,11 @@ async def test_scheduler_grants_allow_append_with_identity_sequences(
         )
         await conn.execute(
             text(
-                "INSERT INTO stock_action_observations(source_id,revision_id,observed_at,"
+                "INSERT INTO stock_action_observations(event_id,source_id,revision_id,observed_at,"
                 "admission_generation,source_kind,cycle_id) "
-                "VALUES (:s,:r,now(),1,'snapshot','fixture')"
+                "VALUES (:e,:s,:r,now(),1,'snapshot','fixture')"
             ),
-            {"s": sid, "r": rid},
+            {"e": eid, "s": sid, "r": rid},
         )
         assert eid > 0 and sid > 0 and rid > 0
         await conn.rollback()
@@ -571,44 +571,193 @@ async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
 
 async def test_verified_alias_can_observe_same_economic_revision(ledger) -> None:
     conn, cid, _ = ledger
-    eid, _, rid = await event(conn, cid)
-    sid = (await conn.execute(text("""INSERT INTO stock_action_sources
+    eid, origin, rid = await event(conn, cid)
+    sid = (
+        await conn.execute(
+            text("""INSERT INTO stock_action_sources
       (event_id,provider,product,provider_event_id)
       VALUES (:e,'alpaca','actions',:k) RETURNING id"""),
-      {"e": eid, "k": str(uuid4())})).scalar_one()
-    # Before the schema repair there is no event column: this valid economic
-    # alias still needs to reference the original, unchanged revision.
-    columns = set((await conn.execute(text("""SELECT column_name
-      FROM information_schema.columns WHERE table_name='stock_action_observations'"""))).scalars())
-    if "event_id" in columns:
-        await conn.execute(text("""INSERT INTO stock_action_observations
+            {"e": eid, "k": str(uuid4())},
+        )
+    ).scalar_one()
+    await conn.execute(
+        text("""INSERT INTO stock_action_observations
           (event_id,source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id)
-          VALUES (:e,:s,:r,now(),1,'snapshot','alias')"""), {"e":eid,"s":sid,"r":rid})
-    else:
-        await conn.execute(text("""INSERT INTO stock_action_observations
-          (source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id)
-          VALUES (:s,:r,now(),1,'snapshot','alias')"""), {"s":sid,"r":rid})
-    assert (await conn.execute(text("SELECT count(*) FROM stock_action_revisions WHERE event_id=:e"), {"e":eid})).scalar_one() == 1
+          VALUES (:e,:s,:r,now(),1,'snapshot','alias')"""),
+        {"e": eid, "s": sid, "r": rid},
+    )
+    assert (
+        await conn.execute(
+            text("SELECT source_id FROM stock_action_revisions WHERE id=:r"), {"r": rid}
+        )
+    ).scalar_one() == origin
+    assert (
+        await conn.execute(
+            text("SELECT count(*) FROM stock_action_revisions WHERE event_id=:e"), {"e": eid}
+        )
+    ).scalar_one() == 1
 
 
 async def fill_cause(conn: AsyncConnection, cid: int, uid: int) -> int:
-    return (await conn.execute(text("""INSERT INTO trades
+    return (
+        await conn.execute(
+            text("""INSERT INTO trades
       (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
        exec_price,fee,cash_delta,cash_after,idempotency_key)
       VALUES (:u,:c,'buy','quantity',2,2,10,now(),10,0,-20,9980,gen_random_uuid())
-      RETURNING id"""), {"c":cid,"u":uid})).scalar_one()
+      RETURNING id"""),
+            {"c": cid, "u": uid},
+        )
+    ).scalar_one()
 
 
 @pytest.mark.parametrize("mismatch", ["user", "coin"])
 async def test_movement_rejects_foreign_fill_cause(ledger, mismatch: str) -> None:
-    conn,cid,uid=ledger
-    foreign_cid=cid
-    foreign_uid=uid
+    conn, cid, uid = ledger
+    foreign_cid = cid
+    foreign_uid = uid
     if mismatch == "coin":
-        foreign_cid=(await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+        foreign_cid = (
+            await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))
+        ).scalar_one()
     else:
-        foreign_uid=(await conn.execute(text("INSERT INTO users(email) VALUES (:e) RETURNING id"), {"e":f"foreign-{uuid4()}@example.test"})).scalar_one()
-    tid=await fill_cause(conn,foreign_cid,foreign_uid)
+        foreign_uid = (
+            await conn.execute(
+                text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                {"e": f"foreign-{uuid4()}@example.test"},
+            )
+        ).scalar_one()
+    tid = await fill_cause(conn, foreign_cid, foreign_uid)
     with pytest.raises(DBAPIError) as error:
-        await movement(conn,cid,uid,kind="fill",trade=tid)
+        await movement(conn, cid, uid, kind="fill", trade=tid)
     assert error.value.orig.sqlstate == "23503"
+
+
+@pytest.mark.parametrize("mismatch", ["source", "revision"])
+async def test_observation_rejects_cross_event_alias(ledger, mismatch: str) -> None:
+    conn, cid, _ = ledger
+    eid, sid, rid = await event(conn, cid)
+    _, other_source, other_revision = await event(conn, cid)
+    if mismatch == "source":
+        sid = other_source
+    else:
+        rid = other_revision
+    with pytest.raises(DBAPIError) as error:
+        await conn.execute(
+            text("""INSERT INTO stock_action_observations
+          (event_id,source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id)
+          VALUES (:e,:s,:r,now(),1,'snapshot','foreign')"""),
+            {"e": eid, "s": sid, "r": rid},
+        )
+    assert error.value.orig.sqlstate == "23503"
+
+
+async def split_cause(conn: AsyncConnection, cid: int) -> int:
+    eid, _, rid = await event(conn, cid)
+    return (
+        await conn.execute(
+            text("""INSERT INTO stock_split_applications
+      (coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,
+       prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)
+      VALUES (:c,:e,:r,'2','1',now(),0,1,0,:f,:f,now()) RETURNING id"""),
+            {"c": cid, "e": eid, "r": rid, "f": "a" * 64},
+        )
+    ).scalar_one()
+
+
+@pytest.mark.parametrize("mismatch", ["coin", "epoch"])
+async def test_movement_rejects_foreign_split_cause(ledger, mismatch: str) -> None:
+    conn, cid, uid = ledger
+    source_coin = cid
+    if mismatch == "coin":
+        source_coin = (
+            await conn.execute(
+                text(
+                    "SELECT coin_id FROM stock_instruments WHERE coin_id<>:c "
+                    "ORDER BY coin_id LIMIT 1"
+                ),
+                {"c": cid},
+            )
+        ).scalar_one()
+    app = await split_cause(conn, source_coin)
+    with pytest.raises(DBAPIError) as error:
+        await movement(
+            conn,
+            cid,
+            uid,
+            kind="split",
+            app=app,
+            before=Decimal(2),
+            after=Decimal(4),
+            bb=Decimal(20),
+            epoch=0 if mismatch == "epoch" else 1,
+        )
+    assert error.value.orig.sqlstate == "23503"
+
+
+async def test_split_application_cannot_claim_another_event_coin(ledger) -> None:
+    conn, cid, _ = ledger
+    app = await split_cause(conn, cid)
+    other = (
+        await conn.execute(
+            text(
+                "SELECT coin_id FROM stock_instruments WHERE coin_id<>:c ORDER BY coin_id LIMIT 1"
+            ),
+            {"c": cid},
+        )
+    ).scalar_one()
+    with pytest.raises(DBAPIError) as error:
+        await conn.execute(
+            text("UPDATE stock_split_applications SET coin_id=:c WHERE id=:a"),
+            {"c": other, "a": app},
+        )
+    assert error.value.orig.sqlstate == "23503"
+
+
+async def test_valid_causes_work_under_runtime_grants_without_trade_read(
+    engine: AsyncEngine,
+    runtime_roles: None,
+) -> None:
+    async with engine.connect() as conn:
+        tx = await conn.begin()
+        try:
+            uid = (
+                await conn.execute(
+                    text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                    {"e": f"causes-{uuid4()}@example.test"},
+                )
+            ).scalar_one()
+            cid = (
+                await conn.execute(
+                    text("SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 1")
+                )
+            ).scalar_one()
+            tid = await fill_cause(conn, cid, uid)
+            app = await split_cause(conn, cid)
+            await conn.execute(text("SET LOCAL ROLE birja_app"))
+            await movement(conn, cid, uid, kind="fill", trade=tid)
+            await conn.execute(text("RESET ROLE"))
+            await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
+            await denied(conn, "SELECT id FROM trades LIMIT 1")
+            await movement(
+                conn,
+                cid,
+                uid,
+                kind="split",
+                app=app,
+                before=Decimal(2),
+                after=Decimal(4),
+                bb=Decimal(20),
+                epoch=1,
+                seq=2,
+                key="split",
+            )
+            await conn.execute(text("RESET ROLE"))
+            assert (
+                await conn.execute(
+                    text("SELECT count(*) FROM stock_ownership_movements WHERE user_id=:u"),
+                    {"u": uid},
+                )
+            ).scalar_one() == 2
+        finally:
+            await tx.rollback()
