@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-03; Wave1 integration pending Plan01 schema-review fixes.
+stopped_at: Completed08-03; Plan01 schema-review fixes implemented, independent re-review pending.
 last_updated: "2026-11-11T10:47:22.510Z"
 last_activity: 2026-11-11
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 2 of 13 executed (29 tasks, 11 waves)
-Status: Plans01/03 implemented; Wave1 integration pending Plan01 schema-review fixes
+Status: Plans01/03 implemented; Plan01 fixes await independent re-review
 Last activity: 2026-11-11
 Progress: [██████░░░░] 56%
 
@@ -49,8 +49,11 @@ authority, frozen exact action/cutoff/split contracts and persistent-hold safety
 decisions.175scoped tests pass2.06s with all3modules100%statements/branches;
 259calendar/quote/admission/economic regressions pass4.64s;5file Ruff/format
 and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration remains pending
-the separate08-01review fixes for alias observations and causal FK consistency;
-no claim those findings are resolved. Next: resolve that integration review,
+independent re-review of08-01fixes for alias observations and causal FK consistency.
+Fix5d0353a passes88isolated migration/quote/role tests8.14s, scoped lint/format
+and model types; new observation event_id, application coin_id and composite
+economic-cause FKs are included. No claim independent review has passed.
+Next: complete that integration re-review,
 then dependency-ordered Wave2 isolated implementation. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,
 and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data

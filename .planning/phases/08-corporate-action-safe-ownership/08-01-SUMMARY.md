@@ -21,6 +21,7 @@ key-files:
     - backend/tests/test_stock_action_migrations.py
   modified:
     - backend/app/models/stock.py
+    - backend/app/models/trade.py
     - backend/app/models/__init__.py
     - backend/app/services/stock_quotes.py
     - backend/tests/test_stock_quotes.py
@@ -77,7 +78,7 @@ Reviewed predecessor SHA256:
 | --- | --- |
 |0009|9a9510aff3bb616398a239c2d1eec4a81964ad733c7746ed09f122a6992240fa|
 |0010|f231c3b62213a0f033a463833ef4cdf6a0b8cb5ee62a20680d1111dc11ad992c|
-|0011|f6700d5b02741b2ac201749ff807dc7744fa4a461331556875649be8273f4be4|
+|0011 initial implementation, superseded by review fixes below|f6700d5b02741b2ac201749ff807dc7744fa4a461331556875649be8273f4be4|
 
 API/SQL reference checks: [SQLAlchemy2.0 constraints](https://docs.sqlalchemy.org/en/20/core/constraints.html), [PostgreSQL18 GRANT](https://www.postgresql.org/docs/current/sql-grant.html).
 
@@ -102,3 +103,58 @@ Ready for08-03 in Wave1 and08-02 exact recovery/TLS integration. No corporate-ac
 ## Self-Check: PASSED
 
 All created source/test files exist; four task commits are present; final targeted tests and static checks pass; predecessor files remain unchanged. No required implementation stub remains in this plan.
+
+## Focused Independent Review Corrections
+
+The independent08-01 review found two blockers in the initial implementation:
+same-event verified aliases could not observe their original economic revision,
+and ownership cause FKs did not bind owner/instrument or split-result units.
+These findings supersede the initial invariant claims for those exact boundaries.
+
+Observed behavioral RED `0abc846` demonstrated three genuine failures: a valid
+same-event alias was rejected by the originating-source FK, and forged cross-user
+and cross-instrument fill causes were accepted. GREEN `5d0353a` implements:
+
+- `stock_action_observations.event_id` with indexed FK and composite
+  `(source_id,event_id)` / `(revision_id,event_id)` references. A verified alias
+  observes the original revision without rewriting its originating source,
+  duplicating the fingerprint or losing scoped mutation uniqueness. Cross-event
+  source and revision references are refused by PostgreSQL.
+- `stock_split_applications.coin_id`, indexed and tied to the event's instrument,
+  plus unique `(id,coin_id,new_unit_epoch)`. Ownership split causes reference
+  `(application_id,coin_id,unit_epoch)`; wrong instrument or resulting epoch fails.
+- Existing `trades` gain unique `(id,coin_id,user_id)` using a concurrently built
+  index attached as `uq_trades_id_coin_user`. Ownership fill causes reference
+  `(trade_id,coin_id,user_id)`. No existing financial row is rewritten. The
+  legacy history-index test compares its original financial constraints while
+  the complete current metadata/schema comparison verifies the new causal key.
+
+The unmerged local0011 was amended only after safely downgrading the empty
+isolated ledger to0010. No durable record was removed to downgrade. No function,
+trigger, SECURITY DEFINER or runtime privilege widening was needed. Actual
+matching fill/split movement INSERTs succeed under app/scheduler grants, while
+scheduler SELECT on trades still fails42501. Operator preprovisioning remains
+required before restricted0011 migration.
+
+Final corrected proof: **88targeted tests pass8.14s**, including alias/adversarial
+causal cases, actual roles, quote persistence, preserved legacy snapshots and
+complete ORM/migration parity. Scoped Ruff/format5files and mypy2models pass;
+git diff --check passes. All test fixtures roll back and isolated runtime-role
+fixtures clean up. The birja-test stack remains available for next plans.
+
+Frozen source identities after corrections:
+
+| File | SHA256 |
+| --- | --- |
+|0011_stock_action_accounting.py|4a5e5a9a29198096e6cd47ea126f9cca4fd88ca050c8d952f73c82d02f62e6eb|
+|corporate_action.py|84d5129e7e57811008f494c5231123b4ce1264f86910177f5c5cb27a8b0fc6fb|
+|trade.py|5211c0b884c58537a467c4d51e42b47534b5a0431514649ae07e33f92f7842f2|
+
+Plan02 canonical recovery must include both new fields, new composite constraints
+and the existing-trades composite unique index. Independent re-review is
+**pending**; executor verification does not declare the review clean. Requirements
+remain addressed, not completed. No03 sources, provider access, production,
+scheduled process or publication changed.
+
+Review-fix self-check: both RED/GREEN commits and all revised files exist;
+reported final tests/static checks were actually executed and passed.
