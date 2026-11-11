@@ -615,28 +615,32 @@ must be made concrete by the planner, not presented as completed implementation.
 | Actual Phase7 source coverage/freshness and Phase8 action rights/history | OWNER-DEFERRED | Preserve deferral; no new campaign inferred |
 | New test runtime durations | UNMEASURED | Budgets below are targets, record actual execution |
 
-## Open Questions and Resolutions
+## Open Questions (RESOLVED)
 
-1. **Status product:** source docs establish message shape, not a complete
+1. **RESOLVED — Status product:** source docs establish message shape, not a complete
    real-time oracle or account grant. Resolve locally with a fail-closed typed
    persisted contract and finite replay fixtures; real activation waits for
    measured permitted bootstrap/continuity. This is not a request to re-approve
    previously attested quote rights. [CITED: Alpaca real-time docs;
    VERIFIED: 07/08-ACTIVATION.md]
-2. **Historical retention horizon:** current quote admission validation bounds
+2. **RESOLVED — Historical retention horizon:** current quote admission validation bounds
    retention_seconds to86400, so weekends may exceed permitted retained marks.
    Show unavailable after actual retention expiry; do not silently extend rights
    to satisfy the visual preference. A later rights/model change requires its
    own review. [VERIFIED: stock_admission.py:evaluate_admission;
    stocks.py:retained_until]
-3. **Exact schema:** planner must select concrete additive facts/guards and
-   recovery/grant proof before scheduling runtime work. No live financial data
-   backfill or rewrite is justified. [RECOMMENDATION; VERIFIED: CLAUDE.md migrations]
-4. **Buy max tie behavior:** conservative floor policy is safe and satisfies a
-   draft shortcut; if exact largest cent-rounded affordable quantity is selected
-   instead, derive it with bounded integer/Decimal math and test half-even ties,
-   numeric capacity and no overspend. Avoid a linear decrement loop.
-   [RECOMMENDATION within D-01 discretion]
+3. **RESOLVED — Exact schema:** Plans09-01/03 select additive0013 immutable
+   stock fill facts and independent status tables, deferred cross-row integrity
+   triggers and a narrowly granted SECURITY INVOKER final execution guard.
+   Plan09-04 proves exact recovery/grants and populated/fresh verified-TLS
+   parity before runtime consumers. No live financial backfill or prior-row
+   rewrite is scheduled. [VERIFIED: 09-01/03/04-PLAN.md; CLAUDE.md migrations]
+4. **RESOLVED — Buy max tie behavior:** Plans09-01/02 select conservative
+   floor(cash/ask), bounded by supported quantity/notional/basis capacities and
+   checked with the exact stock trade predicate. Cover half-even boundaries,
+   numeric capacity and no overspend; do not use a linear decrement loop.
+   This is a draft shortcut, not a guaranteed fill or cent-rounded optimization.
+   [VERIFIED: 09-01/02-PLAN.md; D-01 discretion]
 
 ## Environment Availability
 

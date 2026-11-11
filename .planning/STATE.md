@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: ready_to_plan
-stopped_at: Phase 9 context gathered
-last_updated: "2026-11-11T18:28:56.252Z"
-last_activity: 2026-11-11
+status: ready_to_execute
+stopped_at: Phase 9 planning complete — 15 plans verified
+last_updated: "2026-11-11T19:02:50.240Z"
+last_activity: 2026-11-11 -- Phase 9 planning complete
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 27
+  total_plans: 42
   completed_plans: 26
-  percent: 96
+  percent: 62
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (planning next)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (ready to execute)
 
 ## Current Position
 
 Phase: 9
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-11
-Progress: [██████████] 96%
+Plan: 0/15 complete (30 tasks in 13 waves)
+Status: Ready to execute
+Last activity: 2026-11-11 -- Phase 9 planning complete
+Progress: [██████░░░░] 62% (26/42 tracked plans complete)
 
 ## Completion and next action
 
@@ -40,10 +40,17 @@ semantic links; no blocker/openwarning/override. Owner accepted the new UI and
 explicitly deferred live activation. All47local security controls close; live
 product rights/suitability and Phase7 live evidence remain unverified/disabled.
 Existing full test/coverage/browser/image/recovery/TLS proof is unchanged.
-Phase9 discussion is complete. Context and decision audit are saved in
-09-CONTEXT.md and09-DISCUSSION-LOG.md under
-.planning/phases/09-whole-share-trading-and-combined-portfolio/.
-Next: $gsd-plan-phase 9 on owner invocation; do not implement or activate automatically.
+Phase9 planning is complete:15plans/30tasks/13waves,9/9assigned requirements
+and16/16saved decisions covered. Research, patterns, approved UI contract, exact
+validation map and source audit are saved in its phase directory. Independent
+09-PLAN-CHECK.md passes after one resolved documentation finding, with0active
+blockers/warnings and no override. All15SDK frontmatter/structure checks and
+whitespace checks pass. No application tests ran for these documentation changes.
+Next: $gsd-execute-phase 9 on owner invocation, beginning09-01; do not implement
+or activate automatically. Live Phase7/8 evidence stays owner-deferred. The
+new0013recovery/verified-TLS proof precedes runtime consumers; actual financial
+concurrency, stock/crypto regressions, browser/security/coverage/image gates and
+newUIowner acceptance are future execution obligations.
 No new provider, production, B2, publication, push/PR/merge or deployment action
 is authorized. Phase8 local completion does not satisfy future stock fills,
 cash dividends/publicHistory or final mixed-asset acceptance.
@@ -457,10 +464,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T18:28:56.230Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-CONTEXT.md
-Resume: Phase9 context gathered; next is $gsd-plan-phase 9 on owner invocation. Phase8 independent goal verification passed and local completion is recorded. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
+Last session:2026-11-11T19:03:56.439388Z
+Stopped at: Phase 9 planning complete — 15 plans verified
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-01-PLAN.md
+Resume: Phase9 plans verified; next is $gsd-execute-phase 9 on owner invocation. No Phase9 implementation has run. Phase8 independent goal verification passed and local completion is recorded. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
 Completed verification: .planning/phases/08-corporate-action-safe-ownership/08-VERIFICATION.md (passed locally).
 Completed reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are clear; actual owner checkpoints are recorded separately.
 Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.

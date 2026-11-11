@@ -213,7 +213,82 @@ no production or installed-tool change is authorized by these plans.
   4. Retrying an uncertain order returns its original stored fill exactly once even after closing time; changing its payload under the same key conflicts. (STKTR-05)
   5. User sees combined cash, crypto and midpoint-valued stocks, allocation and return against original starting cash, with IEX attribution. Closed marks show actual dates; missing/action-uncertain marks make totals explicitly incomplete. Dividend cash is counted once when Phase 10 enables credits. (PORT-06, PORT-07)
 
-**Plans**: TBD
+**Plans**: 15 plans in13 execution waves
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md — Freeze stock financial and authority contracts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-02-PLAN.md — Implement exact whole-share plans and conservative shortcuts
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 09-03-PLAN.md — Add successor stock facts and independent status integrity
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 09-04-PLAN.md — Prove exact0013 recovery and least-privilege TLS parity
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 09-05-PLAN.md — Implement bounded independent status and stock eligibility
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 09-06-PLAN.md — Implement atomic stock execution and global idempotency
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 09-07-PLAN.md — Prove shared-cash, action-order and final-wait concurrency
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 09-08-PLAN.md — Expose authenticated stock preview, context and fill APIs
+- [ ] 09-09-PLAN.md — Compute honest mixed portfolio from one financial snapshot
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 09-10-PLAN.md — Implement strict stock client and protected order-attempt lifecycle
+- [ ] 09-12-PLAN.md — Present protected combined portfolio and three allocation classes
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 09-11-PLAN.md — Deliver the reachable whole-share ticket and immutable receipt
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 09-13-PLAN.md — Exercise actual isolated browser journeys and accessibility
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 09-14-PLAN.md — Close strict local financial, recovery and independent review gates
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 09-15-PLAN.md — Obtain owner acceptance of the new Phase9 interface
+
+**Cross-cutting constraints:**
+
+- D-01: User edits only positive whole-share stock quantity; Buy max/Sell all populate drafts requiring preview and confirmation.
+- D-03: Relevant stock price changes show old-to-new execution price and cash-total difference and require renewed confirmation.
+- D-04: User remains on original persisted receipt with historical cash/share-after and Portfolio/Trade again actions.
+- D-09: Incomplete portfolio shows Known value and unvalued count, with unavailable total returns and all allocation percentages.
+- D-14: New fills require current regular session, normal independent status and action/permission safety plus quote age strictly below120seconds after all waits.
+- D-15: Mixed orders share original cash without new grant/overspend; same-key original receipt replays even after close and payload changes conflict.
+- D-16: Stocks use midpoint/dated closed marks; unknown actions make valuation unavailable, and future dividend cash is counted once from Account.cash.
+- D-02: User sees IEX bid/ask, buys at ask or sells at bid with zero stock fee/spread; crypto inputs/fees remain unchanged.
+- D-13: Stock journey discloses IEX single venue, simulated execution, omitted regulatory fees and immediately reusable virtual proceeds.
+- D-10: Verified halt retains permitted compatible dated last midpoint with Halted label; action uncertainty suppresses it.
+- D-11: Unavailable stock ticket allows quantity drafting but disables confirmation and unsafe estimates; no order is queued.
+- D-12: Interrupted review retains quantity, invalidates preview and requires fresh preview plus confirmation without autoexecution.
+- D-05: User sees one shared cash balance and combined labelled Stock/Crypto holdings list.
+- D-06: Holdings remain alphabetical by ticker with stable identity tie-break as prices refresh.
+- D-07: Quantity, average cost, basis, value, gain/loss and allocation appear directly in desktop table/mobile cards.
+- D-08: Allocation displays Cash/Stocks/Crypto class bars and individual holding percentages only when complete.
+
 **UI hint**: yes
 
 ### Phase 10: Dividend Cash and Event History
@@ -261,7 +336,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/15 | Planned | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
