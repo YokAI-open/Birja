@@ -181,7 +181,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 08-11-PLAN.md — Render accessible responsive suspension states and browser proof. (Wave 9)
+- [x] 08-11-PLAN.md — Render accessible responsive suspension states and browser proof. (Wave 9)
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 10/13 | In Progress|  |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 11/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

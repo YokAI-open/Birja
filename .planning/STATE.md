@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Wave8 passed;419 frontend tests and full static/build gates; next08-11
-last_updated: "2026-11-11T16:19:01Z"
+status: Plans01–11 implemented; parent Wave9 integration and Plan12 next
+stopped_at: Plan08-10 implementation complete; independent review clean; Wave8 fullfrontend gate pending
+last_updated: "2026-11-11T16:55:26.435Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 23
-  percent: 85
+  completed_plans: 24
+  percent: 89
 ---
 
 # Project State
@@ -26,12 +26,24 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 10 of 13 executed (29 tasks, 11 waves)
-Status: Wave8 complete; Plans01–10 reviewed and integrated; next08-11
+Plan: 11 of 13 executed (29 tasks, 11 waves)
+Status: Plans01–11 implemented; parent Wave9 integration and Plan12 next
 Last activity: 2026-11-11
-Progress: [█████████░] 85%
+Progress: [█████████░] 89%
 
 ## Completion and next action
+
+Plan08-11 completes fixed corporate-action suspension copy, independent status
+facts, safe valuation/time suppression, contextual announcements and keyboard
+retry recovery.17RTL tests pass5.56s; scoped types/lint/format pass. Broad isolated
+Chromium matrix passes21stories69.4s. Final class-only zoom correction0cea8b5
+passes all four responsive widths plus actualCSS200%/640CSS reflow:5stories21.5s,
+all table cells within bounds. Final screenshot packet08-11-BROWSER.md preserves
+precise zoom limitations; sourceSHA aee6a806 and all owned resources cleaned.
+Parent owns final independent source/visual review and full Wave9/Plan12 gates.
+Phase8 owner acceptance and whole-phase requirements remain pending. No provider,
+production, financialcash/History, dependency or publication changes.
+See08-11-SUMMARY.md.
 
 Plan08-10 implements strict client action/valuation validation, exact source/session
 coherence and authenticated epoch/server-time high-water guards. Original transport
@@ -388,6 +400,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P08 | 104min | 3 tasks | 13 files |
 | Phase 8 P09 | 20min | 2 tasks | 8 files |
 | Phase 8 P10 | 32min | 2 tasks | 5 files |
+| Phase 8 P11 | 39min | 2 tasks | 7 files |
 
 ## Operations
 
@@ -397,8 +410,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T16:06:17.913Z
-Stopped at: Plan08-10 implementation complete; independent review clean; Wave8 fullfrontend gate pending
+Last session:2026-11-11T16:55:26.417Z
+Stopped at: Plan08-11 complete; final source frozen; parent Wave9 and Plan12 next
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
