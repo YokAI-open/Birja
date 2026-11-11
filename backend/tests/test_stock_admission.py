@@ -8,6 +8,7 @@ from pydantic import SecretStr, ValidationError
 
 from app.core.config import SchedulerSettings, Settings
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_quote_rules import CURATED_SYMBOLS
 
 NOW = datetime(2026, 11, 10, 15, tzinfo=UTC)
 
@@ -51,7 +52,7 @@ def admitted(product: str = "quotes") -> ProductAdmission:
     )
 
 
-@pytest.mark.parametrize("product", ["reference", "quotes", "actions", "status"])
+@pytest.mark.parametrize("product", ["reference", "quotes", "status"])
 @pytest.mark.parametrize("purpose", ["collection", "display", "derived", "retention"])
 async def test_complete_specific_evidence_allows_only_requested_purpose(
     product: str, purpose: str
@@ -62,6 +63,72 @@ async def test_complete_specific_evidence_allows_only_requested_purpose(
     assert result.generation == 4
     assert result.valid_until == evidence.valid_until
     assert result.attribution == "IEX prices"
+
+
+def action_admitted() -> ProductAdmission:
+    evidence = admitted("actions")
+    return replace(
+        evidence,
+        allowed_fields=["provider_event_id", "symbol", "event_type", "process_date"],
+        scope={
+            **evidence.scope,
+            "feed": "alpaca-corporate-actions",
+            "capabilities": ["rest", "replay"],
+            "rest_symbols": sorted(CURATED_SYMBOLS),
+            "replay_region": "us",
+            "all_us_replay_ingress": True,
+            "durable_accounting": True,
+            "backup_restore": True,
+            "retention_mode": "durable-accounting",
+        },
+        quota={**evidence.quota, "retention_seconds": 315360000},
+    )
+
+
+@pytest.mark.parametrize("purpose", ["collection", "display", "derived", "retention"])
+async def test_action_authority_requires_separate_product_and_durable_rights(purpose: str) -> None:
+    assert not evaluate_admission(admitted("actions"), "actions", purpose, NOW).allowed
+    evidence = action_admitted()
+    assert evaluate_admission(
+        evidence, "actions", purpose, NOW, feed="alpaca-corporate-actions"
+    ).allowed
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("durable_accounting", False),
+        ("backup_restore", False),
+        ("retention_mode", "unknown"),
+        ("capabilities", []),
+        ("capabilities", ["replay"]),
+        ("all_us_replay_ingress", False),
+        ("rest_symbols", ["AAPL"]),
+        ("replay_region", "eu"),
+    ],
+)
+async def test_action_missing_capability_or_storage_scope_denies(field: str, value: object) -> None:
+    evidence = action_admitted()
+    assert not evaluate_admission(
+        replace(evidence, scope={**evidence.scope, field: value}),
+        "actions",
+        "collection",
+        NOW,
+        feed="alpaca-corporate-actions",
+    ).allowed
+
+
+async def test_action_rest_only_does_not_imply_replay_authority() -> None:
+    evidence = action_admitted()
+    evidence = replace(
+        evidence, scope={**evidence.scope, "capabilities": ["rest"], "all_us_replay_ingress": False}
+    )
+    assert evaluate_admission(
+        evidence, "actions", "collection", NOW, feed="alpaca-corporate-actions", capability="rest"
+    ).allowed
+    assert not evaluate_admission(
+        evidence, "actions", "collection", NOW, feed="alpaca-corporate-actions", capability="replay"
+    ).allowed
 
 
 @pytest.mark.parametrize("purpose", ["collection", "display", "derived", "retention"])
