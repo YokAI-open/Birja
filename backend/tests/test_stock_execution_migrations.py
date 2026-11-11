@@ -1,5 +1,6 @@
 """Actual PostgreSQL immutable stock receipt and cross-row financial tests."""
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -18,7 +19,7 @@ async def receipt(engine, migrated, new_user):
         await tx.rollback()
 
 
-async def complete_receipt(conn, cid, uid, *, movement_changes=None, **changes):
+async def complete_receipt(conn, cid, uid, *, movement_changes=None, authority=None, **changes):
     tid = await insert_trade(conn, cid, uid, **changes)
     await conn.execute(
         text("""INSERT INTO stock_fill_facts
@@ -28,8 +29,8 @@ async def complete_receipt(conn, cid, uid, *, movement_changes=None, **changes):
       SELECT id,coin_id,user_id,'fixture-asset','AAPL','Test company','NASDAQ',
       'alpaca','iex',10,10,10,2,price_as_of,price_as_of,price_as_of,
       (price_as_of AT TIME ZONE 'UTC')::date,price_as_of-interval '1 hour',
-      price_as_of+interval '1 hour','{}' FROM trades WHERE id=:t"""),
-        {"t": tid},
+      price_as_of+interval '1 hour',CAST(:authority AS jsonb) FROM trades WHERE id=:t"""),
+        {"t": tid, "authority": json.dumps(authority or {})},
     )
     movement_values = {"c": cid, "u": uid, "t": tid, "k": str(uuid4()), "bb": "0", "ab": "20"}
     movement_values.update(movement_changes or {})
@@ -44,14 +45,15 @@ async def complete_receipt(conn, cid, uid, *, movement_changes=None, **changes):
 
 
 async def insert_trade(conn, cid, uid, **changes):
-    values = dict(c=cid, u=uid, q="2", fee="0", delta="-20", price="10", key=str(uuid4()))
+    values = dict(c=cid, u=uid, q="2", fee="0", delta="-20", price="10", key=str(uuid4()), at=None)
     values.update(changes)
     return (
         await conn.execute(
             text("""INSERT INTO public.trades
       (coin_id,user_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
        exec_price,fee,cash_delta,cash_after,idempotency_key)
-      VALUES (:c,:u,'buy','quantity',:q,:q,10,clock_timestamp(),:price,:fee,:delta,9980,:key)
+      VALUES (:c,:u,'buy','quantity',:q,:q,10,
+      COALESCE(CAST(:at AS timestamptz),clock_timestamp()),:price,:fee,:delta,9980,:key)
       RETURNING id"""),
             values,
         )

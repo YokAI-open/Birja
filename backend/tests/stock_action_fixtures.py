@@ -1,5 +1,6 @@
 """Explicit synthetic ownership seeds. Never imported by application code."""
 
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -19,6 +20,35 @@ from app.models.corporate_action import (
 from app.models.stock import StockInstrument
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding, Trade
+
+
+@asynccontextmanager
+async def synthetic_corruption(db, table, *, trigger="stock_record_immutable"):
+    """Privileged isolated corruption SETUP only; restore before tested reads.
+
+    Failed DDL/DML aborts its transaction, so rollback restores trigger state.
+    Never call around production behavior or a restricted-role assertion.
+    """
+    if table not in ("trades", "stock_fill_facts", "stock_ownership_movements") or trigger not in (
+        "stock_record_immutable",
+        "stock_fill_integrity",
+    ):
+        raise RuntimeError("Fixed corruption target required")
+    allowed = (
+        await db.execute(
+            text("""SELECT current_database()='birja_test'
+      AND current_user='birja_test' AND rolsuper FROM pg_roles WHERE rolname=current_user""")
+        )
+    ).scalar_one()
+    if not allowed:
+        raise RuntimeError("Privileged isolated corruption setup only")
+    await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await db.execute(text(f"ALTER TABLE public.{table} DISABLE TRIGGER {trigger}"))
+    try:
+        yield
+        await db.flush()
+    finally:
+        await db.execute(text(f"ALTER TABLE public.{table} ENABLE TRIGGER {trigger}"))
 
 
 @pytest_asyncio.fixture
@@ -134,7 +164,9 @@ async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy
             bid=Decimal(10),
             ask=Decimal(10),
             exact_mid=Decimal(10),
-            held_after=held + (quantity if side == "buy" else -quantity),
+            # Invalid oversell fixtures are rolled back by refusal tests before
+            # any movement; keep receipt locally valid to reach that behavior.
+            held_after=max(Decimal(0), held + (quantity if side == "buy" else -quantity)),
             event_at=now,
             collected_at=now,
             observed_at=now,

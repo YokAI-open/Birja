@@ -23,7 +23,12 @@ from app.services.stock_ownership import (
     require_supported_transaction_epoch,
 )
 from tests.stock_action_fixtures import ownership as _ownership_fixture
-from tests.stock_action_fixtures import synthetic_fill, synthetic_opening, synthetic_split
+from tests.stock_action_fixtures import (
+    synthetic_corruption,
+    synthetic_fill,
+    synthetic_opening,
+    synthetic_split,
+)
 from tests.test_stock_action_migrations import runtime_roles as _runtime_roles
 
 ownership = _ownership_fixture
@@ -229,7 +234,8 @@ async def test_movement_integrity_held_for_global_drift(ownership, drift):
                 update(Holding).where(Holding.coin_id == coin_id).values(cost_basis=21)
             )
         elif drift == "sequence":
-            row.sequence = 2
+            async with synthetic_corruption(db, "stock_ownership_movements"):
+                row.sequence = 2
         elif drift == "baseline":
             await db.execute(
                 update(StockActionState)
@@ -237,7 +243,8 @@ async def test_movement_integrity_held_for_global_drift(ownership, drift):
                 .values(complete_from=None)
             )
         else:
-            row.economic_at = row.economic_at - timedelta(days=6)
+            async with synthetic_corruption(db, "stock_ownership_movements"):
+                row.economic_at = row.economic_at - timedelta(days=6)
     async with factory() as db:
         with pytest.raises(OwnershipHeld):
             await assert_ownership_consistent(db, coin_id)
@@ -364,7 +371,7 @@ async def test_reconstruction_multi_owner_partial_split_is_held(ownership, new_u
 async def test_reconstruction_corrupt_units_or_causality_held(ownership, new_user, damage):
     factory, coin_id, user_id = ownership
     other = await new_user()
-    async with factory.begin() as db:
+    async with factory() as db:
         cutoff, app = await split_history(db, coin_id, user_id)
         rows = (
             (
@@ -378,11 +385,13 @@ async def test_reconstruction_corrupt_units_or_causality_held(ownership, new_use
             .all()
         )
         if damage == "unit":
-            rows[0].unit_epoch = 1
+            async with synthetic_corruption(db, "stock_ownership_movements"):
+                rows[0].unit_epoch = 1
         elif damage == "boundary":
             app.sequence_boundary = 3
         elif damage == "split_time":
-            rows[1].economic_at += timedelta(seconds=1)
+            async with synthetic_corruption(db, "stock_ownership_movements"):
+                rows[1].economic_at += timedelta(seconds=1)
         elif damage == "split_ratio":
             app.new_rate = "3"
         elif damage == "epoch":
@@ -437,7 +446,11 @@ async def test_reconstruction_unknown_coverage_or_future(ownership, days):
 async def test_movement_committed_unmatched_fill_refused(ownership):
     factory, coin_id, user_id = ownership
     async with factory.begin() as db:
-        trade = await synthetic_fill(db, coin_id, user_id)
+        async with (
+            synthetic_corruption(db, "trades", trigger="stock_fill_integrity"),
+            synthetic_corruption(db, "stock_fill_facts", trigger="stock_fill_integrity"),
+        ):
+            trade = await synthetic_fill(db, coin_id, user_id)
         movement = StockMovementInput(user_id, coin_id, Decimal(2), Decimal(20), "late", trade.id)
     async with factory() as db:
         with pytest.raises(OwnershipHeld, match="non_atomic_fill"):
@@ -452,6 +465,7 @@ async def test_movement_real_app_append_replay_and_authority_denied(
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
     from app.models.stock import StockInstrument
+    from app.models.stock_execution import StockFillFacts
     from app.models.trade import Trade
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -510,11 +524,15 @@ async def test_movement_real_app_append_replay_and_authority_denied(
             assert error.value.orig.sqlstate == "42501"
     finally:
         async with factory.begin() as db:
-            await db.execute(
-                delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id == cid)
-            )
+            async with synthetic_corruption(db, "stock_fill_facts"):
+                await db.execute(delete(StockFillFacts).where(StockFillFacts.coin_id == cid))
+            async with synthetic_corruption(db, "stock_ownership_movements"):
+                await db.execute(
+                    delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id == cid)
+                )
             await db.execute(delete(Holding).where(Holding.coin_id == cid))
-            await db.execute(delete(Trade).where(Trade.coin_id == cid))
+            async with synthetic_corruption(db, "trades"):
+                await db.execute(delete(Trade).where(Trade.coin_id == cid))
             await db.execute(delete(StockActionState).where(StockActionState.coin_id == cid))
 
 
@@ -528,18 +546,17 @@ async def test_movement_fill_must_match_real_cause_and_result(ownership, new_use
 
     factory, cid, uid = ownership
     other = await new_user()
-    async with factory.begin() as db:
+    async with factory() as db:
         if damage == "account":
             await db.execute(delete(Account).where(Account.user_id == uid))
         trade = await synthetic_fill(
-            db, cid, uid, side="sell" if damage in ("oversell", "emptybasis") else "buy"
+            db, cid, uid, side="sell" if damage in ("oversell", "emptybasis", "side") else "buy"
         )
         request = StockMovementInput(uid, cid, Decimal(2), Decimal(20), "bad-fill", trade.id)
         if damage == "quantity":
             request = replace(request, quantity=Decimal(3))
         elif damage == "side":
-            trade.side = "sell"
-            trade.cash_delta = Decimal(20)
+            pass  # INSERT already supplies the mismatched sell cause.
         elif damage == "basis":
             request = replace(request, after_basis=Decimal(21))
         elif damage == "owner":
@@ -613,11 +630,12 @@ async def test_movement_concurrent_gap_commit_is_not_hidden_by_snapshot(ownershi
         pid = (await waiter.execute(select(func.pg_backend_pid()))).scalar_one()
         task = asyncio.create_task(append_stock_movement(waiter, request))
         await wait_blocked(engine, pid)
-        await blocker.execute(
-            update(StockOwnershipMovement)
-            .where(StockOwnershipMovement.id == opening_id)
-            .values(sequence=2)
-        )
+        async with synthetic_corruption(blocker, "stock_ownership_movements"):
+            await blocker.execute(
+                update(StockOwnershipMovement)
+                .where(StockOwnershipMovement.id == opening_id)
+                .values(sequence=2)
+            )
         await blocker.commit()
         with pytest.raises(OwnershipHeld, match="history_gap"):
             await asyncio.wait_for(task, 5)
