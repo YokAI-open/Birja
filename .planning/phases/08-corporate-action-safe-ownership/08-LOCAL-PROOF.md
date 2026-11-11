@@ -304,3 +304,42 @@ intact; an internal monotonic bound only removes authority.
 Ten of thirteen plans and eight of eleven waves are complete. Next08-11 renders
 and proves the approved responsive safety states. Requirements, human acceptance
 and distinct external activation remain pending; stock execution stays disabled.
+
+## Final retained recovery and restricted-TLS proof
+
+While Plan11 performed isolated frontend/browser work, the unchanged backend,
+schema and recovery tooling completed a fresh serial run of the exact `--all`
+lanes. Actual command:`python3 /tmp/birja-phase08-plan12-ops.py`; the reviewed
+wrapper calls `bundle_package(archive)`, `roundtrip(archive)`, `roles()` and
+`assert tls()==tls(fresh_bootstrap=True)` from the current ops fixture, retaining
+the same public archive rather than deleting it. Runner SHA256:
+`9f32ad29ad3370eeeb95a24c8f99b6049db41b7a6e2d9515ee9f6549f8c9ad7e`.
+The runner exited0, with `final_all_lanes=true`, on2026-11-11. No source changes
+were made to produce a pass; frontend changes cannot affect these backend lanes.
+
+| Actual lane | Result and measured time |
+| --- | --- |
+| Same retained encrypted0007–0012 restore | Exact rows/schema/sequences/identities and nonempty action state;315.978s |
+| Accounting/authority corruption and replay | Refused corruptions; retained cancellation/alias/cursors/epochs; genuine operator/split replay passed within roundtrip |
+| Restricted roles and upgrade/fresh parity |63denied operations, immutable audit/quantity-only scheduler/operator NOLOGIN checks;160.138s |
+| Populated0011→0012 verified TLS | Actual app ownership/accounting, scheduler and narrow operator consumers;111.679s |
+| Fresh0012 verified TLS | Same effective ACLs and genuine consumers;108.760s |
+
+Both TLS lanes reject bad CA/hostname/plaintext, preserve credential mount
+isolation and exercise renewal. No post-upgrade grant repair or source authority
+renewal occurred. Fixed `birja-ops-test` containers, networks and volumes are
+empty after finally cleanup; the separate UI project was not touched.
+
+Retained archive:`/tmp/birja-backup-test-phase08-plan12/recovery.tar`,152186880bytes,
+SHA256`db27d99ba3085c6b93fa4fe4a6ea6bd9be5ea38a89f9e5f3620005de9681b874`.
+Receipt:`/tmp/birja-phase08-plan12-ops.log`. Current verifier SHA256
+`1aa4337745716237f228e468da6a09202907fffbdd9621e9913a8a8272c08bf6`;
+ops-fixture SHA256
+`edc0b3ecf4f9e8b71d4533f5bcb8c3cfc319468a42e0ef7222136e43809173fd`.
+This closes these final local operation lanes, not UI acceptance, the remaining
+CI/image/security gates, provider permission or production rollout.
+
+Independent source security review of Plans01–09 is also complete:
+34/34 backend mitigations verified,0open blockers/unregistered warnings. See
+08-SECURITY.md for exact scope/hashes and explicit legacy ASVS4.0.3 mapping.
+It does not claim pending UI/final verification/external gates are passed.
