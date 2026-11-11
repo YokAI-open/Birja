@@ -95,9 +95,11 @@ Plan07-14's concrete07-ACTIVATION.md packet is prepared. Task07-14-01 remains
 unresolved (0/3tasks complete): on2026-11-11 the owner reported a Paper account,
 privately saved keys and provider approval. Sanitized actual approval reference,
 scope and storage conditions remain pending review. A concrete local bounded
-measurement harness is prepared in/tmp/birja-phase07-measurement;39synthetic
-tests and Ruff lint/format pass, with source hashes in07-ACTIVATION.md. Independent
-focused harness review remains pending; no live CLI or credential discovery is
+measurement harness is prepared in/tmp/birja-phase07-measurement;42synthetic
+tests and Ruff lint/format pass, with source hashes in07-ACTIVATION.md. Initial
+independent focused review had0blockers/3warnings; all3have observed failing
+regressions and corrections. Independent re-review confirmed0active findings,
+matching hashes and42offline tests passed11.46s; no live CLI or credential discovery is
 provided. Only after verifiable scope exists request
 separate approval for at most30private HTTP attempts (20reference/10quote samples).
 No credentials read, private calls, admission import or collection activation.

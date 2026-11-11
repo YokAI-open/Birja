@@ -206,8 +206,8 @@ not deployed tooling or completed live evidence. No dependency was added.
 
 | File | SHA256 frozen for independent focused review |
 | --- | --- |
-| `/tmp/birja-phase07-measurement/measurement.py` | `2b98932e30415a3d63619d7d248d7aaa017ae48630c7bbe96caf6f137f5aac19` |
-| `/tmp/birja-phase07-measurement/test_measurement.py` | `c7a4c310e1f8b86d81f7f649e3c6fac0d5ffc85449d53b9f4c9449d38555be3d` |
+| `/tmp/birja-phase07-measurement/measurement.py` | `4e1553847f0d1d776f290e6ef48d290a74f1edf2b2363ed4f09fa701078b0745` |
+| `/tmp/birja-phase07-measurement/test_measurement.py` | `a72b2631fcc0073965579f548cbb036c3c01818ec77bfb841b4de30e3f478208` |
 
 The harness has no live CLI or credential discovery. A later authorized caller
 must explicitly supply current reviewed `Evidence`, separate exact-call approval,
@@ -235,16 +235,22 @@ and tradable status; conflicting explicit currency refuses. Common-stock and USD
 denomination require separate corroborated catalogue/product evidence. If the
 Asset response omits currency or security subtype, the receipt must never claim
 those fields were response-verified. No raw quote payload or bid/ask values are
-retained in the receipt: only public symbol/ID/listing and aggregate source-age,
-eligible/missing counts. Halt/action status stays unverified/disabled. API error
+retained in the receipt: only public symbol/ID/listing, per-sample UTC collection
+time, per-symbol accepted source-event time or fixed rejection reason, aggregate
+source ages and eligible/missing counts. Halt/action status stays
+unverified/disabled. API error
 and exception details are replaced with fixed local reasons.
 
-Actual offline verification: **39 synthetic HTTP tests pass**, including the
+Actual offline verification: **42 synthetic HTTP tests pass in 11.56 seconds**, including the
 full thirty-attempt path, the blocked 31st attempt, allowlisted origin/path/feed,
 sixty-second cadence, admission expiry/change, session closure, redirect and
 401/403/429 stop, exact response limit, duplicate identity, five-second header
 and streaming-body deadlines, real adapter wrong-feed rejection, and no secret
-or raw-payload output. Ruff lint and format checks pass. The existing pandas
+or raw-payload output. Separate tests establish short product expiry before the
+overall deadline and expiry during response reading, with admission-specific
+refusal. Every cadence sleep is bounded by remaining campaign time; the virtual
+clock regression stops at exactly 900 seconds without another HTTP attempt.
+Ruff lint and format checks pass. The existing pandas
 timezone deprecation warning remains visible; no warning suppression is used.
 No Docker/database/provider request is part of these tests.
 
@@ -256,7 +262,13 @@ PYTHONPATH=/home/YokaiExchange/backend:/tmp/birja-phase07-measurement \
   /tmp/birja-phase07-measurement/test_measurement.py -q
 ```
 
-Independent focused review of this frozen harness remains pending. Recheck its
+Initial independent focused review found zero blockers and three warnings:
+discarded per-symbol outcomes, uncapped cadence waiting, and an expiry test that
+reached the overall deadline first. All three received meaningful failing
+regressions followed by the above corrections. Independent focused re-review
+confirmed all three resolved and no active findings; it separately reproduced
+42 passing offline tests in 11.46 seconds and verified both frozen hashes.
+Recheck the hash
 hash before any later approved use. `/tmp` artifacts are disposable and must be
 reprepared/reviewed if absent or changed; their presence grants no provider
 permission or authority to perform calls. Actual reviewed official calendar
