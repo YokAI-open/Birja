@@ -221,7 +221,7 @@ class PostgreSQLContracts(unittest.TestCase):
             if revision in ("0007", "0008"):
                 self.assertEqual(len(baseline["tables"]), 9)
                 continue
-            self.assertEqual(len(baseline["tables"]), 13)
+            self.assertEqual(len(baseline["tables"]), 22 if revision == "0011" else 13)
             for mutation in ("missing", "extra", "column", "sequence", "invalid"):
                 damaged = copy.deepcopy(baseline)
                 if mutation == "missing":
@@ -243,6 +243,7 @@ class PostgreSQLContracts(unittest.TestCase):
                     damaged["stock_invalid"] = 1
                 with self.assertRaises(ValueError, msg=mutation):
                     producer.validate_manifest(damaged)
+        self.migrate("0010", "downgrade")
         self.query("""INSERT INTO stock_data_admissions(product,state,generation,reviewed_at,valid_from,valid_until,evidence_ref,terms_version,calendar) VALUES ('calendar','approved',3,'2026-01-01Z','2026-01-01Z','2026-01-02Z','https://example.invalid/calendar','fixture-v1','{"official_source":"NYSE/Nasdaq","version":"fixture-v1","review_valid_until":"2026-01-02T00:00:00Z","coverage_start":"2025-12-01","coverage_end":"2026-03-01","overrides":[{"date":"2026-01-01","closed":true,"provenance":"https://example.invalid/closure"}]}');
 INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-01-01','2025-12-01','2026-03-01',3);
 INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation) SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-01-02T15:00Z','2026-01-02T15:00:01Z','2026-01-02',2 FROM stock_instruments ORDER BY coin_id LIMIT 1;""")
@@ -402,6 +403,29 @@ INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,s
         # Held/cancelled state and continuation are durable, never normalized.
         self.assertIn("held", self.query("SELECT state FROM stock_dividend_entitlements ORDER BY id;"))
         self.query("DELETE FROM stock_action_resolutions; DELETE FROM stock_dividend_entitlements; DELETE FROM stock_ownership_movements; DELETE FROM stock_split_applications; DELETE FROM stock_action_state; DELETE FROM stock_action_observations; UPDATE stock_action_events SET current_revision_id=NULL; DELETE FROM stock_action_revisions; DELETE FROM stock_action_sources; DELETE FROM stock_action_events; DELETE FROM users WHERE email='accounting-recovery@example.invalid';")
+
+    def test_zz_resolution_actual_operator_reads_and_outgoing_memberships(self):
+        producer=load('backup-snapshot')
+        self.migrate('head')
+        # Explicit synthetic ownership provision inside a rollback-only probe.
+        # No runtime grants are repaired;0011/0012 supply the actual operator ACL.
+        setup="""BEGIN;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
+  CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ END IF;
+END $$;
+ALTER FUNCTION """+producer.RESOLUTION_SIGNATURE+" OWNER TO birja_migrator;\nSET LOCAL TIME ZONE 'UTC';\n"
+        query=producer.manifest_sql('0012')
+        raw=self.query(setup+query+";\nGRANT birja_test TO birja_action_operator;\n"+query+
+            ";\nREVOKE birja_test FROM birja_action_operator;\nREVOKE SELECT ON stock_action_resolutions FROM birja_action_operator;\n"+
+            query+";\nROLLBACK;")
+        manifests=[json.loads(line) for line in raw.splitlines()]
+        self.assertEqual(len(manifests),3)
+        producer.validate_manifest(manifests[0])
+        for damaged in manifests[1:]:
+            with self.assertRaises(ValueError):
+                producer.validate_manifest(damaged)
 
 
 if __name__ == "__main__":

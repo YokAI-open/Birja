@@ -876,7 +876,8 @@ def restore_resolution_authority(dc):
     sql(dc,"REVOKE ALL ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " FROM PUBLIC;\n"
         "GRANT EXECUTE ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " TO birja_action_operator;\n"
         "GRANT USAGE ON SCHEMA public TO birja_action_operator;\n"
-        "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;")
+        "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;\n"
+        "GRANT SELECT ON " + ','.join('public.'+table for table in sorted([*contract.ACTION_COLUMNS,*contract.STOCK_COLUMNS])) + " TO birja_action_operator;")
     authority=json.loads(sql(dc,"SELECT " + contract.resolution_authority_sql()))
     contract.validate_resolution_authority(authority)
 

@@ -530,10 +530,10 @@ def successor_roundtrips(dc, session, unchanged):
             # Explicit synthetic predecessor role provisioning. The source's
             # migration owner is real before0012; restore never invents it.
             role_sql(dc, 'ALTER ROLE birja_migrator NOINHERIT')
-            role_config=session.root/'source-roles.json'
+            role_config=session.root/'roles.json'
             password_files={}
             for name in ('app','scheduler','migrator'):
-                file=session.root/('source-'+name)
+                file=session.root/name
                 file.write_text('a'*64);file.chmod(0o600)
                 password_files[name]=str(file)
             role_config.write_text(json.dumps({'project':'birja-ops-test','db_name':'birja_source_test',
@@ -553,6 +553,7 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             spec.loader.exec_module(fixture)
             r.sql(dc, fixture.ACTION_SEED, 'birja_source_test')
         if revision == '0012':
+            role_sql(dc,"CREATE ROLE birja_operator_restore_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'a'*64+"'; GRANT birja_action_operator TO birja_operator_restore_fixture")
             request=json.loads(role_python(RESOLUTION_SCENARIO + RECOVERY_SEED_SCENARIO, 'birja_migrator'))
         before = r.canonical(dc, 'birja_source_test')
         if revision == '0010':
@@ -592,6 +593,9 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
                 accounting_negative_controls(dc, manifest)
             if revision == '0012':
                 resolution_negative_controls(dc, manifest)
+                # Fixture-only network entry after authority verification; no
+                # function/table privilege repair or application access.
+                r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_operator_restore_fixture','birja_ops_test')
                 output=role_python(RESOLUTION_SCENARIO + RECOVERY_REPLAY_SCENARIO.replace('REPLAY_REQUEST',repr(request)), 'birja_migrator')
                 assert b'restored_split_decision_replay_no_second_effect=true' in output
                 r.verify(dc,manifest)
@@ -627,6 +631,8 @@ def resolution_negative_controls(dc, manifest):
     for label,query in (
         ('public_execute','GRANT EXECUTE ON FUNCTION '+contract.RESOLUTION_SIGNATURE+' TO PUBLIC'),
         ('operator_login','ALTER ROLE birja_action_operator LOGIN'),
+        ('operator_outgoing','GRANT birja_scheduler TO birja_action_operator'),
+        ('operator_read_missing','REVOKE SELECT ON stock_action_resolutions FROM birja_action_operator'),
         ('operator_catalogue','GRANT SELECT ON coins TO birja_action_operator'),
         ('wrong_owner','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+' OWNER TO '+r.BOOT),
         ('function_configuration','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+" SET search_path TO public"),
@@ -644,7 +650,7 @@ def resolution_negative_controls(dc, manifest):
     try:contract.validate_manifest(damaged)
     except ValueError:pass
     else:raise AssertionError('self-reported changed function accepted')
-    print('resolution_authority_corruptions=7 fixed_definition_owner_acl_nologin=true',flush=True)
+    print('resolution_authority_corruptions=9 fixed_definition_owner_acl_nologin=true',flush=True)
 
 
 def accounting_negative_controls(dc, manifest):
@@ -1906,7 +1912,7 @@ from app.services.alpaca_actions import ActionBatch,ActionObservation
 from app.services.corporate_actions import persist_action_batch,apply_due_actions
 from app.services.stock_action_reconciliation import ResolutionRequest,reconcile,LEDGER_SQL
 
-async def scenario(db,split_too=False):
+async def scenario_authority(db):
  now=(await db.execute(text('SELECT clock_timestamp()'))).scalar_one()
  common=dict(state='approved',generation=8,reviewed_at=now-timedelta(hours=1),
   valid_from=now-timedelta(hours=2),valid_until=now+timedelta(hours=2),
@@ -1928,6 +1934,10 @@ async def scenario(db,split_too=False):
    'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
  await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product.in_(['actions','calendar'])))
  db.add_all([StockDataAdmission(**asdict(auth)),StockDataAdmission(**asdict(calendar))]);await db.flush()
+ return now,auth,calendar
+
+async def scenario(db):
+ now,auth,calendar=await scenario_authority(db)
  catalog=(await db.execute(select(StockInstrument).order_by(StockInstrument.coin_id))).scalars().all()
  instrument=catalog[2]
  instrument.provider_asset_id='synthetic-'+str(instrument.coin_id);instrument.provider_verified_at=now-timedelta(days=10)
@@ -1956,23 +1966,33 @@ async def scenario(db,split_too=False):
    'account':'birja','server':'birja','calendar_generation':8,'calendar_digest':calendar_digest,
    'review_valid_until':(now+timedelta(minutes=30)).isoformat(),'security_id':instrument.provider_asset_id,
    'cutoff':opening.opens_at.isoformat(),'alias_event_id':None}})
- split_coin=None;application=None
- if split_too:
-  split_instrument=catalog[1];split_coin=split_instrument.coin_id
-  split_instrument.provider_asset_id='synthetic-'+str(split_coin);split_instrument.provider_verified_at=now-timedelta(days=10)
-  past=[row for row in sessions if row.exchange==split_instrument.listing_exchange and row.opens_at and row.opens_at<now]
-  boundary=past[-1].opens_at;baseline=boundary-timedelta(days=2)
-  uid=(await db.execute(text('SELECT min(id) FROM users'))).scalar_one()
-  db.add(StockActionState(coin_id=split_coin,admission_generation=8,health='current',checked_at=now-timedelta(seconds=1),valid_until=now+timedelta(hours=1),journal_start_at=baseline,complete_from=baseline,coverage_start=baseline,covered_until=now))
-  db.add(Holding(coin_id=split_coin,user_id=uid,quantity=Decimal(2),cost_basis=Decimal(20)))
-  db.add(StockOwnershipMovement(coin_id=split_coin,user_id=uid,sequence=1,economic_at=boundary-timedelta(days=1),recorded_at=now,quantity=Decimal(2),before_quantity=Decimal(0),after_quantity=Decimal(2),before_basis=Decimal(0),after_basis=Decimal(20),unit_epoch=0,cause_kind='opening',causal_key='synthetic-recovery-opening'))
-  symbol=(await db.execute(select(Coin.symbol).where(Coin.id==split_coin))).scalar_one()
-  split=replace(action,provider_event_id='synthetic-'+str(uuid.uuid4()),coin_id=split_coin,symbol=symbol,
-    event_type='forward_split',currency=None,rate=None,new_rate=Decimal(2),old_rate=Decimal(1),
-    units='pre_split',economic_at=boundary,ex_date=boundary.date(),record_date=boundary.date(),payable_date=boundary.date()+timedelta(days=1))
-  await persist(split)
-  application=(await apply_due_actions(db,split_coin,auth))[0]
- return request,split_coin,application
+ return request,None,None
+
+async def split_scenario(db,prepare=False):
+ from app.services.corporate_actions import _load_admission
+ if prepare:now,auth,calendar=await scenario_authority(db)
+ else:
+  auth=await _load_admission(db,'actions');calendar=await _load_admission(db,'calendar')
+  now=(await db.execute(text('SELECT clock_timestamp()'))).scalar_one()
+ sessions=build_sessions(now,calendar)
+ catalog=(await db.execute(select(StockInstrument).order_by(StockInstrument.coin_id))).scalars().all()
+ split_instrument=catalog[1];split_coin=split_instrument.coin_id
+ split_instrument.provider_asset_id='synthetic-'+str(split_coin);split_instrument.provider_verified_at=now-timedelta(days=10)
+ past=[row for row in sessions if row.exchange==split_instrument.listing_exchange and row.opens_at and row.opens_at<now]
+ boundary=past[-1].opens_at;baseline=boundary-timedelta(days=2)
+ uid=(await db.execute(text('SELECT min(id) FROM users'))).scalar_one()
+ db.add(StockActionState(coin_id=split_coin,admission_generation=8,health='current',checked_at=now-timedelta(seconds=1),valid_until=now+timedelta(hours=1),journal_start_at=baseline,complete_from=baseline,coverage_start=baseline,covered_until=now))
+ db.add(Holding(coin_id=split_coin,user_id=uid,quantity=Decimal(2),cost_basis=Decimal(20)))
+ db.add(StockOwnershipMovement(coin_id=split_coin,user_id=uid,sequence=1,economic_at=boundary-timedelta(days=1),recorded_at=now,quantity=Decimal(2),before_quantity=Decimal(0),after_quantity=Decimal(2),before_basis=Decimal(0),after_basis=Decimal(20),unit_epoch=0,cause_kind='opening',causal_key='synthetic-recovery-opening'))
+ symbol=(await db.execute(select(Coin.symbol).where(Coin.id==split_coin))).scalar_one()
+ split=NormalizedAction('synthetic-'+str(uuid.uuid4()),split_coin,symbol,'forward_split',now.date(),now,
+   new_rate=Decimal(2),old_rate=Decimal(1),units='pre_split',economic_at=boundary,
+   ex_date=boundary.date(),record_date=boundary.date(),payable_date=boundary.date()+timedelta(days=1),
+   due_bills=False,identity_verified=True,dates_verified=True)
+ await persist_action_batch(db,ActionBatch(records=(split,),observations=(ActionObservation(split),),complete=True),auth)
+ application=(await apply_due_actions(db,split_coin,auth))[0]
+ return split_coin,application
+
 """
 
 RECOVERY_SEED_SCENARIO = r"""
@@ -1981,8 +2001,10 @@ async def main():
  engine=create_async_engine(os.environ['DATABASE_URL'])
  try:
   async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
-   request,split_coin,application=await scenario(db,True)
+   request,_,_=await scenario(db)
    resolution=await reconcile(db,request,account='birja',server='birja')
+  async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
+   split_coin,application=await split_scenario(db)
   print(json.dumps({'request':request.model_dump(mode='json'),'split_coin':split_coin,'application':application,'resolution':resolution}))
  finally:await engine.dispose()
 asyncio.run(main())
@@ -1994,19 +2016,24 @@ from sqlalchemy.engine import make_url
 async def main():
  data=REPLAY_REQUEST
  engine=create_async_engine(make_url(os.environ['DATABASE_URL']).set(database='birja_restore_test'))
+ operator_engine=create_async_engine(make_url(os.environ['DATABASE_URL']).set(database='birja_restore_test',username='birja_operator_restore_fixture',password='a'*64))
  try:
-  async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
+  async with async_sessionmaker(operator_engine,expire_on_commit=False).begin() as db:
+   await db.execute(text('SET LOCAL ROLE birja_action_operator'))
    before=(await db.execute(text('SELECT count(*) FROM stock_action_resolutions'))).scalar_one()
    request=ResolutionRequest.model_validate(data['request'])
    assert await reconcile(db,request,account='birja',server='birja')==data['resolution']
    assert await reconcile(db,request,account='birja',server='birja')==data['resolution']
    assert (await db.execute(text('SELECT count(*) FROM stock_action_resolutions'))).scalar_one()==before
+  async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
    from app.services.corporate_actions import _load_admission
    auth=await _load_admission(db,'actions')
    assert await apply_due_actions(db,data['split_coin'],auth)==(data['application'],)
    assert await apply_due_actions(db,data['split_coin'],auth)==(data['application'],)
-  print('restored_split_decision_replay_no_second_effect=true')
- finally:await engine.dispose()
+  print('restored_split_decision_replay_no_second_effect=true operator_service_reads_exact=true')
+ finally:
+  await operator_engine.dispose()
+  await engine.dispose()
 asyncio.run(main())
 """
 

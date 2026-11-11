@@ -130,6 +130,25 @@ def resolution_authority_sql():
         rolcreatedb,rolcreaterole,rolreplication,rolbypassrls) FROM pg_roles WHERE rolname='birja_action_operator'),
       'runtime_operator_membership',EXISTS(SELECT FROM pg_roles r WHERE r.rolname IN
         ('birja_app','birja_scheduler','birja_migrator') AND pg_has_role(r.oid,'birja_action_operator','MEMBER')),
+      'operator_outgoing_memberships',(SELECT coalesce(json_agg(parent.rolname ORDER BY parent.rolname),'[]'::json)
+        FROM pg_auth_members membership JOIN pg_roles parent ON parent.oid=membership.roleid
+        WHERE membership.member=(SELECT oid FROM pg_roles WHERE rolname='birja_action_operator')),
+      'operator_table_acl',(SELECT json_agg(json_build_array(c.relname,
+        has_table_privilege('birja_action_operator',c.oid,'SELECT'),
+        has_table_privilege('birja_action_operator',c.oid,'INSERT'),
+        has_table_privilege('birja_action_operator',c.oid,'UPDATE'),
+        has_table_privilege('birja_action_operator',c.oid,'DELETE'),
+        has_table_privilege('birja_action_operator',c.oid,'TRUNCATE'),
+        has_table_privilege('birja_action_operator',c.oid,'REFERENCES'),
+        has_table_privilege('birja_action_operator',c.oid,'TRIGGER'),
+        has_table_privilege('birja_action_operator',c.oid,'MAINTAIN')) ORDER BY c.relname)
+        FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind='r'
+        AND has_table_privilege('birja_action_operator',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')),
+      'operator_sequence_rights',(SELECT coalesce(json_agg(c.relname ORDER BY c.relname),'[]'::json)
+        FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind='S'
+        AND CASE WHEN c.relkind='S' THEN
+          has_sequence_privilege('birja_action_operator',c.oid,'USAGE,SELECT,UPDATE')
+          ELSE false END),
       'operator_catalogue_columns',(SELECT json_agg(attname ORDER BY attname) FROM pg_attribute
         WHERE attrelid='public.coins'::regclass AND attnum>0 AND NOT attisdropped
         AND has_column_privilege('birja_action_operator',attrelid,attnum,'SELECT')))
@@ -139,7 +158,8 @@ def resolution_authority_sql():
 def validate_resolution_authority(authority):
     require(isinstance(authority, dict) and set(authority) == {
         'definition','owner','security_definer','configuration','function_count',
-        'execute_acl','operator_attributes','runtime_operator_membership','operator_catalogue_columns'})
+        'execute_acl','operator_attributes','runtime_operator_membership','operator_catalogue_columns',
+        'operator_outgoing_memberships','operator_table_acl','operator_sequence_rights'})
     require(isinstance(authority['definition'], str))
     require(hashlib.sha256(authority['definition'].encode()).hexdigest() == RESOLUTION_FUNCTION_SHA256)
     require(authority['owner'] == 'birja_migrator' and authority['security_definer'] is True)
@@ -148,6 +168,10 @@ def validate_resolution_authority(authority):
     require(authority['execute_acl'] == [['birja_action_operator','EXECUTE',False]])
     require(authority['operator_attributes'] == [False]*7)
     require(authority['runtime_operator_membership'] is False)
+    require(authority['operator_outgoing_memberships'] == [])
+    require(authority['operator_table_acl'] == [[table,True,*([False]*7)]
+        for table in sorted([*ACTION_COLUMNS,*STOCK_COLUMNS])])
+    require(authority['operator_sequence_rights'] == [])
     require(authority['operator_catalogue_columns'] == ['asset_class','id','is_active','sort_order','symbol'])
 
 
