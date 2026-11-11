@@ -26,7 +26,13 @@ const item = {
     timezone: "America/New_York",
   },
   status: { state: "unknown", observed_at: null, valid_until: null },
-  action: { state: "current", reason: "none", epoch: 1, checked_at: "2026-11-10T15:00:00Z", valid_until: "2026-11-10T16:00:00Z" },
+  action: {
+    state: "current",
+    reason: "none",
+    epoch: 1,
+    checked_at: "2026-11-10T15:00:00Z",
+    valid_until: "2026-11-10T16:00:00Z",
+  },
   valuation_reason: "available",
   execution_enabled: false,
   execution_reason: "phase_disabled",
@@ -61,7 +67,13 @@ describe("strict stock boundary", () => {
           quote: null,
           quote_reason: "permission_unavailable",
           valuation_reason: "action_unavailable",
-          action: { state: "unknown", reason: "monitor_unavailable", epoch: 0, checked_at: null, valid_until: null },
+          action: {
+            state: "unknown",
+            reason: "monitor_unavailable",
+            epoch: 0,
+            checked_at: null,
+            valid_until: null,
+          },
         })),
       }),
     ).toBe(true);
@@ -179,7 +191,6 @@ describe("strict stock boundary", () => {
   });
 });
 
-
 describe("action authority validation", () => {
   it.each([
     ["missing action", undefined],
@@ -199,13 +210,36 @@ describe("action authority validation", () => {
     expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, action })) })).toBe(false);
   });
   it.each(["unknown", "reconciling", "suspended"])("rejects numeric values on %s", (state) => {
-    expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x,
-      action: { ...x.action, state, reason: state === "unknown" ? "monitor_unavailable" : state === "reconciling" ? "source_gap" : "unsupported", valid_until: null },
-    })) })).toBe(false);
+    expect(
+      isStocks({
+        ...valid,
+        items: valid.items.map((x) => ({
+          ...x,
+          action: {
+            ...x.action,
+            state,
+            reason:
+              state === "unknown"
+                ? "monitor_unavailable"
+                : state === "reconciling"
+                  ? "source_gap"
+                  : "unsupported",
+            valid_until: null,
+          },
+        })),
+      }),
+    ).toBe(false);
   });
   it("requires valuation reason and disallows provider/operator extras", () => {
-    for (const update of [{ valuation_reason: undefined }, { valuation_reason: "guessed" }, { provider_id: "secret" }, { valuation_reason: "action_unavailable" }]) {
-      expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
+    for (const update of [
+      { valuation_reason: undefined },
+      { valuation_reason: "guessed" },
+      { provider_id: "secret" },
+      { valuation_reason: "action_unavailable" },
+    ]) {
+      expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(
+        false,
+      );
     }
   });
 });

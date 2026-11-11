@@ -18,6 +18,21 @@ export type StockSession = {
   valid_until: string | null;
   timezone: "America/New_York";
 };
+export type StockAction = {
+  state: "current" | "unknown" | "reconciling" | "suspended";
+  reason:
+    | "none"
+    | "monitor_unavailable"
+    | "source_gap"
+    | "unsupported"
+    | "fractional"
+    | "conflicting"
+    | "identity_change"
+    | "post_split_quote_missing";
+  epoch: number;
+  checked_at: string | null;
+  valid_until: string | null;
+};
 export type StockItem = {
   id: number;
   symbol: string;
@@ -27,6 +42,9 @@ export type StockItem = {
   quote: StockQuote | null;
   session: StockSession;
   status: { state: "unknown"; observed_at: string | null; valid_until: string | null };
+  action: StockAction;
+  valuation_reason:
+    "available" | "action_unavailable" | "post_split_quote_missing" | "quote_unavailable";
   execution_enabled: false;
   execution_reason: "phase_disabled";
   quote_reason: "permission_unavailable" | "missing" | "stale" | "session_unavailable" | "recent";
@@ -54,6 +72,9 @@ const positiveInteger = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) > 0;
 const enumValue = (value: unknown, values: readonly string[]) =>
   typeof value === "string" && values.includes(value);
+const exact = (value: Record<string, unknown>, keys: string) =>
+  Object.keys(value).length === keys.split(" ").length &&
+  keys.split(" ").every((key) => key in value);
 
 /** Validate civil fields too: Date.parse alone normalizes e.g. February 30. */
 function timestamp(value: unknown): value is string {
@@ -73,7 +94,7 @@ function timestamp(value: unknown): value is string {
     Number(hour) < 24 &&
     Number(minute) < 60 &&
     Number(second) < 60 &&
-    (zone === "Z" || (Number(zone.slice(1, 3)) < 24 && Number(zone.slice(4)) < 60)) &&
+    (zone === "Z" || zone === "+00:00") &&
     Number.isFinite(Date.parse(value))
   );
 }
@@ -92,6 +113,7 @@ function quote(value: unknown): value is StockQuote {
     ask = units(value.ask),
     mid = units(value.mid);
   return (
+    exact(value, "bid ask mid event_at collected_at source feed age_seconds") &&
     bid !== null &&
     ask !== null &&
     mid !== null &&
@@ -108,6 +130,7 @@ function quote(value: unknown): value is StockQuote {
 function session(value: unknown): value is StockSession {
   if (!record(value)) return false;
   if (
+    !exact(value, "state opens_at closes_at next_open_at valid_until timezone") ||
     !enumValue(value.state, ["open", "closed", "unknown"]) ||
     value.timezone !== "America/New_York" ||
     ![value.opens_at, value.closes_at, value.next_open_at, value.valid_until].every(nullableTime)
@@ -121,9 +144,69 @@ function session(value: unknown): value is StockSession {
     return false;
   return value.state !== "open" || (value.opens_at !== null && value.valid_until !== null);
 }
-function item(value: unknown): value is StockItem {
+function action(value: unknown, now: string): value is StockAction {
+  if (
+    !record(value) ||
+    !exact(value, "state reason epoch checked_at valid_until") ||
+    !Number.isSafeInteger(value.epoch) ||
+    (value.epoch as number) < 0 ||
+    !nullableTime(value.checked_at) ||
+    !nullableTime(value.valid_until)
+  )
+    return false;
+  if (value.checked_at !== null && Date.parse(value.checked_at as string) > Date.parse(now))
+    return false;
+  if (value.epoch === 0)
+    return (
+      value.state === "unknown" &&
+      value.reason === "monitor_unavailable" &&
+      value.checked_at === null &&
+      value.valid_until === null
+    );
+  if (value.state === "current")
+    return (
+      value.reason === "none" &&
+      value.checked_at !== null &&
+      value.valid_until !== null &&
+      Date.parse(value.valid_until as string) > Date.parse(now)
+    );
+  if (value.valid_until !== null) return false;
+  return (
+    (value.state === "unknown" && enumValue(value.reason, ["monitor_unavailable", "source_gap"])) ||
+    (value.state === "reconciling" && enumValue(value.reason, ["source_gap", "conflicting"])) ||
+    (value.state === "suspended" &&
+      enumValue(value.reason, [
+        "unsupported",
+        "fractional",
+        "conflicting",
+        "identity_change",
+        "post_split_quote_missing",
+      ]))
+  );
+}
+function item(value: unknown, now: string): value is StockItem {
   if (!record(value) || !record(value.status)) return false;
   return (
+    exact(
+      value,
+      "id symbol company_name listing_exchange currency quote session status action valuation_reason execution_enabled execution_reason quote_reason session_reason status_reason",
+    ) &&
+    exact(value.status, "state observed_at valid_until") &&
+    action(value.action, now) &&
+    enumValue(value.valuation_reason, [
+      "available",
+      "action_unavailable",
+      "post_split_quote_missing",
+      "quote_unavailable",
+    ]) &&
+    (value.quote === null
+      ? value.valuation_reason ===
+        (value.action.reason === "post_split_quote_missing"
+          ? "post_split_quote_missing"
+          : value.action.state !== "current"
+            ? "action_unavailable"
+            : "quote_unavailable")
+      : value.action.state === "current" && value.valuation_reason === "available") &&
     positiveInteger(value.id) &&
     typeof value.symbol === "string" &&
     /^[A-Z][A-Z0-9.-]{0,9}$/.test(value.symbol) &&
@@ -157,6 +240,12 @@ export function isStocks(value: unknown): value is StocksResponse {
   )
     return false;
   const admission = value.admission;
+  if (
+    !exact(value, "server_now admission attribution items") ||
+    !exact(admission, "state generation valid_until") ||
+    !exact(value.attribution, "label explanation required_text")
+  )
+    return false;
   if (admission.state === "approved") {
     if (!positiveInteger(admission.generation) || !timestamp(admission.valid_until)) return false;
   } else if (
@@ -171,7 +260,10 @@ export function isStocks(value: unknown): value is StocksResponse {
     typeof value.attribution.required_text === "string" &&
     Array.isArray(value.items) &&
     value.items.length === 20 &&
-    value.items.every(item) &&
+    value.items.every(
+      (x) =>
+        item(x, value.server_now as string) && (admission.state === "approved" || x.quote === null),
+    ) &&
     new Set(value.items.map((x) => x.id)).size === 20 &&
     new Set(value.items.map((x) => x.symbol)).size === 20
   );
@@ -180,7 +272,7 @@ export function isStocks(value: unknown): value is StocksResponse {
 export async function fetchStocks(signal?: AbortSignal): Promise<TimedStocks> {
   // Enclose apiFetch's entire shared refresh/retry path and JSON validation.
   const started_at = performance.now();
-  const body = await apiFetch("/api/v1/stocks", { signal });
+  const body = await apiFetch("/api/v1/stocks", { signal, cache: "no-store" });
   if (!isStocks(body)) throw new Error("Unexpected stocks response");
   signal?.throwIfAborted();
   const received_at = performance.now();

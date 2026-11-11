@@ -53,6 +53,23 @@ function payload({
         timezone: "America/New_York",
       },
       status: { state: "unknown", observed_at: null, valid_until: null },
+      action:
+        state === "approved"
+          ? {
+              state: "current",
+              reason: "none",
+              epoch: 1,
+              checked_at: stamp(-1),
+              valid_until: stamp(lifetime),
+            }
+          : {
+              state: "unknown",
+              reason: "monitor_unavailable",
+              epoch: 0,
+              checked_at: null,
+              valid_until: null,
+            },
+      valuation_reason: state === "approved" ? "available" : "action_unavailable",
       execution_enabled: false,
       execution_reason: "phase_disabled",
       quote_reason: state === "approved" ? "recent" : "permission_unavailable",
