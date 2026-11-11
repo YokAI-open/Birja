@@ -698,13 +698,17 @@ async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, 
             .scalars()
             .all()
         )
-        observation_id = (
+        uncertain_observation = (
             await db.execute(
-                select(func.coalesce(func.max(StockActionObservation.id), 0)).where(
-                    StockActionObservation.event_id == audit.event_id
+                select(StockActionObservation.id)
+                .where(
+                    StockActionObservation.event_id == audit.event_id,
+                    StockActionObservation.id > audit.evidence.get("observation_id", 0),
+                    StockActionObservation.source_kind == "missing_or_uncertain",
                 )
+                .limit(1)
             )
-        ).scalar_one()
+        ).scalar_one_or_none()
         if (
             event is not None
             and event.current_revision_id == audit.expected_revision
@@ -712,7 +716,7 @@ async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, 
             in ("confirm_no_effect", "accept_corrected_supported_revision", "link_verified_alias")
             and audit.evidence.get("format") == 1
             and audit.evidence.get("held_revision_ids") == list(ids)
-            and audit.evidence.get("observation_id") == observation_id
+            and uncertain_observation is None
         ):
             resolved_ids.update(ids)
     resolved = tuple(resolved_ids)

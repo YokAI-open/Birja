@@ -128,7 +128,7 @@ BEGIN
  OR EXISTS(SELECT FROM public.stock_ownership_movements WHERE coin_id=p_coin
    AND economic_at>=(p_evidence->>'cutoff')::timestamptz)
  THEN RAISE EXCEPTION 'resolution requires financial repair' USING ERRCODE='22023'; END IF;
- IF p_decision='accept_corrected_supported_revision' THEN
+ IF p_decision IN ('accept_corrected_supported_revision','link_verified_alias') THEN
    IF rev.classification NOT IN ('supported_dividend','supported_forward_split')
    OR rev.normalized_terms->'identity_verified' IS DISTINCT FROM 'true'::jsonb
    OR rev.normalized_terms->'identity_changed' IS DISTINCT FROM 'false'::jsonb
@@ -164,19 +164,29 @@ BEGIN
       AND (rev.normalized_terms->>'old_rate')::numeric>0
       AND rev.verified_cutoff=(p_evidence->>'cutoff')::timestamptz,false))
    THEN RAISE EXCEPTION 'unsupported corrected terms' USING ERRCODE='22023'; END IF;
- ELSIF p_decision='confirm_no_effect' THEN
+ END IF;
+ IF p_decision='confirm_no_effect' THEN
    IF rev.classification<>'cancelled' OR rev.mutation_kind<>'delete'
    OR rev.normalized_terms->'identity_verified' IS DISTINCT FROM 'true'::jsonb
    OR rev.normalized_terms->'identity_changed' IS DISTINCT FROM 'false'::jsonb
    OR rev.normalized_terms->'cancelled' IS DISTINCT FROM 'true'::jsonb
    THEN RAISE EXCEPTION 'no verified cancellation' USING ERRCODE='22023'; END IF;
- ELSE
+ ELSIF p_decision='link_verified_alias' THEN
    -- Cross-event aliases cannot be safely linked by changing only an audit
    -- row. Require an already verified same-event source alias; do not merge
    -- independent economic/application identities.
    IF p_evidence->>'alias_event_id' IS DISTINCT FROM p_event::text
    OR (SELECT count(*) FROM public.stock_action_sources WHERE event_id=p_event)<2
    OR rev.classification NOT IN ('supported_dividend','supported_forward_split')
+   OR EXISTS(SELECT FROM public.stock_action_sources src
+      LEFT JOIN LATERAL (SELECT * FROM public.stock_action_revisions other
+        WHERE other.source_id=src.id ORDER BY other.ordinal DESC LIMIT 1) latest ON true
+      WHERE src.event_id=p_event AND (
+        latest.id IS NULL OR latest.normalized_terms IS DISTINCT FROM rev.normalized_terms
+        OR latest.classification IS DISTINCT FROM rev.classification
+        OR latest.units IS DISTINCT FROM rev.units
+        OR latest.verified_cutoff IS DISTINCT FROM rev.verified_cutoff
+        OR latest.admission_generation IS DISTINCT FROM p_generation))
    THEN RAISE EXCEPTION 'unverified alias' USING ERRCODE='22023'; END IF;
  END IF;
  INSERT INTO public.stock_action_resolutions(event_id,coin_id,expected_revision,
@@ -206,10 +216,21 @@ def upgrade() -> None:
              OR rolreplication OR rolbypassrls)) THEN
         RAISE EXCEPTION 'unsafe action operator role';
       END IF;
+      IF EXISTS(SELECT FROM pg_roles r WHERE r.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator')
+        AND pg_has_role(r.oid,'birja_action_operator','MEMBER'))
+        OR EXISTS(SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member
+                  WHERE r.rolname='birja_action_operator') THEN
+        RAISE EXCEPTION 'unsafe action operator membership';
+      END IF;
     END $$""")
     op.execute(FUNCTION)
     op.execute(f"REVOKE ALL ON FUNCTION {SIGNATURE} FROM PUBLIC")
     op.execute(f"GRANT EXECUTE ON FUNCTION {SIGNATURE} TO birja_action_operator")
+    op.execute(
+        "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins "
+        "TO birja_action_operator"
+    )
 
 
 def downgrade() -> None:
@@ -218,3 +239,9 @@ def downgrade() -> None:
         RAISE EXCEPTION 'populated resolution authority cannot be downgraded';
       END IF; END $$""")
     op.execute(f"DROP FUNCTION {SIGNATURE}")
+    op.execute("""DO $$ BEGIN
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
+        REVOKE SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins
+          FROM birja_action_operator;
+      END IF;
+    END $$""")

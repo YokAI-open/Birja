@@ -182,6 +182,7 @@ DO $action_grants$
 DO $resolution_grants$
 BEGIN
   IF (SELECT version_num FROM public.alembic_version)='0012' THEN
+    GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;
     ALTER FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) OWNER TO birja_migrator;
     REVOKE ALL ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) FROM PUBLIC,birja_app,birja_scheduler;
     GRANT EXECUTE ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) TO birja_action_operator;
