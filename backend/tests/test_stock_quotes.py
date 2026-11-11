@@ -1,4 +1,4 @@
-"""Actual isolated PostgreSQL proves source-time monotonicity and permission races."""
+"Actual isolated PostgreSQL proves source-time monotonicity and permission races."
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -8,7 +8,7 @@ from decimal import Decimal
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models.price import Coin
@@ -296,3 +296,87 @@ async def test_real_clock_expiry_at_statement_not_only_snapshot(
     async with factory(info={"writer": True}) as db:
         assert await upsert_stock_quotes(db, [quote], 4, now=lambda: real_now) == 0
         assert await db.get(StockQuote, quote.coin_id) is None
+
+
+@pytest.mark.parametrize("stored_quote", [False, True])
+async def test_nonzero_units_refuse_old_writer(
+    db: AsyncSession,
+    stock_state: list[StockMapping],
+    stored_quote: bool,
+) -> None:
+    quote = accepted(stock_state[0])
+    if stored_quote:
+        assert await upsert_stock_quotes(db, [quote], 4, now=lambda: NOW) == 1
+        await db.execute(update(StockQuote).values(unit_epoch=1))
+    else:
+        await db.execute(
+            text(
+                "INSERT INTO "
+                "stock_action_state(coin_id,admission_generation,unit_epoch) VALUES "
+                "(:c,4,1)"
+            ),
+            {"c": quote.coin_id},
+        )
+    assert (
+        await upsert_stock_quotes(
+            db, [accepted(stock_state[0], 1)], 4, now=lambda: NOW + timedelta(seconds=1)
+        )
+        == 0
+    )
+    db.expire_all()
+    stored = await db.get(StockQuote, quote.coin_id)
+    if stored_quote:
+        assert stored is not None and stored.unit_epoch == 1 and stored.event_at == NOW
+    else:
+        assert stored is None
+
+
+@pytest.mark.parametrize("existing", [False, True])
+async def test_committed_unit_change_before_final_statement(
+    engine: AsyncEngine,
+    stock_state: list[StockMapping],
+    monkeypatch: pytest.MonkeyPatch,
+    existing: bool,
+) -> None:
+    factory = async_sessionmaker(engine)
+    cid = stock_state[0].coin_id
+    if existing:
+        async with factory() as db:
+            assert (
+                await upsert_stock_quotes(db, [accepted(stock_state[0])], 4, now=lambda: NOW) == 1
+            )
+            await db.commit()
+    original = AsyncSession.execute
+    changed = False
+
+    async def execute(self, statement, *args, **kwargs):
+        nonlocal changed
+        if self.info.get("unit_writer") and statement.is_insert and not changed:
+            async with factory() as admin:
+                await original(
+                    admin,
+                    text(
+                        "INSERT INTO "
+                        "stock_action_state(coin_id,admission_generation,unit_epoch) VALUES "
+                        "(:c,4,1)"
+                    ),
+                    {"c": cid},
+                )
+                await admin.commit()
+            changed = True
+        return await original(self, statement, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "execute", execute)
+    try:
+        async with factory(info={"unit_writer": True}) as db:
+            assert (
+                await upsert_stock_quotes(
+                    db, [accepted(stock_state[0], 1)], 4, now=lambda: NOW + timedelta(seconds=1)
+                )
+                == 0
+            )
+            assert changed
+    finally:
+        async with factory() as db:
+            await db.execute(text("DELETE FROM stock_action_state WHERE coin_id=:c"), {"c": cid})
+            await db.commit()

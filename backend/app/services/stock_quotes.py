@@ -9,6 +9,7 @@ from sqlalchemy import DateTime, Text, column, exists, func, select, values
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.corporate_action import StockActionState
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote
 from app.services.stock_admission import ProductAdmission, evaluate_admission
@@ -123,7 +124,21 @@ async def upsert_stock_quotes(
             accepted[quote.coin_id] = quote
     if not accepted:
         return 0
-    names = [c.name for c in StockQuote.__table__.columns]
+    # Provider validation has no authority to assign an accounting unit epoch.
+    # Keep this explicit when local storage gains columns.
+    names = [
+        "coin_id",
+        "bid",
+        "ask",
+        "mid",
+        "source",
+        "feed",
+        "event_at",
+        "collected_at",
+        "session_date",
+        "admission_generation",
+        "unit_epoch",
+    ]
     incoming = (
         values(
             *(column(name, StockQuote.__table__.c[name].type) for name in names),
@@ -134,7 +149,19 @@ async def upsert_stock_quotes(
         )
         .data(
             [
-                tuple(asdict(quote)[name] for name in names)
+                (
+                    quote.coin_id,
+                    quote.bid,
+                    quote.ask,
+                    quote.mid,
+                    quote.source,
+                    quote.feed,
+                    quote.event_at,
+                    quote.collected_at,
+                    quote.session_date,
+                    quote.admission_generation,
+                    0,
+                )
                 + (
                     quote.symbol,
                     catalog[quote.coin_id].provider_asset_id,
@@ -170,16 +197,22 @@ async def upsert_stock_quotes(
             StockInstrument.listing_exchange == incoming.c.listing_exchange,
         )
     )
+    zero_units = ~exists(
+        select(StockActionState.coin_id).where(
+            StockActionState.coin_id == incoming.c.coin_id,
+            StockActionState.unit_epoch != 0,
+        )
+    )
     stmt = insert(StockQuote).from_select(
         names,
         select(
             *(incoming.c[name] for name in names),
-        ).where(current_permission, current_mapping),
+        ).where(current_permission, current_mapping, zero_units),
     )
     returning = stmt.on_conflict_do_update(
         index_elements=[StockQuote.coin_id],
         set_={name: stmt.excluded[name] for name in names if name != "coin_id"},
-        where=StockQuote.event_at < stmt.excluded.event_at,
+        where=(StockQuote.event_at < stmt.excluded.event_at) & (StockQuote.unit_epoch == 0),
     ).returning(StockQuote.coin_id)
     count = len((await db.execute(returning)).scalars().all())
     if count < len(accepted):

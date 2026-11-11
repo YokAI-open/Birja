@@ -1,4 +1,15 @@
 from app.models.auth import AuthSession, RefreshToken
+from app.models.corporate_action import (
+    StockActionEvent,
+    StockActionObservation,
+    StockActionResolution,
+    StockActionRevision,
+    StockActionSource,
+    StockActionState,
+    StockDividendEntitlement,
+    StockOwnershipMovement,
+    StockSplitApplication,
+)
 from app.models.price import Coin, Price
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
 from app.models.trade import Holding, Trade
@@ -17,4 +28,13 @@ __all__ = [
     "StockInstrument",
     "StockQuote",
     "StockSession",
+    "StockActionEvent",
+    "StockActionSource",
+    "StockActionRevision",
+    "StockActionObservation",
+    "StockActionState",
+    "StockOwnershipMovement",
+    "StockSplitApplication",
+    "StockDividendEntitlement",
+    "StockActionResolution",
 ]

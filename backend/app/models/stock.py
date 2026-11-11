@@ -70,6 +70,7 @@ class StockQuote(Base):
         CheckConstraint("source = 'alpaca' AND feed = 'iex'", name="source_feed"),
         CheckConstraint("event_at <= collected_at", name="event_not_future"),
         CheckConstraint("admission_generation > 0", name="generation_positive"),
+        CheckConstraint("unit_epoch BETWEEN 0 AND 9007199254740991", name="unit_epoch_safe"),
     )
 
     coin_id: Mapped[int] = mapped_column(
@@ -84,6 +85,7 @@ class StockQuote(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     session_date: Mapped[date] = mapped_column(Date)
     admission_generation: Mapped[int] = mapped_column(BigInteger)
+    unit_epoch: Mapped[int] = mapped_column(BigInteger, server_default="0")
 
 
 class StockSession(Base):
