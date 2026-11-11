@@ -15,7 +15,7 @@ from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote
 from app.services.stock_quote_rules import RawStockQuote, StockMapping, validate_quote
 from app.services.stock_quotes import load_stock_catalog, upsert_stock_quotes
-from tests.test_stock_admission import admitted
+from tests.test_stock_admission import action_admitted, admitted
 
 NOW = datetime.now(UTC)
 
@@ -381,3 +381,42 @@ async def test_committed_unit_change_before_final_statement(
         async with factory() as db:
             await db.execute(text("DELETE FROM stock_action_state WHERE coin_id=:c"), {"c": cid})
             await db.commit()
+
+
+async def test_genuine_post_split_event_acquires_local_current_units(db, stock_state):
+    from app.models.corporate_action import StockActionState
+    from tests.stock_action_fixtures import synthetic_split
+
+    cid = stock_state[0].coin_id
+    db.add(
+        StockDataAdmission(
+            **asdict(
+                replace(
+                    action_admitted(),
+                    reviewed_at=NOW - timedelta(hours=1),
+                    valid_from=NOW - timedelta(hours=2),
+                    valid_until=NOW + timedelta(hours=8),
+                )
+            )
+        )
+    )
+    db.add(
+        StockActionState(
+            coin_id=cid,
+            admission_generation=4,
+            health="current",
+            checked_at=NOW,
+            valid_until=NOW + timedelta(hours=1),
+            coverage_start=NOW - timedelta(days=1),
+            covered_until=NOW,
+        )
+    )
+    await db.flush()
+    await synthetic_split(db, cid, NOW - timedelta(seconds=1), boundary=0)
+    state = await db.get(StockActionState, cid)
+    state.quote_not_before = NOW - timedelta(seconds=1)
+    await db.flush()
+    assert await upsert_stock_quotes(db, [accepted(stock_state[0])], 4, now=lambda: NOW) == 1
+    stored = await db.get(StockQuote, cid)
+    assert stored.unit_epoch == 1
+    assert stored.event_at == NOW
