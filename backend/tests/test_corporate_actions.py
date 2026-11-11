@@ -19,6 +19,8 @@ from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.services.alpaca_actions import ActionBatch, ActionCoverage, ActionObservation
 from app.services.corporate_actions import ActionHeld, persist_action_batch
+from app.services.corporate_actions import apply_due_actions
+from app.models.trade import Holding
 from tests.stock_action_fixtures import ownership as _ownership
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_corporate_action_rules import dividend
@@ -212,3 +214,20 @@ async def test_ingest_current_authority_required(actions, changes):
     with pytest.raises(ActionHeld, match="admission"):
         async with factory.begin() as db:
             await persist_action_batch(db, batch(action), auth)
+
+
+def split_action(action, cutoff, **changes):
+    return replace(action,event_type="forward_split",rate=None,new_rate=Decimal(4),old_rate=Decimal(1),economic_at=cutoff,ex_date=cutoff.date(),record_date=cutoff.date(),units="pre_split",**changes)
+
+
+async def test_split_exact_quantity_and_basis_once(actions):
+    factory,cid,uid,action,auth=actions
+    cutoff=action.observed_at-timedelta(hours=1)
+    async with factory.begin() as db:
+        await synthetic_opening(db,cid,uid,cutoff-timedelta(hours=1))
+        stored=(await persist_action_batch(db,batch(split_action(action,cutoff)),auth))[0]
+        applied=await apply_due_actions(db,cid)
+        assert len(applied)==1
+        holding=(await db.execute(select(Holding).where(Holding.coin_id==cid))).scalar_one()
+        assert (holding.quantity,holding.cost_basis)==(Decimal(8),Decimal(20))
+        assert await apply_due_actions(db,cid)==applied
