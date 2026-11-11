@@ -267,6 +267,36 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
       path: testInfo.outputPath("actions-200pct-reflow.png"),
       fullPage: true,
     });
+    // CSS zoom is distinct from the high-density reflow emulation above.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate('document.documentElement.style.zoom = "2"');
+    expect(await page.evaluate("getComputedStyle(document.documentElement).zoom")).toBe("2");
+    expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
+    await expect(region(page).getByRole("table")).toHaveCount(1);
+    await expect(region(page).getByRole("list")).toHaveCount(0);
+    expect(
+      await region(page)
+        .locator("table td")
+        .evaluateAll((cells) => cells.every((cell) => cell.scrollWidth <= cell.clientWidth + 1)),
+    ).toBe(true);
+    expect(
+      await region(page)
+        .locator("p:not(.sr-only):visible")
+        .evaluateAll((items) =>
+          items.every(
+            (item) =>
+              item.scrollWidth <= item.clientWidth + 1 &&
+              item.scrollHeight <= item.clientHeight + 1,
+          ),
+        ),
+    ).toBe(true);
+    await records(page)
+      .first()
+      .screenshot({ path: testInfo.outputPath("actions-css-zoom-200pct-first-stock.png") });
+    const trade = page.getByRole("link", { name: "Trade BTC" });
+    await trade.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/trade\/BTC$/);
   } finally {
     await context.close();
   }
