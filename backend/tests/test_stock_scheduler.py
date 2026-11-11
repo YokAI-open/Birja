@@ -24,6 +24,15 @@ from tests.test_stock_admission import admitted
 from tests.test_stock_sessions import evidence
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def clean_account_attempts(redis_client):
+    async for key in redis_client.scan_iter(match=stock_scheduler.ACCOUNT_WINDOW_PREFIX + "*"):
+        await redis_client.delete(key)
+    yield
+    async for key in redis_client.scan_iter(match=stock_scheduler.ACCOUNT_WINDOW_PREFIX + "*"):
+        await redis_client.delete(key)
+
+
 def next_regular_clock(actual: datetime) -> datetime:
     now = actual.replace(hour=15, minute=0, second=0, microsecond=0)
     calendar = calendars.get_calendar(
@@ -314,7 +323,6 @@ async def test_permitted_batch_persists_source_times_without_idle_http_transacti
         "calendar_denied",
         "unverified",
         "closed",
-        "quota",
     ],
 )
 async def test_no_call_without_every_collection_prerequisite(
@@ -341,8 +349,6 @@ async def test_no_call_without_every_collection_prerequisite(
                     values = {"retention_allowed": False}
                 if problem == "derived_denied":
                     values = {"derived_allowed": False}
-                if problem == "quota":
-                    values = {"quota": {**admitted().quota, "requests_per_minute": 1}}
                 await db.execute(
                     update(StockDataAdmission)
                     .where(StockDataAdmission.product == product)
@@ -355,6 +361,33 @@ async def test_no_call_without_every_collection_prerequisite(
             await cycle(state, redis_client, http)
     assert route.call_count == 0
     assert await rows(state) == []
+
+
+async def test_quote_collection_ignores_unrelated_denied_product_quota(state, redis_client):
+    authority = replace(admitted("status"), state="denied", quota={})
+    async with state["factory"].begin() as db:
+        db.add(StockDataAdmission(**asdict(authority)))
+    with respx.mock() as router:
+        route = router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await cycle(state, redis_client, http)
+    assert result.accepted == 20 and route.call_count == 1
+
+
+async def test_one_request_quota_allows_one_actual_quote_attempt(state, redis_client):
+    async with state["factory"].begin() as db:
+        await db.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "quotes")
+            .values(quota={**admitted().quota, "requests_per_minute": 1})
+        )
+    with respx.mock() as router:
+        route = router.get(LATEST_QUOTES_URL).respond(200, json=body(state))
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (await cycle(state, redis_client, http)).accepted == 20
+            await redis_client.delete(stock_scheduler.WINDOW_KEY)
+            assert (await cycle(state, redis_client, http)).status == "source_error"
+    assert route.call_count == 1
 
 
 @pytest.mark.parametrize("status", [403, 429, 500])

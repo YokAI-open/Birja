@@ -45,6 +45,17 @@ MAPPING = StockMapping(16, "AAPL", "asset-aapl", NOW, "NASDAQ")
 EMPTY = b'{"corporate_actions":{},"next_page_token":null}'
 
 
+async def test_rest_continuation_resumes_the_validated_next_page():
+    with respx.mock() as router:
+        route = router.get(REST_URL).respond(200, content=EMPTY)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await fetch_action_snapshot(http, [MAPPING], action_admitted,
+                lambda: NOW, ActionBudget(), start=NOW.date(), end=NOW.date(),
+                page_token="next-reviewed-page")
+    assert route.calls.last.request.url.params.get("page_token") == "next-reviewed-page"
+    assert batch.complete
+
+
 class Clock:
     def __init__(self):
         self.value = 0.0

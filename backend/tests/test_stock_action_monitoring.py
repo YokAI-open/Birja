@@ -21,8 +21,18 @@ from app.models.corporate_action import (
 )
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.tasks import stock_actions
+from app.tasks import stock_scheduler
 from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_sessions import evidence
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_account_attempts(redis_client):
+    async for key in redis_client.scan_iter(match=stock_scheduler.ACCOUNT_WINDOW_PREFIX + "*"):
+        await redis_client.delete(key)
+    yield
+    async for key in redis_client.scan_iter(match=stock_scheduler.ACCOUNT_WINDOW_PREFIX + "*"):
+        await redis_client.delete(key)
 
 
 @pytest_asyncio.fixture
@@ -201,3 +211,113 @@ async def test_duplicate_cycle_and_cadence_are_independently_owned(monitor, redi
     async with httpx.AsyncClient(trust_env=False) as http:
         assert (await cycle(monitor, redis_client, http)).status == "locked"
     assert await redis_client.get(key) == "other"
+
+
+async def test_shared_account_budget_counts_real_attempts_and_rejects_excess(monitor, redis_client):
+    from app.tasks.stock_scheduler import _admissions, reserve_account_attempt
+
+    settings = monitor[1]
+    settings.stock_account_requests_per_minute = 2
+    async with monitor[0]() as db:
+        auth = await _admissions(db)
+    assert await reserve_account_attempt(redis_client, settings, auth)
+    with respx.mock(assert_all_called=False) as router:
+        rest, replay = routes(router)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (await cycle(monitor, redis_client, http)).status == "source_error"
+            assert http.event_hooks["request"] == []
+    assert rest.call_count == 1 and replay.call_count == 0
+    assert all(row.health == "reconciling" for row in await states(monitor[0]))
+    assert not await reserve_account_attempt(redis_client, settings, auth)
+
+
+async def test_account_budget_is_atomic_across_concurrent_products(monitor, redis_client):
+    import asyncio
+    from app.tasks.stock_scheduler import _admissions, reserve_account_attempt
+
+    settings = monitor[1]
+    settings.stock_account_requests_per_minute = 3
+    async with monitor[0]() as db:
+        auth = await _admissions(db)
+    results = await asyncio.gather(
+        *(reserve_account_attempt(redis_client, settings, auth) for _ in range(12))
+    )
+    assert sum(results) == 3
+    settings.stock_data_account = "other-account"
+    assert await reserve_account_attempt(redis_client, settings, auth)
+
+
+@pytest.mark.parametrize("phase", ["acquire", "release"])
+async def test_redis_failure_is_bounded_and_sanitized(monitor, redis_client, monkeypatch, phase):
+    from redis.exceptions import RedisError
+
+    async def failed(*args, **kwargs):
+        raise RedisError("private-credential-never-log")
+
+    monkeypatch.setattr(redis_client, "set" if phase == "acquire" else "eval", failed)
+    with respx.mock(assert_all_called=False) as router:
+        routes(router)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await cycle(monitor, redis_client, http)
+    assert result.status == ("lock_error" if phase == "acquire" else "source_error")
+
+
+async def test_hung_source_cancels_and_releases_only_own_lease(monitor, redis_client):
+    import asyncio
+
+    entered = asyncio.Event()
+
+    async def hang(request):
+        entered.set()
+        await asyncio.Event().wait()
+
+    with respx.mock() as router:
+        router.get("https://data.alpaca.markets/v1/corporate-actions").mock(side_effect=hang)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            task = asyncio.create_task(cycle(monitor, redis_client, http))
+            await asyncio.wait_for(entered.wait(), 3)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert http.event_hooks["request"] == []
+    assert not await redis_client.exists(stock_actions.LOCK_KEY)
+    assert all(r.health == "reconciling" for r in await states(monitor[0]))
+
+
+async def test_health_deadline_never_outlives_reviewed_calendar(monitor, redis_client):
+    reviewed_until = datetime.now(UTC) + timedelta(seconds=10)
+    async with monitor[0].begin() as db:
+        row = (await db.execute(select(StockDataAdmission).where(
+            StockDataAdmission.product == "calendar"))).scalar_one()
+        row.calendar = {**row.calendar, "review_valid_until": reviewed_until.isoformat()}
+    with respx.mock() as router:
+        routes(router)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (await cycle(monitor, redis_client, http)).status == "ok"
+    assert all(r.valid_until == reviewed_until for r in await states(monitor[0]))
+
+
+def mixed_body():
+    from uuid import UUID
+    today = datetime.now(UTC).date()
+    base = {"symbol": "AAPL", "cusip": "037833100", "process_date": today.isoformat(),
+        "ex_date": (today + timedelta(days=2)).isoformat()}
+    return {"corporate_actions": {
+        "cash_dividends": [{**base, "id": str(UUID(int=1)), "rate": 1,
+            "currency": "USD", "foreign": False, "special": False,
+            "record_date": base["ex_date"], "payable_date": (today + timedelta(days=5)).isoformat()}],
+        "forward_splits": [{**base, "id": str(UUID(int=2)), "old_rate": 1, "new_rate": 2}],
+        "reverse_splits": [{**base, "id": str(UUID(int=3)), "old_rate": 2, "new_rate": 1}],
+    }, "next_page_token": None}
+
+
+async def test_mixed_events_only_cash_dividends_receive_entitlement_derivation(monitor, redis_client):
+    from app.services.corporate_actions import persistent_action_holds
+    with respx.mock() as router:
+        routes(router, body=mixed_body())
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (await cycle(monitor, redis_client, http)).status == "ok"
+    async with monitor[0]() as db:
+        event = (await db.execute(select(StockActionEvent).limit(1))).scalar_one()
+        assert await persistent_action_holds(db, event.coin_id)
+    assert len(await states(monitor[0])) == 20

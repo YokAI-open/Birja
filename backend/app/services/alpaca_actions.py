@@ -613,6 +613,7 @@ async def fetch_action_snapshot(
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     account: str = "birja",
     server: str = "birja",
+    page_token: str | None = None,
 ) -> ActionBatch:
     """Exhaust inclusive process-date pages; this does not prove financial health."""
     try:
