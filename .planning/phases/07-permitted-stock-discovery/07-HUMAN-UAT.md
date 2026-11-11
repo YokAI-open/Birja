@@ -58,6 +58,10 @@ generic UI approval is required. Live-data acceptance remains pending.
 
 ## Live measurement handoff
 
+The owner explicitly deferred this review and requested continued local work.
+No additional generic UI approval is needed. Actual measurement success is
+still unverified and is not replaced by this deferral.
+
 The already-authorized single campaign waits for 2026-11-11 **17:30 Moscow**
 (14:30 UTC), with at most thirty read-only provider attempts. See
 [07-ACTIVATION.md](07-ACTIVATION.md) for the frozen harness/runner identities,

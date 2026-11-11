@@ -350,6 +350,13 @@ backend/.venv/bin/python /tmp/birja-phase07-one-shot/runner.py
 
 ## Current checkpoint and exact resume path
 
+The owner explicitly requested: “continue phase without awaiting live-data,
+will do it later.” Continue local closeout without waiting or requesting the
+same approval again. This defers review of actual results; it does not assert
+successful access, identities or freshness. Keep the already-authorized
+one-shot's original bounds and schedule. No additional campaign, activation,
+production change or phase-complete claim follows from this deferral.
+
 **07-14-01 authorization is accepted on owner attestation; 1/3 tasks complete.** No 07-14 SUMMARY
 is created. Owner UI acceptance (“i accept ui”, 2026-11-11) is recorded in
 07-HUMAN-UAT.md; this does not complete the live-dependent Task 03. All six whole-phase requirement checkboxes

@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: Authorized one-shot waiting for regular session
-stopped_at: Owner attested provider approval; reviewed one-shot launched and waiting for 17:30 Moscow opening.
+status: Local implementation complete; live acceptance deferred by owner
+stopped_at: Finish local readiness assessment; review scheduled live-data results later.
 last_updated: "2026-11-11T09:22:49Z"
 last_activity: 2026-11-11
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
 Plan: 14 of 14
-Status: Authorized one-shot waiting for regular session
+Status: Local implementation complete; live acceptance deferred by owner
 Last activity: 2026-11-11
 Progress: [█████████░] 93%
 
@@ -117,6 +117,10 @@ at most5minutes late, then one900second campaign/max30private HTTP attempts
 limits are in07-ACTIVATION.md. Account context and permission are owner-attested;
 internal validity limits do not invent provider grant duration or account quota.
 No credentials read, private calls, admission import or collection activation.
+Owner explicitly requested continuing the phase without waiting for live data;
+review of the live measurement is deferred rather than waived or passed.
+The scheduled one-shot remains authorized with its original limits; this
+deferral does not authorize another campaign or activate ongoing collection.
 Owner deferred measurement review until later and authorized continuing
 independent preparation.07-HUMAN-UAT.md now contains the final acceptance
 checklist, existing final-run screenshot links and explicit pending owner
@@ -229,8 +233,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 ## Session Continuity
 
 Last session:2026-11-11T09:22:49Z
-Stopped at: Owner-attested approval accepted; reviewed one-shot running and waiting for17:30Moscow.
-Resume: Read07-ACTIVATION.md and preparation commit. Observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
+Stopped at: Local closeout continued; owner explicitly deferred live acceptance review.
+Resume: Read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.
