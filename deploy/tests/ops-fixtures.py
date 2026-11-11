@@ -525,8 +525,22 @@ def successor_roundtrips(dc, session, unchanged):
     release = source_git('rev-parse', 'HEAD').decode().strip()
     source_container = r.call(dc + ['ps','-q','postgres']).strip()
     source_mounts = r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()])
-    for revision in ('0008','0009','0010','0011'):
-        role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")")
+    for revision in ('0008','0009','0010','0011','0012'):
+        if revision == '0012':
+            # Explicit synthetic predecessor role provisioning. The source's
+            # migration owner is real before0012; restore never invents it.
+            role_sql(dc, 'ALTER ROLE birja_migrator NOINHERIT')
+            role_config=session.root/'source-roles.json'
+            password_files={}
+            for name in ('app','scheduler','migrator'):
+                file=session.root/('source-'+name)
+                file.write_text('a'*64);file.chmod(0o600)
+                password_files[name]=str(file)
+            role_config.write_text(json.dumps({'project':'birja-ops-test','db_name':'birja_source_test',
+                'bootstrap':r.BOOT,'password_files':password_files}));role_config.chmod(0o600)
+            r.call(['bash',str(ROOT/'deploy/configure-db.sh'),'--synthetic',str(role_config),
+                '--apply','--approved-operation','populated-role-transition'])
+        role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")", 'birja_migrator' if revision=='0012' else r.BOOT)
         if revision == '0009':
             r.sql(dc, STOCK_RECOVERY_SEED, 'birja_source_test')
         if revision == '0010':
@@ -538,6 +552,8 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             fixture = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(fixture)
             r.sql(dc, fixture.ACTION_SEED, 'birja_source_test')
+        if revision == '0012':
+            request=json.loads(role_python(RESOLUTION_SCENARIO + RECOVERY_SEED_SCENARIO, 'birja_migrator'))
         before = r.canonical(dc, 'birja_source_test')
         if revision == '0010':
             assert before['tables']['stock_instruments']['count'] == 20
@@ -574,7 +590,12 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             assert identity_state(dc, r.CLONE) == sequences
             if revision == '0011':
                 accounting_negative_controls(dc, manifest)
-            if revision in ('0009','0010','0011'):
+            if revision == '0012':
+                resolution_negative_controls(dc, manifest)
+                output=role_python(RESOLUTION_SCENARIO + RECOVERY_REPLAY_SCENARIO.replace('REPLAY_REQUEST',repr(request)), 'birja_migrator')
+                assert b'restored_split_decision_replay_no_second_effect=true' in output
+                r.verify(dc,manifest)
+            if revision in ('0009','0010','0011','0012'):
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
                 try:
                     r.verify(dc, manifest)
@@ -599,6 +620,31 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
         assert r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()]) == source_mounts
         shutil.rmtree(directory)
         print(f'retained_revision={revision} exact_rows_schema_sequences=true source_identity_unchanged=true stock_authority_repaired=false', flush=True)
+
+
+def resolution_negative_controls(dc, manifest):
+    contract=r.backup_module()
+    for label,query in (
+        ('public_execute','GRANT EXECUTE ON FUNCTION '+contract.RESOLUTION_SIGNATURE+' TO PUBLIC'),
+        ('operator_login','ALTER ROLE birja_action_operator LOGIN'),
+        ('operator_catalogue','GRANT SELECT ON coins TO birja_action_operator'),
+        ('wrong_owner','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+' OWNER TO '+r.BOOT),
+        ('function_configuration','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+" SET search_path TO public"),
+        ('function_body',"CREATE OR REPLACE FUNCTION "+contract.RESOLUTION_SIGNATURE.replace('bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text',
+            'p_coin bigint,p_event bigint,p_revision bigint,p_generation bigint,p_epoch bigint,p_key text,p_decision text,p_hash text,p_evidence jsonb,p_actor text')+
+            " RETURNS bigint LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public AS 'SELECT 1::bigint'"),
+    ):
+        raw=r.sql(dc,'BEGIN; '+query+"; SET LOCAL TIME ZONE 'UTC'; "+contract.manifest_sql('0012')+'; ROLLBACK;')
+        try:contract.validate_manifest(json.loads(raw))
+        except ValueError:pass
+        else:raise AssertionError('changed0012authority accepted: '+label)
+    damaged=copy.deepcopy(manifest)
+    damaged['resolution_authority']['definition']+='\n-- attacker self-hash claim'
+    damaged['resolution_authority']['definition_sha256']=__import__('hashlib').sha256(damaged['resolution_authority']['definition'].encode()).hexdigest()
+    try:contract.validate_manifest(damaged)
+    except ValueError:pass
+    else:raise AssertionError('self-reported changed function accepted')
+    print('resolution_authority_corruptions=7 fixed_definition_owner_acl_nologin=true',flush=True)
 
 
 def accounting_negative_controls(dc, manifest):
@@ -804,7 +850,7 @@ def roundtrip(archive_arg=None):
             # intentionally measured with no writers in this isolated source.
             wrapper.write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
             successor_roundtrips(dc, session, unchanged)
-            assert r.canonical(dc, "birja_source_test")["revision"] == "0011", "retained recovery rehearsal never exercised populated accounting state"
+            assert r.canonical(dc, "birja_source_test")["revision"] == "0012", "retained recovery rehearsal never exercised populated accounting state"
             print(
                 "integration_elapsed_seconds="
                 + str(round(time.monotonic() - started, 3))
@@ -1300,6 +1346,17 @@ def action_role_contract(dc):
     for query in ('SELECT * FROM trades','SELECT cash_after FROM trades','UPDATE trades SET quantity=quantity','DELETE FROM trades','INSERT INTO trades DEFAULT VALUES'):
         role_sql(dc,query,'birja_scheduler',denied=True)
     assert role_sql(dc, "SELECT NOT (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_action_operator'") == b't'
+    signature=r.backup_module().RESOLUTION_SIGNATURE
+    for role in ('birja_app','birja_scheduler','birja_action_operator'):
+        allowed=role=='birja_action_operator'
+        assert role_sql(dc,"SELECT has_function_privilege('"+role+"','"+signature+"','EXECUTE')") == (b't' if allowed else b'f')
+        rows.append((role,'resolution_function','EXECUTE',str(allowed)))
+    for column in ('id','symbol','asset_class','is_active','sort_order','name','kraken_pair'):
+        allowed=column in ('id','symbol','asset_class','is_active','sort_order')
+        assert role_sql(dc,f"SELECT has_column_privilege('birja_action_operator','coins','{column}','SELECT')") == (b't' if allowed else b'f')
+    role_sql(dc,'SELECT * FROM coins','birja_action_operator',denied=True)
+    for table in ('accounts','holdings','trades'):
+        role_sql(dc,'SELECT * FROM '+table,'birja_action_operator',denied=True)
     return rows
 
 
@@ -1477,7 +1534,7 @@ def roles(red_probe=False):
                 "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",
                 "birja_migrator",
             )
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0011"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0012"
             after = role_manifest(dc)
             assert after['financial'] == before['financial']
             assert all(after['tables'][table] == state for table,state in before['tables'].items() if table not in {'coins','alembic_version'})
@@ -1830,6 +1887,182 @@ print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consist
 """
 
 
+RESOLUTION_SCENARIO = r"""
+import asyncio,json,uuid
+from dataclasses import asdict,replace
+from datetime import timedelta
+from decimal import Decimal
+from sqlalchemy import select,text,delete,func
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from app.models.stock import StockInstrument,StockDataAdmission,StockSession
+from app.models.price import Coin
+from app.models.corporate_action import StockActionState,StockActionRevision,StockActionObservation,StockActionEvent,StockActionSource,StockActionResolution,StockOwnershipMovement,StockSplitApplication
+from app.models.trade import Holding
+from app.services.stock_admission import ProductAdmission
+from app.services.stock_quote_rules import CURATED_SYMBOLS
+from app.services.stock_sessions import build_sessions
+from app.services.corporate_action_rules import NormalizedAction
+from app.services.alpaca_actions import ActionBatch,ActionObservation
+from app.services.corporate_actions import persist_action_batch,apply_due_actions
+from app.services.stock_action_reconciliation import ResolutionRequest,reconcile,LEDGER_SQL
+
+async def scenario(db,split_too=False):
+ now=(await db.execute(text('SELECT clock_timestamp()'))).scalar_one()
+ common=dict(state='approved',generation=8,reviewed_at=now-timedelta(hours=1),
+  valid_from=now-timedelta(hours=2),valid_until=now+timedelta(hours=2),
+  evidence_ref='synthetic:review',terms_version='synthetic-v1',collection_allowed=True,
+  display_allowed=True,derived_allowed=True,retention_allowed=True,attribution='Synthetic action rights',
+  scope={'application':'birja','audience':'authenticated-users','account':'birja','server':'birja','feed':'iex'},
+  quota={'requests_per_minute':20,'symbols_per_request':20,'max_response_bytes':262144,'retention_seconds':86400})
+ auth=ProductAdmission(product='actions',**{**common,'scope':{**common['scope'],
+  'feed':'alpaca-corporate-actions','capabilities':['rest','replay'],
+  'rest_symbols':sorted(CURATED_SYMBOLS),'all_us_replay_ingress':True,'replay_region':'us',
+  'durable_accounting':True,'backup_restore':True,'retention_mode':'durable-accounting'}},
+  allowed_fields=['provider_event_id','symbol','event_type','process_date'])
+ calendar=ProductAdmission(product='calendar',**common,
+  allowed_fields=['exchange','session_date','opens_at','closes_at'],
+  calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/official-2026',
+   'sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],
+   'review_valid_until':(now+timedelta(hours=2)).isoformat(),
+   'coverage_start':(now.date()-timedelta(days=45)).isoformat(),
+   'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
+ await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product.in_(['actions','calendar'])))
+ db.add_all([StockDataAdmission(**asdict(auth)),StockDataAdmission(**asdict(calendar))]);await db.flush()
+ catalog=(await db.execute(select(StockInstrument).order_by(StockInstrument.coin_id))).scalars().all()
+ instrument=catalog[2]
+ instrument.provider_asset_id='synthetic-'+str(instrument.coin_id);instrument.provider_verified_at=now-timedelta(days=10)
+ sessions=build_sessions(now,calendar)
+ opening=next(row for row in sessions if row.exchange==instrument.listing_exchange and row.opens_at and row.opens_at>now)
+ if (await db.execute(select(StockSession.id).where(StockSession.exchange==opening.exchange,StockSession.session_date==opening.session_date))).scalar_one_or_none() is None:
+  db.add(StockSession(**asdict(opening)))
+ symbol=(await db.execute(select(Coin.symbol).where(Coin.id==instrument.coin_id))).scalar_one()
+ action=NormalizedAction('synthetic-'+str(uuid.uuid4()),instrument.coin_id,symbol,'cash_dividend',now.date(),now,
+  currency='USD',rate=Decimal('.25'),ex_date=opening.session_date,record_date=opening.session_date,
+  payable_date=opening.session_date+timedelta(days=5),subtype='ordinary',foreign=False,special=False,
+  due_bills=False,identity_verified=True,dates_verified=True)
+ async def persist(value):
+  return (await persist_action_batch(db,ActionBatch(records=(value,),observations=(ActionObservation(value),),complete=True),auth))[0]
+ await persist(replace(action,rate=None));current=await persist(action)
+ state=await db.get(StockActionState,instrument.coin_id);revision=await db.get(StockActionRevision,current.revision_id)
+ ids=list((await db.execute(select(StockActionRevision.id).where(StockActionRevision.event_id==current.event_id).order_by(StockActionRevision.id))).scalars())
+ observation=(await db.execute(select(func.max(StockActionObservation.id)).where(StockActionObservation.event_id==current.event_id))).scalar_one()
+ ledger=(await db.execute(text(LEDGER_SQL),{'coin':instrument.coin_id})).scalar_one()
+ calendar_digest=(await db.execute(text("SELECT encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex') FROM stock_data_admissions c WHERE product='calendar'"))).scalar_one()
+ request=ResolutionRequest.model_validate({'coin_id':instrument.coin_id,'event_id':current.event_id,
+  'expected_revision':current.revision_id,'admission_generation':8,'epoch':state.epoch,
+  'decision_key':'synthetic-reviewed-'+str(uuid.uuid4()),'decision':'accept_corrected_supported_revision',
+  'actor_ref':'synthetic:operator','evidence':{'format':1,'unit_epoch':state.unit_epoch,'ledger_digest':ledger,
+   'revision_fingerprint':revision.fingerprint,'held_revision_ids':ids,'observation_id':observation,
+   'account':'birja','server':'birja','calendar_generation':8,'calendar_digest':calendar_digest,
+   'review_valid_until':(now+timedelta(minutes=30)).isoformat(),'security_id':instrument.provider_asset_id,
+   'cutoff':opening.opens_at.isoformat(),'alias_event_id':None}})
+ split_coin=None;application=None
+ if split_too:
+  split_instrument=catalog[1];split_coin=split_instrument.coin_id
+  split_instrument.provider_asset_id='synthetic-'+str(split_coin);split_instrument.provider_verified_at=now-timedelta(days=10)
+  past=[row for row in sessions if row.exchange==split_instrument.listing_exchange and row.opens_at and row.opens_at<now]
+  boundary=past[-1].opens_at;baseline=boundary-timedelta(days=2)
+  uid=(await db.execute(text('SELECT min(id) FROM users'))).scalar_one()
+  db.add(StockActionState(coin_id=split_coin,admission_generation=8,health='current',checked_at=now-timedelta(seconds=1),valid_until=now+timedelta(hours=1),journal_start_at=baseline,complete_from=baseline,coverage_start=baseline,covered_until=now))
+  db.add(Holding(coin_id=split_coin,user_id=uid,quantity=Decimal(2),cost_basis=Decimal(20)))
+  db.add(StockOwnershipMovement(coin_id=split_coin,user_id=uid,sequence=1,economic_at=boundary-timedelta(days=1),recorded_at=now,quantity=Decimal(2),before_quantity=Decimal(0),after_quantity=Decimal(2),before_basis=Decimal(0),after_basis=Decimal(20),unit_epoch=0,cause_kind='opening',causal_key='synthetic-recovery-opening'))
+  symbol=(await db.execute(select(Coin.symbol).where(Coin.id==split_coin))).scalar_one()
+  split=replace(action,provider_event_id='synthetic-'+str(uuid.uuid4()),coin_id=split_coin,symbol=symbol,
+    event_type='forward_split',currency=None,rate=None,new_rate=Decimal(2),old_rate=Decimal(1),
+    units='pre_split',economic_at=boundary,ex_date=boundary.date(),record_date=boundary.date(),payable_date=boundary.date()+timedelta(days=1))
+  await persist(split)
+  application=(await apply_due_actions(db,split_coin,auth))[0]
+ return request,split_coin,application
+"""
+
+RECOVERY_SEED_SCENARIO = r"""
+import os
+async def main():
+ engine=create_async_engine(os.environ['DATABASE_URL'])
+ try:
+  async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
+   request,split_coin,application=await scenario(db,True)
+   resolution=await reconcile(db,request,account='birja',server='birja')
+  print(json.dumps({'request':request.model_dump(mode='json'),'split_coin':split_coin,'application':application,'resolution':resolution}))
+ finally:await engine.dispose()
+asyncio.run(main())
+"""
+
+RECOVERY_REPLAY_SCENARIO = r"""
+import os
+from sqlalchemy.engine import make_url
+async def main():
+ data=REPLAY_REQUEST
+ engine=create_async_engine(make_url(os.environ['DATABASE_URL']).set(database='birja_restore_test'))
+ try:
+  async with async_sessionmaker(engine,expire_on_commit=False).begin() as db:
+   before=(await db.execute(text('SELECT count(*) FROM stock_action_resolutions'))).scalar_one()
+   request=ResolutionRequest.model_validate(data['request'])
+   assert await reconcile(db,request,account='birja',server='birja')==data['resolution']
+   assert await reconcile(db,request,account='birja',server='birja')==data['resolution']
+   assert (await db.execute(text('SELECT count(*) FROM stock_action_resolutions'))).scalar_one()==before
+   from app.services.corporate_actions import _load_admission
+   auth=await _load_admission(db,'actions')
+   assert await apply_due_actions(db,data['split_coin'],auth)==(data['application'],)
+   assert await apply_due_actions(db,data['split_coin'],auth)==(data['application'],)
+  print('restored_split_decision_replay_no_second_effect=true')
+ finally:await engine.dispose()
+asyncio.run(main())
+"""
+
+RESOLUTION_TLS_CONSUMER = r"""
+import asyncpg
+from app.core.config import SchedulerSettings
+from app.db.connection import database_connect_args
+async def main():
+ args=database_connect_args(SchedulerSettings())
+ engines={name:create_async_engine('postgresql+asyncpg://'+name+':'+password+'@postgres:5432/birja_source_test',connect_args=args)
+  for name,password in [('birja_migrator','c'*64),('birja_operator_fixture','d'*64)]}
+ sessions={name:async_sessionmaker(engine,expire_on_commit=False) for name,engine in engines.items()}
+ request=None
+ try:
+  async with sessions['birja_migrator'].begin() as db:
+   request,_,_=await scenario(db)
+  async with sessions['birja_operator_fixture'].begin() as db:
+   assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+   await db.execute(text('SET LOCAL ROLE birja_action_operator'))
+   first=await reconcile(db,request,account='birja',server='birja')
+  async with sessions['birja_operator_fixture'].begin() as db:
+   await db.execute(text('SET LOCAL ROLE birja_action_operator'))
+   assert await reconcile(db,request,account='birja',server='birja')==first
+  async with sessions['birja_operator_fixture'].begin() as db:
+   await db.execute(text('SET LOCAL ROLE birja_action_operator'))
+   try:await reconcile(db,request.model_copy(update={'decision_key':'synthetic-stale'}),account='birja',server='birja')
+   except Exception as exc:
+    assert getattr(exc.orig,'sqlstate',None)=='22023'
+   else:raise AssertionError('stale scoped resolution accepted')
+  call='SELECT public.apply_stock_action_resolution(NULL::bigint,NULL::bigint,NULL::bigint,NULL::bigint,NULL::bigint,NULL::text,NULL::text,NULL::text,NULL::jsonb,NULL::text)'
+  for role,password in [('birja_app','a'*64),('birja_scheduler','b'*64),('birja_public_fixture','e'*64)]:
+   connection=await asyncpg.connect('postgresql://'+role+':'+password+'@postgres:5432/birja_source_test',**args)
+   try:
+    assert await connection.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
+    try:await connection.execute(call)
+    except asyncpg.PostgresError as exc:assert exc.sqlstate=='42501'
+    else:raise AssertionError('runtime/PUBLIC obtained resolution authority')
+   finally:await connection.close()
+ finally:
+  if request is not None:
+   async with sessions['birja_migrator'].begin() as db:
+    for model in (StockActionResolution,StockActionObservation):
+     await db.execute(delete(model).where(model.event_id==request.event_id))
+    event=await db.get(StockActionEvent,request.event_id);event.current_revision_id=None;await db.flush()
+    await db.execute(delete(StockActionRevision).where(StockActionRevision.event_id==request.event_id))
+    await db.execute(delete(StockActionSource).where(StockActionSource.event_id==request.event_id))
+    await db.execute(delete(StockActionEvent).where(StockActionEvent.id==request.event_id))
+    await db.execute(delete(StockActionState).where(StockActionState.coin_id==request.coin_id))
+    instrument=await db.get(StockInstrument,request.coin_id);instrument.provider_asset_id=None;instrument.provider_verified_at=None
+    await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product.in_(['actions','calendar'])))
+    await db.execute(delete(StockSession).where(StockSession.session_date==request.evidence.cutoff.date(),StockSession.calendar_admission_generation==8))
+  for engine in engines.values():await engine.dispose()
+asyncio.run(main())
+print('resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true')
+"""
+
 TLS_PROBE = r"""
 import asyncio
 from sqlalchemy import text
@@ -2143,7 +2376,7 @@ def tls(fresh_bootstrap=False):
         hba = root / "hba"
         hba.mkdir(mode=0o755)
         hba.chmod(0o755)
-        policy = (ROOT / "deploy/db/pg_hba.conf").read_text()
+        policy = 'hostssl all birja_operator_fixture,birja_public_fixture samenet scram-sha-256\n' + (ROOT / "deploy/db/pg_hba.conf").read_text()
         (hba / "pg_hba.conf").write_text(
             "hostssl all " + r.BOOT + " samenet scram-sha-256\n" + policy
         )
@@ -2259,7 +2492,7 @@ def tls(fresh_bootstrap=False):
             client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0007')", bootstrap)
             secure_seed = secure_seed.replace("cfg=Config('/app/alembic.ini');cfg.set_main_option('script_location',legacy+'/backend/alembic');command.upgrade(cfg,'0007')", "")
             client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
-            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0010') + ")", bootstrap)
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0011') + ")", bootstrap)
             original = r.canonical(dc, "birja_source_test")
             config = root / "roles.json"
             config.write_text(
@@ -2301,7 +2534,7 @@ def tls(fresh_bootstrap=False):
             upgraded = client('migrate', STOCK_TLS_UPGRADE) if not fresh_bootstrap else None
             if upgraded is not None:
                 assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0011"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0012"
             current = r.canonical(dc, "birja_source_test")
             assert current['financial'] == original['financial']
             assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version','stock_quotes','stock_sessions'})
@@ -2312,10 +2545,16 @@ def tls(fresh_bootstrap=False):
             action_acl = action_role_contract(dc)
             action_consumer = client('migrate', ACTION_TLS_CONSUMER)
             assert b'accounting_tls_actual_append=true immutable_denials=true quantity_only=true' in action_consumer.stdout
-            print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0011' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)
+            print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0012' if fresh_bootstrap else 'populated0011_no_grant_repair'), flush=True)
             ownership_consumer=client('migrate',OWNERSHIP_TLS_CONSUMER)
             assert b'ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true' in ownership_consumer.stdout
-            print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true lane='+('fresh0011' if fresh_bootstrap else 'populated0010_no_grant_repair'),flush=True)
+            print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true lane='+('fresh0012' if fresh_bootstrap else 'populated0011_no_grant_repair'),flush=True)
+            # Dedicated isolated logins are provisioned only AFTER migration
+            # authority checks. NOLOGIN operator remains a separate group role.
+            role_sql(dc,"CREATE ROLE birja_operator_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'d'*64+"'; CREATE ROLE birja_public_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'e'*64+"'; GRANT birja_action_operator TO birja_operator_fixture")
+            resolution_consumer=client('migrate',RESOLUTION_SCENARIO+RESOLUTION_TLS_CONSUMER)
+            assert b'resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true' in resolution_consumer.stdout
+            print('resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true lane='+('fresh0012' if fresh_bootstrap else 'populated0011_no_grant_repair'),flush=True)
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
             print('calendar_runtime_tls_consumer=true lane=' + ('fresh_bootstrap' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)

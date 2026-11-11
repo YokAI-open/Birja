@@ -58,3 +58,6 @@ STOCK_INVALID */
 -- Revision0011 is assembled by backup-snapshot.manifest_sql using its explicit
 -- reviewed accounting columns, exact catalogue fingerprint and identity states.
 -- Keep the legacy query and STOCK_* fragments byte-compatible for0007–0010.
+
+-- Revision0012 additionally inventories the independently pinned scoped function,
+-- actual owner/EXECUTE ACL and operator boundaries in backup-snapshot.py.

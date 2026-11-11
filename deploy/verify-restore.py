@@ -782,6 +782,8 @@ def verify(dc, manifest):
     contract.validate_manifest(manifest)
     actual = canonical(dc)
     contract.validate_manifest(actual)
+    if manifest['revision'] == '0012':
+        require(actual['resolution_authority'] == manifest['resolution_authority'])
     require(
         all(
             actual[k] == manifest[k]
@@ -800,9 +802,9 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    stock = manifest["revision"] in ("0009", "0010", "0011")
-    require(constraints == (b"40" if manifest["revision"] == "0011" else b"10" if stock else b"8"))
-    if manifest["revision"] == "0011":
+    stock = manifest["revision"] in ("0009", "0010", "0011", "0012")
+    require(constraints == (b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
+    if manifest["revision"] in ('0011','0012'):
         require(actual["identity_state"] == manifest["identity_state"])
     require(
         sql(
@@ -843,6 +845,42 @@ def verify(dc, manifest):
     print("equality=true invariants=true identities=true")
 
 
+def restore_resolution_authority(dc):
+    """Restore ONLY the reviewed0012 allowlist, while the clone is quarantined.
+
+    pg_restore --no-owner/--no-acl remains necessary for restricted clone
+    ownership. It cannot be used to infer that SECURITY DEFINER authority was
+    restored. Authenticate the exact reviewed function before the fixed grants.
+    No manifest SQL or source role name is executed.
+    """
+    contract = recovery_contract()
+    definition = json.loads(sql(dc, "SELECT to_json(pg_get_functiondef('" + contract.RESOLUTION_SIGNATURE + "'::regprocedure))"))
+    require(hashlib.sha256(definition.encode()).hexdigest() == contract.RESOLUTION_FUNCTION_SHA256)
+    require(sql(dc,"SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='" + contract.RESOLUTION_SIGNATURE + "'::regprocedure").strip() == b'birja_migrator')
+    sql(dc,"""DO $$ BEGIN
+      IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
+        CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+          NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      END IF;
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator' AND
+          (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+           OR rolreplication OR rolbypassrls)) OR
+        EXISTS(SELECT FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles
+           WHERE rolname='birja_action_operator')) OR
+        EXISTS(SELECT FROM pg_roles r WHERE r.rolname IN
+          ('birja_app','birja_scheduler','birja_migrator') AND
+          pg_has_role(r.oid,'birja_action_operator','MEMBER')) THEN
+        RAISE EXCEPTION 'unsafe restored operator boundary';
+      END IF;
+    END $$;""")
+    sql(dc,"REVOKE ALL ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " FROM PUBLIC;\n"
+        "GRANT EXECUTE ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " TO birja_action_operator;\n"
+        "GRANT USAGE ON SCHEMA public TO birja_action_operator;\n"
+        "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;")
+    authority=json.loads(sql(dc,"SELECT " + contract.resolution_authority_sql()))
+    contract.validate_resolution_authority(authority)
+
+
 @contextlib.contextmanager
 def restored(dc, dump):
     created = False
@@ -875,6 +913,9 @@ def restored(dc, dump):
             "birja_ops_test",
         )
         created = True
+        # A fresh clone has no application access while ACLs are intentionally
+        # omitted by pg_restore and its0012 authority is independently checked.
+        sql(dc, f"REVOKE CONNECT ON DATABASE {CLONE} FROM PUBLIC;", "birja_ops_test")
         call(
             dc
             + [
@@ -894,6 +935,9 @@ def restored(dc, dump):
             ],
             dump,
         )
+        revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
+        if revision == b'0012':
+            restore_resolution_authority(dc)
         yield
     finally:
         if created:

@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012")
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -112,13 +112,50 @@ ACTION_COLUMNS = {
 # Independent migrated0011 catalogue, frozen only after Plan01 review. This
 # includes exact types/defaults, causal FKs, checks and complete index definitions.
 ACCOUNTING_SCHEMA_SHA256 = "93cbd850d4f13148515af53f6693937886d0716d52191ac04362a974c75f0a58"
+RESOLUTION_SIGNATURE = "public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text)"
+# Independently captured from the reviewed0012 function in actual PostgreSQL18;
+# never accept a definition merely because the manifest claims its own hash.
+RESOLUTION_FUNCTION_SHA256 = "898d0a4a1de624eeb655fec3c2f1f69f6ae3f111208d080a9d42aaa056f172f9"
+
+
+def resolution_authority_sql():
+    return """(SELECT json_build_object(
+      'definition',pg_get_functiondef(p.oid),'owner',pg_get_userbyid(p.proowner),
+      'security_definer',p.prosecdef,'configuration',p.proconfig,
+      'function_count',(SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace),
+      'execute_acl',(SELECT json_agg(json_build_array(pg_get_userbyid(a.grantee),a.privilege_type,a.is_grantable)
+        ORDER BY a.grantee,a.privilege_type) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner),
+      'operator_attributes',(SELECT json_build_array(rolcanlogin,rolinherit,rolsuper,
+        rolcreatedb,rolcreaterole,rolreplication,rolbypassrls) FROM pg_roles WHERE rolname='birja_action_operator'),
+      'runtime_operator_membership',EXISTS(SELECT FROM pg_roles r WHERE r.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator') AND pg_has_role(r.oid,'birja_action_operator','MEMBER')),
+      'operator_catalogue_columns',(SELECT json_agg(attname ORDER BY attname) FROM pg_attribute
+        WHERE attrelid='public.coins'::regclass AND attnum>0 AND NOT attisdropped
+        AND has_column_privilege('birja_action_operator',attrelid,attnum,'SELECT')))
+      FROM pg_proc p WHERE p.oid=to_regprocedure('""" + RESOLUTION_SIGNATURE + "'))"
+
+
+def validate_resolution_authority(authority):
+    require(isinstance(authority, dict) and set(authority) == {
+        'definition','owner','security_definer','configuration','function_count',
+        'execute_acl','operator_attributes','runtime_operator_membership','operator_catalogue_columns'})
+    require(isinstance(authority['definition'], str))
+    require(hashlib.sha256(authority['definition'].encode()).hexdigest() == RESOLUTION_FUNCTION_SHA256)
+    require(authority['owner'] == 'birja_migrator' and authority['security_definer'] is True)
+    require(authority['configuration'] == ['search_path=pg_catalog, public'])
+    require(type(authority['function_count']) is int and authority['function_count'] == 1)
+    require(authority['execute_acl'] == [['birja_action_operator','EXECUTE',False]])
+    require(authority['operator_attributes'] == [False]*7)
+    require(authority['runtime_operator_membership'] is False)
+    require(authority['operator_catalogue_columns'] == ['asset_class','id','is_active','sort_order','symbol'])
 
 
 def identity_tables(revision):
     names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
-    if revision in ("0009", "0010", "0011"):
+    if revision in ("0009", "0010", "0011", "0012"):
         names += ["stock_sessions", "stock_data_admissions"]
-    if revision == "0011":
+    if revision in ("0011", "0012"):
         names += [table for table, columns in ACTION_COLUMNS.items() if columns.startswith("id ")]
     return sorted(names)
 
@@ -147,10 +184,10 @@ def dump_identity_state(raw):
 def contract_columns(revision):
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
-    if revision in ("0009", "0010", "0011"):
+    if revision in ("0009", "0010", "0011", "0012"):
         columns["coins"] += " asset_class"
         columns.update(STOCK_COLUMNS)
-    if revision == "0011":
+    if revision in ("0011", "0012"):
         columns["stock_quotes"] += " unit_epoch"
         columns.update(ACTION_COLUMNS)
     return {table: set(value.split()) for table, value in columns.items()}
@@ -195,7 +232,7 @@ def manifest_sql(revision):
         "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
         "  'constraints',",
     )
-    if revision == "0011":
+    if revision in ("0011", "0012"):
         quote = fragment("STOCK_ROWS").splitlines()[1]
         result = result.replace(quote, quote.replace("admission_generation)::text", "admission_generation,unit_epoch)::text"))
         rows = []
@@ -213,6 +250,9 @@ def manifest_sql(revision):
         result = result.replace("('stock_data_admissions')\n", "('stock_data_admissions')," + ",".join("('" + t + "')" for t in ACTION_COLUMNS) + "\n")
         sequences = " UNION ALL ".join("SELECT '" + t + "',last_value,is_called FROM " + t + "_id_seq" for t in identity_tables(revision))
         result = result.replace(" 'schema',json_build_object(", " 'identity_state',(SELECT json_agg(json_build_array(name,last_value,is_called) ORDER BY name) FROM (" + sequences + ") AS s(name,last_value,is_called)),\n 'schema',json_build_object(")
+    if revision == '0012':
+        result = result.replace(" 'schema',json_build_object(",
+            " 'resolution_authority'," + resolution_authority_sql() + ",\n 'schema',json_build_object(")
     return result
 
 
@@ -240,6 +280,8 @@ def schema_guard_sql(revision):
 def validate_manifest(manifest):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
+    if manifest['revision'] == '0012':
+        validate_resolution_authority(manifest.get('resolution_authority'))
     require(set(manifest["tables"]) == set(expected))
     for row in manifest["tables"].values():
         require(set(row) == {"count", "sha256"})
@@ -267,7 +309,7 @@ def validate_manifest(manifest):
             isinstance(manifest["financial"][key], str)
             and Decimal(manifest["financial"][key]).is_finite()
         )
-    if manifest["revision"] == "0011":
+    if manifest["revision"] in ("0011", "0012"):
         require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
         require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == ACCOUNTING_SCHEMA_SHA256)
         states = manifest["identity_state"]
@@ -1086,7 +1128,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision == "0011":
+            if revision in ("0011", "0012"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
