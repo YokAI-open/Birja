@@ -678,14 +678,27 @@ async def test_action_final_committed_snapshot_after_staged_reads(
     assert changed
     assert result["items"][0]["quote"] is None
     assert len(result["items"]) == 20
+    if change in ("generation", "rights"):
+        assert result["items"][0]["action"] == dict(
+            state="unknown",
+            reason="monitor_unavailable",
+            epoch=0,
+            checked_at=None,
+            valid_until=None,
+        )
 
 
 async def test_action_calendar_revocation_hides_all_derived_authority(engine, settings):
     await seed(engine)
     async with engine.begin() as conn:
-        await conn.execute(update(StockDataAdmission).where(StockDataAdmission.product == "calendar").values(state="revoked"))
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "calendar")
+            .values(state="revoked")
+        )
     async with async_sessionmaker(engine)() as db:
         result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
     action = result["items"][0]["action"]
-    assert action == dict(state="unknown", reason="monitor_unavailable", epoch=0,
-                          checked_at=None, valid_until=None)
+    assert action == dict(
+        state="unknown", reason="monitor_unavailable", epoch=0, checked_at=None, valid_until=None
+    )
