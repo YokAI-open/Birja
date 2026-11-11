@@ -13,7 +13,20 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import uuid4
 
-from sqlalchemy import exists, func, select, true, update
+from sqlalchemy import (
+    BigInteger,
+    case,
+    exists,
+    func,
+    literal,
+    select,
+    true,
+    update,
+)
+from sqlalchemy import (
+    cast as sql_cast,
+)
+from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_action import (
@@ -670,84 +683,90 @@ async def apply_due_actions(
     return tuple(result)
 
 
-async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, ...]:
-    """Reasons survive a healthy feed; only reviewed resolutions clear them."""
-    # Only exact immutable history approved by the scoped database operation is
-    # applicable. New observations/revisions invalidate the prior disposition;
-    # renewed HTTP health alone never clears an older hold.
-    audit_rows = (
-        (
-            await db.execute(
-                select(StockActionResolution).where(StockActionResolution.coin_id == coin_id)
-            )
-        )
-        .scalars()
-        .all()
+def resolved_action_event(event: Any) -> Any:
+    """Exact immutable-history disposition, reusable inside final SQL snapshots.
+
+    History aggregation stays on PostgreSQL and is bounded to 129 IDs: reviewed
+    operations accept at most 128. Oversized history cannot match an old audit.
+    JSON casts are CASE guarded, rather than relying on WHERE evaluation order.
+    """
+    audit = StockActionResolution.__table__.alias("hold_audit")
+    revision = StockActionRevision.__table__.alias("hold_history")
+    observation = StockActionObservation.__table__.alias("hold_observation")
+    bounded_ids = (
+        select(revision.c.id)
+        .where(revision.c.event_id == event.c.id)
+        .order_by(revision.c.id)
+        .limit(129)
+        .correlate(event)
+        .subquery()
     )
-    resolved_ids: set[int] = set()
-    for audit in audit_rows:
-        event = await db.get(StockActionEvent, audit.event_id)
-        ids = (
-            (
-                await db.execute(
-                    select(StockActionRevision.id)
-                    .where(StockActionRevision.event_id == audit.event_id)
-                    .order_by(StockActionRevision.id)
-                )
-            )
-            .scalars()
-            .all()
+    ids = select(
+        func.jsonb_agg(aggregate_order_by(bounded_ids.c.id, bounded_ids.c.id))
+    ).scalar_subquery()
+    observed_id = audit.c.evidence["observation_id"].astext
+    safe_observed_id = case(
+        (observed_id.op("~")(r"^[0-9]{1,16}$"), sql_cast(observed_id, BigInteger)),
+        else_=0,
+    )
+    newer_uncertainty = exists(
+        select(observation.c.id)
+        .where(
+            observation.c.event_id == event.c.id,
+            observation.c.id > safe_observed_id,
+            observation.c.source_kind == "missing_or_uncertain",
         )
-        uncertain_observation = (
-            await db.execute(
-                select(StockActionObservation.id)
-                .where(
-                    StockActionObservation.event_id == audit.event_id,
-                    StockActionObservation.id > audit.evidence.get("observation_id", 0),
-                    StockActionObservation.source_kind == "missing_or_uncertain",
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if (
-            event is not None
-            and event.current_revision_id == audit.expected_revision
-            and audit.decision
-            in ("confirm_no_effect", "accept_corrected_supported_revision", "link_verified_alias")
-            and audit.evidence.get("format") == 1
-            and audit.evidence.get("held_revision_ids") == list(ids)
-            and uncertain_observation is None
-        ):
-            resolved_ids.update(ids)
-    resolved = tuple(resolved_ids)
-    held = list(
-        (
-            await db.execute(
-                select(StockActionRevision.reason)
-                .join(StockActionEvent, StockActionEvent.id == StockActionRevision.event_id)
-                .where(
-                    StockActionEvent.coin_id == coin_id,
-                    StockActionRevision.classification.not_in(
-                        ("supported_dividend", "supported_forward_split")
-                    ),
-                    StockActionRevision.id.not_in(resolved),
-                )
-            )
-        ).scalars()
+        .correlate(event, audit)
+    )
+    return exists(
+        select(audit.c.id)
+        .where(
+            audit.c.event_id == event.c.id,
+            audit.c.coin_id == event.c.coin_id,
+            audit.c.expected_revision == event.c.current_revision_id,
+            audit.c.decision.in_(
+                ("confirm_no_effect", "accept_corrected_supported_revision", "link_verified_alias")
+            ),
+            audit.c.evidence["format"] == literal(1, type_=JSONB),
+            audit.c.evidence["held_revision_ids"] == ids,
+            ~newer_uncertainty,
+        )
+        .correlate(event)
+    )
+
+
+def action_hold_queries(coin_id: Any) -> tuple[Any, Any]:
+    """Return unresolved revision reasons and material uncertainty SQL queries."""
+    event = StockActionEvent.__table__
+    revision = StockActionRevision.__table__
+    observation = StockActionObservation.__table__
+    unresolved = ~resolved_action_event(event)
+    held = (
+        select(revision.c.reason)
+        .join(event, event.c.id == revision.c.event_id)
+        .where(
+            event.c.coin_id == coin_id,
+            revision.c.classification.not_in(("supported_dividend", "supported_forward_split")),
+            unresolved,
+        )
     )
     missing = (
-        await db.execute(
-            select(StockActionObservation.id)
-            .join(StockActionEvent, StockActionEvent.id == StockActionObservation.event_id)
-            .where(
-                StockActionEvent.coin_id == coin_id,
-                StockActionObservation.source_kind == "missing_or_uncertain",
-                StockActionObservation.revision_id.not_in(resolved),
-            )
-            .limit(1)
+        select(observation.c.id)
+        .join(event, event.c.id == observation.c.event_id)
+        .where(
+            event.c.coin_id == coin_id,
+            observation.c.source_kind == "missing_or_uncertain",
+            unresolved,
         )
-    ).scalar_one_or_none()
-    if missing is not None:
+    )
+    return held, missing
+
+
+async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, ...]:
+    """Reasons survive healthy polls; exact reviewed history alone clears them."""
+    held_query, missing_query = action_hold_queries(coin_id)
+    held = list((await db.execute(held_query.distinct())).scalars())
+    if (await db.execute(missing_query.limit(1))).scalar_one_or_none() is not None:
         held.append("source_gap")
     return tuple(sorted(set(held)))
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class FrozenModel(BaseModel):
@@ -54,6 +54,23 @@ class StockStatus(FrozenModel):
     valid_until: datetime | None = None
 
 
+class StockActionOut(FrozenModel):
+    state: Literal["current", "unknown", "reconciling", "suspended"] = "unknown"
+    reason: Literal[
+        "none",
+        "monitor_unavailable",
+        "source_gap",
+        "unsupported",
+        "fractional",
+        "conflicting",
+        "identity_change",
+        "post_split_quote_missing",
+    ] = "monitor_unavailable"
+    epoch: int = Field(default=0, ge=0, le=9007199254740991, strict=True)
+    checked_at: AwareDatetime | None = None
+    valid_until: AwareDatetime | None = None
+
+
 class StockItem(FrozenModel):
     id: int
     symbol: str
@@ -63,6 +80,10 @@ class StockItem(FrozenModel):
     quote: StockQuoteOut | None = None
     session: StockSessionOut = StockSessionOut()
     status: StockStatus = StockStatus()
+    action: StockActionOut = StockActionOut()
+    valuation_reason: Literal[
+        "available", "action_unavailable", "post_split_quote_missing", "quote_unavailable"
+    ] = "action_unavailable"
     execution_enabled: Literal[False] = False
     execution_reason: Literal["phase_disabled"] = "phase_disabled"
     quote_reason: Literal[

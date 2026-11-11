@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import insert, select, text, update
+import pytest_asyncio
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.corporate_action import StockActionState
@@ -21,15 +22,44 @@ from tests.test_stock_sessions import evidence
 NOW = datetime(2026, 11, 10, 15, tzinfo=UTC)
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def action_state_cleanup(engine, clean_stock_discovery):
+    async with engine.begin() as conn:
+        await conn.execute(delete(StockActionState))
+    yield
+    async with engine.begin() as conn:
+        await conn.execute(delete(StockActionState))
+
+
 async def seed(engine, *, event_at=NOW, now=NOW):
     authority = evidence(now)
     quote_permission = admitted()
     async with engine.begin() as conn:
         await conn.execute(
-            insert(StockDataAdmission), [asdict(quote_permission), asdict(authority)]
+            insert(StockDataAdmission),
+            [asdict(quote_permission), asdict(authority), asdict(action_admitted())],
         )
         await conn.execute(
             insert(StockSession), [asdict(r) for r in build_sessions(now, authority)]
+        )
+        ids = (
+            (await conn.execute(select(Coin.id).where(Coin.asset_class == "stock"))).scalars().all()
+        )
+        await conn.execute(
+            insert(StockActionState),
+            [
+                dict(
+                    coin_id=cid,
+                    admission_generation=4,
+                    health="current",
+                    epoch=1,
+                    checked_at=now,
+                    valid_until=now + timedelta(hours=1),
+                    coverage_start=now - timedelta(days=1),
+                    covered_until=now,
+                )
+                for cid in ids
+            ],
         )
         coin_id = (await conn.execute(select(Coin.id).where(Coin.symbol == "AAPL"))).scalar_one()
         await conn.execute(
@@ -117,7 +147,16 @@ async def test_nondefault_verified_scope_projects_quotes(engine, settings, clean
     await seed(engine)
     scope = {"account": "reviewed-account", "server": "reviewed-server"}
     async with engine.begin() as conn:
-        await conn.execute(update(StockDataAdmission).values(scope={**admitted().scope, **scope}))
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product != "actions")
+            .values(scope={**admitted().scope, **scope})
+        )
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "actions")
+            .values(scope={**action_admitted().scope, **scope})
+        )
     configured = settings.model_copy(
         update={"stock_data_account": scope["account"], "stock_data_server": scope["server"]}
     )
@@ -250,6 +289,8 @@ async def test_stock_endpoint_auth_and_no_store(client, auth_client, outbox, cle
         "quote_reason",
         "session_reason",
         "status_reason",
+        "action",
+        "valuation_reason",
     }
     for method in ("post", "put", "delete", "patch"):
         response = await getattr(auth_client, method)("/api/v1/stocks")
@@ -516,13 +557,124 @@ async def test_action_unknown_suppresses_quote_without_hiding_identity(
     engine, settings, clean_stock_discovery
 ):
     await seed(engine)
+    async with engine.begin() as conn:
+        await conn.execute(delete(StockActionState))
+
     async with async_sessionmaker(engine)() as db:
         result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
     first = result["items"][0]
     assert first["quote"] is None
     assert first["action"] == {
-        "state": "unknown", "reason": "monitor_unavailable", "epoch": 0,
-        "checked_at": None, "valid_until": None,
+        "state": "unknown",
+        "reason": "monitor_unavailable",
+        "epoch": 0,
+        "checked_at": None,
+        "valid_until": None,
     }
     assert first["valuation_reason"] == "action_unavailable"
+    assert len(result["items"]) == 20
+
+
+@pytest.mark.parametrize(
+    "condition,expected",
+    [
+        ("current", "current"),
+        ("expired", "unknown"),
+        ("reconciling", "reconciling"),
+        ("unknown", "unknown"),
+        ("generation", "unknown"),
+        ("coverage", "unknown"),
+        ("future_check", "unknown"),
+        ("boundary", "reconciling"),
+        ("future_boundary", "current"),
+    ],
+)
+async def test_action_current_monitor_and_deadlines(engine, settings, condition, expected):
+    await seed(engine)
+    values = {
+        "expired": dict(valid_until=NOW),
+        "reconciling": dict(health="reconciling"),
+        "unknown": dict(health="unknown"),
+        "generation": dict(admission_generation=5),
+        "coverage": dict(covered_until=None),
+        "future_check": dict(checked_at=NOW + timedelta(seconds=1)),
+        "boundary": dict(next_blocking_at=NOW),
+        "future_boundary": dict(next_blocking_at=NOW + timedelta(seconds=1)),
+    }.get(condition, {})
+    if condition == "expired":
+        values["checked_at"] = NOW - timedelta(seconds=1)
+    async with engine.begin() as conn:
+        if values:
+            await conn.execute(update(StockActionState).values(**values))
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    first = result["items"][0]
+    assert first["action"]["state"] == expected
+    assert (first["quote"] is not None) == (expected == "current")
+    if condition == "future_boundary":
+        assert datetime.fromisoformat(first["action"]["valid_until"]) == NOW + timedelta(seconds=1)
+    assert len(result["items"]) == 20
+    assert all(not item["execution_enabled"] for item in result["items"])
+
+
+@pytest.mark.parametrize("purpose", ["collection", "display", "derived", "retention"])
+async def test_action_denied_rights_disclose_no_derived_timestamps(engine, settings, purpose):
+    await seed(engine)
+    async with engine.begin() as conn:
+        await conn.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "actions")
+            .values(**{purpose + "_allowed": False})
+        )
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    first = result["items"][0]
+    assert first["quote"] is None
+    assert first["action"] == dict(
+        state="unknown", reason="monitor_unavailable", epoch=0, checked_at=None, valid_until=None
+    )
+    assert first["session"]["state"] == "open"
+
+
+@pytest.mark.parametrize("change", ["hold", "generation", "rights", "resolution_health"])
+async def test_action_final_committed_snapshot_after_staged_reads(
+    engine, settings, monkeypatch, change
+):
+    await seed(engine)
+    original = AsyncSession.execute
+    changed = False
+
+    async def intercept(db, statement, *args, **kwargs):
+        nonlocal changed
+        result = await original(db, statement, *args, **kwargs)
+        if (
+            "stock_sessions" in str(statement)
+            and not statement.get_execution_options().get("stock_final_evidence")
+            and not changed
+        ):
+            changed = True
+            async with engine.begin() as conn:
+                if change in ("hold", "resolution_health"):
+                    await conn.execute(
+                        update(StockActionState).values(health="reconciling", epoch=2)
+                    )
+                else:
+                    await conn.execute(
+                        update(StockDataAdmission)
+                        .where(StockDataAdmission.product == "actions")
+                        .values(
+                            **(
+                                dict(generation=5)
+                                if change == "generation"
+                                else dict(display_allowed=False)
+                            )
+                        )
+                    )
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", intercept)
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    assert changed
+    assert result["items"][0]["quote"] is None
     assert len(result["items"]) == 20
