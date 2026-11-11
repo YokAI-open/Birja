@@ -765,53 +765,201 @@ async def test_valid_causes_work_under_runtime_grants_without_trade_read(
 
 
 async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
-    engine: AsyncEngine, migrated: None,
+    engine: AsyncEngine,
+    migrated: None,
 ) -> None:
     """The committed concurrent index must survive and support a safe retry."""
-    await migrate("0010",down=True)
+    await migrate("0010", down=True)
     async with engine.begin() as conn:
-        exists=(await conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one_or_none()
+        exists = (
+            await conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname='birja_action_operator'"))
+        ).scalar_one_or_none()
         if exists:
             await conn.execute(text("DROP OWNED BY birja_action_operator"))
             await conn.execute(text("DROP ROLE birja_action_operator"))
-        await conn.execute(text("CREATE ROLE birja_action_retry_migrator LOGIN NOINHERIT PASSWORD 'test-only-retry'"))
-        await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_action_retry_migrator WITH GRANT OPTION"))
+        await conn.execute(
+            text(
+                "CREATE ROLE birja_action_retry_migrator LOGIN NOINHERIT PASSWORD 'test-only-retry'"
+            )
+        )
+        await conn.execute(
+            text("GRANT USAGE ON SCHEMA public TO birja_action_retry_migrator WITH GRANT OPTION")
+        )
         await conn.execute(text("GRANT CREATE ON SCHEMA public TO birja_action_retry_migrator"))
-        await conn.execute(text("GRANT REFERENCES ON ALL TABLES IN SCHEMA public TO birja_action_retry_migrator"))
-        await conn.execute(text("GRANT SELECT,INSERT,UPDATE,DELETE ON alembic_version TO birja_action_retry_migrator"))
-        await conn.execute(text("GRANT SELECT ON stock_instruments,stock_data_admissions,stock_sessions TO birja_action_retry_migrator WITH GRANT OPTION"))
+        await conn.execute(
+            text("GRANT REFERENCES ON ALL TABLES IN SCHEMA public TO birja_action_retry_migrator")
+        )
+        await conn.execute(
+            text(
+                "GRANT SELECT,INSERT,UPDATE,DELETE ON alembic_version "
+                "TO birja_action_retry_migrator"
+            )
+        )
+        await conn.execute(
+            text(
+                "GRANT SELECT ON stock_instruments,stock_data_admissions,stock_sessions "
+                "TO birja_action_retry_migrator WITH GRANT OPTION"
+            )
+        )
         await conn.execute(text("ALTER TABLE trades OWNER TO birja_action_retry_migrator"))
         await conn.execute(text("ALTER TABLE stock_quotes OWNER TO birja_action_retry_migrator"))
-    root=await asyncio.to_thread(lambda: Path(__file__).resolve().parents[1])
+    root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[1])
+
     async def restricted_upgrade() -> tuple[int, str]:
-        proc=await asyncio.create_subprocess_exec(
-            str(root/".venv/bin/alembic"),"upgrade","head",cwd=root,
-            env={"PATH":os.defpath,"ENV":"test",
-                 "DATABASE_URL":"postgresql+asyncpg://birja_action_retry_migrator:test-only-retry@127.0.0.1:55432/birja_test",
-                 "REDIS_URL":"redis://:test@127.0.0.1:56379/0",
-                 "OTP_HMAC_SECRET":"test-only-otp-secret-not-for-prod-000000",
-                 "JWT_SECRET":"test-only-jwt-secret-not-for-prod-000000",
-                 "ALPACA_API_KEY":"","ALPACA_SECRET_KEY":"","STOCK_DATA_ENABLED":"false"},
-            stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.STDOUT,
+        proc = await asyncio.create_subprocess_exec(
+            str(root / ".venv/bin/alembic"),
+            "upgrade",
+            "head",
+            cwd=root,
+            env={
+                "PATH": os.defpath,
+                "ENV": "test",
+                "DATABASE_URL": "postgresql+asyncpg://birja_action_retry_migrator:test-only-retry@127.0.0.1:55432/birja_test",
+                "REDIS_URL": "redis://:test@127.0.0.1:56379/0",
+                "OTP_HMAC_SECRET": "test-only-otp-secret-not-for-prod-000000",
+                "JWT_SECRET": "test-only-jwt-secret-not-for-prod-000000",
+                "ALPACA_API_KEY": "",
+                "ALPACA_SECRET_KEY": "",
+                "STOCK_DATA_ENABLED": "false",
+            },
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
-        output,_=await asyncio.wait_for(proc.communicate(),30)
+        output, _ = await asyncio.wait_for(proc.communicate(), 30)
         assert proc.returncode is not None
-        return proc.returncode,output.decode()
+        return proc.returncode, output.decode()
+
     try:
-        code,output=await restricted_upgrade()
-        assert code!=0 and "preprovision birja_action_operator" in output
-        assert await _versions(engine)==["0010"]
+        code, output = await restricted_upgrade()
+        assert code != 0 and "preprovision birja_action_operator" in output
+        assert await _versions(engine) == ["0010"]
         async with engine.begin() as conn:
-            assert (await conn.execute(text("SELECT indisvalid FROM pg_index WHERE indexrelid='uq_trades_id_coin_user'::regclass"))).scalar_one()
+            assert (
+                await conn.execute(
+                    text(
+                        "SELECT indisvalid FROM pg_index "
+                        "WHERE indexrelid='uq_trades_id_coin_user'::regclass"
+                    )
+                )
+            ).scalar_one()
             await conn.execute(text("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT"))
-        code,output=await restricted_upgrade()
-        assert code==0,output
-        assert await _versions(engine)==["0011"]
+        code, output = await restricted_upgrade()
+        assert code == 0, output
+        assert await _versions(engine) == ["0011"]
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("REASSIGN OWNED BY birja_action_retry_migrator TO birja_test"))
             await conn.execute(text("DROP OWNED BY birja_action_retry_migrator"))
             await conn.execute(text("DROP ROLE birja_action_retry_migrator"))
-            if (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()=="0010":
+            if (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar_one() == "0010":
                 await conn.execute(text("DROP INDEX IF EXISTS uq_trades_id_coin_user"))
+        await migrate("head")
+
+
+async def test_same_name_wrong_cause_index_is_rejected_without_repair(
+    engine: AsyncEngine,
+    migrated: None,
+) -> None:
+    await migrate("0010", down=True)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("CREATE UNIQUE INDEX uq_trades_id_coin_user ON trades(id,user_id,coin_id)")
+            )
+        with pytest.raises(RuntimeError, match="incompatible preexisting trade cause index"):
+            await migrate("head")
+        assert await _versions(engine) == ["0010"]
+        async with engine.connect() as conn:
+            assert (
+                (
+                    await conn.execute(
+                        text("SELECT pg_get_indexdef('uq_trades_id_coin_user'::regclass)")
+                    )
+                )
+                .scalar_one()
+                .endswith("(id, user_id, coin_id)")
+            )
+            assert (
+                await conn.execute(text("SELECT to_regclass('public.stock_action_events')"))
+            ).scalar_one() is None
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP INDEX uq_trades_id_coin_user"))
+        await migrate("head")
+
+
+async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
+    engine: AsyncEngine,
+    migrated: None,
+) -> None:
+    """Create a genuine invalid build by cancelling its old-snapshot wait."""
+    await migrate("0010", down=True)
+    try:
+        async with engine.connect() as snapshot, engine.connect() as builder:
+            snapshot = await snapshot.execution_options(isolation_level="REPEATABLE READ")
+            snapshot_tx = await snapshot.begin()
+            await snapshot.execute(text("SELECT id FROM trades LIMIT 1"))
+            builder = await builder.execution_options(isolation_level="AUTOCOMMIT")
+            pid = (await builder.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+            task = asyncio.create_task(
+                builder.execute(
+                    text(
+                        "CREATE UNIQUE INDEX CONCURRENTLY uq_trades_id_coin_user "
+                        "ON trades(id,coin_id,user_id)"
+                    )
+                )
+            )
+            try:
+                async with engine.connect() as observer:
+                    for _ in range(100):
+                        phase = (
+                            await observer.execute(
+                                text(
+                                    "SELECT phase FROM pg_stat_progress_create_index WHERE pid=:p"
+                                ),
+                                {"p": pid},
+                            )
+                        ).scalar_one_or_none()
+                        if phase == "waiting for old snapshots":
+                            break
+                        await observer.rollback()
+                        await asyncio.sleep(0.02)
+                    else:
+                        raise AssertionError(
+                            "Concurrent index did not reach observable snapshot barrier"
+                        )
+                    assert (
+                        await observer.execute(text("SELECT pg_cancel_backend(:p)"), {"p": pid})
+                    ).scalar_one()
+                with pytest.raises(DBAPIError) as error:
+                    await asyncio.wait_for(task, 5)
+                assert error.value.orig.sqlstate == "57014"
+            finally:
+                await snapshot_tx.rollback()
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+        async with engine.connect() as conn:
+            assert not (
+                await conn.execute(
+                    text(
+                        "SELECT indisvalid FROM pg_index "
+                        "WHERE indexrelid='uq_trades_id_coin_user'::regclass"
+                    )
+                )
+            ).scalar_one()
+        await migrate("head")
+        assert await _versions(engine) == ["0011"]
+        async with engine.connect() as conn:
+            assert (
+                await conn.execute(
+                    text(
+                        "SELECT indisvalid AND indisready FROM pg_index "
+                        "WHERE indexrelid='uq_trades_id_coin_user'::regclass"
+                    )
+                )
+            ).scalar_one()
+    finally:
         await migrate("head")

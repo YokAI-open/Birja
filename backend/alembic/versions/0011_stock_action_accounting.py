@@ -19,18 +19,62 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _prepare_trade_cause_index() -> None:
+    """Resume only our exact unbound concurrent index after transactional failure.
+
+    CONCURRENTLY commits before the remaining migration. A valid matching index
+    is reusable; an exact invalid build is rebuilt. An unrelated same-name
+    object, changed definition, different owner or attached constraint is never
+    repaired or silently accepted.
+    """
+    existing = None
+    if not op.get_context().as_sql:
+        existing = (
+            op.get_bind()
+            .execute(
+                sa.text("""SELECT c.relkind::text AS relkind,
+          c.relowner=t.relowner AS table_owned,
+          pg_get_userbyid(c.relowner)=current_user AS migration_owned,
+          pg_get_indexdef(c.oid) AS definition,
+          i.indisvalid,i.indisready,i.indislive,
+          EXISTS(SELECT FROM pg_constraint WHERE conindid=c.oid) AS attached
+          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          JOIN pg_class t ON t.oid='public.trades'::regclass
+          LEFT JOIN pg_index i ON i.indexrelid=c.oid
+          WHERE n.nspname='public' AND c.relname='uq_trades_id_coin_user'""")
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if existing is not None and (
+            existing["relkind"] != "i"
+            or not existing["table_owned"]
+            or not existing["migration_owned"]
+            or not existing["indislive"]
+            or existing["attached"]
+            or existing["definition"]
+            != "CREATE UNIQUE INDEX uq_trades_id_coin_user ON public.trades "
+            "USING btree (id, coin_id, user_id)"
+        ):
+            raise RuntimeError("incompatible preexisting trade cause index")
+    if existing is None or not (existing["indisvalid"] and existing["indisready"]):
+        with op.get_context().autocommit_block():
+            if existing is not None:
+                op.drop_index("uq_trades_id_coin_user", "trades", postgresql_concurrently=True)
+            op.create_index(
+                "uq_trades_id_coin_user",
+                "trades",
+                ["id", "coin_id", "user_id"],
+                unique=True,
+                postgresql_concurrently=True,
+            )
+
+
 def upgrade() -> None:
     """Upgrade schema."""
     # Existing fills remain byte-identical. Build their composite causal key
     # concurrently before creating any0011 objects, then attach the index.
-    with op.get_context().autocommit_block():
-        op.create_index(
-            "uq_trades_id_coin_user",
-            "trades",
-            ["id", "coin_id", "user_id"],
-            unique=True,
-            postgresql_concurrently=True,
-        )
+    _prepare_trade_cause_index()
     op.execute(
         "ALTER TABLE trades ADD CONSTRAINT uq_trades_id_coin_user "
         "UNIQUE USING INDEX uq_trades_id_coin_user"
