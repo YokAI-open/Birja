@@ -667,3 +667,53 @@ async def test_private_cli_rejects_unprotected_ca_before_ssl_load(tmp_path, monk
     monkeypatch.setattr(cli.ssl, "create_default_context", load)
     with pytest.raises(ValueError, match="protected"):
         await cli.run(argparse.Namespace(connection_file=str(config), command="inspect"))
+
+
+async def test_private_cli_never_prints_success_before_transaction_commit(
+    tmp_path, monkeypatch, capsys
+):
+    import argparse
+    import importlib.util
+    from pathlib import Path
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    spec = importlib.util.spec_from_file_location(
+        "stock_actions_commit_cli", Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
+    )
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    config = {
+        "database_url": "postgresql+asyncpg://synthetic:synthetic@localhost/birja_test",
+        "ca_file": str(tmp_path / "ca"),
+        "account": "birja",
+        "server": "birja",
+    }
+    monkeypatch.setattr(cli, "protected_json", lambda _path: config)
+    monkeypatch.setattr(cli, "protected_bytes", lambda _path: b"synthetic CA bytes")
+    monkeypatch.setattr(cli.ssl, "create_default_context", lambda **_kwargs: object())
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(one=lambda: (True, True, ["birja_action_operator"]))
+    transaction = AsyncMock()
+    transaction.__aenter__.return_value = db
+    transaction.__aexit__.side_effect = ValueError("synthetic commit failure")
+    engine = SimpleNamespace(dispose=AsyncMock())
+    monkeypatch.setattr(cli, "create_async_engine", lambda *_args, **_kwargs: engine)
+    monkeypatch.setattr(
+        cli,
+        "async_sessionmaker",
+        lambda *_args, **_kwargs: SimpleNamespace(begin=lambda: transaction),
+    )
+    monkeypatch.setattr(cli, "inspect_actions", AsyncMock(return_value=[]))
+    with pytest.raises(ValueError, match="commit failure"):
+        await cli.run(
+            argparse.Namespace(
+                connection_file=str(tmp_path / "config"),
+                command="inspect",
+                coin_id=1,
+                event_id=None,
+                after=0,
+                limit=20,
+            )
+        )
+    assert capsys.readouterr().out == ""
