@@ -301,3 +301,70 @@ def test_private_file_owned0600_regular_only(tmp_path):
         protected_json(tmp_path)
     with pytest.raises(ValueError):
         protected_json(__import__("pathlib").Path("relative.json"))
+
+
+async def test_authority_alias_rejects_different_economics(resolution_case):
+    import json
+
+    from app.models.corporate_action import StockActionSource
+
+    factory, request, data, _action = resolution_case
+    async with factory.begin() as db:
+        current = await db.get(StockActionRevision, request["revision"])
+        source = StockActionSource(
+            event_id=request["event"],
+            provider="alpaca",
+            product="actions",
+            provider_event_id="synthetic-conflicting-alias",
+        )
+        db.add(source)
+        await db.flush()
+        alias = StockActionRevision(
+            event_id=request["event"],
+            source_id=source.id,
+            ordinal=3,
+            fingerprint="1" * 64,
+            mutation_kind="snapshot",
+            observed_at=current.observed_at,
+            admission_generation=current.admission_generation,
+            normalized_terms={**current.normalized_terms, "rate": "999"},
+            classification="supported_dividend",
+            reason="none",
+        )
+        db.add(alias)
+        await db.flush()
+        data = {
+            **data,
+            "held_revision_ids": [*data["held_revision_ids"], alias.id],
+            "alias_event_id": request["event"],
+        }
+        await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+        with pytest.raises(DBAPIError, match="alias"):
+            await db.execute(
+                text(CALL),
+                {**request, "decision": "link_verified_alias", "evidence": json.dumps(data)},
+            )
+
+
+async def test_authority_uncertain_observation_reinstates_hold(resolution_case):
+    from app.services.alpaca_actions import ActionBatch, ActionCoverage
+
+    factory, request, _data, action = resolution_case
+    async with factory.begin() as db:
+        await db.execute(text(CALL), request)
+        await persist_action_batch(
+            db,
+            ActionBatch(
+                coverage=(
+                    ActionCoverage(
+                        "known_id",
+                        action.provider_event_id,
+                        action.provider_event_id,
+                        False,
+                        "missing_or_uncertain",
+                    ),
+                )
+            ),
+            await _load_admission(db, "actions"),
+        )
+        assert await persistent_action_holds(db, request["coin"])
