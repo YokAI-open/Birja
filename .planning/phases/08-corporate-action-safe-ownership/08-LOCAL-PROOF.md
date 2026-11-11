@@ -216,3 +216,36 @@ findings; actual discovered bugs and test-boundary corrections are recorded in
 Predecessor selected SQL/contracts remain byte-compatible. Eight of thirteen
 plans are complete; next08-09 integrates committed action-safe discovery and
 genuinely gate-bound quote units. Whole-phase human/external gates remain pending.
+
+## Wave 7: Plan 09
+
+Action-safe discovery and gate-bound local quote units are complete. The final
+bounded READ COMMITTED query projects twenty instruments, exact persistent-hold
+and resolution facts, verified units and unresolved event deadlines. Denied,
+expired or mismatched authority returns generic epoch0/null times and suppresses
+amounts. There are no awaits after the fresh projection clock. One shared SQL
+predicate preserves accounting/reconciliation hold semantics.
+
+Quote writes use the exact instrument gate and current post-wait authority,
+health and genuine strictly-post-boundary source time. Local units never become
+a provider field. Multi-instrument batches explicitly require caller partition;
+scheduler writes sorted single-instrument transactions after HTTP without
+committing a caller-owned transaction. Verified applications consume stale
+boundary hints; unresolved events still cap disclosure.
+
+- Focused API/quote/scheduler/accounting/operator suite:**311passed,28warnings,
+  101.00s**; three changed critical services562statements/194branches:**100%**.
+- Actual observed advisory waits prove both quote/split orders, permission and
+  120second source-age expiry. Applied split/new-unit quote/API recovery and a
+  separate pending event cutoff pass. Entire-envelope redaction regressions
+  reproduce and correct both calendar denial and generation mismatch.
+- Scoped Ruff/format8files,mypy5sources and diff checks pass.
+- Independent full and targeted re-review atf6e9d0a:**0active findings**.
+- Full guarded isolated backend:**1551passed,73warnings,153.59s**,**99.82%**overall.
+  All29critical modules2972statements/978branches:**100%**; compileall passes.
+  Receipt:`/tmp/birja-phase08-wave7-backend.log`.
+
+No schema/grant/tooling/dependency change was needed. Nine of thirteen plans
+are complete; next08-10 implements client validation, monotonic epoch protection
+and exact known-deadline purging. Permission-reducing generic epoch0 responses
+must win over cached higher epochs while internal replay high-water is retained.
