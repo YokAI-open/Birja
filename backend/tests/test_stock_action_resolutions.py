@@ -171,3 +171,11 @@ async def test_authority_has_narrow_operator_entrypoint(engine, migrated, runtim
         assert row is not None, "Reconciliation must have an actual restricted database authority"
         assert row[0] and row[1] == ["search_path=pg_catalog, public"]
         assert all(row[2:])
+
+
+async def test_private_evidence_rejects_naive_cutoff(resolution_case):
+    from app.services.stock_action_reconciliation import Evidence
+
+    _factory, _request, data, _action = resolution_case
+    with pytest.raises(ValueError):
+        Evidence.model_validate({**data, 'cutoff':'2026-11-12T14:30:00'})
