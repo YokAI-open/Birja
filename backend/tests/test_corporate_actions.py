@@ -23,13 +23,30 @@ from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.trade import Holding
 from app.services.alpaca_actions import ActionBatch, ActionCoverage, ActionObservation
-from app.services.corporate_actions import ActionHeld, apply_due_actions, persist_action_batch
+from app.services.corporate_actions import ActionHeld, apply_due_actions, persist_action_batch, derive_dividend_entitlements
 from tests.stock_action_fixtures import ownership as _ownership
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_corporate_action_rules import dividend
 from tests.test_stock_admission import action_admitted
+from tests.test_stock_sessions import evidence as calendar_evidence
 
 ownership = _ownership
+
+
+async def test_entitlement_historical_quantity_and_idempotent_snapshot(actions):
+    factory,cid,uid,action,auth=actions
+    now=action.observed_at
+    day=now.date()-timedelta(days=1)
+    dividend_action=replace(action,ex_date=day,record_date=day,payable_date=now.date()+timedelta(days=2))
+    async with factory.begin() as db:
+        db.add(StockDataAdmission(**asdict(calendar_evidence(now))))
+        await synthetic_opening(db,cid,uid,now-timedelta(days=2))
+        event=(await persist_action_batch(db,batch(dividend_action),auth))[0]
+        entitlements=await derive_dividend_entitlements(db,event.event_id)
+        assert len(entitlements)==1
+        assert entitlements[0].eligible_quantity==Decimal(2)
+        assert entitlements[0].state=="eligible"
+        assert await derive_dividend_entitlements(db,event.event_id)==entitlements
 
 
 @pytest_asyncio.fixture
