@@ -305,3 +305,56 @@ def test_halt_mark_never_outlives_calendar_authority(change: dict) -> None:
     result = evaluate_valuation(mark(evidence), NOW)
     assert result.mode == "unavailable" and result.mid is None
     assert result.reason == "session_unavailable"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"opens_at": None},
+        {"closes_at": None},
+        {"opens_at": NOW, "closes_at": NOW},
+        {"session_date": NOW.date() - timedelta(days=1)},
+    ],
+)
+def test_open_session_requires_complete_ordered_same_day_boundaries(change: dict) -> None:
+    evidence = replace(valid(), **change)
+    if "session_date" in change:
+        evidence = replace(
+            evidence, status=replace(evidence.status, session_date=evidence.session_date)
+        )
+    decision = evaluate_execution(evidence, NOW)
+    assert not decision.allowed and decision.reason == "session_unavailable"
+    assert decision.evidence is None and decision.valid_until is None
+
+
+def test_unpermitted_retained_mark_has_no_price_or_deadline() -> None:
+    result = evaluate_valuation(mark(replace(valid(), admissions=())), NOW)
+    assert result.mode == "unavailable" and result.reason == "permission_unavailable"
+    assert result.mid is None and result.event_at is None and result.valid_until is None
+
+
+@pytest.mark.parametrize("state", ["open", "closed"])
+def test_missing_quote_side_never_produces_current_or_retained_mark(state: str) -> None:
+    evidence = replace(valid(), session_state=state, quote=replace(valid().quote, ask=None))
+    result = evaluate_valuation(mark(evidence), NOW)
+    assert result.mode == "unavailable" and result.reason == "quote_unavailable"
+    assert result.mid is None and result.event_at is None
+
+
+def test_open_market_stale_price_cannot_use_closed_mark_fallback() -> None:
+    evidence = replace(valid(), quote=replace(valid().quote, event_at=NOW - timedelta(seconds=120)))
+    result = evaluate_valuation(mark(evidence), NOW)
+    assert result.mode == "unavailable" and result.reason == "quote_stale"
+    assert result.mid is None and result.valid_until is None
+
+
+def test_projection_defends_against_validator_admitting_missing_side(monkeypatch) -> None:
+    # Fault injection at the validator boundary: a defective upstream decision
+    # must still never fabricate a zero/one-sided midpoint for the portfolio.
+    import app.services.stock_trading_rules as rules
+
+    monkeypatch.setattr(rules, "_quote_valid", lambda *_: True)
+    evidence = replace(valid(), quote=replace(valid().quote, bid=None))
+    result = evaluate_valuation(mark(evidence), NOW)
+    assert result.mode == "unavailable" and result.reason == "quote_unavailable"
+    assert result.mid is None and result.event_at is None and result.valid_until is None
