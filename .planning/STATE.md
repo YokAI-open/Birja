@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-12; actual Plan13 UI and external disposition pending
-last_updated: "2026-11-11T17:09:46.100Z"
+stopped_at: Completed08-13 owner checkpoints; independent goal verification next
+last_updated: "2026-11-11T17:59:17.334Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 25
-  percent: 93
+  completed_plans: 26
+  percent: 96
 ---
 
 # Project State
@@ -26,12 +26,23 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 12 of 13 executed (29 tasks, 11 waves)
-Status: Wave10 complete; awaiting actual Plan13 UI acceptance and external disposition
+Plan: 13 of 13 executed (29 tasks, 11 waves)
+Status: All13 plans executed; owner UI accepted/live deferred; independent goal verification next
 Last activity: 2026-11-11
-Progress: [█████████░] 93%
+Progress: [██████████] 96%
 
 ## Completion and next action
+
+Plan08-13 records the actual owner answers on2026-11-11: newPhase8UI approved,
+liveactionactivation explicitly deferred while isolated development continues.
+Task receipts01ab6d3/80a2567 preserve permission gaps and disabled activation.
+Independent checkpoint security review closes47/47local control mitigations,
+0openblocker/high findings; it grants no provider or production approval.
+All13plans/29tasks are executed. Schema drift gate passes with no drift; the
+nonblocking codebase drift check skips because noSTRUCTURE.md exists. Prior full
+regression proof is current because only acceptance records changed. Next:
+independent goal verification before any whole-phase requirement completion.
+No source/provider/production/publication change occurred. See08-13-SUMMARY.md.
 
 Plan08-12 completes all local gates:1551backend tests163.92s,99.82%overall;
 exact29critical modules2972statements/978branches100%;429frontend tests and all
@@ -421,6 +432,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P10 | 32min | 2 tasks | 5 files |
 | Phase 8 P11 | 39min | 2 tasks | 7 files |
 | Phase 8 P12 | 12min | 3 tasks | 13 files |
+| Phase 8 P13 | 2min | 2 tasks | 3 files |
 
 ## Operations
 
@@ -430,10 +442,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T17:09:46.084Z
-Stopped at: Completed08-12; actual Plan13 UI and external disposition pending
-Resume: Plan08-13 only: present the actual new UI packet and record owner UI acceptance plus explicit external action deferral/proposal disposition. All automatic tasks are complete. After actual answers, perform the required independent goal verification before phase completion. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
-Active plan: .planning/phases/08-corporate-action-safe-ownership/08-13-PLAN.md.
+Last session:2026-11-11T17:59:17.318Z
+Stopped at: Completed08-13 owner checkpoints; independent goal verification next
+Resume: AllPhase8plans executed; actual owner UI approval and live activation deferral are recorded. Run independent goal verification, then complete phase bookkeeping only if it passes. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
+Active verification: .planning/phases/08-corporate-action-safe-ownership/08-VERIFICATION.md (to be independently produced).
 Active reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are locally clear; final goal verification follows actual Plan13 disposition.
 Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.

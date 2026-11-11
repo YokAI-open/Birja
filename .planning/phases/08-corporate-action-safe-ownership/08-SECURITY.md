@@ -1,19 +1,50 @@
 ---
 phase: 08-corporate-action-safe-ownership
-scope: independent-phase8-implementation-security-review
-reviewed: 2026-11-11T17:05:41Z
-status: secured_implementation_scope_owner_external_pending
+scope: independent-phase8-local-security-control-review
+reviewed: 2026-11-11T17:59:06Z
+status: secured_local_controls_external_deferred
 asvs_level: 1
 asvs_taxonomy: legacy-4.0.3-category-mapping-only
-threats_reviewed: 44
-threats_closed: 44
+threats_reviewed: 47
+threats_closed: 47
 threats_open: 0
-threats_pending_owner_external: 3
+threats_pending_owner_external: 0
 unregistered_flags: 0
-final_phase_security_complete: false
+local_security_controls_complete: true
+external_activation_verified: false
+external_activation: deferred_by_owner
 ---
 
-# Phase8 backend security review
+# Phase8 local security review
+
+## Final explicit Plan13 checkpoint closure
+
+**SECURED:47/47 declared local security-control mitigations closed, zero open
+BLOCKER/high findings and zero unregistered WARNING flags.** The owner actually
+approved the new Phase8 UI and separately selected live-activation deferral. The
+root supplied the exact answers; this reviewer independently read their recorded
+dispositions in08-HUMAN-UAT (accepted, commit01ab6d3) and08-ACTIVATION
+(deferred-by-owner, commit80a2567), and checked them against Plan13's two blocking
+checkpoint requirements. No generic continuation, earlier Phase7 acceptance or
+synthetic test result was substituted for the new answers.
+
+| Threat | Category | Disposition/status and actual closure evidence |
+| --- | --- | --- |
+| T-08-13-01 | Repudiation |mitigate / **CLOSED**:08-HUMAN-UAT records the actual2026-11-11 answer “Approve the Phase 8 UI.” with the new screenshots/source scope. Approval concerns presentation, not an assertion the owner repeated dynamic tests or passed provider/production acceptance. |
+| T-08-13-02 | Elevation of privilege |mitigate / **CLOSED control**:08-ACTIVATION records the distinct actual answer “Defer live activation; continue locally (Recommended).” It keeps provider REST/replay/retention/backup rights and practical continuity/latency/limits unverified; live activation and stock execution stay disabled. Any later campaign requires its own concrete reviewed exact scope and authorization. |
+| T-08-13-SC | Tampering |mitigate / **CLOSED**: checkpoint changes are records only; reviewed runtime, default-disabled activation, dependency locks and strict local scan gates remain unchanged. Deferral introduces no package, provider call, credentials read, campaign reuse or deployment. |
+
+Closing these **controls** means honest explicit acceptance/disposition and
+retained authorization boundaries were verified. It does **not** mean the
+deferred live provider gates passed, that permissions were granted, that stock
+orders/dividend cash are enabled, or that production deployment is approved.
+No ASVS certification or complete live-product readiness is claimed. Independent
+goal verification still follows and decides phase-goal achievement separately.
+
+Only this report was updated. No tests, database/browser/Docker/provider/private
+configuration/production operations or implementation edits were performed.
+Prior44-plus3-pending sections below are retained as dated pre-checkpoint review
+history; this explicit closure supersedes their pending disposition counts only.
 
 ## Final Plan12 security extension
 
