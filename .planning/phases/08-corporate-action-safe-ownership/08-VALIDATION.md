@@ -184,3 +184,13 @@ Plan10 focused144tests pass5.15s; strict parser100%allmetrics. Full frontend
 99.53%lines; lint, types, all-file Prettier and build pass. Independent review
 at7473df3 has0active findings. Exact-deadline, raw authority high-water, denial/
 cache-remount and recovery regressions passed; Phase8 browser/UI proof is next.
+
+## Wave9 measured presentation gate
+
+Plan11 focused17RTL tests pass5.56s. Broad stock browser matrix21stories69.4s;
+final4responsive widths plusCSS200%/640CSS reflow5stories21.5s. Exact source and
+zoom limitations are retained in08-11-BROWSER.md. Full frontend429tests/28files
+pass15.68s,98.87%statements/97.29%branches/99.61%functions/99.66%lines; full
+lint/types/Prettier/build pass. Independent UI24/24,0active findings; independent
+33-source runtime review is clear. Final CI/test mirror follow-up and Plan12
+full backend/browser/image gates remain pending. No owner acceptance inferred.

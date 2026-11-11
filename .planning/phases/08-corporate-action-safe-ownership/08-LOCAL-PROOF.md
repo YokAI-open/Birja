@@ -343,3 +343,33 @@ Independent source security review of Plans01–09 is also complete:
 34/34 backend mitigations verified,0open blockers/unregistered warnings. See
 08-SECURITY.md for exact scope/hashes and explicit legacy ASVS4.0.3 mapping.
 It does not claim pending UI/final verification/external gates are passed.
+
+## Wave9: Plan11 presentation and actual browser proof
+
+Fixed enum copy renders independent Corporate actions/Stock status/Trading facts,
+dated semantic checked times and visible valuation refusal without unsafe amounts
+or guessed recovery. Contextual symbol announcements avoid per-second chatter.
+Manual request failure survives local expiry, failed retries retain button focus,
+and background updates do not move focus. Actual browser REDs reproduced retry
+loss after expiry and enlarged-table overlap; reviewed fixes preserve the data
+and money formatters while allowing labels/badges/timestamps to wrap.
+
+- Focused17RTL tests pass5.56s; scoped static checks pass.
+- Actual broad authenticated stock browser21stories pass69.4s, retries disabled.
+- Final affected4responsive widths and actualCSS200%/640CSS reflow5stories pass
+  21.5s after class-only correction0cea8b5. Neither CSS zoom nor640CSS@2x is
+  represented as native browser-toolbar zoom. Owned projects cleaned.
+- Screenshot/receipt packet:08-11-BROWSER.md; final captures under
+  `/tmp/birja-phase08-ui-mqq4ss1g/screenshots/`.
+- Independent source+visual review24/24,0active findings. Reviewer inspected
+  corrected zoom and representative ordinary captures, not merely test results.
+- Independent33-source runtime review has0blockers/0warnings; final CI/test
+  changes require the planned scoped follow-up. See08-REVIEW.md.
+- Full frontend429tests/28files pass15.68s:98.87%statements,97.29%branches,
+  99.61%functions,99.66%lines. Full ESLint/typecheck/Prettier/build pass.
+  Receipts:`/tmp/birja-phase08-wave9-frontend.log` and matching
+  `wave9-lint`, `wave9-types`, `wave9-format`, `wave9-build` logs.
+
+Eleven of thirteen plans and nine of eleven waves are complete. Next08-12
+finishes the exact critical CI contract and remaining full local gates before
+the actual Plan13 owner/external checkpoints. Requirements remain unchecked.
