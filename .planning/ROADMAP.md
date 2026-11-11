@@ -173,7 +173,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 08-09-PLAN.md — Expose current action safety and compatible quote units. (Wave 7)
+- [x] 08-09-PLAN.md — Expose current action safety and compatible quote units. (Wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 8/13 | In Progress|  |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 9/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

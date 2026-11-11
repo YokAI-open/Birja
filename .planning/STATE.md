@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave6 complete;1516backend tests and29critical modules pass; next08-09.
-last_updated: "2026-11-11T15:19:32Z"
+stopped_at: Plan08-09 complete; focused critical gates pass; parent Wave7 integration next.
+last_updated: "2026-11-11T15:41:23.675Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 21
-  percent: 78
+  completed_plans: 22
+  percent: 81
 ---
 
 # Project State
@@ -26,12 +26,26 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 8 of 13 executed (29 tasks, 11 waves)
-Status: Wave6 complete; Plans01–08 reviewed and integrated; next08-09
+Plan: 9 of 13 executed (29 tasks, 11 waves)
+Status: Executing; Plans01–09 complete; parent Wave7 integration next
 Last activity: 2026-11-11
-Progress: [████████░░] 78%
+Progress: [████████░░] 81%
 
 ## Completion and next action
+
+Plan08-09 completes final committed action-safe discovery and gate-bound quote
+units.311focused tests pass101.00s/28warnings; stocks139statements/46branches,
+quotes89/30 and corporate_actions334/118 all100% (562/194 total). Scoped Ruff/
+format8files,mypy5sources and diffcheck pass. Real advisory-wait races prove
+both quote/split orders plus post-wait permission and120second source-age
+expiry. Exact applied boundaries consume stale cache markers while unresolved
+events remain independent. Independent full/CR01 re-review has0active findings.
+Runtime frozen atf6e9d0a; final tests530f9f7. DB lane released; parent owns full
+Wave7 integration before08-10. Generic denied authority is epoch0/nulltimes:
+Plan10 must accept this safety-reducing redaction despite a previous higher
+safety epoch, while retaining its internal high-water for later unsafe replays.
+No schema/grants/tooling/provider/production/publication changes. Whole-phase
+requirements and activation remain pending. See08-09-SUMMARY.md.
 
 Plan08-08 completes narrowly privileged evidence-bound reconciliation, protected
 private tooling and exact0012 recovery. Final55focused tests pass18.79s;
@@ -352,6 +366,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P06 | 24 min | 3 tasks | 2 files |
 | Phase 8 P07 | 31 min | 2 tasks | 15 files |
 | Phase 8 P08 | 104min | 3 tasks | 13 files |
+| Phase 8 P09 | 20min | 2 tasks | 8 files |
 
 ## Operations
 
@@ -361,8 +376,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T15:19:32Z
-Stopped at: Wave6 complete;1516backend tests and29critical modules pass; next08-09.
+Last session:2026-11-11T15:41:18.907Z
+Stopped at: Plan08-09 complete; focused critical gates pass; parent Wave7 integration next.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
