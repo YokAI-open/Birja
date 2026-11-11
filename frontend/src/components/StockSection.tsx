@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { StockItem } from "@/api/stocks";
 import { StockActionState } from "@/components/StockActionState";
 import { stockActionSummary } from "@/lib/stockActionCopy";
@@ -106,9 +106,27 @@ function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side
 export function StockSection() {
   const heading = useRef<HTMLHeadingElement>(null);
   const { data, isPending, isError, isFetching, refetch } = useStocks();
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const [request, setRequest] = useState({ isError, isFetching, isPending, failed: isError });
+  if (
+    request.isError !== isError ||
+    request.isFetching !== isFetching ||
+    request.isPending !== isPending
+  ) {
+    // Adjust this component's own state when request flags change. A local cache
+    // purge can clear Query's transient error without completing a network fetch.
+    setRequest({
+      isError,
+      isFetching,
+      isPending,
+      failed: isError || (!isPending && !(request.isFetching && !isFetching) && request.failed),
+    });
+  }
+  const failed = isError || request.failed;
   const retry = async () => {
     const result = await refetch();
-    if (!result?.isError) heading.current?.focus();
+    if (result?.isError) requestAnimationFrame(() => retryButton.current?.focus());
+    else heading.current?.focus();
   };
   const allowed = data?.admission.state === "approved";
   const items = data?.items ?? [];
@@ -137,8 +155,10 @@ export function StockSection() {
     : !data
       ? "Can’t load stock prices right now. Retry stock prices or continue with crypto."
       : !allowed
-        ? permissionNotice
-        : isError
+        ? failed
+          ? `${permissionNotice} ${refreshNotice}`
+          : permissionNotice
+        : failed
           ? `${refreshNotice} ${actionNotice}`
           : `${categories}. ${actionNotice}`;
   return (
@@ -160,15 +180,16 @@ export function StockSection() {
             aria-label={isPending ? "Loading stocks" : undefined}
             aria-busy={isPending}
             className={
-              data && allowed && !isError
+              data && allowed && !failed
                 ? "sr-only"
                 : "text-[13px] leading-[18px] text-muted-foreground"
             }
           >
             {message}
           </p>
-          {data && allowed && isError && (
+          {data && failed && (
             <Button
+              ref={retryButton}
               variant="secondary"
               disabled={isFetching}
               className="min-h-11 self-start whitespace-normal"
@@ -185,6 +206,7 @@ export function StockSection() {
             </div>
           ) : !data ? (
             <Button
+              ref={retryButton}
               variant="secondary"
               disabled={isFetching}
               className="min-h-11 self-start whitespace-normal"
