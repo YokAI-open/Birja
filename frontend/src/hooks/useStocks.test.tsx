@@ -991,3 +991,30 @@ it.each(["same cache", "cache remount"])(
     ).toBe(stamp(2));
   },
 );
+
+
+it("retains a newer denial time before rejecting an intermediate approval", async () => {
+  const denied = payload({ state: "unavailable" }); denied.server_now = stamp(2);
+  const old = payload(); old.server_now = stamp(1);
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(payload()))).mockResolvedValueOnce(new Response(JSON.stringify(denied))).mockResolvedValueOnce(new Response(JSON.stringify(aligned(old)))));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  await act(async () => { await result.current.refetch(); });
+  expect(result.current.data?.server_now).toBe(stamp(2));
+  await act(async () => { await result.current.refetch(); });
+  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.admission.state).toBe("unavailable");
+  expect(result.current.data?.items[0].quote).toBeNull();
+});
+
+
+it("absorbs higher incoming held epochs even when public categorical redaction is retained", async () => {
+  const previous = hold(payload(), 7); previous.server_now = stamp(20);
+  const higher = hold(payload(), 9); higher.server_now = stamp(15);
+  const unsafe = payload(); unsafe.server_now = stamp(25); unsafe.items.forEach((x) => { x.action.epoch = 8; });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(previous))).mockResolvedValueOnce(new Response(JSON.stringify(higher))).mockResolvedValueOnce(new Response(JSON.stringify(aligned(unsafe)))));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(7));
+  await act(async () => { await result.current.refetch(); });
+  await act(async () => { await result.current.refetch(); });
+  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull();
+});
