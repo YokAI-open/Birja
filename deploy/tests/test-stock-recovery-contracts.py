@@ -72,7 +72,25 @@ class RevisionContracts(unittest.TestCase):
                 for column in columns.split():
                     self.assertIn(column, query)
         with self.assertRaises(ValueError):
-            producer.manifest_sql("0013")
+            producer.manifest_sql("0014")
+
+    def test_execution_revision_is_explicit_and_preserves_predecessors(self):
+        producer = load("backup-snapshot")
+        # Successor support must inventory actual persisted receipt/status, not
+        # silently accept an unsupported revision or reuse the older schema.
+        self.assertIn("0013", producer.SUPPORTED_REVISIONS)
+        columns = producer.contract_columns("0013")
+        self.assertEqual(len(columns), 24)
+        self.assertIn("authority", columns["stock_fill_facts"])
+        self.assertIn("held_after", columns["stock_fill_facts"])
+        self.assertIn("continuity_generation", columns["stock_status_evidence"])
+        self.assertEqual(producer.identity_tables("0013"), producer.identity_tables("0012"))
+        query = producer.manifest_sql("0013")
+        for token in ("execution_authority", "pg_get_functiondef", "pg_get_triggerdef",
+                      "stock_fill_facts", "stock_status_evidence"):
+            self.assertIn(token, query)
+        for revision in ("0011", "0012"):
+            self.assertEqual(len(producer.contract_columns(revision)), 22)
 
     def test_resolution_authority_has_explicit_exact_contract(self):
         producer = load("backup-snapshot")
