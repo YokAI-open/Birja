@@ -1050,3 +1050,93 @@ it("absorbs higher incoming held epochs even when public categorical redaction i
     client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
   ).toBeNull();
 });
+
+it("retains raw future observation time when lower-generation redaction preserves public metadata", async () => {
+  const previous = hold(payload({ generation: 2 }), 7);
+  previous.server_now = stamp(20);
+  const lower = hold(payload({ generation: 1 }), 9);
+  lower.server_now = stamp(30);
+  const unsafe = payload({ generation: 2 });
+  unsafe.server_now = stamp(25);
+  unsafe.items.forEach((x) => {
+    x.action.epoch = 10;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(previous)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(lower)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(unsafe)))),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.admission.generation).toBe(2));
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.data?.server_now).toBe(stamp(20));
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
+});
+
+it("retains incoming held high-water while preserving generic permission redaction", async () => {
+  const previous = payload();
+  previous.server_now = stamp(20);
+  previous.items.forEach((x) => {
+    x.action = {
+      state: "unknown",
+      reason: "monitor_unavailable",
+      epoch: 0,
+      checked_at: null,
+      valid_until: null,
+    } as never;
+    x.quote = null;
+    x.quote_reason = "permission_unavailable";
+    x.valuation_reason = "action_unavailable";
+  });
+  const held = hold(payload(), 9);
+  held.server_now = stamp(15);
+  const unsafe = payload();
+  unsafe.server_now = stamp(25);
+  unsafe.items.forEach((x) => {
+    x.action.epoch = 8;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(previous)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(held)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(unsafe)))),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(0));
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.data?.items[0].action.checked_at).toBeNull();
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
+});
+
+
+it("keeps the approved admission-generation high-water across a generic denial", async () => {
+  const denied = payload({ state: "unavailable" }); denied.server_now = stamp(2);
+  const lower = payload({ generation: 4 }); lower.server_now = stamp(3); lower.items.forEach((x) => { x.action.epoch = 8; });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(payload({ generation: 5 })))).mockResolvedValueOnce(new Response(JSON.stringify(denied))).mockResolvedValueOnce(new Response(JSON.stringify(aligned(lower)))));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.admission.generation).toBe(5));
+  await act(async () => { await result.current.refetch(); });
+  expect(result.current.data?.admission.state).toBe("unavailable");
+  await act(async () => { await result.current.refetch(); });
+  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.admission.state).toBe("unavailable");
+  expect(result.current.data?.items[0].quote).toBeNull();
+});
