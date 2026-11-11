@@ -1,7 +1,7 @@
 ---
 phase: 8
 slug: corporate-action-safe-ownership
-status: planned
+status: executing
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-11-11
@@ -9,8 +9,22 @@ created: 2026-11-11
 
 # Phase 8 validation strategy
 
-Planning contract, not executed proof: 13 plans,29 tasks,11 waves, all five
-assigned requirements. Actual Nyquist sign-off follows execution/verification.
+Execution contract:13plans,29tasks,11waves,all five assigned requirements.
+Actual results remain distinct from planned commands below. Nyquist sign-off
+follows complete execution/verification.
+
+## Executed progress
+
+Plans01–06 are complete and independently reviewed; Waves1–4 integration pass.
+Plan02 includes actual retained encrypted0007–0011 recovery and restricted-role
+populated/fresh TLS proofs. Plan05 adds actual ownership-service TLS consumers
+and the minimum scheduler immutable-trade column reads. Review-discovered schema,
+sequence-capture and journal bugs have observed regressions and fixes.
+
+Latest Wave4:1398backend tests pass75.35s,99.80%overall;26critical modules retain
+100%statements/branches. Plans07–13 remain pending. Whole-phase requirements,
+human acceptance, live activation and Nyquist compliance are not marked complete.
+See08-LOCAL-PROOF.md and individual summaries/reviews for actual receipts.
 
 ## Environment and sampling
 

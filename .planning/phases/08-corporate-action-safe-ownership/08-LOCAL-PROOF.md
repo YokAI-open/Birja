@@ -119,3 +119,30 @@ The canonical producer/row/schema contract is unchanged; earlier encrypted
 recovery proof is retained, while affected ACL/TLS consumers were re-proved.
 Five of thirteen plans are complete. Next08-06 handles durable revisions,
 once-only splits and historical entitlements without stock execution or cash.
+
+## Wave 4: Plan 06
+
+Immutable event revisions, once-only all-owner splits and historical dividend
+snapshots are complete. Source repeats append audit without duplicate economics;
+uncertain/late/changed applied terms hold. Entitlements preserve sold-out owners,
+explicit units and immutable replacement lineage without cash or History writes.
+
+Independent review found three blockers, reproduced and fixed: final monitor/
+reviewed-calendar expiry, later split effects past a held earlier boundary, and
+trusted account/server scope propagation. Re-review of frozen source SHA256
+`649d9e35416315ae2268264142b97059105ef3530b14310fb3f41142ef435317`
+has0active findings.
+
+- Focused accounting/ownership/rules:**234passed,20warnings,22.43s**.
+- Accounting312statements/116branches:**100%**; scoped lint/format/types pass.
+- Actual PostgreSQL races observe blocking in both freeze/fill orders; final
+  authority revocation and elapsed monitor/calendar deadlines roll back effects.
+- Split retry/concurrency, all-owner fractional/overflow refusal, zero owners,
+  first-owner fault rollback and five split/dividend boundary orderings pass.
+- Full guarded isolated backend:**1398passed,73warnings,75.35s**.
+- Overallcoverage:**99.80%**;26critical modules2407statements/804branches:**100%**.
+- Compileall:pass. Receipt:`/tmp/birja-phase08-wave4-backend.log`.
+
+No schema, grant, canonical recovery or dependency change was needed. Six of
+thirteen plans are complete; next08-07 implements durable complete catch-up and
+independent disabled-by-default action scheduling. External gates remain pending.
