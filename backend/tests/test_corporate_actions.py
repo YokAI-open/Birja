@@ -359,6 +359,32 @@ async def test_revision_historical_terms_reappear_without_rewinding_safe_state(a
         assert last.classification == "uncertain" and last.revision_id != first.revision_id
 
 
+async def test_inclusive_old_mutation_replay_preserves_later_current_revision(actions):
+    factory, cid, _, action, auth = actions
+    async with factory.begin() as db:
+        first = (
+            await persist_action_batch(db, batch(action, mutation="insert", cursor="old-1"), auth)
+        )[0]
+    revised = replace(action, rate=Decimal("0.5"))
+    async with factory.begin() as db:
+        latest = (
+            await persist_action_batch(db, batch(revised, mutation="update", cursor="new-2"), auth)
+        )[0]
+    async with factory.begin() as db:
+        epoch = (await db.get(StockActionState, cid)).epoch
+        replayed = (
+            await persist_action_batch(db, batch(action, mutation="insert", cursor="old-1"), auth)
+        )[0]
+        assert replayed.revision_id == first.revision_id
+        assert (
+            await db.get(StockActionEvent, first.event_id)
+        ).current_revision_id == latest.revision_id
+        assert (await db.get(StockActionState, cid)).epoch == epoch
+    with pytest.raises(ActionHeld, match="mutation_conflict"):
+        async with factory.begin() as db:
+            await persist_action_batch(db, batch(revised, mutation="insert", cursor="old-1"), auth)
+
+
 async def test_ingest_mutation_replay_and_conflict(actions):
     factory, _, _, action, auth = actions
     async with factory.begin() as db:
