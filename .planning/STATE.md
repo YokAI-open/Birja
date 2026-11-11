@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-03; Plan01 schema-review fixes implemented, independent re-review pending.
+stopped_at: Completed08-03; Plan01 schema review clean; Wave1 API correction review/full gate pending.
 last_updated: "2026-11-11T10:47:22.510Z"
 last_activity: 2026-11-11
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 2 of 13 executed (29 tasks, 11 waves)
-Status: Plans01/03 implemented; Plan01 fixes await independent re-review
+Status: Plans01/03 implemented; API integration correction review/full gate pending
 Last activity: 2026-11-11
 Progress: [██████░░░░] 56%
 
@@ -49,14 +49,17 @@ authority, frozen exact action/cutoff/split contracts and persistent-hold safety
 decisions.175scoped tests pass2.06s with all3modules100%statements/branches;
 259calendar/quote/admission/economic regressions pass4.64s;5file Ruff/format
 and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration remains pending
-independent re-review of08-01fixes for alias observations and causal FK consistency.
+the full backend gate and API-guard review after08-01schema re-review passed.
 Fix5d0353a plus retry correctionb389ce1 pass91isolated migration/quote/role
 tests11.10s, scoped lint/format
 and model types; new observation event_id, application coin_id and composite
 economic-cause FKs are included. Actual restricted failed-upgrade/provision/retry,
 incompatible-index rejection and cancelled concurrent-index rebuild are proven.
-No claim independent review has passed.
-Next: complete that integration re-review,
+Independent schema re-review atb389ce1 is clean. Full integration then found22
+API/seedguard failures; correction32bff2b passes36targeted tests4.56s with scoped
+lint/format/types, preserving explicit provider fields and suppressing nonzero
+unit quotes. Root owns the full-suite rerun and new API-guard independent review.
+Next: complete those integration gates,
 then dependency-ordered Wave2 isolated implementation. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,
 and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data

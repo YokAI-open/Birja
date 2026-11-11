@@ -24,7 +24,10 @@ key-files:
     - backend/app/models/trade.py
     - backend/app/models/__init__.py
     - backend/app/services/stock_quotes.py
+    - backend/app/services/stocks.py
     - backend/tests/test_stock_quotes.py
+    - backend/tests/test_stocks_api.py
+    - backend/tests/test_stock_catalog.py
     - backend/tests/test_migrations.py
     - deploy/db/bootstrap-roles.sql
 key-decisions:
@@ -185,3 +188,29 @@ Final full focused gate: **91tests pass11.10s**, scoped Ruff/format and2model
 mypy pass, git diff --check passes. Current0011 hash is the57b4… value above;
 the earlier4a5e… hash is superseded. No additional schema field/function/trigger
 was introduced by this retry correction. Independent re-review remains pending.
+
+### Wave1 integration correction
+
+Independent schema re-review at `b389ce1` subsequently closedCR-01/02/03 with
+zero active findings (08-01-REVIEW.md). The parent full-backend integration run
+then found22failures/1089passes in55.78s:20discovery cases passed the storage-local
+unit_epoch into ValidatedStockQuote, and2legacy seed-guard tests met the newer
+earlier0011 financial guard rather than their intended0010 guard.
+
+RED `f896bc7` adds current/historical unit0/1 API regressions and observes the
+actual unsupported-unit_epoch TypeError. GREEN `32bff2b` maps only the explicit
+provider validation fields in discovery. Storage-local nonzero units disclose
+neither current nor historical amounts until08-09 supplies authentic current-unit
+authorization; zero-unit recent and dated behavior remains unchanged. Stock
+execution stays disabled. Seed rollback tests now migrate to0010 before creating
+their financial fixture, preserving the exact historical guard assertion rather
+than accepting arbitrary exceptions or changing historical migrations.
+
+`uv run pytest tests/test_stocks_api.py tests/test_stock_catalog.py -q -x`:
+**36passed4.56s**, with4existing upstream pandas timezone deprecation warnings.
+Scoped Ruff/format3files and mypy app/services/stocks.py pass; git diff --check
+passes. Root owns the next full-backend gate and independent review of this new
+projection guard. The clean schema review does not claim those new gates pass.
+
+No schema/hash or03 source changed in this integration correction. Root controls
+the isolated database gate now; this executor has stopped all DB work.
