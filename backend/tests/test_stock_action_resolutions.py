@@ -727,3 +727,60 @@ async def test_private_cli_never_prints_success_before_transaction_commit(
             )
         )
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("product", ["actions", "calendar"])
+async def test_private_service_binds_hash_to_the_precise_validated_snapshot(
+    resolution_case, monkeypatch, product
+):
+    from sqlalchemy import update
+    import app.services.stock_action_reconciliation as service
+
+    factory, request, data, _action = resolution_case
+    async with factory.begin() as db:
+        values = {"allowed_fields": []}
+        if product == "calendar":
+            calendar = await _load_admission(db, "calendar")
+            values = {
+                "calendar": {
+                    **calendar.calendar,
+                    "overrides": [
+                        {
+                            "exchange": "XNAS",
+                            "date": data["cutoff"][:10],
+                            "state": "closed",
+                            "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
+                        }
+                    ],
+                }
+            }
+        savepoint = await db.begin_nested()
+        await db.execute(
+            update(StockDataAdmission).where(StockDataAdmission.product == product).values(**values)
+        )
+        later_hash = (
+            await db.execute(
+                text("""SELECT encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex')
+          FROM stock_data_admissions c WHERE c.product=:product"""),
+                {"product": product},
+            )
+        ).scalar_one()
+        await savepoint.rollback()
+        original = service._mapping
+
+        async def change_after_validation(session, coin):
+            mapping = await original(session, coin)
+            await session.execute(
+                update(StockDataAdmission)
+                .where(StockDataAdmission.product == product)
+                .values(**values)
+            )
+            return mapping
+
+        monkeypatch.setattr(service, "_mapping", change_after_validation)
+        field = "admission_digest" if product == "actions" else "calendar_digest"
+        data = {**data, field: later_hash}
+        with pytest.raises(ValueError):
+            await service.reconcile(
+                db, request_model(request, data), account="birja", server="birja"
+            )
