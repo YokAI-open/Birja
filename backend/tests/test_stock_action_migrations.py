@@ -567,3 +567,48 @@ async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == before
+
+
+async def test_verified_alias_can_observe_same_economic_revision(ledger) -> None:
+    conn, cid, _ = ledger
+    eid, _, rid = await event(conn, cid)
+    sid = (await conn.execute(text("""INSERT INTO stock_action_sources
+      (event_id,provider,product,provider_event_id)
+      VALUES (:e,'alpaca','actions',:k) RETURNING id"""),
+      {"e": eid, "k": str(uuid4())})).scalar_one()
+    # Before the schema repair there is no event column: this valid economic
+    # alias still needs to reference the original, unchanged revision.
+    columns = set((await conn.execute(text("""SELECT column_name
+      FROM information_schema.columns WHERE table_name='stock_action_observations'"""))).scalars())
+    if "event_id" in columns:
+        await conn.execute(text("""INSERT INTO stock_action_observations
+          (event_id,source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id)
+          VALUES (:e,:s,:r,now(),1,'snapshot','alias')"""), {"e":eid,"s":sid,"r":rid})
+    else:
+        await conn.execute(text("""INSERT INTO stock_action_observations
+          (source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id)
+          VALUES (:s,:r,now(),1,'snapshot','alias')"""), {"s":sid,"r":rid})
+    assert (await conn.execute(text("SELECT count(*) FROM stock_action_revisions WHERE event_id=:e"), {"e":eid})).scalar_one() == 1
+
+
+async def fill_cause(conn: AsyncConnection, cid: int, uid: int) -> int:
+    return (await conn.execute(text("""INSERT INTO trades
+      (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+       exec_price,fee,cash_delta,cash_after,idempotency_key)
+      VALUES (:u,:c,'buy','quantity',2,2,10,now(),10,0,-20,9980,gen_random_uuid())
+      RETURNING id"""), {"c":cid,"u":uid})).scalar_one()
+
+
+@pytest.mark.parametrize("mismatch", ["user", "coin"])
+async def test_movement_rejects_foreign_fill_cause(ledger, mismatch: str) -> None:
+    conn,cid,uid=ledger
+    foreign_cid=cid
+    foreign_uid=uid
+    if mismatch == "coin":
+        foreign_cid=(await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+    else:
+        foreign_uid=(await conn.execute(text("INSERT INTO users(email) VALUES (:e) RETURNING id"), {"e":f"foreign-{uuid4()}@example.test"})).scalar_one()
+    tid=await fill_cause(conn,foreign_cid,foreign_uid)
+    with pytest.raises(DBAPIError) as error:
+        await movement(conn,cid,uid,kind="fill",trade=tid)
+    assert error.value.orig.sqlstate == "23503"
