@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: ready_to_plan
-stopped_at: Phase 8 complete (13/13) — ready to discuss Phase 9
-last_updated: 2026-11-11T18:10:09.980Z
+stopped_at: Phase 9 context gathered
+last_updated: "2026-11-11T18:28:56.252Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
@@ -40,7 +40,10 @@ semantic links; no blocker/openwarning/override. Owner accepted the new UI and
 explicitly deferred live activation. All47local security controls close; live
 product rights/suitability and Phase7 live evidence remain unverified/disabled.
 Existing full test/coverage/browser/image/recovery/TLS proof is unchanged.
-Next: discuss or plan Phase9; do not implement or activate it automatically.
+Phase9 discussion is complete. Context and decision audit are saved in
+09-CONTEXT.md and09-DISCUSSION-LOG.md under
+.planning/phases/09-whole-share-trading-and-combined-portfolio/.
+Next: $gsd-plan-phase 9 on owner invocation; do not implement or activate automatically.
 No new provider, production, B2, publication, push/PR/merge or deployment action
 is authorized. Phase8 local completion does not satisfy future stock fills,
 cash dividends/publicHistory or final mixed-asset acceptance.
@@ -454,9 +457,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T17:59:17.318Z
-Stopped at: Completed08-13 owner checkpoints; independent goal verification next
-Resume: Phase8 independent goal verification passed and local completion is recorded. Next is Phase9 discussion/planning only on owner invocation. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
+Last session:2026-11-11T18:28:56.230Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-CONTEXT.md
+Resume: Phase9 context gathered; next is $gsd-plan-phase 9 on owner invocation. Phase8 independent goal verification passed and local completion is recorded. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
 Completed verification: .planning/phases/08-corporate-action-safe-ownership/08-VERIFICATION.md (passed locally).
 Completed reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are clear; actual owner checkpoints are recorded separately.
 Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.
