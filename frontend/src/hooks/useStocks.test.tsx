@@ -1157,3 +1157,56 @@ it("keeps the approved admission-generation high-water across a generic denial",
   );
   expect(result.current.data?.items[0].quote).toBeNull();
 });
+
+it("preserves approved generation history when remounting after a denial", async () => {
+  const denied = payload({ state: "unavailable" });
+  denied.server_now = stamp(2);
+  const lower = payload({ generation: 4 });
+  lower.server_now = stamp(3);
+  lower.items.forEach((x) => {
+    x.action.epoch = 8;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload({ generation: 5 }))))
+      .mockResolvedValueOnce(new Response(JSON.stringify(denied)))
+      .mockResolvedValue(new Response(JSON.stringify(aligned(lower)))),
+  );
+  const first = setup();
+  await waitFor(() => expect(first.result.current.data?.admission.generation).toBe(5));
+  await act(async () => {
+    await first.result.current.refetch();
+  });
+  expect(first.result.current.data?.admission.state).toBe("unavailable");
+  first.unmount();
+  first.client.removeQueries({ queryKey: ["stocks"] });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={first.client}>{children}</QueryClientProvider>
+  );
+  const next = renderHook(() => useStocks(), { wrapper });
+  await waitFor(() => expect(next.result.current.isError).toBe(true));
+  expect(next.result.current.data).toBeUndefined();
+  expect(first.client.getQueryData<TimedStocks>(["stocks", "first@example.test"])).toBeUndefined();
+});
+
+
+it.each(["action epoch", "admission generation"])("remembers raw %s when full arrival RTT redacts first-response authority", async (kind) => {
+  let now = 0; vi.spyOn(performance, "now").mockImplementation(() => now);
+  const first = payload({ lifetime: 1, generation: kind === "admission generation" ? 5 : 1 });
+  first.items.forEach((x) => { x.action.epoch = 9; });
+  const lower = payload({ generation: kind === "admission generation" ? 4 : 1 }); lower.server_now = stamp(3);
+  lower.items.forEach((x) => { x.action.epoch = kind === "action epoch" ? 8 : 10; });
+  let calls = 0;
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    if (calls++ === 0) { now = 2000; return new Response(JSON.stringify(first)); }
+    return new Response(JSON.stringify(aligned(lower)));
+  }));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.admission.state).toBe("unavailable");
+  expect(result.current.data?.items[0].action.epoch).toBe(0);
+  await act(async () => { await result.current.refetch(); });
+  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull();
+});
