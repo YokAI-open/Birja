@@ -105,7 +105,9 @@ BEGIN
  OR NOT coalesce(adm.scope->'capabilities' ? 'rest',false)
  OR NOT EXISTS(SELECT FROM public.stock_instruments i JOIN public.coins c ON c.id=i.coin_id
    WHERE i.coin_id=p_coin AND i.provider_asset_id=p_evidence->>'security_id'
-   AND i.provider_verified_at IS NOT NULL AND c.asset_class='stock' AND c.is_active)
+   AND i.provider_verified_at IS NOT NULL AND c.asset_class='stock' AND c.is_active
+   AND rev.normalized_terms->>'coin_id'=p_coin::text
+   AND rev.normalized_terms->>'symbol'=c.symbol)
  THEN RAISE EXCEPTION 'resolution state stale' USING ERRCODE='22023'; END IF;
  SELECT encode(sha256(convert_to(coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.sequence),
    '[]'::jsonb)::text,'UTF8')),'hex') INTO ledger
@@ -179,10 +181,17 @@ BEGIN
    OR (SELECT count(*) FROM public.stock_action_sources WHERE event_id=p_event)<2
    OR rev.classification NOT IN ('supported_dividend','supported_forward_split')
    OR EXISTS(SELECT FROM public.stock_action_sources src
-      LEFT JOIN LATERAL (SELECT * FROM public.stock_action_revisions other
-        WHERE other.source_id=src.id ORDER BY other.ordinal DESC LIMIT 1) latest ON true
+      LEFT JOIN LATERAL (SELECT other.*,o.source_kind,
+          o.admission_generation AS observation_generation
+        FROM public.stock_action_observations o
+        JOIN public.stock_action_revisions other ON other.id=o.revision_id
+        WHERE o.source_id=src.id AND o.event_id=p_event
+        ORDER BY o.id DESC LIMIT 1) latest ON true
       WHERE src.event_id=p_event AND (
-        latest.id IS NULL OR latest.normalized_terms IS DISTINCT FROM rev.normalized_terms
+        src.provider<>'alpaca' OR src.product<>'actions'
+        OR latest.id IS NULL OR latest.source_kind NOT IN ('rest','replay')
+        OR latest.observation_generation IS DISTINCT FROM p_generation
+        OR latest.normalized_terms IS DISTINCT FROM rev.normalized_terms
         OR latest.classification IS DISTINCT FROM rev.classification
         OR latest.units IS DISTINCT FROM rev.units
         OR latest.verified_cutoff IS DISTINCT FROM rev.verified_cutoff
