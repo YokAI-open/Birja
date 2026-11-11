@@ -147,7 +147,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — Add durable action and ownership schema with narrow grants. (Wave 1)
+- [x] 08-01-PLAN.md — Add durable action and ownership schema with narrow grants. (Wave 1)
 - [ ] 08-03-PLAN.md — Define independent action permission, exact terms and safety rules. (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 0/13 | Planned; ready for isolated execution | - |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 1/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

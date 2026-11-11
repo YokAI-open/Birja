@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: ready_to_execute
-stopped_at: Phase 8 plans verified; isolated execution ready, Phase 7 live review deferred.
-last_updated: "2026-11-11T10:17:13.614Z"
-last_activity: 2026-11-11 -- Phase 8 planning complete
+status: completed
+stopped_at: Phase 8 planning verified; ready for isolated execution.
+last_updated: "2026-11-11T10:37:40.753Z"
+last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-10)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 8 — Corporate-Action-Safe Ownership (planning complete)
+**Current focus:** Phase 8 — Corporate-Action-Safe Ownership (isolated execution)
 
 ## Current Position
 
-Phase: 8 (Corporate-Action-Safe Ownership) — PLANNED
-Plan: 0 of 13 executed (29 tasks, 11 waves)
-Status: Ready for isolated local execution; external activation remains gated
-Last activity: 2026-11-11 -- Phase 8 planning complete
-Progress: Phase 8 planning complete; 0/13 execution plans complete
+Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
+Plan: 1 of 13 executed (29 tasks, 11 waves)
+Status: Plan01 complete; Plan03 next in Wave1; external activation gated
+Last activity: 2026-11-11
+Progress: [█████░░░░░] 52%
 
 ## Completion and next action
 
@@ -37,7 +37,14 @@ Phase 8 planning is complete: 13 plans / 29 tasks / 11 waves. Research, pattern
 map, approved UI contract, per-task validation and source audit are saved under
 08-corporate-action-safe-ownership. Independent plan review found two blockers;
 revision 1 resolved both, with 0 active warnings. See08-PLAN-CHECK.md.
-Next: $gsd-execute-phase 8 for isolated local implementation only. Stock
+Plan08-01 is complete: additive0011/nine constrained typed models, empty-only
+downgrade, epoch-zero quote compatibility/final-statement nonzero refusal and
+restricted append/quantity-only grants. Final79isolated tests pass7.45s;
+8files Ruff/format and4source mypy pass. Actual42501 denials and transactional
+fresh-bootstrap grant parity pass. See08-01-SUMMARY.md. The NOLOGIN operator
+must be preprovisioned by privileged bootstrap before restricted0011 migration;
+the migrator does not gain CREATEROLE. Recovery/TLS proof remains08-02. Next:
+Plan08-03 in Wave1, then dependency-ordered isolated implementation only. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,
 and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data
 acceptance owner-deferred, not passed; no duplicate campaign or UI approval is
@@ -235,6 +242,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 7 P11 | 10min | 2 tasks | 6 files |
 | Phase 7 P12 | 16min | 2 tasks | 6 files |
 | Phase 7 P13 | 46min | 2 tasks | 35 files |
+| Phase 08 P01 | 18 min | 2 tasks | 9 files |
 
 ## Operations
 
@@ -244,7 +252,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T09:22:49Z
+Last session:2026-11-11T10:36:37.051Z
 Stopped at: Phase 8 planning verified; ready for isolated execution.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
