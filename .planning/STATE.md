@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: completed
-stopped_at: Phase 8 planning verified; ready for isolated execution.
-last_updated: "2026-11-11T10:37:40.753Z"
+status: executing
+stopped_at: Completed08-03; Wave1 integration pending Plan01 schema-review fixes.
+last_updated: "2026-11-11T10:47:22.510Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 14
+  completed_plans: 15
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 1 of 13 executed (29 tasks, 11 waves)
-Status: Plan01 complete; Plan03 next in Wave1; external activation gated
+Plan: 2 of 13 executed (29 tasks, 11 waves)
+Status: Plans01/03 implemented; Wave1 integration pending Plan01 schema-review fixes
 Last activity: 2026-11-11
-Progress: [█████░░░░░] 52%
+Progress: [██████░░░░] 56%
 
 ## Completion and next action
 
@@ -43,12 +43,22 @@ restricted append/quantity-only grants. Final79isolated tests pass7.45s;
 8files Ruff/format and4source mypy pass. Actual42501 denials and transactional
 fresh-bootstrap grant parity pass. See08-01-SUMMARY.md. The NOLOGIN operator
 must be preprovisioned by privileged bootstrap before restricted0011 migration;
-the migrator does not gain CREATEROLE. Recovery/TLS proof remains08-02. Next:
-Plan08-03 in Wave1, then dependency-ordered isolated implementation only. Stock
+the migrator does not gain CREATEROLE. Recovery/TLS proof remains08-02.
+Plan08-03 is complete: independent action REST/replay and durable-accounting
+authority, frozen exact action/cutoff/split contracts and persistent-hold safety
+decisions.175scoped tests pass2.06s with all3modules100%statements/branches;
+259calendar/quote/admission/economic regressions pass4.64s;5file Ruff/format
+and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration remains pending
+the separate08-01review fixes for alias observations and causal FK consistency;
+no claim those findings are resolved. Next: resolve that integration review,
+then dependency-ordered Wave2 isolated implementation. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,
 and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data
 acceptance owner-deferred, not passed; no duplicate campaign or UI approval is
-needed. Planning changes neither production nor the scheduled one-shot.
+needed. Production and the scheduled one-shot process are unchanged. Plan03's
+authorized stock_admission.py change makes the frozen Phase7 source manifest
+stale; the unchanged runner must fail closed before calls. Do not refresh its
+hashes or launch another campaign; actual results/revalidation remain deferred.
 
 ### Preserved Phase 7 execution evidence
 
@@ -243,6 +253,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 7 P12 | 16min | 2 tasks | 6 files |
 | Phase 7 P13 | 46min | 2 tasks | 35 files |
 | Phase 08 P01 | 18 min | 2 tasks | 9 files |
+| Phase 08 P03 | 10 min | 2 tasks | 5 files |
 
 ## Operations
 
@@ -252,8 +263,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T10:36:37.051Z
-Stopped at: Phase 8 planning verified; ready for isolated execution.
+Last session:2026-11-11T10:47:22.492Z
+Stopped at: Completed08-03; Wave1 integration pending Plan01 schema-review fixes.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
