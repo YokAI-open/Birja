@@ -112,6 +112,32 @@ class RevisionContracts(unittest.TestCase):
                 restore.canonical([])
         self.assertEqual(len(calls), 1)
 
+    def test_fresh_restore_preprovisions_only_the_fixed_nologin_role(self):
+        restore = load("verify-restore")
+        contract = load("backup-snapshot")
+        calls = []
+        definition = "reviewed fixture definition"
+
+        def sql(dc, query, db=restore.CLONE):
+            calls.append((query, db))
+            if "to_json(pg_get_functiondef" in query:
+                return json.dumps(definition).encode()
+            if "SELECT pg_get_userbyid" in query:
+                return b"birja_migrator"
+            return b"{}"
+
+        with mock.patch.object(restore, "sql", side_effect=sql), mock.patch.object(
+            restore, "recovery_contract", return_value=contract
+        ), mock.patch.object(
+            contract, "RESOLUTION_FUNCTION_SHA256", hashlib.sha256(definition.encode()).hexdigest()
+        ), mock.patch.object(contract, "validate_resolution_authority"):
+            restore.restore_resolution_authority([])
+        privileged = [query for query, db in calls if db == "birja_ops_test"]
+        self.assertEqual(len(privileged), 1)
+        self.assertIn("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT", privileged[0])
+        self.assertNotIn("GRANT", privileged[0])
+        self.assertTrue(all(db == restore.CLONE for query, db in calls if query not in privileged))
+
     def test_old_revision_selected_before_stock_columns(self):
         restore = load("verify-restore")
         for revision in ("0007", "0008"):
