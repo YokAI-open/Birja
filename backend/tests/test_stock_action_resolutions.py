@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -21,6 +22,8 @@ from tests.test_corporate_actions import actions as _actions
 from tests.test_corporate_actions import batch
 from tests.test_stock_action_migrations import runtime_roles as _runtime_roles
 from tests.test_stock_sessions import evidence as calendar_evidence
+
+CLI_PATH = Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
 
 ownership = _ownership
 actions = _actions
@@ -591,7 +594,9 @@ async def test_authority_equal_alias_observes_shared_revision(resolution_case):
 
 async def test_authority_calendar_override_change_during_gate_wait_is_stale(resolution_case):
     import asyncio
+
     from sqlalchemy import update
+
     from app.services.stock_action_reconciliation import reconcile
     from app.services.stock_ownership import acquire_stock_gate
     from tests.test_corporate_actions import wait_blocked
@@ -638,11 +643,8 @@ async def test_private_cli_rejects_unprotected_ca_before_ssl_load(tmp_path, monk
     import argparse
     import importlib.util
     import json
-    from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location(
-        "stock_actions_cli", Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
-    )
+    spec = importlib.util.spec_from_file_location("stock_actions_cli", CLI_PATH)
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     ca = tmp_path / "ca.pem"
@@ -674,13 +676,10 @@ async def test_private_cli_never_prints_success_before_transaction_commit(
 ):
     import argparse
     import importlib.util
-    from pathlib import Path
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    spec = importlib.util.spec_from_file_location(
-        "stock_actions_commit_cli", Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
-    )
+    spec = importlib.util.spec_from_file_location("stock_actions_commit_cli", CLI_PATH)
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     config = {

@@ -75,14 +75,10 @@ async def run(args: argparse.Namespace) -> None:
                     after=args.after,
                     limit=args.limit,
                 )
-                print(
-                    json.dumps(
-                        {
-                            "items": result,
-                            "next_after": result[-1]["event_id"] if result else None,
-                        }
-                    )
-                )
+                output = {
+                    "items": result,
+                    "next_after": result[-1]["event_id"] if result else None,
+                }
             else:
                 request = ResolutionRequest.model_validate(
                     protected_json(Path(args.evidence_file))
@@ -90,15 +86,12 @@ async def run(args: argparse.Namespace) -> None:
                 identity = await reconcile(
                     db, request, account=config.account, server=config.server
                 )
-                print(
-                    json.dumps(
-                        {
-                            "resolution_id": identity,
-                            "event_id": request.event_id,
-                            "state": "reconciling",
-                        }
-                    )
-                )
+                output = {
+                    "resolution_id": identity,
+                    "event_id": request.event_id,
+                    "state": "recorded",
+                }
+        print(json.dumps(output))
     finally:
         await engine.dispose()
 
