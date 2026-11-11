@@ -31,6 +31,38 @@ FIXTURE = Path(__file__).parent / "fixtures" / "kraken_ticker_ok.json"
 NOW = datetime(2026, 10, 28, 12, 0, 0, tzinfo=UTC)
 
 
+async def test_action_loop_runs_with_quote_loop_disabled(monkeypatch, tmp_path):
+    settings = SchedulerSettings(env="test",
+        database_url="postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
+        redis_url="redis://:test@127.0.0.1:56379/0", stock_actions_enabled=True,
+        stock_actions_coverage_start=datetime(2026, 11, 1, tzinfo=UTC),
+        alpaca_api_key="synthetic-key", alpaca_secret_key="synthetic-secret")
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
+    seen = []
+    stop = asyncio.Event()
+
+    async def run_loop(*, cycle, interval, stop):
+        result = await cycle()
+        seen.append(result.accepted)
+        if len(seen) == 2:
+            stop.set()
+
+    async def crypto(**kwargs):
+        return CycleResult("ok", accepted=15)
+
+    async def actions(**kwargs):
+        assert kwargs["http"].trust_env is False
+        assert kwargs["http"].headers["APCA-API-KEY-ID"] == "synthetic-key"
+        return CycleResult("ok", accepted=20)
+
+    from app.tasks import stock_actions
+    monkeypatch.setattr(stock_actions, "run_stock_action_cycle", actions)
+    monkeypatch.setattr(scheduler, "run", run_loop)
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    await scheduler.amain(stop)
+    assert sorted(seen) == [15, 20]
+
+
 def _body() -> dict[str, Any]:
     body: dict[str, Any] = json.loads(FIXTURE.read_text())
     return body
