@@ -672,9 +672,50 @@ async def apply_due_actions(
 
 async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, ...]:
     """Reasons survive a healthy feed; only reviewed resolutions clear them."""
-    resolved = select(StockActionResolution.expected_revision).where(
-        StockActionResolution.coin_id == coin_id
+    # Only exact immutable history approved by the scoped database operation is
+    # applicable. New observations/revisions invalidate the prior disposition;
+    # renewed HTTP health alone never clears an older hold.
+    audit_rows = (
+        (
+            await db.execute(
+                select(StockActionResolution).where(StockActionResolution.coin_id == coin_id)
+            )
+        )
+        .scalars()
+        .all()
     )
+    resolved_ids: set[int] = set()
+    for audit in audit_rows:
+        event = await db.get(StockActionEvent, audit.event_id)
+        ids = (
+            (
+                await db.execute(
+                    select(StockActionRevision.id)
+                    .where(StockActionRevision.event_id == audit.event_id)
+                    .order_by(StockActionRevision.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        observation_id = (
+            await db.execute(
+                select(func.coalesce(func.max(StockActionObservation.id), 0)).where(
+                    StockActionObservation.event_id == audit.event_id
+                )
+            )
+        ).scalar_one()
+        if (
+            event is not None
+            and event.current_revision_id == audit.expected_revision
+            and audit.decision
+            in ("confirm_no_effect", "accept_corrected_supported_revision", "link_verified_alias")
+            and audit.evidence.get("format") == 1
+            and audit.evidence.get("held_revision_ids") == list(ids)
+            and audit.evidence.get("observation_id") == observation_id
+        ):
+            resolved_ids.update(ids)
+    resolved = tuple(resolved_ids)
     held = list(
         (
             await db.execute(

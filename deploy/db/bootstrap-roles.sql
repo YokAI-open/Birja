@@ -11,10 +11,10 @@ BEGIN
     (SELECT rolsuper FROM pg_roles WHERE rolname=current_user) THEN
     RAISE EXCEPTION 'administrative identity mismatch';
   END IF;
-  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011') THEN
+  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012') THEN
     RAISE EXCEPTION 'unsupported populated revision';
   END IF;
-  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)='0011' THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END LOOP
+  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0011','0012') THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END LOOP
     SELECT pg_get_userbyid(c.relowner) INTO owner_name FROM pg_class c
       WHERE c.oid=to_regclass(format('public.%I',t)) AND c.relkind='r';
     IF owner_name IS NULL OR owner_name NOT IN (current_user,'birja_migrator') THEN
@@ -82,7 +82,7 @@ REVOKE CREATE, TEMPORARY ON DATABASE :"db_name" FROM PUBLIC, birja_migrator, bir
 DO $transfer$
 DECLARE t text; s record;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)='0011' THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END LOOP
+  FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0011','0012') THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END LOOP
     -- ALTER TABLE transfers its identity sequences as a dependency. Never
     -- ALTER an identity-owned sequence independently or reassign other objects.
     EXECUTE format('ALTER TABLE public.%I OWNER TO birja_migrator',t);
@@ -109,7 +109,7 @@ GRANT USAGE ON SEQUENCE users_id_seq,accounts_id_seq,auth_sessions_id_seq,refres
 -- Mirror revision0009 exactly; legacy schemas must never parse absent objects.
 DO $stock_grants$
 BEGIN
-  IF (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011') THEN
+  IF (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012') THEN
     GRANT SELECT ON stock_instruments,stock_quotes,stock_sessions,stock_data_admissions TO birja_app;
     GRANT SELECT ON stock_instruments,stock_data_admissions TO birja_scheduler;
     GRANT SELECT,INSERT,UPDATE ON stock_quotes,stock_sessions TO birja_scheduler;
@@ -120,7 +120,7 @@ $stock_grants$;
 DO $action_grants$
     DECLARE t text; r text;
     BEGIN
-      IF (SELECT version_num FROM public.alembic_version) <> '0011' THEN RETURN; END IF;
+      IF (SELECT version_num FROM public.alembic_version) NOT IN ('0011','0012') THEN RETURN; END IF;
       IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
         IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=current_user
                       AND (rolsuper OR rolcreaterole)) THEN
@@ -179,6 +179,15 @@ DO $action_grants$
         GRANT SELECT(id,coin_id,user_id,side,quantity,cash_delta) ON trades TO birja_scheduler;
       END IF;
     END $action_grants$;
+DO $resolution_grants$
+BEGIN
+  IF (SELECT version_num FROM public.alembic_version)='0012' THEN
+    ALTER FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) OWNER TO birja_migrator;
+    REVOKE ALL ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) FROM PUBLIC,birja_app,birja_scheduler;
+    GRANT EXECUTE ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) TO birja_action_operator;
+  END IF;
+END
+$resolution_grants$;
 -- New tables stay private until a migration deliberately grants access.
 -- Both global and schema defaults are reset, for the actual creator only.
 ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN ON TABLES FROM PUBLIC,birja_app,birja_scheduler;
