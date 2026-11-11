@@ -175,6 +175,7 @@ type Guard = {
   lifecycle: number;
   marks: Map<number, Mark>;
   clock: { upper: number; received: number } | null;
+  latest: TimedStocks | null;
 };
 const guards = new WeakMap<ReturnType<typeof useQueryClient>, Guard>();
 const emailOf = (client: ReturnType<typeof useQueryClient>) =>
@@ -189,6 +190,7 @@ function upperClock(data: TimedStocks, now: number): number {
 }
 function remember(guard: Guard, data: TimedStocks) {
   const now = performance.now();
+  guard.latest = data;
   guard.clock = {
     upper: Math.max(
       upperClock(data, now),
@@ -210,7 +212,13 @@ function remember(guard: Guard, data: TimedStocks) {
 function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
   const existing = guards.get(client);
   if (existing) return existing;
-  const guard: Guard = { email: emailOf(client), lifecycle: 0, marks: new Map(), clock: null };
+  const guard: Guard = {
+    email: emailOf(client),
+    lifecycle: 0,
+    marks: new Map(),
+    clock: null,
+    latest: null,
+  };
   guards.set(client, guard);
   client.getQueryCache().subscribe((event) => {
     const email = emailOf(client);
@@ -219,6 +227,7 @@ function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
       guard.lifecycle++;
       guard.marks.clear();
       guard.clock = null;
+      guard.latest = null;
     }
     if (
       email !== null &&
@@ -231,6 +240,35 @@ function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
     }
   });
   return guard;
+}
+
+/** Late redactions may remove facts, but never replace independent authority. */
+function mergeReduction(previous: TimedStocks, response: TimedStocks): TimedStocks {
+  const incoming = new Map(response.items.map((item) => [item.id, item]));
+  return {
+    ...previous,
+    admission: response.admission.state === "unavailable" ? response.admission : previous.admission,
+    items: previous.items.map((old) => {
+      const next = incoming.get(old.id);
+      if (!next || next.action.state === "current") return old;
+      const action =
+        next.action.epoch === 0
+          ? next.action
+          : old.action.state === "current"
+            ? next.action
+            : old.action;
+      return {
+        ...old,
+        action,
+        quote: null,
+        quote_reason: "permission_unavailable",
+        valuation_reason:
+          action.reason === "post_split_quote_missing"
+            ? "post_split_quote_missing"
+            : "action_unavailable",
+      };
+    }),
+  };
 }
 
 export function useStocks() {
@@ -277,6 +315,18 @@ export function useStocks() {
         )
           throw new Error("Stock session changed");
         const current = client.getQueryData<TimedStocks>(key);
+        const previous = guard.latest;
+        const reducing =
+          response.admission.state === "unavailable" ||
+          response.items.some((item) => item.action.state !== "current");
+        if (
+          reducing &&
+          previous &&
+          (stockInstant(response.server_now) <= stockInstant(previous.server_now) ||
+            (response.admission.generation ?? 0) < (previous.admission.generation ?? 0))
+        ) {
+          return purgeExpired(mergeReduction(previous, response));
+        }
         // Concurrent invalidation may have installed newer permission evidence.
         if (
           current &&

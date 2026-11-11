@@ -931,25 +931,63 @@ it.each(["equal", "older"])(
   },
 );
 
-
-it.each(["same cache", "cache remount"])("retains categorical admission/calendar revocation through older generic facts (%s)", async (mode) => {
-  const revoked = payload({ state: "unavailable" }); revoked.server_now = stamp(2);
-  revoked.items.forEach((x) => { x.session = { ...x.session, state: "unknown", opens_at: null, closes_at: null, next_open_at: null, valid_until: null } as never; x.session_reason = "unknown"; });
-  const old = payload(); old.items.forEach((x) => { x.action = { state: "unknown", reason: "monitor_unavailable", epoch: 0, checked_at: null, valid_until: null } as never; x.quote = null; x.quote_reason = "permission_unavailable"; x.valuation_reason = "action_unavailable"; });
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(revoked))).mockResolvedValue(new Response(JSON.stringify(old))));
-  const first = setup();
-  await waitFor(() => expect(first.result.current.data?.admission.state).toBe("unavailable"));
-  if (mode === "same cache") {
-    await act(async () => { await first.result.current.refetch(); });
-    expect(first.result.current.data?.admission.state).toBe("unavailable");
-    expect(first.result.current.data?.items[0].session.state).toBe("unknown");
-  } else {
-    first.unmount(); first.client.removeQueries({ queryKey: ["stocks"] });
-    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={first.client}>{children}</QueryClientProvider>;
-    const next = renderHook(() => useStocks(), { wrapper });
-    await waitFor(() => expect(next.result.current.isSuccess).toBe(true));
-    expect(next.result.current.data?.admission.state).toBe("unavailable");
-    expect(next.result.current.data?.items[0].session.state).toBe("unknown");
-  }
-  expect(first.client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.server_now).toBe(stamp(2));
-});
+it.each(["same cache", "cache remount"])(
+  "retains categorical admission/calendar revocation through older generic facts (%s)",
+  async (mode) => {
+    const revoked = payload({ state: "unavailable" });
+    revoked.server_now = stamp(2);
+    revoked.items.forEach((x) => {
+      x.session = {
+        ...x.session,
+        state: "unknown",
+        opens_at: null,
+        closes_at: null,
+        next_open_at: null,
+        valid_until: null,
+      } as never;
+      x.session_reason = "unknown";
+    });
+    const old = payload();
+    old.items.forEach((x) => {
+      x.action = {
+        state: "unknown",
+        reason: "monitor_unavailable",
+        epoch: 0,
+        checked_at: null,
+        valid_until: null,
+      } as never;
+      x.quote = null;
+      x.quote_reason = "permission_unavailable";
+      x.valuation_reason = "action_unavailable";
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(revoked)))
+        .mockResolvedValue(new Response(JSON.stringify(old))),
+    );
+    const first = setup();
+    await waitFor(() => expect(first.result.current.data?.admission.state).toBe("unavailable"));
+    if (mode === "same cache") {
+      await act(async () => {
+        await first.result.current.refetch();
+      });
+      expect(first.result.current.data?.admission.state).toBe("unavailable");
+      expect(first.result.current.data?.items[0].session.state).toBe("unknown");
+    } else {
+      first.unmount();
+      first.client.removeQueries({ queryKey: ["stocks"] });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={first.client}>{children}</QueryClientProvider>
+      );
+      const next = renderHook(() => useStocks(), { wrapper });
+      await waitFor(() => expect(next.result.current.isSuccess).toBe(true));
+      expect(next.result.current.data?.admission.state).toBe("unavailable");
+      expect(next.result.current.data?.items[0].session.state).toBe("unknown");
+    }
+    expect(
+      first.client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.server_now,
+    ).toBe(stamp(2));
+  },
+);
