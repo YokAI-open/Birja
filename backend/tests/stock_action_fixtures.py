@@ -70,3 +70,28 @@ async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy
     db.add(trade)
     await db.flush()
     return trade
+
+
+async def synthetic_opening(
+    db, coin_id, user_id, at, *, quantity=Decimal(2), basis=Decimal(20), sequence=1
+):
+    """Test-only prehistory; deliberately unavailable from production services."""
+    row = StockOwnershipMovement(
+        coin_id=coin_id,
+        user_id=user_id,
+        sequence=sequence,
+        economic_at=at,
+        recorded_at=at,
+        quantity=quantity,
+        before_quantity=Decimal(0),
+        after_quantity=quantity,
+        before_basis=Decimal(0),
+        after_basis=basis,
+        unit_epoch=0,
+        cause_kind="opening",
+        causal_key="synthetic-opening:" + str(user_id),
+    )
+    db.add(row)
+    db.add(Holding(coin_id=coin_id, user_id=user_id, quantity=quantity, cost_basis=basis))
+    await db.flush()
+    return row

@@ -16,8 +16,10 @@ from app.services.stock_ownership import (
     acquire_stock_gate,
     append_stock_movement,
     assert_ownership_consistent,
+    reconstruct_stock_quantity,
 )
-from tests.stock_action_fixtures import synthetic_fill
+from app.services.corporate_action_rules import CutoffEvidence
+from tests.stock_action_fixtures import synthetic_fill, synthetic_opening
 
 pytest_plugins = ["tests.stock_action_fixtures"]
 
@@ -229,3 +231,19 @@ async def test_movement_integrity_held_for_global_drift(ownership, drift):
     async with factory() as db:
         with pytest.raises(OwnershipHeld):
             await assert_ownership_consistent(db, coin_id)
+
+
+def cutoff_at(at):
+    return CutoffEvidence(at, "NASDAQ", at.date(), 1, "synthetic-reviewed-calendar")
+
+
+@pytest.mark.parametrize("offset,expected", [(-1, 2), (0, 0), (1, 0)])
+async def test_reconstruction_exclusive_cutoff(ownership, offset, expected):
+    factory, coin_id, user_id = ownership
+    async with factory.begin() as db:
+        now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+        cutoff = cutoff_at(now - timedelta(days=1))
+        await synthetic_opening(db, coin_id, user_id, cutoff.cutoff + timedelta(seconds=offset))
+        result = await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 0)
+        assert result.quantity == Decimal(expected)
+        assert result.cutoff == cutoff
