@@ -188,9 +188,8 @@ function upperClock(data: TimedStocks, now: number): number {
     Math.max(0, now - data.transport.received_at)
   );
 }
-function remember(guard: Guard, data: TimedStocks) {
+function observe(guard: Guard, data: TimedStocks) {
   const now = performance.now();
-  guard.latest = data;
   guard.clock = {
     upper: Math.max(
       upperClock(data, now),
@@ -208,6 +207,20 @@ function remember(guard: Guard, data: TimedStocks) {
       at: old && old.at > at ? old.at : at,
     });
   }
+}
+function remember(guard: Guard, data: TimedStocks) {
+  observe(guard, data);
+  guard.latest = data;
+}
+function withAuthorityClock(guard: Guard, data: TimedStocks): TimedStocks {
+  const now = performance.now();
+  const previousUpper =
+    guard.clock === null ? -Infinity : guard.clock.upper + Math.max(0, now - guard.clock.received);
+  return {
+    ...data,
+    authority_offset_ms:
+      (data.authority_offset_ms ?? 0) + Math.max(0, previousUpper - upperClock(data, now)),
+  };
 }
 function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
   const existing = guards.get(client);
@@ -322,10 +335,14 @@ export function useStocks() {
         if (
           reducing &&
           previous &&
-          (stockInstant(response.server_now) <= stockInstant(previous.server_now) ||
-            (response.admission.generation ?? 0) < (previous.admission.generation ?? 0))
+          ([...guard.marks.values()].some((mark) => stockInstant(response.server_now) <= mark.at) ||
+            (response.admission.state === "approved" &&
+              (response.admission.generation ?? 0) < (previous.admission.generation ?? 0)))
         ) {
-          return purgeExpired(mergeReduction(previous, response));
+          // Public redaction may omit stronger incoming facts. Keep their raw
+          // ordering/clock high-water independently of the retained snapshot.
+          observe(guard, response);
+          return purgeExpired(withAuthorityClock(guard, mergeReduction(previous, response)));
         }
         // Concurrent invalidation may have installed newer permission evidence.
         if (
@@ -349,15 +366,7 @@ export function useStocks() {
             throw new Error("Superseded stock action response");
         }
         // Purge expired permission/review material before entering the cache.
-        const now = performance.now();
-        const previousUpper =
-          guard.clock === null
-            ? -Infinity
-            : guard.clock.upper + Math.max(0, now - guard.clock.received);
-        return purgeExpired({
-          ...response,
-          authority_offset_ms: Math.max(0, previousUpper - upperClock(response, now)),
-        });
+        return purgeExpired(withAuthorityClock(guard, response));
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           client.setQueryData(["me"], null);
