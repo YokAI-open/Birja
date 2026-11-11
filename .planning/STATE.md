@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-05 ownership and final TLS consumer proof; parent Wave3 integration next.
+stopped_at: Wave3 complete;1322backend tests and25critical modules pass; next08-06.
 last_updated: "2026-11-11T12:27:11.045Z"
 last_activity: 2026-11-11
 progress:
@@ -27,11 +27,16 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 5 of 13 executed (29 tasks, 11 waves)
-Status: Plan08-05 complete; independent re-review clean; parent Wave3 integration next
+Status: Wave3 complete; Plans01–05 reviewed and integrated; next08-06
 Last activity: 2026-11-11
 Progress: [███████░░░] 67%
 
 ## Completion and next action
+
+Wave3 integration passes:1322backend tests,77warnings,64.19s,99.78%overall.
+All25critical modules2095statements/688branches retain100%coverage; compileall
+passes. Plan05 independent re-review has0active findings. Next08-06 implements
+immutable action revisions, exact once-only splits and historical entitlements.
 
 Plan08-05 completes historical ownership:207targeted backend tests pass19.41s,
 ownership203statements/94branches100%, scoped static checks pass. Real duplicate
@@ -44,8 +49,8 @@ has0active findings. Exact-boundary old-unit fills hold; new atomic causes
 explicitly hold once full transaction ID reaches2**32, before xmin interpretation.
 This operational limitation is enforced, not claimed wrap support. Producer/
 schema/row contracts stay unchanged; prior retained recovery proof is preserved.
-See08-05-SUMMARY.md. Parent Wave3 full integration is next; Plan06 follows its
-passing gate. No full-suite or whole-phase completion is claimed here.
+See08-05-SUMMARY.md and08-LOCAL-PROOF.md for the passing Wave3 gate. Whole-phase
+requirements and external activation remain pending.
 
 Wave2 review/integration passed:1238backend tests/99.76%overall,24critical modules
 100%(1892statements/594branches); adapter review0active findings. Exact0011
@@ -313,7 +318,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 ## Session Continuity
 
 Last session:2026-11-11T12:27:11.030Z
-Stopped at: Completed08-05 historical ownership and final TLS consumer proof; parent Wave3 integration next.
+Stopped at: Wave3 complete;1322backend tests and25critical modules pass; next08-06.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.

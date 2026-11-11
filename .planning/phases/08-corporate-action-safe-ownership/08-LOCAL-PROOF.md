@@ -69,8 +69,6 @@ commits are recorded in 08-02-SUMMARY.md. No new package or privileged productio
 operation was needed. Existing birja-test services remain available for later
 local tests. This completes one of the two Wave 2 plans, not the entire wave.
 
-## Recovery boundary for later consumers
-
 ## Wave 2: Plans 02 and 04
 
 Plan 04 implements current REST discovery, known-ID rechecks and finite mutation
@@ -99,3 +97,25 @@ split_applications.coin_id, causal composite keys and the concurrent trade index
 Privileged bootstrap preprovisions the NOLOGIN operator role; restricted migrator
 privileges must not be expanded to CREATEROLE. No requirement or entire phase is
 marked complete by the infrastructure/rules evidence above.
+
+## Wave 3: Plan 05
+
+Instrument-serialized ownership and exclusive-cutoff reconstruction are complete.
+Independent review reproduced two bugs; exact-boundary fills now hold and new
+causes explicitly hold at full transaction ID>=2**32 before xmin interpretation.
+Stored replay and reconstruction remain supported. Re-review:0active findings.
+
+- Focused ownership/migration/crypto regressions:207passed19.41s.
+- Ownership203statements/94branches:100%; scoped lint/format/types pass.
+- Actual roles/fresh parity155.530s and populated/freshTLS102.727/99.435s pass.
+- Final corrected-source TLS service consumer:pass100.850s. Owned ops resources
+  cleaned. Minimum scheduler six-column immutable trade read preserves denials.
+- Full guarded isolated backend integration:**1322passed,77warnings,64.19s**.
+- Overallcoverage:**99.78%**;25critical modules2095statements/688branches:**100%**.
+- Backend compileall:pass. Receipt:`/tmp/birja-phase08-wave3-backend.log`.
+
+Exact0011 ACL/source identities and RED/GREEN evidence are in08-05-SUMMARY.md.
+The canonical producer/row/schema contract is unchanged; earlier encrypted
+recovery proof is retained, while affected ACL/TLS consumers were re-proved.
+Five of thirteen plans are complete. Next08-06 handles durable revisions,
+once-only splits and historical entitlements without stock execution or cash.
