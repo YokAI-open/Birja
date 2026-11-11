@@ -49,10 +49,10 @@ BEGIN
  END IF;
  IF p_evidence - ARRAY['format','unit_epoch','ledger_digest','revision_fingerprint',
  'held_revision_ids','observation_id','account','server','calendar_generation',
- 'review_valid_until','security_id','cutoff','alias_event_id'] <> '{}'::jsonb
+ 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest'] <> '{}'::jsonb
  OR NOT p_evidence ?& ARRAY['format','unit_epoch','ledger_digest','revision_fingerprint',
  'held_revision_ids','observation_id','account','server','calendar_generation',
- 'review_valid_until','security_id','cutoff','alias_event_id']
+ 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest']
  OR p_evidence->'format' <> '1'::jsonb
  OR p_hash <> encode(sha256(convert_to(p_evidence::text,'UTF8')),'hex') THEN
    RAISE EXCEPTION 'resolution evidence rejected' USING ERRCODE='22023';
@@ -92,6 +92,8 @@ BEGIN
      AND (p_evidence->>'review_valid_until')::timestamptz<=adm.valid_until
      AND (p_evidence->>'review_valid_until')::timestamptz<=cal.valid_until,false)
  OR cal.generation::text IS DISTINCT FROM p_evidence->>'calendar_generation'
+ OR encode(sha256(convert_to(to_jsonb(cal)::text,'UTF8')),'hex')
+    IS DISTINCT FROM p_evidence->>'calendar_digest'
  OR adm.scope->>'application' IS DISTINCT FROM 'birja'
  OR adm.scope->>'audience' IS DISTINCT FROM 'authenticated-users'
  OR adm.scope->>'feed' IS DISTINCT FROM 'alpaca-corporate-actions'

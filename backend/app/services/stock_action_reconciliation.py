@@ -36,6 +36,7 @@ class Evidence(BaseModel):
     account: Annotated[StrictStr, Field(min_length=1, max_length=256)]
     server: Annotated[StrictStr, Field(min_length=1, max_length=256)]
     calendar_generation: SafeId
+    calendar_digest: Digest
     review_valid_until: datetime
     security_id: Annotated[StrictStr, Field(min_length=1, max_length=128)]
     cutoff: datetime
@@ -64,7 +65,7 @@ class ResolutionRequest(BaseModel):
     evidence: Evidence
 
 
-def protected_json(path: Path) -> object:
+def protected_bytes(path: Path) -> bytes:
     """Read one bounded owned regular0600 file without following symlinks."""
     if not path.is_absolute() or path != path.resolve():
         raise ValueError("protected file required")
@@ -91,6 +92,11 @@ def protected_json(path: Path) -> object:
             raise ValueError("bounded file required")
     finally:
         os.close(descriptor)
+    return raw
+
+
+def protected_json(path: Path) -> object:
+    raw = protected_bytes(path)
 
     def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result: dict[str, object] = {}

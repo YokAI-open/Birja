@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from app.services.stock_action_reconciliation import (
     ResolutionRequest,
     inspect_actions,
+    protected_bytes,
     protected_json,
     reconcile,
 )
@@ -45,9 +46,7 @@ async def run(args: argparse.Namespace) -> None:
     # The CA is private configuration too; read/protect using the same owned
     # file policy, without interpreting it as JSON.
     ca = Path(config.ca_file)
-    if not ca.is_absolute() or ca != ca.resolve() or not ca.is_file():
-        raise ValueError("verified CA required")
-    context = ssl.create_default_context(cafile=str(ca))
+    context = ssl.create_default_context(cadata=protected_bytes(ca).decode("ascii"))
     engine = create_async_engine(
         url, connect_args={"ssl": context}, hide_parameters=True
     )

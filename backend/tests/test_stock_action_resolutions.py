@@ -597,7 +597,6 @@ async def test_authority_calendar_override_change_during_gate_wait_is_stale(reso
     from tests.test_corporate_actions import wait_blocked
 
     factory, request, data, _action = resolution_case
-    data = {key: value for key, value in data.items() if key != "calendar_digest"}
     announced = asyncio.Queue()
 
     async def operator():
