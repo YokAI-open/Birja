@@ -181,3 +181,23 @@ it("restores keyboard position to the stock heading after successful retry", asy
   await user.keyboard("{Enter}");
   expect(screen.getByRole("heading", { name: "US stocks · 20" })).toHaveFocus();
 });
+
+
+it("shows a scoped corporate-action hold with fixed reason, no numeric mark, and independent status", () => {
+  const held = state.data!.items[0];
+  held.action = { state: "suspended", reason: "fractional", epoch: 2,
+    checked_at: "2026-11-10T14:59:59Z", valid_until: null };
+  held.quote = null;
+  held.valuation_reason = "action_unavailable";
+  renderWithClient(<StockSection />);
+  const rows = within(screen.getByRole("table", { name: "US stocks" })).getAllByRole("row");
+  expect(rows[1]).toHaveTextContent("Suspended for corporate-action review.");
+  expect(rows[1]).toHaveTextContent("This action may create fractional shares and needs review.");
+  expect(rows[1]).toHaveTextContent("Valuation unavailable");
+  expect(rows[1]).toHaveTextContent("Stock status unverified.");
+  expect(rows[1]).toHaveTextContent("Trading coming later.");
+  expect(rows[1]).not.toHaveTextContent("$100.00");
+  expect(rows[2]).toHaveTextContent("$100.00");
+  expect(screen.getByRole("status")).toHaveTextContent("AA");
+  expect(screen.getByRole("status")).toHaveTextContent("fractional shares");
+});
