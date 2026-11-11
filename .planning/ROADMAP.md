@@ -152,7 +152,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 08-02-PLAN.md — Prove exact0011 recovery and restricted TLS compatibility. (Wave 2)
+- [x] 08-02-PLAN.md — Prove exact0011 recovery and restricted TLS compatibility. (Wave 2)
 - [ ] 08-04-PLAN.md — Collect bounded current REST/known-ID/mutation observations. (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 2/13 | In Progress|  |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 3/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

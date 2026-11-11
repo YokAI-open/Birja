@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave 1 complete; 1115 backend tests and 23 critical modules pass; start08-02 exact recovery/TLS.
-last_updated: "2026-11-11T10:47:22.510Z"
+stopped_at: Completed08-02 exact retained recovery/TLS; parent integration next.
+last_updated: "2026-11-11T11:32:51.951Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 15
+  completed_plans: 16
   percent: 0
 ---
 
@@ -26,18 +26,24 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 2 of 13 executed (29 tasks, 11 waves)
-Status: Wave 1 complete; Plans01/03 reviewed and integrated; next08-02
+Plan: 3 of 13 executed (29 tasks, 11 waves)
+Status: Plans01/02/03 executed; exact accounting recovery/TLS passed
 Last activity: 2026-11-11
-Progress: Phase 8 execution 2/13 plans complete (Wave 1/11)
+Progress: Phase8 execution3/13 plans complete (Wave2 in progress);16/27 milestone plans
 
 ## Completion and next action
 
 Wave 1 gate passed:1115backend tests/99.71%overall, expanded23critical modules100%
 (1388statements/374branches). Initial22integrationfailures were fixed and
 independently re-reviewed. Both01/03reviews are clean. See08-LOCAL-PROOF.md.
-Next08-02 must prove exact0011 recovery and actual restricted-role TLS upgrade
-before any new runtime consumer. Existing birja-test stack remains available.
+Plan08-02 now proves exact0011 recovery and actual restricted-role TLS upgrade:
+same retained tool archive recovers0007/8/9/10/11, including actual concurrent
+sequence capture,9accounting corruption classes and17exact identity states.
+Full serial operations gate passes; populated0010 and fresh0011 TLS ACLs match,
+with real allowed/denied SQL and no post-upgrade grant repair. Independent
+re-review is clean. See08-02-SUMMARY.md for archive/tool hashes and timings.
+Parent integration precedes later runtime consumers; existing birja-test stack
+remains available. Next dependency-ordered work includes08-04 provider adapter.
 
 Phase 8 planning is complete: 13 plans / 29 tasks / 11 waves. Research, pattern
 map, approved UI contract, per-task validation and source audit are saved under
@@ -49,13 +55,13 @@ restricted append/quantity-only grants. Final79isolated tests pass7.45s;
 8files Ruff/format and4source mypy pass. Actual42501 denials and transactional
 fresh-bootstrap grant parity pass. See08-01-SUMMARY.md. The NOLOGIN operator
 must be preprovisioned by privileged bootstrap before restricted0011 migration;
-the migrator does not gain CREATEROLE. Recovery/TLS proof remains08-02.
+the migrator does not gain CREATEROLE. Recovery/TLS proof now passes08-02.
 Plan08-03 is complete: independent action REST/replay and durable-accounting
 authority, frozen exact action/cutoff/split contracts and persistent-hold safety
 decisions.175scoped tests pass2.06s with all3modules100%statements/branches;
 259calendar/quote/admission/economic regressions pass4.64s;5file Ruff/format
-and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration remains pending
-the full backend gate and API-guard review after08-01schema re-review passed.
+and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration subsequently passed the full backend gate and clean API-guard
+review, as recorded above and in08-LOCAL-PROOF.md.
 Fix5d0353a plus retry correctionb389ce1 pass91isolated migration/quote/role
 tests11.10s, scoped lint/format
 and model types; new observation event_id, application coin_id and composite
@@ -64,9 +70,8 @@ incompatible-index rejection and cancelled concurrent-index rebuild are proven.
 Independent schema re-review atb389ce1 is clean. Full integration then found22
 API/seedguard failures; correction32bff2b passes36targeted tests4.56s with scoped
 lint/format/types, preserving explicit provider fields and suppressing nonzero
-unit quotes. Root owns the full-suite rerun and new API-guard independent review.
-Next: complete those integration gates,
-then dependency-ordered Wave2 isolated implementation. Stock
+unit quotes. The full-suite rerun and new API-guard independent review passed,
+as recorded in the Wave1 gate above. Continue dependency-ordered Wave2 work. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,
 and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data
 acceptance owner-deferred, not passed; no duplicate campaign or UI approval is
@@ -269,6 +274,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 7 P13 | 46min | 2 tasks | 35 files |
 | Phase 08 P01 | 18 min | 2 tasks | 9 files |
 | Phase 08 P03 | 10 min | 2 tasks | 5 files |
+| Phase 8 P02 | 27 min | 2 tasks | 6 files |
 
 ## Operations
 
@@ -278,8 +284,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T10:47:22.492Z
-Stopped at: Completed08-03; Wave1 integration pending Plan01 schema-review fixes.
+Last session:2026-11-11T11:32:51.933Z
+Stopped at: Completed08-02 exact retained recovery/TLS; parent integration next.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
