@@ -373,3 +373,72 @@ and money formatters while allowing labels/badges/timestamps to wrap.
 Eleven of thirteen plans and nine of eleven waves are complete. Next08-12
 finishes the exact critical CI contract and remaining full local gates before
 the actual Plan13 owner/external checkpoints. Requirements remain unchecked.
+
+## Plan12 final local gates — 2026-11-11
+
+Final source0026053 contains only the reviewed exact critical coverage mirror
+and scheduler test correction after runtime UI0cea8b5. Task1 RED7e757b4 reproduced
+both omitted modules and a false cancellation witness; GREEN0026053 passes80
+focused tests65.77s. Actual quote/action attempts already share the reviewed
+atomic budget; no runtime quota rewrite was needed. CI, CLAUDE and the contract
+test now require the same exact29 modules. The cancellation test observes a
+genuine timeout after one-instrument write and verifies rollback/lease release.
+
+| Final gate | Actual result |
+| --- | --- |
+| Full backend |1551passed,73warnings,163.92s;99.82%overall |
+| Exact29 critical modules |2972statements/978branches,100%; no omitted paths or exclusions |
+| Backend static checks | Ruff lint/142files format, mypy68source files and compileall pass |
+| Full frontend/current UI |429passed/28files15.68s;98.87%statements,97.29%branches,99.61%functions,99.66%lines; lint/types/Prettier/build pass |
+| Full isolated Chromium |31passed,1expected production-CSP skip,0failed, retries0;130.4s wrapper |
+| Hardened nonroot test-builder |77passed,16warnings,2.36s; read-only/capabilities dropped; guarded isolated host test Redis |
+| Actual final runtime smoke | Network disabled/read-only/nonroot; genuine calendar, exact split/basis/fractional refusal, expiry/holds and action-service imports pass |
+| Dependency audits | pip-audit no known vulnerabilities; npm0HIGH/CRITICAL, retained2low/13moderate development advisories |
+| Offline image/CI contracts |13image and10CI tests pass |
+| Explicit realSQL recovery contracts |10tests pass55.831s with `--postgres`; none skipped |
+| All five actual image scans |0HIGH/CRITICAL including unfixed, all exit0; pinned Trivy0.76.1 |
+| Independent reviews | Code0blockers/0warnings, UI24/24;44implementation security mitigations closed,3Plan13 checkpoint threats remain pending |
+
+The full browser proof uses authenticated synthetic accounts, console OTP,
+fake crypto and stock/action collectionOFF. It includes login, health, actual
+crypto buy/sell, portfolio/history and all stock/action stories. Production CSP
+is intentionally not tested withoutE2E_PROD_URL; no production access was used.
+Browser receipt/source hashes/cleanup:
+`/tmp/birja-phase08-plan12-browser-rw1fffy4/`; all owned resources are empty.
+
+Backend receipts are `/tmp/birja-phase08-final-{backend,critical,ruff,format,mypy,
+compile}.log`. Additional receipts: `final-native-corrected.log`,
+`runtime-final-smoke.log`, `final-image-contracts.log`, `final-ci-contracts.log`,
+`final-recovery-postgres-contracts.log`, under `/tmp/birja-phase08-`.
+The initial native test harness incorrectly disabled its autouse test-Redis
+connection, producing77setup errors; unchanged tests passed after enabling
+guarded host test networking. This is distinct from the separately network-free
+runtime smoke. The default recovery contract run's3conditional skips were
+superseded by the explicit10/10 realSQL variant, not represented as executed
+before that run. Existing pandas warnings were not suppressed.
+
+The six-revision retained encrypted recovery, exact accounting/authority checks,
+operator replay, role parity and both genuine TLS lanes passed as recorded above.
+CI/test-only changes do not alter their schema/tool/runtime sources, so those
+unchanged expensive lanes were not repeated without cause.
+
+Actual final scanned image identities (SHA256 engine identity; saved config
+digest is separately retained in `/tmp/birja-phase08-final-scans/status.json`):
+
+| Target | Actual Docker SHA256 identity |
+| --- | --- |
+| Runtime |361cf93bafe1f1a2e3507ce7b426dfd258882bdc914f257795757341c3339059 |
+| Test-builder |bf1d3cf016e2827efa01af7f26b5a52152c15c773d2ca1cc10f375f8ffb86350 |
+| Node |485847063301f53f516e6830e68fe5d61b8fd530bbf353e6ecc5e76de63194b6 |
+| PostgreSQL pinned registry |f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4 |
+| Redis pinned registry |26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48 |
+
+The scan status plus per-image JSON/logs retain configuration identity, report
+hash, database metadata and zero qualifying findings. No ignores, VEX,
+ignore-unfixed, continue-on-error or threshold lowering were added.
+
+All local execution gates are ready for Plan13. Human UI acceptance and explicit
+external action disposition are pending, not inferred. Action activation and
+stock execution remain disabled; no provider/private API, production, B2,
+installed tooling, Phase7 campaign, push/PR/merge or deployment was performed.
+See08-HUMAN-UAT.md and08-ACTIVATION.md for the concrete final checkpoint packet.

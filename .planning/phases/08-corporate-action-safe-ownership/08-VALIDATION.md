@@ -15,7 +15,7 @@ follows complete execution/verification.
 
 ## Executed progress
 
-Plans01–09 are complete and independently reviewed; Waves1–7 integration pass.
+Plans01–12 are complete and independently reviewed; Waves1–10 local gates pass.
 Plan02 includes actual retained encrypted0007–0011 recovery and restricted-role
 populated/fresh TLS proofs. Plan05 adds actual ownership-service TLS consumers
 and the minimum scheduler immutable-trade column reads. Review-discovered schema,
@@ -24,7 +24,9 @@ sequence-capture and journal bugs have observed regressions and fixes.
 Plan08 adds actual exact0007–0012 encrypted recovery, nonprivileged operator
 replay and populated/fresh restrictedTLS authority parity; reviewed fixes have
 actual regressions. Latest Wave7:1551backend tests pass153.59s,99.82%overall;
-29critical modules retain100%statements/branches. Plans10–13 remain pending. Whole-phase requirements,
+29critical modules retain100%statements/branches. Plans10–12 now pass their
+strict client, real browser, final coverage/security/image gates as recorded
+below. Plan13 actual owner UI/external disposition remains pending. Whole-phase requirements,
 human acceptance, live activation and Nyquist compliance are not marked complete.
 See08-LOCAL-PROOF.md and individual summaries/reviews for actual receipts.
 
@@ -194,3 +196,20 @@ pass15.68s,98.87%statements/97.29%branches/99.61%functions/99.66%lines; full
 lint/types/Prettier/build pass. Independent UI24/24,0active findings; independent
 33-source runtime review is clear. Final CI/test mirror follow-up and Plan12
 full backend/browser/image gates remain pending. No owner acceptance inferred.
+
+## Wave10 final local gate
+
+Final1551backend tests pass163.92s,99.82%overall; exactCI/CLAUDE/test29-module
+critical mirror passes2972statements/978branches100%. Frontend429tests and all
+static/build checks pass. Full browser31pass/1expected production-CSP skip,
+retries0,130.4s; owned cleanup empty. Hardened nonroot native77tests pass2.36s
+using isolated testRedis; separate actual runtime network-free smoke passes.
+All five strict image scans exit0 with0HIGH/CRITICAL including unfixed; audits
+pass required thresholds. Image13/CI10contracts and explicit realSQL recovery
+10/10 contracts pass. Same retained encrypted0007–0012 exact recovery/roles/both
+verifiedTLS proofs remain current. Code review0active, UI24/24, security44/44
+implementation mitigations closed;3Plan13 checkpoint threats remain pending.
+
+All27 automatic tasks have implementation/proof; two owner checkpoints remain.
+No Nyquist/whole-phase sign-off or requirement completion is inferred before
+actual Plan13 disposition and goal verification. See final08-LOCAL-PROOF.md.

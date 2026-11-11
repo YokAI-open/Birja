@@ -1,18 +1,95 @@
 ---
 phase: 08-corporate-action-safe-ownership
-scope: independent-backend-security-source-review
-reviewed: 2026-11-11
-status: secured_backend_scope
+scope: independent-phase8-implementation-security-review
+reviewed: 2026-11-11T17:05:41Z
+status: secured_implementation_scope_owner_external_pending
 asvs_level: 1
 asvs_taxonomy: legacy-4.0.3-category-mapping-only
-threats_reviewed: 34
-threats_closed: 34
+threats_reviewed: 44
+threats_closed: 44
 threats_open: 0
+threats_pending_owner_external: 3
 unregistered_flags: 0
 final_phase_security_complete: false
 ---
 
 # Phase8 backend security review
+
+## Final Plan12 security extension
+
+**SECURED implementation scope:44/44 Plan01–12 mitigation threats verified,
+zero open implementation BLOCKER/high findings and zero unregistered WARNING
+flags.** Plan13's three human/external disposition entries remain **PENDING**,
+not passed, accepted or waived. They are the legitimate next checkpoint and do
+not imply an implementation defect or block completion of Plan12 local work.
+This is not whole-phase approval, provider permission, deployment approval or
+ASVS certification.
+
+This extension rechecked the final client/UI review dispositions, actual final
+test/scan receipts, CI critical-list contract and sanitized draft acceptance/
+activation packets. Runtime remains unchanged at the reviewed source tree
+`0026053`; UI release `0cea8b5`. Client hashes remain API
+`3ec74a0f69a7b1cac338954fa18e2efc0dddc29d7a3127b4e902609a618d5e53`,
+hook `7befec3b3df07084226d8278def3236a3077965feee2f0d44d04a8f8d6c9143d`,
+StockSection `aee6a806a4588c1af653fe84f2e40cecae286a2fa59101369f3c4cb98ef2516d`.
+No tests, DB/Docker/browser/provider/production operations, private files or new
+dependency accesses were performed by this reviewer. All actual execution below
+is executor evidence whose recorded results were read, not reviewer-run proof.
+
+### Additional threat verification
+
+These ten entries extend the original34-threat backend matrix below. Every
+entry has disposition **mitigate** and status **CLOSED** for implemented controls.
+
+| Threat | STRIDE category | Actual control/evidence |
+| --- | --- | --- |
+| T-08-10-01 | Tampering | `api/stocks.ts` exact schema/coherence/UTC instants; `useStocks.ts` independently retains raw action epoch, approved admission generation, server-time and conservative clock maxima across generic denial/cache removal. Old reductions cannot restore independent session/admission facts; both normal and merge paths observe raw facts before redaction. Final08-10-REVIEW at7473df3 is clean. |
+| T-08-10-02 | Information disclosure | Full RTT once, nearest-deadline strict equality purge in view/cache, auth lifecycle cleanup and no local storage; incoming equal replies cannot reset elapsed authority. Focused arrival-expiry, same/older reply and remount regressions preserved in08-10 review/summary; full final frontend and browser receipts pass. |
+| T-08-10-SC | Tampering | Existing packages/locks unchanged; final dependency audits and all-five-image strict scan evidence below, no gate exclusions. |
+| T-08-11-01 | Information disclosure | Fixed public enum copy helper, no private/raw event text, semantic original times, unsafe price/time absence and generic permission redaction. Independent actual screenshot/source review08-UI-REVIEW24/24; final browser verifies denied/malformed/action states. |
+| T-08-11-02 | Tampering | Independent corporate-action/session/halt/trading labels, no stock order/resolve controls; exact expiry, persistent hold, compatible recovery, retry/focus and long text/zoom journeys. Actual retry-loss and enlarged-cell-overlap defects were corrected and re-reviewed; no owner acceptance inferred. |
+| T-08-11-SC | Tampering | Existing checked-in Card/Button/Badge and fixed local copy helper; components.json third-party registries empty, no dependency or registry installation. |
+| T-08-12-01 | Tampering | `test_critical_coverage_config.py` explicitly mirrors all29 modules in CLAUDE/CI and100% threshold. Atomic concurrent account reservations in `test_stock_action_monitoring.py:233`, plus actual-attempt quota denial/low-limit tests in `test_stock_scheduler.py:372–398`; no coverage/security threshold lowered. |
+| T-08-12-02 | Tampering | Exact same retained encrypted0007–0012 archive,17 identities, nonempty action/financial rows, operator/split replay and restricted populated/fresh roles/TLS proof; final code/security/UI reviews preserve earlier REDs/fixes and identify interrupted versus final successful runs. |
+| T-08-12-03 | Information disclosure | Read08-HUMAN-UAT/08-ACTIVATION drafts: synthetic screenshot/source/receipt links, no secrets/private payloads/actual holdings or production-read claim; no fabricated provider campaign quotas or owner answer. |
+| T-08-12-SC | Tampering | Unchanged lockfiles; pip-audit no known vulnerabilities; npm0HIGH/CRITICAL with existing2low/13moderate; actual immutable runtime/builder/node/PostgreSQL/Redis scans each0qualifyingHIGH/CRITICAL including unfixed, strict gate intact. |
+
+### Final local evidence read
+
+| Evidence | Recorded outcome and limits |
+| --- | --- |
+| `/tmp/birja-phase08-final-backend.log` |1551passed,73warnings,163.92s;99.82% overall with80% gate unchanged. |
+| `/tmp/birja-phase08-final-critical.log` |29critical modules,2972statements/978branches,100%. |
+| final Ruff/mypy/format receipts |Ruff all checks pass; mypy68sources pass; full format gate preserved. |
+| Wave9 frontend/static receipts |429tests/28files,15.68s;98.87% statements/97.29% branches/99.61% functions/99.66% lines; lint/types/Prettier/build pass. |
+| `/tmp/birja-phase08-plan12-browser-rw1fffy4/browser-final.log` |31passed,1conditional deployed-CSP skip,130.4s; retries0. CSP test requires explicit deployed URL, and no production browsing was performed to remove that expected skip. Owned project cleanup recorded. |
+| `/tmp/birja-phase08-final-native-corrected.log` |77passed,2.36s in hardened nonroot/read-only context using host networking solely for isolated test Redis. Initial incorrect-network failed log is not represented as a pass. Separate final runtime calendar/action smoke uses networknone. |
+| final image/CI/recovery contract logs |13image contracts and10CI contracts pass. Initial default10recovery-contract run had3conditional PostgreSQL skips; the explicit guarded `--postgres` follow-up in `/tmp/birja-phase08-final-recovery-postgres-contracts.log` subsequently executed all10 successfully in55.831s. The default skips are historical, not represented as executed in that initial invocation; actual serial retained operations remain separate proof. |
+| `/tmp/birja-phase08-final-scans/status.json` |Actual read: oktrue, Trivy0.76.1 pinned scanner, all five target exit_code0/oktrue/qualifying_findings0. Scan database metadata and immutable target/report identities retained. This is a dated scan result, not a future vulnerability guarantee. |
+| final pip/npm audit receipts |No known Python dependency vulnerabilities; npm retains15development advisories (2low,13moderate), no HIGH/CRITICAL. No forced upgrades/waivers. |
+| final retained archive and TLS proof |Same db27… archive0007–0012 exact recovery315.978s; roles160.138s; populated TLS111.679s and fresh TLS108.760s. Full local proof preserves command/source/cleanup receipts; no production restore or installed-tool replacement. |
+
+### Plan13 disposition remains pending
+
+| Threat | Category | Disposition/status and next evidence |
+| --- | --- | --- |
+| T-08-13-01 | Repudiation |mitigate / **PENDING**: actual owner response to the new Phase8 presentation and explicit distinct external disposition must be recorded; Phase7 approval or generic continue is not substituted. |
+| T-08-13-02 | Elevation of privilege |mitigate / **PENDING**: no activation authorized. Draft explicitly keeps REST/replay/derived/DB/backup rights, actual account limits/history/latency and source identity review unverified, with no call-ready campaign before those facts exist. |
+| T-08-13-SC | Tampering |mitigate / **PENDING Plan13 checkpoint**: current locks/default-off source are intact; future concrete activation must recheck current source/configuration/terms without adding unreviewed packages or silently renewing approval. |
+
+Packet wording was subsequently rechecked after its routine readiness update:
+08-HUMAN-UAT is awaiting-owner-review and08-ACTIVATION is awaiting-owner-disposition,
+both truthfully record local gates passed while owner answers remain pending.
+This does not authorize a campaign or change external scope. Their substantive
+scope is safe: screenshot-only owner presentation review, actions disabled,
+execution disabled, distinct permission purposes, unknown actual limits, no
+invented request/byte/duration entitlement, no key disclosure and no automatic
+provider contact, payment, agreement, production access or Phase7 campaign reuse.
+The stricter internal safety ceilings are explicitly not provider entitlements.
+
+The original backend source matrix/hashes and legacy ASVS4.0.3 category mapping
+remain below as historical scope evidence, superseded only in completion counts
+by this44-threat extension. Owner/external readiness is intentionally not closed.
 
 ## Result and scope
 

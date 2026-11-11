@@ -1,12 +1,14 @@
 ---
 phase: 08-corporate-action-safe-ownership
-reviewed: 2026-11-11T16:55:16Z
+reviewed: 2026-11-11T17:00:15Z
 depth: deep
 diff_base: 949db3a
-review_head: 0cea8b56ab0967ba4e24661b872e593a700e555b
-review_scope: runtime_and_configuration
-files_reviewed: 33
+review_head: 0026053ec84168d6f54ecbe03feccaa84b9bd8c3
+review_scope: runtime_configuration_and_final_CI_test_delta
+files_reviewed: 37
 files_reviewed_list:
+  - .github/workflows/ci.yml
+  - CLAUDE.md
   - .env.example
   - backend/alembic/versions/0011_stock_action_accounting.py
   - backend/alembic/versions/0012_stock_action_resolution.py
@@ -40,20 +42,25 @@ files_reviewed_list:
   - frontend/src/hooks/useStocks.ts
   - frontend/src/lib/stockActionCopy.ts
   - scripts/stock-actions.py
+  - backend/tests/test_critical_coverage_config.py
+  - backend/tests/test_stock_scheduler.py
 findings:
   critical: 0
   warning: 0
   info: 0
   total: 0
 status: clean
-followup_required: Plan12_CI_coverage_contract_changes
+followup_required: none_for_recorded_source_scope
 ---
 
 # Phase 8: Final Runtime Code Review
 
-**Reviewed:** 2026-11-11T16:55:16Z  
-**Depth:** deep  
-**Files reviewed:** 33 runtime/configuration sources  
+**Reviewed:** 2026-11-11T17:00:15Z
+
+**Depth:** deep
+
+**Files reviewed:** 33 runtime/configuration sources plus 4 final CI/document/test changes
+
 **Status:** clean for the recorded source scope
 
 ## Narrative Findings (AI reviewer)
@@ -63,10 +70,12 @@ runtime/configuration source. Earlier resolved findings remain historical in
 08-01 through 08-10-REVIEW.md; this report does not reopen them or infer correctness
 from their reported test counts.
 
-The explicit scope is the 33 changed runtime/configuration files listed above,
-selected from baseline `949db3a`. Supporting regression source and prior reviews
-were consulted for reachability and earlier dispositions; this is not a claim
-that every changed test or operations fixture received a new complete review.
+The runtime scope is the 33 changed runtime/configuration files listed above,
+selected from baseline `949db3a`. The four additional CI/document/test files
+received the focused final Plan 12 review described below. Supporting regression
+source and prior reviews were consulted for reachability and earlier dispositions;
+this is not a claim that every changed test or operations fixture received a new
+complete review.
 Backend/accounting/recovery sources still match the frozen `f6e9d0a` tree.
 The client guard is the reviewed `7473df3` implementation. The final recorded
 StockSection hash matches committed `0cea8b5`, including all three final
@@ -112,6 +121,29 @@ Side/quote-badge/timestamp intrinsic-size and wrapping corrections.
   re-read against the existing Badge composition; they introduce no additional
   source finding and change no authority, parsing or request behavior.
 
+### Final Plan 12 CI/test follow-up at `0026053`
+
+**Zero active BLOCKER/WARNING findings.** Reviewed the two-commit delta
+`7e757b4`/`0026053` for `.github/workflows/ci.yml`, `CLAUDE.md`,
+`backend/tests/test_critical_coverage_config.py` and the affected scheduler
+cancellation test with its real service/fixture context. This closes the pending
+CI/test follow-up from the initial runtime report.
+
+CI and the documented command preserve the original 21 critical modules and add
+exactly the eight required action/rules/provider/ownership/accounting/monitoring/
+quote-scheduler/reconciliation modules. Both now name the same ordered 29-module
+list. The source contract test requires exact tuple equality, a single matching
+100% command, uniqueness, existing module files and identical CI/document strings;
+the overall 80% and critical 100% thresholds remain unchanged.
+
+The scheduler test now expects the actual single-instrument write count of one.
+It records an explicit `CancelledError` witness only after that successful write,
+reraises cancellation and requires the witness, empty persisted quote rows and
+released lease. An earlier assertion/service failure can no longer masquerade
+as proof of configured deadline cancellation and rollback. These commits change
+no runtime/quota/dependency/image code. The executor's reported 80 focused tests
+and static checks remain separately attributed; this reviewer ran none.
+
 ### Verification and acceptance limits
 
 This reviewer performed source inspection and read-only git/hash operations.
@@ -125,11 +157,11 @@ owner-acceptance claim. The independent UI auditor owns those conclusions in
 08-UI-REVIEW.md. Actual CSS 200% zoom and a 640-CSS-pixel reflow viewport remain
 distinct evidence and must not be described as interchangeable native zoom.
 
-Plan 12's pending exact critical-module CI/CLAUDE/test mirror and scheduler-test
-reliability corrections require a focused follow-up after their source freeze.
-They are not included in this 33-file result. A changed runtime source likewise
-requires affected-scope re-review; later documentation/test-only commits do not
-silently change the frozen runtime identities below.
+The final Plan 12 CI/CLAUDE/test mirror and scheduler-test reliability corrections
+are included in the focused follow-up above. Full local proof, browser execution
+and acceptance remain independent gates. A changed runtime source requires
+affected-scope re-review; later documentation/test-only commits do not silently
+change the frozen runtime identities below.
 
 Stock execution remains false. Phase 9 fills, Phase 10 cash/public History,
 unsupported financial repairs, provider rights/live verification, ongoing
@@ -160,6 +192,10 @@ not claimed wraparound support.
 | deploy/backup-snapshot.py | `9e24a224718c3aab9c5252185da64a6e44ee6c26c320f2cbcb8b4b12246cf2d4` |
 | deploy/verify-restore.py | `1aa4337745716237f228e468da6a09202907fffbdd9621e9913a8a8272c08bf6` |
 | scripts/stock-actions.py | `fb493fcbd19192ae3a6fadab3df61e1d92e560d552c50efa18faa149263c93db` |
+| .github/workflows/ci.yml | `a4d8db1fad9687bbe5cfd3fb054f661512e5f096d0b1328e6c65ae82ae855390` |
+| CLAUDE.md | `1eb5103d5cdf0425a1ec9cf6ad3baeb7509f1fe202e73f9a710a1faf8c5589d0` |
+| backend/tests/test_critical_coverage_config.py | `99c2c608e0c07ee59fda9150b0dfd16b79753c0f1160c14cbc5b992ac622e221` |
+| backend/tests/test_stock_scheduler.py | `64468111cd529e1ef33a9099bd5800fe0e6307ee4075ea4a42938e919c0f9e9e` |
 
 ---
 
