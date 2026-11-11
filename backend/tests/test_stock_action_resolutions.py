@@ -143,7 +143,7 @@ async def test_authority_rejects_stale_or_arbitrary_evidence(resolution_case, fi
             await db.execute(text(CALL), request)
 
 
-async def test_authority_new_observation_invalidates_old_disposition(resolution_case):
+async def test_authority_identical_confirmation_preserves_reviewed_disposition(resolution_case):
     factory, request, _data, action = resolution_case
     async with factory.begin() as db:
         await db.execute(text(CALL), request)
@@ -153,7 +153,24 @@ async def test_authority_new_observation_invalidates_old_disposition(resolution_
             batch(action),
             await _load_admission(db, "actions"),
         )
-        assert await persistent_action_holds(db, request["coin"])
+        assert not await persistent_action_holds(db, request["coin"])
+
+
+async def test_authority_upgrade_refuses_existing_runtime_operator_membership(
+    engine, runtime_roles
+):
+    from tests.test_stock_migrations import migrate
+
+    await migrate("0011", down=True)
+    async with engine.begin() as conn:
+        await conn.execute(text("GRANT birja_action_operator TO birja_app"))
+    try:
+        with pytest.raises(DBAPIError, match="unsafe action operator"):
+            await migrate("head")
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("REVOKE birja_action_operator FROM birja_app"))
+        await migrate("head")
 
 
 async def test_authority_has_narrow_operator_entrypoint(engine, migrated, runtime_roles):
@@ -178,4 +195,109 @@ async def test_private_evidence_rejects_naive_cutoff(resolution_case):
 
     _factory, _request, data, _action = resolution_case
     with pytest.raises(ValueError):
-        Evidence.model_validate({**data, 'cutoff':'2026-11-12T14:30:00'})
+        Evidence.model_validate({**data, "cutoff": "2026-11-12T14:30:00"})
+
+
+def request_model(request, data):
+    from app.services.stock_action_reconciliation import ResolutionRequest
+
+    return ResolutionRequest.model_validate(
+        {
+            "coin_id": request["coin"],
+            "event_id": request["event"],
+            "expected_revision": request["revision"],
+            "admission_generation": request["generation"],
+            "epoch": request["epoch"],
+            "decision_key": request["key"],
+            "decision": request["decision"],
+            "actor_ref": request["actor"],
+            "evidence": data,
+        }
+    )
+
+
+async def test_private_service_current_and_stored_replay(resolution_case):
+    from app.services.stock_action_reconciliation import inspect_actions, reconcile
+
+    factory, request, data, _action = resolution_case
+    async with factory.begin() as db:
+        rows = await inspect_actions(db, coin_id=request["coin"])
+        assert rows[0]["event_id"] == request["event"]
+        assert set(rows[0]) == {
+            "event_id",
+            "coin_id",
+            "revision_id",
+            "epoch",
+            "unit_epoch",
+            "classification",
+            "health",
+        }
+        await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+        first = await reconcile(db, request_model(request, data), account="birja", server="birja")
+        assert (
+            await reconcile(db, request_model(request, data), account="birja", server="birja")
+            == first
+        )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"coin_id": 0},
+        {"coin_id": True},
+        {"after": -1},
+        {"after": False},
+        {"limit": 0},
+        {"limit": 101},
+        {"event_id": 0},
+        {"event_id": True},
+    ],
+)
+async def test_private_inspect_rejects_invalid_pagination(engine, changes):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.services.stock_action_reconciliation import inspect_actions
+
+    async with AsyncSession(engine) as db:
+        with pytest.raises(ValueError):
+            await inspect_actions(db, **{"coin_id": 1, **changes})
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"a":1,"a":2}',
+        '{"number":NaN}',
+        '{"number":Infinity}',
+        '"' + ("a" * 32768) + '"',
+        "[" * 1500 + "]" * 1500,
+    ],
+)
+def test_private_file_rejects_unbounded_or_ambiguous_json(tmp_path, raw):
+    from app.services.stock_action_reconciliation import protected_json
+
+    path = tmp_path / "evidence.json"
+    path.write_text(raw)
+    path.chmod(0o600)
+    with pytest.raises(ValueError):
+        protected_json(path)
+
+
+def test_private_file_owned0600_regular_only(tmp_path):
+    from app.services.stock_action_reconciliation import protected_json
+
+    path = tmp_path / "evidence.json"
+    path.write_text('{"format":1}')
+    path.chmod(0o600)
+    assert protected_json(path) == {"format": 1}
+    link = tmp_path / "link"
+    link.symlink_to(path)
+    with pytest.raises(ValueError):
+        protected_json(link)
+    path.chmod(0o644)
+    with pytest.raises(ValueError):
+        protected_json(path)
+    with pytest.raises(ValueError):
+        protected_json(tmp_path)
+    with pytest.raises(ValueError):
+        protected_json(__import__("pathlib").Path("relative.json"))
