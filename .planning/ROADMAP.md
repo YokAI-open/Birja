@@ -222,7 +222,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md — Implement exact whole-share plans and conservative shortcuts
+- [x] 09-02-PLAN.md — Implement exact whole-share plans and conservative shortcuts
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -336,7 +336,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 1/15 | In Progress|  |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 2/15 | In Progress|  |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
