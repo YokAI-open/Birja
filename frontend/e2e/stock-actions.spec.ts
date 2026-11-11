@@ -5,16 +5,23 @@ import { stocks } from "./stock-fixtures.js";
 test("retry remains available after failed refresh and permission expiry", async ({ page }) => {
   await page.clock.install();
   let fail = false;
-  await page.route("**/api/v1/stocks", (route) =>
-    fail
-      ? route.fulfill({ status: 503, json: { detail: "unavailable" } })
-      : route.fulfill({ json: stocks({ lifetime: 2 }) }),
-  );
+  let failedRequests = 0;
+  await page.route("**/api/v1/stocks", (route) => {
+    if (fail) {
+      failedRequests++;
+      return route.fulfill({ status: 503, json: { detail: "unavailable" } });
+    }
+    return route.fulfill({ json: stocks({ lifetime: 35 }) });
+  });
   await signInNewUser(page);
   const section = page.getByRole("region", { name: "US stocks · 20" });
   await expect(section.getByText("$100.00").first()).toBeVisible();
   fail = true;
   await page.clock.fastForward(30_001);
+  await page.clock.runFor(100);
+  await expect.poll(() => failedRequests).toBeGreaterThan(0);
+  await expect(section.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
+  await page.clock.fastForward(5_000);
   await page.clock.runFor(100);
   await expect(section.getByText("$100.00")).toHaveCount(0);
   await expect(section.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
@@ -81,7 +88,7 @@ for (const width of [320, 375, 768, 1280]) {
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     expect(
       await region(page)
-        .locator("p:visible")
+        .locator("p:not(.sr-only):visible")
         .evaluateAll((items) =>
           items.every(
             (item) =>
@@ -91,6 +98,9 @@ for (const width of [320, 375, 768, 1280]) {
         ),
     ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`actions-${width}.png`), fullPage: true });
+    await records(page)
+      .first()
+      .screenshot({ path: testInfo.outputPath(`actions-${width}-first-stock.png`) });
     const trade = page.getByRole("link", { name: "Trade BTC" });
     await trade.focus();
     await page.keyboard.press("Enter");
@@ -136,6 +146,7 @@ test("global monitor loss and repeated healthy refresh cannot clear a persistent
   await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
   await expect(first).toContainText("Corporate-action checks unavailable.");
   body = snapshot(93);
+  for (const item of body.items) item.action.epoch = 4;
   hold(body, 0, "unsupported", 4);
   await poll(page);
   await expect(first).toContainText("Suspended for corporate-action review.");

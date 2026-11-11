@@ -291,3 +291,31 @@ it("keeps retry focus after failure and suppresses action-derived check times on
   await user.keyboard("{Enter}");
   expect(retry).toHaveFocus();
 });
+
+it("retains request failure through a local safety purge, clearing only a completed fetch or new pending lifecycle", () => {
+  state.isError = true;
+  const { rerender } = render(<StockSection />);
+  expect(screen.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
+  state.isError = false; // a local cache safety projection is not a network recovery
+  state.data!.admission = { state: "unavailable", generation: null, valid_until: null };
+  rerender(<StockSection />);
+  expect(screen.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Couldn’t refresh stocks");
+  state.isFetching = true;
+  rerender(<StockSection />);
+  state.isFetching = false;
+  state.data = payload();
+  rerender(<StockSection />);
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.getByRole("heading", { name: "US stocks · 20" })).not.toHaveFocus();
+  state.isError = true;
+  rerender(<StockSection />);
+  state.isError = false;
+  state.isPending = true;
+  state.data = undefined;
+  rerender(<StockSection />);
+  state.isPending = false;
+  state.data = payload();
+  rerender(<StockSection />);
+  expect(screen.queryByRole("button")).toBeNull();
+});

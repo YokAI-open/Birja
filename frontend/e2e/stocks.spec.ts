@@ -18,10 +18,13 @@ async function refocus(page: Page) {
 test("independent stock HTTP errors can retry while crypto remains usable", async ({ page }) => {
   await page.clock.install();
   let failed = false;
+  let recovered = false;
   await page.route("**/api/v1/stocks", (route) =>
     failed
       ? route.fulfill({ status: 503, json: { detail: "unavailable" } })
-      : route.fulfill({ json: stocks() }),
+      : route.fulfill({
+          json: stocks({ now: recovered ? "2026-11-10T15:00:31Z" : "2026-11-10T15:00:00Z" }),
+        }),
   );
   await signInNewUser(page);
   await expect(records(page)).toHaveCount(20);
@@ -35,6 +38,7 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
   await retry.focus();
   await expect(retry).toBeFocused();
   failed = false;
+  recovered = true;
   await page.keyboard.press("Enter");
   await expect(section(page).getByRole("status")).not.toContainText("Couldn’t refresh");
   await expect(section(page).getByRole("heading", { name: "US stocks · 20" })).toBeFocused();
@@ -91,11 +95,11 @@ test("denied, admitted and revoked generations retain identities and purge provi
   await expect(records(page)).toHaveCount(20);
   await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
   await expect(section(page).getByText("$100.00")).toHaveCount(0);
-  body = stocks({ generation: 2 });
+  body = stocks({ generation: 2, now: "2026-11-10T15:00:31Z" });
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
   await expect(records(page).first()).toContainText("$100.00");
-  body = stocks({ state: "unavailable", generation: 3 });
+  body = stocks({ state: "unavailable", generation: 3, now: "2026-11-10T15:01:02Z" });
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
   await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
@@ -136,7 +140,8 @@ test("source 119.999 to120 stays nonexecutable and does not announce each second
     route.fulfill({ json: stocks({ age: 119.999 }) }),
   );
   await signInNewUser(page);
-  await expect(records(page).first()).toContainText("Out of date"); // conservative full RTT reaches120
+  await expect(records(page).first()).not.toContainText("$100.00"); // full RTT cannot extend source age
+  await expect(section(page).getByRole("status")).toContainText("Out of date");
   await expect(section(page).getByRole("button")).toHaveCount(0);
   await page.clock.install();
   const before = await section(page).getByRole("status").textContent();
@@ -153,7 +158,8 @@ test("source age crossing120 changes the contextual announcement only at the bou
   await expect(records(page).first()).toContainText("Recent · 1m ago");
   const recent = await section(page).getByRole("status").textContent();
   await page.clock.runFor(1000);
-  await expect(records(page).first()).toContainText("Out of date · 2m ago");
+  await expect(records(page).first()).not.toContainText("$100.00");
+  await expect(section(page).getByRole("status")).toContainText("Out of date");
   const stale = await section(page).getByRole("status").textContent();
   expect(stale).not.toBe(recent);
   await page.clock.runFor(1000);
@@ -171,8 +177,12 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   });
   body.items[0].quote = null;
   body.items[0].quote_reason = "missing";
+  body.items[0].valuation_reason = "quote_unavailable";
   body.items[1].quote_reason = "session_unavailable";
   body.items[1].quote!.event_at = "2026-11-25T20:59:00Z";
+  body.items[1].quote!.age_seconds = Math.floor(
+    (Date.parse(body.server_now) - Date.parse(body.items[1].quote!.event_at)) / 1000,
+  );
   body.items[2].session = {
     ...body.items[2].session,
     state: "unknown",
@@ -180,17 +190,22 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
     closes_at: null,
     valid_until: null,
   };
+  body.items[2].session_reason = "unknown";
   body.items[2].quote = null;
+  body.items[2].quote_reason = "missing";
+  body.items[2].valuation_reason = "quote_unavailable";
   // Winter NY session14:30Z and summer13:30Z are explicit server-provided bounds.
   body.items[3].session.opens_at = "2026-07-06T13:30:00Z";
   body.items[3].session.closes_at = "2026-07-06T20:00:00Z";
   body.items[3].session.state = "closed";
+  body.items[3].session_reason = "closed";
   body.items[3].quote_reason = "session_unavailable";
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
   await expect(records(page)).toHaveCount(20);
   await expect(records(page).nth(0)).toContainText("Waiting for an IEX quote");
-  await expect(records(page).nth(1)).toContainText("Previous session");
+  await expect(records(page).nth(1)).not.toContainText("$100.00");
+  await expect(records(page).nth(1)).toContainText("Valuation unavailable");
   await expect(records(page).nth(2)).toContainText("Session unavailable");
   await expect(records(page).nth(3)).toContainText("Last quote");
   await expect(records(page).nth(4)).toContainText("Market open");
