@@ -644,7 +644,13 @@ def resolution_negative_controls(dc, manifest):
             'p_coin bigint,p_event bigint,p_revision bigint,p_generation bigint,p_epoch bigint,p_key text,p_decision text,p_hash text,p_evidence jsonb,p_actor text')+
             " RETURNS bigint LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public AS 'SELECT 1::bigint'"),
     ):
-        raw=r.sql(dc,'BEGIN; '+query+"; SET LOCAL TIME ZONE 'UTC'; "+contract.manifest_sql('0012')+'; ROLLBACK;')
+        print('resolution_authority_corruption='+label,flush=True)
+        # Deliberate corruption is privileged fixture setup, never a grant to
+        # the restricted clone owner. Target the actual clone, not the source
+        # or bootstrap database; transaction rollback preserves its authority.
+        raw=r.call(dc+['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1',
+            '-U',r.BOOT,'-d',r.CLONE],
+            ('BEGIN; '+query+"; SET LOCAL TIME ZONE 'UTC'; "+contract.manifest_sql('0012')+'; ROLLBACK;').encode())
         try:contract.validate_manifest(json.loads(raw))
         except ValueError:pass
         else:raise AssertionError('changed0012authority accepted: '+label)
