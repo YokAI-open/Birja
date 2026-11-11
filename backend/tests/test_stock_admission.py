@@ -333,6 +333,33 @@ def scheduler_config(**extra: object) -> SchedulerSettings:
     )  # type: ignore[arg-type]
 
 
+async def test_capability_cannot_expand_old_products_and_shortened_override_checks_dates() -> None:
+    assert not evaluate_admission(
+        admitted(), "quotes", "collection", NOW, capability="rest"
+    ).allowed
+    evidence = calendar_evidence()
+    override = {**evidence.calendar["overrides"][0], "opens_at": "2026-11-28T14:30:00Z"}
+    closed = {
+        **override,
+        "date": "2026-11-26",
+        "state": "closed",
+        "opens_at": None,
+        "closes_at": None,
+    }
+    assert evaluate_admission(
+        replace(evidence, calendar={**evidence.calendar, "overrides": [closed]}),
+        "calendar",
+        "derived",
+        NOW,
+    ).allowed
+    assert not evaluate_admission(
+        replace(evidence, calendar={**evidence.calendar, "overrides": [override]}),
+        "calendar",
+        "derived",
+        NOW,
+    ).allowed
+
+
 async def test_disabled_configuration_needs_no_provider_secrets() -> None:
     settings = scheduler_config()
     assert settings.stock_data_enabled is False

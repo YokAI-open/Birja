@@ -152,7 +152,7 @@ def test_holiday_or_missing_authority_never_guesses_cutoff() -> None:
 
 @pytest.mark.parametrize("new,old,quantity,expected", [(2, 1, 3, 6), (3, 2, 4, 6), (4, 1, 0, 0)])
 def test_exact_forward_split_preserves_total_basis(new, old, quantity, expected) -> None:
-    owner = SplitOwner(1, Decimal(quantity), Decimal("123.45"))
+    owner = SplitOwner(1, Decimal(quantity), Decimal("123.45") if quantity else Decimal(0))
     result = plan_forward_split(split(new_rate=Decimal(new), old_rate=Decimal(old)), [owner])
     assert result.allowed and result.ratio == Fraction(new, old)
     assert result.owners == (replace(owner, quantity=Decimal(expected)),)
@@ -207,6 +207,65 @@ def current(**changes):
             **changes,
         }
     )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"declaration_date": date(2026, 11, 11)},
+        {"declaration_date": "2026-11-01"},
+        {"provider_event_id": " "},
+        {"provider_event_id": "x" * 257},
+        {"coin_id": True},
+        {"symbol": []},
+        {"source_event_at": NOW.replace(tzinfo=None)},
+        {"economic_at": NOW.replace(tzinfo=None)},
+        {"record_date": None},
+        {"payable_date": None},
+        {"same_boundary_split": 1},
+        {"rate": Decimal("0.12345678912345678912345678912")},
+    ],
+)
+def test_malformed_identity_dates_and_terms_remain_uncertain(changes) -> None:
+    assert classify_action(dividend(**changes)).kind == "uncertain"
+
+
+def test_unknown_event_and_outside_calendar_coverage_have_no_guessed_economics() -> None:
+    assert classify_action(dividend(event_type="merger")).kind == "unsupported"
+    assert classify_action(split(new_rate=Decimal("99999999999"))).kind == "uncertain"
+    assert dividend_cutoff(split(), "NYSE", NOW, evidence(NOW)) is None
+    assert dividend_cutoff(dividend(), "other", NOW, evidence(NOW)) is None
+
+
+def test_split_overflow_and_invalid_basis_or_duplicate_owner_abort_entire_plan() -> None:
+    owner = SplitOwner(1, Decimal("600000000000"), Decimal("1.00"))
+    assert not plan_forward_split(split(), [owner]).allowed
+    assert not plan_forward_split(split(), [replace(owner, total_basis=Decimal("0.001"))]).allowed
+    assert not plan_forward_split(split(), [replace(owner, user_id=True)]).allowed
+    assert not plan_forward_split(split(), [replace(owner, total_basis=Decimal("1e12"))]).allowed
+    assert not plan_forward_split(split(), [replace(owner, quantity=Decimal(0))]).allowed
+    owner = replace(owner, quantity=Decimal(2))
+    assert not plan_forward_split(split(), [owner, owner]).allowed
+    assert plan_forward_split(split(), []).allowed
+
+
+def test_due_bills_need_verified_mapping_and_do_not_invert_split() -> None:
+    assert classify_action(split(due_bills=True)).kind == "uncertain"
+    assert classify_action(split(due_bills=0)).kind == "uncertain"
+    assert (
+        classify_action(split(due_bills=True, due_bill_mapping_verified=True)).kind
+        == "supported_forward_split"
+    )
+    assert classify_action(split(economic_at=NOW + timedelta(days=1))).kind == "uncertain"
+    assert classify_action(split(payable_date=date(2026, 11, 9))).kind == "uncertain"
+
+
+def test_unknown_monitor_and_malformed_boundary_cannot_promote_current() -> None:
+    assert current(health="unknown").state == "unknown"
+    assert current(known_boundary=NOW.replace(tzinfo=None)).state == "unknown"
+    assert current(unit_epoch=True).state == "unknown"
+    assert current(quote_unit_epoch=True).state == "suspended"
+    assert current(persistent_holds=("source_gap",)).reason == "conflicting"
 
 
 def test_current_monitor_never_clears_persistent_hold() -> None:
