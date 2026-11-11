@@ -123,6 +123,27 @@ def identity_tables(revision):
     return sorted(names)
 
 
+def dump_identity_state(raw):
+    """Parse only the allowlisted SEQUENCE SET output; never execute dump SQL.
+
+    Sequences are not MVCC. Their actual archived values, rather than values
+    read before pg_dump, are the authoritative retained identity contract.
+    """
+    require(isinstance(raw, bytes) and len(raw) <= 65536)
+    states = {}
+    for line in raw.decode("utf-8").splitlines():
+        if "pg_catalog.setval(" not in line:
+            continue
+        match = re.fullmatch(r"SELECT pg_catalog\.setval\('public\.([a-z_]+)_id_seq', ([0-9]{1,19}), (true|false)\);", line)
+        require(match is not None)
+        table, value, called = match.groups()
+        require(table in identity_tables("0011") and table not in states)
+        require(1 <= int(value) <= 9223372036854775807)
+        states[table] = [table, int(value), called == "true"]
+    require(set(states) == set(identity_tables("0011")))
+    return [states[table] for table in sorted(states)]
+
+
 def contract_columns(revision):
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
@@ -178,7 +199,7 @@ def manifest_sql(revision):
         quote = fragment("STOCK_ROWS").splitlines()[1]
         result = result.replace(quote, quote.replace("admission_generation)::text", "admission_generation,unit_epoch)::text"))
         rows = []
-        timestamps = {"cutoff", "coverage_start", "covered_until", "complete_from", "quote_not_before", "next_blocking_at"}
+        timestamps = {"cutoff", "verified_cutoff", "coverage_start", "covered_until", "complete_from", "quote_not_before", "next_blocking_at"}
         for table, columns in ACTION_COLUMNS.items():
             expressions = []
             for column in columns.split():
@@ -867,11 +888,16 @@ class Job:
             (self.c["max_stage_bytes"], self.c["max_stage_bytes"]),
         )
 
-    def call(self, argv, *, data=None, input_file=None, output=None, cwd=None):
+    def call(self, argv, *, data=None, input_file=None, output=None, cwd=None, capture_limit=None):
         self.calls += 1
         require(self.calls <= 20)
         left = self.c["timeout_seconds"] - (time.monotonic() - self.started)
         require(left > 0)
+        def limits():
+            self.limit()
+            if capture_limit is not None:
+                require(type(capture_limit) is int and 1 <= capture_limit <= self.c["max_stage_bytes"])
+                resource.setrlimit(resource.RLIMIT_FSIZE, (capture_limit, capture_limit))
         with tempfile.TemporaryFile(dir=self.state) as capture:
             r = subprocess.run(
                 argv,
@@ -883,7 +909,7 @@ class Job:
                 env=self.env,
                 cwd=cwd,
                 timeout=left,
-                preexec_fn=self.limit,
+                preexec_fn=self.limit if capture_limit is None else limits,
             )
             require(r.returncode == 0)
             if output is None:
@@ -1060,6 +1086,12 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
+            if revision == "0011":
+                selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
+                with archive.open("rb") as f:
+                    raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
+                manifest["identity_state"] = dump_identity_state(raw_states)
+                validate_manifest(manifest)
             proc.stdin.write(b"ROLLBACK;\n")
             proc.stdin.close()
             require(proc.wait(timeout=5) == 0)
