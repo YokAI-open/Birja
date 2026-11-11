@@ -92,9 +92,13 @@ re-reviewed:0active code findings,47/47local threats closed,UI24/24. Existing
 response deadlines bound retained-value exposure; actual DB/recovery storage
 rights or approved verified cleanup remain prerequisites before live activation.
 Plan07-14's concrete07-ACTIVATION.md packet is prepared. Task07-14-01 remains
-unresolved (0/3tasks complete): first establish whether the owner has an Alpaca
-account and applicable Birja multi-user/display/DB-and-recovery-storage rights,
-or needs setup/permission guidance. Only after verifiable scope exists request
+unresolved (0/3tasks complete): on2026-11-11 the owner reported a Paper account,
+privately saved keys and provider approval. Sanitized actual approval reference,
+scope and storage conditions remain pending review. A concrete local bounded
+measurement harness is prepared in/tmp/birja-phase07-measurement;39synthetic
+tests and Ruff lint/format pass, with source hashes in07-ACTIVATION.md. Independent
+focused harness review remains pending; no live CLI or credential discovery is
+provided. Only after verifiable scope exists request
 separate approval for at most30private HTTP attempts (20reference/10quote samples).
 No credentials read, private calls, admission import or collection activation.
 Owner UI acceptance remains later07-14-03. No completed07-14SUMMARY and no
@@ -204,7 +208,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Last session:2026-11-10T20:29:14.102Z
 Stopped at: Awaiting blocking-human07-14-01; concrete activation packet prepared.
-Resume: Read07-ACTIVATION.md and preparation commit. Obtain sanitized account/applicable product-and-storage evidence or provide requested setup guidance; only then seek separate bounded30-attempt approval. Do not execute07-14-02/03 or write a completedSUMMARY before their gates pass. Stock execution stays disabled; owner UI acceptance remains pending.
+Resume: Read07-ACTIVATION.md and preparation commit. Review sanitized provider approval scope/storage evidence and frozen bounded-harness review; only then seek separate bounded30-attempt approval. Owner reports Paper account/privately saved keys/provider approval; no private API or key verification has occurred. Do not execute07-14-02/03 or write a completedSUMMARY before their gates pass. Stock execution stays disabled; owner UI acceptance remains pending.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.

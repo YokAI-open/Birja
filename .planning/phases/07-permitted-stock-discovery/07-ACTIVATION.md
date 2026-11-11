@@ -4,6 +4,7 @@ plan: "14"
 checkpoint: 07-14-01
 status: awaiting-blocking-human-product-evidence
 prepared: 2026-11-10
+preparation_updated: 2026-11-11
 tasks_completed: 0
 live_activation: disabled
 private_requests_made: 0
@@ -13,9 +14,12 @@ owner_ui_acceptance: pending
 # Stock discovery activation review and continuation handoff
 
 Plans 01–13 are locally complete. This is the prepared first checkpoint of
-Plan 14, not completed external acceptance. No account, credentials, subscription
-or applicable Birja usage grant has been verified. No private API request was
-made. No admission was imported, data collection enabled or production changed.
+Plan 14, not completed external acceptance. On 2026-11-11 the owner reported
+creating an Alpaca Paper Trading account, saving its keys privately, and receiving
+provider approval. The actual approval reference/date, applicable scope and
+storage conditions have not yet been reviewed; this preparation does not read
+or validate the keys. No private API request was made. No admission was imported,
+data collection enabled or production changed.
 The owner-approved calendar dependency installation is a separate, completed
 package gate; it does not establish market-data rights.
 
@@ -194,10 +198,71 @@ Authorization to test software or install calendar packages is insufficient.
    only; no account/billing/service/timer changes, production/B2 access,
    provider contact, signup, agreements, payment, deployment or publication.
 
-Proposed reference timeout/size/host wrapper and hard aggregate request counter
-must be checked by the continuation executor before use; they are not claimed
-implemented by writing this packet. The existing quote adapter is reusable with
-the tighter single-attempt bounds. No dependency addition is needed.
+### Concrete offline measurement harness — prepared 2026-11-11
+
+The proposed wrapper and hard aggregate counter now exist locally, outside the
+repository, under `/tmp/birja-phase07-measurement/`. They are preparation only,
+not deployed tooling or completed live evidence. No dependency was added.
+
+| File | SHA256 frozen for independent focused review |
+| --- | --- |
+| `/tmp/birja-phase07-measurement/measurement.py` | `2b98932e30415a3d63619d7d248d7aaa017ae48630c7bbe96caf6f137f5aac19` |
+| `/tmp/birja-phase07-measurement/test_measurement.py` | `c7a4c310e1f8b86d81f7f649e3c6fac0d5ffc85449d53b9f4c9449d38555be3d` |
+
+The harness has no live CLI or credential discovery. A later authorized caller
+must explicitly supply current reviewed `Evidence`, separate exact-call approval,
+storage scope, USD-product evidence, common-stock catalogue evidence and the two
+memory-only credential headers. No synthetic approved admission is supplied for
+live use. Immutable evidence snapshots are checked before/after every request;
+changed generation/scope, expired permission/calendar review, closed/unknown
+session or fifteen-minute deadline stops the run. Actual existing admission and
+calendar evaluators enforce both exchange sessions. Session rows remain derived
+in memory; there are no database writes.
+
+Only `https://paper-api.alpaca.markets/v2/assets/{one-approved-symbol}` and the
+explicit IEX twenty-symbol latest-quote URL are reachable. The transport counts
+every outbound attempt, refuses duplicate/reference overflow and the 31st call,
+requires completed twenty-reference collection before quote requests, bounds
+quotes at ten batches at least sixty seconds apart, and enforces the stricter
+reviewed quota. There is one in-flight request, no retries/redirects/fallbacks,
+five-second whole-response wall bound, and at most 262144 decoded response bytes
+(less when evidence says so). Any HTTP/transport/size/rights/session failure
+irreversibly halts the harness. The existing reviewed quote adapter is reused
+with `attempts=1`, `budget_seconds=5` and its actual Decimal/source validation.
+
+Asset metadata must match exact symbol/listing, active `us_equity`, usable UUID
+and tradable status; conflicting explicit currency refuses. Common-stock and USD
+denomination require separate corroborated catalogue/product evidence. If the
+Asset response omits currency or security subtype, the receipt must never claim
+those fields were response-verified. No raw quote payload or bid/ask values are
+retained in the receipt: only public symbol/ID/listing and aggregate source-age,
+eligible/missing counts. Halt/action status stays unverified/disabled. API error
+and exception details are replaced with fixed local reasons.
+
+Actual offline verification: **39 synthetic HTTP tests pass**, including the
+full thirty-attempt path, the blocked 31st attempt, allowlisted origin/path/feed,
+sixty-second cadence, admission expiry/change, session closure, redirect and
+401/403/429 stop, exact response limit, duplicate identity, five-second header
+and streaming-body deadlines, real adapter wrong-feed rejection, and no secret
+or raw-payload output. Ruff lint and format checks pass. The existing pandas
+timezone deprecation warning remains visible; no warning suppression is used.
+No Docker/database/provider request is part of these tests.
+
+Reproduce with the already locked project environment, without reading `.env`:
+
+```bash
+PYTHONPATH=/home/YokaiExchange/backend:/tmp/birja-phase07-measurement \
+  backend/.venv/bin/python -m pytest \
+  /tmp/birja-phase07-measurement/test_measurement.py -q
+```
+
+Independent focused review of this frozen harness remains pending. Recheck its
+hash before any later approved use. `/tmp` artifacts are disposable and must be
+reprepared/reviewed if absent or changed; their presence grants no provider
+permission or authority to perform calls. Actual reviewed official calendar
+evidence must be refreshed for the measurement session. On 2026-11-11 the regular
+session is scheduled 17:30–00:00 Moscow time (closing 2026-11-12); this does not
+schedule a run, authorize waiting for it or establish emergency-closure status.
 
 ## Current checkpoint and exact resume path
 
@@ -206,12 +271,13 @@ or HUMAN-UAT acceptance is created. All six whole-phase requirement checkboxes
 remain pending. Source and local safety proof are ready; actual permissions,
 20 verified provider mappings, source freshness and owner UI acceptance are not.
 
-The simplest next owner step is to say whether an existing Alpaca account and
-applicable permission for Birja's multi-user display and retained database/backup
-copies already exist, or whether setup/permission guidance is needed. Supply
-only sanitized references or public terms URLs, never keys or full private terms.
-A generic “approved” cannot create missing provider rights. Do not ask for
-measurement authorization until the prerequisites can actually be satisfied.
+Account setup and provider approval are now owner-reported. The remaining owner
+input is the sanitized actual approval wording/reference/date and relevant
+collection/display/derived/storage, audience/location, attribution, quota,
+validity and revocation conditions. Root coordinates that pending evidence
+request. Supply no keys or full private account records. Exact thirty-attempt
+measurement approval remains separate and is requested only after the
+prerequisites and focused harness review can actually be satisfied.
 
 Continuation executor: verify this packet's preparation commit, collect/review
 the scoped product evidence, keep unresolved products denied, then request the
