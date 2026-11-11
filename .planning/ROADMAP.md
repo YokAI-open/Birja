@@ -165,7 +165,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 08-07-PLAN.md — Monitor complete catch-up independently in the existing scheduler. (Wave 5)
+- [x] 08-07-PLAN.md — Monitor complete catch-up independently in the existing scheduler. (Wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 6/13 | In Progress|  |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 7/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
