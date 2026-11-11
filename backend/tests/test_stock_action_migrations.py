@@ -386,6 +386,34 @@ async def test_upgrade_grants_support_quantity_but_deny_cash_and_authority(
     runtime_roles: None,
 ) -> None:
     async with engine.connect() as conn:
+        for column in ("id", "coin_id", "user_id", "side", "quantity", "cash_delta"):
+            assert (
+                await conn.execute(
+                    text("SELECT has_column_privilege('birja_scheduler','trades',:c,'SELECT')"),
+                    {"c": column},
+                )
+            ).scalar_one()
+        assert not (
+            await conn.execute(
+                text("SELECT has_table_privilege('birja_scheduler','trades','SELECT')")
+            )
+        ).scalar_one()
+        await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
+        await conn.execute(
+            text("SELECT id,coin_id,user_id,side,quantity,cash_delta FROM trades LIMIT 0")
+        )
+        for statement in (
+            "SELECT * FROM trades",
+            "SELECT cash_after FROM trades",
+            "UPDATE trades SET quantity=quantity",
+            "DELETE FROM trades",
+            "INSERT INTO trades DEFAULT VALUES",
+        ):
+            with pytest.raises(DBAPIError) as error:
+                async with conn.begin_nested():
+                    await conn.execute(text(statement))
+            assert error.value.orig.sqlstate == "42501"
+        await conn.execute(text("RESET ROLE"))
         assert (
             await conn.execute(
                 text(
@@ -715,7 +743,7 @@ async def test_split_application_cannot_claim_another_event_coin(ledger) -> None
     assert error.value.orig.sqlstate == "23503"
 
 
-async def test_valid_causes_work_under_runtime_grants_without_trade_read(
+async def test_valid_causes_work_under_runtime_grants_with_narrow_trade_read(
     engine: AsyncEngine,
     runtime_roles: None,
 ) -> None:
@@ -739,7 +767,8 @@ async def test_valid_causes_work_under_runtime_grants_without_trade_read(
             await movement(conn, cid, uid, kind="fill", trade=tid)
             await conn.execute(text("RESET ROLE"))
             await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
-            await denied(conn, "SELECT id FROM trades LIMIT 1")
+            await conn.execute(text("SELECT id FROM trades LIMIT 1"))
+            await denied(conn, "SELECT cash_after FROM trades LIMIT 1")
             await movement(
                 conn,
                 cid,

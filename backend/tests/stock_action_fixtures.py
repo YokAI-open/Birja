@@ -5,10 +5,17 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.models.corporate_action import StockActionState, StockOwnershipMovement
+from app.models.corporate_action import (
+    StockActionEvent,
+    StockActionRevision,
+    StockActionSource,
+    StockActionState,
+    StockOwnershipMovement,
+    StockSplitApplication,
+)
 from app.models.stock import StockInstrument
 from app.models.trade import Holding, Trade
 
@@ -44,6 +51,22 @@ async def ownership(engine, migrated, new_user):
             await db.execute(
                 delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id == coin_id)
             )
+            await db.execute(
+                delete(StockSplitApplication).where(StockSplitApplication.coin_id == coin_id)
+            )
+            events = select(StockActionEvent.id).where(StockActionEvent.coin_id == coin_id)
+            await db.execute(
+                update(StockActionEvent)
+                .where(StockActionEvent.coin_id == coin_id)
+                .values(current_revision_id=None)
+            )
+            await db.execute(
+                delete(StockActionRevision).where(StockActionRevision.event_id.in_(events))
+            )
+            await db.execute(
+                delete(StockActionSource).where(StockActionSource.event_id.in_(events))
+            )
+            await db.execute(delete(StockActionEvent).where(StockActionEvent.coin_id == coin_id))
             await db.execute(delete(Holding).where(Holding.coin_id == coin_id))
             await db.execute(delete(Trade).where(Trade.coin_id == coin_id))
             await db.execute(delete(StockActionState).where(StockActionState.coin_id == coin_id))
@@ -95,3 +118,52 @@ async def synthetic_opening(
     db.add(Holding(coin_id=coin_id, user_id=user_id, quantity=quantity, cost_basis=basis))
     await db.flush()
     return row
+
+
+async def synthetic_split(db, coin_id, cutoff, *, boundary=1, prior_epoch=0):
+    """Explicit matched event/revision/application; never false-causal shortcuts."""
+    event = StockActionEvent(coin_id=coin_id, economic_key=str(uuid4()), first_observed_at=cutoff)
+    db.add(event)
+    await db.flush()
+    source = StockActionSource(
+        event_id=event.id, provider="synthetic", product="actions", provider_event_id=str(uuid4())
+    )
+    db.add(source)
+    await db.flush()
+    revision = StockActionRevision(
+        event_id=event.id,
+        source_id=source.id,
+        ordinal=1,
+        fingerprint="a" * 64,
+        mutation_kind="snapshot",
+        observed_at=cutoff,
+        admission_generation=1,
+        normalized_terms={"synthetic": True},
+        classification="supported_forward_split",
+        reason="verified synthetic fixture",
+        verified_cutoff=cutoff,
+        units="pre_split",
+    )
+    db.add(revision)
+    await db.flush()
+    event.current_revision_id = revision.id
+    now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+    application = StockSplitApplication(
+        coin_id=coin_id,
+        economic_event_id=event.id,
+        revision_id=revision.id,
+        new_rate="2",
+        old_rate="1",
+        cutoff=cutoff,
+        prior_unit_epoch=prior_epoch,
+        new_unit_epoch=prior_epoch + 1,
+        sequence_boundary=boundary,
+        before_digest="b" * 64,
+        after_digest="c" * 64,
+        processed_at=now,
+    )
+    db.add(application)
+    state = await db.get(StockActionState, coin_id)
+    state.unit_epoch = prior_epoch + 1
+    await db.flush()
+    return application

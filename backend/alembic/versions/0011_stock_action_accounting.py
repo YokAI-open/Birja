@@ -920,6 +920,7 @@ def upgrade() -> None:
           stock_dividend_entitlements_id_seq TO birja_scheduler;
         REVOKE ALL ON holdings FROM birja_scheduler;
         GRANT SELECT,UPDATE(quantity) ON holdings TO birja_scheduler;
+        GRANT SELECT(id,coin_id,user_id,side,quantity,cash_delta) ON trades TO birja_scheduler;
       END IF;
     END $action_grants$;""")
 
@@ -1018,6 +1019,7 @@ def downgrade() -> None:
     BEGIN
       IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
         REVOKE SELECT,UPDATE(quantity) ON holdings FROM birja_scheduler;
+        REVOKE SELECT(id,coin_id,user_id,side,quantity,cash_delta) ON trades FROM birja_scheduler;
       END IF;
     END $revoke$;""")
     # ### end Alembic commands ###

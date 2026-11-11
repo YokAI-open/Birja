@@ -10,7 +10,8 @@ execution. Trade.created_at is ingestion time, never economic ownership time.
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import cast
+from fractions import Fraction
+from typing import Literal, cast
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,10 +25,51 @@ from app.models.stock import StockInstrument
 from app.models.trade import Holding, Trade
 from app.models.user import Account
 from app.services.corporate_action_rules import CutoffEvidence, _decimal
+from app.services.stock_quote_rules import utc
+from app.services.trade_math import cost_basis_after
+
+OwnershipReason = Literal[
+    "ambiguous_units",
+    "causal_conflict",
+    "fill_mismatch",
+    "history_gap",
+    "holding_mismatch",
+    "invalid_cutoff",
+    "invalid_instrument",
+    "invalid_movement",
+    "invalid_result",
+    "missing_account",
+    "missing_baseline",
+    "monitor_unavailable",
+    "non_atomic_fill",
+    "non_atomic_split",
+    "one_instrument_per_transaction",
+    "read_committed_required",
+    "split_mismatch",
+    "unit_gap",
+    "transaction_epoch_unverified",
+]
 
 
 class OwnershipHeld(ValueError):
     """History or current authority cannot establish a safe automatic effect."""
+
+    def __init__(self, reason: OwnershipReason):
+        self.reason = reason
+        super().__init__(reason)
+
+
+def require_supported_transaction_epoch(full_xid: int) -> None:
+    """Fail closed before interpreting 32-bit tuple xmin after the first wrap.
+
+    Explicit operational limitation: after full cluster XID 2**32 no NEW stock
+    fill/split may be journaled automatically until a separately verified own-row
+    proof replaces this guard. Replay/reconstruction still work. Subtransaction
+    locks disappear at savepoint release; guessing epochs could mistake a frozen
+    old tuple for a current cause. Pre-wrap status supports valid savepoints.
+    """
+    if type(full_xid) is not int or not 3 <= full_xid < 4294967296:
+        raise OwnershipHeld("transaction_epoch_unverified")
 
 
 @dataclass(frozen=True)
@@ -172,7 +214,49 @@ async def append_stock_movement(
         .all()
     )
     await _clock(db)
-    state, rows = await assert_ownership_consistent(db, movement.coin_id)
+    if movement.trade_id is not None:
+        # Under READ COMMITTED an in-progress row version visible here belongs
+        # to this transaction (including savepoints). Committed orphan fills
+        # cannot be adopted with an invented later economic timestamp.
+        full_xid = int(
+            (await db.execute(text("SELECT CAST(pg_current_xact_id() AS text)"))).scalar_one()
+        )
+        require_supported_transaction_epoch(full_xid)
+        same_transaction = (
+            await db.execute(
+                text(
+                    "SELECT pg_xact_status(CAST(CAST(xmin AS text) AS xid8)) = 'in progress' "
+                    "FROM trades WHERE id=:trade"
+                ),
+                {"trade": movement.trade_id},
+            )
+        ).scalar_one_or_none()
+        await _clock(db)
+        if same_transaction is not True:
+            raise OwnershipHeld("non_atomic_fill")
+    else:
+        full_xid = int(
+            (await db.execute(text("SELECT CAST(pg_current_xact_id() AS text)"))).scalar_one()
+        )
+        require_supported_transaction_epoch(full_xid)
+        same_transaction = (
+            await db.execute(
+                text(
+                    "SELECT pg_xact_status(CAST(CAST(xmin AS text) AS xid8)) = 'in progress' "
+                    "FROM stock_split_applications WHERE id=:application"
+                ),
+                {"application": movement.application_id},
+            )
+        ).scalar_one_or_none()
+        await _clock(db)
+        if same_transaction is False:
+            raise OwnershipHeld("non_atomic_split")
+    state, rows = await assert_ownership_consistent(
+        db,
+        movement.coin_id,
+        pending_application_id=movement.application_id,
+        pending_trade_id=movement.trade_id,
+    )
     now = await _clock(db)
     holding = next((row for row in holdings if row.user_id == movement.user_id), None)
     before = Decimal(0) if holding is None else holding.quantity
@@ -197,6 +281,14 @@ async def append_stock_movement(
             trade is None
             or trade.quantity != abs(movement.quantity)
             or (trade.side == "buy") != (movement.quantity > 0)
+        ):
+            raise OwnershipHeld("fill_mismatch")
+        if movement.after_basis != cost_basis_after(
+            side=cast(Literal["buy", "sell"], trade.side),
+            cost_basis=basis,
+            held_before=before,
+            quantity=trade.quantity,
+            cash_delta=trade.cash_delta,
         ):
             raise OwnershipHeld("fill_mismatch")
         if (
@@ -225,8 +317,6 @@ async def append_stock_movement(
             or movement.after_basis != basis
         ):
             raise OwnershipHeld("split_mismatch")
-        from fractions import Fraction
-
         if Fraction(after) != Fraction(before) * Fraction(Decimal(application.new_rate)) / Fraction(
             Decimal(application.old_rate)
         ):
@@ -269,7 +359,11 @@ async def append_stock_movement(
 
 
 async def assert_ownership_consistent(
-    db: AsyncSession, coin_id: int
+    db: AsyncSession,
+    coin_id: int,
+    *,
+    pending_application_id: int | None = None,
+    pending_trade_id: int | None = None,
 ) -> tuple[StockActionState, list[StockOwnershipMovement]]:
     """Validate COMPLETE instrument history, including departed/zero owners.
 
@@ -300,6 +394,33 @@ async def assert_ownership_consistent(
         .all()
     )
     await _clock(db)
+    trades = (
+        await db.execute(
+            select(
+                Trade.id, Trade.coin_id, Trade.user_id, Trade.side, Trade.quantity, Trade.cash_delta
+            ).where(Trade.coin_id == coin_id)
+        )
+    ).all()
+    await _clock(db)
+    by_trade = {row.trade_id: row for row in rows if row.trade_id is not None}
+    for trade in trades:
+        if trade.id == pending_trade_id:
+            continue
+        row = by_trade.get(trade.id)
+        if (
+            row is None
+            or row.user_id != trade.user_id
+            or row.quantity != (trade.quantity if trade.side == "buy" else -trade.quantity)
+            or row.after_basis
+            != cost_basis_after(
+                side=cast(Literal["buy", "sell"], trade.side),
+                cost_basis=row.before_basis,
+                held_before=row.before_quantity,
+                quantity=trade.quantity,
+                cash_delta=trade.cash_delta,
+            )
+        ):
+            raise OwnershipHeld("fill_mismatch")
     totals: dict[int, tuple[Decimal, Decimal]] = {}
     previous = state.journal_start_at
     for index, row in enumerate(rows, 1):
@@ -307,6 +428,7 @@ async def assert_ownership_consistent(
             row.sequence != index
             or row.economic_at < previous
             or row.recorded_at < row.economic_at
+            or (row.cause_kind == "fill" and row.recorded_at != row.economic_at)
             or (row.before_quantity, row.before_basis)
             != totals.get(row.user_id, (Decimal(0), Decimal(0)))
         ):
@@ -315,6 +437,19 @@ async def assert_ownership_consistent(
         totals[row.user_id] = (row.after_quantity, row.after_basis)
     if state.sequence > len(rows):
         raise OwnershipHeld("history_gap")
+    applications = list(
+        (
+            await db.execute(
+                select(StockSplitApplication)
+                .where(StockSplitApplication.coin_id == coin_id)
+                .order_by(StockSplitApplication.new_unit_epoch)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    await _clock(db)
+    _check_units(rows, applications, state.unit_epoch, pending_application_id)
     holdings = (await db.execute(select(Holding).where(Holding.coin_id == coin_id))).scalars().all()
     await _clock(db)
     actual = {row.user_id: (row.quantity, row.cost_basis) for row in holdings}
@@ -323,6 +458,67 @@ async def assert_ownership_consistent(
     ) or any(total != totals.get(uid, (Decimal(0), Decimal(0))) for uid, total in actual.items()):
         raise OwnershipHeld("holding_mismatch")
     return state, rows
+
+
+def _check_units(
+    rows: list[StockOwnershipMovement],
+    applications: list[StockSplitApplication],
+    current_epoch: int,
+    pending: int | None,
+) -> None:
+    """sequence_boundary is the tail BEFORE the first per-owner split delta.
+
+    All positive owners need exact deltas at the verified cutoff. Only append's
+    in-progress application may lack remaining owners; reconstruction never can.
+    """
+    if current_epoch != len(applications):
+        raise OwnershipHeld("unit_gap")
+    last_boundary = 0
+    last_cutoff: datetime | None = None
+    for epoch, app in enumerate(applications, 1):
+        if (
+            app.new_unit_epoch != epoch
+            or app.prior_unit_epoch != epoch - 1
+            or app.sequence_boundary < last_boundary
+            or app.sequence_boundary > len(rows)
+            or last_cutoff is not None
+            and app.cutoff <= last_cutoff
+        ):
+            raise OwnershipHeld("unit_gap")
+        owners: dict[int, Decimal] = {}
+        for row in rows:
+            if row.sequence <= app.sequence_boundary:
+                if row.economic_at >= app.cutoff:
+                    raise OwnershipHeld("unit_gap")
+                owners[row.user_id] = row.after_quantity
+        actual = {row.user_id: row for row in rows if row.application_id == app.id}
+        expected = {uid: qty for uid, qty in owners.items() if qty > 0}
+        if (
+            app.id != pending and actual.keys() != expected.keys()
+        ) or not actual.keys() <= expected.keys():
+            raise OwnershipHeld("unit_gap")
+        for uid, row in actual.items():
+            if (
+                row.sequence <= app.sequence_boundary
+                or row.economic_at != app.cutoff
+                or row.unit_epoch != epoch
+                or row.before_quantity != expected[uid]
+                or Fraction(row.after_quantity)
+                != Fraction(expected[uid])
+                * Fraction(Decimal(app.new_rate))
+                / Fraction(Decimal(app.old_rate))
+            ):
+                raise OwnershipHeld("unit_gap")
+        last_boundary, last_cutoff = app.sequence_boundary, app.cutoff
+    for row in rows:
+        # Composite application/coin/unit FK already proves split membership.
+        if row.cause_kind != "split":
+            epoch = sum(row.sequence > app.sequence_boundary for app in applications)
+            if row.unit_epoch != epoch or any(
+                row.sequence > app.sequence_boundary and row.economic_at < app.cutoff
+                for app in applications
+            ):
+                raise OwnershipHeld("unit_gap")
 
 
 @dataclass(frozen=True)
@@ -336,4 +532,62 @@ class StockQuantitySnapshot:
 async def reconstruct_stock_quantity(
     db: AsyncSession, user_id: int, coin_id: int, cutoff: CutoffEvidence, units: int
 ) -> StockQuantitySnapshot:
-    raise OwnershipHeld("unverified")
+    """Exclusive cutoff with explicit integer unit_epoch denomination selection.
+
+    At an exact split cutoff prior/new epoch selects pre/post economics. Away
+    from a boundary only its effective epoch is valid. Calendar provenance is
+    retained; current holdings and ingestion IDs never substitute for history.
+    """
+    if (
+        not isinstance(cutoff, CutoffEvidence)
+        or not utc(cutoff.cutoff)
+        or cutoff.exclusive is not True
+        or cutoff.rule != "exclusive-regular-session-open"
+        or cutoff.exchange not in ("NASDAQ", "NYSE")
+        or cutoff.ex_date != cutoff.cutoff.date()
+        or type(cutoff.calendar_generation) is not int
+        or cutoff.calendar_generation < 1
+        or not cutoff.calendar_version
+        or type(units) is not int
+        or units < 0
+        or type(user_id) is not int
+        or user_id <= 0
+    ):
+        raise OwnershipHeld("invalid_cutoff")
+    state, rows = await assert_ownership_consistent(db, coin_id)
+    now = await _clock(db)
+    if cutoff.cutoff > now or state.complete_from is None or cutoff.cutoff < state.complete_from:
+        raise OwnershipHeld("missing_baseline")
+    applications = list(
+        (
+            await db.execute(
+                select(StockSplitApplication)
+                .where(StockSplitApplication.coin_id == coin_id)
+                .order_by(StockSplitApplication.new_unit_epoch)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    await _clock(db)
+    natural = sum(app.cutoff < cutoff.cutoff for app in applications)
+    boundary = [app for app in applications if app.cutoff == cutoff.cutoff]
+    allowed = {natural}
+    if boundary:
+        allowed.add(boundary[0].new_unit_epoch)
+    if units not in allowed:
+        raise OwnershipHeld("ambiguous_units")
+    selected = [
+        row
+        for row in rows
+        if row.economic_at < cutoff.cutoff
+        or (
+            row.economic_at == cutoff.cutoff
+            and row.cause_kind == "split"
+            and row.unit_epoch <= units
+        )
+    ]
+    quantity = sum((row.quantity for row in selected if row.user_id == user_id), Decimal(0))
+    return StockQuantitySnapshot(
+        quantity, units, max((row.sequence for row in selected), default=0), cutoff
+    )

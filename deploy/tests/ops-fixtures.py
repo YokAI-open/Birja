@@ -1292,6 +1292,13 @@ def action_role_contract(dc):
             role_sql(dc, query, role, denied=True)
     role_sql(dc, 'UPDATE holdings SET quantity=quantity', 'birja_scheduler')
     role_sql(dc, 'UPDATE holdings SET cost_basis=cost_basis', 'birja_scheduler', denied=True)
+    for column in ('id','coin_id','user_id','side','quantity','cash_delta','cash_after','idempotency_key','created_at'):
+        actual = role_sql(dc, f"SELECT has_column_privilege('birja_scheduler','trades','{column}','SELECT')")
+        assert actual == (b't' if column in ('id','coin_id','user_id','side','quantity','cash_delta') else b'f')
+        rows.append(('birja_scheduler','trades',column,actual.decode()))
+    role_sql(dc, 'SELECT id,coin_id,user_id,side,quantity,cash_delta FROM trades LIMIT 0','birja_scheduler')
+    for query in ('SELECT * FROM trades','SELECT cash_after FROM trades','UPDATE trades SET quantity=quantity','DELETE FROM trades','INSERT INTO trades DEFAULT VALUES'):
+        role_sql(dc,query,'birja_scheduler',denied=True)
     assert role_sql(dc, "SELECT NOT (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_action_operator'") == b't'
     return rows
 
@@ -1766,6 +1773,60 @@ async def main():
   for conn in connections: await conn.close()
 asyncio.run(main())
 print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true')
+"""
+
+
+OWNERSHIP_TLS_CONSUMER = r"""
+import asyncio,uuid
+from datetime import timedelta
+from decimal import Decimal
+from sqlalchemy import select,func,delete,text
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from app.core.config import SchedulerSettings
+from app.db.connection import database_connect_args
+from app.models.stock import StockInstrument
+from app.models.user import User
+from app.models.trade import Trade,Holding
+from app.models.corporate_action import StockActionState,StockOwnershipMovement
+from app.services.stock_ownership import append_stock_movement,assert_ownership_consistent,reconstruct_stock_quantity,StockMovementInput
+from app.services.corporate_action_rules import CutoffEvidence
+async def main():
+ args=database_connect_args(SchedulerSettings())
+ engines={role:create_async_engine('postgresql+asyncpg://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',connect_args=args) for role,char in [('app','a'),('scheduler','b'),('migrator','c')]}
+ sessions={role:async_sessionmaker(engine,expire_on_commit=False) for role,engine in engines.items()}
+ cid=None
+ try:
+  async with sessions['app']() as db:
+   assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+   cid=(await db.execute(select(func.min(StockInstrument.coin_id)))).scalar_one()
+   uid=(await db.execute(select(func.min(User.id)))).scalar_one()
+  async with sessions['scheduler'].begin() as db:
+   now=(await db.execute(select(func.clock_timestamp()))).scalar_one()
+   db.add(StockActionState(coin_id=cid,admission_generation=1,health='current',checked_at=now-timedelta(seconds=1),valid_until=now+timedelta(hours=1),journal_start_at=now-timedelta(days=1),complete_from=now-timedelta(days=1)))
+  async with sessions['app'].begin() as db:
+   now=(await db.execute(select(func.clock_timestamp()))).scalar_one()
+   trade=Trade(user_id=uid,coin_id=cid,side='buy',input_kind='quantity',input_value=Decimal(2),quantity=Decimal(2),mid_price=Decimal(10),price_as_of=now,exec_price=Decimal(10),fee=Decimal(0),cash_delta=Decimal(-20),cash_after=Decimal(10000),idempotency_key=uuid.uuid4())
+   db.add(trade);await db.flush()
+   request=StockMovementInput(uid,cid,Decimal(2),Decimal(20),'tls-fill:'+str(trade.id),trade.id)
+   first=await append_stock_movement(db,request)
+   assert first.sequence==1 and (await append_stock_movement(db,request)).id==first.id
+   now=(await db.execute(select(func.clock_timestamp()))).scalar_one()
+   cutoff=CutoffEvidence(now,'NASDAQ',now.date(),1,'synthetic-reviewed-tls-calendar')
+   assert (await reconstruct_stock_quantity(db,uid,cid,cutoff,0)).quantity==2
+  async with sessions['scheduler'].begin() as db:
+   assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+   state,rows=await assert_ownership_consistent(db,cid)
+   assert state.unit_epoch==0 and len(rows)==1 and rows[0].after_quantity==2
+ finally:
+  if cid is not None:
+   async with sessions['migrator'].begin() as db:
+    await db.execute(delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id==cid))
+    await db.execute(delete(Holding).where(Holding.coin_id==cid))
+    await db.execute(delete(Trade).where(Trade.coin_id==cid))
+    await db.execute(delete(StockActionState).where(StockActionState.coin_id==cid))
+  for engine in engines.values():await engine.dispose()
+asyncio.run(main())
+print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true')
 """
 
 
@@ -2252,6 +2313,9 @@ def tls(fresh_bootstrap=False):
             action_consumer = client('migrate', ACTION_TLS_CONSUMER)
             assert b'accounting_tls_actual_append=true immutable_denials=true quantity_only=true' in action_consumer.stdout
             print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0011' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)
+            ownership_consumer=client('migrate',OWNERSHIP_TLS_CONSUMER)
+            assert b'ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true' in ownership_consumer.stdout
+            print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true lane='+('fresh0011' if fresh_bootstrap else 'populated0010_no_grant_repair'),flush=True)
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
             print('calendar_runtime_tls_consumer=true lane=' + ('fresh_bootstrap' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)
