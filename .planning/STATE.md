@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave2 complete; 1238 backend tests/24critical modules pass; next08-05 ownership journal.
-last_updated: "2026-11-11T11:52:15.476Z"
+stopped_at: Completed08-05 ownership and final TLS consumer proof; parent Wave3 integration next.
+last_updated: "2026-11-11T12:27:11.045Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 17
-  percent: 0
+  completed_plans: 18
+  percent: 67
 ---
 
 # Project State
@@ -26,17 +26,31 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 4 of 13 executed (29 tasks, 11 waves)
-Status: Wave2 complete; Plans01–04 reviewed and integrated; next08-05
+Plan: 5 of 13 executed (29 tasks, 11 waves)
+Status: Plan08-05 complete; independent re-review clean; parent Wave3 integration next
 Last activity: 2026-11-11
-Progress: Phase8 execution4/13 plans complete;17/27 milestone plans
+Progress: [███████░░░] 67%
 
 ## Completion and next action
+
+Plan08-05 completes historical ownership:207targeted backend tests pass19.41s,
+ownership203statements/94branches100%, scoped static checks pass. Real duplicate
+causal/gap/expiry lock races and cancellation/timeout cleanup pass. Actual app
+append/replay/reconstruction and scheduler consistency pass with six-column-only
+immutable trade reads; state/cash/basis/trade mutation remain denied. Updated
+role/fresh parity155.530s, populated/fresh verified-TLS102.727/99.435s pass; final
+review-corrected frozen-source TLS consumer100.850s passes. Independent re-review
+has0active findings. Exact-boundary old-unit fills hold; new atomic causes
+explicitly hold once full transaction ID reaches2**32, before xmin interpretation.
+This operational limitation is enforced, not claimed wrap support. Producer/
+schema/row contracts stay unchanged; prior retained recovery proof is preserved.
+See08-05-SUMMARY.md. Parent Wave3 full integration is next; Plan06 follows its
+passing gate. No full-suite or whole-phase completion is claimed here.
 
 Wave2 review/integration passed:1238backend tests/99.76%overall,24critical modules
 100%(1892statements/594branches); adapter review0active findings. Exact0011
 recovery/TLS proof passed before journal consumers. See08-LOCAL-PROOF.md.
-Next08-05 implements instrument-serialized historical ownership.
+Plan08-05 implementation is complete as recorded above; parent integration remains next.
 
 Wave 1 gate passed:1115backend tests/99.71%overall, expanded23critical modules100%
 (1388statements/374branches). Initial22integrationfailures were fixed and
@@ -288,6 +302,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 08 P01 | 18 min | 2 tasks | 9 files |
 | Phase 08 P03 | 10 min | 2 tasks | 5 files |
 | Phase 8 P02 | 27 min | 2 tasks | 6 files |
+| Phase 8 P05 | 32 min | 2 tasks | 7 files |
 
 ## Operations
 
@@ -297,7 +312,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T11:52:15.460Z
+Last session:2026-11-11T12:27:11.030Z
 Stopped at: Completed08-02 exact retained recovery/TLS; parent integration next.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
