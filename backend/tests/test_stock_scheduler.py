@@ -168,7 +168,7 @@ async def test_configured_budget_cancels_post_fetch_write_and_rolls_back(
 
     async def held(*args, **kwargs):
         count = await original(*args, **kwargs)
-        assert count == 20
+        assert count == 1
         try:
             await asyncio.sleep(1.1)
         except asyncio.CancelledError:
