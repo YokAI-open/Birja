@@ -11,7 +11,7 @@ class Safety(unittest.TestCase):
   spec=importlib.util.spec_from_file_location('restore',ROOT/'deploy/verify-restore.py'); r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
   expected={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in r.CONTRACT_PAYLOAD}
   r.verify_contract_inventory({},expected)
-  record={'revisions':['0007','0008','0009','0010','0011','0012'],'payload_sha256':dict(expected)}
+  record={'revisions':['0007','0008','0009','0010','0011','0012','0013'],'payload_sha256':dict(expected)}
   r.verify_contract_inventory({'schema_contract':record},expected)
   record['payload_sha256']['deploy/backup-manifest.sql']='0'*64
   with self.assertRaises(ValueError): r.verify_contract_inventory({'schema_contract':record},expected)

@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013")
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -109,6 +109,77 @@ ACTION_COLUMNS = {
     "stock_split_applications": "id coin_id economic_event_id revision_id new_rate old_rate cutoff prior_unit_epoch new_unit_epoch sequence_boundary before_digest after_digest processed_at",
     "stock_ownership_movements": "id coin_id user_id sequence economic_at recorded_at quantity before_quantity after_quantity before_basis after_basis unit_epoch cause_kind trade_id application_id causal_key",
 }
+EXECUTION_COLUMNS = {
+    "stock_fill_facts": "trade_id coin_id user_id provider_asset_id symbol company_name listing_exchange source feed bid ask exact_mid held_after event_at collected_at observed_at session_date opens_at closes_at authority schema_version",
+    "stock_status_evidence": "coin_id provider_asset_id state event_at observed_at session_date admission_generation continuity_generation sequence valid_until bootstrap_verified continuity_current source source_ref",
+}
+# Measured independently from reviewed0013 on the guarded PostgreSQL18 fixture.
+EXECUTION_SCHEMA_SHA256 = "b90ddfa6cb8c33670f5341b8bc45ec4b71d5c7bc63172d041a4c2b12575e8196"
+EXECUTION_FUNCTIONS = {
+    "assert_stock_execution_current": "b3fed4dfaec09d8f6174a471796795ea5a1d324037d8412efb5954f2567f5a24",
+    "check_stock_fill_integrity": "dbfbbcc20567be709b34a88f1b900ac0151c27c175444914d80344c8b1322647",
+}
+
+
+def execution_authority_sql():
+    return """json_build_object(
+      'owners',(SELECT json_agg(json_build_array(relname,pg_get_userbyid(relowner)) ORDER BY relname)
+        FROM pg_class WHERE relnamespace='public'::regnamespace
+        AND relname IN ('stock_fill_facts','stock_status_evidence')),
+      'functions',(SELECT json_agg(json_build_array(p.proname,pg_get_functiondef(p.oid),
+        pg_get_userbyid(p.proowner),p.prosecdef,p.proconfig,
+        (SELECT coalesce(json_agg(json_build_array(CASE WHEN a.grantee=0 THEN 'PUBLIC'
+          ELSE pg_get_userbyid(a.grantee) END,a.privilege_type,a.is_grantable)
+          ORDER BY a.grantee,a.privilege_type),'[]'::json)
+          FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner)) ORDER BY p.proname)
+        FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
+        AND p.proname IN ('assert_stock_execution_current','check_stock_fill_integrity')),
+      'triggers',(SELECT json_agg(json_build_array(c.relname,t.tgname,
+        pg_get_triggerdef(t.oid),t.tgenabled) ORDER BY c.relname,t.tgname)
+        FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+        WHERE c.relnamespace='public'::regnamespace AND NOT t.tgisinternal),
+      'runtime_acl',(SELECT json_agg(json_build_array(r.rolname,c.relname,
+        has_table_privilege(r.oid,c.oid,'SELECT'),has_table_privilege(r.oid,c.oid,'INSERT'),
+        has_table_privilege(r.oid,c.oid,'UPDATE'),has_table_privilege(r.oid,c.oid,'DELETE'),
+        has_table_privilege(r.oid,c.oid,'TRUNCATE'),has_table_privilege(r.oid,c.oid,'REFERENCES'),
+        has_table_privilege(r.oid,c.oid,'TRIGGER'),has_table_privilege(r.oid,c.oid,'MAINTAIN'))
+        ORDER BY r.rolname,c.relname) FROM pg_roles r CROSS JOIN pg_class c
+        WHERE r.rolname IN ('birja_app','birja_scheduler') AND c.relnamespace='public'::regnamespace
+        AND c.relname IN ('stock_fill_facts','stock_status_evidence')),
+      'runtime_columns',(SELECT json_agg(json_build_array(r.rolname,c.relname,a.attname,
+        has_column_privilege(r.oid,c.oid,a.attnum,'SELECT'),
+        has_column_privilege(r.oid,c.oid,a.attnum,'INSERT'),
+        has_column_privilege(r.oid,c.oid,a.attnum,'UPDATE'),
+        has_column_privilege(r.oid,c.oid,a.attnum,'REFERENCES')) ORDER BY r.rolname,c.relname,a.attname)
+        FROM pg_roles r CROSS JOIN pg_class c JOIN pg_attribute a ON a.attrelid=c.oid
+        AND a.attnum>0 AND NOT a.attisdropped WHERE r.rolname IN ('birja_app','birja_scheduler')
+        AND c.relnamespace='public'::regnamespace
+        AND c.relname IN ('stock_fill_facts','stock_status_evidence')))
+    """
+
+
+def validate_execution_authority(authority):
+    require(isinstance(authority, dict) and set(authority) == {'functions','triggers','runtime_acl','runtime_columns','owners'})
+    require(authority['owners'] == [[t,'birja_migrator'] for t in sorted(EXECUTION_COLUMNS)])
+    require(len(authority['functions']) == 2)
+    for row, name in zip(authority['functions'], sorted(EXECUTION_FUNCTIONS), strict=True):
+        require(len(row) == 6 and row[0] == name)
+        require(hashlib.sha256(row[1].encode()).hexdigest() == EXECUTION_FUNCTIONS[name])
+        require(row[2:5] == ['birja_migrator',False,['search_path=pg_catalog, public']])
+        require(row[5] == ([['birja_app','EXECUTE',False]] if name == 'assert_stock_execution_current' else []))
+    require(hashlib.sha256(json.dumps(authority['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest() == EXECUTION_TRIGGERS_SHA256)
+    require(authority['runtime_acl'] == [
+        ['birja_app','stock_fill_facts',True,True,False,False,False,False,False,False],
+        ['birja_app','stock_status_evidence',True,False,False,False,False,False,False,False],
+        ['birja_scheduler','stock_fill_facts',False,False,False,False,False,False,False,False],
+        ['birja_scheduler','stock_status_evidence',True,True,True,False,False,False,False,False]])
+    rights = {(row[0],row[1]):row[2:5]+[row[7]] for row in authority['runtime_acl']}
+    require(authority['runtime_columns'] == [[role,table,column,*rights[role,table]]
+        for role in ('birja_app','birja_scheduler') for table in sorted(EXECUTION_COLUMNS)
+        for column in sorted(EXECUTION_COLUMNS[table].split())])
+
+EXECUTION_TRIGGERS_SHA256 = "0cd07680b643109ed072bb87c88215bc97b8e85b752cceb81cc5534860043545"
 # Independent migrated0011 catalogue, frozen only after Plan01 review. This
 # includes exact types/defaults, causal FKs, checks and complete index definitions.
 ACCOUNTING_SCHEMA_SHA256 = "93cbd850d4f13148515af53f6693937886d0716d52191ac04362a974c75f0a58"
@@ -167,7 +238,7 @@ def resolution_authority_sql():
       FROM pg_proc p WHERE p.oid=to_regprocedure('""" + RESOLUTION_SIGNATURE + "'))"
 
 
-def validate_resolution_authority(authority):
+def validate_resolution_authority(authority, revision='0012'):
     require(isinstance(authority, dict) and set(authority) == {
         'definition','owner','security_definer','configuration','function_count',
         'execute_acl','operator_attributes','runtime_operator_membership','operator_catalogue_columns',
@@ -177,7 +248,7 @@ def validate_resolution_authority(authority):
     require(hashlib.sha256(authority['definition'].encode()).hexdigest() == RESOLUTION_FUNCTION_SHA256)
     require(authority['owner'] == 'birja_migrator' and authority['security_definer'] is True)
     require(authority['configuration'] == ['search_path=pg_catalog, public'])
-    require(type(authority['function_count']) is int and authority['function_count'] == 1)
+    require(type(authority['function_count']) is int and authority['function_count'] == (3 if revision=='0013' else 1))
     require(authority['execute_acl'] == [['birja_action_operator','EXECUTE',False]])
     require(authority['operator_attributes'] == [False]*7)
     require(authority['runtime_operator_membership'] is False)
@@ -187,7 +258,7 @@ def validate_resolution_authority(authority):
     require(authority['operator_sequence_rights'] == [])
     readable=set(ACTION_COLUMNS)|set(STOCK_COLUMNS)
     coin_columns={'asset_class','id','is_active','sort_order','symbol'}
-    columns=contract_columns('0012')
+    columns=contract_columns(revision)
     require(authority['operator_column_acl'] == [[table,column,
         table in readable or (table=='coins' and column in coin_columns),*([False]*7)]
         for table in sorted(columns) for column in sorted(columns[table])])
@@ -196,9 +267,9 @@ def validate_resolution_authority(authority):
 
 def identity_tables(revision):
     names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
-    if revision in ("0009", "0010", "0011", "0012"):
+    if revision in ("0009", "0010", "0011", "0012", "0013"):
         names += ["stock_sessions", "stock_data_admissions"]
-    if revision in ("0011", "0012"):
+    if revision in ("0011", "0012", "0013"):
         names += [table for table, columns in ACTION_COLUMNS.items() if columns.startswith("id ")]
     return sorted(names)
 
@@ -227,12 +298,14 @@ def dump_identity_state(raw):
 def contract_columns(revision):
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
-    if revision in ("0009", "0010", "0011", "0012"):
+    if revision in ("0009", "0010", "0011", "0012", "0013"):
         columns["coins"] += " asset_class"
         columns.update(STOCK_COLUMNS)
-    if revision in ("0011", "0012"):
+    if revision in ("0011", "0012", "0013"):
         columns["stock_quotes"] += " unit_epoch"
         columns.update(ACTION_COLUMNS)
+    if revision == "0013":
+        columns.update(EXECUTION_COLUMNS)
     return {table: set(value.split()) for table, value in columns.items()}
 
 
@@ -275,12 +348,12 @@ def manifest_sql(revision):
         "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
         "  'constraints',",
     )
-    if revision in ("0011", "0012"):
+    if revision in ("0011", "0012", "0013"):
         quote = fragment("STOCK_ROWS").splitlines()[1]
         result = result.replace(quote, quote.replace("admission_generation)::text", "admission_generation,unit_epoch)::text"))
         rows = []
         timestamps = {"cutoff", "verified_cutoff", "coverage_start", "covered_until", "complete_from", "quote_not_before", "next_blocking_at"}
-        for table, columns in ACTION_COLUMNS.items():
+        for table, columns in (ACTION_COLUMNS | (EXECUTION_COLUMNS if revision=='0013' else {})).items():
             expressions = []
             for column in columns.split():
                 if column.endswith("_at") or column == "valid_until" or column in timestamps:
@@ -291,11 +364,16 @@ def manifest_sql(revision):
             rows.append(" UNION ALL SELECT '" + table + "'," + key + ",json_build_array(" + ",".join(expressions) + ")::text FROM " + table)
         result = result.replace("\n), names(name) AS (", "\n" + "\n".join(rows) + "\n), names(name) AS (")
         result = result.replace("('stock_data_admissions')\n", "('stock_data_admissions')," + ",".join("('" + t + "')" for t in ACTION_COLUMNS) + "\n")
+        if revision == '0013':
+            result = result.replace("('stock_ownership_movements')\n", "('stock_ownership_movements')," + ",".join("('" + t + "')" for t in EXECUTION_COLUMNS) + "\n")
         sequences = " UNION ALL ".join("SELECT '" + t + "',last_value,is_called FROM " + t + "_id_seq" for t in identity_tables(revision))
         result = result.replace(" 'schema',json_build_object(", " 'identity_state',(SELECT json_agg(json_build_array(name,last_value,is_called) ORDER BY name) FROM (" + sequences + ") AS s(name,last_value,is_called)),\n 'schema',json_build_object(")
-    if revision == '0012':
+    if revision in ('0012','0013'):
         result = result.replace(" 'schema',json_build_object(",
             " 'resolution_authority'," + resolution_authority_sql() + ",\n 'schema',json_build_object(")
+    if revision == '0013':
+        result = result.replace(" 'schema',json_build_object(",
+            " 'execution_authority'," + execution_authority_sql() + ",\n 'schema',json_build_object(")
     return result
 
 
@@ -323,8 +401,10 @@ def schema_guard_sql(revision):
 def validate_manifest(manifest):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
-    if manifest['revision'] == '0012':
-        validate_resolution_authority(manifest.get('resolution_authority'))
+    if manifest['revision'] in ('0012','0013'):
+        validate_resolution_authority(manifest.get('resolution_authority'),manifest['revision'])
+    if manifest['revision'] == '0013':
+        validate_execution_authority(manifest.get('execution_authority'))
     require(set(manifest["tables"]) == set(expected))
     for row in manifest["tables"].values():
         require(set(row) == {"count", "sha256"})
@@ -352,9 +432,9 @@ def validate_manifest(manifest):
             isinstance(manifest["financial"][key], str)
             and Decimal(manifest["financial"][key]).is_finite()
         )
-    if manifest["revision"] in ("0011", "0012"):
+    if manifest["revision"] in ("0011", "0012", "0013"):
         require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
-        require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == ACCOUNTING_SCHEMA_SHA256)
+        require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == (EXECUTION_SCHEMA_SHA256 if manifest['revision']=='0013' else ACCOUNTING_SCHEMA_SHA256))
         states = manifest["identity_state"]
         require(isinstance(states, list) and len(states) == len(identity_tables("0011")))
         require([row[0] for row in states] == identity_tables("0011"))
@@ -1171,7 +1251,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012"):
+            if revision in ("0011", "0012", "0013"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)

@@ -60,4 +60,6 @@ STOCK_INVALID */
 -- Keep the legacy query and STOCK_* fragments byte-compatible for0007–0010.
 
 -- Revision0012 additionally inventories the independently pinned scoped function,
+-- Revision0013 adds exact immutable fill/status rows, invoker function bodies,
+-- owners, search paths, ACLs and enabled trigger definitions, pinned independently.
 -- actual owner/EXECUTE ACL and operator boundaries in backup-snapshot.py.

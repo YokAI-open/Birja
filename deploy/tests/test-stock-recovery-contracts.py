@@ -101,6 +101,20 @@ class RevisionContracts(unittest.TestCase):
         self.assertIn("aclexplode", query)
         self.assertEqual(producer.identity_tables("0012"), producer.identity_tables("0011"))
 
+    def test_execution_authority_refuses_forged_function_self_hash(self):
+        producer = load("backup-snapshot")
+        forged = {
+            "functions": [["assert_stock_execution_current", "SELECT true;",
+                "birja_migrator", False, ["search_path=pg_catalog, public"],
+                [["birja_app", "EXECUTE", False]]]],
+            "triggers": [], "runtime_acl": [], "runtime_columns": [],
+            "owners": [[t,"birja_migrator"] for t in sorted(producer.EXECUTION_COLUMNS)],
+        }
+        for value in (forged, {**forged, "definition_sha256": hashlib.sha256(b"SELECT true;").hexdigest()},
+                      None, {}):
+            with self.assertRaises(ValueError):
+                producer.validate_execution_authority(value)
+
     def test_accounting_revision_is_explicit_and_preserves_predecessors(self):
         producer = load("backup-snapshot")
         self.assertIn("0011", producer.SUPPORTED_REVISIONS)

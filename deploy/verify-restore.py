@@ -782,8 +782,10 @@ def verify(dc, manifest):
     contract.validate_manifest(manifest)
     actual = canonical(dc)
     contract.validate_manifest(actual)
-    if manifest['revision'] == '0012':
+    if manifest['revision'] in ('0012','0013'):
         require(actual['resolution_authority'] == manifest['resolution_authority'])
+    if manifest['revision'] == '0013':
+        require(actual['execution_authority'] == manifest['execution_authority'])
     require(
         all(
             actual[k] == manifest[k]
@@ -802,9 +804,9 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    stock = manifest["revision"] in ("0009", "0010", "0011", "0012")
-    require(constraints == (b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
-    if manifest["revision"] in ('0011','0012'):
+    stock = manifest["revision"] in ("0009", "0010", "0011", "0012", "0013")
+    require(constraints == (b"43" if manifest['revision']=='0013' else b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
+    if manifest["revision"] in ('0011','0012','0013'):
         require(actual["identity_state"] == manifest["identity_state"])
     require(
         sql(
@@ -845,7 +847,7 @@ def verify(dc, manifest):
     print("equality=true invariants=true identities=true")
 
 
-def restore_resolution_authority(dc):
+def restore_resolution_authority(dc, revision='0012'):
     """Restore ONLY the reviewed0012 allowlist, while the clone is quarantined.
 
     pg_restore --no-owner/--no-acl remains necessary for restricted clone
@@ -882,7 +884,42 @@ def restore_resolution_authority(dc):
         "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;\n"
         "GRANT SELECT ON " + ','.join('public.'+table for table in sorted([*contract.ACTION_COLUMNS,*contract.STOCK_COLUMNS])) + " TO birja_action_operator;")
     authority=json.loads(sql(dc,"SELECT " + contract.resolution_authority_sql()))
-    contract.validate_resolution_authority(authority)
+    contract.validate_resolution_authority(authority, revision)
+
+
+def restore_execution_authority(dc):
+    """Reconstruct only fixed reviewed ACLs inside the quarantined clone.
+
+    Never execute definitions or grants supplied by the manifest. Authenticate
+    both independently pinned bodies and owners before adding fixed grants.
+    Runtime roles are NOLOGIN here; the clone has no application connection.
+    """
+    contract = recovery_contract()
+    for name, signature in (
+        ('check_stock_fill_integrity','public.check_stock_fill_integrity()'),
+        ('assert_stock_execution_current','public.assert_stock_execution_current(bigint,bigint,jsonb)'),
+    ):
+        definition = json.loads(sql(dc,"SELECT to_json(pg_get_functiondef('"+signature+"'::regprocedure))"))
+        require(hashlib.sha256(definition.encode()).hexdigest() == contract.EXECUTION_FUNCTIONS[name])
+        require(sql(dc,"SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='"+signature+"'::regprocedure").strip()==b'birja_migrator')
+    sql(dc,"""DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+          RAISE EXCEPTION 'unsafe restored runtime role'; END IF;
+      END LOOP; END $$;""",'birja_ops_test')
+    sql(dc,"""REVOKE ALL ON FUNCTION public.check_stock_fill_integrity() FROM PUBLIC;
+      REVOKE ALL ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb) FROM PUBLIC;
+      REVOKE ALL ON stock_fill_facts,stock_status_evidence FROM PUBLIC;
+      GRANT SELECT,INSERT ON stock_fill_facts TO birja_app;
+      GRANT SELECT ON stock_status_evidence TO birja_app;
+      GRANT SELECT,INSERT,UPDATE ON stock_status_evidence TO birja_scheduler;
+      GRANT EXECUTE ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb) TO birja_app;""")
+    authority=json.loads(sql(dc,'SELECT '+contract.execution_authority_sql()))
+    contract.validate_execution_authority(authority)
 
 
 @contextlib.contextmanager
@@ -940,8 +977,10 @@ def restored(dc, dump):
             dump,
         )
         revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
-        if revision == b'0012':
-            restore_resolution_authority(dc)
+        if revision in (b'0012',b'0013'):
+            if revision == b'0013':
+                restore_execution_authority(dc)
+            restore_resolution_authority(dc, revision.decode())
         yield
     finally:
         if created:
