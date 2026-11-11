@@ -42,7 +42,21 @@ class RevisionContracts(unittest.TestCase):
                 for column in columns.split():
                     self.assertIn(column, query)
         with self.assertRaises(ValueError):
-            producer.manifest_sql("0011")
+            producer.manifest_sql("0012")
+
+    def test_accounting_revision_is_explicit_and_preserves_predecessors(self):
+        producer = load("backup-snapshot")
+        self.assertIn("0011", producer.SUPPORTED_REVISIONS)
+        columns = producer.contract_columns("0011")
+        self.assertEqual(len(columns), 22)
+        self.assertIn("event_id", columns["stock_action_observations"])
+        self.assertIn("coin_id", columns["stock_split_applications"])
+        self.assertIn("unit_epoch", columns["stock_quotes"])
+        query = producer.manifest_sql("0011")
+        self.assertIn("identity_state", query)
+        for table in producer.ACTION_COLUMNS:
+            self.assertIn("FROM " + table, query)
+        self.assertNotIn("stock_action_events", producer.manifest_sql("0010"))
 
     def test_unknown_revision_refused_before_manifest_sql(self):
         restore = load("verify-restore")
