@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-03; Plan01 schema review clean; Wave1 API correction review/full gate pending.
+stopped_at: Wave 1 complete; 1115 backend tests and 23 critical modules pass; start08-02 exact recovery/TLS.
 last_updated: "2026-11-11T10:47:22.510Z"
 last_activity: 2026-11-11
 progress:
@@ -27,11 +27,17 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 2 of 13 executed (29 tasks, 11 waves)
-Status: Plans01/03 implemented; API integration correction review/full gate pending
+Status: Wave 1 complete; Plans01/03 reviewed and integrated; next08-02
 Last activity: 2026-11-11
-Progress: [██████░░░░] 56%
+Progress: Phase 8 execution 2/13 plans complete (Wave 1/11)
 
 ## Completion and next action
+
+Wave 1 gate passed:1115backend tests/99.71%overall, expanded23critical modules100%
+(1388statements/374branches). Initial22integrationfailures were fixed and
+independently re-reviewed. Both01/03reviews are clean. See08-LOCAL-PROOF.md.
+Next08-02 must prove exact0011 recovery and actual restricted-role TLS upgrade
+before any new runtime consumer. Existing birja-test stack remains available.
 
 Phase 8 planning is complete: 13 plans / 29 tasks / 11 waves. Research, pattern
 map, approved UI contract, per-task validation and source audit are saved under
