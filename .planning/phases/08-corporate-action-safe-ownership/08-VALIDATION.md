@@ -1,21 +1,22 @@
 ---
 phase: 8
 slug: corporate-action-safe-ownership
-status: executing
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-11
 ---
 
 # Phase 8 validation strategy
 
 Execution contract:13plans,29tasks,11waves,all five assigned requirements.
-Actual results remain distinct from planned commands below. Nyquist sign-off
-follows complete execution/verification.
+Actual results remain distinct from planned commands below. All29tasks and
+independent local goal verification are complete; sign-off covers the approved
+isolated boundary, not deferred external suitability or production acceptance.
 
 ## Executed progress
 
-Plans01–12 are complete and independently reviewed; Waves1–10 local gates pass.
+Plans01–13 are complete and independently reviewed; all11waves pass locally.
 Plan02 includes actual retained encrypted0007–0011 recovery and restricted-role
 populated/fresh TLS proofs. Plan05 adds actual ownership-service TLS consumers
 and the minimum scheduler immutable-trade column reads. Review-discovered schema,
@@ -26,8 +27,11 @@ replay and populated/fresh restrictedTLS authority parity; reviewed fixes have
 actual regressions. Latest Wave7:1551backend tests pass153.59s,99.82%overall;
 29critical modules retain100%statements/branches. Plans10–12 now pass their
 strict client, real browser, final coverage/security/image gates as recorded
-below. Plan13 actual owner UI/external disposition remains pending. Whole-phase requirements,
-human acceptance, live activation and Nyquist compliance are not marked complete.
+below. Plan13 now records actual owner UI acceptance and explicit live deferral.
+Independent goal verification passes28/28merged must-haves/all38PLANtruths,
+five roadmap criteria and five primary requirements without override. Local
+requirement completion and validation sign-off are recorded; external evidence
+remains unverified and activation disabled.
 See08-LOCAL-PROOF.md and individual summaries/reviews for actual receipts.
 
 ## Environment and sampling
@@ -213,3 +217,14 @@ implementation mitigations closed;3Plan13 checkpoint threats remain pending.
 All27 automatic tasks have implementation/proof; two owner checkpoints remain.
 No Nyquist/whole-phase sign-off or requirement completion is inferred before
 actual Plan13 disposition and goal verification. See final08-LOCAL-PROOF.md.
+
+## Final sign-off
+
+Owner UI acceptance and external deferral were explicitly received2026-11-11.
+Independent08-VERIFICATION.md verifies all required local truths, artifacts and
+semantic wiring with no blocker/openwarning. Schema drift gate passes; optional
+structural drift gate skips(noSTRUCTURE.md). No runtime changed after the full
+passing proof, so only report/record checks were needed for finalization.
+All27automatic tasks have meaningful feedback/proof, and both human/decision
+tasks have actual dispositions. Live provider and future Phase9–11 gates remain
+deferred/unimplemented as explicitly scoped; none is counted as locally tested.

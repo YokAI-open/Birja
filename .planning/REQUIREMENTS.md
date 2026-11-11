@@ -38,17 +38,17 @@ Owner approved all 26 requirements and the exact boundaries below, including a s
 
 ### Dividends
 
-- [ ] **DIV-01**: User dividend entitlements use structured ordinary USD cash-dividend announcements whose identities, dates, amounts and revisions are retained and regularly rechecked; conflicting, incomplete, cancelled or uncertain events do not cause guessed payments.
-- [ ] **DIV-02**: User dividend entitlement is based on holdings at the verified eligibility cutoff for that event, accounting for historical trades and processed splits; buying after the cutoff does not earn the dividend and selling afterward does not erase it.
+- [x] **DIV-01**: User dividend entitlements use structured ordinary USD cash-dividend announcements whose identities, dates, amounts and revisions are retained and regularly rechecked; conflicting, incomplete, cancelled or uncertain events do not cause guessed payments.
+- [x] **DIV-02**: User dividend entitlement is based on holdings at the verified eligibility cutoff for that event, accounting for historical trades and processed splits; buying after the cutoff does not earn the dividend and selling afterward does not erase it.
 - [ ] **DIV-03**: User receives the verified gross ordinary USD cash dividend into shared cash on or after its payable date, without tax withholding or automatic reinvestment; the Dividend event shows stock, relevant dates, eligible quantity, per-share rate and credited amount.
 - [ ] **DIV-04**: User cannot receive duplicate dividend cash from retries, concurrent processing, revised announcements or recovery; credit and History publication are one atomic accounting operation.
 - [ ] **DIV-05**: User can trace a verified post-payment correction through a separate adjustment linked to the original event; prior history is retained, duplicate deltas are prevented and uncertain or unaffordable negative adjustments are held for reconciliation instead of making cash negative.
 
 ### Splits and uncertain corporate actions
 
-- [ ] **ACT-01**: User holdings are automatically reconciled for verified straightforward forward splits when entitlements are unambiguous and preserve supported whole-share quantities; total holding basis is conserved, unit basis changes correctly and historical trade fills remain unchanged.
-- [ ] **ACT-02**: User cannot trade an affected stock while a reverse split, merger, fractional entitlement, disputed action or other unsupported event requires reconciliation; its uncertain valuation is unavailable until a verified, auditable resolution, without guessed liquidation or cash-in-lieu.
-- [ ] **ACT-03**: User cannot receive repeated split adjustments after retries or recovery; action processing is ordered with trades and dividend eligibility, and source-monitoring failures have explicit suspension/recovery rules.
+- [x] **ACT-01**: User holdings are automatically reconciled for verified straightforward forward splits when entitlements are unambiguous and preserve supported whole-share quantities; total holding basis is conserved, unit basis changes correctly and historical trade fills remain unchanged.
+- [x] **ACT-02**: User cannot trade an affected stock while a reverse split, merger, fractional entitlement, disputed action or other unsupported event requires reconciliation; its uncertain valuation is unavailable until a verified, auditable resolution, without guessed liquidation or cash-in-lieu.
+- [x] **ACT-03**: User cannot receive repeated split adjustments after retries or recovery; action processing is ordered with trades and dividend eligibility, and source-monitoring failures have explicit suspension/recovery rules.
 
 ### Compatibility and acceptance
 
@@ -97,14 +97,14 @@ Every approved requirement has exactly one approved primary phase owner. The own
 | PORT-06 | Phase 9 | Pending |
 | PORT-07 | Phase 9 | Pending |
 | HIST-03 | Phase 10 | Pending |
-| DIV-01 | Phase 8 | Pending |
-| DIV-02 | Phase 8 | Pending |
+| DIV-01 | Phase 8 | Complete |
+| DIV-02 | Phase 8 | Complete |
 | DIV-03 | Phase 10 | Pending |
 | DIV-04 | Phase 10 | Pending |
 | DIV-05 | Phase 10 | Pending |
-| ACT-01 | Phase 8 | Pending |
-| ACT-02 | Phase 8 | Pending |
-| ACT-03 | Phase 8 | Pending |
+| ACT-01 | Phase 8 | Complete |
+| ACT-02 | Phase 8 | Complete |
+| ACT-03 | Phase 8 | Complete |
 | SAFE-01 | Phase 7 | Pending |
 | SAFE-02 | Phase 11 | Pending |
 | SAFE-03 | Phase 11 | Pending |
@@ -113,6 +113,10 @@ Every approved requirement has exactly one approved primary phase owner. The own
 
 ## Decision and evidence notes
 
+- Phase8 DIV-01, DIV-02 and ACT-01–03 passed independent local verification on
+  2026-11-11; the owner accepted the UI and explicitly deferred live action
+  activation. Their completion records implemented local capabilities, not
+  provider permission, live suitability, stock fills or dividend cash payments.
 - Owner confirmed IEX labels, zero stock fees/added spread, buys at ask/sells at bid, dividend credits and separate History events, structured announcement/correction monitoring, automatic ordinary events with uncertain-event suspension, and immediate virtual proceeds.
 - Quote/event display permission, actual feed coverage/access, timely action/status availability and quota compliance remain activation gates; no free public-use entitlement has been obtained.
 - Research remains dated evidence; later user decisions above supersede its formerly open policy options. See [research summary](research/SUMMARY.md).

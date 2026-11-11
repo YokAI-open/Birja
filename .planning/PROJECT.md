@@ -28,6 +28,11 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - [x] Public HTTPS deployment with Gmail/Outlook signup and live trade acceptance — Phase 6
 - [x] Nightly encrypted off-server backups and successful exact restores — Phase 6
 
+- [x] Retained structured dividend revisions and historical eligibility snapshots
+  without cash publication (DIV-01/02) — locally verified in Phase8
+- [x] Exact once-only forward splits, basis preservation and auditable uncertainty
+  holds with safe UI (ACT-01–03) — locally verified in Phase8; live activation deferred
+
 ### Active
 
 - [ ] Trade 20 curated NYSE/Nasdaq stocks in whole-share quantities during regular market sessions.
@@ -82,6 +87,15 @@ records as follow-up debt, without claiming fixes. See
 [integration audit](milestones/v1.0-INTEGRATION-AUDIT.md) and
 [retrospective](RETROSPECTIVE.md). Historical accepted logout/protection caveats
 remain recorded there. All v1 phase execution history is preserved in `milestones/v1.0-phases/`.
+
+Phase8 is locally complete:13plans/29tasks and five assigned requirements passed
+independent verification. The owner accepted the new UI and explicitly deferred
+live corporate-action activation; Phase7 live evidence also remains deferred.
+Structured event retention/rechecks, historical eligibility, exact forward splits,
+audited reconciliation and visible safety holds are implemented and tested.
+Phase9 discussion/planning is next; actual stock fills/combined valuation and
+Phase10 cash dividends/public event History remain future work. Production is
+unchanged; local completion does not authorize provider activation or rollout.
 
 ## Current Milestone: v1.1 US Stock Trading
 
@@ -181,4 +195,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-10 after v1.1 stock milestone scope confirmation*
+*Last updated: 2026-11-11 after independent local Phase8 verification and owner disposition*
