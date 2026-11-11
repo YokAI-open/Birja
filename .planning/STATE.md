@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave7 complete;1551backend tests and29critical modules pass; next08-10.
-last_updated: "2026-11-11T15:43:33Z"
+stopped_at: Plan08-10 implementation complete; independent review clean; Wave8 fullfrontend gate pending
+last_updated: "2026-11-11T16:06:17.933Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 22
-  percent: 81
+  completed_plans: 23
+  percent: 85
 ---
 
 # Project State
@@ -26,12 +26,29 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 9 of 13 executed (29 tasks, 11 waves)
-Status: Wave7 complete; Plans01–09 reviewed and integrated; next08-10
+Plan: 10 of 13 executed (29 tasks, 11 waves)
+Status: Plan10 implemented and independently reviewed; Wave8 full frontend gate pending
 Last activity: 2026-11-11
-Progress: [████████░░] 81%
+Progress: [█████████░] 85%
 
 ## Completion and next action
+
+Plan08-10 implements strict client action/valuation validation, exact source/session
+coherence and authenticated epoch/server-time high-water guards. Original transport
+and source times remain intact; conservative internal elapsed authority prevents
+late generic redactions from rewinding independent session/calendar deadlines.
+Nearest timers purge cache and projection at equality, including source120seconds,
+monitor/known-action boundaries, permission and review expiry. Equal snapshots do
+not restart elapsed authority; actual auth transitions alone reset high-water.
+Final runtime7473df3 retains independent raw epoch/time/admission maxima before
+local redaction, plus sanitized snapshot authority through denial/cache-remount.
+Final144focused tests pass5.15s, parser100%allmetrics; hook98.24%statements/
+94.47%branches/100%functions/99.36%lines. Scoped static checks pass.
+Independent complete re-review has0active findings; root Wave8 full frontend
+proof remains pending. Next08-11
+consumes explicit action/valuation states without fallback to healthy. No provider,
+production, schema, cash/History, package or publication changes. Requirements
+remain pending. See08-10-SUMMARY.md; final coverage is recorded there.
 
 Plan08-09 completes final committed action-safe discovery and gate-bound quote
 units.311focused tests pass101.00s/28warnings; stocks139statements/46branches,
@@ -369,6 +386,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P07 | 31 min | 2 tasks | 15 files |
 | Phase 8 P08 | 104min | 3 tasks | 13 files |
 | Phase 8 P09 | 20min | 2 tasks | 8 files |
+| Phase 8 P10 | 32min | 2 tasks | 5 files |
 
 ## Operations
 
@@ -378,8 +396,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T15:43:33Z
-Stopped at: Wave7 complete;1551backend tests and29critical modules pass; next08-10.
+Last session:2026-11-11T16:06:17.913Z
+Stopped at: Plan08-10 implementation complete; independent review clean; Wave8 fullfrontend gate pending
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
