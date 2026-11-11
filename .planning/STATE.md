@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 08-08; parent Wave6 integration gate pending
-last_updated: "2026-11-11T15:13:44.798Z"
+stopped_at: Wave6 complete;1516backend tests and29critical modules pass; next08-09.
+last_updated: "2026-11-11T15:19:32Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 8 of 13 executed (29 tasks, 11 waves)
-Status: Plan08 complete; parent Wave6 integration gate pending before08-09
+Status: Wave6 complete; Plans01–08 reviewed and integrated; next08-09
 Last activity: 2026-11-11
 Progress: [████████░░] 78%
 
@@ -41,8 +41,11 @@ states,13authority corruptions and actual operator/split replay301.665s.
 Remaining roles/TLS lanes pass serially:158.290s roles,105.969s populated TLS,
 105.810s fresh TLS; effective ACL parity and runtime/PUBLIC denials pass.
 Independent review has0active findings. Owned ops resources are cleaned and DB
-lane is released. Parent Wave6 full integration gate is pending; do not advance
-to08-09 or claim whole-phase requirements/external activation complete yet.
+lane is released. Wave6 passes1516backend tests/73warnings146.72s,99.82%overall;
+all29critical modules2875statements/952branches100%,compileallpass. Initialsix
+stale0011head assertions were corrected without changing runtime/tooling;61
+migration tests pass8.77s. Next08-09 integrates action-safe API/quote units.
+Whole-phase requirements and external activation remain pending.
 See08-08-SUMMARY.md and08-08-REVIEW.md for precise proof scope/identities.
 
 Plan08-07 completes durable fixed-target action catch-up, retained known-ID
@@ -358,8 +361,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T15:13:44.780Z
-Stopped at: Completed 08-08; parent Wave6 integration gate pending
+Last session:2026-11-11T15:19:32Z
+Stopped at: Wave6 complete;1516backend tests and29critical modules pass; next08-09.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.

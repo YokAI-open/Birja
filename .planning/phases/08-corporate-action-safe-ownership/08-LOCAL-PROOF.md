@@ -174,3 +174,45 @@ Exact source hashes, deviations and task commits are in08-07-SUMMARY.md and its
 review. No schema/grant/recovery-contract change was needed. Seven of thirteen
 plans are complete; next08-08 adds scoped operator reconciliation and proves0012
 plus predecessor exact recovery. No private calls or activation occurred.
+
+## Wave 6: Plan 08
+
+Scoped SQL reconciliation, protected private tooling and exact0012 recovery are
+complete. Full action/calendar row digests are bound to the same snapshots Python
+validated and rechecked under the shared gate. Exact revision/history/ledger/
+unit/epoch expectations constrain immutable decisions. Unsupported financial
+repairs stay held. Independent functional/recovery/fixture reviews have0active
+findings; actual discovered bugs and test-boundary corrections are recorded in
+08-08-SUMMARY.md and08-08-REVIEW.md.
+
+- Final focused authority/private suite:**55passed18.79s**; reconciliation
+  121statements/52branches:**100%**; scoped lint/format/types pass.
+- Retained archive SHA256:
+  `db27d99ba3085c6b93fa4fe4a6ea6bd9be5ea38a89f9e5f3620005de9681b874`.
+  Public tool artifact:`/tmp/birja-backup-test-phase08-final/recovery.tar`.
+- Actual same-archive encrypted0007–0012 exact recovery/replay:**301.665s**.
+  Includes populated accounting/17identities,13authority corruption refusals,
+  genuine restricted operator decision replay and split replay without effects.
+- Remaining actual role proof:**158.290s**; populated0011→0012 TLS:**105.969s**;
+  fresh0012 TLS:**105.810s**. Effective ACL parity, real nonprivileged operator
+  consumers, PUBLIC/app/scheduler denials, bad CA/hostname/plaintext, mount
+  isolation and renewal pass. No post-upgrade authority repair.
+- Source verifier SHA256:
+  `1aa4337745716237f228e468da6a09202907fffbdd9621e9913a8a8272c08bf6`.
+  Final fixture SHA256:
+  `edc0b3ecf4f9e8b71d4533f5bcb8c3cfc319468a42e0ef7222136e43809173fd`.
+- Owned ops/restore containers, networks and volumes are cleaned. Logs:
+  `/tmp/phase08-08-ops-complete.log`, `/tmp/phase08-08-roles-tls-final.log`.
+  The former completed recovery/replay then found a NOLOGIN test-helper error;
+  corrected helper was independently reviewed and remaining role/TLS lanes
+  passed separately. No claim that an interrupted --all exited successfully.
+- First full backend gate:1510passed/6failed146.71s; all failures were stale
+  head0011 assertions. Four literal-only corrections preserve financial,
+  retry/index and downgrade checks;61migration tests pass8.77s.
+- Final full guarded backend:**1516passed,73warnings,146.72s**,**99.82%** overall.
+  All29critical modules2875statements/952branches:**100%**; compileall passes.
+  Receipt:`/tmp/birja-phase08-wave6-backend-fixed.log`.
+
+Predecessor selected SQL/contracts remain byte-compatible. Eight of thirteen
+plans are complete; next08-09 integrates committed action-safe discovery and
+genuinely gate-bound quote units. Whole-phase human/external gates remain pending.
