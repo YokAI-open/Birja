@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan08-10 implementation complete; independent review clean; Wave8 fullfrontend gate pending
-last_updated: "2026-11-11T16:06:17.933Z"
+stopped_at: Wave8 passed;419 frontend tests and full static/build gates; next08-11
+last_updated: "2026-11-11T16:19:01Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 10 of 13 executed (29 tasks, 11 waves)
-Status: Plan10 implemented and independently reviewed; Wave8 full frontend gate pending
+Status: Wave8 complete; Plans01–10 reviewed and integrated; next08-11
 Last activity: 2026-11-11
 Progress: [█████████░] 85%
 
@@ -44,8 +44,9 @@ Final runtime7473df3 retains independent raw epoch/time/admission maxima before
 local redaction, plus sanitized snapshot authority through denial/cache-remount.
 Final144focused tests pass5.15s, parser100%allmetrics; hook98.24%statements/
 94.47%branches/100%functions/99.36%lines. Scoped static checks pass.
-Independent complete re-review has0active findings; root Wave8 full frontend
-proof remains pending. Next08-11
+Independent complete re-review has0active findings. Wave8 full frontend passes
+419tests/28files15.96s,98.84%statements/97.09%branches/99.6%functions/99.53%lines;
+full ESLint, typecheck, Prettier and production build pass. Next08-11
 consumes explicit action/valuation states without fallback to healthy. No provider,
 production, schema, cash/History, package or publication changes. Requirements
 remain pending. See08-10-SUMMARY.md; final coverage is recorded there.

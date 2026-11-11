@@ -176,3 +176,11 @@ and continue isolated development. Deferred never equals passed.
 
 No execution/compliance/activation is claimed. Flags remain false until actual
 proof and independent validation.
+
+## Wave8 measured client gate
+
+Plan10 focused144tests pass5.15s; strict parser100%allmetrics. Full frontend
+419tests/28files pass15.96s with98.84%statements/97.09%branches/99.6%functions/
+99.53%lines; lint, types, all-file Prettier and build pass. Independent review
+at7473df3 has0active findings. Exact-deadline, raw authority high-water, denial/
+cache-remount and recovery regressions passed; Phase8 browser/UI proof is next.

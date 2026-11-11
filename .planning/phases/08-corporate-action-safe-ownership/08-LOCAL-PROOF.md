@@ -249,3 +249,58 @@ No schema/grant/tooling/dependency change was needed. Nine of thirteen plans
 are complete; next08-10 implements client validation, monotonic epoch protection
 and exact known-deadline purging. Permission-reducing generic epoch0 responses
 must win over cached higher epochs while internal replay high-water is retained.
+
+## Final dependency audit preparation
+
+Actual unchanged-lockfile audits ran during Plan10 on 2026-11-11; these are
+dependency results only, not a completed Plan12 or phase gate. `uv run pip-audit`
+exited0 with no known vulnerabilities. `npm audit --audit-level=high` exited0:
+0HIGH/CRITICAL, with the existing2low/13moderate development advisories retained.
+No forced upgrade, dependency, lockfile or gate change was made. Initial sandbox
+attempts failed on cache/network access; authorized local audit reruns completed
+with ordinary registry access. Receipts:
+`/tmp/birja-phase08-final-pipaudit.log` and
+`/tmp/birja-phase08-final-npmaudit.log`.
+
+An actual current-source hardened runtime build also passed. The subsequent
+container ran as UID1001 with network disabled, read-only root, all capabilities
+dropped, no-new-privileges and a bounded16MiB private temporary filesystem.
+Genuine calendar imports/early-close decisions, exact3:2 split/basis preservation,
+fractional refusal, persistent-hold precedence and exact expiry passed; action,
+ownership, reconciliation and monitor modules import from baked source. No
+database/provider connection, credentials or production resource was used.
+An initial harness needed explicit `/app` import resolution and writable private
+temporary space; the corrected smoke exited0. Build/smoke receipts:
+`/tmp/birja-phase08-runtime-build.log`,
+`/tmp/birja-phase08-runtime-smoke.log`;
+replay script:`/tmp/birja-phase08-runtime-smoke.py`.
+This runtime smoke is not the later all-five-image vulnerability scan or a
+completed Plan12 gate; changed backend source would require affected revalidation.
+
+## Wave8: Plan10 client safety
+
+Strict parser/coherence and exact nearest-deadline purging are complete. Raw
+observed action epochs, permission generations and server times are retained
+separately from sanitized cached data. Generic redaction can remove prices
+without rewinding session/calendar/admission authority. Equal replies cannot
+restart elapsed authority; lower generations/epochs cannot recover through
+denial, TTL expiry or cache removal/remount. Actual authentication lifecycle
+changes alone reset these guards. Public source times and measured RTT remain
+intact; an internal monotonic bound only removes authority.
+
+- Final focused suite144tests5.15s; parser100%allmetrics. Hook defensive coverage
+  is reported honestly in08-10-SUMMARY.md; no artificial exclusions or gate change.
+- Independent complete re-review at7473df3:0active findings. Both original
+  blockers and each actual additional ordering regression are preserved in
+  08-10-REVIEW.md with final source hashes.
+- Full frontend419tests/28files pass15.96s:98.84%statements,97.09%branches,
+  99.6%functions,99.53%lines. Full ESLint/typecheck/Prettier/build pass.
+  Receipts:`/tmp/birja-phase08-wave8-frontend-final.log` and matching
+  `wave8-lint-final`, `wave8-types-final`, `wave8-format-final`,
+  `wave8-build-final` logs under `/tmp/birja-phase08-`.
+- An earlier409test/fullstatic pass at89c1322 was superseded by the final run
+  after real review-driven source corrections, not counted as final evidence.
+
+Ten of thirteen plans and eight of eleven waves are complete. Next08-11 renders
+and proves the approved responsive safety states. Requirements, human acceptance
+and distinct external activation remain pending; stock execution stays disabled.
