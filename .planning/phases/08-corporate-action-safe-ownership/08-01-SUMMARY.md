@@ -30,7 +30,8 @@ key-decisions:
   - "A restricted migrator never gains CREATEROLE: privileged bootstrap preprovisions the NOLOGIN operator before0011."
   - "Provider validation never supplies unit epochs; the legacy writer assigns local zero and refuses committed nonzero state or stored units."
   - "No full requirement checkbox is completed by schema infrastructure alone; final phase verification remains necessary."
-requirements-completed: [DIV-01, DIV-02, ACT-01, ACT-02, ACT-03]
+requirements-completed: []
+requirements-addressed: [DIV-01, DIV-02, ACT-01, ACT-02, ACT-03]
 duration: 18 min
 completed: 2026-11-11
 ---
