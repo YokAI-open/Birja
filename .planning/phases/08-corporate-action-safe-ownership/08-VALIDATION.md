@@ -15,14 +15,14 @@ follows complete execution/verification.
 
 ## Executed progress
 
-Plans01–06 are complete and independently reviewed; Waves1–4 integration pass.
+Plans01–07 are complete and independently reviewed; Waves1–5 integration pass.
 Plan02 includes actual retained encrypted0007–0011 recovery and restricted-role
 populated/fresh TLS proofs. Plan05 adds actual ownership-service TLS consumers
 and the minimum scheduler immutable-trade column reads. Review-discovered schema,
 sequence-capture and journal bugs have observed regressions and fixes.
 
-Latest Wave4:1398backend tests pass75.35s,99.80%overall;26critical modules retain
-100%statements/branches. Plans07–13 remain pending. Whole-phase requirements,
+Latest Wave5:1461backend tests pass126.05s,99.81%overall;28critical modules retain
+100%statements/branches. Plans08–13 remain pending. Whole-phase requirements,
 human acceptance, live activation and Nyquist compliance are not marked complete.
 See08-LOCAL-PROOF.md and individual summaries/reviews for actual receipts.
 

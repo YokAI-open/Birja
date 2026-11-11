@@ -146,3 +146,31 @@ has0active findings.
 No schema, grant, canonical recovery or dependency change was needed. Six of
 thirteen plans are complete; next08-07 implements durable complete catch-up and
 independent disabled-by-default action scheduling. External gates remain pending.
+
+## Wave 5: Plan 07
+
+Durable fixed-target action catch-up, retained known-ID checks, bounded REST
+continuations and replay time-segment resumption are complete. Partial progress
+stays reconciling; twenty-stock health publication requires complete evidence
+and current scope/generation/unit/epoch/deadline guards. Independent stock loops
+share actual request-attempt quotas; actions remain default-OFF.
+
+Five independently found source-continuity/deadline/routing/quota/replay issues
+have observed regressions and corrections. Inclusive historical mutation replay
+now returns its original immutable observation without changing the later pointer
+or safety epoch; changed terms still conflict. Final independent review, including
+formatted quota source and scheduler/Compose wiring, has0active findings.
+
+- Final focused suite:**342passed,20warnings,74.26s**.
+- Four affected critical modules1155statements/428branches:**100%**.
+- Actual bounded REST restart, replay interval bisection and smallest-instant
+  capacity-held cases pass. No request/byte/time caps were weakened.
+- Ruff12files, mypy6sources, synthetic dev/prod Compose and diff checks pass.
+- Full guarded isolated backend:**1461passed,73warnings,126.05s**.
+- Overallcoverage:**99.81%**;28critical modules2746statements/896branches:**100%**.
+- Compileall:pass. Receipt:`/tmp/birja-phase08-wave5-backend.log`.
+
+Exact source hashes, deviations and task commits are in08-07-SUMMARY.md and its
+review. No schema/grant/recovery-contract change was needed. Seven of thirteen
+plans are complete; next08-08 adds scoped operator reconciliation and proves0012
+plus predecessor exact recovery. No private calls or activation occurred.
