@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-02 exact retained recovery/TLS; parent integration next.
-last_updated: "2026-11-11T11:32:51.951Z"
+stopped_at: Completed08-04 bounded adapter; parent Wave2 review/integration next.
+last_updated: "2026-11-11T11:52:15.476Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 16
+  completed_plans: 17
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 3 of 13 executed (29 tasks, 11 waves)
-Status: Plans01/02/03 executed; exact accounting recovery/TLS passed
+Plan: 4 of 13 executed (29 tasks, 11 waves)
+Status: Plans01/02/03/04 executed; parent Wave2 review/integration next
 Last activity: 2026-11-11
-Progress: Phase8 execution3/13 plans complete (Wave2 in progress);16/27 milestone plans
+Progress: Phase8 execution4/13 plans complete;17/27 milestone plans
 
 ## Completion and next action
 
@@ -42,8 +42,16 @@ sequence capture,9accounting corruption classes and17exact identity states.
 Full serial operations gate passes; populated0010 and fresh0011 TLS ACLs match,
 with real allowed/denied SQL and no post-upgrade grant repair. Independent
 re-review is clean. See08-02-SUMMARY.md for archive/tool hashes and timings.
-Parent integration precedes later runtime consumers; existing birja-test stack
-remains available. Next dependency-ordered work includes08-04 provider adapter.
+Plan08-04 completes current REST/known-ID and finite historical mutation adapters.
+123mocked adapter tests plus175rules/admission regressions pass298tests3.91s;
+504adapter statements/220branches have100%coverage; scoped Ruff/format/mypy pass.
+Distinct official stream host and filter exclusions are pinned in public fixtures;
+unknown economic terms remain unknown, known-ID absence never invents deletion.
+One budget bounds attempts/pages/bytes/time/frame/mutations across collection.
+Source freezes at4d1b327 for independent review and parent serial Wave2 gate;
+neither review nor full integration is claimed passed yet. See08-04-SUMMARY.md.
+Existing birja-test stack remains available. After Wave2 passes, continue08-05
+historical ownership before later action persistence/monitoring consumers.
 
 Phase 8 planning is complete: 13 plans / 29 tasks / 11 waves. Research, pattern
 map, approved UI contract, per-task validation and source audit are saved under
@@ -284,7 +292,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T11:32:51.933Z
+Last session:2026-11-11T11:52:15.460Z
 Stopped at: Completed08-02 exact retained recovery/TLS; parent integration next.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
