@@ -161,7 +161,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 08-06-PLAN.md — Persist revisions, atomic forward splits and dividend entitlements. (Wave 4)
+- [x] 08-06-PLAN.md — Persist revisions, atomic forward splits and dividend entitlements. (Wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -260,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 5/13 | In Progress|  |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 6/13 | In Progress|  |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

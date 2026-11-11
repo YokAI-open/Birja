@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Wave3 complete;1322backend tests and25critical modules pass; next08-06.
-last_updated: "2026-11-11T12:27:11.045Z"
+status: completed
+stopped_at: Wave4 complete;1398backend tests and26critical modules pass; next08-07.
+last_updated: "2026-11-11T12:53:06.894Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 18
-  percent: 67
+  completed_plans: 19
+  percent: 0
 ---
 
 # Project State
@@ -26,12 +26,23 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 5 of 13 executed (29 tasks, 11 waves)
-Status: Wave3 complete; Plans01–05 reviewed and integrated; next08-06
+Plan: 6 of 13 executed (29 tasks, 11 waves)
+Status: Wave4 complete; Plans01–06 reviewed and integrated; next08-07
 Last activity: 2026-11-11
-Progress: [███████░░░] 67%
+Progress: [███████░░░] 70%
 
 ## Completion and next action
+
+Plan08-06 completes immutable corporate-action revisions, exact once-only splits
+and historical entitlement snapshots without cash/payment/History effects.
+Focused234tests pass22.43s;312statements/116branches100%, scoped static checks
+pass. Independent re-review has0active findings after final monitor/calendar
+deadline, ordered-hold and configured-scope corrections. Parent Wave4 passes
+1398tests/73warnings75.35s,99.80%overall;26critical modules2407statements/
+804branches100%,compileallpass. Next08-07 owns bounded monitoring/cursor/health;
+partition adapter batches into one instrument per transaction, forward trusted
+account/server and retain persistent holds independently of healthy source I/O.
+See08-06-SUMMARY.md. Whole-phase requirements and activation remain pending.
 
 Wave3 integration passes:1322backend tests,77warnings,64.19s,99.78%overall.
 All25critical modules2095statements/688branches retain100%coverage; compileall
@@ -308,6 +319,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 08 P03 | 10 min | 2 tasks | 5 files |
 | Phase 8 P02 | 27 min | 2 tasks | 6 files |
 | Phase 8 P05 | 32 min | 2 tasks | 7 files |
+| Phase 8 P06 | 24 min | 3 tasks | 2 files |
 
 ## Operations
 
@@ -317,8 +329,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T12:27:11.030Z
-Stopped at: Wave3 complete;1322backend tests and25critical modules pass; next08-06.
+Last session:2026-11-11T12:52:16.256Z
+Stopped at: Wave4 complete;1398backend tests and26critical modules pass; next08-07.
 Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
 Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
