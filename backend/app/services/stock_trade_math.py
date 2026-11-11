@@ -5,7 +5,7 @@ midpoint is retained separately from Trade's eight-place metadata.
 """
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_EVEN, Decimal, localcontext
+from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
 
 from app.services.trade_math import Q2, Q8, Side, TradeRefused, cost_basis_after
 
@@ -128,3 +128,15 @@ def plan_stock_trade(
             cost_basis_after=basis_after,
             whole_position=side == "sell" and quantity == held,
         )
+
+
+def buy_max_quantity(*, bid: Decimal, ask: Decimal, cash: Decimal,
+                     held: Decimal, cost_basis: Decimal) -> Decimal:
+    with localcontext() as ctx:
+        ctx.prec = 64
+        return (cash / ask).to_integral_value(rounding=ROUND_FLOOR)
+
+
+def sell_all_quantity(*, bid: Decimal, ask: Decimal, cash: Decimal,
+                      held: Decimal, cost_basis: Decimal) -> Decimal:
+    return held

@@ -12,7 +12,9 @@ from app.services.stock_trade_math import (
     MAX_PRICE,
     MAX_QUANTITY,
     StockTradePlan,
+    buy_max_quantity,
     plan_stock_trade,
+    sell_all_quantity,
 )
 from app.services.trade_math import Side, TradeRefused
 
@@ -207,3 +209,9 @@ def test_invalid_side_fails_closed() -> None:
     with pytest.raises(TradeRefused) as error:
         plan(side=cast(Side, "hold"))
     assert error.value.code == "numeric_range"
+
+
+def test_buy_max_caps_remaining_holding_capacity() -> None:
+    quantity = buy_max_quantity(bid=D("1"), ask=D("1"), cash=D("100"),
+                                held=D("999999999997"), cost_basis=D("1"))
+    assert quantity == D("2")
