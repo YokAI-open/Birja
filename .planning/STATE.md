@@ -50,9 +50,12 @@ decisions.175scoped tests pass2.06s with all3modules100%statements/branches;
 259calendar/quote/admission/economic regressions pass4.64s;5file Ruff/format
 and3source mypy pass. See08-03-SUMMARY.md. Wave1 integration remains pending
 independent re-review of08-01fixes for alias observations and causal FK consistency.
-Fix5d0353a passes88isolated migration/quote/role tests8.14s, scoped lint/format
+Fix5d0353a plus retry correctionb389ce1 pass91isolated migration/quote/role
+tests11.10s, scoped lint/format
 and model types; new observation event_id, application coin_id and composite
-economic-cause FKs are included. No claim independent review has passed.
+economic-cause FKs are included. Actual restricted failed-upgrade/provision/retry,
+incompatible-index rejection and cancelled concurrent-index rebuild are proven.
+No claim independent review has passed.
 Next: complete that integration re-review,
 then dependency-ordered Wave2 isolated implementation. Stock
 execution stays disabled, cash payment/public event History remain Phase 10,

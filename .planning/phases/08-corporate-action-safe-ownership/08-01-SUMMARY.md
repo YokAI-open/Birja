@@ -146,7 +146,7 @@ Frozen source identities after corrections:
 
 | File | SHA256 |
 | --- | --- |
-|0011_stock_action_accounting.py|4a5e5a9a29198096e6cd47ea126f9cca4fd88ca050c8d952f73c82d02f62e6eb|
+|0011_stock_action_accounting.py, after retry correction below|57b4f279a969b3e7da55c87742414138eeefe493fd82309fb1b268b71ac6e161|
 |corporate_action.py|84d5129e7e57811008f494c5231123b4ce1264f86910177f5c5cb27a8b0fc6fb|
 |trade.py|5211c0b884c58537a467c4d51e42b47534b5a0431514649ae07e33f92f7842f2|
 
@@ -158,3 +158,30 @@ scheduled process or publication changed.
 
 Review-fix self-check: both RED/GREEN commits and all revised files exist;
 reported final tests/static checks were actually executed and passed.
+
+### Follow-up: interrupted concurrent-index recovery
+
+Independent re-review identified a third blocker: CREATE INDEX CONCURRENTLY
+commits before later transactional DDL, so a later failure left the expected
+index behind and a retry failed DuplicateTable. RED `cd9d037` reproduced this
+with an actual restricted synthetic login: the missing operator prerequisite
+failed after index creation, provisioning the operator then retrying failed.
+
+GREEN `b389ce1` validates the existing object against its exact index definition,
+current migration-role/table ownership, live state and lack of any attached
+constraint. A valid exact unbound index is reused. An exact interrupted invalid
+build is dropped/rebuilt CONCURRENTLY. Any incompatible same-name object is
+rejected without alteration; no blind IF NOT EXISTS or financial repair occurs.
+Empty downgrade still removes the attached constraint/index transactionally.
+
+Three real experiments pass: failed restricted upgrade→retained valid index→
+operator provision→successful retry; incompatible same-name index remains
+unchanged with migration at0010; a genuinely cancelled concurrent build,
+cancelled at an observed PostgreSQL old-snapshot barrier, leaves an invalid
+index that is safely rebuilt. Dedicated test-role ownership and grants are
+restored/removed afterward. No manual pg_catalog writes or fake invalid flag.
+
+Final full focused gate: **91tests pass11.10s**, scoped Ruff/format and2model
+mypy pass, git diff --check passes. Current0011 hash is the57b4… value above;
+the earlier4a5e… hash is superseded. No additional schema field/function/trigger
+was introduced by this retry correction. Independent re-review remains pending.
