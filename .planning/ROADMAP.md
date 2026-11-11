@@ -142,7 +142,62 @@ Plans:
   4. User sees affected stocks suspended and uncertain valuations unavailable for unsupported/disputed actions or insufficient monitoring; only verified auditable reconciliation restores availability, without guessed liquidation or cash-in-lieu. Other eligible instruments and crypto remain independent. (ACT-02, ACT-03)
   5. Event replay or recovery cannot repeat a split or reorder it across trades and dividend eligibility. Defined monitoring-loss/recovery behavior is demonstrable on isolated seeded holdings before stock execution is enabled. (ACT-03, DIV-02)
 
-**Plans**: TBD
+**Plans**: 13 plans (29 tasks, 11 waves)
+
+Plans:
+**Wave 1**
+
+- [ ] 08-01-PLAN.md — Add durable action and ownership schema with narrow grants. (Wave 1)
+- [ ] 08-03-PLAN.md — Define independent action permission, exact terms and safety rules. (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 08-02-PLAN.md — Prove exact0011 recovery and restricted TLS compatibility. (Wave 2)
+- [ ] 08-04-PLAN.md — Collect bounded current REST/known-ID/mutation observations. (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 08-05-PLAN.md — Journal historical ownership with post-lock economic ordering. (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 08-06-PLAN.md — Persist revisions, atomic forward splits and dividend entitlements. (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 08-07-PLAN.md — Monitor complete catch-up independently in the existing scheduler. (Wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 08-08-PLAN.md — Add audited narrow reconciliation and exact0012 recovery. (Wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 08-09-PLAN.md — Expose current action safety and compatible quote units. (Wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 08-10-PLAN.md — Enforce strict client epochs and exact boundary expiry. (Wave 8)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 08-11-PLAN.md — Render accessible responsive suspension states and browser proof. (Wave 9)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 08-12-PLAN.md — Close local critical coverage, security and recovery gates. (Wave 10)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 08-13-PLAN.md — Record new UI acceptance and separate external activation disposition. (Wave 11)
+
+**Execution boundary**: Owner-deferred Phase 7 live evidence remains pending.
+Isolated Phase 8 development may proceed without enabling stock execution or
+new provider access. Distinct action-product/retained-accounting/backup rights,
+actual continuity/quotas/latency and Phase 7 live acceptance stay activation
+gates. All local proof precedes the final external checkpoint. Migration/recovery
+compatibility for each successor revision precedes its runtime consumers;
+no production or installed-tool change is authorized by these plans.
 **UI hint**: yes
 
 ### Phase 9: Whole-Share Trading and Combined Portfolio
@@ -205,7 +260,7 @@ do not establish live acceptance or phase completion.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
-| 8. Corporate-Action-Safe Ownership | v1.1 | 0/TBD | Not started | - |
+| 8. Corporate-Action-Safe Ownership | v1.1 | 0/13 | Planned; ready for isolated execution | - |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 0/TBD | Not started | - |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |

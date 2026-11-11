@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: Local implementation complete; live acceptance deferred by owner
-stopped_at: Finish local readiness assessment; review scheduled live-data results later.
-last_updated: "2026-11-11T09:22:49Z"
-last_activity: 2026-11-11
+status: ready_to_execute
+stopped_at: Phase 8 plans verified; isolated execution ready, Phase 7 live review deferred.
+last_updated: "2026-11-11T10:17:13.614Z"
+last_activity: 2026-11-11 -- Phase 8 planning complete
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 14
+  total_plans: 27
   completed_plans: 13
   percent: 0
 ---
@@ -21,17 +21,29 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-10)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 7 — Permitted Stock Discovery
+**Current focus:** Phase 8 — Corporate-Action-Safe Ownership (planning complete)
 
 ## Current Position
 
-Phase: 7 (Permitted Stock Discovery) — EXECUTING
-Plan: 14 of 14
-Status: Local implementation complete; live acceptance deferred by owner
-Last activity: 2026-11-11
-Progress: [█████████░] 93%
+Phase: 8 (Corporate-Action-Safe Ownership) — PLANNED
+Plan: 0 of 13 executed (29 tasks, 11 waves)
+Status: Ready for isolated local execution; external activation remains gated
+Last activity: 2026-11-11 -- Phase 8 planning complete
+Progress: Phase 8 planning complete; 0/13 execution plans complete
 
 ## Completion and next action
+
+Phase 8 planning is complete: 13 plans / 29 tasks / 11 waves. Research, pattern
+map, approved UI contract, per-task validation and source audit are saved under
+08-corporate-action-safe-ownership. Independent plan review found two blockers;
+revision 1 resolved both, with 0 active warnings. See08-PLAN-CHECK.md.
+Next: $gsd-execute-phase 8 for isolated local implementation only. Stock
+execution stays disabled, cash payment/public event History remain Phase 10,
+and actual fills integrate in Phase 9. Phase 7 remains13/14 with its live-data
+acceptance owner-deferred, not passed; no duplicate campaign or UI approval is
+needed. Planning changes neither production nor the scheduled one-shot.
+
+### Preserved Phase 7 execution evidence
 
 Phase7 has14plans/29tasks/13waves, covering all6requirements/5success criteria.
 Research, patterns, approved UI contract, validation and source audit are saved;
@@ -233,10 +245,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 ## Session Continuity
 
 Last session:2026-11-11T09:22:49Z
-Stopped at: Local closeout continued; owner explicitly deferred live acceptance review.
-Resume: Read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
-Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
-Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
+Stopped at: Phase 8 planning verified; ready for isolated execution.
+Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
+Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
+Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
+Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.
 Plan13 proof resources were cleaned; no stack started for this documentation
 checkpoint. No production services changed or provider data activated.
