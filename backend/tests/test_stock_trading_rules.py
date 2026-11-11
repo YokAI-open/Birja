@@ -238,6 +238,21 @@ def mark(execution: ExecutionEvidence) -> ValuationEvidence:
     return ValuationEvidence(execution, NOW + timedelta(hours=1), NOW + timedelta(hours=2))
 
 
+@pytest.mark.parametrize("state", ["garbage", "OPEN", "", None, True, 1])
+@pytest.mark.parametrize("halted", [False, True])
+def test_malformed_session_state_never_authorizes_execution_or_marks(state: object, halted: bool) -> None:
+    evidence = replace(valid(), session_state=state)
+    if halted:
+        evidence = replace(evidence, status=replace(evidence.status, state="halted"))
+    execution = evaluate_execution(evidence, NOW)
+    assert not execution.allowed
+    assert execution.reason == ("halted" if halted else "session_unavailable")
+    valuation = evaluate_valuation(mark(evidence), NOW)
+    assert valuation.mode == "unavailable"
+    assert valuation.reason == "session_unavailable"
+    assert valuation.mid is None
+
+
 def test_exact_midpoint_is_not_rounded_and_fresh_deadline_is_bounded() -> None:
     result = evaluate_valuation(mark(valid()), NOW)
     assert result.mode == "fresh"
