@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave9 passed;429 frontend tests and UI24/24; next08-12
-last_updated: "2026-11-11T16:56:20Z"
+stopped_at: Completed08-12; actual Plan13 UI and external disposition pending
+last_updated: "2026-11-11T17:09:46.100Z"
 last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 27
-  completed_plans: 24
-  percent: 89
+  completed_plans: 25
+  percent: 93
 ---
 
 # Project State
@@ -26,12 +26,28 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 ## Current Position
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
-Plan: 11 of 13 executed (29 tasks, 11 waves)
-Status: Wave9 complete; Plans01–11 reviewed and integrated; next08-12
+Plan: 12 of 13 executed (29 tasks, 11 waves)
+Status: Wave10 complete; awaiting actual Plan13 UI acceptance and external disposition
 Last activity: 2026-11-11
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Completion and next action
+
+Plan08-12 completes all local gates:1551backend tests163.92s,99.82%overall;
+exact29critical modules2972statements/978branches100%;429frontend tests and all
+static/build checks pass. Full isolated browser31passed/1expected production-CSP
+skip,0retries130.4s; nonroot native77passed2.36s and separate network-free runtime
+smoke pass. All five actual strict image scans have0HIGH/CRITICAL including
+unfixed. Exact retained0007–0012 recovery, roles and both genuineTLS lanes pass;
+explicit realSQL recovery10/10contracts pass55.831s. Code review0active, UI24/24,
+security44implementation threats closed with3Plan13 checkpoint threats pending.
+Task1 RED7e757b4/GREEN0026053 fixes the exactCI mirror and cancellation witness
+without runtime changes. Final proof4f42fc7 and acceptance packets942f6b8 are
+committed. All27automatic tasks are complete; two human/decision tasks remain.
+Next is08-13 actual new-UI acceptance and explicit external action disposition,
+then independent goal verification. No acceptance, provider grant, requirement
+completion, activation, publication or deployment is inferred. See08-12-SUMMARY,
+08-HUMAN-UAT and08-ACTIVATION. Whole-phase requirements remain unchecked.
 
 Plan08-11 completes fixed corporate-action suspension copy, independent status
 facts, safe valuation/time suppression, contextual announcements and keyboard
@@ -43,7 +59,7 @@ precise zoom limitations; sourceSHA aee6a806 and all owned resources cleaned.
 Independent UI review passes24/24 with0active findings, and full runtime source
 review is clear. Wave9 frontend passes429tests/28files15.68s,98.87%statements/
 97.29%branches/99.61%functions/99.66%lines; full lint/types/Prettier/build pass.
-Plan12 exact CI coverage and full final validation remain next.
+Plan12 final evidence is now recorded above and in08-12-SUMMARY.md.
 Phase8 owner acceptance and whole-phase requirements remain pending. No provider,
 production, financialcash/History, dependency or publication changes.
 See08-11-SUMMARY.md.
@@ -404,6 +420,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P09 | 20min | 2 tasks | 8 files |
 | Phase 8 P10 | 32min | 2 tasks | 5 files |
 | Phase 8 P11 | 39min | 2 tasks | 7 files |
+| Phase 8 P12 | 12min | 3 tasks | 13 files |
 
 ## Operations
 
@@ -413,12 +430,12 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T16:55:26.417Z
-Stopped at: Plan08-11 complete; final source frozen; parent Wave9 and Plan12 next
-Resume: Execute the reviewed Phase 8 plans via $gsd-execute-phase 8, preserving its explicit activation checkpoint. For the separately deferred Phase 7 review, read07-LOCAL-READINESS.md and07-ACTIVATION.md. Local implementation and owner UI acceptance are complete; live review is owner-deferred. When resuming that review, observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
-Active plans: .planning/phases/08-corporate-action-safe-ownership/08-01-PLAN.md through08-13.
-Active review: .planning/phases/08-corporate-action-safe-ownership/08-PLAN-CHECK.md.
+Last session:2026-11-11T17:09:46.084Z
+Stopped at: Completed08-12; actual Plan13 UI and external disposition pending
+Resume: Plan08-13 only: present the actual new UI packet and record owner UI acceptance plus explicit external action deferral/proposal disposition. All automatic tasks are complete. After actual answers, perform the required independent goal verification before phase completion. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
+Active plan: .planning/phases/08-corporate-action-safe-ownership/08-13-PLAN.md.
+Active reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are locally clear; final goal verification follows actual Plan13 disposition.
 Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.
-Plan13 proof resources were cleaned; no stack started for this documentation
+All Phase8 owned proof resources were cleaned; no stack remains for this owner
 checkpoint. No production services changed or provider data activated.
