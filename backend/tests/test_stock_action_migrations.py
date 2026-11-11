@@ -304,7 +304,7 @@ async def test_populated_0010_upgrade_preserves_legacy(engine: AsyncEngine, migr
     try:
         before = await _financial_snapshot(engine)
         await migrate("head")
-        assert await _versions(engine) == ["0011"]
+        assert await _versions(engine) == ["0012"]
         assert await _financial_snapshot(engine) == before
         await migrate("0010", down=True)
         assert await _financial_snapshot(engine) == before
@@ -874,7 +874,7 @@ async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
             await conn.execute(text("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT"))
         code, output = await restricted_upgrade()
         assert code == 0, output
-        assert await _versions(engine) == ["0011"]
+        assert await _versions(engine) == ["0012"]
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("REASSIGN OWNED BY birja_action_retry_migrator TO birja_test"))
@@ -980,7 +980,7 @@ async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
                 )
             ).scalar_one()
         await migrate("head")
-        assert await _versions(engine) == ["0011"]
+        assert await _versions(engine) == ["0012"]
         async with engine.connect() as conn:
             assert (
                 await conn.execute(

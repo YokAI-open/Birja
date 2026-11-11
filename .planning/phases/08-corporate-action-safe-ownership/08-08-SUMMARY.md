@@ -193,3 +193,21 @@ All25recorded task/test/fix commits exist; all five primary created/runtime
 artifacts exist. Final retained archive SHA was remeasured, and claims above are
 supported by actual focused, recovery, role and TLS logs. Parent full Wave6
 integration remains separately owned.
+
+## Wave6 migration integration follow-up
+
+The parent's first full gate produced1510passes and6failures in146.71s,
+99.82%overall. All six failures were exact stale assertions: upgrade-to-head
+returned0012 while generic/history/restricted-retry/cancelled-index tests still
+expected0011. The authorized narrow correction changes only EXPECTED_HEAD and
+three head-upgrade assertions in `test_migrations.py` and
+`test_stock_action_migrations.py`. Historical0011 downgrade-refusal assertions,
+financial row/schema equality, actual failed/retried concurrent-index checks,
+index validity and final head cleanup remain unchanged. No runtime, migration,
+tooling or retained archive byte changed.
+
+Actual RED is the full-gate receipt above; targeted GREEN is **61passed,8.77s**
+across both complete test files, log
+`/tmp/phase08-08-migration-integration-green.log`. Scoped Ruff/format and diff
+checks pass. Parent owns the subsequent full rerun and its final receipt;
+this follow-up does not claim that gate already passed.
