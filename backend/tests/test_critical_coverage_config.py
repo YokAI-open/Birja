@@ -3,6 +3,38 @@
 import re
 from pathlib import Path
 
+CRITICAL_MODULES = (
+    "app/services/otp.py",
+    "app/services/auth.py",
+    "app/services/accounts.py",
+    "app/services/ratelimit.py",
+    "app/services/email.py",
+    "app/core/security.py",
+    "app/core/deps.py",
+    "app/services/price_rules.py",
+    "app/services/prices.py",
+    "app/services/trade_math.py",
+    "app/services/trading.py",
+    "app/services/portfolio_math.py",
+    "app/services/portfolio.py",
+    "app/services/history.py",
+    "app/api/v1/history.py",
+    "app/services/stock_admission.py",
+    "app/services/stock_quote_rules.py",
+    "app/services/stock_quotes.py",
+    "app/services/stock_sessions.py",
+    "app/services/stocks.py",
+    "app/api/v1/stocks.py",
+    "app/services/corporate_action_rules.py",
+    "app/services/stock_action_rules.py",
+    "app/services/alpaca_actions.py",
+    "app/services/stock_ownership.py",
+    "app/services/corporate_actions.py",
+    "app/tasks/stock_actions.py",
+    "app/tasks/stock_scheduler.py",
+    "app/services/stock_action_reconciliation.py",
+)
+
 
 def test_critical_coverage_gate_includes_all_financial_services() -> None:
     root = Path(__file__).resolve().parents[2]
@@ -11,18 +43,7 @@ def test_critical_coverage_gate_includes_all_financial_services() -> None:
         matches = re.findall(r"coverage report --include=(\S+) --fail-under=100", path.read_text())
         assert len(matches) == 1
         modules = matches[0].split(",")
-        for name in ("portfolio_math", "portfolio", "history"):
-            assert f"app/services/{name}.py" in modules
-        assert "app/api/v1/history.py" in modules
-        for name in (
-            "stock_admission",
-            "stock_quote_rules",
-            "stock_quotes",
-            "stock_sessions",
-            "stocks",
-        ):
-            assert f"app/services/{name}.py" in modules
-        assert "app/api/v1/stocks.py" in modules
+        assert tuple(modules) == CRITICAL_MODULES, f"{path.name} omits or changes critical paths"
         assert len(modules) == len(set(modules))
         assert all((root / "backend" / module).is_file() for module in modules)
         lists.append(matches[0])

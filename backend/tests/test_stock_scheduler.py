@@ -164,11 +164,16 @@ async def test_configured_budget_cancels_post_fetch_write_and_rolls_back(
     state, redis_client, monkeypatch
 ):
     original = stock_scheduler.upsert_stock_quotes
+    cancelled = asyncio.Event()
 
     async def held(*args, **kwargs):
         count = await original(*args, **kwargs)
         assert count == 20
-        await asyncio.sleep(1.1)
+        try:
+            await asyncio.sleep(1.1)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
         return count
 
     monkeypatch.setattr(stock_scheduler, "upsert_stock_quotes", held)
@@ -178,6 +183,7 @@ async def test_configured_budget_cancels_post_fetch_write_and_rolls_back(
         async with httpx.AsyncClient() as http:
             result = await cycle(state, redis_client, http)
     assert result.status == "source_error"
+    assert cancelled.is_set(), "the write must reach and be cancelled by its cycle deadline"
     assert not await rows(state)
     assert not await redis_client.exists(stock_scheduler.LOCK_KEY)
 
