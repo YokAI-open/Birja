@@ -368,3 +368,215 @@ async def test_authority_uncertain_observation_reinstates_hold(resolution_case):
             await _load_admission(db, "actions"),
         )
         assert await persistent_action_holds(db, request["coin"])
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "scope",
+        "calendar_missing",
+        "calendar_expired",
+        "generation",
+        "revision_missing",
+        "event_mismatch",
+        "unsupported",
+        "cutoff",
+    ],
+)
+async def test_private_service_rejects_invalid_current_facts(resolution_case, case):
+    from sqlalchemy import update
+
+    from app.services.stock_action_reconciliation import reconcile
+
+    factory, request, data, _action = resolution_case
+    async with factory.begin() as db:
+        if case == "scope":
+            data = {**data, "account": "different"}
+        elif case == "calendar_missing":
+            await db.execute(
+                delete(StockDataAdmission).where(StockDataAdmission.product == "calendar")
+            )
+        elif case == "calendar_expired":
+            await db.execute(
+                update(StockDataAdmission)
+                .where(StockDataAdmission.product == "calendar")
+                .values(state="revoked")
+            )
+        elif case == "generation":
+            request = {**request, "generation": 99}
+        elif case == "revision_missing":
+            request = {**request, "revision": 9007199254740990}
+        elif case == "event_mismatch":
+            request = {**request, "event": 9007199254740990}
+        elif case == "unsupported":
+            request = {**request, "revision": data["held_revision_ids"][0]}
+        else:
+            data = {**data, "cutoff": datetime.fromisoformat(data["cutoff"]) + timedelta(minutes=1)}
+        with pytest.raises(ValueError):
+            await reconcile(db, request_model(request, data), account="birja", server="birja")
+
+
+async def refreshed_request(db, request, data, action, **changes):
+    from sqlalchemy import func, select
+
+    from app.models.corporate_action import StockActionObservation
+
+    current = (
+        await persist_action_batch(
+            db, batch(action, **changes), await _load_admission(db, "actions")
+        )
+    )[0]
+    revision = await db.get(StockActionRevision, current.revision_id)
+    state = await db.get(StockActionState, request["coin"])
+    ids = list(
+        (
+            await db.execute(
+                select(StockActionRevision.id)
+                .where(StockActionRevision.event_id == request["event"])
+                .order_by(StockActionRevision.id)
+            )
+        ).scalars()
+    )
+    obs = (await db.execute(select(func.max(StockActionObservation.id)))).scalar_one()
+    return (
+        {**request, "revision": revision.id, "epoch": state.epoch},
+        {
+            **data,
+            "held_revision_ids": ids,
+            "revision_fingerprint": revision.fingerprint,
+            "observation_id": obs,
+        },
+    )
+
+
+@pytest.mark.parametrize("offset", [0, 1])
+async def test_private_service_forward_split_calendar_is_genuine(resolution_case, offset):
+    from decimal import Decimal
+
+    from app.services.stock_action_reconciliation import reconcile
+
+    factory, request, data, action = resolution_case
+    action = replace(
+        action,
+        event_type="forward_split",
+        currency=None,
+        rate=None,
+        new_rate=Decimal(2),
+        old_rate=Decimal(1),
+        units="pre_split",
+        economic_at=datetime.fromisoformat(data["cutoff"]) + timedelta(minutes=offset),
+    )
+    async with factory.begin() as db:
+        request, data = await refreshed_request(db, request, data, action)
+        if offset:
+            with pytest.raises(ValueError, match="unsupported"):
+                await reconcile(db, request_model(request, data), account="birja", server="birja")
+        else:
+            await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+            assert (
+                await reconcile(db, request_model(request, data), account="birja", server="birja")
+                > 0
+            )
+
+
+async def test_private_service_verified_prospective_cancellation(resolution_case):
+    from app.services.stock_action_reconciliation import reconcile
+
+    factory, request, data, action = resolution_case
+    async with factory.begin() as db:
+        request, data = await refreshed_request(
+            db, request, data, replace(action, cancelled=True), mutation="delete"
+        )
+        request = {**request, "decision": "confirm_no_effect"}
+        await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+        assert (
+            await reconcile(db, request_model(request, data), account="birja", server="birja") > 0
+        )
+
+
+def test_private_file_unsafe_parent_invalid_utf8_and_growth(tmp_path, monkeypatch):
+    import os
+
+    import app.services.stock_action_reconciliation as service
+
+    path = tmp_path / "evidence.json"
+    path.write_bytes(b"\xff")
+    path.chmod(0o600)
+    with pytest.raises(ValueError, match="invalid evidence"):
+        service.protected_json(path)
+    tmp_path.chmod(0o777)
+    try:
+        with pytest.raises(ValueError, match="parent"):
+            service.protected_json(path)
+    finally:
+        tmp_path.chmod(0o700)
+    path.write_text("{}")
+    monkeypatch.setattr(service.os, "read", lambda *_args: b"x" * 32769)
+    with pytest.raises(ValueError, match="bounded"):
+        service.protected_json(path)
+    monkeypatch.undo()
+    monkeypatch.setattr(service.os, "getuid", lambda: os.getgid() + 12345)
+    with pytest.raises(ValueError, match="protected"):
+        service.protected_json(path)
+
+
+def test_private_file_refuses_parent_owned_by_other_user(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from app.services.stock_action_reconciliation import protected_json
+
+    path = tmp_path / "evidence.json"
+    path.write_text("{}")
+    path.chmod(0o600)
+    original = Path.lstat
+
+    def ownership(entry):
+        result = original(entry)
+        return (
+            SimpleNamespace(st_uid=os.getuid() + 12345, st_mode=result.st_mode)
+            if entry == tmp_path
+            else result
+        )
+
+    monkeypatch.setattr(Path, "lstat", ownership)
+    with pytest.raises(ValueError, match="parent"):
+        protected_json(path)
+
+
+async def test_authority_equal_alias_observes_shared_revision(resolution_case):
+    import json
+
+    from app.models.corporate_action import StockActionObservation, StockActionSource
+
+    factory, request, data, _action = resolution_case
+    async with factory.begin() as db:
+        source = StockActionSource(
+            event_id=request["event"],
+            provider="alpaca",
+            product="actions",
+            provider_event_id="synthetic-equal-alias",
+        )
+        db.add(source)
+        await db.flush()
+        observation = StockActionObservation(
+            event_id=request["event"],
+            source_id=source.id,
+            revision_id=request["revision"],
+            observed_at=datetime.now(UTC),
+            admission_generation=request["generation"],
+            source_kind="rest",
+            cycle_id="synthetic-alias",
+        )
+        db.add(observation)
+        await db.flush()
+        data = {**data, "observation_id": observation.id, "alias_event_id": request["event"]}
+        await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+        identity = (
+            await db.execute(
+                text(CALL),
+                {**request, "decision": "link_verified_alias", "evidence": json.dumps(data)},
+            )
+        ).scalar_one()
+        assert identity > 0
