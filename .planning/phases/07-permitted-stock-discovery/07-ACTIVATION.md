@@ -8,7 +8,7 @@ preparation_updated: 2026-11-11
 tasks_completed: 1
 live_activation: disabled
 private_requests_made: 0
-owner_ui_acceptance: pending
+owner_ui_acceptance: accepted-2026-11-11
 ---
 
 # Stock discovery activation review and continuation handoff
@@ -351,10 +351,11 @@ backend/.venv/bin/python /tmp/birja-phase07-one-shot/runner.py
 ## Current checkpoint and exact resume path
 
 **07-14-01 authorization is accepted on owner attestation; 1/3 tasks complete.** No 07-14 SUMMARY
-or HUMAN-UAT acceptance is created. All six whole-phase requirement checkboxes
+is created. Owner UI acceptance (“i accept ui”, 2026-11-11) is recorded in
+07-HUMAN-UAT.md; this does not complete the live-dependent Task 03. All six whole-phase requirement checkboxes
 remain pending. Source and local safety proof are ready; provider approval is
-owner-attested. Twenty actual provider mappings, source freshness and owner UI
-acceptance remain unmeasured. No provider agreement or conditions were invented.
+owner-attested. Twenty actual provider mappings and source freshness remain
+unmeasured. No provider agreement or conditions were invented.
 
 Continuation executor: verify this packet's preparation commit and frozen runner
 hashes and observe managed session60401 / the single waiting PID3191116 for
@@ -362,6 +363,6 @@ today's opening. Launch is now confirmed; **waiting is not measured success**.
 Task02 must record real results and any
 coverage/freshness failures, without treating owner attestation as independent
 provider verification or ongoing runtime activation. Then prepare the
-isolated local UI environment for Task 03 owner acceptance; automated browser
-proof does not replace that acceptance. Stock execution remains disabled through
+live acceptance record using the owner's already-received UI acceptance;
+do not request duplicate UI approval. Stock execution remains disabled through
 Phase 8. Provider/payment/deployment/publication actions remain separate.

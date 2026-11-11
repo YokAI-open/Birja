@@ -197,8 +197,8 @@ complete, including calendar dependency review, genuine calendar consumers,
 responsive discovery and local coverage/security/recovery gates. Plan 14 remains
 open: owner-attested permission and bounded verification are authorized, with
 one campaign waiting for the 2026-11-11 regular-session opening. Actual provider
-identity/freshness results and final owner UI acceptance remain pending. The
-acceptance checklist is prepared in `07-HUMAN-UAT.md`; waiting and test fixtures
+identity/freshness results remain pending. Owner UI acceptance was received on
+2026-11-11 and recorded in `07-HUMAN-UAT.md`; waiting and test fixtures
 do not establish live acceptance or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |

@@ -1,15 +1,16 @@
 ---
 phase: 07-permitted-stock-discovery
 plan: "14"
-status: prepared-acceptance-pending
+status: ui-accepted-live-verification-pending
 prepared: 2026-11-11
 ---
 
 # Phase 7 acceptance record
 
 The owner requested continuing independent preparation and checking the live
-measurement later. This record prepares Task 07-14-03; it does not record an
-owner pass, finish Plan 14, or enable stock data or execution.
+measurement later. On 2026-11-11 the owner explicitly stated “i accept ui”.
+UI acceptance is recorded; live measurement acceptance remains pending. This
+does not finish Plan 14 or enable stock data or execution.
 
 ## Evidence already available
 
@@ -36,8 +37,11 @@ No new capture or test execution is claimed by preparing this record.
 
 ## Final review checklist
 
-All owner outcomes below remain **pending**. The assistant prepares and runs the
-isolated environment; the owner need not build, run tests or download data.
+The owner accepted the UI as a whole. Individual viewport, zoom and interaction
+checks were not separately reported by the owner; their automated evidence is
+retained below without inventing manual test executions. The per-check pending
+entries mean no separate owner test result was supplied, not that another
+generic UI approval is required. Live-data acceptance remains pending.
 
 | Review | Existing automated evidence | Owner outcome |
 | --- | --- | --- |
@@ -62,16 +66,16 @@ campaign while checking it. Read the sanitized receipt at
 `/tmp/birja-phase07-one-shot/result-20261111/receipt.json` once available;
 absence before opening is expected, not a failed or passed measurement.
 
-After the result is reviewed, prepare the isolated local UI for the final
-interactive owner check. Record only pass/fail and nonprivate issues, plus
-actual environment/source identity. Screenshot approval cannot substitute for
-keyboard interaction or live-data evidence. Retain unresolved criteria honestly;
-no completed summary or phase completion before the remaining gates pass.
+After the result is reviewed, record actual coverage/freshness and any issues.
+Reuse the owner's UI acceptance; do not request the same approval again.
+Owner acceptance does not establish an independently observed manual keyboard
+or zoom test, or substitute for live-data evidence. Retain unresolved criteria
+honestly; no completed summary or phase completion before remaining gates pass.
 
 ## Owner acceptance
 
-- Result: **Not requested yet; deferred pending actual measurement review.**
-- Review date/environment: Pending.
-- Nonprivate issues: No new owner findings reported; this is not a pass.
+- Result: **UI accepted by owner: “i accept ui”. Live data not yet accepted.**
+- Review date: 2026-11-11; environment not separately specified by owner.
+- Nonprivate issues: None reported with acceptance.
 - Stock execution: Disabled through Phase 8.
 - Production/publication: No deployment, push or merge performed.

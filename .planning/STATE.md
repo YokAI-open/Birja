@@ -120,8 +120,9 @@ No credentials read, private calls, admission import or collection activation.
 Owner deferred measurement review until later and authorized continuing
 independent preparation.07-HUMAN-UAT.md now contains the final acceptance
 checklist, existing final-run screenshot links and explicit pending owner
-outcomes. No new preview server, browser run or visual acceptance is claimed.
-Owner UI acceptance remains later07-14-03. No completed07-14SUMMARY and no
+outcomes. Owner subsequently stated “i accept ui” on2026-11-11; this explicit
+UI acceptance is now recorded. No new preview server, browser run or individually
+observed manual checks are claimed. Live-dependent07-14-03 remains pending. No completed07-14SUMMARY and no
 phase-complete or live criteria claim from fixtures. See07-ACTIVATION.md for
 reviewed source/locks/images/tools, product checklist, exact call bounds and
 continuation handoff. Actions/status remain separately disabled and unverified;
@@ -129,8 +130,8 @@ their rights are required before those products are used, not invented now.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
 Exact reviewed calendar-package approval is recorded; provider permission is
-owner-attested, with actual access,20symbol coverage/freshness and UI acceptance
-remaining explicit measured gates.
+owner-attested, with actual access and20symbol coverage/freshness remaining
+explicit measured gates; owner UI acceptance is recorded.
 Stock execution remains disabled through Phase8; no real stock orders in Phase7.
 Live data or completed acceptance cannot be claimed from fixtures/disabled state.
 
@@ -229,7 +230,7 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Last session:2026-11-11T09:22:49Z
 Stopped at: Owner-attested approval accepted; reviewed one-shot running and waiting for17:30Moscow.
-Resume: Read07-ACTIVATION.md and preparation commit. Observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance07-14-03 remains pending. No completedSUMMARY or phase completion before remaining gates pass.
+Resume: Read07-ACTIVATION.md and preparation commit. Observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance is recorded in07-HUMAN-UAT.md, while live-dependent07-14-03 remains pending. Do not ask for duplicate UI approval. No completedSUMMARY or phase completion before remaining gates pass.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.
