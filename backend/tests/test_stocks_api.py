@@ -9,12 +9,13 @@ import pytest
 from sqlalchemy import insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.models.corporate_action import StockActionState
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockQuote, StockSession
 from app.services import stocks
 from app.services.stock_sessions import build_sessions
 from tests.helpers import sign_in, unique_email
-from tests.test_stock_admission import admitted
+from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_sessions import evidence
 
 NOW = datetime(2026, 11, 10, 15, tzinfo=UTC)
@@ -509,3 +510,19 @@ async def test_bounded_reads_and_no_io_after_projection(
     assert projected == [True]
     assert len(statements) == 3
     assert statements[-1].get_execution_options()["stock_final_evidence"]
+
+
+async def test_action_unknown_suppresses_quote_without_hiding_identity(
+    engine, settings, clean_stock_discovery
+):
+    await seed(engine)
+    async with async_sessionmaker(engine)() as db:
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    first = result["items"][0]
+    assert first["quote"] is None
+    assert first["action"] == {
+        "state": "unknown", "reason": "monitor_unavailable", "epoch": 0,
+        "checked_at": None, "valid_until": None,
+    }
+    assert first["valuation_reason"] == "action_unavailable"
+    assert len(result["items"]) == 20
