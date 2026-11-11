@@ -882,3 +882,21 @@ it("retains the original transport anchor when an equal snapshot arrives before 
     client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
   ).toBeNull();
 });
+
+
+it.each(["equal", "older"])("preserves independent consumed session authority on %s generic redaction", async (kind) => {
+  let now = 0; vi.spyOn(performance, "now").mockImplementation(() => now);
+  const first = payload({ close: 1 });
+  const denied = payload({ close: 1 });
+  denied.server_now = kind === "older" ? stamp(-0.5) : stamp(0);
+  denied.items.forEach((x) => { x.action = { state: "unknown", reason: "monitor_unavailable", epoch: 0, checked_at: null, valid_until: null } as never; x.quote = null; x.quote_reason = "permission_unavailable"; x.valuation_reason = "action_unavailable"; });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(first))).mockResolvedValueOnce(new Response(JSON.stringify(denied))));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  now = 1000;
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  expect(result.current.data?.items[0].session.state).toBe("closed");
+  await act(async () => { await result.current.refetch(); });
+  expect(result.current.data?.items[0]).toMatchObject({ quote: null, action: { epoch: 0, state: "unknown" }, session: { state: "closed" } });
+  expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].session.state).toBe("closed");
+});
