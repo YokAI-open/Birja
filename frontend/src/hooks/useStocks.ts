@@ -375,6 +375,7 @@ export function useStocks() {
             throw new Error("Superseded stock action response");
         }
         // Purge expired permission/review material before entering the cache.
+        observe(guard, response);
         return purgeExpired(withAuthorityClock(guard, response));
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
