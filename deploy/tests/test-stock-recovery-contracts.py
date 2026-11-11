@@ -72,7 +72,16 @@ class RevisionContracts(unittest.TestCase):
                 for column in columns.split():
                     self.assertIn(column, query)
         with self.assertRaises(ValueError):
-            producer.manifest_sql("0012")
+            producer.manifest_sql("0013")
+
+    def test_resolution_authority_has_explicit_exact_contract(self):
+        producer = load("backup-snapshot")
+        query = producer.manifest_sql("0012")
+        self.assertIn("pg_get_functiondef", query)
+        self.assertIn("resolution_authority", query)
+        self.assertIn("birja_action_operator", query)
+        self.assertIn("aclexplode", query)
+        self.assertEqual(producer.identity_tables("0012"), producer.identity_tables("0011"))
 
     def test_accounting_revision_is_explicit_and_preserves_predecessors(self):
         producer = load("backup-snapshot")
