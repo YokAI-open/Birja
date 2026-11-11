@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011")
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -98,14 +98,40 @@ STOCK_COLUMNS = {
     "stock_sessions": "id exchange session_date opens_at closes_at coverage_start coverage_end calendar_admission_generation",
     "stock_data_admissions": "id product state generation reviewed_at valid_from valid_until evidence_ref terms_version collection_allowed display_allowed derived_allowed retention_allowed scope quota allowed_fields attribution calendar",
 }
+ACTION_COLUMNS = {
+    "stock_action_events": "id coin_id economic_key current_revision_id first_observed_at",
+    "stock_action_state": "coin_id epoch unit_epoch sequence health checked_at valid_until admission_generation coverage_start covered_until cursor staged_continuation journal_start_at complete_from quote_not_before next_blocking_at",
+    "stock_action_sources": "id event_id provider product provider_event_id",
+    "stock_action_revisions": "id event_id source_id ordinal fingerprint mutation_kind source_mutation_id source_event_at observed_at admission_generation normalized_terms classification reason verified_cutoff units calendar_provenance",
+    "stock_action_observations": "id event_id source_id revision_id mutation_id observed_at admission_generation source_kind cycle_id",
+    "stock_action_resolutions": "id event_id coin_id expected_revision admission_generation epoch decision decision_key evidence evidence_hash before_digest after_digest actor_ref created_at",
+    "stock_dividend_entitlements": "id event_id user_id revision_id cutoff cutoff_rule version units_basis unit_epoch last_movement_sequence eligible_quantity state supersedes_id fingerprint",
+    "stock_split_applications": "id coin_id economic_event_id revision_id new_rate old_rate cutoff prior_unit_epoch new_unit_epoch sequence_boundary before_digest after_digest processed_at",
+    "stock_ownership_movements": "id coin_id user_id sequence economic_at recorded_at quantity before_quantity after_quantity before_basis after_basis unit_epoch cause_kind trade_id application_id causal_key",
+}
+# Independent migrated0011 catalogue, frozen only after Plan01 review. This
+# includes exact types/defaults, causal FKs, checks and complete index definitions.
+ACCOUNTING_SCHEMA_SHA256 = "93cbd850d4f13148515af53f6693937886d0716d52191ac04362a974c75f0a58"
+
+
+def identity_tables(revision):
+    names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
+    if revision in ("0009", "0010", "0011"):
+        names += ["stock_sessions", "stock_data_admissions"]
+    if revision == "0011":
+        names += [table for table, columns in ACTION_COLUMNS.items() if columns.startswith("id ")]
+    return sorted(names)
 
 
 def contract_columns(revision):
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
-    if revision in ("0009", "0010"):
+    if revision in ("0009", "0010", "0011"):
         columns["coins"] += " asset_class"
         columns.update(STOCK_COLUMNS)
+    if revision == "0011":
+        columns["stock_quotes"] += " unit_epoch"
+        columns.update(ACTION_COLUMNS)
     return {table: set(value.split()) for table, value in columns.items()}
 
 
@@ -148,6 +174,24 @@ def manifest_sql(revision):
         "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
         "  'constraints',",
     )
+    if revision == "0011":
+        quote = fragment("STOCK_ROWS").splitlines()[1]
+        result = result.replace(quote, quote.replace("admission_generation)::text", "admission_generation,unit_epoch)::text"))
+        rows = []
+        timestamps = {"cutoff", "coverage_start", "covered_until", "complete_from", "quote_not_before", "next_blocking_at"}
+        for table, columns in ACTION_COLUMNS.items():
+            expressions = []
+            for column in columns.split():
+                if column.endswith("_at") or column == "valid_until" or column in timestamps:
+                    expressions.append("to_char(" + column + ",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
+                else:
+                    expressions.append(column + "::text")
+            key = "id" if columns.startswith("id ") else "coin_id"
+            rows.append(" UNION ALL SELECT '" + table + "'," + key + ",json_build_array(" + ",".join(expressions) + ")::text FROM " + table)
+        result = result.replace("\n), names(name) AS (", "\n" + "\n".join(rows) + "\n), names(name) AS (")
+        result = result.replace("('stock_data_admissions')\n", "('stock_data_admissions')," + ",".join("('" + t + "')" for t in ACTION_COLUMNS) + "\n")
+        sequences = " UNION ALL ".join("SELECT '" + t + "',last_value,is_called FROM " + t + "_id_seq" for t in identity_tables(revision))
+        result = result.replace(" 'schema',json_build_object(", " 'identity_state',(SELECT json_agg(json_build_array(name,last_value,is_called) ORDER BY name) FROM (" + sequences + ") AS s(name,last_value,is_called)),\n 'schema',json_build_object(")
     return result
 
 
@@ -157,17 +201,7 @@ def schema_guard_sql(revision):
     SQL identifiers derive only from reviewed constants, never operator input.
     """
     tables = contract_columns(revision)
-    identities = [
-        "users",
-        "accounts",
-        "auth_sessions",
-        "refresh_tokens",
-        "coins",
-        "holdings",
-        "trades",
-    ]
-    if revision in ("0009", "0010"):
-        identities += ["stock_sessions", "stock_data_admissions"]
+    identities = identity_tables(revision)
     table_names = ",".join("'" + t + "'" for t in sorted(tables))
     sequence_names = ",".join("'" + t + "_id_seq'" for t in sorted(identities))
     return (
@@ -212,6 +246,15 @@ def validate_manifest(manifest):
             isinstance(manifest["financial"][key], str)
             and Decimal(manifest["financial"][key]).is_finite()
         )
+    if manifest["revision"] == "0011":
+        require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
+        require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == ACCOUNTING_SCHEMA_SHA256)
+        states = manifest["identity_state"]
+        require(isinstance(states, list) and len(states) == len(identity_tables("0011")))
+        require([row[0] for row in states] == identity_tables("0011"))
+        for name, value, called in states:
+            require(type(value) is int and 1 <= value <= 9223372036854775807)
+            require(type(called) is bool)
     if manifest["revision"] in ("0009", "0010"):
         require(
             type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0

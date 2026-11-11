@@ -800,8 +800,10 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    stock = manifest["revision"] in ("0009", "0010")
-    require(constraints == (b"10" if stock else b"8"))
+    stock = manifest["revision"] in ("0009", "0010", "0011")
+    require(constraints == (b"40" if manifest["revision"] == "0011" else b"10" if stock else b"8"))
+    if manifest["revision"] == "0011":
+        require(actual["identity_state"] == manifest["identity_state"])
     require(
         sql(
             dc,
@@ -826,17 +828,7 @@ def verify(dc, manifest):
     )
     # Check identity progression without consuming sequence values. MVCC sequence
     # state need not equal the source; every future generated id must be safe.
-    identities = [
-        "users",
-        "accounts",
-        "auth_sessions",
-        "refresh_tokens",
-        "coins",
-        "holdings",
-        "trades",
-    ]
-    if stock:
-        identities += ["stock_sessions", "stock_data_admissions"]
+    identities = contract.identity_tables(manifest["revision"])
     for table in identities:
         sequence = f"{table}_id_seq"
         require(

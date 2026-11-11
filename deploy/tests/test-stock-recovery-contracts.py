@@ -15,6 +15,24 @@ from unittest import mock
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 
+ACTION_SEED = """
+BEGIN;
+INSERT INTO stock_action_events(coin_id,economic_key,first_observed_at) SELECT coin_id,'11111111-1111-4111-8111-111111111111',now() FROM stock_instruments ORDER BY coin_id LIMIT 1;
+INSERT INTO stock_action_sources(event_id,provider,product,provider_event_id) SELECT id,'alpaca','actions','synthetic-original' FROM stock_action_events;
+INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason) SELECT event_id,id,1,repeat('a',64),'snapshot',now(),7,'{"cash_rate":"0.25"}','uncertain','synthetic-held' FROM stock_action_sources;
+UPDATE stock_action_events SET current_revision_id=(SELECT id FROM stock_action_revisions);
+INSERT INTO stock_action_sources(event_id,provider,product,provider_event_id) SELECT id,'alpaca','actions','synthetic-alias' FROM stock_action_events;
+INSERT INTO stock_action_observations(event_id,source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id) SELECT s.event_id,s.id,r.id,now(),7,'rest','synthetic-cycle' FROM stock_action_sources s JOIN stock_action_revisions r ON r.event_id=s.event_id;
+INSERT INTO stock_action_state(coin_id,epoch,unit_epoch,sequence,health,admission_generation,cursor,staged_continuation,journal_start_at,complete_from) SELECT coin_id,3,1,2,'unknown',7,'synthetic-cursor','{"page":"pending"}',now()-interval '1 day',now() FROM stock_action_events;
+INSERT INTO stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at) SELECT e.coin_id,e.id,r.id,'2','1',now(),0,1,1,repeat('b',64),repeat('c',64),now() FROM stock_action_events e JOIN stock_action_revisions r ON r.event_id=e.id;
+INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) SELECT a.coin_id,u.id,1,now()-interval '1 day',now(),2,0,2,0,20,0,'opening','synthetic-opening' FROM stock_split_applications a CROSS JOIN (SELECT id FROM users ORDER BY id LIMIT 1) u;
+INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,application_id,causal_key) SELECT a.coin_id,u.id,2,now(),now(),2,2,4,20,20,1,'split',a.id,'synthetic-split' FROM stock_split_applications a CROSS JOIN (SELECT id FROM users ORDER BY id LIMIT 1) u;
+INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,fingerprint) SELECT e.id,u.id,r.id,now(),'synthetic-cutoff',1,'post-split',1,2,4,'held',repeat('d',64) FROM stock_action_events e JOIN stock_action_revisions r ON r.event_id=e.id CROSS JOIN (SELECT id FROM users ORDER BY id LIMIT 1) u;
+INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,supersedes_id,fingerprint) SELECT event_id,user_id,revision_id,cutoff,cutoff_rule,2,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,'cancelled',id,repeat('e',64) FROM stock_dividend_entitlements;
+INSERT INTO stock_action_resolutions(event_id,coin_id,expected_revision,admission_generation,epoch,decision,decision_key,evidence,evidence_hash,before_digest,after_digest,actor_ref,created_at) SELECT e.id,e.coin_id,r.id,7,3,'hold','synthetic-decision','{"fixture":true}',repeat('f',64),repeat('a',64),repeat('b',64),'synthetic-operator',now() FROM stock_action_events e JOIN stock_action_revisions r ON r.event_id=e.id;
+COMMIT;
+"""
+
 
 def load(name):
     spec = importlib.util.spec_from_file_location(
@@ -37,6 +55,7 @@ class RevisionContracts(unittest.TestCase):
         self.assertNotIn("stock_", legacy)
         for revision in ("0009", "0010"):
             query = producer.manifest_sql(revision)
+            self.assertEqual(hashlib.sha256(query.encode()).hexdigest(), "30b3ab0789afa3187fdda383241dfdb115fd102471604a8bb43bf91c21e9d8c1")
             for table, columns in producer.STOCK_COLUMNS.items():
                 self.assertIn("FROM " + table, query)
                 for column in columns.split():
@@ -174,7 +193,7 @@ class PostgreSQLContracts(unittest.TestCase):
             == "t"
         ):
             self.migrate("base", "downgrade")
-        for revision in producer.SUPPORTED_REVISIONS:
+        for revision in producer.SUPPORTED_REVISIONS[:-1]:
             self.migrate(revision)
             baseline = self.manifest(revision)
             self.verify(baseline)
@@ -335,6 +354,34 @@ INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,s
         self.query(
             "DELETE FROM stock_quotes; DELETE FROM stock_sessions; DELETE FROM stock_data_admissions;"
         )
+
+    def test_z_accounting_rows_schema_and_exact_identity_state(self):
+        self.migrate("0011")
+        self.query("INSERT INTO users(email) VALUES ('accounting-recovery@example.invalid') ON CONFLICT(email) DO NOTHING;")
+        self.query(ACTION_SEED)
+        producer = load("backup-snapshot")
+        baseline = self.manifest("0011")
+        self.verify(baseline)
+        for table in producer.ACTION_COLUMNS:
+            self.assertGreater(baseline["tables"][table]["count"], 0, table)
+            damaged = copy.deepcopy(baseline)
+            damaged["tables"][table]["sha256"] = "0" * 64
+            with self.assertRaises(ValueError, msg=table):
+                self.verify(damaged)
+        for row in baseline["identity_state"]:
+            damaged = copy.deepcopy(baseline)
+            target = next(x for x in damaged["identity_state"] if x[0] == row[0])
+            target[1] += 1
+            with self.assertRaises(ValueError, msg=row[0]):
+                self.verify(damaged)
+        for field in ("constraints", "indexes", "columns", "identities", "sequences"):
+            damaged = copy.deepcopy(baseline)
+            damaged["schema"][field].pop()
+            with self.assertRaises(ValueError, msg=field):
+                producer.validate_manifest(damaged)
+        # Held/cancelled state and continuation are durable, never normalized.
+        self.assertIn("held", self.query("SELECT state FROM stock_dividend_entitlements ORDER BY id;"))
+        self.query("DELETE FROM stock_action_resolutions; DELETE FROM stock_dividend_entitlements; DELETE FROM stock_ownership_movements; DELETE FROM stock_split_applications; DELETE FROM stock_action_state; DELETE FROM stock_action_observations; UPDATE stock_action_events SET current_revision_id=NULL; DELETE FROM stock_action_revisions; DELETE FROM stock_action_sources; DELETE FROM stock_action_events; DELETE FROM users WHERE email='accounting-recovery@example.invalid';")
 
 
 if __name__ == "__main__":
