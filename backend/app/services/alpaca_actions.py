@@ -7,9 +7,11 @@ Public protocol source identity and bounded fixtures are pinned in the tests.
 
 import asyncio
 import copy
+import hashlib
 import inspect
 import json
 import math
+import random
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -27,6 +29,7 @@ from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
 
 REST_URL = "https://data.alpaca.markets/v1/corporate-actions"
 REPLAY_URL = "https://stream.data.alpaca.markets/v1beta1/events/corporate-actions"
+_JITTER = random.SystemRandom().random
 _TYPES = {
     "capital_gains_distributions": "capital_gains_distribution",
     "cash_dividends": "cash_dividend",
@@ -277,6 +280,8 @@ def _rate(value: Any, *, replay: bool) -> Decimal | None:
     if value is None:
         return None
     try:
+        if replay and not isinstance(value, str):
+            raise ValueError
         result = _number(value) if replay and isinstance(value, str) else value
         if not isinstance(result, Decimal) or not 0 < result < Decimal("1e12"):
             raise ValueError
@@ -404,7 +409,8 @@ async def _attempt(ctx: _Context) -> int:
 
 
 async def _request(ctx: _Context, params: dict[str, str]) -> bytes:
-    for retry in range(2):
+    retry = False
+    while True:
         limit = await _attempt(ctx)
         delay = 0.0
         try:
@@ -418,6 +424,8 @@ async def _request(ctx: _Context, params: dict[str, str]) -> bytes:
                     headers={"Accept-Encoding": "identity"},
                 ) as response:
                     await ctx.guard()
+                    if response.headers.get("Content-Encoding", "identity").lower() != "identity":
+                        raise ActionError("content_encoding")
                     if response.status_code in (429, 500, 502, 503, 504):
                         try:
                             delay = float(_number(response.headers.get("Retry-After", "1")))
@@ -447,8 +455,8 @@ async def _request(ctx: _Context, params: dict[str, str]) -> bytes:
             delay = 1
         except TimeoutError:
             raise ActionError("attempt_timeout") from None
-        await _pause(ctx, max(1, delay))
-    raise ActionError("attempt_budget")
+        await _pause(ctx, max(1 + _JITTER(), delay))
+        retry = True
 
 
 def _context(
@@ -667,5 +675,264 @@ async def recheck_action_ids(
         budget._busy = False
 
 
-async def replay_action_mutations(*args: Any, **kwargs: Any) -> ActionBatch:
-    return ActionBatch()
+def _cursor(value: Any) -> str:
+    if not isinstance(value, str) or _ULID.fullmatch(value) is None:
+        raise ActionError("invalid_cursor")
+    return value
+
+
+def _ulid_millis(value: str) -> int:
+    result = 0
+    for character in value[:10]:
+        result = result * 32 + "0123456789ABCDEFGHJKMNPQRSTVWXYZ".index(character)
+    return result
+
+
+def _mutation_frame(
+    data: bytes,
+    ctx: _Context,
+    seen: dict[str, bytes],
+    last: str | None,
+    since: datetime | None,
+    until: datetime | None,
+    since_id: str | None,
+    until_id: str | None,
+) -> tuple[list[ActionObservation], str | None, bool]:
+    entries = _decode(data)
+    if not isinstance(entries, list) or not entries:
+        raise ActionError("invalid_frame")
+    rows: list[ActionObservation] = []
+    terminal = False
+    for entry in entries:
+        ctx.budget.mutations += 1
+        if ctx.budget.mutations > ctx.budget.max_mutations:
+            raise ActionError("mutation_budget")
+        if not isinstance(entry, dict) or set(entry) != {
+            "event_id",
+            "at",
+            "action",
+            "region",
+            "event_type",
+            "ca",
+        }:
+            raise ActionError("invalid_envelope")
+        cursor = _cursor(entry["event_id"])
+        event_at = _stamp(entry["at"])
+        mutation = entry["action"]
+        name = entry["event_type"]
+        if (
+            mutation not in ("insert", "update", "delete")
+            or entry["region"] != "us"
+            or not isinstance(name, str)
+            or not name.endswith("_corporateaction_event")
+            or event_at > ctx.now()
+        ):
+            raise ActionError("invalid_envelope")
+        kind = name.removesuffix("_corporateaction_event")
+        if kind == "equity_partial_call":
+            kind = "partial_call"
+        if kind not in _TYPES.values():
+            raise ActionError("unknown_schema")
+        if (since is not None and (event_at < since or event_at > cast(datetime, until))) or (
+            since_id is not None and (cursor < since_id or cursor > cast(str, until_id))
+        ):
+            raise ActionError("outside_window")
+        # Digests are transient deduplication, never persisted provider payloads.
+        digest = hashlib.sha256(json.dumps(entry, sort_keys=True, default=str).encode()).digest()
+        if cursor in seen:
+            if seen[cursor] != digest:
+                raise ActionError("cursor_conflict")
+            continue
+        if last is not None and cursor <= last:
+            raise ActionError("cursor_order")
+        actions = _normalize(
+            entry["ca"], kind, ctx, replay=True, cancelled=mutation == "delete", source_at=event_at
+        )
+        rows.extend(ActionObservation(action, mutation, cursor, event_at) for action in actions)
+        seen[cursor] = digest
+        last = cursor
+        terminal = terminal or cursor == until_id
+    return rows, last, terminal
+
+
+async def _replay(
+    ctx: _Context,
+    params: dict[str, str],
+    coverage: ActionCoverage,
+    since: datetime | None,
+    until: datetime | None,
+    since_id: str | None,
+    until_id: str | None,
+) -> ActionBatch:
+    rows: list[ActionObservation] = []
+    last: str | None = None
+    seen: dict[str, bytes] = {}
+    terminal = False
+    try:
+        # Replay never reconnects automatically: validated partial frames/cursors
+        # are returned as incomplete, for the durable consumer to reconcile.
+        async with asyncio.timeout(ctx.budget.remaining()):
+            limit = await _attempt(ctx)
+            async with asyncio.timeout(min(ctx.budget.remaining(), ctx.budget.attempt_seconds)):
+                async with ctx.http.stream(
+                    "GET",
+                    REPLAY_URL,
+                    params=params,
+                    follow_redirects=False,
+                    timeout=ctx.budget.attempt_seconds,
+                    headers={"Accept": "text/event-stream", "Accept-Encoding": "identity"},
+                ) as response:
+                    await ctx.guard()
+                    if response.headers.get("Content-Encoding", "identity").lower() != "identity":
+                        raise ActionError("content_encoding")
+                    if response.status_code != 200:
+                        raise ActionError("replay_unavailable")
+                    if (
+                        response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                        != "text/event-stream"
+                    ):
+                        raise ActionError("content_type")
+                    buffer = bytearray()
+                    frame: list[bytes] = []
+                    frame_size = 0
+                    response_size = 0
+                    async for chunk in response.aiter_bytes():
+                        await ctx.guard()
+                        response_size += len(chunk)
+                        ctx.budget.total_bytes += len(chunk)
+                        if response_size > limit:
+                            raise ActionError("response_limit")
+                        if ctx.budget.total_bytes > ctx.budget.max_total_bytes:
+                            raise ActionError("byte_budget")
+                        # Byte-by-byte framing bounds both lines and whole frames
+                        # without buffering an arbitrary stream before decoding.
+                        for byte in chunk:
+                            frame_size += 1
+                            if frame_size > ctx.budget.max_frame_bytes:
+                                raise ActionError("frame_limit")
+                            if byte != 10:
+                                buffer.append(byte)
+                                continue
+                            line = bytes(buffer).removesuffix(b"\r")
+                            buffer.clear()
+                            if line:
+                                frame.append(line)
+                                continue
+                            data: list[bytes] = []
+                            for field in frame:
+                                if field.startswith(b":"):
+                                    continue
+                                key, separator, value = field.partition(b":")
+                                if not separator or key not in (b"data", b"id", b"event"):
+                                    raise ActionError("invalid_framing")
+                                if key == b"data":
+                                    data.append(value.removeprefix(b" "))
+                            if data:
+                                page, next_cursor, reached = _mutation_frame(
+                                    b"\n".join(data),
+                                    ctx,
+                                    seen,
+                                    last,
+                                    since,
+                                    until,
+                                    since_id,
+                                    until_id,
+                                )
+                                await ctx.guard()
+                                rows.extend(page)
+                                last = next_cursor
+                                terminal = terminal or reached
+                            frame.clear()
+                            frame_size = 0
+                    await ctx.guard()
+                    if buffer or frame:
+                        raise ActionError("truncated_frame")
+                    if until_id is not None and not terminal:
+                        raise ActionError("source_gap")
+                    # Timestamp mode's normal protocol EOF is the documented
+                    # inclusive historical until close, NOT an idle timeout.
+                    completed = ActionCoverage(
+                        "replay",
+                        coverage.start,
+                        coverage.end,
+                        True,
+                        "terminal_id" if until_id else "historical_until_close",
+                    )
+                    return _batch(rows, (completed,), last, True, ctx.budget, completed.reason)
+    except ActionError as exc:
+        reason = str(exc)
+    except httpx.TransportError:
+        reason = "source_gap"
+    except TimeoutError:
+        reason = "replay_timeout"
+    if reason in ("admission", "admission_changed", "lease"):
+        rows.clear()
+        last = None
+    return _batch(rows, (coverage,), last, False, ctx.budget, reason)
+
+
+async def replay_action_mutations(
+    http: httpx.AsyncClient,
+    mappings: Sequence[StockMapping],
+    evidence: EvidenceLoader,
+    now: Callable[[], datetime],
+    budget: ActionBudget,
+    *,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    since_id: str | None = None,
+    until_id: str | None = None,
+    lease: LeaseCheck = lambda: True,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    account: str = "birja",
+    server: str = "birja",
+) -> ActionBatch:
+    """One finite, separately admitted all-US historical replay; no live worker.
+
+    ID mode requires the exact inclusive terminal emission. Timestamp mode
+    requires normal HTTP EOF on the documented historical-until request and
+    fully terminated frames. HTTP errors, truncation, idle timeout or missing
+    terminal ID never prove coverage. Local retained observations are curated.
+    """
+    try:
+        if since_id is not None or until_id is not None:
+            if since is not None or until is not None:
+                raise ActionError("invalid_window")
+            _cursor(since_id)
+            _cursor(until_id)
+            if cast(str, since_id) > cast(str, until_id) or _ulid_millis(cast(str, until_id)) > int(
+                now().timestamp() * 1000
+            ):
+                raise ActionError("invalid_window")
+            params = {
+                "since_id": cast(str, since_id),
+                "until_id": cast(str, until_id),
+                "region": "us",
+            }
+            first, final = cast(str, since_id), cast(str, until_id)
+        else:
+            if (
+                not utc(since)
+                or not utc(until)
+                or not cast(datetime, since) <= cast(datetime, until) <= now()
+            ):
+                raise ActionError("invalid_window")
+            first, final = cast(datetime, since).isoformat(), cast(datetime, until).isoformat()
+            params = {"since": first, "until": final, "region": "us"}
+        ctx = _context(
+            http, mappings, evidence, now, budget, lease, sleep, account, server, "replay"
+        )
+    except ActionError as exc:
+        return ActionBatch(attempt_count=budget.attempts, reason=str(exc))
+    try:
+        return await _replay(
+            ctx,
+            params,
+            ActionCoverage("replay", first, final, False, "source_gap"),
+            since,
+            until,
+            since_id,
+            until_id,
+        )
+    finally:
+        budget._busy = False

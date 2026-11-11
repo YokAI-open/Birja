@@ -21,12 +21,12 @@ import pytest
 import respx
 
 from app.services.alpaca_actions import (
+    REPLAY_URL,
     REST_URL,
     ActionBudget,
     fetch_action_snapshot,
     recheck_action_ids,
     replay_action_mutations,
-    REPLAY_URL,
 )
 from app.services.stock_quote_rules import StockMapping
 from tests.test_stock_admission import action_admitted
@@ -381,3 +381,434 @@ async def test_replay_inclusive_terminal_witness_deduplicates_but_preserves_muta
         "until_id": LAST,
         "region": "us",
     }
+
+
+async def replay(http, budget=None, **kwargs):
+    return await replay_action_mutations(
+        http,
+        [MAPPING],
+        kwargs.pop("evidence", action_admitted),
+        lambda: NOW,
+        budget or ActionBudget(),
+        since_id=kwargs.pop("since_id", CURSOR),
+        until_id=kwargs.pop("until_id", LAST),
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize(
+    "body,reason",
+    [
+        (frame(), "source_gap"),
+        (frame()[:-1], "truncated_frame"),
+        (frame() + b"data: {", "truncated_frame"),
+        (frame().replace(b"data:", b"unknown:"), "invalid_framing"),
+        (b"data: []\n\n", "invalid_frame"),
+        (b"data: {}\n\n", "invalid_frame"),
+        (frame().replace(b'"us"', b'"non_us"'), "invalid_envelope"),
+        (frame().replace(b'"insert"', b'"cancel"'), "invalid_envelope"),
+        (
+            frame().replace(
+                b"cash_dividend_corporateaction_event", b"unknown_corporateaction_event"
+            ),
+            "unknown_schema",
+        ),
+        (
+            frame().replace(b'"at": "2026-11-10T14:00:00Z"', b'"at": "2026-11-10T16:00:00Z"'),
+            "invalid_envelope",
+        ),
+        (frame().replace(b'"at": "2026-11-10T14:00:00Z"', b'"at": "invalid"'), "invalid_timestamp"),
+        (
+            frame().replace(b'"at": "2026-11-10T14:00:00Z"', b'"at": "2026-02-31T14:00:00Z"'),
+            "invalid_timestamp",
+        ),
+        (frame().replace(CURSOR.encode(), b"not-an-id"), "invalid_cursor"),
+        (frame().replace(b'"ca":', b'"extra": true, "ca":'), "invalid_envelope"),
+        (frame().replace(b'"rate": "0.24000001"', b'"rate": "1e99999999999999"'), "invalid_rate"),
+        (frame().replace(b'"rate": "0.24000001"', b'"rate": 0.24'), "invalid_rate"),
+        (frame() + frame(CURSOR, "update"), "cursor_conflict"),
+        (frame(LAST) + frame(CURSOR), "cursor_order"),
+        (frame("01J9RPMV5TKB8WX3M4F1KZ7QH4"), "outside_window"),
+    ],
+)
+async def test_replay_adversarial_protocol_is_incomplete(body, reason):
+    with respx.mock() as router:
+        router.get(REPLAY_URL).respond(
+            200, content=body, headers={"Content-Type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay(http)
+    assert not batch.complete and batch.reason == reason
+
+
+async def test_replay_unrelated_terminal_witness_discarded_and_update_retained():
+    body = b": heartbeat\n\n" + frame(CURSOR, "update") + frame(LAST, symbol="ZZZZ")
+    with respx.mock() as router:
+        route = router.get(REPLAY_URL).respond(
+            200,
+            content=body.replace(b"\n", b"\r\n"),
+            headers={"Content-Type": "text/event-stream; charset=utf-8"},
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay(http)
+    assert batch.complete and batch.continuation == LAST and len(batch.records) == 1
+    assert batch.observations[0].mutation == "update"
+    assert "ZZZZ" not in repr(batch)
+    assert route.calls.last.request.headers["accept"] == "text/event-stream"
+
+
+@pytest.mark.parametrize(
+    "kwargs,reason",
+    [
+        ({"since_id": "bad"}, "invalid_cursor"),
+        ({"until_id": None}, "invalid_cursor"),
+        ({"since_id": LAST, "until_id": CURSOR}, "invalid_window"),
+        ({"until_id": "7ZZZZZZZZZZZZZZZZZZZZZZZZZ"}, "invalid_window"),
+        ({"since": NOW}, "invalid_window"),
+    ],
+)
+async def test_replay_invalid_windows_make_no_attempts(kwargs, reason):
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await replay(http, **kwargs)
+    assert batch.reason == reason and batch.attempt_count == 0
+
+
+async def test_replay_timestamp_until_normal_close_and_inclusive_empty_window():
+    for body in (frame(), b""):
+        with respx.mock() as router:
+            route = router.get(REPLAY_URL).respond(
+                200, content=body, headers={"Content-Type": "text/event-stream"}
+            )
+            async with httpx.AsyncClient(trust_env=False) as http:
+                batch = await replay_action_mutations(
+                    http,
+                    [MAPPING],
+                    action_admitted,
+                    lambda: NOW,
+                    ActionBudget(),
+                    since=NOW - timedelta(hours=2),
+                    until=NOW - timedelta(minutes=30),
+                )
+        assert batch.complete and batch.reason == "historical_until_close"
+        assert set(route.calls.last.request.url.params) == {"since", "until", "region"}
+
+
+@pytest.mark.parametrize(
+    "mode,reason",
+    [
+        ("frame", "frame_limit"),
+        ("mutation", "mutation_budget"),
+        ("response", "response_limit"),
+        ("total", "byte_budget"),
+    ],
+)
+async def test_replay_all_stream_bounds_count_discarded_data(mode, reason):
+    budget = ActionBudget()
+    body = frame() + frame(LAST, symbol="ZZZZ")
+    if mode == "frame":
+        budget.max_frame_bytes = 30
+    elif mode == "mutation":
+        budget.max_mutations = 1
+    elif mode == "response":
+        budget.max_response_bytes = 100
+    else:
+        budget.max_total_bytes = 100
+    with respx.mock() as router:
+        router.get(REPLAY_URL).respond(
+            200, content=body, headers={"Content-Type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay(http, budget)
+    assert not batch.complete and batch.reason == reason and batch.attempt_count == 1
+
+
+@pytest.mark.parametrize(
+    "status,content_type,reason",
+    [
+        (403, "text/event-stream", "replay_unavailable"),
+        (302, "text/event-stream", "replay_unavailable"),
+        (200, "application/json", "content_type"),
+    ],
+)
+async def test_replay_unavailable_or_wrong_type_never_renews_coverage(status, content_type, reason):
+    with respx.mock() as router:
+        router.get(REPLAY_URL).respond(
+            status, content=frame(LAST), headers={"Content-Type": content_type}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay(http)
+    assert batch.reason == reason and not batch.complete and not batch.records
+
+
+async def test_replay_requires_distinct_all_us_ingress_permission():
+    evidence = action_admitted()
+    evidence = replace(
+        evidence, scope={**evidence.scope, "capabilities": ["rest"], "all_us_replay_ingress": False}
+    )
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await replay(http, evidence=lambda: evidence)
+    assert batch.reason == "admission" and not batch.records and batch.attempt_count == 0
+
+
+@pytest.mark.parametrize("mode", ["revoke", "disconnect", "timeout", "cancel"])
+async def test_replay_awaited_stream_revocation_disconnect_timeout_and_cancellation(mode):
+    evidence = action_admitted()
+
+    class Body(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            nonlocal evidence
+            yield frame()
+            if mode == "revoke":
+                evidence = replace(evidence, collection_allowed=False)
+            elif mode == "disconnect":
+                raise httpx.ReadError("private-value")
+            elif mode == "timeout":
+                await asyncio.sleep(0.05)
+            else:
+                raise asyncio.CancelledError
+            yield frame(LAST)
+
+    with respx.mock() as router:
+        router.get(REPLAY_URL).respond(
+            200, stream=Body(), headers={"Content-Type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            budget = ActionBudget(attempt_seconds=0.01)
+            if mode == "cancel":
+                with pytest.raises(asyncio.CancelledError):
+                    await replay(http, budget, evidence=lambda: evidence)
+                assert not budget._busy
+                return
+            batch = await replay(http, budget, evidence=lambda: evidence)
+    assert not batch.complete and not budget._busy and "private-value" not in repr(batch)
+    assert (
+        batch.reason
+        == {"revoke": "admission", "disconnect": "source_gap", "timeout": "replay_timeout"}[mode]
+    )
+    if mode == "revoke":
+        assert not batch.records and batch.continuation is None
+
+
+@pytest.mark.parametrize(
+    "budget_changes",
+    [
+        {"max_attempts": 9},
+        {"max_pages": False},
+        {"attempt_seconds": 6},
+        {"total_seconds": float("nan")},
+        {"max_frame_bytes": 0},
+    ],
+)
+async def test_rest_invalid_budget_never_contacts_provider(budget_changes):
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await rest(http, ActionBudget(**budget_changes))
+    assert batch.reason == "invalid_budget" and batch.attempt_count == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs,reason",
+    [
+        ({"start": NOW}, "invalid_window"),
+        ({"end": NOW.date() - timedelta(days=1)}, "invalid_window"),
+        ({"mappings": []}, "invalid_request"),
+        ({"mappings": [MAPPING, MAPPING]}, "invalid_request"),
+        ({"mappings": [replace(MAPPING, provider_asset_id=None)]}, "invalid_request"),
+        ({"evidence": lambda: None}, "admission"),
+    ],
+)
+async def test_rest_invalid_scope_and_windows_are_zero_attempts(kwargs, reason):
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await rest(http, **kwargs)
+    assert batch.reason == reason and batch.attempt_count == 0
+
+
+@pytest.mark.parametrize("ids", [{}, {"bad": "AAPL"}, {EVENT_ID: "NVDA"}])
+async def test_rest_invalid_known_ids_make_no_attempt(ids):
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await recheck_action_ids(
+            http, [MAPPING], action_admitted, lambda: NOW, ActionBudget(), ids=ids
+        )
+    assert not batch.complete and batch.attempt_count == 0
+    assert batch.reason in ("invalid_ids", "invalid_identity")
+
+
+@pytest.mark.parametrize(
+    "body,reason",
+    [
+        (BODY.replace(EVENT_ID.encode(), EVENT_ID.upper().encode()), "invalid_identity"),
+        (BODY.replace(b'[{"id"', b'[null,{"id"'), "invalid_record"),
+        (b'{"corporate_actions":{"cash_dividends":{}},"next_page_token":null}', "invalid_body"),
+        (
+            b'{"corporate_actions":{"cash_dividends":['
+            + b"null," * 1000
+            + b'null]},"next_page_token":null}',
+            "record_limit",
+        ),
+        (BODY.replace(b"037833100", b'has\\"quote\\\\backslash[]'), "pages_exhausted"),
+    ],
+)
+async def test_rest_additional_parser_limits_and_escaped_string_brackets(body, reason):
+    with respx.mock() as router:
+        router.get(REST_URL).respond(200, content=body)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(http)
+    assert batch.reason == reason
+    assert batch.complete == (reason == "pages_exhausted")
+
+
+@pytest.mark.parametrize(
+    "kind,reason", [("status", "http_retry_exhausted"), ("transport", "transport")]
+)
+async def test_rest_retry_is_at_most_one_for_status_and_transport(kind, reason):
+    clock = Clock()
+    with respx.mock() as router:
+        responses = (
+            [httpx.Response(503), httpx.Response(503)]
+            if kind == "status"
+            else [httpx.ConnectError("private-value"), httpx.ReadError("private-value")]
+        )
+        route = router.get(REST_URL).mock(side_effect=responses)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(http, ActionBudget(monotonic=clock), sleep=clock.sleep)
+    assert batch.reason == reason and batch.attempt_count == route.call_count == 2
+    assert "private-value" not in repr(batch)
+
+
+async def test_rest_cadence_exhaustion_and_elapsed_clock_are_not_late_requests():
+    clock = Clock()
+    budget = ActionBudget(monotonic=clock, total_seconds=2)
+    with respx.mock() as router:
+        route = router.get(REST_URL).respond(200, content=EMPTY.replace(b"null", b'"next"'))
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(http, budget, sleep=clock.sleep)
+            clock.value = 3
+            expired = await rest(http, budget, sleep=clock.sleep)
+    assert batch.reason == expired.reason == "cycle_budget" and route.call_count == 1
+
+
+async def test_rest_zero_cadence_wait_and_async_authority_and_lease_reload():
+    clock = Clock()
+    count = 0
+
+    async def evidence():
+        nonlocal count
+        count += 1
+        return action_admitted()
+
+    async def lease():
+        return True
+
+    async def response(request):
+        clock.value += 5
+        return httpx.Response(
+            200, content=EMPTY.replace(b"null", b'"next"') if clock.value == 5 else EMPTY
+        )
+
+    with respx.mock() as router:
+        router.get(REST_URL).mock(side_effect=response)
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(
+                http,
+                ActionBudget(monotonic=clock),
+                sleep=clock.sleep,
+                evidence=evidence,
+                lease=lease,
+            )
+    assert batch.complete and count > 4 and clock.sleeps == []
+
+
+async def test_rest_second_lease_recheck_and_evidence_change_clear_partial_data():
+    evidence = action_admitted()
+    lease_calls = 0
+
+    async def lease():
+        nonlocal lease_calls
+        lease_calls += 1
+        return lease_calls != 2
+
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await rest(http, lease=lease)
+    assert batch.reason == "lease" and batch.attempt_count == 0
+
+    class Body(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            nonlocal evidence
+            evidence = replace(evidence, attribution="Changed valid attribution")
+            yield BODY
+
+    with respx.mock() as router:
+        router.get(REST_URL).respond(200, stream=Body())
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(http, evidence=lambda: evidence)
+    assert batch.reason == "admission_changed" and not batch.records
+
+
+async def test_rest_cycle_timeout_in_authority_and_concurrent_budget_rejected():
+    async def evidence():
+        await asyncio.sleep(0.05)
+        return action_admitted()
+
+    budget = ActionBudget(total_seconds=0.01)
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await rest(http, budget, evidence=evidence)
+        assert batch.reason == "cycle_budget" and not budget._busy
+        budget._busy = True
+        concurrent = await rest(http, budget)
+    assert concurrent.reason == "concurrent_budget" and budget._busy
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"since": NOW, "until": NOW + timedelta(seconds=1)},
+        {"since": NOW, "until": NOW - timedelta(seconds=1)},
+    ],
+)
+async def test_replay_timestamp_invalid_or_future_terminal_is_no_request(kwargs):
+    async with httpx.AsyncClient(trust_env=False) as http:
+        batch = await replay_action_mutations(
+            http, [MAPPING], action_admitted, lambda: NOW, ActionBudget(), **kwargs
+        )
+    assert batch.reason == "invalid_window" and batch.attempt_count == 0
+
+
+async def test_replay_partial_call_actual_type_and_sse_metadata_and_outside_timestamp():
+    body = frame(LAST).replace(
+        b"cash_dividend_corporateaction_event", b"equity_partial_call_corporateaction_event"
+    )
+    body = b"id: " + LAST.encode() + b"\nevent: message\n" + body
+    with respx.mock() as router:
+        router.get(REPLAY_URL).respond(
+            200, content=body, headers={"Content-Type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay(http)
+            outside = await replay_action_mutations(
+                http,
+                [MAPPING],
+                action_admitted,
+                lambda: NOW,
+                ActionBudget(),
+                since=NOW - timedelta(minutes=20),
+                until=NOW - timedelta(minutes=10),
+            )
+    assert batch.complete and batch.records[0].event_type == "partial_call"
+    assert batch.records[0].identity_changed
+    assert outside.reason == "outside_window" and not outside.complete
+
+
+@pytest.mark.parametrize("url", [REST_URL, REPLAY_URL])
+async def test_reject_content_encoding_before_decoder_allocation(url):
+    # Server disregarding Accept-Encoding identity must not activate an
+    # unbounded HTTPX decompressor before our byte/frame checks.
+    class Encoded(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            raise AssertionError("Compressed body must not be read")
+            yield b""
+
+    with respx.mock() as router:
+        router.get(url).respond(200, stream=Encoded(), headers={"Content-Encoding": "gzip"})
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await rest(http) if url == REST_URL else await replay(http)
+    assert not batch.complete and batch.reason == "content_encoding"
