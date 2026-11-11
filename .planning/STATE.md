@@ -117,6 +117,10 @@ at most5minutes late, then one900second campaign/max30private HTTP attempts
 limits are in07-ACTIVATION.md. Account context and permission are owner-attested;
 internal validity limits do not invent provider grant duration or account quota.
 No credentials read, private calls, admission import or collection activation.
+Owner deferred measurement review until later and authorized continuing
+independent preparation.07-HUMAN-UAT.md now contains the final acceptance
+checklist, existing final-run screenshot links and explicit pending owner
+outcomes. No new preview server, browser run or visual acceptance is claimed.
 Owner UI acceptance remains later07-14-03. No completed07-14SUMMARY and no
 phase-complete or live criteria claim from fixtures. See07-ACTIVATION.md for
 reviewed source/locks/images/tools, product checklist, exact call bounds and

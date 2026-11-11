@@ -192,12 +192,14 @@ Plans:
 
 ## Progress
 
-**Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase7 execution is underway:
-07-01schema/catalogue,07-02crypto boundaries,07-03revisioned recovery contracts
-and07-04restricted-role TLS/exact retained restore proofs are complete, together
-with07-05product admission and07-06exact quote/persistence rules.07-07calendar
-dependency review is next. Genuine calendar consumer semantics
-remain required in07-08/13 before activation or phase completion.
+**Approved execution order:** 7 → 8 → 9 → 10 → 11. Phase 7 Plans 01–13 are
+complete, including calendar dependency review, genuine calendar consumers,
+responsive discovery and local coverage/security/recovery gates. Plan 14 remains
+open: owner-attested permission and bounded verification are authorized, with
+one campaign waiting for the 2026-11-11 regular-session opening. Actual provider
+identity/freshness results and final owner UI acceptance remain pending. The
+acceptance checklist is prepared in `07-HUMAN-UAT.md`; waiting and test fixtures
+do not establish live acceptance or phase completion.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
