@@ -18,7 +18,7 @@ const refreshNotice =
 function StockTime({ value, exchange = false }: { value: string; exchange?: boolean }) {
   const zone = exchange ? "America/New_York" : Intl.DateTimeFormat().resolvedOptions().timeZone;
   return (
-    <time dateTime={value} className="break-words tabular-nums">
+    <time dateTime={value} className="min-w-0 max-w-full break-words tabular-nums">
       {new Intl.DateTimeFormat(undefined, {
         dateStyle: "medium",
         timeStyle: "long",
@@ -84,7 +84,10 @@ function QuoteTime({ item, allowed }: { item: StockItem; allowed: boolean }) {
       ) : previous ? (
         <p>Previous session</p>
       ) : (
-        <Badge variant={stale ? "warning" : "success"}>
+        <Badge
+          variant={stale ? "warning" : "success"}
+          className="h-auto max-w-full whitespace-normal break-words"
+        >
           {stale ? "Out of date" : "Recent"} · {formatAge(quote.age_seconds)}
         </Badge>
       )}
@@ -95,7 +98,7 @@ function QuoteTime({ item, allowed }: { item: StockItem; allowed: boolean }) {
 }
 function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side: "bid" | "ask" }) {
   return (
-    <span className="text-[15px] leading-[22px] font-medium tabular-nums">
+    <span className="block min-w-0 text-[15px] leading-[22px] font-medium break-words tabular-nums">
       {allowed && item.action.state === "current" && item.quote
         ? formatUnitPrice(item.quote[side])
         : "Unavailable"}

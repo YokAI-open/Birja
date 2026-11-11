@@ -274,11 +274,22 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     await expect(region(page).getByRole("table")).toHaveCount(1);
     await expect(region(page).getByRole("list")).toHaveCount(0);
+    await records(page)
+      .first()
+      .screenshot({ path: testInfo.outputPath("actions-css-zoom-200pct-first-stock.png") });
     expect(
       await region(page)
         .locator("table td")
-        .evaluateAll((cells) => cells.every((cell) => cell.scrollWidth <= cell.clientWidth + 1)),
-    ).toBe(true);
+        .evaluateAll((cells) =>
+          cells
+            .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+            .map((cell) => ({
+              text: cell.textContent,
+              width: cell.clientWidth,
+              scroll: cell.scrollWidth,
+            })),
+        ),
+    ).toEqual([]);
     expect(
       await region(page)
         .locator("p:not(.sr-only):visible")
