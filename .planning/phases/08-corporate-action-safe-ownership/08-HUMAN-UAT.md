@@ -1,7 +1,7 @@
 ---
 phase: 08-corporate-action-safe-ownership
-status: awaiting-owner-review
-owner_acceptance: pending
+status: accepted
+owner_acceptance: accepted-2026-11-11
 source: [08-LOCAL-PROOF.md, 08-UI-REVIEW.md, 08-11-BROWSER.md]
 prepared: 2026-11-11
 ---
@@ -12,7 +12,8 @@ This packet concerns the new corporate-action safety presentation only. Phase7
 UI acceptance is retained; its deferred live-data evidence is a separate gate.
 These are actual authenticated synthetic browser captures, not production or
 provider acceptance. No services, builds or tests are requested from the owner.
-Final local validation passed; no owner acceptance has been inferred. Full
+Final local validation passed; owner presentation approval was received on
+2026-11-11 after the actual examples were presented. Full
 frontend429tests, backend1551tests,31browser passes plus1expected production-CSP
 skip, exact six-revision recovery and all five strict image scans are recorded
 in08-LOCAL-PROOF.md. Independent UI24/24 and source/security reviews are clear.
@@ -40,7 +41,7 @@ unavailable”, with no bid/ask or quote timestamp. Reasons and dated check time
 wrap without clipping or adjacent-cell overlap. Corporate actions, Stock status
 and Trading are separate facts; no stock Buy/Sell/Resolve control appears.
 
-Result: pending owner review.
+Result: presentation approved by owner on2026-11-11; automated behavior evidence remains separate.
 
 ### 2. Other instruments and notices remain independent
 
@@ -49,7 +50,7 @@ identities and15 crypto instruments remain discoverable. Crypto keeps Trade
 controls. “IEX prices”, single-venue explanation and the stock-trading-coming-later
 notice remain visible. A healthy quote does not override a corporate-action hold.
 
-Result: pending owner review.
+Result: presentation approved by owner on2026-11-11; automated behavior evidence remains separate.
 
 ### 3. Monitoring and recovery behavior is honest
 
@@ -61,9 +62,13 @@ heading. Background polling/expiry never moves keyboard focus. Automated RTL,
 real browser assertions and independent source/visual review cover these changes;
 the owner is asked for presentation approval, not to reproduce the tests.
 
-Result: pending owner review.
+Result: presentation approved by owner on2026-11-11; automated behavior evidence remains separate.
 
 ## Disposition
 
-Owner response: pending. A generic instruction to continue is not new UI approval.
-No whole-phase completion or external permission is established by this packet.
+Owner response on2026-11-11: **“Approve the Phase 8 UI.”** This directly answers
+the new presentation checkpoint; it is separate from earlier Phase7 approval
+and does not claim the owner manually repeated the automated dynamic tests.
+The same reply explicitly chooses external activation deferral, recorded in
+08-ACTIVATION.md. No provider permission or production acceptance is established.
+Independent goal verification still precedes whole-phase completion.
