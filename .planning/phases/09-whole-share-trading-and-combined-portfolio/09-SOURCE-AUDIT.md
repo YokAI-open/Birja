@@ -103,4 +103,3 @@ Each plan registers T-09-NN-{V,A,I,D,R}, with concrete task behaviors; T-09-SC f
 ## Planning reasoning
 
 Irreversible choices are additive0013 immutable receipt/cause integrity and status authority provenance; they receive migration/grants/recovery proof first. Reversible UI composition stays within accepted design contract. Pre-mortem failures: stale authority after journal waits (03/06/07 last guard), cross-asset key/deadlock races (06/07 real PG), old-unit historical marks or incomplete totals overstated (09/12/13 exact snapshot/cache tests). No source item is missing. Local recovery of new schema is required now; Phase11 remains final milestone rollout acceptance. Existing explicit external deferral is recorded, not reapproved.
-
