@@ -419,9 +419,17 @@ ALTER FUNCTION """+producer.RESOLUTION_SIGNATURE+" OWNER TO birja_migrator;\nSET
         query=producer.manifest_sql('0012')
         raw=self.query(setup+query+";\nGRANT birja_test TO birja_action_operator;\n"+query+
             ";\nREVOKE birja_test FROM birja_action_operator;\nREVOKE SELECT ON stock_action_resolutions FROM birja_action_operator;\n"+
+            query+";\nGRANT SELECT ON stock_action_resolutions TO birja_action_operator;\n"
+            "GRANT UPDATE(cost_basis) ON holdings TO birja_action_operator;\n"+query+
+            ";\nREVOKE UPDATE(cost_basis) ON holdings FROM birja_action_operator;\n"
+            "GRANT UPDATE(reason) ON stock_action_revisions TO birja_action_operator;\n"+query+
+            ";\nREVOKE UPDATE(reason) ON stock_action_revisions FROM birja_action_operator;\n"
+            "GRANT SELECT(cash) ON accounts TO birja_action_operator;\n"+query+
+            ";\nREVOKE SELECT(cash) ON accounts FROM birja_action_operator;\n"
+            "GRANT SELECT ON stock_action_resolutions TO birja_action_operator WITH GRANT OPTION;\n"+
             query+";\nROLLBACK;")
         manifests=[json.loads(line) for line in raw.splitlines()]
-        self.assertEqual(len(manifests),3)
+        self.assertEqual(len(manifests),7)
         producer.validate_manifest(manifests[0])
         for damaged in manifests[1:]:
             with self.assertRaises(ValueError):

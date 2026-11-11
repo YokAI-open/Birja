@@ -592,7 +592,10 @@ async def test_authority_equal_alias_observes_shared_revision(resolution_case):
         assert identity > 0
 
 
-async def test_authority_calendar_override_change_during_gate_wait_is_stale(resolution_case):
+@pytest.mark.parametrize("product", ["calendar", "actions"])
+async def test_authority_calendar_override_change_during_gate_wait_is_stale(
+    resolution_case, product
+):
     import asyncio
 
     from sqlalchemy import update
@@ -618,22 +621,23 @@ async def test_authority_calendar_override_change_during_gate_wait_is_stale(reso
         pid = await announced.get()
         await wait_blocked(factory, pid)
         cal = await _load_admission(locker, "calendar")
+        values = {
+            "calendar": {
+                **cal.calendar,
+                "overrides": [
+                    {
+                        "exchange": "XNAS",
+                        "date": data["cutoff"][:10],
+                        "state": "closed",
+                        "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
+                    }
+                ],
+            }
+        }
+        if product == "actions":
+            values = {"allowed_fields": []}
         await locker.execute(
-            update(StockDataAdmission)
-            .where(StockDataAdmission.product == "calendar")
-            .values(
-                calendar={
-                    **cal.calendar,
-                    "overrides": [
-                        {
-                            "exchange": "XNAS",
-                            "date": data["cutoff"][:10],
-                            "state": "closed",
-                            "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
-                        }
-                    ],
-                }
-            )
+            update(StockDataAdmission).where(StockDataAdmission.product == product).values(**values)
         )
     with pytest.raises(DBAPIError):
         await job
