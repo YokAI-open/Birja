@@ -130,13 +130,62 @@ def plan_stock_trade(
         )
 
 
-def buy_max_quantity(*, bid: Decimal, ask: Decimal, cash: Decimal,
-                     held: Decimal, cost_basis: Decimal) -> Decimal:
+def buy_max_quantity(
+    *, bid: Decimal, ask: Decimal, cash: Decimal, held: Decimal, cost_basis: Decimal
+) -> Decimal:
+    """Conservative floor(cash/ask), capped by safe holding and basis room.
+
+    At most forty binary-search steps cover the twelve-digit quantity space.
+    Zero is a disabled draft, never an order. Do not optimize half-cent ties
+    into an extra share beyond floor(cash/ask).
+    """
     with localcontext() as ctx:
         ctx.prec = 64
-        return (cash / ask).to_integral_value(rounding=ROUND_FLOOR)
+        _snapshot(bid=bid, ask=ask, cash=cash, held=held, basis=cost_basis)
+        high = int(min((cash / ask).to_integral_value(rounding=ROUND_FLOOR), MAX_QUANTITY - held))
+        low = 0
+        money_room = min(cash, MAX_MONEY - cost_basis)
+        while low < high:
+            middle = (low + high + 1) // 2
+            raw = Decimal(middle) * ask
+            if raw <= MAX_PRICE and raw.quantize(Q2, rounding=ROUND_HALF_EVEN) <= money_room:
+                low = middle
+            else:
+                high = middle - 1
+        quantity = Decimal(low)
+        if quantity == ZERO or (quantity * ask).quantize(Q2, rounding=ROUND_HALF_EVEN) == ZERO:
+            return ZERO
+        plan_stock_trade(
+            side="buy",
+            quantity=quantity,
+            bid=bid,
+            ask=ask,
+            cash=cash,
+            held=held,
+            cost_basis=cost_basis,
+        )
+        return quantity
 
 
-def sell_all_quantity(*, bid: Decimal, ask: Decimal, cash: Decimal,
-                      held: Decimal, cost_basis: Decimal) -> Decimal:
-    return held
+def sell_all_quantity(
+    *, bid: Decimal, ask: Decimal, cash: Decimal, held: Decimal, cost_basis: Decimal
+) -> Decimal:
+    """Return the verified entire holding only when its sale fits this account."""
+    with localcontext() as ctx:
+        ctx.prec = 64
+        _snapshot(bid=bid, ask=ask, cash=cash, held=held, basis=cost_basis)
+        if held == ZERO:
+            return ZERO
+        try:
+            plan_stock_trade(
+                side="sell",
+                quantity=held,
+                bid=bid,
+                ask=ask,
+                cash=cash,
+                held=held,
+                cost_basis=cost_basis,
+            )
+        except TradeRefused:
+            return ZERO
+        return held

@@ -212,6 +212,134 @@ def test_invalid_side_fails_closed() -> None:
 
 
 def test_buy_max_caps_remaining_holding_capacity() -> None:
-    quantity = buy_max_quantity(bid=D("1"), ask=D("1"), cash=D("100"),
-                                held=D("999999999997"), cost_basis=D("1"))
+    quantity = buy_max_quantity(
+        bid=D("1"), ask=D("1"), cash=D("100"), held=D("999999999997"), cost_basis=D("1")
+    )
     assert quantity == D("2")
+
+
+@pytest.mark.parametrize(
+    "cash,ask,held,basis,expected",
+    [
+        ("100", "33.335", "0", "0", "2"),
+        ("100", "101", "0", "0", "0"),
+        ("0", "1", "0", "0", "0"),
+        ("1", "0.00000001", "0", "0", "100000000"),
+        ("999999999999.99", "0.00000001", "0", "0", "999999999999"),
+        ("999999999999.99", "999999999999.99", "0", "0", "1"),
+        ("100", "1", "999999999999", "1", "0"),
+        ("100", "1", "1", "999999999998.99", "1"),
+        ("100", "1", "1", "999999999999.99", "0"),
+        ("100", "0.015", "1", "999999999999.97", "1"),
+        ("100", "0.005", "1", "999999999999.97", "5"),
+        ("100", "0.005", "999999999998", "1", "0"),
+    ],
+)
+def test_buy_max_is_safe_bounded_draft(
+    cash: str, ask: str, held: str, basis: str, expected: str
+) -> None:
+    snapshot = dict(bid=D(ask), ask=D(ask), cash=D(cash), held=D(held), cost_basis=D(basis))
+    before = snapshot.copy()
+    quantity = buy_max_quantity(**snapshot)
+    assert quantity == D(expected)
+    assert quantity <= MAX_QUANTITY - D(held)
+    assert snapshot == before
+    assert format(quantity, "f").isdigit()
+    if quantity:
+        p = plan_stock_trade(side="buy", quantity=quantity, **snapshot)
+        assert p.cash_after >= 0 and p.cost_basis_after <= MAX_MONEY
+        assert p.notional > 0
+
+
+def test_conservative_shortcut_does_not_find_rounding_extra_share() -> None:
+    assert (
+        buy_max_quantity(
+            bid=D("33.335"), ask=D("33.335"), cash=D("100"), held=D("0"), cost_basis=D("0")
+        )
+        == 2
+    )
+    assert plan(quantity=D("3"), bid=D("33.335"), ask=D("33.335")).cash_after == 0
+
+
+@pytest.mark.parametrize(
+    "cash,bid,held,basis,expected",
+    [
+        ("100", "9.99", "4", "25", "4"),
+        ("0", "1", "0", "0", "0"),
+        ("0", "0.00000001", "999999999999", "0", "999999999999"),
+        ("999999999999.99", "1", "1", "1", "0"),
+        ("999999999999.98", "0.005", "1", "1", "1"),
+        ("0", "999999999999.99", "2", "1", "0"),
+    ],
+)
+def test_sell_all_is_verified_draft(
+    cash: str, bid: str, held: str, basis: str, expected: str
+) -> None:
+    snapshot = dict(bid=D(bid), ask=D(bid), cash=D(cash), held=D(held), cost_basis=D(basis))
+    before = snapshot.copy()
+    quantity = sell_all_quantity(**snapshot)
+    assert quantity == D(expected)
+    assert snapshot == before
+    if quantity:
+        p = plan_stock_trade(side="sell", quantity=quantity, **snapshot)
+        assert p.held_after == 0 and p.cost_basis_after == 0
+        assert p.cash_after >= p.cash_before
+
+
+@pytest.mark.parametrize("shortcut", [buy_max_quantity, sell_all_quantity])
+@pytest.mark.parametrize(
+    "field,value", [("ask", "0"), ("held", "1.5"), ("cash", "NaN"), ("cost_basis", "-1")]
+)
+def test_shortcut_rejects_unverified_snapshot(shortcut: object, field: str, value: str) -> None:
+    from collections.abc import Callable
+
+    snapshot = dict(bid=D("1"), ask=D("1"), cash=D("100"), held=D("2"), cost_basis=D("1"))
+    snapshot[field] = D(value)
+    with pytest.raises(TradeRefused) as error:
+        cast(Callable[..., D], shortcut)(**snapshot)
+    assert error.value.code == "numeric_range"
+
+
+def test_buy_max_uses_bounded_predicate_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.stock_trade_math as math
+
+    calls = 0
+    original = math.plan_stock_trade
+
+    def counted(**kwargs: object) -> StockTradePlan:
+        nonlocal calls
+        calls += 1
+        return original(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(math, "plan_stock_trade", counted)
+    with localcontext() as ctx:
+        ctx.prec = 6
+        quantity = buy_max_quantity(
+            bid=D("0.00000001"),
+            ask=D("0.00000001"),
+            cash=MAX_MONEY,
+            held=D("1"),
+            cost_basis=MAX_MONEY,
+        )
+    assert quantity == 0  # 0.005 rounds half-even to zero; cannot mint shares.
+    assert calls == 0
+
+
+def test_buy_max_large_search_respects_basis_half_cent_boundary() -> None:
+    quantity = buy_max_quantity(
+        bid=D("0.00000001"),
+        ask=D("0.00000001"),
+        cash=MAX_MONEY,
+        held=D("1"),
+        cost_basis=D("999999999999.98"),
+    )
+    assert quantity == D("1499999")
+    p = plan(
+        quantity=quantity,
+        bid=D("0.00000001"),
+        ask=D("0.00000001"),
+        cash=MAX_MONEY,
+        held=D("1"),
+        cost_basis=D("999999999999.98"),
+    )
+    assert p.notional == D("0.01") and p.cost_basis_after == MAX_MONEY
