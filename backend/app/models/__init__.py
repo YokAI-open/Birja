@@ -12,10 +12,13 @@ from app.models.corporate_action import (
 )
 from app.models.price import Coin, Price
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
+from app.models.stock_execution import StockFillFacts, StockStatusEvidence
 from app.models.trade import Holding, Trade
 from app.models.user import Account, User
 
 __all__ = [
+    "StockFillFacts",
+    "StockStatusEvidence",
     "Account",
     "AuthSession",
     "Coin",

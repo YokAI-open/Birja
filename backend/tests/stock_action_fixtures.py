@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest_asyncio
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.models.corporate_action import (
@@ -17,6 +17,7 @@ from app.models.corporate_action import (
     StockSplitApplication,
 )
 from app.models.stock import StockInstrument
+from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding, Trade
 
 
@@ -48,6 +49,23 @@ async def ownership(engine, migrated, new_user):
         yield factory, coin_id, user_id
     finally:
         async with factory.begin() as db:
+            # Explicit test-only DDL maintenance, never a production escape or
+            # behavior-under-test. Transaction rollback restores trigger state
+            # if cleanup fails; never disable ALL/constraint/FK triggers.
+            allowed = (
+                await db.execute(
+                    text("""SELECT current_database()='birja_test'
+              AND current_user='birja_test' AND rolsuper FROM pg_roles
+              WHERE rolname=current_user""")
+                )
+            ).scalar_one()
+            if not allowed:
+                raise RuntimeError("Test-only immutable cleanup identity required")
+            for table in ("stock_fill_facts", "stock_ownership_movements", "trades"):
+                await db.execute(
+                    text(f"ALTER TABLE public.{table} DISABLE TRIGGER stock_record_immutable")
+                )
+            await db.execute(delete(StockFillFacts).where(StockFillFacts.coin_id == coin_id))
             await db.execute(
                 delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id == coin_id)
             )
@@ -70,9 +88,13 @@ async def ownership(engine, migrated, new_user):
             await db.execute(delete(Holding).where(Holding.coin_id == coin_id))
             await db.execute(delete(Trade).where(Trade.coin_id == coin_id))
             await db.execute(delete(StockActionState).where(StockActionState.coin_id == coin_id))
+            for table in ("stock_fill_facts", "stock_ownership_movements", "trades"):
+                await db.execute(
+                    text(f"ALTER TABLE public.{table} ENABLE TRIGGER stock_record_immutable")
+                )
 
 
-async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy"):
+async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy", created_at=None):
     """Fill-like caller only; no production cash service or stock execution."""
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
     trade = Trade(
@@ -89,8 +111,39 @@ async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy
         cash_delta=quantity * Decimal(-10 if side == "buy" else 10),
         cash_after=Decimal(10000),
         idempotency_key=uuid4(),
+        **({"created_at": created_at} if created_at is not None else {}),
     )
     db.add(trade)
+    await db.flush()
+    held = (
+        await db.execute(
+            select(Holding.quantity).where(Holding.coin_id == coin_id, Holding.user_id == user_id)
+        )
+    ).scalar_one_or_none() or Decimal(0)
+    db.add(
+        StockFillFacts(
+            trade_id=trade.id,
+            coin_id=coin_id,
+            user_id=user_id,
+            provider_asset_id="synthetic-asset",
+            symbol="SYNTH",
+            company_name="Synthetic fixture",
+            listing_exchange="NASDAQ",
+            source="alpaca",
+            feed="iex",
+            bid=Decimal(10),
+            ask=Decimal(10),
+            exact_mid=Decimal(10),
+            held_after=held + (quantity if side == "buy" else -quantity),
+            event_at=now,
+            collected_at=now,
+            observed_at=now,
+            session_date=now.date(),
+            opens_at=now - timedelta(hours=1),
+            closes_at=now + timedelta(hours=1),
+            authority={},
+        )
+    )
     await db.flush()
     return trade
 

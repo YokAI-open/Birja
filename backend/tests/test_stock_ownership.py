@@ -174,9 +174,8 @@ async def test_lock_cancellation_releases_and_next_transaction_succeeds(ownershi
 async def test_movement_rollback_and_actual_clock_ignore_ingestion(ownership):
     factory, coin_id, user_id = ownership
     async with factory() as db:
-        trade = await synthetic_fill(db, coin_id, user_id)
-        trade.created_at = trade.price_as_of - timedelta(days=4)
         before = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+        trade = await synthetic_fill(db, coin_id, user_id, created_at=before - timedelta(days=4))
         row = await append_stock_movement(
             db, StockMovementInput(user_id, coin_id, Decimal(2), Decimal(20), "fill", trade.id)
         )
