@@ -734,6 +734,7 @@ async def test_private_service_binds_hash_to_the_precise_validated_snapshot(
     resolution_case, monkeypatch, product
 ):
     from sqlalchemy import update
+
     import app.services.stock_action_reconciliation as service
 
     factory, request, data, _action = resolution_case
