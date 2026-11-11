@@ -37,6 +37,7 @@ class Evidence(BaseModel):
     server: Annotated[StrictStr, Field(min_length=1, max_length=256)]
     calendar_generation: SafeId
     calendar_digest: Digest
+    admission_digest: Digest
     review_valid_until: datetime
     security_id: Annotated[StrictStr, Field(min_length=1, max_length=128)]
     cutoff: datetime

@@ -633,6 +633,10 @@ def resolution_negative_controls(dc, manifest):
         ('operator_login','ALTER ROLE birja_action_operator LOGIN'),
         ('operator_outgoing','GRANT birja_scheduler TO birja_action_operator'),
         ('operator_read_missing','REVOKE SELECT ON stock_action_resolutions FROM birja_action_operator'),
+        ('operator_column_basis','GRANT UPDATE(cost_basis) ON holdings TO birja_action_operator'),
+        ('operator_column_action','GRANT UPDATE(reason) ON stock_action_revisions TO birja_action_operator'),
+        ('operator_column_cash','GRANT SELECT(cash) ON accounts TO birja_action_operator'),
+        ('operator_delegation','GRANT SELECT ON stock_action_resolutions TO birja_action_operator WITH GRANT OPTION'),
         ('operator_catalogue','GRANT SELECT ON coins TO birja_action_operator'),
         ('wrong_owner','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+' OWNER TO '+r.BOOT),
         ('function_configuration','ALTER FUNCTION '+contract.RESOLUTION_SIGNATURE+" SET search_path TO public"),
@@ -650,7 +654,7 @@ def resolution_negative_controls(dc, manifest):
     try:contract.validate_manifest(damaged)
     except ValueError:pass
     else:raise AssertionError('self-reported changed function accepted')
-    print('resolution_authority_corruptions=9 fixed_definition_owner_acl_nologin=true',flush=True)
+    print('resolution_authority_corruptions=13 fixed_definition_owner_acl_nologin=true',flush=True)
 
 
 def accounting_negative_controls(dc, manifest):
@@ -1957,13 +1961,14 @@ async def scenario(db):
  ids=list((await db.execute(select(StockActionRevision.id).where(StockActionRevision.event_id==current.event_id).order_by(StockActionRevision.id))).scalars())
  observation=(await db.execute(select(func.max(StockActionObservation.id)).where(StockActionObservation.event_id==current.event_id))).scalar_one()
  ledger=(await db.execute(text(LEDGER_SQL),{'coin':instrument.coin_id})).scalar_one()
+ admission_digest=(await db.execute(text("SELECT encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex') FROM stock_data_admissions c WHERE product='actions'"))).scalar_one()
  calendar_digest=(await db.execute(text("SELECT encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex') FROM stock_data_admissions c WHERE product='calendar'"))).scalar_one()
  request=ResolutionRequest.model_validate({'coin_id':instrument.coin_id,'event_id':current.event_id,
   'expected_revision':current.revision_id,'admission_generation':8,'epoch':state.epoch,
   'decision_key':'synthetic-reviewed-'+str(uuid.uuid4()),'decision':'accept_corrected_supported_revision',
   'actor_ref':'synthetic:operator','evidence':{'format':1,'unit_epoch':state.unit_epoch,'ledger_digest':ledger,
    'revision_fingerprint':revision.fingerprint,'held_revision_ids':ids,'observation_id':observation,
-   'account':'birja','server':'birja','calendar_generation':8,'calendar_digest':calendar_digest,
+   'account':'birja','server':'birja','calendar_generation':8,'calendar_digest':calendar_digest,'admission_digest':admission_digest,
    'review_valid_until':(now+timedelta(minutes=30)).isoformat(),'security_id':instrument.provider_asset_id,
    'cutoff':opening.opens_at.isoformat(),'alias_event_id':None}})
  return request,None,None

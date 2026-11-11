@@ -115,7 +115,7 @@ ACCOUNTING_SCHEMA_SHA256 = "93cbd850d4f13148515af53f6693937886d0716d52191ac04362
 RESOLUTION_SIGNATURE = "public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text)"
 # Independently captured from the reviewed0012 function in actual PostgreSQL18;
 # never accept a definition merely because the manifest claims its own hash.
-RESOLUTION_FUNCTION_SHA256 = "898d0a4a1de624eeb655fec3c2f1f69f6ae3f111208d080a9d42aaa056f172f9"
+RESOLUTION_FUNCTION_SHA256 = "a612d7fb2f5b4f50549f4d40b01e6e83a2bfaf8a7d4ce1f77ff2df22b13b2dc1"
 
 
 def resolution_authority_sql():
@@ -149,6 +149,18 @@ def resolution_authority_sql():
         AND CASE WHEN c.relkind='S' THEN
           has_sequence_privilege('birja_action_operator',c.oid,'USAGE,SELECT,UPDATE')
           ELSE false END),
+      'operator_column_acl',(SELECT json_agg(json_build_array(c.relname,a.attname,
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'SELECT'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'INSERT'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'UPDATE'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'REFERENCES'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'SELECT WITH GRANT OPTION'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'INSERT WITH GRANT OPTION'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'UPDATE WITH GRANT OPTION'),
+        has_column_privilege('birja_action_operator',c.oid,a.attnum,'REFERENCES WITH GRANT OPTION'))
+        ORDER BY c.relname,a.attname) FROM pg_class c
+        JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
+        WHERE c.relnamespace='public'::regnamespace AND c.relkind='r'),
       'operator_catalogue_columns',(SELECT json_agg(attname ORDER BY attname) FROM pg_attribute
         WHERE attrelid='public.coins'::regclass AND attnum>0 AND NOT attisdropped
         AND has_column_privilege('birja_action_operator',attrelid,attnum,'SELECT')))
@@ -159,7 +171,8 @@ def validate_resolution_authority(authority):
     require(isinstance(authority, dict) and set(authority) == {
         'definition','owner','security_definer','configuration','function_count',
         'execute_acl','operator_attributes','runtime_operator_membership','operator_catalogue_columns',
-        'operator_outgoing_memberships','operator_table_acl','operator_sequence_rights'})
+        'operator_outgoing_memberships','operator_table_acl','operator_sequence_rights',
+        'operator_column_acl'})
     require(isinstance(authority['definition'], str))
     require(hashlib.sha256(authority['definition'].encode()).hexdigest() == RESOLUTION_FUNCTION_SHA256)
     require(authority['owner'] == 'birja_migrator' and authority['security_definer'] is True)
@@ -172,6 +185,12 @@ def validate_resolution_authority(authority):
     require(authority['operator_table_acl'] == [[table,True,*([False]*7)]
         for table in sorted([*ACTION_COLUMNS,*STOCK_COLUMNS])])
     require(authority['operator_sequence_rights'] == [])
+    readable=set(ACTION_COLUMNS)|set(STOCK_COLUMNS)
+    coin_columns={'asset_class','id','is_active','sort_order','symbol'}
+    columns=contract_columns('0012')
+    require(authority['operator_column_acl'] == [[table,column,
+        table in readable or (table=='coins' and column in coin_columns),*([False]*7)]
+        for table in sorted(columns) for column in sorted(columns[table])])
     require(authority['operator_catalogue_columns'] == ['asset_class','id','is_active','sort_order','symbol'])
 
 

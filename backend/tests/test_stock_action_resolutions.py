@@ -74,6 +74,13 @@ async def resolution_case(runtime_roles, actions):
             "account": "birja",
             "server": "birja",
             "calendar_generation": calendar.generation,
+            "admission_digest": (
+                await db.execute(
+                    text("""SELECT encode(sha256(convert_to(
+              to_jsonb(c)::text,'UTF8')),'hex') FROM stock_data_admissions c
+              WHERE product='actions'""")
+                )
+            ).scalar_one(),
             "calendar_digest": (
                 await db.execute(
                     text("""SELECT encode(sha256(convert_to(

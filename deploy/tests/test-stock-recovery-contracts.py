@@ -406,6 +406,9 @@ INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,s
 
     def test_zz_resolution_actual_operator_reads_and_outgoing_memberships(self):
         producer=load('backup-snapshot')
+        # The standalone probe rebuilds empty0011/0012 role grants after
+        # unrelated runtime fixtures intentionally DROP OWNED operator roles.
+        self.migrate('0010','downgrade')
         self.migrate('head')
         # Explicit synthetic ownership provision inside a rollback-only probe.
         # No runtime grants are repaired;0011/0012 supply the actual operator ACL.

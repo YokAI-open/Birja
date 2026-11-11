@@ -49,10 +49,11 @@ BEGIN
  END IF;
  IF p_evidence - ARRAY['format','unit_epoch','ledger_digest','revision_fingerprint',
  'held_revision_ids','observation_id','account','server','calendar_generation',
- 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest'] <> '{}'::jsonb
+ 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest',
+ 'admission_digest'] <> '{}'::jsonb
  OR NOT p_evidence ?& ARRAY['format','unit_epoch','ledger_digest','revision_fingerprint',
  'held_revision_ids','observation_id','account','server','calendar_generation',
- 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest']
+ 'review_valid_until','security_id','cutoff','alias_event_id','calendar_digest','admission_digest']
  OR p_evidence->'format' <> '1'::jsonb
  OR p_hash <> encode(sha256(convert_to(p_evidence::text,'UTF8')),'hex') THEN
    RAISE EXCEPTION 'resolution evidence rejected' USING ERRCODE='22023';
@@ -79,6 +80,8 @@ BEGIN
  OR st.epoch IS DISTINCT FROM p_epoch
  OR st.admission_generation IS DISTINCT FROM p_generation
  OR adm.generation IS DISTINCT FROM p_generation
+ OR encode(sha256(convert_to(to_jsonb(adm)::text,'UTF8')),'hex')
+    IS DISTINCT FROM p_evidence->>'admission_digest'
  OR rev.admission_generation IS DISTINCT FROM p_generation
  OR st.unit_epoch::text IS DISTINCT FROM p_evidence->>'unit_epoch'
  OR rev.fingerprint IS DISTINCT FROM p_evidence->>'revision_fingerprint'
