@@ -62,6 +62,8 @@ export type StocksResponse = {
   items: StockItem[];
 };
 export type TimedStocks = StocksResponse & {
+  /** Internal conservative elapsed authority; never a provider/public field. */
+  authority_offset_ms?: number;
   transport: { started_at: number; received_at: number; round_trip_ms: number };
 };
 

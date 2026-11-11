@@ -22,7 +22,8 @@ const unknownAction = () =>
 export function projectStocks(data: TimedStocks, now = performance.now()): StocksResponse {
   const elapsed = Math.max(0, now - data.transport.received_at);
   const lower = floorTime(data.server_now) + elapsed;
-  const upper = ceilTime(data.server_now) + elapsed + data.transport.round_trip_ms;
+  const offset = data.authority_offset_ms ?? 0;
+  const upper = ceilTime(data.server_now) + elapsed + data.transport.round_trip_ms + offset;
   const allowed =
     data.admission.state === "approved" &&
     data.admission.valid_until !== null &&
@@ -60,7 +61,7 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
               item.quote.age_seconds,
               (ceilTime(data.server_now) - floorTime(item.quote.event_at)) / 1000,
             ) +
-            (data.transport.round_trip_ms + elapsed) / 1000;
+            (data.transport.round_trip_ms + elapsed + offset) / 1000;
       const canDisplay =
         allowed &&
         reviewed &&
@@ -163,16 +164,40 @@ function nextDeadline(data: TimedStocks): number {
     Math.min(...deadlines) -
     ceilTime(data.server_now) -
     data.transport.round_trip_ms -
+    (data.authority_offset_ms ?? 0) -
     Math.max(0, performance.now() - data.transport.received_at)
   );
 }
 
 type Mark = { epoch: number; at: bigint };
-type Guard = { email: string | null; lifecycle: number; marks: Map<number, Mark> };
+type Guard = {
+  email: string | null;
+  lifecycle: number;
+  marks: Map<number, Mark>;
+  clock: { upper: number; received: number } | null;
+};
 const guards = new WeakMap<ReturnType<typeof useQueryClient>, Guard>();
 const emailOf = (client: ReturnType<typeof useQueryClient>) =>
   client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
+function upperClock(data: TimedStocks, now: number): number {
+  return (
+    ceilTime(data.server_now) +
+    data.transport.round_trip_ms +
+    (data.authority_offset_ms ?? 0) +
+    Math.max(0, now - data.transport.received_at)
+  );
+}
 function remember(guard: Guard, data: TimedStocks) {
+  const now = performance.now();
+  guard.clock = {
+    upper: Math.max(
+      upperClock(data, now),
+      guard.clock === null
+        ? -Infinity
+        : guard.clock.upper + Math.max(0, now - guard.clock.received),
+    ),
+    received: now,
+  };
   const at = stockInstant(data.server_now);
   for (const item of data.items) {
     const old = guard.marks.get(item.id);
@@ -185,7 +210,7 @@ function remember(guard: Guard, data: TimedStocks) {
 function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
   const existing = guards.get(client);
   if (existing) return existing;
-  const guard: Guard = { email: emailOf(client), lifecycle: 0, marks: new Map() };
+  const guard: Guard = { email: emailOf(client), lifecycle: 0, marks: new Map(), clock: null };
   guards.set(client, guard);
   client.getQueryCache().subscribe((event) => {
     const email = emailOf(client);
@@ -193,6 +218,7 @@ function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
       guard.email = email;
       guard.lifecycle++;
       guard.marks.clear();
+      guard.clock = null;
     }
     if (
       email !== null &&
@@ -273,7 +299,15 @@ export function useStocks() {
             throw new Error("Superseded stock action response");
         }
         // Purge expired permission/review material before entering the cache.
-        return purgeExpired(response);
+        const now = performance.now();
+        const previousUpper =
+          guard.clock === null
+            ? -Infinity
+            : guard.clock.upper + Math.max(0, now - guard.clock.received);
+        return purgeExpired({
+          ...response,
+          authority_offset_ms: Math.max(0, previousUpper - upperClock(response, now)),
+        });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           client.setQueryData(["me"], null);
