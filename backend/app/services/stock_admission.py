@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 FIELDS = {
     "reference": {"symbol", "name", "exchange", "provider_asset_id"},
     "quotes": {"bid", "ask", "event_at", "symbol"},
-    "actions": {"event_id", "revision", "symbol", "event_type", "effective_date"},
+    "actions": {"provider_event_id", "symbol", "event_type", "process_date"},
     "status": {"symbol", "status", "event_at"},
     "calendar": {"exchange", "session_date", "opens_at", "closes_at"},
 }
@@ -152,6 +152,7 @@ def evaluate_admission(
     account: str = "birja",
     server: str = "birja",
     feed: str = "iex",
+    capability: str | None = None,
 ) -> AdmissionDecision:
     """Evaluate current committed evidence separately at every asynchronous boundary.
 
@@ -196,7 +197,7 @@ def evaluate_admission(
             "feed": feed,
         }
         if (
-            feed != "iex"
+            feed != ("alpaca-corporate-actions" if product == "actions" else "iex")
             or not account
             or not server
             or any(evidence.scope.get(key) != value for key, value in expected_scope.items())
@@ -214,12 +215,43 @@ def evaluate_admission(
             "requests_per_minute": (1, 200),
             "symbols_per_request": (20, 1000),
             "max_response_bytes": (1, 1048576),
-            "retention_seconds": (1, 86400),
+            "retention_seconds": (1, 315360000) if product == "actions" else (1, 86400),
         }
         if any(
             type(evidence.quota.get(key)) is not int or not low <= evidence.quota[key] <= high
             for key, (low, high) in bounds.items()
         ):
+            return denied
+        if product == "actions":
+            from app.services.stock_quote_rules import CURATED_SYMBOLS
+
+            scope = evidence.scope
+            capabilities = scope.get("capabilities")
+            symbols = scope.get("rest_symbols")
+            if (
+                not isinstance(capabilities, list)
+                or not capabilities
+                or any(value not in ("rest", "replay") for value in capabilities)
+                or len(set(capabilities)) != len(capabilities)
+                or "rest" not in capabilities
+                or (capability is not None and capability not in capabilities)
+                or not isinstance(symbols, list)
+                or not all(isinstance(value, str) for value in symbols)
+                or len(symbols) != 20
+                or set(symbols) != CURATED_SYMBOLS
+                or scope.get("durable_accounting") is not True
+                or scope.get("backup_restore") is not True
+                or scope.get("retention_mode") != "durable-accounting"
+                or (
+                    "replay" in capabilities
+                    and (
+                        scope.get("all_us_replay_ingress") is not True
+                        or scope.get("replay_region") != "us"
+                    )
+                )
+            ):
+                return denied
+        elif capability is not None:
             return denied
         expiry = cast(datetime, evidence.valid_until)
         if product == "calendar":
