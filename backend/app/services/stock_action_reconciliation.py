@@ -12,8 +12,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.corporate_action_rules import classify_action, dividend_cutoff
-from app.services.corporate_actions import _action, _authority, _load_admission, _mapping
-from app.services.stock_admission import evaluate_admission
+from app.services.corporate_actions import _action, _mapping
+from app.services.stock_admission import ProductAdmission, evaluate_admission
 from app.services.stock_sessions import build_sessions
 
 SafeId = Annotated[StrictInt, Field(gt=0, le=9007199254740991)]
@@ -198,14 +198,36 @@ async def reconcile(
         )
     ).scalar_one_or_none()
     if stored is None:
-        auth = await _authority(db, account=account, server=server)
-        calendar = await _load_admission(db, "calendar")
+        auth, admission_digest = await _admission_snapshot(db, "actions")
+        calendar, calendar_digest = await _admission_snapshot(db, "calendar")
         now = (await db.execute(text("SELECT clock_timestamp()"))).scalar_one()
-        if calendar is None or not all(
-            evaluate_admission(
-                calendar, "calendar", purpose, now, account=account, server=server
-            ).allowed
-            for purpose in ("collection", "derived")
+        if (
+            auth is None
+            or admission_digest != evidence.admission_digest
+            or not all(
+                evaluate_admission(
+                    auth,
+                    "actions",
+                    purpose,
+                    now,
+                    feed="alpaca-corporate-actions",
+                    capability="rest",
+                    account=account,
+                    server=server,
+                ).allowed
+                for purpose in ("collection", "derived", "retention")
+            )
+        ):
+            raise ValueError("actions authority unavailable")
+        if (
+            calendar is None
+            or calendar_digest != evidence.calendar_digest
+            or not all(
+                evaluate_admission(
+                    calendar, "calendar", purpose, now, account=account, server=server
+                ).allowed
+                for purpose in ("collection", "derived")
+            )
         ):
             raise ValueError("calendar authority unavailable")
         if auth.generation != request.admission_generation:
@@ -259,3 +281,32 @@ async def reconcile(
         },
     )
     return int(result.scalar_one())
+
+
+async def _admission_snapshot(
+    db: AsyncSession, product: str
+) -> tuple[ProductAdmission | None, str | None]:
+    """Return the exact row and digest from one PostgreSQL statement snapshot.
+
+    Computing a later digest after validating a different earlier row permits
+    precomputed future evidence to bridge a permission change. Keep both facts
+    inseparable here, then retain the function's locked comparison after waits.
+    """
+    row = (
+        (
+            await db.execute(
+                text("""SELECT c.*,
+        encode(sha256(convert_to(to_jsonb(c)::text,'UTF8')),'hex') AS snapshot_digest
+        FROM public.stock_data_admissions c WHERE c.product=:product"""),
+                {"product": product},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        return None, None
+    data = dict(row)
+    digest = data.pop("snapshot_digest")
+    data.pop("id")
+    return ProductAdmission(**data), str(digest)
