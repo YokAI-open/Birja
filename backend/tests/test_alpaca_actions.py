@@ -25,6 +25,8 @@ from app.services.alpaca_actions import (
     ActionBudget,
     fetch_action_snapshot,
     recheck_action_ids,
+    replay_action_mutations,
+    REPLAY_URL,
 )
 from app.services.stock_quote_rules import StockMapping
 from tests.test_stock_admission import action_admitted
@@ -331,3 +333,51 @@ async def test_rest_headers_and_body_share_attempt_timeout():
             budget = ActionBudget(attempt_seconds=0.01)
             batch = await rest(http, budget)
     assert batch.reason == "attempt_timeout" and not budget._busy
+
+
+CURSOR = "01J9RPMV5TKB8WX3M4F1KZ7QH2"
+LAST = "01J9RPMV5TKB8WX3M4F1KZ7QH3"
+
+
+def frame(cursor=CURSOR, mutation="insert", symbol="AAPL"):
+    entry = json.loads(BODY)["corporate_actions"]["cash_dividends"][0]
+    entry["rate"] = "0.24000001"
+    entry["symbol"] = symbol
+    value = [
+        {
+            "event_id": cursor,
+            "action": mutation,
+            "at": "2026-11-10T14:00:00Z",
+            "event_type": "cash_dividend_corporateaction_event",
+            "region": "us",
+            "ca": entry,
+        }
+    ]
+    return b"data: " + json.dumps(value).encode() + b"\n\n"
+
+
+async def test_replay_inclusive_terminal_witness_deduplicates_but_preserves_mutations():
+    stream = frame() + frame() + frame(LAST, "delete")
+    with respx.mock(assert_all_called=False) as router:
+        route = router.get(REPLAY_URL).respond(
+            200, content=stream, headers={"Content-Type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            batch = await replay_action_mutations(
+                http,
+                [MAPPING],
+                action_admitted,
+                lambda: NOW,
+                ActionBudget(),
+                since_id=CURSOR,
+                until_id=LAST,
+            )
+    assert batch.complete and len(batch.observations) == 2
+    assert [row.mutation for row in batch.observations] == ["insert", "delete"]
+    assert batch.records[-1].cancelled and batch.continuation == LAST
+    assert batch.records[0].rate == Decimal("0.24000001")
+    assert dict(route.calls.last.request.url.params) == {
+        "since_id": CURSOR,
+        "until_id": LAST,
+        "region": "us",
+    }

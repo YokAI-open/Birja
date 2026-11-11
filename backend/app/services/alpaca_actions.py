@@ -665,3 +665,7 @@ async def recheck_action_ids(
         )
     finally:
         budget._busy = False
+
+
+async def replay_action_mutations(*args: Any, **kwargs: Any) -> ActionBatch:
+    return ActionBatch()
