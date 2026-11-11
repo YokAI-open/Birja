@@ -1,6 +1,7 @@
 """Real isolated PostgreSQL accounting invariants and privilege boundaries."""
 
 import asyncio
+import os
 import shutil
 import subprocess
 from collections.abc import AsyncIterator
@@ -761,3 +762,56 @@ async def test_valid_causes_work_under_runtime_grants_without_trade_read(
             ).scalar_one() == 2
         finally:
             await tx.rollback()
+
+
+async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
+    engine: AsyncEngine, migrated: None,
+) -> None:
+    """The committed concurrent index must survive and support a safe retry."""
+    await migrate("0010",down=True)
+    async with engine.begin() as conn:
+        exists=(await conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one_or_none()
+        if exists:
+            await conn.execute(text("DROP OWNED BY birja_action_operator"))
+            await conn.execute(text("DROP ROLE birja_action_operator"))
+        await conn.execute(text("CREATE ROLE birja_action_retry_migrator LOGIN NOINHERIT PASSWORD 'test-only-retry'"))
+        await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_action_retry_migrator WITH GRANT OPTION"))
+        await conn.execute(text("GRANT CREATE ON SCHEMA public TO birja_action_retry_migrator"))
+        await conn.execute(text("GRANT REFERENCES ON ALL TABLES IN SCHEMA public TO birja_action_retry_migrator"))
+        await conn.execute(text("GRANT SELECT,INSERT,UPDATE,DELETE ON alembic_version TO birja_action_retry_migrator"))
+        await conn.execute(text("GRANT SELECT ON stock_instruments,stock_data_admissions,stock_sessions TO birja_action_retry_migrator WITH GRANT OPTION"))
+        await conn.execute(text("ALTER TABLE trades OWNER TO birja_action_retry_migrator"))
+        await conn.execute(text("ALTER TABLE stock_quotes OWNER TO birja_action_retry_migrator"))
+    root=await asyncio.to_thread(lambda: Path(__file__).resolve().parents[1])
+    async def restricted_upgrade() -> tuple[int, str]:
+        proc=await asyncio.create_subprocess_exec(
+            str(root/".venv/bin/alembic"),"upgrade","head",cwd=root,
+            env={"PATH":os.defpath,"ENV":"test",
+                 "DATABASE_URL":"postgresql+asyncpg://birja_action_retry_migrator:test-only-retry@127.0.0.1:55432/birja_test",
+                 "REDIS_URL":"redis://:test@127.0.0.1:56379/0",
+                 "OTP_HMAC_SECRET":"test-only-otp-secret-not-for-prod-000000",
+                 "JWT_SECRET":"test-only-jwt-secret-not-for-prod-000000",
+                 "ALPACA_API_KEY":"","ALPACA_SECRET_KEY":"","STOCK_DATA_ENABLED":"false"},
+            stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.STDOUT,
+        )
+        output,_=await asyncio.wait_for(proc.communicate(),30)
+        assert proc.returncode is not None
+        return proc.returncode,output.decode()
+    try:
+        code,output=await restricted_upgrade()
+        assert code!=0 and "preprovision birja_action_operator" in output
+        assert await _versions(engine)==["0010"]
+        async with engine.begin() as conn:
+            assert (await conn.execute(text("SELECT indisvalid FROM pg_index WHERE indexrelid='uq_trades_id_coin_user'::regclass"))).scalar_one()
+            await conn.execute(text("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT"))
+        code,output=await restricted_upgrade()
+        assert code==0,output
+        assert await _versions(engine)==["0011"]
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("REASSIGN OWNED BY birja_action_retry_migrator TO birja_test"))
+            await conn.execute(text("DROP OWNED BY birja_action_retry_migrator"))
+            await conn.execute(text("DROP ROLE birja_action_retry_migrator"))
+            if (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()=="0010":
+                await conn.execute(text("DROP INDEX IF EXISTS uq_trades_id_coin_user"))
+        await migrate("head")
