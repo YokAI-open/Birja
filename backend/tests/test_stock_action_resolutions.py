@@ -71,6 +71,13 @@ async def resolution_case(runtime_roles, actions):
             "account": "birja",
             "server": "birja",
             "calendar_generation": calendar.generation,
+            "calendar_digest": (
+                await db.execute(
+                    text("""SELECT encode(sha256(convert_to(
+              to_jsonb(c)::text,'UTF8')),'hex') FROM stock_data_admissions c
+              WHERE product='calendar'""")
+                )
+            ).scalar_one(),
             "review_valid_until": (now + timedelta(minutes=15)).isoformat(),
             "security_id": f"synthetic-{coin}",
             "cutoff": opening.opens_at.isoformat(),
@@ -580,3 +587,84 @@ async def test_authority_equal_alias_observes_shared_revision(resolution_case):
             )
         ).scalar_one()
         assert identity > 0
+
+
+async def test_authority_calendar_override_change_during_gate_wait_is_stale(resolution_case):
+    import asyncio
+    from sqlalchemy import update
+    from app.services.stock_action_reconciliation import reconcile
+    from app.services.stock_ownership import acquire_stock_gate
+    from tests.test_corporate_actions import wait_blocked
+
+    factory, request, data, _action = resolution_case
+    data = {key: value for key, value in data.items() if key != "calendar_digest"}
+    announced = asyncio.Queue()
+
+    async def operator():
+        async with factory.begin() as db:
+            await db.execute(text("SET LOCAL ROLE birja_action_operator"))
+            await announced.put((await db.execute(text("SELECT pg_backend_pid()"))).scalar_one())
+            return await reconcile(
+                db, request_model(request, data), account="birja", server="birja"
+            )
+
+    async with factory.begin() as locker:
+        await acquire_stock_gate(locker, request["coin"])
+        job = asyncio.create_task(operator())
+        pid = await announced.get()
+        await wait_blocked(factory, pid)
+        cal = await _load_admission(locker, "calendar")
+        await locker.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "calendar")
+            .values(
+                calendar={
+                    **cal.calendar,
+                    "overrides": [
+                        {
+                            "exchange": "XNAS",
+                            "date": data["cutoff"][:10],
+                            "state": "closed",
+                            "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
+                        }
+                    ],
+                }
+            )
+        )
+    with pytest.raises(DBAPIError):
+        await job
+
+
+async def test_private_cli_rejects_unprotected_ca_before_ssl_load(tmp_path, monkeypatch):
+    import argparse
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "stock_actions_cli", Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
+    )
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    ca = tmp_path / "ca.pem"
+    ca.write_text("synthetic test CA data")
+    ca.chmod(0o644)
+    config = tmp_path / "connection.json"
+    config.write_text(
+        json.dumps(
+            {
+                "database_url": "postgresql+asyncpg://synthetic:synthetic@localhost/birja_test",
+                "ca_file": str(ca),
+                "account": "birja",
+                "server": "birja",
+            }
+        )
+    )
+    config.chmod(0o600)
+
+    def load(**_kwargs):
+        raise AssertionError("unsafe CA reached SSL loader")
+
+    monkeypatch.setattr(cli.ssl, "create_default_context", load)
+    with pytest.raises(ValueError, match="protected"):
+        await cli.run(argparse.Namespace(connection_file=str(config), command="inspect"))
