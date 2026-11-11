@@ -157,10 +157,24 @@ async def list_stocks(
         reason = "permission_unavailable"
         if permitted:
             reason = "missing"
-            if row.quote_coin_id is not None:
+            # Local accounting provenance is not a provider validation field.
+            # Nonzero units need Plan09's authentic current-unit gate before
+            # either a recent or historical amount can be disclosed.
+            if row.quote_coin_id is not None and row.quote_unit_epoch == 0:
                 fields = {
-                    column.name: row["quote_" + column.name]
-                    for column in StockQuote.__table__.columns
+                    name: row["quote_" + name]
+                    for name in (
+                        "coin_id",
+                        "bid",
+                        "ask",
+                        "mid",
+                        "source",
+                        "feed",
+                        "event_at",
+                        "collected_at",
+                        "session_date",
+                        "admission_generation",
+                    )
                 }
                 candidate = ValidatedStockQuote(symbol=row.symbol, **fields)
                 matched = evaluate_admission(

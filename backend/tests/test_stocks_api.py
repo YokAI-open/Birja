@@ -183,22 +183,26 @@ async def test_exact_quote_and_independent_facts(engine, settings, clean_stock_d
 @pytest.mark.parametrize("unit_epoch", [0, 1])
 @pytest.mark.parametrize("source_age", [0, 121])
 async def test_local_quote_units_never_enter_provider_projection(
-    engine, settings, clean_stock_discovery, unit_epoch, source_age,
+    engine,
+    settings,
+    clean_stock_discovery,
+    unit_epoch,
+    source_age,
 ):
-    await seed(engine,event_at=NOW-timedelta(seconds=source_age))
+    await seed(engine, event_at=NOW - timedelta(seconds=source_age))
     async with engine.begin() as conn:
         await conn.execute(update(StockQuote).values(unit_epoch=unit_epoch))
     async with async_sessionmaker(engine)() as db:
-        result=body(await stocks.list_stocks(db,settings,now=lambda:NOW))
-    first=result["items"][0]
-    assert first["symbol"]=="AAPL"
+        result = body(await stocks.list_stocks(db, settings, now=lambda: NOW))
+    first = result["items"][0]
+    assert first["symbol"] == "AAPL"
     assert first["execution_enabled"] is False
     if unit_epoch:
         assert first["quote"] is None
         assert first["quote_reason"] != "recent"
     else:
-        assert first["quote"]["bid"]=="100.00000001"
-        assert first["quote_reason"]==("recent" if source_age==0 else "stale")
+        assert first["quote"]["bid"] == "100.00000001"
+        assert first["quote_reason"] == ("recent" if source_age == 0 else "stale")
     assert "secure-review" not in str(result)
 
 

@@ -103,6 +103,9 @@ async def test_seed_repeat_and_rollback_preserve_crypto(
 async def test_seed_downgrade_refuses_financial_loss(
     engine: AsyncEngine, migrated: None, financial_table: str
 ) -> None:
+    # Exercise0010's seed guard specifically. Successor accounting revisions
+    # have their own earlier, stricter financial downgrade guard.
+    await migrate("0010", down=True)
     async with engine.begin() as conn:
         cid = (
             await conn.execute(
