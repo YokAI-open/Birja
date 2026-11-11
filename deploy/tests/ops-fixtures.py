@@ -1592,7 +1592,7 @@ async def main():
   for role,char in [('app','a'),('scheduler','b')]:
    conn=await asyncpg.connect('postgresql://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',**args)
    assert await conn.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
-   assert await conn.fetchval('SELECT count(*) FROM coins')==15
+   assert await conn.fetchval('SELECT count(*) FROM coins')==35, 'populated0010 predecessor is mandatory before restricted accounting upgrade'
    connections.append(conn)
   subprocess.run(['alembic','upgrade','head'],check=True,timeout=90)
   app,scheduler=connections
