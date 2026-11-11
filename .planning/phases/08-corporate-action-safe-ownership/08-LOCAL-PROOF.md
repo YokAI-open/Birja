@@ -37,11 +37,42 @@ changed. Phase 7's live review remains owner-deferred; its frozen source hashes
 are stale after authorized Plan 03 changes and must not be silently refreshed.
 The scheduled check retains its fail-closed hash guard and has not been modified.
 
-## Next gate
+## Plan 02: exact0011 recovery and restricted TLS
 
-Plan 02 must extend exact revision-selected recovery and prove actual restricted
-TLS populated upgrade/fresh parity for 0011 before new runtime consumers start.
-Its canonical contract must include observations.event_id,
+Both tasks passed. Independent review found a pre-dump sequence snapshot race:
+PostgreSQL sequences are not MVCC, so a correct concurrent dump could disagree
+with its manifest. Actual encrypted retained-archive regression reproduced it.
+The correction extracts exact allowlisted SEQUENCE SET values from the actual
+dump with strict parsing, bounded output and cumulative timeouts. Final review
+of this correction and the operations fixtures is clean.
+
+- Same retained archive SHA256:
+  `eb271dfc8fe524230b12c698586298ad29ecdf74aacb66d4555c646aaecea690`.
+- Exact encrypted recovery 0007/0008/0009/0010/0011: pass, 263.968s.
+- Real concurrent-nextval0011 restore, nine accounting-row corruption classes,
+  all seventeen identity-state corruptions and duplicate-application refusal:
+  pass.
+- Actual roles/grant parity: pass, 150.169s, including 63 legacy denials.
+- Populated0010→0011 verified-TLS lane without grant repair: pass, 99.296s.
+- Fresh0011 verified-TLS/parity lane: pass, 93.225s.
+- CA/hostname/plaintext, mount isolation, renewal and real calendar/append/deny
+  consumers: pass in both applicable lanes.
+- Final real canonical suite: 7 passed, 47.652s; populated downgrade refusal:
+  1 passed, 0.44s.
+- Backup tests: 25 passed, 53.24s; restore-safety: 6 passed, 1.32s.
+- Full serial log: `/tmp/phase08-02-all.log`; earlier actual sequence RED:
+  `/tmp/phase08-02-sequence-red.log`.
+- Owned birja-ops-test containers, networks and volumes: empty after teardown.
+
+Exact commands, source/image identities, predecessor hashes and RED/GREEN
+commits are recorded in 08-02-SUMMARY.md. No new package or privileged production
+operation was needed. Existing birja-test services remain available for later
+local tests. This completes one of the two Wave 2 plans, not the entire wave.
+
+## Recovery boundary for later consumers
+
+Plan 02 has proved exact revision-selected recovery and actual restricted
+TLS populated upgrade/fresh parity for 0011. Its canonical contract includes observations.event_id,
 split_applications.coin_id, causal composite keys and the concurrent trade index.
 Privileged bootstrap preprovisions the NOLOGIN operator role; restricted migrator
 privileges must not be expanded to CREATEROLE. No requirement or entire phase is
