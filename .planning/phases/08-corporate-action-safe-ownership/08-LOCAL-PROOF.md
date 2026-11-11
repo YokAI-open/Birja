@@ -71,6 +71,28 @@ local tests. This completes one of the two Wave 2 plans, not the entire wave.
 
 ## Recovery boundary for later consumers
 
+## Wave 2: Plans 02 and 04
+
+Plan 04 implements current REST discovery, known-ID rechecks and finite mutation
+replay with fixed distinct REST/stream hosts, exact parsing and a shared cycle
+budget. Official source identities and protocol deviations are recorded in
+08-04-SUMMARY.md. No private provider request was performed.
+
+- Adapter:123 tests; adapter/rules/admission combined:298 passed,3.91s.
+- Adapter504statements/220branches:100%; scoped lint/format/types pass.
+- Independent review at4d1b327:0blockers/0warnings.
+- Full guarded isolated backend integration: **1238 passed,77 warnings,53.86s**.
+- Overall coverage: **99.76%**; expanded24critical modules1892statements /
+  594branches: **100%**. Existing thresholds were not reduced.
+- Backend compileall:pass.
+- Full receipt:`/tmp/birja-phase08-wave2-backend.log`.
+
+Wave 2 is complete; four of thirteen Phase 8 plans are executed. Next is the
+ownership journal and historical cutoff reconstruction in Plan 05. Phase 7
+live acceptance and Phase 8 activation remain separate pending gates.
+
+## Proven recovery contract for subsequent consumers
+
 Plan 02 has proved exact revision-selected recovery and actual restricted
 TLS populated upgrade/fresh parity for 0011. Its canonical contract includes observations.event_id,
 split_applications.coin_id, causal composite keys and the concurrent trade index.

@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed08-04 bounded adapter; parent Wave2 review/integration next.
+stopped_at: Wave2 complete; 1238 backend tests/24critical modules pass; next08-05 ownership journal.
 last_updated: "2026-11-11T11:52:15.476Z"
 last_activity: 2026-11-11
 progress:
@@ -27,11 +27,16 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 8 (Corporate-Action-Safe Ownership) — EXECUTING
 Plan: 4 of 13 executed (29 tasks, 11 waves)
-Status: Plans01/02/03/04 executed; parent Wave2 review/integration next
+Status: Wave2 complete; Plans01–04 reviewed and integrated; next08-05
 Last activity: 2026-11-11
 Progress: Phase8 execution4/13 plans complete;17/27 milestone plans
 
 ## Completion and next action
+
+Wave2 review/integration passed:1238backend tests/99.76%overall,24critical modules
+100%(1892statements/594branches); adapter review0active findings. Exact0011
+recovery/TLS proof passed before journal consumers. See08-LOCAL-PROOF.md.
+Next08-05 implements instrument-serialized historical ownership.
 
 Wave 1 gate passed:1115backend tests/99.71%overall, expanded23critical modules100%
 (1388statements/374branches). Initial22integrationfailures were fixed and
