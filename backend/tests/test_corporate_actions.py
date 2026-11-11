@@ -359,7 +359,8 @@ async def test_revision_historical_terms_reappear_without_rewinding_safe_state(a
         assert last.classification == "uncertain" and last.revision_id != first.revision_id
 
 
-async def test_inclusive_old_mutation_replay_preserves_later_current_revision(actions):
+@pytest.mark.parametrize("change", ["rate", "cancelled", "units", "ex_date"])
+async def test_inclusive_old_mutation_replay_preserves_later_current_revision(actions, change):
     factory, cid, _, action, auth = actions
     async with factory.begin() as db:
         first = (
@@ -382,7 +383,31 @@ async def test_inclusive_old_mutation_replay_preserves_later_current_revision(ac
         assert (await db.get(StockActionState, cid)).epoch == epoch
     with pytest.raises(ActionHeld, match="mutation_conflict"):
         async with factory.begin() as db:
-            await persist_action_batch(db, batch(revised, mutation="insert", cursor="old-1"), auth)
+            divergent = replace(
+                action,
+                **{
+                    change: {
+                        "rate": Decimal("0.5"),
+                        "cancelled": True,
+                        "units": "post_split",
+                        "ex_date": action.ex_date + timedelta(days=1),
+                    }[change]
+                },
+            )
+            await persist_action_batch(
+                db, batch(divergent, mutation="insert", cursor="old-1"), auth
+            )
+    async with factory() as db:
+        assert (
+            await db.get(StockActionEvent, first.event_id)
+        ).current_revision_id == latest.revision_id
+        assert (await db.get(StockActionState, cid)).epoch == epoch
+        assert (
+            await db.execute(select(func.count()).select_from(StockActionRevision))
+        ).scalar_one() == 2
+        assert (
+            await db.execute(select(func.count()).select_from(StockActionObservation))
+        ).scalar_one() == 2
 
 
 async def test_ingest_mutation_replay_and_conflict(actions):

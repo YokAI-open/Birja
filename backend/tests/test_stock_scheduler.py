@@ -390,6 +390,27 @@ async def test_one_request_quota_allows_one_actual_quote_attempt(state, redis_cl
     assert route.call_count == 1
 
 
+async def test_no_selected_instrument_for_open_exchange_requires_no_quote_attempt(
+    state, redis_client, monkeypatch
+):
+    monkeypatch.setattr(stock_scheduler, "_open_exchanges", lambda *args, **kwargs: {"NASDAQ"})
+    async with state["factory"].begin() as db:
+        await db.execute(update(StockInstrument).values(listing_exchange="NYSE"))
+    try:
+        with respx.mock() as router:
+            async with httpx.AsyncClient(trust_env=False) as http:
+                assert (await cycle(state, redis_client, http)).accepted == 0
+            assert not router.calls
+    finally:
+        async with state["factory"].begin() as db:
+            for mapping in state["mappings"]:
+                await db.execute(
+                    update(StockInstrument)
+                    .where(StockInstrument.coin_id == mapping.coin_id)
+                    .values(listing_exchange=mapping.listing_exchange)
+                )
+
+
 @pytest.mark.parametrize("status", [403, 429, 500])
 async def test_provider_failures_keep_data_and_release_lease(
     state: dict, redis_client: Redis, status: int

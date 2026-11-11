@@ -5,6 +5,7 @@ import logging
 import secrets
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import httpx
 from redis.asyncio import Redis
@@ -26,14 +27,51 @@ WINDOW_KEY = "sim:stock:quote-window"
 LOCK_TTL_MS = 45_000
 CYCLE_TIMEOUT_S = 40
 SOURCE_TIMEOUT_S = 35
-# Leave four requests/minute unused for reviewed reference/action/status/calendar
-# work. These products are not fetched by this discovery-only cycle.
-RESERVED_REQUESTS = 4
+ACCOUNT_WINDOW_PREFIX = "sim:stock:account-attempts:"
+# A rolling 60-second account budget, atomically shared by every real quote and
+# action attempt (including failures/retries). Redis TIME supplies one clock.
+_ACCOUNT_LUA = """
+local t = redis.call('TIME')
+local now = tonumber(t[1])*1000 + math.floor(tonumber(t[2])/1000)
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now-60000)
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[1]) then return 0 end
+redis.call('ZADD', KEYS[1], now, ARGV[2])
+redis.call('PEXPIRE', KEYS[1], 60000)
+return 1
+"""
 _RELEASE_LUA = (
     "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) "
     "else return 0 end"
 )
 logger = logging.getLogger(__name__)
+
+
+async def reserve_account_attempt(
+    redis: Redis,
+    settings: SchedulerSettings,
+    evidence: dict[str, ProductAdmission],
+    *,
+    at: datetime | None = None,
+) -> bool:
+    # Ignore denied/unrelated rows; an enable flag cannot make them authority.
+    now = at or datetime.now(UTC)
+    limits = [settings.stock_account_requests_per_minute]
+    for product in ("quotes", "actions"):
+        row = evidence.get(product)
+        decision = evaluate_admission(
+            row,
+            product,
+            "collection",
+            now,
+            account=settings.stock_data_account,
+            server=settings.stock_data_server,
+            feed="alpaca-corporate-actions" if product == "actions" else "iex",
+        )
+        if decision.allowed and row is not None:
+            limits.append(int(row.quota["requests_per_minute"]))
+    limit = min(limits)
+    key = ACCOUNT_WINDOW_PREFIX + sha256(settings.stock_data_account.encode()).hexdigest()
+    return bool(await redis.eval(_ACCOUNT_LUA, 1, key, limit, secrets.token_hex(16)) == 1)
 
 
 async def _admissions(db: AsyncSession) -> dict[str, ProductAdmission]:
@@ -126,7 +164,7 @@ async def _refresh(
     # Fresh pure check after awaited reads (calendar bounds already warmed above).
     opened &= _open_exchanges(checked, sessions, current["calendar"], **scope)
     selected = [m for m in mappings if m.listing_exchange in opened]
-    quota = current["quotes"].quota["requests_per_minute"] - RESERVED_REQUESTS
+    quota = current["quotes"].quota["requests_per_minute"]
     if not selected or quota < 1 or await redis.get(LOCK_KEY) != token:
         return CycleResult("ok")
     # Separate shared cadence guard survives lease release, including failures.
@@ -152,6 +190,8 @@ async def _refresh(
             or not opened <= _open_exchanges(checked, sessions, latest["calendar"], **scope)
         ):
             raise AlpacaError("current_admission")
+        if not await reserve_account_attempt(redis, settings, latest, at=checked):
+            raise AlpacaError("account_budget")
 
     http.event_hooks["request"].append(before_request)
     try:

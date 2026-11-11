@@ -6,11 +6,13 @@ instrument's epoch before extending the monitoring deadline.
 """
 
 import asyncio
+import json
 import logging
 import secrets
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from typing import Any, Literal, TypedDict, cast
 
 import httpx
@@ -20,8 +22,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import SchedulerSettings
-from app.models.corporate_action import StockActionEvent, StockActionSource, StockActionState
+from app.models.corporate_action import (
+    StockActionEvent,
+    StockActionRevision,
+    StockActionSource,
+    StockActionState,
+)
 from app.services.alpaca_actions import (
+    ActionBatch,
     ActionBudget,
     ActionError,
     fetch_action_snapshot,
@@ -39,7 +47,7 @@ from app.services.stock_ownership import acquire_stock_gate, assert_ownership_co
 from app.services.stock_quote_rules import CURATED_SYMBOLS, verified_mapping
 from app.services.stock_quotes import load_stock_catalog
 from app.tasks.scheduler import CycleResult
-from app.tasks.stock_scheduler import _RELEASE_LUA, _admissions
+from app.tasks.stock_scheduler import _RELEASE_LUA, _admissions, reserve_account_attempt
 
 LOCK_KEY = "sim:stock:actions:lock"
 WINDOW_KEY = "sim:stock:actions:window"
@@ -104,6 +112,23 @@ async def _refresh(
     ):
         raise ActionError("mapping")
     scope: _Scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
+    policy_key = sha256(
+        json.dumps(
+            {
+                "authority": {
+                    k: asdict(v)
+                    for k, v in original.items()
+                    if k in ("actions", "calendar", "reference")
+                },
+                "scope": scope,
+                "mappings": [asdict(m) for m in mappings],
+                "baseline": baseline,
+                "segment_days": settings.stock_actions_segment_days,
+            },
+            default=str,
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
     budget = ActionBudget(
         max_attempts=getattr(settings, "stock_actions_max_attempts", 8),
         total_seconds=getattr(settings, "stock_actions_cycle_budget_seconds", 30),
@@ -158,13 +183,24 @@ async def _refresh(
                 raise ActionError("journal_baseline")
             await assert_ownership_consistent(db, mapping.coin_id)
             stage = state.staged_continuation or {}
-            if state.admission_generation != original["actions"].generation:
+            if (
+                state.admission_generation != original["actions"].generation
+                or stage.get("policy_key") != policy_key
+            ):
                 stage = {}
             state.health = "reconciling"
             state.valid_until = None
             state.epoch += 1
             state.admission_generation = original["actions"].generation
             checkpoints[mapping.coin_id] = (state.epoch, stage, state.covered_until)
+    stages = [stage for _, stage, _ in checkpoints.values()]
+    pending_targets = [
+        datetime.fromisoformat(stage["target_until"])
+        for stage in stages
+        if stage.get("target_until")
+    ]
+    if pending_targets:
+        until = min(pending_targets)
     horizon = until.date() + timedelta(days=getattr(settings, "stock_actions_future_days", 90))
     # Choose the least advanced durable segment across all twenty, including
     # interrupted previous commits. Never skip an instrument after a crash.
@@ -174,7 +210,7 @@ async def _refresh(
     ]
     start = min(starts)
     if start > horizon:
-        start = until.date()
+        start = horizon + timedelta(days=1) if pending_targets else until.date()
     end = min(
         horizon, start + timedelta(days=getattr(settings, "stock_actions_segment_days", 31) - 1)
     )
@@ -194,26 +230,79 @@ async def _refresh(
         raise ActionError("known_id_budget")
     symbol_by_id = {m.coin_id: m.symbol for m in mappings}
     ids = {identity: symbol_by_id[cid] for identity, cid in known}
-    batches = [
-        await fetch_action_snapshot(
-            http, mappings, evidence, now, budget, start=start, end=end, lease=lease, **scope
-        )
+    tokens = [stage.get("continuation") for stage in stages]
+    page_token = tokens[0] if len(set(tokens)) == 1 else None
+    rest_complete = start > horizon
+    frontiers = [
+        datetime.fromisoformat(stage["replay_frontier"])
+        if stage.get("replay_frontier")
+        else baseline
+        for stage in stages
     ]
-    if ids:
-        batches.append(
-            await recheck_action_ids(
-                http, mappings, evidence, now, budget, ids=ids, lease=lease, **scope
+    since = min(frontiers)
+    replay_ends = [
+        datetime.fromisoformat(stage["replay_end"]) if stage.get("replay_end") else until
+        for stage in stages
+    ]
+    replay_end = min(until, *replay_ends)
+
+    async def before_request(request: httpx.Request) -> None:
+        await guard()
+        if not await reserve_account_attempt(redis, settings, original):
+            raise ActionError("account_budget")
+        await guard()
+
+    http.event_hooks["request"].append(before_request)
+    try:
+        batches: list[ActionBatch] = []
+        snapshot = None
+        if not rest_complete:
+            snapshot = await fetch_action_snapshot(
+                http,
+                mappings,
+                evidence,
+                now,
+                budget,
+                start=start,
+                end=end,
+                lease=lease,
+                page_token=page_token,
+                **scope,
             )
+            batches.append(snapshot)
+            rest_complete = snapshot.complete and end == horizon
+        if ids:
+            batches.append(
+                await recheck_action_ids(
+                    http, mappings, evidence, now, budget, ids=ids, lease=lease, **scope
+                )
+            )
+        replay = await replay_action_mutations(
+            http,
+            mappings,
+            evidence,
+            now,
+            budget,
+            since=since,
+            until=replay_end,
+            lease=lease,
+            **scope,
         )
-    since = min(
-        covered if covered is not None else baseline for _, _, covered in checkpoints.values()
+        batches.append(replay)
+    finally:
+        http.event_hooks["request"].remove(before_request)
+    replay_frontier = replay_end if replay.complete else since
+    next_replay_end = until
+    density_limit = False
+    if not replay.complete:
+        if replay.reason in ("response_limit", "byte_budget", "mutation_budget", "cycle_budget"):
+            next_replay_end = since + (replay_end - since) / 2
+            density_limit = next_replay_end <= since
+        else:
+            next_replay_end = replay_end
+    complete = (
+        all(batch.complete for batch in batches) and rest_complete and replay_frontier == until
     )
-    batches.append(
-        await replay_action_mutations(
-            http, mappings, evidence, now, budget, since=since, until=until, lease=lease, **scope
-        )
-    )
-    complete = all(batch.complete for batch in batches) and end == horizon
     # Missing-ID evidence has no action row; route it using retained identity.
     id_coin = {identity: cid for identity, cid in known}
     for mapping in mappings:
@@ -244,27 +333,29 @@ async def _refresh(
                 )
             state = cast(StockActionState, await db.get(StockActionState, mapping.coin_id))
             state.staged_continuation = {
+                "policy_key": policy_key,
+                "target_until": until.isoformat(),
                 "next_date": (
-                    (end + timedelta(days=1)) if batches[0].complete else start
+                    (end + timedelta(days=1))
+                    if snapshot is not None and snapshot.complete
+                    else start
                 ).isoformat(),
                 "segment_start": start.isoformat(),
                 "segment_end": end.isoformat(),
                 "until": until.isoformat(),
-                "complete": batches[0].complete,
-                "continuation": batches[0].continuation,
+                "complete": rest_complete,
+                "continuation": snapshot.continuation if snapshot is not None else None,
+                "replay_frontier": replay_frontier.isoformat(),
+                "replay_end": next_replay_end.isoformat(),
+                "reason": "replay_density_limit" if density_limit else replay.reason,
             }
-            if all(batch.complete for batch in batches):
+            if complete:
                 state.coverage_start = baseline
                 state.covered_until = until
-                state.cursor = next(
-                    (
-                        o.cursor
-                        for b in reversed(batches)
-                        for o in reversed(b.observations)
-                        if o.cursor
-                    ),
-                    state.cursor,
-                )
+            state.cursor = next(
+                (o.cursor for b in reversed(batches) for o in reversed(b.observations) if o.cursor),
+                replay.continuation or state.cursor,
+            )
             await db.flush()
             checkpoints[mapping.coin_id] = (
                 state.epoch,
@@ -306,11 +397,17 @@ async def _refresh(
                 for a in latest.values()
                 if a.product in ("actions", "calendar", "reference")
             ),
+            datetime.fromisoformat(original["calendar"].calendar["review_valid_until"]),
         )
         for state in rows:
             state.health = "current"
             state.checked_at = checked
             state.valid_until = deadline
+            state.staged_continuation = {
+                **cast(dict[str, Any], state.staged_continuation),
+                "target_until": None,
+                "replay_end": None,
+            }
         await db.flush()
         for mapping in mappings:
             state = next(row for row in rows if row.coin_id == mapping.coin_id)
@@ -333,7 +430,15 @@ async def _refresh(
                 (
                     await db.execute(
                         select(StockActionEvent.id)
-                        .where(StockActionEvent.coin_id == mapping.coin_id)
+                        .join(
+                            StockActionRevision,
+                            StockActionRevision.id == StockActionEvent.current_revision_id,
+                        )
+                        .where(
+                            StockActionEvent.coin_id == mapping.coin_id,
+                            StockActionRevision.normalized_terms["event_type"].as_string()
+                            == "cash_dividend",
+                        )
                         .order_by(StockActionEvent.id)
                         .limit(1001)
                     )

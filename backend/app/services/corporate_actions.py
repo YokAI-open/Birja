@@ -376,6 +376,34 @@ async def persist_action_batch(
             )
             if event.coin_id != cid:
                 raise ActionHeld("identity_conflict")
+            if observation.cursor is not None:
+                recorded = (
+                    await db.execute(
+                        select(StockActionRevision)
+                        .join(
+                            StockActionObservation,
+                            StockActionObservation.revision_id == StockActionRevision.id,
+                        )
+                        .where(
+                            StockActionObservation.source_id == source.id,
+                            StockActionObservation.mutation_id == observation.cursor,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if recorded is not None:
+                    # Inclusive replay can redeliver A after B became current.
+                    # Compare A with its own immutable observation, never B;
+                    # do not manufacture a historical revision or rewind state.
+                    if {
+                        k: v for k, v in recorded.normalized_terms.items() if k != "ingest_hold"
+                    } != terms:
+                        raise ActionHeld("mutation_conflict")
+                    results.append(
+                        PersistedAction(
+                            event.id, recorded.id, recorded.classification, recorded.reason
+                        )
+                    )
+                    continue
         previous = (
             await db.get(StockActionRevision, event.current_revision_id)
             if event.current_revision_id
@@ -471,34 +499,18 @@ async def persist_action_batch(
                 )
         else:
             revision = cast(StockActionRevision, previous)
-        duplicate = (
-            (
-                await db.execute(
-                    select(StockActionObservation).where(
-                        StockActionObservation.source_id == source.id,
-                        StockActionObservation.mutation_id == observation.cursor,
-                    )
-                )
-            ).scalar_one_or_none()
-            if observation.cursor is not None
-            else None
-        )
-        if duplicate is not None:
-            if duplicate.revision_id != revision.id:
-                raise ActionHeld("mutation_conflict")
-        else:
-            db.add(
-                StockActionObservation(
-                    event_id=event.id,
-                    source_id=source.id,
-                    revision_id=revision.id,
-                    mutation_id=observation.cursor,
-                    observed_at=action.observed_at,
-                    admission_generation=evidence.generation,
-                    source_kind="replay" if observation.mutation != "snapshot" else "rest",
-                    cycle_id=str(uuid4()),
-                )
+        db.add(
+            StockActionObservation(
+                event_id=event.id,
+                source_id=source.id,
+                revision_id=revision.id,
+                mutation_id=observation.cursor,
+                observed_at=action.observed_at,
+                admission_generation=evidence.generation,
+                source_kind="replay" if observation.mutation != "snapshot" else "rest",
+                cycle_id=str(uuid4()),
             )
+        )
         results.append(
             PersistedAction(event.id, revision.id, revision.classification, revision.reason)
         )

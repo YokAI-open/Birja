@@ -515,10 +515,11 @@ async def _rest(
     params: dict[str, str],
     coverage: ActionCoverage,
     ids: Mapping[str, str] | None = None,
+    initial_token: str | None = None,
 ) -> ActionBatch:
     rows: list[ActionObservation] = []
-    token: str | None = None
-    seen_tokens: set[str] = set()
+    token = initial_token
+    seen_tokens: set[str] = {initial_token} if initial_token is not None else set()
     seen_ids: set[str] = set()
     try:
         async with asyncio.timeout(ctx.budget.remaining()):
@@ -619,6 +620,7 @@ async def fetch_action_snapshot(
     try:
         if type(start) is not date or type(end) is not date or not start <= end:
             raise ActionError("invalid_window")
+        page_token = _token(page_token)
         ctx = _context(http, mappings, evidence, now, budget, lease, sleep, account, server, "rest")
     except ActionError as exc:
         return ActionBatch(attempt_count=budget.attempts, reason=str(exc))
@@ -635,6 +637,7 @@ async def fetch_action_snapshot(
                 "sort": "asc",
             },
             ActionCoverage("process_date", start.isoformat(), end.isoformat(), False, "source_gap"),
+            initial_token=page_token,
         )
     finally:
         budget._busy = False
