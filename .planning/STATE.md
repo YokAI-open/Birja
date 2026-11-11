@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 09-02; Wave 3 schema next
-last_updated: "2026-11-11T20:08:07.860Z"
+stopped_at: Completed 09-03; schema review before 09-04
+last_updated: "2026-11-11T20:28:23.972Z"
 last_activity: 2026-11-11 -- Phase 9 planning complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 28
-  percent: 67
+  completed_plans: 29
+  percent: 69
 ---
 
 # Project State
@@ -21,24 +21,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 3)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 4)
 
 ## Current Position
 
 Phase: 9
-Plan: 2/15 complete; next 09-03 (Wave 3/13)
+Plan: 3/15 complete; 09-04 recovery/TLS (Wave 4/13)
 Status: In progress
 Last activity: 2026-11-11 -- Phase 9 planning complete
-Progress: [███████░░░] 67% (28/42 tracked plans complete)
+Progress: [███████░░░] 69% (29/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-03 is complete locally: additive0013stock facts/status, deferred
+financial integrity, immutable rows, narrow grants and fixed invoker finalguard.
+Final124PGtests pass14.19s; scoped Ruff/Mypy pass. Sourcec408be8, summary5134cbc.
+Independent14-file source/schema review is now clean after actualWR-01
+malformed-session RED/GREENe0f1802/e5f122a. Initial full backend7failures fixed
+by test-only successor fixtures/assertionsb2d9f80 and coverage96e780b.
+Final1793backend tests pass168.97s,99.83%overall; all31critical modules
+3217statements/1052branches100%. Continue09-04exact encrypted recovery and
+actual restricted verified-TLS proof. See09-03-REVIEW/INTEGRATION andLOCAL-PROOF.
+No runtime stock consumer/liveactivation/production change. Requirements pending.
+
 
 Plan09-02 is complete:2tasks,186affected tests pass1.78s; stockmath
 72statements/24branches100%, scoped Ruff/format/Mypy pass. Source16b6c55,
 summaryb218105. Exact ask/bid/cents/basis and bounded conservative shortcuts
 retain crypto behavior; no financial writer or activation. Continue09-03
 additive0013schema/grants, then09-04actual recovery/TLS before runtime consumers.
-
 
 Phase9 execution started on owner invocation. Plan09-01 is complete:2tasks,
 137focused tests pass0.67s; scoped Ruff/format/Mypy pass. Exact typed stock
@@ -60,7 +71,7 @@ validation map and source audit are saved in its phase directory. Independent
 09-PLAN-CHECK.md passes after one resolved documentation finding, with0active
 blockers/warnings and no override. All15SDK frontmatter/structure checks and
 whitespace checks pass. No application tests ran for these documentation changes.
-Execution is now authorized and progressing from09-03; this planning history
+Execution is now authorized and progressing through review before09-04; this planning history
 does not authorize live activation. Live Phase7/8 evidence stays owner-deferred. The
 new0013recovery/verified-TLS proof precedes runtime consumers; actual financial
 concurrency, stock/crypto regressions, browser/security/coverage/image gates and
@@ -471,6 +482,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 8 P13 | 2min | 2 tasks | 3 files |
 | Phase 9 P01 | 10m16s | 2 tasks | 5 files |
 | Phase 9 P02 | 7min | 2 tasks | 2 files |
+| Phase 9 P03 | 19min | 2 tasks | 8 files |
 
 ## Operations
 
@@ -480,9 +492,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T20:08:07.841Z
-Stopped at: Completed 09-02; Wave 3 schema next
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-03-PLAN.md
+Last session:2026-11-11T20:28:23.947Z
+Stopped at: Completed 09-03; schema review before 09-04
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-04-PLAN.md
 Resume: Phase9 plans09-01/02 are complete; continue09-03 then09-04 proof before runtime consumers. New stock schemas/pure rules are tested; financial writers and activation have not run. Phase8 independent goal verification passed and local completion is recorded. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
 Completed verification: .planning/phases/08-corporate-action-safe-ownership/08-VERIFICATION.md (passed locally).
 Completed reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are clear; actual owner checkpoints are recorded separately.

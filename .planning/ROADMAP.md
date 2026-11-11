@@ -226,7 +226,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-03-PLAN.md — Add successor stock facts and independent status integrity
+- [x] 09-03-PLAN.md — Add successor stock facts and independent status integrity
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -336,7 +336,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 2/15 | In Progress|  |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 3/15 | In Progress|  |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
