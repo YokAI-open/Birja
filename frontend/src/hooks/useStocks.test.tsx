@@ -95,6 +95,7 @@ afterEach(() => {
   cleanup();
   clients.forEach((c) => c.clear());
   clients.length = 0;
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -385,7 +386,7 @@ it("removes monitor-expired numbers at exact millisecond equality, from projecti
   const fetch = vi.fn(async () => new Response(JSON.stringify(body)));
   vi.stubGlobal("fetch", fetch);
   const { result, client } = setup();
-  await waitFor(() => expect(result.current.data?.items[0].quote).not.toBeNull());
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
   now = 124;
   expect(
     projectStocks(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])!, now).items[0]
@@ -456,4 +457,380 @@ it("uses sub-millisecond timestamps conservatively and purges source age at120",
   data.server_now = "2026-11-10T15:00:00.000999Z";
   data.items[0].quote!.event_at = "2026-11-10T14:58:00.001001Z";
   expect(projectStocks(data, 0).items[0].quote).toBeNull();
+});
+
+const timed = (body = payload()): TimedStocks =>
+  ({
+    ...body,
+    transport: { started_at: 0, received_at: 0, round_trip_ms: 0 },
+  }) as unknown as TimedStocks;
+const hold = (body: ReturnType<typeof payload>, epoch: number, reason = "unsupported") => {
+  body.items.forEach((item) => {
+    item.action = {
+      state: "suspended",
+      reason,
+      epoch,
+      checked_at: stamp(-1),
+      valid_until: null,
+    } as never;
+    item.quote = null;
+    item.valuation_reason = reason === "post_split_quote_missing" ? reason : "action_unavailable";
+  });
+  return body;
+};
+
+it.each([
+  [
+    "admission",
+    (data: TimedStocks) => {
+      data.admission.valid_until = stamp(0.1);
+    },
+  ],
+  [
+    "calendar",
+    (data: TimedStocks) => {
+      data.items[0].session.valid_until = stamp(0.1);
+    },
+  ],
+  [
+    "action",
+    (data: TimedStocks) => {
+      data.items[0].action.valid_until = stamp(0.1);
+    },
+  ],
+  [
+    "source-age",
+    (data: TimedStocks) => {
+      data.items[0].quote!.event_at = stamp(-119.9);
+      data.items[0].quote!.age_seconds = 119;
+    },
+  ],
+])("purges %s exactly at equality using full RTT once", (_name, change) => {
+  const data = timed();
+  change(data);
+  data.transport.round_trip_ms = 40;
+  expect(projectStocks(data, 59).items[0].quote).not.toBeNull();
+  expect(projectStocks(data, 60).items[0].quote).toBeNull();
+  expect(data.items[0].quote?.event_at).toBeDefined();
+});
+
+it("rounds deadline and source fractions down, never granting an extra millisecond", () => {
+  const data = timed();
+  data.items[0].action.valid_until = "2026-11-10T15:00:00.100999999Z";
+  expect(projectStocks(data, 99).items[0].quote).not.toBeNull();
+  expect(projectStocks(data, 100).items[0].quote).toBeNull();
+  const almost = timed();
+  almost.items[0].quote!.event_at = stamp(-119.999);
+  almost.items[0].quote!.age_seconds = 119;
+  expect(projectStocks(almost, 0).items[0].quote).not.toBeNull();
+  expect(projectStocks(almost, 1).items[0].quote).toBeNull();
+});
+
+it("keeps original held reasons and never locally establishes action safety", () => {
+  const data = timed(hold(payload(), 7, "post_split_quote_missing"));
+  expect(projectStocks(data, 100).items[0]).toMatchObject({
+    quote: null,
+    action: { state: "suspended", reason: "post_split_quote_missing", epoch: 7 },
+    valuation_reason: "post_split_quote_missing",
+  });
+  const unavailable = projectStocks(
+    { ...data, admission: { state: "unavailable", generation: null, valid_until: null } },
+    100,
+  );
+  expect(unavailable.items[0]).toMatchObject({
+    quote: null,
+    action: { state: "unknown", epoch: 0, checked_at: null, valid_until: null },
+    valuation_reason: "action_unavailable",
+  });
+});
+
+it.each(["older epoch", "older server", "equal time hold", "older submillisecond"])(
+  "rejects %s after a newer hold without losing cached privacy",
+  async (scenario) => {
+    const held = hold(payload(), 7);
+    held.server_now =
+      scenario === "older submillisecond" ? "2026-11-10T15:00:01.000000002Z" : stamp(1);
+    const old = payload();
+    old.server_now =
+      scenario === "older submillisecond"
+        ? "2026-11-10T15:00:01.000000001Z"
+        : scenario === "older server"
+          ? stamp(0)
+          : scenario === "equal time hold"
+            ? stamp(1)
+            : stamp(2);
+    old.items.forEach((x) => {
+      x.action.epoch = scenario === "older epoch" ? 6 : 7;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(held)))
+        .mockResolvedValue(new Response(JSON.stringify(old))),
+    );
+    const { result, client } = setup();
+    await waitFor(() => expect(result.current.data?.items[0].action.state).toBe("suspended"));
+    await act(async () => {
+      await result.current.refetch();
+    });
+    expect(
+      client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0],
+    ).toMatchObject({ quote: null, action: { state: "suspended", epoch: 7 } });
+  },
+);
+
+it("retains high-water across same-user refresh and accepts a newer legitimate resolution", async () => {
+  const held = hold(payload(), 7);
+  const stale = payload();
+  stale.server_now = stamp(1);
+  stale.items.forEach((x) => {
+    x.action.epoch = 6;
+  });
+  const resolved = payload();
+  resolved.server_now = stamp(2);
+  resolved.items.forEach((x) => {
+    x.action.epoch = 8;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(held)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(stale)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(resolved))),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(7));
+  act(() => {
+    client.setQueryData(["me"], { email: "first@example.test", cash_usd: "9000" });
+  });
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.data?.items[0].quote).toBeNull();
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.data?.items[0].action.epoch).toBe(8);
+  expect(result.current.data?.items[0].quote?.bid).toBe("100");
+});
+
+it("aborts in-flight healthy results when a newer same-generation stock hold enters cache", async () => {
+  let release: (value: Response) => void = () => {};
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(payload())))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  let pending: Promise<unknown>;
+  act(() => {
+    pending = result.current.refetch();
+  });
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  act(() => {
+    client.setQueryData(["stocks", "first@example.test"], timed(hold(payload(), 8)));
+  });
+  expect((fetch.mock.calls[1] as unknown as [string, RequestInit])[1].signal?.aborted).toBe(true);
+  await act(async () => {
+    release(new Response(JSON.stringify(payload())));
+    await pending;
+  });
+  expect(result.current.data?.items[0]).toMatchObject({
+    quote: null,
+    action: { state: "suspended", epoch: 8 },
+  });
+});
+
+it("rejects stale admission generation and newer-cache server evidence", async () => {
+  let release: (value: Response) => void = () => {};
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(payload({ generation: 2 }))))
+    .mockResolvedValueOnce(new Response(JSON.stringify(payload())))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.admission.generation).toBe(2));
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(result.current.data?.admission.generation).toBe(2);
+  let pending: Promise<unknown>;
+  act(() => {
+    pending = result.current.refetch();
+  });
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  const newer = timed(payload({ generation: 2 }));
+  newer.server_now = stamp(2);
+  act(() => {
+    client.setQueryData(["stocks", "first@example.test"], newer);
+  });
+  await act(async () => {
+    release(new Response(JSON.stringify(payload({ generation: 2 }))));
+    await pending;
+  });
+  expect(result.current.data?.server_now).toBe(stamp(2));
+});
+
+it("resets high-water only after logout and login, preserving crypto cache", async () => {
+  const first = hold(payload(), 9);
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(first)))
+      .mockImplementation(async (path: string) =>
+        path === "/api/v1/auth/me"
+          ? new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10000" }))
+          : new Response(JSON.stringify(payload())),
+      ),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(9));
+  await act(async () => {
+    await clearPrivateQueries(client);
+    client.setQueryData(["me"], null);
+  });
+  await waitFor(() => expect(result.current.data).toBeUndefined());
+  act(() => {
+    client.setQueryData(["me"], { email: "first@example.test", cash_usd: "10000" });
+  });
+  await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(1));
+});
+
+it("catches background expiry on focus without waiting for the throttled timer", async () => {
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(payload()))),
+  );
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  now = 301_000;
+  act(() => {
+    window.dispatchEvent(new Event("focus"));
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
+  expect(result.current.data?.items[0].action.checked_at).toBeNull();
+});
+
+it("schedules a cache purge at the nearest millisecond boundary before polling or display ticks", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  const body = payload();
+  body.items.forEach((x) => {
+    x.action.valid_until = stamp(0.125);
+  });
+  const fetch = vi.fn(async () => new Response(JSON.stringify(body)));
+  vi.stubGlobal("fetch", fetch);
+  const { result, client, unmount } = setup();
+  for (let i = 0; i < 5; i++)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  expect(result.current.data?.items[0].quote?.bid).toBe("100");
+  now = 124;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(124);
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote?.bid,
+  ).toBe("100");
+  now = 125;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
+  expect(result.current.data?.items[0].action.state).toBe("unknown");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  unmount();
+  now = 2000;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1875);
+  });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("reschedules simultaneous permission/calendar/monitor deadlines on cache changes", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  const fetch = vi.fn(async () => new Response(JSON.stringify(payload())));
+  vi.stubGlobal("fetch", fetch);
+  const { result, client } = setup();
+  for (let i = 0; i < 5; i++)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  expect(result.current.data?.items[0].quote?.bid).toBe("100");
+  const replacement = timed();
+  replacement.transport.round_trip_ms = 25;
+  replacement.admission.valid_until = stamp(0.125);
+  replacement.items.forEach((x) => {
+    x.session.valid_until = stamp(0.125);
+    x.action.valid_until = stamp(0.125);
+  });
+  act(() => {
+    client.setQueryData(["stocks", "first@example.test"], replacement);
+  });
+  now = 99;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(99);
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote?.bid,
+  ).toBe("100");
+  now = 100;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0],
+  ).toMatchObject({
+    quote: null,
+    action: { state: "unknown", epoch: 0, checked_at: null, valid_until: null },
+    session: { state: "unknown", valid_until: null },
+  });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  // Consumed deadlines are removed; there is no zero-delay busy reschedule.
+  const count = vi.getTimerCount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10);
+  });
+  expect(vi.getTimerCount()).toBeLessThanOrEqual(count);
+});
+
+
+it.each(["quote expiry", "session close"])("does not reanchor an equal-time healthy reply after local %s", async (kind) => {
+  let now = 0; vi.spyOn(performance, "now").mockImplementation(() => now);
+  const body = payload(kind === "quote expiry" ? { age: 119 } : { close: 1 });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body))));
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  now = 1000;
+  act(() => { window.dispatchEvent(new Event("focus")); });
+  if (kind === "quote expiry") expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull();
+  else expect(result.current.data?.items[0].session.state).toBe("closed");
+  await act(async () => { await result.current.refetch(); });
+  if (kind === "quote expiry") expect(result.current.data?.items[0].quote).toBeNull();
+  else expect(result.current.data?.items[0].session.state).toBe("closed");
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchStocks, isStocks } from "./stocks";
+import { fetchStocks, isStocks, stockInstant } from "./stocks";
 
 const item = {
   id: 16,
@@ -242,4 +242,150 @@ describe("action authority validation", () => {
       );
     }
   });
+});
+
+it.each([
+  ["null envelope", null],
+  ["bad timestamp type", { ...valid, server_now: 1 }],
+  ["bad civil month", { ...valid, server_now: "2026-13-10T15:00:10Z" }],
+  ["bad civil hour", { ...valid, server_now: "2026-11-10T24:00:10Z" }],
+  ["bad civil minute", { ...valid, server_now: "2026-11-10T15:60:10Z" }],
+  ["bad civil second", { ...valid, server_now: "2026-11-10T15:00:60Z" }],
+  ["non-UTC", { ...valid, server_now: "2026-11-10T15:00:10-01:00" }],
+  ["envelope extra", { ...valid, raw: "private" }],
+  ["admission extra", { ...valid, admission: { ...valid.admission, raw: "private" } }],
+  ["attribution extra", { ...valid, attribution: { ...valid.attribution, raw: "private" } }],
+  [
+    "approved without generation",
+    { ...valid, admission: { ...valid.admission, generation: null } },
+  ],
+  [
+    "denied with generation",
+    { ...valid, admission: { state: "unavailable", generation: 1, valid_until: null } },
+  ],
+  [
+    "denied with validity",
+    {
+      ...valid,
+      admission: { state: "unavailable", generation: null, valid_until: valid.server_now },
+    },
+  ],
+  [
+    "unknown admission",
+    { ...valid, admission: { state: "guessed", generation: null, valid_until: null } },
+  ],
+])("rejects %s", (_name, response) => expect(isStocks(response)).toBe(false));
+
+it.each([
+  { quote: "unparsed" },
+  { session: null },
+  { session: { ...item.session, state: "guessed" } },
+  { session: { ...item.session, opens_at: null } },
+  { session: { ...item.session, closes_at: null } },
+  { session: { ...item.session, valid_until: null } },
+  { session: { ...item.session, timezone: "UTC" } },
+  { session: { ...item.session, next_open_at: "bad" } },
+  { status: null },
+  { status: { state: "unknown", observed_at: null, valid_until: null, raw: true } },
+  { quote: { ...item.quote, age_seconds: -1 } },
+  { quote: { ...item.quote, age_seconds: 0.1 } },
+  { action: { ...item.action, epoch: "1" } },
+  { action: { ...item.action, state: "unknown", reason: "none", valid_until: null } },
+  { action: { ...item.action, state: "reconciling", reason: "unsupported", valid_until: null } },
+  { action: { ...item.action, state: "suspended", reason: "none", valid_until: null } },
+  { action: { ...item.action, state: "unknown", reason: "monitor_unavailable" } },
+  { action: { ...item.action, checked_at: "bad" } },
+  { action: { ...item.action, valid_until: "bad" } },
+])("rejects malformed nested authority %j", (update) =>
+  expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false),
+);
+
+it.each([
+  ["unknown", "monitor_unavailable"],
+  ["unknown", "source_gap"],
+  ["reconciling", "source_gap"],
+  ["reconciling", "conflicting"],
+  ["suspended", "unsupported"],
+  ["suspended", "fractional"],
+  ["suspended", "conflicting"],
+  ["suspended", "identity_change"],
+  ["suspended", "post_split_quote_missing"],
+])("accepts safe %s/%s without numeric values", (state, reason) => {
+  expect(
+    isStocks({
+      ...valid,
+      items: valid.items.map((x) => ({
+        ...x,
+        quote: null,
+        action: { ...x.action, state, reason, valid_until: null },
+        valuation_reason:
+          reason === "post_split_quote_missing" ? "post_split_quote_missing" : "action_unavailable",
+      })),
+    }),
+  ).toBe(true);
+});
+
+it("accepts current action without a quote and explicit unknown session facts", () => {
+  expect(
+    isStocks({
+      ...valid,
+      items: valid.items.map((x) => ({
+        ...x,
+        quote: null,
+        valuation_reason: "quote_unavailable",
+        session: {
+          ...x.session,
+          state: "unknown",
+          opens_at: null,
+          closes_at: null,
+          valid_until: null,
+        },
+      })),
+    }),
+  ).toBe(true);
+});
+it("orders UTC timestamps exactly without losing nanoseconds", () => {
+  expect(
+    stockInstant("2026-11-10T15:00:10.123456789Z") -
+      stockInstant("2026-11-10T15:00:10.123456788+00:00"),
+  ).toBe(1n);
+  expect(isStocks({ ...valid, server_now: "2026-11-10T15:00:10+00:00" })).toBe(true);
+  expect(
+    isStocks({
+      ...valid,
+      items: valid.items.map((x) => ({
+        ...x,
+        action: { ...x.action, checked_at: "2026-11-10T15:00:10.000000001Z" },
+      })),
+    }),
+  ).toBe(false);
+});
+
+it("honors caller cancellation before publication and sends no-store", async () => {
+  const controller = new AbortController();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      controller.abort();
+      return new Response(JSON.stringify(valid));
+    }),
+  );
+  await expect(fetchStocks(controller.signal)).rejects.toThrow();
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/v1/stocks",
+    expect.objectContaining({ cache: "no-store" }),
+  );
+});
+
+
+it.each([
+  { session: { ...item.session, state: "unknown" } },
+  { session: { ...item.session, state: "closed" } },
+  { quote_reason: "missing" }, { quote_reason: "permission_unavailable" },
+  { session_reason: "closed" },
+  { quote: { ...item.quote, event_at: "2026-11-10T15:00:02Z", collected_at: "2026-11-10T15:00:01Z" } },
+  { quote: { ...item.quote, collected_at: "2026-11-10T15:00:10.000000001Z" } },
+  { quote: { ...item.quote, event_at: "2026-11-10T14:58:10Z", collected_at: "2026-11-10T15:00:01Z", age_seconds: 120 } },
+])("rejects incoherent disclosed numeric quote %j", (update) => {
+  expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
 });
