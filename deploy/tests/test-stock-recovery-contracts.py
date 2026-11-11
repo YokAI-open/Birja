@@ -44,6 +44,17 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_dump_sequence_states_are_exact_bounded_and_allowlisted(self):
+        producer = load("backup-snapshot")
+        rows = [f"SELECT pg_catalog.setval('public.{table}_id_seq', {index+11}, {'true' if index % 2 else 'false'});" for index,table in enumerate(producer.identity_tables("0011"))]
+        raw = ("-- PostgreSQL SEQUENCE SET\n" + "\n".join(rows)).encode()
+        parsed = producer.dump_identity_state(raw)
+        self.assertEqual(parsed[0][1:], [11, False])
+        self.assertEqual(parsed[-1][1], len(rows)+10)
+        for invalid in (raw + b"\n" + rows[0].encode(), raw.replace(b"11, false", b"0, false"), b"\n".join(raw.splitlines()[:-1]), raw.replace(b"public.users_id_seq", b"public.unknown_id_seq"), raw + b"x"*65536, raw.replace(b"11, false", b"9223372036854775808, false")):
+            with self.assertRaises(ValueError):
+                producer.dump_identity_state(invalid)
+
     def test_legacy_sql_bytes_and_all_new_fields(self):
         producer = load("backup-snapshot")
         legacy = producer.manifest_sql("0008")

@@ -516,9 +516,7 @@ INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_sta
 
 
 def identity_state(dc, db):
-    names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
-    if role_sql(dc, "SELECT version_num FROM alembic_version").decode() in ('0009','0010'):
-        names += ["stock_sessions", "stock_data_admissions"]
+    names = r.backup_module().identity_tables(role_sql(dc, "SELECT version_num FROM alembic_version").decode())
     return {name: r.sql(dc, f"SELECT last_value,is_called FROM {name}_id_seq", db).strip() for name in names}
 
 
@@ -527,7 +525,7 @@ def successor_roundtrips(dc, session, unchanged):
     release = source_git('rev-parse', 'HEAD').decode().strip()
     source_container = r.call(dc + ['ps','-q','postgres']).strip()
     source_mounts = r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()])
-    for revision in ('0008','0009','0010'):
+    for revision in ('0008','0009','0010','0011'):
         role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")")
         if revision == '0009':
             r.sql(dc, STOCK_RECOVERY_SEED, 'birja_source_test')
@@ -535,6 +533,11 @@ def successor_roundtrips(dc, session, unchanged):
             r.sql(dc, """UPDATE stock_instruments SET provider_asset_id='synthetic-'||coin_id,provider_verified_at='2026-11-10T14:00Z' WHERE mod(coin_id,2)=0;
 INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation)
 SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10T15:00:00.123456Z','2026-11-10T15:00:01.654321Z','2026-11-10',7 FROM stock_instruments;""", 'birja_source_test')
+        if revision == '0011':
+            spec = importlib.util.spec_from_file_location('accounting_fixture', ROOT / 'deploy/tests/test-stock-recovery-contracts.py')
+            fixture = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(fixture)
+            r.sql(dc, fixture.ACTION_SEED, 'birja_source_test')
         before = r.canonical(dc, 'birja_source_test')
         if revision == '0010':
             assert before['tables']['stock_instruments']['count'] == 20
@@ -542,7 +545,19 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             assert before['tables']['stock_sessions']['count'] == 5
             assert before['tables']['stock_data_admissions']['count'] == 4
         sequences = identity_state(dc, 'birja_source_test')
+        if revision == '0011':
+            # A real independent writer advances an identity AFTER the snapshot
+            # manifest read, immediately before pg_dump captures SEQUENCE SET.
+            wrapper = session.root / 'docker'
+            injection = dc + ['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U',r.BOOT,'-d','birja_source_test','-c',"SELECT nextval('users_id_seq')"]
+            wrapper.write_text('#!/usr/bin/python3\nimport subprocess,sys,os\na=sys.argv[1:]\nif "pg_dump" in a and "--version" not in a: subprocess.run(' + repr(injection) + ',check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nos.execv("/usr/bin/docker",["docker",*a])\n')
+            wrapper.chmod(0o700)
         sid = recovery_roundtrip(session, source_revision=revision, source_release=release)
+        if revision == '0011':
+            session.root.joinpath('docker').write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
+            before_writer = sequences['users']
+            sequences = identity_state(dc, 'birja_source_test')
+            assert sequences['users'] != before_writer
         config_hash = r.digest(session.config_path)
         directory = session.root / ('retrieved-' + revision)
         directory.mkdir(mode=0o700)
@@ -550,11 +565,16 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
         job = producer.Job(producer.load_config(['--synthetic',str(session.config_path)]))
         job.restic('restore', sid, '--target', str(directory), '--verify')
         manifest = json.loads((directory / 'manifest.json').read_text())
+        if revision == '0011':
+            assert next(row for row in manifest['identity_state'] if row[0]=='users')[1:] == [int(sequences['users'].decode().split('|')[0]), True]
+            before['identity_state'] = manifest['identity_state']
         assert all(manifest[key] == before[key] for key in ('tables','financial','revision','schema'))
         with r.restored(dc, (directory / 'database.dump').read_bytes()):
             r.verify(dc, manifest)
             assert identity_state(dc, r.CLONE) == sequences
-            if revision in ('0009','0010'):
+            if revision == '0011':
+                accounting_negative_controls(dc, manifest)
+            if revision in ('0009','0010','0011'):
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
                 try:
                     r.verify(dc, manifest)
@@ -579,6 +599,50 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
         assert r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()]) == source_mounts
         shutil.rmtree(directory)
         print(f'retained_revision={revision} exact_rows_schema_sequences=true source_identity_unchanged=true stock_authority_repaired=false', flush=True)
+
+
+def accounting_negative_controls(dc, manifest):
+    """Corrupt only the disposable restored clone; never source or live state."""
+    changes = {
+        'stock_action_events': ('first_observed_at', "interval '1 second'"),
+        'stock_action_sources': ('provider_event_id', "'changed'"),
+        'stock_action_revisions': ('reason', "'changed'"),
+        'stock_action_observations': ('cycle_id', "'changed'"),
+        'stock_action_state': ('cursor', "'changed'"),
+        'stock_ownership_movements': ('recorded_at', "interval '1 second'"),
+        'stock_split_applications': ('processed_at', "interval '1 second'"),
+        'stock_dividend_entitlements': ('cutoff', "interval '1 second'"),
+        'stock_action_resolutions': ('actor_ref', "'changed'"),
+    }
+    for table, (column, delta) in changes.items():
+        is_time = delta.startswith('interval')
+        r.sql(dc, f"UPDATE {table} SET {column}={column}" + ('+' if is_time else '||') + delta)
+        try:
+            r.verify(dc, manifest)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('accounting corruption accepted: ' + table)
+        r.sql(dc, f"UPDATE {table} SET {column}=" + (column + '-' + delta if is_time else f"left({column},length({column})-7)"))
+        r.verify(dc, manifest)
+    for table, value, called in manifest['identity_state']:
+        r.sql(dc, f"SELECT setval('{table}_id_seq',{value + 1},true)")
+        try:
+            r.verify(dc, manifest)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('accounting identity change accepted: ' + table)
+        r.sql(dc, f"SELECT setval('{table}_id_seq',{value},{str(called).lower()})")
+    r.verify(dc, manifest)
+    # Replaying this economic application must still conflict after recovery.
+    result = subprocess.run(dc + ['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-U',r.BOOT,'-d',r.CLONE], input=b"INSERT INTO stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at) SELECT coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at FROM stock_split_applications", capture_output=True, env=r.ENV, timeout=15)
+    assert result.returncode != 0 and b'23505' in result.stderr
+    # Failed INSERT consumes an identity; restore it explicitly in this clone.
+    value, called = next((v,c) for t,v,c in manifest['identity_state'] if t=='stock_split_applications')
+    r.sql(dc, f"SELECT setval('stock_split_applications_id_seq',{value},{str(called).lower()})")
+    r.verify(dc, manifest)
+    print('accounting_restore_corruptions=9 exact_identity_corruptions=17 duplicate_application_refused=true held_cancelled_alias_cursor_epochs_preserved=true', flush=True)
 
 
 def roundtrip(archive_arg=None):
@@ -740,7 +804,7 @@ def roundtrip(archive_arg=None):
             # intentionally measured with no writers in this isolated source.
             wrapper.write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
             successor_roundtrips(dc, session, unchanged)
-            assert r.canonical(dc, "birja_source_test")["revision"] == "0010", "retained recovery rehearsal never exercised populated successor state"
+            assert r.canonical(dc, "birja_source_test")["revision"] == "0011", "retained recovery rehearsal never exercised populated accounting state"
             print(
                 "integration_elapsed_seconds="
                 + str(round(time.monotonic() - started, 3))
@@ -1197,6 +1261,41 @@ def role_manifest(dc):
     return json.loads(role_sql(dc, "SET TIME ZONE 'UTC';\n" + r.backup_module().manifest_sql(revision)))
 
 
+def action_role_contract(dc):
+    tables = sorted(r.backup_module().ACTION_COLUMNS)
+    rows = []
+    for role in ('birja_app', 'birja_scheduler', 'birja_action_operator'):
+        for table in tables:
+            allowed = {'SELECT'}
+            if role == 'birja_app' and table == 'stock_ownership_movements':
+                allowed.add('INSERT')
+            if role == 'birja_scheduler' and table != 'stock_action_resolutions':
+                allowed.add('INSERT')
+                if table == 'stock_action_state':
+                    allowed.add('UPDATE')
+            for privilege in ('SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN'):
+                actual = role_sql(dc, f"SELECT has_table_privilege('{role}','{table}','{privilege}')")
+                assert actual == (b't' if privilege in allowed else b'f'), (role, table, privilege)
+                rows.append((role,table,privilege,actual.decode()))
+            if table != 'stock_action_state':
+                for privilege in ('USAGE','SELECT','UPDATE'):
+                    allowed_sequence = privilege == 'USAGE' and ((role == 'birja_scheduler' and table != 'stock_action_resolutions') or (role == 'birja_app' and table == 'stock_ownership_movements'))
+                    actual = role_sql(dc, f"SELECT has_sequence_privilege('{role}','{table}_id_seq','{privilege}')")
+                    assert actual == (b't' if allowed_sequence else b'f')
+                    rows.append((role,table+'_id_seq',privilege,actual.decode()))
+    for column in ('quantity','cost_basis'):
+        actual = role_sql(dc, f"SELECT has_column_privilege('birja_scheduler','holdings','{column}','UPDATE')")
+        assert actual == (b't' if column == 'quantity' else b'f')
+        rows.append(('birja_scheduler','holdings',column,actual.decode()))
+    for role in ('birja_app','birja_scheduler'):
+        for query in ("UPDATE stock_action_revisions SET reason=reason", "DELETE FROM stock_ownership_movements", "INSERT INTO stock_action_resolutions DEFAULT VALUES", "UPDATE stock_action_resolutions SET decision=decision", "SELECT nextval('stock_action_resolutions_id_seq')", "SET ROLE birja_action_operator"):
+            role_sql(dc, query, role, denied=True)
+    role_sql(dc, 'UPDATE holdings SET quantity=quantity', 'birja_scheduler')
+    role_sql(dc, 'UPDATE holdings SET cost_basis=cost_basis', 'birja_scheduler', denied=True)
+    assert role_sql(dc, "SELECT NOT (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_action_operator'") == b't'
+    return rows
+
+
 def roles(red_probe=False):
     dc = r.compose()
     started = time.monotonic()
@@ -1371,11 +1470,12 @@ def roles(red_probe=False):
                 "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",
                 "birja_migrator",
             )
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0011"
             after = role_manifest(dc)
             assert after['financial'] == before['financial']
             assert all(after['tables'][table] == state for table,state in before['tables'].items() if table not in {'coins','alembic_version'})
             stock_role_contract(dc)
+            upgraded_action_acl = action_role_contract(dc)
             assert (
                 role_sql(
                     dc,
@@ -1436,8 +1536,11 @@ def roles(red_probe=False):
                     f"INSERT INTO {table} DEFAULT VALUES",
                     f"UPDATE {table} SET {column}={column}",
                 ):
-                    role_sql(dc, query, "birja_scheduler", denied=True)
-                    negatives += 1
+                    if table == 'holdings' and query in ('SELECT * FROM holdings', 'UPDATE holdings SET quantity=quantity'):
+                        role_sql(dc, query, 'birja_scheduler')
+                    else:
+                        role_sql(dc, query, "birja_scheduler", denied=True)
+                        negatives += 1
             for query in (
                 "UPDATE prices SET mid=mid",
                 "DELETE FROM users",
@@ -1483,6 +1586,8 @@ def roles(red_probe=False):
             role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')")
             r.call(admin + approved)
             stock_role_contract(dc)
+            assert action_role_contract(dc) == upgraded_action_acl
+            print('accounting_acl_upgrade_fresh_parity=true operator_nologin=true immutable_audit_denied=true quantity_only_scheduler=true', flush=True)
             print(
                 f"roles_populated_transfer=true fresh_bootstrap_parity=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
             )
@@ -1607,7 +1712,8 @@ async def main():
     try: await conn.execute(query)
     except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
     else: raise AssertionError('restricted TLS role escalated')
-  for query in ["UPDATE accounts SET cash=cash", "UPDATE holdings SET quantity=quantity", "UPDATE trades SET fee=fee"]:
+  await scheduler.execute("UPDATE holdings SET quantity=quantity")
+  for query in ["UPDATE accounts SET cash=cash", "UPDATE holdings SET cost_basis=cost_basis", "UPDATE trades SET fee=fee"]:
    try: await scheduler.execute(query)
    except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
    else: raise AssertionError('scheduler obtained financial writes')
@@ -1615,6 +1721,51 @@ async def main():
   for conn in connections: await conn.close()
 asyncio.run(main())
 print('existing_tls_connections_immediate_stock_grants=true no_postupgrade_grant_repair=true')
+"""
+
+
+ACTION_TLS_CONSUMER = r"""
+import asyncio,uuid
+import asyncpg
+from app.core.config import SchedulerSettings
+from app.db.connection import database_connect_args
+async def main():
+ args=database_connect_args(SchedulerSettings())
+ connections=[]
+ try:
+  for role,char in [('app','a'),('scheduler','b')]:
+   conn=await asyncpg.connect('postgresql://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',**args)
+   assert await conn.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
+   connections.append(conn)
+  app,scheduler=connections
+  cid=await app.fetchval('SELECT min(coin_id) FROM stock_instruments')
+  uid=await app.fetchval('SELECT min(id) FROM users')
+  transaction=scheduler.transaction(); await transaction.start()
+  eid=await scheduler.fetchval('INSERT INTO stock_action_events(coin_id,economic_key,first_observed_at) VALUES ($1,$2,now()) RETURNING id',cid,str(uuid.uuid4()))
+  sid=await scheduler.fetchval("INSERT INTO stock_action_sources(event_id,provider,product,provider_event_id) VALUES ($1,'alpaca','actions',$2) RETURNING id",eid,str(uuid.uuid4()))
+  rid=await scheduler.fetchval("INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason) VALUES ($1,$2,1,$3,'snapshot',now(),1,'{}','uncertain','fixture') RETURNING id",eid,sid,'a'*64)
+  await scheduler.execute('UPDATE stock_action_events SET current_revision_id=$1 WHERE id=$2',rid,eid)
+  await scheduler.execute("INSERT INTO stock_action_observations(event_id,source_id,revision_id,observed_at,admission_generation,source_kind,cycle_id) VALUES ($1,$2,$3,now(),1,'snapshot','tls-fixture')",eid,sid,rid)
+  await scheduler.execute('INSERT INTO stock_action_state(coin_id,admission_generation) VALUES ($1,1)',cid)
+  await scheduler.execute('UPDATE holdings SET quantity=quantity')
+  await transaction.rollback()
+  transaction=app.transaction(); await transaction.start()
+  value=await app.fetchval("INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) VALUES ($1,$2,1,now(),now(),1,0,1,0,10,0,'opening','tls-opening') RETURNING id",cid,uid)
+  assert value>0
+  await transaction.rollback()
+  for conn in connections:
+   for query in ["UPDATE stock_action_revisions SET reason=reason", "DELETE FROM stock_ownership_movements", "INSERT INTO stock_action_resolutions DEFAULT VALUES", "UPDATE stock_action_resolutions SET decision=decision", "SELECT nextval('stock_action_resolutions_id_seq')", "SET ROLE birja_action_operator"]:
+    try: await conn.execute(query)
+    except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
+    else: raise AssertionError('immutable/operator authority widened')
+  for query in ["UPDATE accounts SET cash=cash", "UPDATE holdings SET cost_basis=cost_basis", "UPDATE trades SET fee=fee", "UPDATE stock_data_admissions SET reviewed_at=now()"]:
+   try: await scheduler.execute(query)
+   except asyncpg.PostgresError as exc: assert exc.sqlstate=='42501'
+   else: raise AssertionError('scheduler gained financial/authority mutation')
+ finally:
+  for conn in connections: await conn.close()
+asyncio.run(main())
+print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true')
 """
 
 
@@ -2047,7 +2198,7 @@ def tls(fresh_bootstrap=False):
             client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0007')", bootstrap)
             secure_seed = secure_seed.replace("cfg=Config('/app/alembic.ini');cfg.set_main_option('script_location',legacy+'/backend/alembic');command.upgrade(cfg,'0007')", "")
             client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
-            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0008') + ")", bootstrap)
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0010') + ")", bootstrap)
             original = r.canonical(dc, "birja_source_test")
             config = root / "roles.json"
             config.write_text(
@@ -2089,14 +2240,21 @@ def tls(fresh_bootstrap=False):
             upgraded = client('migrate', STOCK_TLS_UPGRADE) if not fresh_bootstrap else None
             if upgraded is not None:
                 assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0010"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0011"
             current = r.canonical(dc, "birja_source_test")
             assert current['financial'] == original['financial']
-            assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version'})
+            assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version','stock_quotes','stock_sessions'})
+            if not fresh_bootstrap:
+                assert original['tables']['stock_quotes']['count'] == original['tables']['stock_sessions']['count'] == 0
+                assert current['tables']['stock_quotes']['count'] == current['tables']['stock_sessions']['count'] == 1
             stock_role_contract(dc)
+            action_acl = action_role_contract(dc)
+            action_consumer = client('migrate', ACTION_TLS_CONSUMER)
+            assert b'accounting_tls_actual_append=true immutable_denials=true quantity_only=true' in action_consumer.stdout
+            print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0011' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
-            print('calendar_runtime_tls_consumer=true lane=' + ('fresh_bootstrap' if fresh_bootstrap else 'populated0008_no_grant_repair'), flush=True)
+            print('calendar_runtime_tls_consumer=true lane=' + ('fresh_bootstrap' if fresh_bootstrap else 'populated0010_no_grant_repair'), flush=True)
             assert (
                 role_sql(
                     dc,
@@ -2200,6 +2358,7 @@ def tls(fresh_bootstrap=False):
             print(
                 f"tls_fixture_setup_seconds={setup - started:.3f} tls_integration_seconds={time.monotonic() - started:.3f}"
             )
+            return action_acl
         finally:
             r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
             assert not r.call(dc + ["ps", "-q"]).strip()
@@ -2213,8 +2372,7 @@ if __name__ == "__main__":
         input_self_test()
     elif sys.argv[1:] == ["--roles"]:
         roles()
-        tls()
-        tls(fresh_bootstrap=True)
+        assert tls() == tls(fresh_bootstrap=True)
     elif sys.argv[1:] == ["--image-transition"]:
         image_transition()
     elif sys.argv[1:] == ["--roles-red-probe"]:
@@ -2224,8 +2382,7 @@ if __name__ == "__main__":
     elif sys.argv[1:] == ["--all"]:
         roundtrip()
         roles()
-        tls()
-        tls(fresh_bootstrap=True)
+        assert tls() == tls(fresh_bootstrap=True)
     else:
         args = options(sys.argv[1:])
         roundtrip(args.recovery_bundle)
