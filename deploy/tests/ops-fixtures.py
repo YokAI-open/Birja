@@ -1057,6 +1057,12 @@ def role_python(code, role=r.BOOT):
 
 
 def role_sql(dc, query, role=r.BOOT, denied=False):
+    # The operator is deliberately a NOLOGIN group. Use trusted fixture
+    # bootstrap solely to enter that group's SQL authority for this check;
+    # actual dedicated-login membership and TLS are exercised separately.
+    login = r.BOOT if role == 'birja_action_operator' else role
+    if role == 'birja_action_operator':
+        query = 'BEGIN; SET LOCAL ROLE birja_action_operator; ' + query + '; ROLLBACK;'
     result = subprocess.run(
         dc
         + [
@@ -1070,7 +1076,7 @@ def role_sql(dc, query, role=r.BOOT, denied=False):
             "-v",
             "VERBOSITY=sqlstate",
             "-U",
-            role,
+            login,
             "-d",
             "birja_source_test",
         ],
@@ -1370,7 +1376,12 @@ def action_role_contract(dc):
     for column in ('id','symbol','asset_class','is_active','sort_order','name','kraken_pair'):
         allowed=column in ('id','symbol','asset_class','is_active','sort_order')
         assert role_sql(dc,f"SELECT has_column_privilege('birja_action_operator','coins','{column}','SELECT')") == (b't' if allowed else b'f')
+    role_sql(dc,'SELECT id,symbol,asset_class,is_active,sort_order FROM coins LIMIT 0','birja_action_operator')
     role_sql(dc,'SELECT * FROM coins','birja_action_operator',denied=True)
+    for query in ('SELECT name FROM coins','SELECT kraken_pair FROM coins',
+                  'UPDATE coins SET symbol=symbol','UPDATE stock_action_revisions SET reason=reason',
+                  'UPDATE holdings SET quantity=quantity'):
+        role_sql(dc,query,'birja_action_operator',denied=True)
     for table in ('accounts','holdings','trades'):
         role_sql(dc,'SELECT * FROM '+table,'birja_action_operator',denied=True)
     return rows
