@@ -176,6 +176,7 @@ type Guard = {
   marks: Map<number, Mark>;
   clock: { upper: number; received: number } | null;
   latest: TimedStocks | null;
+  generation: number;
 };
 const guards = new WeakMap<ReturnType<typeof useQueryClient>, Guard>();
 const emailOf = (client: ReturnType<typeof useQueryClient>) =>
@@ -190,6 +191,7 @@ function upperClock(data: TimedStocks, now: number): number {
 }
 function observe(guard: Guard, data: TimedStocks) {
   const now = performance.now();
+  guard.generation = Math.max(guard.generation, data.admission.generation ?? 0);
   guard.clock = {
     upper: Math.max(
       upperClock(data, now),
@@ -231,6 +233,7 @@ function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
     marks: new Map(),
     clock: null,
     latest: null,
+    generation: 0,
   };
   guards.set(client, guard);
   client.getQueryCache().subscribe((event) => {
@@ -241,6 +244,7 @@ function guardFor(client: ReturnType<typeof useQueryClient>): Guard {
       guard.marks.clear();
       guard.clock = null;
       guard.latest = null;
+      guard.generation = 0;
     }
     if (
       email !== null &&
@@ -337,13 +341,18 @@ export function useStocks() {
           previous &&
           ([...guard.marks.values()].some((mark) => stockInstant(response.server_now) <= mark.at) ||
             (response.admission.state === "approved" &&
-              (response.admission.generation ?? 0) < (previous.admission.generation ?? 0)))
+              (response.admission.generation ?? 0) < guard.generation))
         ) {
           // Public redaction may omit stronger incoming facts. Keep their raw
           // ordering/clock high-water independently of the retained snapshot.
           observe(guard, response);
           return purgeExpired(withAuthorityClock(guard, mergeReduction(previous, response)));
         }
+        if (
+          response.admission.state === "approved" &&
+          (response.admission.generation ?? 0) < guard.generation
+        )
+          throw new Error("Superseded stock admission generation");
         // Concurrent invalidation may have installed newer permission evidence.
         if (
           current &&
