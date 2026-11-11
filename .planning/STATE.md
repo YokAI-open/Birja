@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: Awaiting blocking-human checkpoint07-14-01
-stopped_at: Awaiting blocking-human07-14-01; concrete activation packet prepared.
-last_updated: "2026-11-10T20:29:14.122Z"
-last_activity: 2026-11-10
+status: Authorized one-shot waiting for regular session
+stopped_at: Owner attested provider approval; reviewed one-shot launched and waiting for 17:30 Moscow opening.
+last_updated: "2026-11-11T09:22:49Z"
+last_activity: 2026-11-11
 progress:
   total_phases: 5
   completed_phases: 0
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-11-10)
 
 Phase: 7 (Permitted Stock Discovery) — EXECUTING
 Plan: 14 of 14
-Status: Awaiting blocking-human checkpoint07-14-01
-Last activity: 2026-11-10
+Status: Authorized one-shot waiting for regular session
+Last activity: 2026-11-11
 Progress: [█████████░] 93%
 
 ## Completion and next action
@@ -91,17 +91,31 @@ on0010 claim. Independent code/security/UI review findings are fixed and
 re-reviewed:0active code findings,47/47local threats closed,UI24/24. Existing
 response deadlines bound retained-value exposure; actual DB/recovery storage
 rights or approved verified cleanup remain prerequisites before live activation.
-Plan07-14's concrete07-ACTIVATION.md packet is prepared. Task07-14-01 remains
-unresolved (0/3tasks complete): on2026-11-11 the owner reported a Paper account,
-privately saved keys and provider approval. Sanitized actual approval reference,
-scope and storage conditions remain pending review. A concrete local bounded
+Plan07-14's concrete07-ACTIVATION.md packet is prepared. Task07-14-01 is accepted
+on owner attestation (1/3tasks complete): on2026-11-11 the owner reported a Paper
+account, privately saved keys and provider approval, then instructed “just do all
+the way, we have planned.” This supersedes further paperwork/repeated approval
+requests within the previously presented fixed30-attempt scope. No provider
+document, terms version or conditions were independently verified or invented.
+A concrete local bounded
 measurement harness is prepared in/tmp/birja-phase07-measurement;42synthetic
 tests and Ruff lint/format pass, with source hashes in07-ACTIVATION.md. Initial
 independent focused review had0blockers/3warnings; all3have observed failing
 regressions and corrections. Independent re-review confirmed0active findings,
-matching hashes and42offline tests passed11.46s; no live CLI or credential discovery is
-provided. Only after verifiable scope exists request
-separate approval for at most30private HTTP attempts (20reference/10quote samples).
+matching hashes and42offline tests passed11.46s. A separate one-shot runner is
+prepared at/tmp/birja-phase07-one-shot/runner.py:23offline tests pass1.02s,
+including real calendar/admission evaluation, time/hash/claim/deadline guards,
+sanitized failures and secret-free default. Independent review reproduced all23
+tests with matching hashes and0active findings. Parent launched the reviewed
+runner in managed session60401; same-host verification confirms exactly one
+waiting PID3191116, private claim present/no receipt. Earlier sandbox process
+inspection hid the first host waiter; its claim is preserved and exact extra
+PID3189601 was terminated before opening. No private calls or keys were read.
+Authorized start is2026-11-11at17:30Moscow,
+at most5minutes late, then one900second campaign/max30private HTTP attempts
+(20reference/10quote samples), no next-day fallback. Frozen hashes and exact
+limits are in07-ACTIVATION.md. Account context and permission are owner-attested;
+internal validity limits do not invent provider grant duration or account quota.
 No credentials read, private calls, admission import or collection activation.
 Owner UI acceptance remains later07-14-03. No completed07-14SUMMARY and no
 phase-complete or live criteria claim from fixtures. See07-ACTIVATION.md for
@@ -110,8 +124,9 @@ continuation handoff. Actions/status remain separately disabled and unverified;
 their rights are required before those products are used, not invented now.
 Successor canonical callers must
 use manifest_sql/schema_guard_sql or verify-restore.canonical; raw SQL is legacy-only.
-Exact reviewed calendar-package approval is recorded; actual provider permission,
-access,20symbol coverage/freshness and UI acceptance remain explicit later gates.
+Exact reviewed calendar-package approval is recorded; provider permission is
+owner-attested, with actual access,20symbol coverage/freshness and UI acceptance
+remaining explicit measured gates.
 Stock execution remains disabled through Phase8; no real stock orders in Phase7.
 Live data or completed acceptance cannot be claimed from fixtures/disabled state.
 
@@ -208,9 +223,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-10T20:29:14.102Z
-Stopped at: Awaiting blocking-human07-14-01; concrete activation packet prepared.
-Resume: Read07-ACTIVATION.md and preparation commit. Review sanitized provider approval scope/storage evidence and frozen bounded-harness review; only then seek separate bounded30-attempt approval. Owner reports Paper account/privately saved keys/provider approval; no private API or key verification has occurred. Do not execute07-14-02/03 or write a completedSUMMARY before their gates pass. Stock execution stays disabled; owner UI acceptance remains pending.
+Last session:2026-11-11T09:22:49Z
+Stopped at: Owner-attested approval accepted; reviewed one-shot running and waiting for17:30Moscow.
+Resume: Read07-ACTIVATION.md and preparation commit. Observe managed exec session60401 / waiting host PID3191116, then read sanitized result-20261111/receipt.json under/tmp/birja-phase07-one-shot after the single2026-11-11at17:30Moscow measurement. No further paperwork/repeated scope approval or new launch is required. Waiting is not measured success; record real results/failures. Permission/account scope remains owner-attested, not independently provider-verified. No credentials/private calls occurred before opening. Stock execution stays disabled; owner UI acceptance07-14-03 remains pending. No completedSUMMARY or phase completion before remaining gates pass.
 Plans: .planning/phases/07-permitted-stock-discovery/07-01-PLAN.md through07-14.
 Review: .planning/phases/07-permitted-stock-discovery/07-PLAN-CHECK.md.
 07-01 through07-13 summaries committed; whole-phase requirements remain pending.

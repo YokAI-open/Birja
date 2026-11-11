@@ -1,11 +1,11 @@
 ---
 phase: 07-permitted-stock-discovery
 plan: "14"
-checkpoint: 07-14-01
-status: awaiting-blocking-human-product-evidence
+checkpoint: 07-14-02
+status: one-shot-running-waiting-for-regular-session
 prepared: 2026-11-10
 preparation_updated: 2026-11-11
-tasks_completed: 0
+tasks_completed: 1
 live_activation: disabled
 private_requests_made: 0
 owner_ui_acceptance: pending
@@ -16,9 +16,13 @@ owner_ui_acceptance: pending
 Plans 01–13 are locally complete. This is the prepared first checkpoint of
 Plan 14, not completed external acceptance. On 2026-11-11 the owner reported
 creating an Alpaca Paper Trading account, saving its keys privately, and receiving
-provider approval. The actual approval reference/date, applicable scope and
-storage conditions have not yet been reviewed; this preparation does not read
-or validate the keys. No private API request was made. No admission was imported,
+provider approval. The owner subsequently instructed “just do all the way, we
+have planned,” accepting continuation within the already presented maximum
+thirty-attempt read-only measurement. This supersedes the request for additional
+paperwork and repeated separate authorization. Approval is owner-attested;
+no provider document, terms version or conditions were independently reviewed.
+This preparation does not read or validate keys. No private API request was
+made. No admission was imported,
 data collection enabled or production changed.
 The owner-approved calendar dependency installation is a separate, completed
 package gate; it does not establish market-data rights.
@@ -157,11 +161,12 @@ Original product/API research remains in [07-RESEARCH.md](07-RESEARCH.md).
 The single-asset API-reference URL attempted during preparation was inaccessible
 through the public documentation tool; no private API probe replaced it.
 
-## Proposed bounded measurement — NOT authorized or performed
+## Original bounded measurement proposal — authorization updated below
 
-Only after verifiable applicable product/storage evidence is reviewed, obtain
-separate explicit approval of this exact measurement and private key placement.
-Authorization to test software or install calendar packages is insufficient.
+The following exact limits were presented to the owner. Their subsequent
+instruction authorizes this fixed measurement based on their confirmation of
+provider approval; see the current authorization and provenance record below.
+The original request for further paperwork/separate approval is superseded.
 
 1. Fixed catalogue only: AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AVGO,
    AMD, COST, JPM, V, JNJ, PG, KO, XOM, CVX, HD, MCD, DIS.
@@ -268,33 +273,95 @@ reached the overall deadline first. All three received meaningful failing
 regressions followed by the above corrections. Independent focused re-review
 confirmed all three resolved and no active findings; it separately reproduced
 42 passing offline tests in 11.46 seconds and verified both frozen hashes.
-Recheck the hash
-hash before any later approved use. `/tmp` artifacts are disposable and must be
+Recheck the hash before any later approved use. `/tmp` artifacts are disposable and must be
 reprepared/reviewed if absent or changed; their presence grants no provider
 permission or authority to perform calls. Actual reviewed official calendar
 evidence must be refreshed for the measurement session. On 2026-11-11 the regular
-session is scheduled 17:30–00:00 Moscow time (closing 2026-11-12); this does not
-schedule a run, authorize waiting for it or establish emergency-closure status.
+session is scheduled 17:30–00:00 Moscow time (closing 2026-11-12). The current
+owner instruction authorizes a one-shot wait for this opening; this paragraph
+and preparation alone do not establish a launched process or future schedule.
+
+## One-shot runner prepared on 2026-11-11
+
+The reviewed runner `/tmp/birja-phase07-one-shot/runner.py` is launched and
+**waiting for the regular-session opening**; no private API call has occurred.
+It defaults to an inert dry run with no credential reads or network calls.
+Focused independent review passed with zero active findings and reproduced all
+23 runner tests with matching frozen hashes. Parent launched the fixed runner
+in managed execution session60401. Same-host process verification confirms
+exactly one waiter, PID3191116, with a private claim and no result receipt yet.
+No systemd unit, cron
+job, production file, service or repeating schedule is created.
+
+| Prepared file | SHA256 |
+| --- | --- |
+| runner.py | e972fd5392bece2aac5fcc645b46f8ef356f5bdeb7733a2e866195a4609be911 |
+| test_runner.py | 4c4cb5c86f6cf0288b9d94279c5d7c98070f3deee732b51aa55a02a4bfc6ca2e |
+
+The fixed start is 2026-11-11 14:30 UTC / **17:30 Moscow**, with at most five
+minutes of start lateness and a single 900-second campaign after waiting. Wrong
+day, missed window, changed audited source, closed session or expired evidence
+refuses without any private request. No next-day fallback or retry campaign is
+allowed. An exclusive private claim prevents simultaneous and repeat launches.
+Initial process inspection from the sandbox mistakenly hid the first host
+process. Its claim was preserved in `aborted-before-start-20261111`; after
+same-host inspection the parent terminated that exact extra PID3189601 before
+the authorized opening. It was not reaped automatically. Final same-host checks
+confirm only PID3191116 waits. Neither process could reach credential loading
+or API calls before the fixed opening. No second measurement is authorized.
+Later process polling must use the escalated same-host namespace; sandbox
+`/proc` absence is not proof that the host waiter exited. Prefer the managed
+execution session and sanitized receipt over an inferred process disappearance.
+The final receipt lives under `/tmp/birja-phase07-one-shot/result-20261111/`
+(directory0700/files0600), with sanitized status/counts and reviewed public
+identity/time observations only. The audited harness remains unchanged.
+
+Only the two saved Alpaca credential assignments are parsed, literally, at the
+actual campaign start after admission/session validation. Other dotenv values
+are ignored; there is no environment fallback, expansion or command execution.
+Credentials remain memory-only and are never printed or included in receipts.
+
+The in-memory admission source is **owner-attested provider approval in this
+conversation on2026-11-11**, not a fabricated provider ticket or independent
+license determination. The account scope is an owner-attested logical Paper
+context, not an API-verified account identifier. The fifteen-minute validity
+and quota/retention values are conservative internal campaign restrictions,
+not invented provider grant duration or independently verified account limits.
+USD basis is the documented stock quote product; common-stock basis is the
+approved curated catalogue with SEC identity/listing corroboration. Neither
+basis claims an absent Asset currency/subtype field was response-verified.
+Actions/status and ongoing application admission remain disabled/unverified.
+
+Offline verification: **23 runner tests pass in1.02seconds**, including inert
+default, exact opening wait, wrong-day/late/stalled-clock refusal, simultaneous
+and repeat claims, private output permissions, hash mismatch after waiting,
+900-second campaign timeout, sanitized failure with consumed attempts, literal
+credential parsing using synthetic files, and the genuine current-session
+admission/calendar evaluator without network. Ruff lint and formatting pass.
+Existing pandas timezone deprecation warnings remain visible. These tests make
+no real credential reads, provider calls or production changes.
+
+Reproduce without secrets or network:
+
+```bash
+backend/.venv/bin/python -m pytest /tmp/birja-phase07-one-shot/test_runner.py -q
+backend/.venv/bin/python /tmp/birja-phase07-one-shot/runner.py
+```
 
 ## Current checkpoint and exact resume path
 
-**07-14-01 remains unresolved; 0/3 Plan 14 tasks complete.** No 07-14 SUMMARY
+**07-14-01 authorization is accepted on owner attestation; 1/3 tasks complete.** No 07-14 SUMMARY
 or HUMAN-UAT acceptance is created. All six whole-phase requirement checkboxes
-remain pending. Source and local safety proof are ready; actual permissions,
-20 verified provider mappings, source freshness and owner UI acceptance are not.
+remain pending. Source and local safety proof are ready; provider approval is
+owner-attested. Twenty actual provider mappings, source freshness and owner UI
+acceptance remain unmeasured. No provider agreement or conditions were invented.
 
-Account setup and provider approval are now owner-reported. The remaining owner
-input is the sanitized actual approval wording/reference/date and relevant
-collection/display/derived/storage, audience/location, attribution, quota,
-validity and revocation conditions. Root coordinates that pending evidence
-request. Supply no keys or full private account records. Exact thirty-attempt
-measurement approval remains separate and is requested only after the
-prerequisites and focused harness review can actually be satisfied.
-
-Continuation executor: verify this packet's preparation commit, collect/review
-the scoped product evidence, keep unresolved products denied, then request the
-separate exact 30-attempt approval. Only after both requirements are met may
-Task 02 perform private measurement and record real results. Then prepare the
+Continuation executor: verify this packet's preparation commit and frozen runner
+hashes and observe managed session60401 / the single waiting PID3191116 for
+today's opening. Launch is now confirmed; **waiting is not measured success**.
+Task02 must record real results and any
+coverage/freshness failures, without treating owner attestation as independent
+provider verification or ongoing runtime activation. Then prepare the
 isolated local UI environment for Task 03 owner acceptance; automated browser
 proof does not replace that acceptance. Stock execution remains disabled through
 Phase 8. Provider/payment/deployment/publication actions remain separate.
