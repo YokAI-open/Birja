@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.corporate_action import (
     StockActionEvent,
     StockActionObservation,
+    StockActionResolution,
     StockActionRevision,
     StockActionSource,
     StockActionState,
@@ -26,14 +27,20 @@ from app.models.corporate_action import (
     StockSplitApplication,
 )
 from app.models.stock import StockDataAdmission
+from app.models.trade import Holding
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
     NormalizedAction,
+    SplitOwner,
     classify_action,
+    plan_forward_split,
 )
 from app.services.stock_admission import ProductAdmission, evaluate_admission
 from app.services.stock_ownership import (
+    StockMovementInput,
     acquire_stock_gate,
+    append_stock_movement,
+    assert_ownership_consistent,
 )
 from app.services.stock_quote_rules import utc, verified_mapping
 from app.services.stock_quotes import load_stock_catalog
@@ -444,8 +451,158 @@ async def persist_action_batch(
     return tuple(results)
 
 
-async def apply_due_actions(db: AsyncSession, coin_id: int, now: datetime | None = None) -> tuple[int, ...]:
-    return ()
+async def apply_due_actions(
+    db: AsyncSession, coin_id: int, now: datetime | None = None
+) -> tuple[int, ...]:
+    """Apply due splits once. Only post-lock database time is authoritative."""
+    await acquire_stock_gate(db, coin_id)
+    evidence = await _authority(db)
+    state, rows = await assert_ownership_consistent(db, coin_id)
+    holders = list(
+        (
+            await db.execute(
+                select(Holding)
+                .where(Holding.coin_id == coin_id)
+                .order_by(Holding.user_id, Holding.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalars()
+    )
+    checked = await _clock(db)
+    if (
+        state.health != "current"
+        or state.valid_until is None
+        or checked >= state.valid_until
+        or state.admission_generation != evidence.generation
+    ):
+        await _hold(db, state, checked)
+        return ()
+    if await persistent_action_holds(db, coin_id):
+        await _hold(db, state, checked)
+        return ()
+    revisions = list(
+        (
+            await db.execute(
+                select(StockActionRevision)
+                .join(
+                    StockActionEvent, StockActionEvent.current_revision_id == StockActionRevision.id
+                )
+                .where(
+                    StockActionEvent.coin_id == coin_id,
+                    StockActionRevision.classification == "supported_forward_split",
+                )
+                .order_by(StockActionRevision.verified_cutoff, StockActionRevision.id)
+            )
+        ).scalars()
+    )
+    result = []
+    for revision in revisions:
+        existing = (
+            await db.execute(
+                select(StockSplitApplication).where(
+                    StockSplitApplication.economic_event_id == revision.event_id
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            result.append(existing.id)
+            continue
+        action = _action(revision)
+        cutoff = revision.verified_cutoff
+        checked = await _clock(db)
+        if cutoff is None or cutoff > checked:
+            continue
+        if (
+            state.complete_from is None
+            or cutoff < state.complete_from
+            or (rows and rows[-1].economic_at >= cutoff)
+        ):
+            await _hold(db, state, checked)
+            continue
+        owners = [SplitOwner(h.user_id, h.quantity, h.cost_basis) for h in holders]
+        plan = plan_forward_split(action, owners)
+        if not plan.allowed:
+            await _hold(db, state, checked)
+            continue
+        await _authority(db, evidence)
+        before = [(h.user_id, str(h.quantity), str(h.cost_basis)) for h in holders]
+        after = [(h.user_id, str(h.quantity), str(h.total_basis)) for h in plan.owners]
+        application = StockSplitApplication(
+            coin_id=coin_id,
+            economic_event_id=revision.event_id,
+            revision_id=revision.id,
+            new_rate=format(cast(Decimal, action.new_rate), "f"),
+            old_rate=format(cast(Decimal, action.old_rate), "f"),
+            cutoff=cutoff,
+            prior_unit_epoch=state.unit_epoch,
+            new_unit_epoch=state.unit_epoch + 1,
+            sequence_boundary=rows[-1].sequence if rows else 0,
+            before_digest=_digest(before),
+            after_digest=_digest(after),
+            processed_at=await _clock(db),
+        )
+        db.add(application)
+        state.unit_epoch += 1
+        state.epoch += 1
+        state.quote_not_before = cutoff
+        await db.flush()
+        for original, adjusted in zip(holders, plan.owners, strict=True):
+            if original.quantity > 0:
+                await append_stock_movement(
+                    db,
+                    StockMovementInput(
+                        original.user_id,
+                        coin_id,
+                        adjusted.quantity - original.quantity,
+                        original.cost_basis,
+                        "split:" + str(application.id),
+                        application_id=application.id,
+                    ),
+                )
+        state, rows = await assert_ownership_consistent(db, coin_id)
+        state.sequence = rows[-1].sequence if rows else 0
+        result.append(application.id)
+    await db.flush()
+    await _guard(db, coin_id, evidence)
+    return tuple(result)
+
+
+async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, ...]:
+    """Reasons survive a healthy feed; only reviewed resolutions clear them."""
+    resolved = select(StockActionResolution.expected_revision).where(
+        StockActionResolution.coin_id == coin_id
+    )
+    held = list(
+        (
+            await db.execute(
+                select(StockActionRevision.reason)
+                .join(StockActionEvent, StockActionEvent.id == StockActionRevision.event_id)
+                .where(
+                    StockActionEvent.coin_id == coin_id,
+                    StockActionRevision.classification.not_in(
+                        ("supported_dividend", "supported_forward_split")
+                    ),
+                    StockActionRevision.id.not_in(resolved),
+                )
+            )
+        ).scalars()
+    )
+    missing = (
+        await db.execute(
+            select(StockActionObservation.id)
+            .join(StockActionEvent, StockActionEvent.id == StockActionObservation.event_id)
+            .where(
+                StockActionEvent.coin_id == coin_id,
+                StockActionObservation.source_kind == "missing_or_uncertain",
+                StockActionObservation.revision_id.not_in(resolved),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if missing is not None:
+        held.append("source_gap")
+    return tuple(sorted(set(held)))
 
 
 async def derive_dividend_entitlements(db: AsyncSession, event_id: int) -> tuple[object, ...]:

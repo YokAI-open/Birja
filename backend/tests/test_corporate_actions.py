@@ -1,5 +1,6 @@
 """Actual isolated PostgreSQL corporate-action financial invariants."""
 
+import asyncio
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -8,19 +9,21 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, func, select, update
 
+import app.services.corporate_actions as service
 from app.models.corporate_action import (
     StockActionEvent,
     StockActionObservation,
     StockActionRevision,
     StockActionState,
     StockDividendEntitlement,
+    StockOwnershipMovement,
+    StockSplitApplication,
 )
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
-from app.services.alpaca_actions import ActionBatch, ActionCoverage, ActionObservation
-from app.services.corporate_actions import ActionHeld, persist_action_batch
-from app.services.corporate_actions import apply_due_actions
 from app.models.trade import Holding
+from app.services.alpaca_actions import ActionBatch, ActionCoverage, ActionObservation
+from app.services.corporate_actions import ActionHeld, apply_due_actions, persist_action_batch
 from tests.stock_action_fixtures import ownership as _ownership
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_corporate_action_rules import dividend
@@ -217,17 +220,146 @@ async def test_ingest_current_authority_required(actions, changes):
 
 
 def split_action(action, cutoff, **changes):
-    return replace(action,event_type="forward_split",rate=None,new_rate=Decimal(4),old_rate=Decimal(1),economic_at=cutoff,ex_date=cutoff.date(),record_date=cutoff.date(),units="pre_split",**changes)
+    base = replace(
+        action,
+        event_type="forward_split",
+        rate=None,
+        new_rate=Decimal(4),
+        old_rate=Decimal(1),
+        economic_at=cutoff,
+        ex_date=cutoff.date(),
+        record_date=cutoff.date(),
+        units="pre_split",
+    )
+    return replace(base, **changes)
 
 
 async def test_split_exact_quantity_and_basis_once(actions):
-    factory,cid,uid,action,auth=actions
-    cutoff=action.observed_at-timedelta(hours=1)
+    factory, cid, uid, action, auth = actions
+    cutoff = action.observed_at - timedelta(hours=1)
     async with factory.begin() as db:
-        await synthetic_opening(db,cid,uid,cutoff-timedelta(hours=1))
-        stored=(await persist_action_batch(db,batch(split_action(action,cutoff)),auth))[0]
-        applied=await apply_due_actions(db,cid)
-        assert len(applied)==1
-        holding=(await db.execute(select(Holding).where(Holding.coin_id==cid))).scalar_one()
-        assert (holding.quantity,holding.cost_basis)==(Decimal(8),Decimal(20))
-        assert await apply_due_actions(db,cid)==applied
+        await synthetic_opening(db, cid, uid, cutoff - timedelta(hours=1))
+        await persist_action_batch(db, batch(split_action(action, cutoff)), auth)
+        applied = await apply_due_actions(db, cid)
+        assert len(applied) == 1
+        holding = (await db.execute(select(Holding).where(Holding.coin_id == cid))).scalar_one()
+        assert (holding.quantity, holding.cost_basis) == (Decimal(8), Decimal(20))
+        assert await apply_due_actions(db, cid) == applied
+
+
+@pytest.mark.parametrize(
+    "quantity,rate,expected",
+    [
+        ("2", "4", "8"),
+        ("2", "1.5", "3"),
+        ("0", "4", "0"),
+        ("3", "1.5", None),
+        ("999999999999", "4", None),
+    ],
+)
+async def test_split_all_owner_exact_or_none(actions, new_user, quantity, rate, expected):
+    factory, cid, uid, action, auth = actions
+    second = await new_user()
+    cutoff = action.observed_at - timedelta(hours=1)
+    async with factory.begin() as db:
+        if quantity != "0":
+            await synthetic_opening(
+                db, cid, uid, cutoff - timedelta(hours=1), quantity=Decimal(quantity)
+            )
+            await synthetic_opening(
+                db, cid, second, cutoff - timedelta(minutes=30), quantity=Decimal(2), sequence=2
+            )
+        await persist_action_batch(
+            db, batch(split_action(action, cutoff, new_rate=Decimal(rate))), auth
+        )
+        result = await apply_due_actions(db, cid)
+        assert len(result) == (0 if expected is None else 1)
+        holdings = (
+            (
+                await db.execute(
+                    select(Holding).where(Holding.coin_id == cid).order_by(Holding.user_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert all(h.cost_basis == Decimal(20) for h in holdings)
+        if expected is not None and holdings:
+            assert holdings[0].quantity == Decimal(expected)
+        if expected is None:
+            assert holdings[0].quantity == Decimal(quantity)
+            assert (await db.get(StockActionState, cid)).health == "reconciling"
+
+
+async def test_split_failure_after_first_owner_rolls_everything_back(
+    actions, new_user, monkeypatch
+):
+    factory, cid, uid, action, auth = actions
+    second = await new_user()
+    cutoff = action.observed_at - timedelta(hours=1)
+    async with factory.begin() as db:
+        await synthetic_opening(db, cid, uid, cutoff - timedelta(hours=1))
+        await synthetic_opening(db, cid, second, cutoff - timedelta(minutes=30), sequence=2)
+        await persist_action_batch(db, batch(split_action(action, cutoff)), auth)
+    original = service.append_stock_movement
+
+    async def broken(db, movement):
+        await original(db, movement)
+        raise RuntimeError("injected")
+
+    monkeypatch.setattr(service, "append_stock_movement", broken)
+    with pytest.raises(RuntimeError, match="injected"):
+        async with factory.begin() as db:
+            await apply_due_actions(db, cid)
+    async with factory() as db:
+        assert (
+            await db.execute(select(func.count()).select_from(StockSplitApplication))
+        ).scalar_one() == 0
+        assert (
+            await db.execute(
+                select(func.count())
+                .select_from(StockOwnershipMovement)
+                .where(StockOwnershipMovement.cause_kind == "split")
+            )
+        ).scalar_one() == 0
+        assert (await db.get(StockActionState, cid)).unit_epoch == 0
+        assert (
+            await db.execute(select(Holding.quantity).where(Holding.coin_id == cid))
+        ).scalars().all() == [Decimal(2), Decimal(2)]
+
+
+async def test_split_concurrent_processors_one_economic_effect(actions):
+    factory, cid, uid, action, auth = actions
+    cutoff = action.observed_at - timedelta(hours=1)
+    async with factory.begin() as db:
+        await synthetic_opening(db, cid, uid, cutoff - timedelta(hours=1))
+        await persist_action_batch(db, batch(split_action(action, cutoff)), auth)
+
+    async def apply():
+        async with factory.begin() as db:
+            return await apply_due_actions(db, cid)
+
+    results = await asyncio.gather(apply(), apply(), apply())
+    assert results[0] == results[1] == results[2] and len(results[0]) == 1
+    async with factory() as db:
+        assert (
+            await db.execute(select(Holding.quantity).where(Holding.coin_id == cid))
+        ).scalar_one() == 8
+
+
+async def test_split_changed_applied_terms_never_reapply(actions):
+    factory, cid, uid, action, auth = actions
+    cutoff = action.observed_at - timedelta(hours=1)
+    split = split_action(action, cutoff)
+    async with factory.begin() as db:
+        await synthetic_opening(db, cid, uid, cutoff - timedelta(hours=1))
+        await persist_action_batch(db, batch(split), auth)
+        await apply_due_actions(db, cid)
+        result = (await persist_action_batch(db, batch(replace(split, new_rate=Decimal(5))), auth))[
+            0
+        ]
+        assert result.classification == "uncertain"
+        assert await apply_due_actions(db, cid) == ()
+        assert (
+            await db.execute(select(Holding.quantity).where(Holding.coin_id == cid))
+        ).scalar_one() == 8
