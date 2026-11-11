@@ -1,10 +1,10 @@
 ---
 phase: 08-corporate-action-safe-ownership
-status: awaiting-owner-disposition
+status: deferred-by-owner
 live_activation: disabled
 stock_execution: disabled
 phase8_private_requests_made: 0
-owner_external_disposition: pending-plan13
+owner_external_disposition: defer-live-activation-continue-locally-2026-11-11
 prepared: 2026-11-11
 ---
 
@@ -82,7 +82,11 @@ production remains outside the authorized local work.
 
 ## Plan13 owner decision
 
-Pending: explicitly defer external action activation and continue isolated
-development, or review a newly concrete bounded proposal after actual rights and
-limits are available. Deferral is not a pass. No provider call, credential read,
-agreement, payment, deployment or stock execution is inferred from continuation.
+On2026-11-11 the owner explicitly selected **“Defer live activation; continue
+locally (Recommended)”** after the separate access/retention/continuity/quota/
+latency gaps were presented. The Plan13 disposition checkpoint is satisfied;
+the underlying live evidence remains unverified and activation remains disabled.
+Deferral is not a product-readiness pass. Existing Phase7 live deferral and quote
+attestation remain unchanged. No provider call, credential read, agreement,
+payment, deployment or stock execution is authorized by this decision.
+Future activation still requires the concrete reviewed scope described above.
