@@ -64,6 +64,7 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
       const canDisplay =
         allowed &&
         reviewed &&
+        state !== "unknown" &&
         action.state === "current" &&
         item.quote_reason !== "permission_unavailable" &&
         age < 120;
@@ -166,7 +167,7 @@ function nextDeadline(data: TimedStocks): number {
   );
 }
 
-type Mark = { epoch: number; at: bigint; held: boolean };
+type Mark = { epoch: number; at: bigint };
 type Guard = { email: string | null; lifecycle: number; marks: Map<number, Mark> };
 const guards = new WeakMap<ReturnType<typeof useQueryClient>, Guard>();
 const emailOf = (client: ReturnType<typeof useQueryClient>) =>
@@ -178,7 +179,6 @@ function remember(guard: Guard, data: TimedStocks) {
     guard.marks.set(item.id, {
       epoch: Math.max(old?.epoch ?? 0, item.action.epoch),
       at: old && old.at > at ? old.at : at,
-      held: item.action.state !== "current",
     });
   }
 }
@@ -268,11 +268,7 @@ export function useStocks() {
           if (
             item.action.state === "current" &&
             mark &&
-            (item.action.epoch < mark.epoch ||
-              stockInstant(response.server_now) < mark.at ||
-              (item.action.epoch === mark.epoch &&
-                stockInstant(response.server_now) === mark.at &&
-                mark.held))
+            (item.action.epoch < mark.epoch || stockInstant(response.server_now) <= mark.at)
           )
             throw new Error("Superseded stock action response");
         }
@@ -281,7 +277,7 @@ export function useStocks() {
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           client.setQueryData(["me"], null);
-              void client.invalidateQueries({ queryKey: ["me"] });
+          void client.invalidateQueries({ queryKey: ["me"] });
         }
         throw error;
       } finally {

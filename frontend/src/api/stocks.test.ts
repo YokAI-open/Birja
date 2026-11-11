@@ -335,6 +335,7 @@ it("accepts current action without a quote and explicit unknown session facts", 
         quote: null,
         valuation_reason: "quote_unavailable",
         quote_reason: "missing",
+        session_reason: "unknown",
         session: {
           ...x.session,
           state: "unknown",
@@ -402,5 +403,37 @@ it.each([
     },
   },
 ])("rejects incoherent disclosed numeric quote %j", (update) => {
+  expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
+});
+
+it("accepts dated permitted stale and closed-session marks without calling them recent", () => {
+  expect(
+    isStocks({
+      ...valid,
+      items: valid.items.map((x) => ({
+        ...x,
+        quote_reason: "stale",
+        quote: { ...x.quote, event_at: "2026-11-10T14:58:10Z", age_seconds: 120 },
+      })),
+    }),
+  ).toBe(true);
+  expect(
+    isStocks({
+      ...valid,
+      items: valid.items.map((x) => ({
+        ...x,
+        quote_reason: "session_unavailable",
+        session_reason: "closed",
+        session: { ...x.session, state: "closed" },
+      })),
+    }),
+  ).toBe(true);
+});
+it.each([
+  { quote_reason: "stale" },
+  { quote: { ...item.quote, age_seconds: 9 } },
+  { session: { ...item.session, closes_at: "2026-11-10T15:00:10Z" } },
+  { session: { ...item.session, opens_at: "2026-11-10T15:00:01Z" } },
+])("refuses false source-age/session claims %j", (update) => {
   expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
 });

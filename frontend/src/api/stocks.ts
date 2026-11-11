@@ -237,6 +237,37 @@ function item(value: unknown, now: string): value is StockItem {
     value.status_reason === "unknown"
   );
 }
+function coherent(item: StockItem, now: string): boolean {
+  if (item.session_reason !== item.session.state) return false;
+  const value = item.quote;
+  if (value === null) return item.quote_reason !== "recent";
+  if (
+    item.session.state === "unknown" ||
+    item.quote_reason === "missing" ||
+    item.quote_reason === "permission_unavailable"
+  )
+    return false;
+  const event = stockInstant(value.event_at),
+    collected = stockInstant(value.collected_at),
+    current = stockInstant(now);
+  if (
+    event > collected ||
+    collected > current ||
+    value.age_seconds !== Number((current - event) / 1_000_000_000n)
+  )
+    return false;
+  if (item.quote_reason === "stale") return current - event >= 120_000_000_000n;
+  if (item.quote_reason === "recent")
+    return (
+      item.session.state === "open" &&
+      current - event < 120_000_000_000n &&
+      item.session.opens_at !== null &&
+      event >= stockInstant(item.session.opens_at) &&
+      item.session.closes_at !== null &&
+      current < stockInstant(item.session.closes_at)
+    );
+  return true;
+}
 export function isStocks(value: unknown): value is StocksResponse {
   if (
     !record(value) ||
@@ -268,7 +299,9 @@ export function isStocks(value: unknown): value is StocksResponse {
     value.items.length === 20 &&
     value.items.every(
       (x) =>
-        item(x, value.server_now as string) && (admission.state === "approved" || x.quote === null),
+        item(x, value.server_now as string) &&
+        coherent(x, value.server_now as string) &&
+        (admission.state === "approved" || x.quote === null),
     ) &&
     new Set(value.items.map((x) => x.id)).size === 20 &&
     new Set(value.items.map((x) => x.symbol)).size === 20
