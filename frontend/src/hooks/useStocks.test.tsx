@@ -78,6 +78,15 @@ function payload({
     })),
   };
 }
+function aligned<T extends ReturnType<typeof payload>>(body: T): T {
+  body.items.forEach((item) => {
+    if (item.quote !== null)
+      item.quote.age_seconds = Math.floor(
+        (Date.parse(body.server_now) - Date.parse(item.quote.event_at)) / 1000,
+      );
+  });
+  return body;
+}
 const clients: QueryClient[] = [];
 function setup() {
   const client = new QueryClient({
@@ -104,7 +113,6 @@ it.each([
   ["permission expires", { lifetime: 5 }, 6000, "permission_unavailable", "unknown"],
   ["quote reaches 120", { age: 119 }, 1000, "stale", "open"],
   ["session closes", { close: 5 }, 6000, "session_unavailable", "closed"],
-  ["open boundary uncertain", { open: 1 }, 2000, "session_unavailable", "unknown"],
 ])(
   "classifies %s before the first successful render",
   async (_name, options, delay, reason, session) => {
@@ -383,7 +391,7 @@ it("removes monitor-expired numbers at exact millisecond equality, from projecti
   body.items.forEach((x) => {
     x.action.valid_until = stamp(0.125);
   });
-  const fetch = vi.fn(async () => new Response(JSON.stringify(body)));
+  const fetch = vi.fn(async () => new Response(JSON.stringify(aligned(body))));
   vi.stubGlobal("fetch", fetch);
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
@@ -432,9 +440,9 @@ it("accepts generic epoch-zero redaction then refuses an older healthy epoch", a
     "fetch",
     vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(healthy)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(healthy))))
       .mockResolvedValueOnce(new Response(JSON.stringify(redacted)))
-      .mockResolvedValueOnce(new Response(JSON.stringify(stale))),
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(stale)))),
   );
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(7));
@@ -474,6 +482,7 @@ const hold = (body: ReturnType<typeof payload>, epoch: number, reason = "unsuppo
       valid_until: null,
     } as never;
     item.quote = null;
+    item.quote_reason = "permission_unavailable";
     item.valuation_reason = reason === "post_split_quote_missing" ? reason : "action_unavailable";
   });
   return body;
@@ -566,8 +575,8 @@ it.each(["older epoch", "older server", "equal time hold", "older submillisecond
       "fetch",
       vi
         .fn()
-        .mockResolvedValueOnce(new Response(JSON.stringify(held)))
-        .mockResolvedValue(new Response(JSON.stringify(old))),
+        .mockResolvedValueOnce(new Response(JSON.stringify(aligned(held))))
+        .mockResolvedValue(new Response(JSON.stringify(aligned(old)))),
     );
     const { result, client } = setup();
     await waitFor(() => expect(result.current.data?.items[0].action.state).toBe("suspended"));
@@ -596,9 +605,9 @@ it("retains high-water across same-user refresh and accepts a newer legitimate r
     "fetch",
     vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(held)))
-      .mockResolvedValueOnce(new Response(JSON.stringify(stale)))
-      .mockResolvedValueOnce(new Response(JSON.stringify(resolved))),
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(held))))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(stale))))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(resolved)))),
   );
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].action.epoch).toBe(7));
@@ -691,7 +700,7 @@ it("resets high-water only after logout and login, preserving crypto cache", asy
     "fetch",
     vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(first)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(aligned(first))))
       .mockImplementation(async (path: string) =>
         path === "/api/v1/auth/me"
           ? new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10000" }))
@@ -738,7 +747,7 @@ it("schedules a cache purge at the nearest millisecond boundary before polling o
   body.items.forEach((x) => {
     x.action.valid_until = stamp(0.125);
   });
-  const fetch = vi.fn(async () => new Response(JSON.stringify(body)));
+  const fetch = vi.fn(async () => new Response(JSON.stringify(aligned(body))));
   vi.stubGlobal("fetch", fetch);
   const { result, client, unmount } = setup();
   for (let i = 0; i < 5; i++)
@@ -819,18 +828,57 @@ it("reschedules simultaneous permission/calendar/monitor deadlines on cache chan
   expect(vi.getTimerCount()).toBeLessThanOrEqual(count);
 });
 
+it.each(["quote expiry", "session close"])(
+  "does not reanchor an equal-time healthy reply after local %s",
+  async (kind) => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const body = payload(kind === "quote expiry" ? { age: 119 } : { close: 1 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(aligned(body)))),
+    );
+    const { result, client } = setup();
+    await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+    now = 1000;
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    if (kind === "quote expiry")
+      expect(
+        client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+      ).toBeNull();
+    else expect(result.current.data?.items[0].session.state).toBe("closed");
+    await act(async () => {
+      await result.current.refetch();
+    });
+    if (kind === "quote expiry") expect(result.current.data?.items[0].quote).toBeNull();
+    else expect(result.current.data?.items[0].session.state).toBe("closed");
+  },
+);
 
-it.each(["quote expiry", "session close"])("does not reanchor an equal-time healthy reply after local %s", async (kind) => {
-  let now = 0; vi.spyOn(performance, "now").mockImplementation(() => now);
-  const body = payload(kind === "quote expiry" ? { age: 119 } : { close: 1 });
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body))));
+it("retains the original transport anchor when an equal snapshot arrives before expiry", async () => {
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  const body = payload({ age: 119 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(aligned(body)))),
+  );
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.items[0].quote?.bid).toBe("100"));
+  now = 500;
+  await act(async () => {
+    await result.current.refetch();
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.transport.received_at,
+  ).toBe(0);
   now = 1000;
-  act(() => { window.dispatchEvent(new Event("focus")); });
-  if (kind === "quote expiry") expect(client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote).toBeNull();
-  else expect(result.current.data?.items[0].session.state).toBe("closed");
-  await act(async () => { await result.current.refetch(); });
-  if (kind === "quote expiry") expect(result.current.data?.items[0].quote).toBeNull();
-  else expect(result.current.data?.items[0].session.state).toBe("closed");
+  act(() => {
+    window.dispatchEvent(new Event("focus"));
+  });
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
 });

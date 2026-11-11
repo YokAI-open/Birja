@@ -317,6 +317,7 @@ it.each([
       items: valid.items.map((x) => ({
         ...x,
         quote: null,
+        quote_reason: "permission_unavailable",
         action: { ...x.action, state, reason, valid_until: null },
         valuation_reason:
           reason === "post_split_quote_missing" ? "post_split_quote_missing" : "action_unavailable",
@@ -333,6 +334,7 @@ it("accepts current action without a quote and explicit unknown session facts", 
         ...x,
         quote: null,
         valuation_reason: "quote_unavailable",
+        quote_reason: "missing",
         session: {
           ...x.session,
           state: "unknown",
@@ -377,15 +379,28 @@ it("honors caller cancellation before publication and sends no-store", async () 
   );
 });
 
-
 it.each([
   { session: { ...item.session, state: "unknown" } },
   { session: { ...item.session, state: "closed" } },
-  { quote_reason: "missing" }, { quote_reason: "permission_unavailable" },
+  { quote_reason: "missing" },
+  { quote_reason: "permission_unavailable" },
   { session_reason: "closed" },
-  { quote: { ...item.quote, event_at: "2026-11-10T15:00:02Z", collected_at: "2026-11-10T15:00:01Z" } },
+  {
+    quote: {
+      ...item.quote,
+      event_at: "2026-11-10T15:00:02Z",
+      collected_at: "2026-11-10T15:00:01Z",
+    },
+  },
   { quote: { ...item.quote, collected_at: "2026-11-10T15:00:10.000000001Z" } },
-  { quote: { ...item.quote, event_at: "2026-11-10T14:58:10Z", collected_at: "2026-11-10T15:00:01Z", age_seconds: 120 } },
+  {
+    quote: {
+      ...item.quote,
+      event_at: "2026-11-10T14:58:10Z",
+      collected_at: "2026-11-10T15:00:01Z",
+      age_seconds: 120,
+    },
+  },
 ])("rejects incoherent disclosed numeric quote %j", (update) => {
   expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
 });
