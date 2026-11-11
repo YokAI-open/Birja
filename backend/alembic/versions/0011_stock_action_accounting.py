@@ -753,6 +753,68 @@ def upgrade() -> None:
         initially="DEFERRED",
     )
     # ### end Alembic commands ###
+    # Provisioning this NOLOGIN privilege role needs administrative authority.
+    # A restricted migrator must receive it from reviewed bootstrap beforehand.
+    op.execute("""DO $action_grants$
+    DECLARE t text; r text;
+    BEGIN
+      IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=current_user
+                      AND (rolsuper OR rolcreaterole)) THEN
+          RAISE EXCEPTION 'preprovision birja_action_operator before restricted 0011 upgrade';
+        END IF;
+        CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER
+          NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      END IF;
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator'
+                AND (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                     OR rolreplication OR rolbypassrls)) OR
+         EXISTS(SELECT FROM pg_auth_members WHERE
+                member=(SELECT oid FROM pg_roles WHERE rolname='birja_action_operator') OR
+                roleid=(SELECT oid FROM pg_roles WHERE rolname='birja_action_operator')) THEN
+        RAISE EXCEPTION 'unsafe action operator attributes or membership';
+      END IF;
+      FOREACH t IN ARRAY ARRAY['stock_action_events','stock_action_sources',
+        'stock_action_revisions','stock_action_observations','stock_action_state',
+        'stock_ownership_movements','stock_split_applications',
+        'stock_dividend_entitlements','stock_action_resolutions'] LOOP
+        EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC',t);
+        FOREACH r IN ARRAY ARRAY['birja_app','birja_scheduler','birja_action_operator'] LOOP
+          IF EXISTS(SELECT FROM pg_roles WHERE rolname=r) THEN
+            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM %I',t,r);
+            EXECUTE format('GRANT SELECT ON TABLE public.%I TO %I',t,r);
+          END IF;
+        END LOOP;
+        IF t <> 'stock_action_state' THEN
+          EXECUTE format('REVOKE ALL ON SEQUENCE public.%I FROM PUBLIC',t||'_id_seq');
+          FOREACH r IN ARRAY ARRAY['birja_app','birja_scheduler','birja_action_operator'] LOOP
+            IF EXISTS(SELECT FROM pg_roles WHERE rolname=r) THEN
+              EXECUTE format('REVOKE ALL ON SEQUENCE public.%I FROM %I',t||'_id_seq',r);
+            END IF;
+          END LOOP;
+        END IF;
+      END LOOP;
+      GRANT USAGE ON SCHEMA public TO birja_action_operator;
+      GRANT SELECT ON stock_instruments,stock_data_admissions,stock_quotes,stock_sessions
+        TO birja_action_operator;
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_app') THEN
+        GRANT INSERT ON stock_ownership_movements TO birja_app;
+        GRANT USAGE ON SEQUENCE stock_ownership_movements_id_seq TO birja_app;
+      END IF;
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
+        GRANT INSERT ON stock_action_events,stock_action_sources,stock_action_revisions,
+          stock_action_observations,stock_action_state,stock_ownership_movements,
+          stock_split_applications,stock_dividend_entitlements TO birja_scheduler;
+        GRANT UPDATE(current_revision_id) ON stock_action_events TO birja_scheduler;
+        GRANT UPDATE ON stock_action_state TO birja_scheduler;
+        GRANT USAGE ON SEQUENCE stock_action_events_id_seq,stock_action_sources_id_seq,
+          stock_action_revisions_id_seq,stock_action_observations_id_seq,
+          stock_ownership_movements_id_seq,stock_split_applications_id_seq,
+          stock_dividend_entitlements_id_seq TO birja_scheduler;
+        REVOKE ALL ON holdings FROM birja_scheduler;
+        GRANT SELECT,UPDATE(quantity) ON holdings TO birja_scheduler;
+      END IF;
+    END $action_grants$;""")
 
 
 def downgrade() -> None:
@@ -844,4 +906,10 @@ def downgrade() -> None:
     op.drop_index("ix_stock_action_events_current_revision_id", table_name="stock_action_events")
     op.drop_index(op.f("ix_stock_action_events_coin_id"), table_name="stock_action_events")
     op.drop_table("stock_action_events")
+    op.execute("""DO $revoke$
+    BEGIN
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
+        REVOKE SELECT,UPDATE(quantity) ON holdings FROM birja_scheduler;
+      END IF;
+    END $revoke$;""")
     # ### end Alembic commands ###

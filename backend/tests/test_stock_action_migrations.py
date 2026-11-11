@@ -1,7 +1,11 @@
 """Real isolated PostgreSQL accounting invariants and privilege boundaries."""
 
+import asyncio
+import shutil
+import subprocess
 from collections.abc import AsyncIterator
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -357,7 +361,7 @@ async def test_populated_accounting_downgrade_refuses_before_alter(
 async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
     await migrate("0010", down=True)
     async with engine.begin() as conn:
-        for role in ("birja_app", "birja_scheduler"):
+        for role in ("birja_app", "birja_scheduler", "birja_migrator"):
             await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
             await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))  # noqa: S608
     try:
@@ -365,17 +369,201 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
         yield
     finally:
         async with engine.begin() as conn:
-            for role in ("birja_app", "birja_scheduler", "birja_action_operator"):
-                exists = (await conn.execute(text("SELECT count(*) FROM pg_roles WHERE rolname=:r"), {"r":role})).scalar_one()
+            for role in ("birja_app", "birja_scheduler", "birja_action_operator", "birja_migrator"):
+                exists = (
+                    await conn.execute(
+                        text("SELECT count(*) FROM pg_roles WHERE rolname=:r"), {"r": role}
+                    )
+                ).scalar_one()
                 if exists:
                     await conn.execute(text(f"DROP OWNED BY {role}"))  # noqa: S608 - fixed isolated roles
                     await conn.execute(text(f"DROP ROLE {role}"))  # noqa: S608
 
 
 async def test_upgrade_grants_support_quantity_but_deny_cash_and_authority(
-    engine: AsyncEngine, runtime_roles: None,
+    engine: AsyncEngine,
+    runtime_roles: None,
 ) -> None:
     async with engine.connect() as conn:
-        assert (await conn.execute(text("SELECT has_column_privilege('birja_scheduler','holdings','quantity','UPDATE')"))).scalar_one(), "Splits require precisely quantity-only UPDATE"
-        assert not (await conn.execute(text("SELECT has_column_privilege('birja_scheduler','holdings','cost_basis','UPDATE')"))).scalar_one()
-        assert (await conn.execute(text("SELECT has_table_privilege('birja_app','stock_ownership_movements','INSERT')"))).scalar_one()
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT has_column_privilege('birja_scheduler','holdings','quantity','UPDATE')"
+                )
+            )
+        ).scalar_one(), "Splits require precisely quantity-only UPDATE"
+        assert not (
+            await conn.execute(
+                text(
+                    "SELECT has_column_privilege('birja_scheduler',"
+                    "'holdings','cost_basis','UPDATE')"
+                )
+            )
+        ).scalar_one()
+        assert (
+            await conn.execute(
+                text("SELECT has_table_privilege('birja_app','stock_ownership_movements','INSERT')")
+            )
+        ).scalar_one()
+
+
+async def denied(conn: AsyncConnection, statement: str) -> None:
+    savepoint = await conn.begin_nested()
+    try:
+        with pytest.raises(DBAPIError) as error:
+            await conn.execute(text(statement))
+        assert error.value.orig.sqlstate == "42501", statement
+    finally:
+        await savepoint.rollback()
+
+
+async def test_actual_runtime_grants_deny_immutable_and_authority_writes(
+    engine: AsyncEngine,
+    runtime_roles: None,
+) -> None:
+    async with engine.connect() as conn, conn.begin():
+        for role in ("birja_app", "birja_scheduler", "birja_action_operator"):
+            await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed test roles
+            for table, field in (
+                ("stock_action_revisions", "reason"),
+                ("stock_action_observations", "cycle_id"),
+                ("stock_ownership_movements", "causal_key"),
+                ("stock_split_applications", "new_rate"),
+                ("stock_dividend_entitlements", "state"),
+                ("stock_action_resolutions", "decision"),
+            ):
+                await conn.execute(text(f"SELECT id FROM {table} LIMIT 1"))  # noqa: S608 - fixed tables
+                await denied(conn, f"UPDATE {table} SET {field}={field} WHERE false")  # noqa: S608 - fixed matrix
+                await denied(conn, f"DELETE FROM {table} WHERE false")  # noqa: S608 - fixed matrix
+            await denied(conn, "INSERT INTO stock_action_resolutions DEFAULT VALUES")
+            await denied(
+                conn, "UPDATE stock_data_admissions SET generation=generation+1 WHERE false"
+            )
+            await denied(conn, "SELECT setval('stock_action_resolutions_id_seq',999)")
+            if role != "birja_app":
+                await denied(conn, "UPDATE accounts SET cash=cash+1 WHERE false")
+                await denied(conn, "UPDATE holdings SET cost_basis=cost_basis WHERE false")
+                await denied(conn, "INSERT INTO trades DEFAULT VALUES")
+            if role == "birja_scheduler":
+                await conn.execute(text("UPDATE holdings SET quantity=quantity WHERE false"))
+                await conn.execute(
+                    text(
+                        "UPDATE stock_action_events SET current_revision_id=current_revision_id "
+                        "WHERE false"
+                    )
+                )
+                await denied(
+                    conn, "UPDATE stock_action_events SET economic_key=economic_key WHERE false"
+                )
+                await conn.execute(text("SELECT nextval('stock_action_revisions_id_seq')"))
+            if role == "birja_app":
+                await conn.execute(text("SELECT nextval('stock_ownership_movements_id_seq')"))
+                await denied(conn, "INSERT INTO stock_action_revisions DEFAULT VALUES")
+            await conn.execute(text("RESET ROLE"))
+        attrs = (
+            await conn.execute(
+                text(
+                    "SELECT rolcanlogin,rolinherit,rolsuper,rolcreaterole,rolcreatedb,"
+                    "rolreplication,rolbypassrls FROM pg_roles "
+                    "WHERE rolname='birja_action_operator'"
+                )
+            )
+        ).one()
+        assert tuple(attrs) == (False,) * 7
+        assert not (
+            await conn.execute(
+                text(
+                    "SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles "
+                    "WHERE rolname='birja_action_operator') OR roleid=(SELECT oid FROM pg_roles "
+                    "WHERE rolname='birja_action_operator')"
+                )
+            )
+        ).all()
+
+
+async def test_scheduler_grants_allow_append_with_identity_sequences(
+    engine: AsyncEngine,
+    runtime_roles: None,
+) -> None:
+    async with engine.connect() as conn, conn.begin():
+        cid = (
+            await conn.execute(
+                text("SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 1")
+            )
+        ).scalar_one()
+        await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
+        eid, sid, rid = await event(conn, cid)
+        await conn.execute(
+            text("INSERT INTO stock_action_state(coin_id,admission_generation) VALUES (:c,1)"),
+            {"c": cid},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO stock_action_observations(source_id,revision_id,observed_at,"
+                "admission_generation,source_kind,cycle_id) "
+                "VALUES (:s,:r,now(),1,'snapshot','fixture')"
+            ),
+            {"s": sid, "r": rid},
+        )
+        assert eid > 0 and sid > 0 and rid > 0
+        await conn.rollback()
+
+
+async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
+    engine: AsyncEngine,
+    runtime_roles: None,
+) -> None:
+    matrix = """SELECT string_agg(r||':'||t||':'||p||':'||
+      has_table_privilege(r,t,p)::text,'|' ORDER BY r,t,p)
+      FROM unnest(ARRAY['birja_app','birja_scheduler','birja_action_operator']) r,
+      unnest(ARRAY['stock_action_events','stock_action_sources','stock_action_revisions',
+        'stock_action_observations','stock_action_state','stock_ownership_movements',
+        'stock_split_applications','stock_dividend_entitlements','stock_action_resolutions']) t,
+      unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p"""
+    async with engine.connect() as conn:
+        before = (await conn.execute(text(matrix))).scalar_one()
+    root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[2])
+    script = await asyncio.to_thread((root / "deploy/db/bootstrap-roles.sql").read_text)
+    script = script.rsplit("COMMIT;", 1)[0] + matrix + ";\nROLLBACK;\n"
+    docker = shutil.which("docker")
+    assert docker is not None
+    result = await asyncio.to_thread(
+        subprocess.run,
+        [
+            docker,
+            "compose",
+            "-f",
+            str(root / "docker-compose.test.yml"),
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "birja_test",
+            "-d",
+            "birja_test",
+            "-X",
+            "-qAt",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-v",
+            "bootstrap=birja_test",
+            "-v",
+            "apply=true",
+            "-v",
+            "db_name=birja_test",
+            "-v",
+            "app_password=test-only-app",
+            "-v",
+            "scheduler_password=test-only-scheduler",
+            "-v",
+            "migrator_password=test-only-migrator",
+        ],
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == before

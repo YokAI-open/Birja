@@ -115,6 +115,7 @@ async def test_catalogue_and_exact_durable_source_values(
     assert stored.event_at == NOW and stored.collected_at == NOW + timedelta(seconds=1)
     assert stored.session_date == NOW.date()
     assert (stored.source, stored.feed, stored.admission_generation) == ("alpaca", "iex", 4)
+    assert stored.unit_epoch == 0
 
 
 async def test_older_equal_changed_and_partial_never_refresh_retained_observation(
