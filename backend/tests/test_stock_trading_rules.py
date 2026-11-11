@@ -240,7 +240,9 @@ def mark(execution: ExecutionEvidence) -> ValuationEvidence:
 
 @pytest.mark.parametrize("state", ["garbage", "OPEN", "", None, True, 1])
 @pytest.mark.parametrize("halted", [False, True])
-def test_malformed_session_state_never_authorizes_execution_or_marks(state: object, halted: bool) -> None:
+def test_malformed_session_state_never_authorizes_execution_or_marks(
+    state: object, halted: bool
+) -> None:
     evidence = replace(valid(), session_state=state)
     if halted:
         evidence = replace(evidence, status=replace(evidence.status, state="halted"))

@@ -308,7 +308,7 @@ def evaluate_execution(evidence: ExecutionEvidence, now: datetime) -> ExecutionD
     if reason:
         return refuse(reason)
     if (
-        evidence.session_state == "unknown"
+        evidence.session_state not in ("open", "closed")
         or not _deadline(evidence.session_valid_until, now)
         or not _integer(evidence.calendar_generation, 1)
         or evidence.calendar_generation != _generation(evidence, "calendar")
@@ -357,7 +357,7 @@ def evaluate_valuation(evidence: ValuationEvidence, now: datetime) -> ValuationD
     if not _quote_valid(execution, now):
         return ValuationDecision("unavailable", "quote_unavailable")
     if (
-        execution.session_state == "unknown"
+        execution.session_state not in ("open", "closed")
         or not _deadline(execution.session_valid_until, now)
         or not _integer(execution.calendar_generation, 1)
         or execution.calendar_generation != _generation(execution, "calendar")
