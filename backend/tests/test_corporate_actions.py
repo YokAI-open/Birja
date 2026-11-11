@@ -30,6 +30,7 @@ from app.services.corporate_actions import (
     persist_action_batch,
 )
 from app.services.stock_ownership import StockMovementInput, append_stock_movement
+from app.services.stock_sessions import build_sessions
 from tests.stock_action_fixtures import ownership as _ownership
 from tests.stock_action_fixtures import synthetic_fill, synthetic_opening
 from tests.test_corporate_action_rules import dividend
@@ -1155,3 +1156,77 @@ async def test_split_changed_applied_terms_never_reapply(actions):
         assert (
             await db.execute(select(Holding.quantity).where(Holding.coin_id == cid))
         ).scalar_one() == 8
+
+
+async def test_applied_split_cached_boundary_and_new_quote_project_current(actions, settings):
+    from app.models.stock import StockQuote, StockSession
+    from app.services.stock_quote_rules import RawStockQuote, validate_quote
+    from app.services.stock_quotes import load_stock_catalog, upsert_stock_quotes
+    from app.services.stocks import list_stocks
+    from tests.test_stock_admission import admitted
+
+    factory, cid, _, action, auth = actions
+    observed = datetime.now(UTC)
+    cutoff = observed - timedelta(hours=1)
+    calendar = calendar_evidence(observed)
+    try:
+        async with factory.begin() as db:
+            db.add(
+                StockDataAdmission(
+                    **asdict(
+                        replace(
+                            admitted(),
+                            reviewed_at=observed - timedelta(hours=1),
+                            valid_from=observed - timedelta(hours=2),
+                            valid_until=observed + timedelta(hours=2),
+                        )
+                    )
+                )
+            )
+            db.add(StockDataAdmission(**asdict(calendar)))
+            for session in build_sessions(observed, calendar):
+                db.add(StockSession(**asdict(session)))
+            await persist_action_batch(db, batch(split_action(action, cutoff)), auth)
+            assert len(await apply_due_actions(db, cid)) == 1
+            state = await db.get(StockActionState, cid)
+            assert state.next_blocking_at == cutoff
+            mapping = next(item for item in await load_stock_catalog(db) if item.coin_id == cid)
+            quote = validate_quote(
+                RawStockQuote(
+                    mapping,
+                    Decimal(100),
+                    Decimal(102),
+                    observed,
+                    ["R"],
+                    tape="C" if mapping.listing_exchange == "NASDAQ" else "A",
+                ),
+                observed,
+                4,
+            )
+            assert await upsert_stock_quotes(db, [quote], 4, now=lambda: observed) == 1
+            response = await list_stocks(db, settings, now=lambda: observed)
+            item = next(item for item in response.items if item.id == cid)
+            assert item.action.state == "current" and item.action.reason == "none"
+            assert item.quote.mid == Decimal(101)
+            assert item.valuation_reason == "available"
+            # The stale consumed marker cannot mask a different unresolved boundary.
+            future = observed + timedelta(seconds=30)
+            from tests.stock_action_fixtures import synthetic_split
+
+            pending = await synthetic_split(db, cid, future, boundary=0, prior_epoch=1)
+            await db.delete(pending)
+            state.unit_epoch = 1
+            await db.flush()
+            response = await list_stocks(db, settings, now=lambda: observed)
+            item = next(item for item in response.items if item.id == cid)
+            assert item.action.valid_until == future
+            response = await list_stocks(db, settings, now=lambda: future)
+            item = next(item for item in response.items if item.id == cid)
+            assert item.quote is None and item.action.state == "reconciling"
+    finally:
+        async with factory.begin() as db:
+            await db.execute(delete(StockQuote))
+            await db.execute(delete(StockSession))
+            await db.execute(
+                delete(StockDataAdmission).where(StockDataAdmission.product == "quotes")
+            )

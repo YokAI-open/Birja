@@ -165,7 +165,7 @@ def _action_projection(
         ).allowed
         for purpose in ("collection", "display", "derived", "retention")
     )
-    if not rights or raw is None:
+    if not rights or raw is None or calendar_deadline is None or calendar_deadline <= checked_at:
         return StockActionOut(), False
     try:
         row = dict(raw)
@@ -183,19 +183,26 @@ def _action_projection(
         epoch, units = row["epoch"], row["unit_epoch"]
         if type(epoch) is not int or not 1 <= epoch <= 9007199254740991:
             return StockActionOut(), False
-        rights = (
-            rights and row["admission_generation"] == cast(ProductAdmission, admission).generation
-        )
+        if row["admission_generation"] != cast(ProductAdmission, admission).generation:
+            return StockActionOut(), False
         deadlines = [
             row["valid_until"],
             calendar_deadline,
             cast(ProductAdmission, admission).valid_until,
         ]
         validity = min(deadlines) if all(value is not None for value in deadlines) else None
+        cached_boundary = row["next_blocking_at"]
+        if (
+            cached_boundary is not None
+            and row["split_boundary"] is not None
+            and row["split_boundary"] == row["quote_not_before"]
+            and cached_boundary <= row["split_boundary"]
+        ):
+            # The exact applied current unit boundary consumed this cached marker.
+            # Canonical unresolved current events still independently bound validity.
+            cached_boundary = None
         boundaries = [
-            value
-            for value in (row["next_blocking_at"], row["pending_boundary"])
-            if value is not None
+            value for value in (cached_boundary, row["pending_boundary"]) if value is not None
         ]
         decision = evaluate_action_state(
             now=checked_at,
@@ -327,7 +334,12 @@ async def list_stocks(
         action, action_safe = _action_projection(
             actions.get(row.id),
             authority.get("actions"),
-            session.valid_until,
+            session.valid_until
+            if all(
+                evaluate_admission(calendar, "calendar", purpose, checked_at, **scope).allowed
+                for purpose in ("collection", "display", "derived", "retention")
+            )
+            else None,
             checked_at,
             scope,
             row.quote_unit_epoch,
@@ -338,8 +350,8 @@ async def list_stocks(
         if permitted and action_safe:
             reason = "missing"
             # Local accounting provenance is not a provider validation field.
-            # Nonzero units need Plan09's authentic current-unit gate before
-            # either a recent or historical amount can be disclosed.
+            # Current action/unit authority governs both recent and historical
+            # disclosures; safety epochs do not change the quote's local units.
             if row.quote_coin_id is not None:
                 fields = {
                     name: row["quote_" + name]
@@ -388,6 +400,15 @@ async def list_stocks(
                     and candidate.event_at <= candidate.collected_at <= checked_at
                 ):
                     disclosure_deadline = min(cast(datetime, disclosure_deadline), retained_until)
+                    action = action.model_copy(
+                        update={
+                            "valid_until": min(
+                                cast(datetime, action.valid_until),
+                                retained_until,
+                                cast(datetime, permission.valid_until),
+                            )
+                        }
+                    )
                     quote = StockQuoteOut(
                         bid=candidate.bid,
                         ask=candidate.ask,

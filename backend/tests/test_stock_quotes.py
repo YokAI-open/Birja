@@ -123,7 +123,10 @@ async def test_older_equal_changed_and_partial_never_refresh_retained_observatio
     stock_state: list[StockMapping],
 ) -> None:
     first, second = [accepted(m) for m in stock_state[:2]]
-    assert await upsert_stock_quotes(db, [first, second], 4, now=lambda: NOW) == 2
+    assert await upsert_stock_quotes(db, [first], 4, now=lambda: NOW) == 1
+    await db.commit()
+    assert await upsert_stock_quotes(db, [second], 4, now=lambda: NOW) == 1
+    await db.commit()
     newer = accepted(stock_state[0], 2)
     assert await upsert_stock_quotes(db, [newer], 4, now=lambda: NOW + timedelta(seconds=2)) == 1
     equal_changed = replace(
@@ -191,9 +194,9 @@ async def test_forged_future_and_invalid_rows_are_refused_without_poisoning_batc
     changes: dict[str, object],
 ) -> None:
     first, second = [accepted(m) for m in stock_state[:2]]
-    assert (
-        await upsert_stock_quotes(db, [replace(first, **changes), second], 4, now=lambda: NOW) == 1
-    )
+    assert await upsert_stock_quotes(db, [replace(first, **changes)], 4, now=lambda: NOW) == 0
+    await db.commit()
+    assert await upsert_stock_quotes(db, [second], 4, now=lambda: NOW) == 1
     assert await db.get(StockQuote, first.coin_id) is None
     assert await db.get(StockQuote, second.coin_id) is not None
 
@@ -420,3 +423,193 @@ async def test_genuine_post_split_event_acquires_local_current_units(db, stock_s
     stored = await db.get(StockQuote, cid)
     assert stored.unit_epoch == 1
     assert stored.event_at == NOW
+
+
+@pytest_asyncio.fixture
+async def split_quotes(engine, stock_state):
+    from app.models.corporate_action import (
+        StockActionEvent,
+        StockActionRevision,
+        StockActionSource,
+        StockActionState,
+        StockSplitApplication,
+    )
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    cid = stock_state[0].coin_id
+    async with factory.begin() as db:
+        db.add(
+            StockDataAdmission(
+                **asdict(
+                    replace(
+                        action_admitted(),
+                        reviewed_at=NOW - timedelta(hours=1),
+                        valid_from=NOW - timedelta(hours=2),
+                        valid_until=NOW + timedelta(hours=8),
+                    )
+                )
+            )
+        )
+        db.add(
+            StockActionState(
+                coin_id=cid,
+                admission_generation=4,
+                health="current",
+                checked_at=NOW,
+                valid_until=NOW + timedelta(hours=1),
+                coverage_start=NOW - timedelta(days=1),
+                covered_until=NOW,
+            )
+        )
+    try:
+        yield factory, stock_state[0]
+    finally:
+        async with factory.begin() as db:
+            await db.execute(delete(StockQuote))
+            await db.execute(delete(StockSplitApplication))
+            await db.execute(update(StockActionEvent).values(current_revision_id=None))
+            await db.execute(delete(StockActionRevision))
+            await db.execute(delete(StockActionSource))
+            await db.execute(delete(StockActionEvent))
+            await db.execute(delete(StockActionState))
+
+
+async def wait_for_advisory_wait(factory, pid):
+    async with asyncio.timeout(5):
+        while True:
+            async with factory() as db:
+                waiting = (
+                    await db.execute(
+                        text(
+                            "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=:pid "
+                            "AND locktype='advisory' AND NOT granted)"
+                        ),
+                        dict(pid=pid),
+                    )
+                ).scalar_one()
+            if waiting:
+                return
+            await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize("source_after", [True, False])
+async def test_quote_waiting_for_split_binds_committed_units(split_quotes, source_after):
+    from app.models.corporate_action import StockActionState
+    from app.services.stock_ownership import acquire_stock_gate
+    from tests.stock_action_fixtures import synthetic_split
+
+    factory, mapping = split_quotes
+    started = asyncio.Event()
+    pid = []
+
+    async def write():
+        async with factory.begin() as db:
+            pid.append((await db.execute(text("SELECT pg_backend_pid()"))).scalar_one())
+            started.set()
+            return await upsert_stock_quotes(db, [accepted(mapping)], 4, now=lambda: NOW)
+
+    async with factory() as split:
+        await acquire_stock_gate(split, mapping.coin_id)
+        task = asyncio.create_task(write())
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            await wait_for_advisory_wait(factory, pid[0])
+            boundary = NOW - timedelta(seconds=1) if source_after else NOW
+            await synthetic_split(split, mapping.coin_id, boundary, boundary=0)
+            state = await split.get(StockActionState, mapping.coin_id)
+            state.quote_not_before = boundary
+            await split.commit()
+            assert await asyncio.wait_for(task, 5) == int(source_after)
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    async with factory() as db:
+        stored = await db.get(StockQuote, mapping.coin_id)
+        assert (stored is not None) == source_after
+        if stored:
+            assert stored.unit_epoch == 1 and stored.event_at == NOW
+
+
+async def test_split_waiting_for_quote_never_relabels_old_observation(split_quotes):
+    from app.models.corporate_action import StockActionState
+    from app.services.stock_ownership import acquire_stock_gate
+    from tests.stock_action_fixtures import synthetic_split
+
+    factory, mapping = split_quotes
+    started = asyncio.Event()
+    pid = []
+
+    async def apply():
+        async with factory.begin() as db:
+            pid.append((await db.execute(text("SELECT pg_backend_pid()"))).scalar_one())
+            started.set()
+            await acquire_stock_gate(db, mapping.coin_id)
+            await synthetic_split(db, mapping.coin_id, NOW - timedelta(seconds=1), boundary=0)
+            state = await db.get(StockActionState, mapping.coin_id)
+            state.quote_not_before = NOW - timedelta(seconds=1)
+
+    async with factory() as writer:
+        assert await upsert_stock_quotes(writer, [accepted(mapping)], 4, now=lambda: NOW) == 1
+        task = asyncio.create_task(apply())
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            await wait_for_advisory_wait(factory, pid[0])
+            await writer.commit()
+            await asyncio.wait_for(task, 5)
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    async with factory() as db:
+        stored = await db.get(StockQuote, mapping.coin_id)
+        assert stored.unit_epoch == 0 and stored.event_at == NOW
+        state = await db.get(StockActionState, mapping.coin_id)
+        assert state.unit_epoch == 1
+
+
+@pytest.mark.parametrize(
+    "change", ["rights", "expired", "reconciling", "missing_boundary", "stale_quote"]
+)
+async def test_nonzero_quote_requires_current_authority_and_fresh_postgate_clock(
+    split_quotes, change
+):
+    from app.models.corporate_action import StockActionState
+    from tests.stock_action_fixtures import synthetic_split
+
+    factory, mapping = split_quotes
+    async with factory.begin() as db:
+        await synthetic_split(db, mapping.coin_id, NOW - timedelta(seconds=1), boundary=0)
+        state = await db.get(StockActionState, mapping.coin_id)
+        state.quote_not_before = NOW - timedelta(seconds=1)
+        if change == "rights":
+            await db.execute(
+                update(StockDataAdmission)
+                .where(StockDataAdmission.product == "actions")
+                .values(derived_allowed=False)
+            )
+        elif change == "expired":
+            state.checked_at = NOW - timedelta(seconds=1)
+            state.valid_until = NOW
+        elif change == "reconciling":
+            state.health = "reconciling"
+        elif change == "missing_boundary":
+            state.quote_not_before = None
+        await db.flush()
+        assert (
+            await upsert_stock_quotes(
+                db,
+                [accepted(mapping)],
+                4,
+                now=lambda: NOW + timedelta(seconds=120 if change == "stale_quote" else 0),
+            )
+            == 0
+        )
+
+
+async def test_multiple_valid_instruments_require_explicit_caller_transactions(db, stock_state):
+    from app.services.stock_ownership import OwnershipHeld
+
+    with pytest.raises(OwnershipHeld, match="one_instrument_per_transaction"):
+        await upsert_stock_quotes(db, [accepted(m) for m in stock_state[:2]], 4, now=lambda: NOW)
+    assert (await db.execute(select(StockQuote))).scalars().all() == []

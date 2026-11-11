@@ -213,37 +213,41 @@ async def _refresh(
             )
     finally:
         http.event_hooks["request"].remove(before_request)
-    async with sessionmaker() as db:
-        latest = await _admissions(db)
-        checked = now()
-        if latest != original or not _allowed(latest, settings, checked):
-            return CycleResult("ok")
-        opened = _open_exchanges(checked, sessions, latest["calendar"], **scope)
-        quotes = [
-            q
-            for q in batch.quotes
-            if next(m for m in mappings if m.coin_id == q.coin_id).listing_exchange in opened
-        ]
-        accepted = await upsert_stock_quotes(
-            db,
-            quotes,
-            original["quotes"].generation,
-            now=now,
-            account=settings.stock_data_account,
-            server=settings.stock_data_server,
-        )
-        # Recheck after awaited persistence as well: a revoked calendar/reference
-        # or expired lease must roll back this short transaction.
-        latest = await _admissions(db)
-        owned = await redis.get(LOCK_KEY) == token
-        if (
-            latest != original
-            or not _allowed(latest, settings, now())
-            or not owned
-            or _open_exchanges(now(), sessions, latest["calendar"], **scope) != opened
-        ):
-            return CycleResult("ok")
-        await db.commit()
+    accepted = 0
+    quotes = list(batch.quotes)
+    # HTTP has finished. One instrument gate belongs to each short caller-owned
+    # transaction; never hold twenty financial locks or commit inside upsert.
+    for quote in sorted(quotes, key=lambda item: item.coin_id):
+        async with sessionmaker() as db:
+            latest = await _admissions(db)
+            checked = now()
+            if latest != original or not _allowed(latest, settings, checked):
+                return CycleResult("ok", accepted=accepted)
+            opened = _open_exchanges(checked, sessions, latest["calendar"], **scope)
+            if (
+                next(m for m in mappings if m.coin_id == quote.coin_id).listing_exchange
+                not in opened
+            ):
+                continue
+            count = await upsert_stock_quotes(
+                db,
+                [quote],
+                original["quotes"].generation,
+                now=now,
+                account=settings.stock_data_account,
+                server=settings.stock_data_server,
+            )
+            latest = await _admissions(db)
+            owned = await redis.get(LOCK_KEY) == token
+            if (
+                latest != original
+                or not _allowed(latest, settings, now())
+                or not owned
+                or _open_exchanges(now(), sessions, latest["calendar"], **scope) != opened
+            ):
+                return CycleResult("ok", accepted=accepted)
+            await db.commit()
+            accepted += count
     return CycleResult("ok", accepted=accepted, rejected=len(selected) - len(quotes))
 
 
