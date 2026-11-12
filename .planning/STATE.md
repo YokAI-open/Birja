@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan09-13 complete; continue09-14 final gates.
-last_updated: "2026-11-12T12:46:04.552Z"
-last_activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
+stopped_at: Plan09-14 complete; awaiting Plan09-15 new UI acceptance and native200% check.
+last_updated: "2026-11-12T16:37:51.119Z"
+last_activity: 2026-11-12 -- Plan09-14 local verification complete; Plan09-15 owner checkpoint
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 39
-  percent: 93
+  completed_plans: 40
+  percent: 95
 ---
 
 # Project State
@@ -21,17 +21,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 12)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (Wave 13 owner checkpoint)
 
 ## Current Position
 
 Phase: 9
-Plan: 13/15 complete; 09-14 final gates (Wave 12/13)
-Status: In progress
-Last activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
-Progress: [███████░░░] 93% (39/42 tracked plans complete)
+Plan: 14/15 complete; 09-15 owner UI acceptance (Wave 13/13)
+Status: Awaiting actual owner verification
+Last activity: 2026-11-12 -- Plan09-14 local gates/reviews complete
+Progress: [██████████] 95% (40/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-14 complete: backend2086/39critical modules100%,frontend590,fullbrowser45
+plus1expectedCSPskip,finalstock14,strict5image scans,audits,standaloneSQL13 and
+nonrootnative5 all pass. Exact compatible recovery archive5eb886d1 passes all
+0007–0013/roles/bothTLS and real old/new selected-volume cutover/rollback.
+Distinct inline source/security/UI/goal reports close implementation blockers;
+independence is not claimed. See09-14-SUMMARY and09-LOCAL-PROOF.
+
+Next: actual09-15 ticket/receipt and portfolio acceptance plus native200%zoom.
+Checked offline bundle:/tmp/birja-phase09-ui-review.zip; extract/open index.html
+on the owner's computer.09-HUMAN-UAT describes the concrete checks. No owner
+acceptance is inferred; requirements and Nyquist flags remain pending. Preserve
+live/provider/publication deferrals; no Phase10 or deployment auto-advance.
+
+The older entries below preserve earlier execution history and intermediate
+next-action pointers; this paragraph and Session Continuity are current.
 
 Plan09-13 actual browser proof complete: all45applicable stories pass across
 full run plus affected correction;1expected CSP skip. Final14stock stories
@@ -564,6 +580,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P07 | 15min | 2 tasks | 4 files |
 | Phase 9 P08 | 8min | 2 tasks | 4 files |
 | Phase 9 P09 | 24min | 2 tasks | 8 files |
+| Phase 09 P14 | 117min | 2 tasks | 35 files |
 
 ## Operations
 
@@ -573,11 +590,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-13 complete; continue09-14 final gates.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-14-PLAN.md
-Phase9 plans01–09 are complete with actual source/test/summary commits. Do not
-restart completed work. Existing isolated birja-test stack is available; all DB
-and ops gates must run serially. Production and live Phase7/8 activation remain
+Stopped at: Plan09-14 complete; awaiting Plan09-15 new UI acceptance and native200% check.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-15-PLAN.md
+Phase9 plans01–14 are complete with actual source/test/summary commits. Do not
+restart completed work. All owned isolated test resources are cleaned; any new
+DB/ops gates must recreate only owned fixtures and run serially. Production and live Phase7/8 activation remain
 owner-deferred; no private provider/B2/timer/publication operation is authorized.
 Agents lacked filesystem/shell tools in this session; required roles are distinct
 inline passes with honest provenance. Whole requirements remain pending until

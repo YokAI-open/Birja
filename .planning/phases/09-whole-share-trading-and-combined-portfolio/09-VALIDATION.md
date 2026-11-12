@@ -9,7 +9,7 @@ created: 2026-11-11
 
 # Phase9 — Validation Strategy
 
-Planning contract only; no tests or acceptance have run for this new feature. Keep false sign-offs until actual execution. All paths below are exact planned files, created by the owning task before behavior code. Existing pytest/real guarded PG+Redis, Vitest/RTL and Playwright infrastructure is sufficient; no package install. Start/stop only owned docker-compose.test.yml resources after identity check, never dev/prod. HTTP external inputs are finite transport fakes; no provider keys/calls.
+Execution contract: plans01–14 have actual local automated evidence;15 owner UI/nativezoom answers remain pending. Source creation and behavioral RED/GREEN are recorded in plan summaries. Existing guarded PG+Redis, Vitest/RTL and Playwright run against owned fixtures, never dev/prod. HTTP external inputs are finite transport fakes; no provider keys/calls. See09-LOCAL-PROOF for final evidence and exact archive/source hashes.
 
 ## Exact per-task wave/requirement/threat map
 
@@ -70,10 +70,10 @@ Schema04 gates and final14 replay are serial: `python3 deploy/tests/test-stock-r
 ## Sign-off after execution
 
 - [ ] All30 tasks have actual automated evidence or actual owner answer, mapped to current source.
-- [ ] Exact0013/legacy recovery and both restricted verified-TLS lanes pass.
-- [ ] Financial concurrency/last-wait/current-authority and crypto regressions pass.
-- [ ]80%overall and100%critical statement/branch coverage, strict audits/scans and fullstatic pass.
+- [x] Exact0013/legacy recovery and both restricted verified-TLS lanes pass.
+- [x] Financial concurrency/last-wait/current-authority and crypto regressions pass.
+- [x]80%overall and100%critical statement/branch coverage, strict audits/scans and fullstatic pass.
 - [ ] Actual browser/reflow/keyboard and honest nativezoom evidence pass.
-- [ ] Independent code/security/UI/goal role reports close allblocking issues and cover all9requirements/16decisions.
+- [x] Required code/security/UI/goal roles run as distinct sequential inline passes; no implementation blockers, all9requirements/16decisions mapped. Independence is not claimed; unavailable delegation fallback follows AGENTS/adapter.
 - [ ] Owner accepts new UI; existing live deferrals preserved.
 - [ ] Only then set nyquist_compliant and wave_0_complete from actual evidence.

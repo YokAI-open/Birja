@@ -1,43 +1,59 @@
 ---
-status: draft
+status: awaiting_owner
 phase: 09-whole-share-trading-and-combined-portfolio
-source: [09-UI-SPEC.md, 09-LOCAL-PROOF.md, 09-UI-SOURCE-HASHES.json]
+source: [09-UI-SPEC.md, 09-LOCAL-PROOF.md, 09-UI-SOURCE-HASHES.json, 09-VERIFICATION.md]
 ---
 
-# Phase9 new interface acceptance packet
+# Phase 9 interface acceptance
 
-Final automated/review gates14 must pass before requesting owner acceptance15.
-Prior Phase7/8 acceptance does not approve these new screens. No owner result
-is inferred; all items below remain pending. Synthetic-only artifacts prove
-local UI behavior, not provider rights or public readiness.
+Plans01–14 are complete locally. All required automated, recovery, security and
+source-review gates pass. Plan15 requires the actual owner's new-UI answers;
+earlier Phase7/8 acceptance does not cover these screens. All checks below
+remain pending. Live provider activation remains owner-deferred.
 
-## Review screenshots
+## Open the review bundle
 
-22current images and SHA256 are in
-[/tmp/birja-phase09-ui-proof/screenshots.json](/tmp/birja-phase09-ui-proof/screenshots.json).
-Source identities are [09-UI-SOURCE-HASHES.json](09-UI-SOURCE-HASHES.json).
-Images include actual authenticated stock previews/receipts and combined
-portfolio at320/375/768/1024/1440, old→new repricing, closed editable draft,
-committed-loss original receipt, keyboard stale draft and incomplete portfolio.
-Names/balances are deliberately synthetic; names use the actual64-character
-catalogue bound. Huge decimal display is additionally covered in unit tests and
-legacy portfolio browser boundary fixtures, not impossible production balances.
+[Download the review ZIP](/tmp/birja-phase09-ui-review.zip), extract it on your
+computer and open index.html in your desktop browser. The five read-only pages
+contain the actual rendered DOM, CSS and fonts from source969c301. Accounts,
+prices and session times are deliberately synthetic. Scripts, forms and network
+navigation are removed; trade buttons are inactive in these review snapshots.
 
-## Pending owner checks
+The pages run offline and support actual desktop browser zoom. Their integrity
+check passed at1440/375/640px with zero external HTTP requests. This reflow proof
+is separate from the owner's native200% check. The real application passed
+45applicable browser stories and the final affected stock14, with no retries;
+the expected production-CSP skip remains separate.
 
-1. Ticket: whole-share input, Buy max/Sell all drafts, bid/ask selected side,
-   visible IEX/simulation/zero-fee/omitted-regulatory-fee/immediate-proceeds copy.
-2. Preview and repricing: itemized cash, old/new execution price and cash delta;
-   explicit second confirmation, closed/held quantity retained without a queue.
-3. Receipt: original saved company/source/full dates and historical cash/share
-   balances, Portfolio/Trade again and sensible keyboard focus.
-4. Portfolio: shared cash, Stock/Crypto labels, direct quantities/costs/basis/
-   values/returns, alphabetic rows and exactly3Cash/Stocks/Crypto allocations.
-5. Incomplete/historical: Known value and unvalued count, no overall return or
-   filled allocation bars; dated closed/halt marks and uncertainty explanations.
-6. Actual browser200% zoom on the owner's browser: confirm/retry reachable,
-   readable table/cards, no overlap or horizontal page scroll. Headless native
-   shortcut attempt did not apply zoom;640px reflow is supplementary only.
+The bundle includes25live application screenshots, covering320/375/768/1024/1440,
+the actual AAPL+BTC combined portfolio, repricing, receipt, dated closed/halted
+marks, uncertain action, keyboard/stale draft and a supplementary640px reflow.
+MANIFEST.json records SHA256 and sizes.09-UI-SOURCE-HASHES.json records source.
 
-Result: pending for all6. Do not activate provider collection or deploy to do
-these checks. Plan15 must present the finished concrete packet after14 passes.
+## Owner checks
+
+1. **Ticket/preview/receipt — pending.** Review stock-preview-review.html,
+   stock-reprice-review.html and stock-receipt-review.html. Check whole-share
+   quantity and shortcut drafts, bid/ask highlighting, explicit confirmation,
+   old/new price and cash delta, original receipt balances and dates, sensible
+   focus, and IEX/simulation/zero-added-fee/settlement disclosures. Closed draft
+   and committed-loss recovery screenshots show unavailable/result states;
+   the actual functional paths passed browser tests.
+
+2. **Combined portfolio — pending.** Review combined-portfolio-review.html and
+   incomplete-portfolio-review.html. Check one cash balance, Stock/Crypto labels,
+   alphabetic AAPL/BTC rows, direct quantity/cost/basis/value/return/allocation,
+   Cash/Stocks/Crypto bars, known subtotal/count and unavailable aggregate
+   returns/allocations. Closed/halted screenshots retain dated marks;
+   uncertain actions hide unsafe values.
+
+3. **Actual native200% zoom — pending.** Use your desktop browser's Zoom menu
+   to select200% on these HTML pages. Check readable text/table/cards, reachable
+   controls and no overlap or horizontal page overflow. The headless shortcut
+   did not apply native zoom; no automated native200% pass is claimed.
+
+Reply with approval or concrete issues for the ticket/receipt and portfolio,
+and the actual zoom result. No credentials, live-data activation, production
+login, publication or deployment is needed for this review.
+
+Result: pending. This packet does not constitute owner acceptance.

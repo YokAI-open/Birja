@@ -264,11 +264,15 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 09-14-PLAN.md — Close strict local financial, recovery and independent review gates
+- [x] 09-14-PLAN.md — Close strict local financial, recovery and independent review gates
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
 - [ ] 09-15-PLAN.md — Obtain owner acceptance of the new Phase9 interface
+
+All Plan14 local gates and distinct inline role reviews pass. Plan15 awaits
+actual ticket/receipt, combined-portfolio and native200%zoom owner checks using
+the checked offline review bundle; live/provider/publication deferrals remain.
 
 **Cross-cutting constraints:**
 
@@ -336,7 +340,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 13/15 | In Progress|  |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 14/15 | Awaiting owner UI acceptance |  |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
