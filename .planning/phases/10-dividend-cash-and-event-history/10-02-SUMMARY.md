@@ -210,3 +210,63 @@ All8owned source/test/bootstrap files and this summary exist; all five listed
 task commit hashes exist. Final183tests and scoped static checks actually pass.
 No task commit deletes tracked files. Only scoped files are committed; unrelated
 `.claude/`, canonical planning state and production remain untouched.
+
+## Independent Authority Review Corrections
+
+Independent review at576b667 found one blocker and one warning, reproduced
+against actual PostgreSQL. The phase correctly stopped before Plan04. The
+original review is retained in10-AUTHORITY-REVIEW.md; no clean re-review is
+claimed by this executor. The following corrections supersede the initial
+authority completeness claim until independent recheck accepts them.
+
+- **CR-01 / Rule1 — Current calendar economic meaning.** Valid same-generation
+  current calendar closure/coverage changes could contradict the stale derived
+  session and eligible entitlement before both SQL guards. Full row equality
+  between those guards did not reject a contradiction already present at entry.
+  The private authoritative guard now requires the actual ex-date inside current
+  admitted coverage and applies the matching exchange/date override: closed
+  dates and either opening or closing mismatch refuse. Both initial and final
+  post-constraint calls execute those same semantics; no cash/publication
+  survives refusal. A matching legitimate shortened session can still pay.
+  Tests explicitly call evaluate_admission and real build_sessions to establish
+  that the reviewed payloads are legitimate and to compare their economic
+  meaning. Current market opening/quotes/status are still not prerequisites.
+- **WR-01 / Rule2 — Exact returned tuple identity.** Identical prosrc with a
+  substituted TABLE output type/name/mode passed generic record-return checks.
+  Bootstrap now pins proallargtypes, proargmodes and proargnames for all four
+  functions, including each input name and every TABLE output column. These
+  checks precede ownership/grant changes. Actual drop/recreate of APPLY with
+  unchanged body and altered OUT type, name or mode is refused. Upcoming exact
+  recovery proof must carry these full identities too.
+
+Additional commits:
+
+1. RED `edc0af8`: tracked current-calendar and returned-declaration regressions.
+   Initial run6failed2.31s: closure/coverage and all three OUT substitutions
+   reached actual missing-refusal assertions. The first shortened override
+   fixture used a non-UTC serialized timestamp and failed admission setup; that
+   failure is not counted as behavioral RED evidence. It was corrected to a
+   legitimate UTC override before final verification. Additional valid cases
+   cover changed opening, same-opening changed close, and matching shortened
+   session success.
+2. GREEN `4de3977`: both authority fixes and updated exact private-helper body
+   hash. Final191affected tests passed24.25s,8existing pandas warnings; all49
+   authority tests are included. Scoped Ruff/format, configure syntax and diff
+   checks pass. No app module/dependency changed; prior Mypy82source pass applies.
+
+Evidence: `/tmp/birja-phase10-02-review-red.log`,
+`/tmp/birja-phase10-02-review-green.log` (7focused cases passed2.05s before the
+matching shortened positive was added), and final
+`/tmp/birja-phase10-02-review-affected.log`. Only the owned empty0014 disposable
+schema was refreshed through Alembic. No production/provider/retained-tool/
+publication action occurred. Root owns canonical state and independent recheck.
+
+Review correction work took approximately8minutes after the new assignment;
+the initial26minute plan evidence above remains historical rather than replaced.
+
+### Review Correction Self-Check: PASSED
+
+Both new commit IDs exist; the three corrected source/test/bootstrap files
+and this updated summary exist. Final191test evidence and exact body/tuple
+validation are actual runs; no tracked deletion was introduced. Independent
+review report and unrelated `.claude/` are preserved and not staged here.
