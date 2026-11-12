@@ -82,6 +82,11 @@ export const split = {
 const page = (items: unknown[] = [dividend]) => ({ items, next_cursor: null });
 afterEach(() => vi.unstubAllGlobals());
 
+it("refuses a response exceeding the requested page bound", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response(JSON.stringify(page([trade, dividend])))));
+  await expect(fetchEventHistory({ limit: 1 })).rejects.toThrow("Unexpected event history response");
+});
+
 it("accepts an exact tiny rate and bigint identity without financial coercion", () => {
   expect(isEventHistoryPage(page())).toBe(true);
 });
