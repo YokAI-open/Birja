@@ -34,6 +34,25 @@ async def test_scheduler_boundary_requires_narrow_authority(engine, migrated):
         ).scalar_one(), "Scheduler needs both narrow retained-row financial authorities"
 
 
+async def test_acl_bootstrap_accepts_exact_current_authority(engine,migrated):
+    import asyncio
+    import subprocess
+    from pathlib import Path
+
+    root=Path(__file__).resolve().parents[2]
+    script=(root/"deploy/db/bootstrap-roles.sql").read_text()
+    script=script.rsplit("COMMIT;",1)[0]+"SELECT 'dividend_bootstrap_ok';\nROLLBACK;\n"
+    result=await asyncio.to_thread(subprocess.run,[
+        "docker","compose","-f",str(root/"docker-compose.test.yml"),"exec","-T","postgres",
+        "psql","-U","birja_test","-d","birja_test","-XqAt","-v","ON_ERROR_STOP=1",
+        "-v","bootstrap=birja_test","-v","apply=true","-v","db_name=birja_test",
+        "-v","app_password=test-only-app","-v","scheduler_password=test-only-scheduler",
+        "-v","migrator_password=test-only-migrator"],input=script,text=True,
+        capture_output=True,timeout=30,check=False)
+    assert result.returncode==0,result.stderr
+    assert result.stdout.strip()=="dividend_bootstrap_ok"
+
+
 @pytest_asyncio.fixture
 async def authority_case(dividend_case, request):
     conn, ids = dividend_case
