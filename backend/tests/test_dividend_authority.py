@@ -719,3 +719,129 @@ async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority
                 async with conn.begin_nested():
                     await conn.execute(text(guard))
             await outer.rollback()
+
+
+@pytest.mark.parametrize("change", ["closed", "shortened", "coverage"])
+async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(authority_case, change):
+    from dataclasses import fields
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    from app.services.stock_admission import ProductAdmission, evaluate_admission
+    from app.services.stock_sessions import build_sessions
+
+    conn, ids = authority_case
+    row = dict(
+        (await conn.execute(text("SELECT * FROM stock_data_admissions WHERE product='calendar'")))
+        .mappings()
+        .one()
+    )
+    rv = (
+        await conn.execute(
+            text("SELECT normalized_terms FROM stock_action_revisions WHERE id=:revision_id"), ids
+        )
+    ).scalar_one()
+    cal = dict(row["calendar"])
+    ex_date = rv["ex_date"]
+    if change == "coverage":
+        now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+        cal["coverage_start"] = str(now.date())
+    else:
+        override = {
+            "exchange": "XNAS",
+            "date": ex_date,
+            "state": change,
+            "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
+        }
+        if change == "shortened":
+            day = datetime.fromisoformat(ex_date).date()
+            override.update(
+                opens_at=datetime.combine(
+                    day, time(9, 30), ZoneInfo("America/New_York")
+                ).isoformat(),
+                closes_at=datetime.combine(day, time(13), ZoneInfo("America/New_York")).isoformat(),
+            )
+        cal["overrides"] = [override]
+    row["calendar"] = cal
+    admission = ProductAdmission(**{f.name: row[f.name] for f in fields(ProductAdmission)})
+    now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+    assert evaluate_admission(admission, "calendar", "derived", now).allowed
+    sessions = build_sessions(now, admission)
+    expected = [s for s in sessions if s.exchange == "NASDAQ" and str(s.session_date) == ex_date]
+    if change == "coverage":
+        assert not expected
+    elif change == "closed":
+        assert len(expected) == 1 and expected[0].opens_at is None
+    else:
+        assert len(expected) == 1 and expected[0].opens_at is not None
+        cached = (await conn.execute(text("SELECT opens_at FROM stock_sessions"))).scalar_one()
+        assert expected[0].opens_at != cached
+    await conn.execute(
+        text(
+            "UPDATE stock_data_admissions SET calendar=CAST(:c AS jsonb) WHERE product='calendar'"
+        ),
+        {"c": json.dumps(cal)},
+    )
+    with pytest.raises(DBAPIError):
+        await apply(conn, ids)
+    assert (
+        await conn.execute(text("SELECT cash FROM accounts WHERE user_id=:user_id"), ids)
+    ).scalar_one() == Decimal(100)
+    assert (
+        await conn.execute(text("SELECT count(*) FROM stock_dividend_payments"))
+    ).scalar_one() == 0
+    assert (
+        await conn.execute(text("SELECT count(*) FROM stock_dividend_decisions"))
+    ).scalar_one() == 0
+
+
+@pytest.mark.parametrize("declaration", ["type", "name", "mode"])
+async def test_identity_preflight_refuses_altered_out_declaration(authority_case, declaration):
+    import asyncio
+    from pathlib import Path
+
+    conn, _ = authority_case
+    definition = migration().APPLY
+    if declaration == "type":
+        definition = definition.replace(
+            "RETURNS TABLE(payment_id bigint,", "RETURNS TABLE(payment_id text,"
+        )
+    elif declaration == "name":
+        definition = definition.replace(
+            "RETURNS TABLE(payment_id bigint,", "RETURNS TABLE(payment_reference bigint,"
+        )
+    else:
+        definition = definition.replace(
+            "p_event bigint,p_entitlement bigint,p_revision text,p_fingerprint text)",
+            "p_event bigint,p_entitlement bigint,p_revision text,p_fingerprint text,"
+            "OUT payment_id bigint,OUT decision_id bigint,OUT outcome text)",
+        )
+        definition = definition.replace(
+            "RETURNS TABLE(payment_id bigint,decision_id bigint,outcome text)",
+            "RETURNS SETOF record",
+        )
+    assert definition != migration().APPLY
+    await conn.execute(text("DROP FUNCTION public.apply_stock_dividend(bigint,bigint,text,text)"))
+    await conn.execute(text(definition))
+    await conn.execute(
+        text(
+            "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) OWNER TO birja_migrator"
+        )
+    )
+    await conn.execute(
+        text(
+            "REVOKE ALL ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) FROM PUBLIC"
+        )
+    )
+    await conn.execute(
+        text(
+            "GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) TO birja_scheduler"
+        )
+    )
+    source = await asyncio.to_thread(
+        lambda: (Path(__file__).resolve().parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
+    )
+    guard = source[source.index("DO $dividend_identity$") : source.index("\\if :apply")]
+    with pytest.raises(DBAPIError, match="authority mismatch"):
+        async with conn.begin_nested():
+            await conn.execute(text(guard))
