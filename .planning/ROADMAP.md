@@ -18,7 +18,7 @@ authorize a software release or deployment.
 
 - [ ] **Phase 7: Permitted Stock Discovery** — Browse twenty stocks with truthful IEX prices, freshness and regular-session availability while preserving existing accounts.
 - [x] **Phase 8: Corporate-Action-Safe Ownership** — Protect ownership with event monitoring, historical dividend eligibility, ordinary forward splits and visible uncertainty suspensions. (completed 2026-11-11)
-- [ ] **Phase 9: Whole-Share Trading and Combined Portfolio** — Trade stocks against shared cash with safe previews/retries and honest mixed-asset valuations.
+- [x] **Phase 9: Whole-Share Trading and Combined Portfolio** — Trade stocks against shared cash with safe previews/retries and honest mixed-asset valuations. (completed 2026-11-12)
 - [ ] **Phase 10: Dividend Cash and Event History** — Receive dividends and auditable corrections in shared cash and complete paginated History.
 - [ ] **Phase 11: Mixed-Asset Recovery and Acceptance** — Restore the complete ledger exactly and prove full user journeys under existing CI gates.
 
@@ -268,11 +268,12 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 09-15-PLAN.md — Obtain owner acceptance of the new Phase9 interface
+- [x] 09-15-PLAN.md — Obtain owner acceptance of the new Phase9 interface
 
-All Plan14 local gates and distinct inline role reviews pass. Plan15 awaits
-actual ticket/receipt, combined-portfolio and native200%zoom owner checks using
-the checked offline review bundle; live/provider/publication deferrals remain.
+All15plans are locally complete on2026-11-12: Plan14 gates and distinct inline
+role reviews pass, and Plan15 records actual ticket/receipt, combined-portfolio
+and native200%zoom owner acceptance. All nine assigned requirements pass locally.
+Live/provider/publication deferrals remain; production is unchanged.
 
 **Cross-cutting constraints:**
 
@@ -340,7 +341,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 14/15 | Awaiting owner UI acceptance |  |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 

@@ -33,10 +33,16 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - [x] Exact once-only forward splits, basis preservation and auditable uncertainty
   holds with safe UI (ACT-01–03) — locally verified in Phase8; live activation deferred
 
+- [x] Whole-share regular-session stock execution, eligible IEX ask/bid with zero
+  commission/added spread, exact previews/repricing and immutable retry receipts
+  — locally validated in Phase9; live activation deferred.
+- [x] Shared original USD cash, immediately reusable proceeds, cross-asset
+  concurrency safety and combined midpoint/dated/incomplete portfolio valuation
+  — locally validated in Phase9; dividend cash publication remains Phase10.
+
 ### Active
 
-- [ ] Trade 20 curated NYSE/Nasdaq stocks in whole-share quantities during regular market sessions.
-- [ ] Use the existing USD cash balance and combined portfolio/history for crypto and stocks.
+- [ ] Complete combined stock/crypto/dividend/correction event History (Phase10).
 - [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
 - [ ] Stock commission and added percentage spread are zero; simulate buys at IEX ask and sells at bid, disclosing omitted regulatory fees.
 - [ ] Credit verified cash dividends to shared USD and show separate Dividend history events, with revision, correction and duplicate-payment safeguards.
@@ -88,14 +94,18 @@ records as follow-up debt, without claiming fixes. See
 [retrospective](RETROSPECTIVE.md). Historical accepted logout/protection caveats
 remain recorded there. All v1 phase execution history is preserved in `milestones/v1.0-phases/`.
 
-Phase8 is locally complete:13plans/29tasks and five assigned requirements passed
-independent verification. The owner accepted the new UI and explicitly deferred
-live corporate-action activation; Phase7 live evidence also remains deferred.
-Structured event retention/rechecks, historical eligibility, exact forward splits,
-audited reconciliation and visible safety holds are implemented and tested.
-Phase9 discussion/planning is next; actual stock fills/combined valuation and
-Phase10 cash dividends/public event History remain future work. Production is
-unchanged; local completion does not authorize provider activation or rollout.
+Phases8 and9 are locally complete. Phase9 delivers whole-share IEX ask/bid
+simulated execution with zero stock fee, shared original USD cash, idempotent
+original receipts and truthful mixed crypto/stock valuations. All15plans/30tasks
+and nine assigned requirements pass local verification; owner accepted the ticket,
+receipt and combined portfolio and confirmed actual native200%browser zoom on
+2026-11-12. Full financial/browser/security/image/recovery/TLS/rollback proof is
+recorded in09-LOCAL-PROOF. Distinct inline late reviews do not claim agent independence.
+
+Phase7 live evidence and Phase8/live status/data activation remain deferred;
+rights/access/quotas/latency are not established by synthetic tests. Production
+remains v0.4.0/schema0008. Phase10 dividend cash and public event History and
+Phase11 final acceptance/rollout remain future work. Next: discuss Phase10.
 
 ## Current Milestone: v1.1 US Stock Trading
 
@@ -195,4 +205,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-11 after independent local Phase8 verification and owner disposition*
+*Last updated: 2026-11-12 after local Phase9 verification and owner UI/nativezoom acceptance*

@@ -19,21 +19,21 @@ Owner approved all 26 requirements and the exact boundaries below, including a s
 ### Market availability
 
 - [ ] **MKT-01**: User can execute stocks only during the applicable regular US session, with holidays, early closes and America/New_York daylight-saving changes applied server-side.
-- [ ] **MKT-02**: User sees a clear refusal for closed, halted, frozen or unknown/stale eligibility state; new fills recheck eligibility and quote age after blocking database waits, while crypto remains independently available.
+- [x] **MKT-02**: User sees a clear refusal for closed, halted, frozen or unknown/stale eligibility state; new fills recheck eligibility and quote age after blocking database waits, while crypto remains independently available.
 
 ### Stock trading and shared cash
 
-- [ ] **STKTR-01**: User can buy and sell positive whole-share quantities only; fractional-stock and dollar-input stock orders are rejected, while existing fractional and dollar-based crypto orders retain their behavior.
-- [ ] **STKTR-02**: User receives a simulated stock buy at an eligible IEX ask and sell at an eligible IEX bid, with zero commission and zero additional spread; omitted regulatory fees and simulated execution are disclosed.
-- [ ] **STKTR-03**: User sees an itemized server preview before confirmation and the actual persisted fill afterward; a relevant executable-price change returns a revised preview requiring renewed confirmation.
-- [ ] **STKTR-04**: User spends and receives the same existing virtual USD balance across stocks and crypto, without another starting grant; concurrent cross-asset orders cannot overspend cash or holdings.
-- [ ] **STKTR-05**: User can retry an uncertain stock order without duplicate execution; replay returns the stored original fill even after the market closes, and a changed payload conflicts.
-- [ ] **STKTR-06**: User can immediately reuse stock-sale proceeds for stocks or crypto, with the absence of real settlement restrictions disclosed.
+- [x] **STKTR-01**: User can buy and sell positive whole-share quantities only; fractional-stock and dollar-input stock orders are rejected, while existing fractional and dollar-based crypto orders retain their behavior.
+- [x] **STKTR-02**: User receives a simulated stock buy at an eligible IEX ask and sell at an eligible IEX bid, with zero commission and zero additional spread; omitted regulatory fees and simulated execution are disclosed.
+- [x] **STKTR-03**: User sees an itemized server preview before confirmation and the actual persisted fill afterward; a relevant executable-price change returns a revised preview requiring renewed confirmation.
+- [x] **STKTR-04**: User spends and receives the same existing virtual USD balance across stocks and crypto, without another starting grant; concurrent cross-asset orders cannot overspend cash or holdings.
+- [x] **STKTR-05**: User can retry an uncertain stock order without duplicate execution; replay returns the stored original fill even after the market closes, and a changed payload conflicts.
+- [x] **STKTR-06**: User can immediately reuse stock-sale proceeds for stocks or crypto, with the absence of real settlement restrictions disclosed.
 
 ### Combined portfolio and event history
 
-- [ ] **PORT-06**: User sees combined cash, crypto and stock holdings, allocation and portfolio return against the original stored starting cash; eligible stock valuation uses IEX bid/ask midpoint and dividend cash is counted once.
-- [ ] **PORT-07**: User can inspect dated stock marks while the market is closed; missing or corporate-action-uncertain valuations are explicitly unavailable and make aggregate totals incomplete rather than silently zero or fresh.
+- [x] **PORT-06**: User sees combined cash, crypto and stock holdings, allocation and portfolio return against the original stored starting cash; eligible stock valuation uses IEX bid/ask midpoint and dividend cash is counted once.
+- [x] **PORT-07**: User can inspect dated stock marks while the market is closed; missing or corporate-action-uncertain valuations are explicitly unavailable and make aggregate totals incomplete rather than silently zero or fresh.
 - [ ] **HIST-03**: User sees stock fills, Dividend credits, forward-split events and explicit corrections in a private, deterministic newest-first paginated History, with event-specific details and preserved existing crypto fills.
 
 ### Dividends
@@ -87,15 +87,15 @@ Every approved requirement has exactly one approved primary phase owner. The own
 | STOCK-03 | Phase 7 | Pending |
 | DATA-01 | Phase 7 | Pending |
 | MKT-01 | Phase 7 | Pending |
-| MKT-02 | Phase 9 | Pending |
-| STKTR-01 | Phase 9 | Pending |
-| STKTR-02 | Phase 9 | Pending |
-| STKTR-03 | Phase 9 | Pending |
-| STKTR-04 | Phase 9 | Pending |
-| STKTR-05 | Phase 9 | Pending |
-| STKTR-06 | Phase 9 | Pending |
-| PORT-06 | Phase 9 | Pending |
-| PORT-07 | Phase 9 | Pending |
+| MKT-02 | Phase 9 | Complete |
+| STKTR-01 | Phase 9 | Complete |
+| STKTR-02 | Phase 9 | Complete |
+| STKTR-03 | Phase 9 | Complete |
+| STKTR-04 | Phase 9 | Complete |
+| STKTR-05 | Phase 9 | Complete |
+| STKTR-06 | Phase 9 | Complete |
+| PORT-06 | Phase 9 | Complete |
+| PORT-07 | Phase 9 | Complete |
 | HIST-03 | Phase 10 | Pending |
 | DIV-01 | Phase 8 | Complete |
 | DIV-02 | Phase 8 | Complete |

@@ -2,34 +2,34 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Plan09-14 complete; awaiting Plan09-15 new UI acceptance and native200% check.
-last_updated: "2026-11-12T16:37:51.119Z"
-last_activity: 2026-11-12 -- Plan09-14 local verification complete; Plan09-15 owner checkpoint
+status: ready_to_plan
+stopped_at: Phase 9 complete (15/15) — ready to discuss Phase 10
+last_updated: 2026-11-12T18:17:55.896Z
+last_activity: 2026-11-12 -- Phase9 locally complete; owner UI and native200% accepted
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 42
-  completed_plans: 40
-  percent: 95
+  completed_plans: 41
+  percent: 98
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-11)
+See: .planning/PROJECT.md (updated 2026-11-12)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (Wave 13 owner checkpoint)
+**Current focus:** Phase 10 — dividend cash and event history
 
 ## Current Position
 
-Phase: 9
-Plan: 14/15 complete; 09-15 owner UI acceptance (Wave 13/13)
-Status: Awaiting actual owner verification
-Last activity: 2026-11-12 -- Plan09-14 local gates/reviews complete
-Progress: [██████████] 95% (40/42 tracked plans complete)
+Phase: 10
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-12
+Progress: [██████████] 98% (41/42 currently tracked plans complete; Phase10/11 unplanned)
 
 ## Completion and next action
 
@@ -40,11 +40,14 @@ nonrootnative5 all pass. Exact compatible recovery archive5eb886d1 passes all
 Distinct inline source/security/UI/goal reports close implementation blockers;
 independence is not claimed. See09-14-SUMMARY and09-LOCAL-PROOF.
 
-Next: actual09-15 ticket/receipt and portfolio acceptance plus native200%zoom.
-Checked offline bundle:/tmp/birja-phase09-ui-review.zip; extract/open index.html
-on the owner's computer.09-HUMAN-UAT describes the concrete checks. No owner
-acceptance is inferred; requirements and Nyquist flags remain pending. Preserve
-live/provider/publication deferrals; no Phase10 or deployment auto-advance.
+Phase9 now locally complete:15/15plans,30/30tasks,9/9assigned requirements,
+18/18verification truths. Owner explicitly approved ticket/receipt and combined
+portfolio, then confirmed native200%zoom readability/reachability/nooverlap or
+horizontal page scrolling. See09-HUMAN-UAT and09-15-SUMMARY; source hashes match.
+Nyquist/wave0 validation signed off. Next: $gsd-discuss-phase 10 for dividend cash
+and event History. Phase10 has not started; no automatic next-phase execution.
+Preserve live/provider/publication deferrals. The98% figure covers only currently
+planned work, not milestone completion; Phase10/11 still require plans.
 
 The older entries below preserve earlier execution history and intermediate
 next-action pointers; this paragraph and Session Continuity are current.
@@ -590,13 +593,12 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-14 complete; awaiting Plan09-15 new UI acceptance and native200% check.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-15-PLAN.md
-Phase9 plans01–14 are complete with actual source/test/summary commits. Do not
-restart completed work. All owned isolated test resources are cleaned; any new
-DB/ops gates must recreate only owned fixtures and run serially. Production and live Phase7/8 activation remain
-owner-deferred; no private provider/B2/timer/publication operation is authorized.
-Agents lacked filesystem/shell tools in this session; required roles are distinct
-inline passes with honest provenance. Whole requirements remain pending until
-end-to-end verification and actual new-UI owner acceptance. Next phase is not
-authorized by auto-advance.
+Stopped at: Phase9 locally complete (15/15); ready to discuss Phase10.
+Resume file: .planning/ROADMAP.md
+Phase9 source/tests/recovery/verification and actual owner acceptance are complete.
+No completed plan needs restarting. All owned test resources were cleaned in14.
+Production and live Phase7/8 activation remain owner-deferred; no private
+provider/B2/timer/publication operation is authorized. Required late roles ran
+as distinct inline passes, honestly not independent agent assurance. All nine
+assigned requirements are complete locally. Publication remains owner-deferred;
+no repeated push question or next-phase auto-advance.
