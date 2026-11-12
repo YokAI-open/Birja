@@ -28,6 +28,7 @@ from app.models.price import Coin, Price
 from app.models.trade import Holding, Trade
 from app.models.user import Account
 from app.services.prices import age_seconds, freshness
+from app.services.trade_idempotency import find_user_trade, require_same_order
 from app.services.trade_math import (
     InputKind,
     Plan,
@@ -140,19 +141,15 @@ def _require_fresh(symbol: str, as_of: datetime, now: datetime, settings: Settin
 
 
 async def _find_trade(db: AsyncSession, user_id: int, key: uuid.UUID) -> tuple[Trade, str] | None:
-    row = (
-        await db.execute(
-            select(Trade, Coin.symbol)
-            .join(Coin, Coin.id == Trade.coin_id)
-            .where(
-                Trade.user_id == user_id,
-                Trade.idempotency_key == key,
-                Coin.asset_class == "crypto",
-            )
-            .execution_options(populate_existing=True)
-        )
-    ).one_or_none()
-    return None if row is None else (row[0], row[1])
+    trade = await find_user_trade(db, user_id, key)
+    if trade is None:
+        return None
+    coin = (
+        await db.execute(select(Coin.symbol, Coin.asset_class).where(Coin.id == trade.coin_id))
+    ).one()
+    if coin.asset_class != "crypto":
+        require_same_order(trade, same_instrument=False, side="", kind="", value=_ZERO)
+    return trade, coin.symbol
 
 
 def _fill(trade: Trade, symbol: str) -> Fill:
@@ -180,17 +177,13 @@ def _fill(trade: Trade, symbol: str) -> Fill:
 
 def _replay(found: tuple[Trade, str], order: Order) -> tuple[Fill, bool]:
     trade, symbol = found
-    same = (
-        symbol == order.symbol.upper()
-        and trade.side == order.side
-        and trade.input_kind == order.kind
-        and trade.input_value == order.value
+    require_same_order(
+        trade,
+        same_instrument=symbol == order.symbol.upper(),
+        side=order.side,
+        kind=order.kind,
+        value=order.value,
     )
-    if not same:
-        raise TradeRefused(
-            "idempotency_conflict",
-            "This order key was already used for a different order. Start a new order.",
-        )
     return _fill(trade, symbol), False
 
 
