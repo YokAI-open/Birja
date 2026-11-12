@@ -7,7 +7,14 @@ import pytest
 
 from app.services.stock_status_rules import StatusBatch, StatusEvent, normalize_status_batch
 from app.services.stock_trading_rules import MAX_SAFE, status_current
+from tests.stock_trade_fixtures import ownership as _ownership
+from tests.stock_trade_fixtures import status_case as _status_case
+from tests.stock_trade_fixtures import stock_trade_case as _stock_trade_case
 from tests.test_stock_trading_rules import NOW
+
+status_case = _status_case
+stock_trade_case = _stock_trade_case
+ownership = _ownership
 
 
 def batch(**changes):
@@ -177,3 +184,201 @@ def test_generation_cannot_wrap_on_loss():
     old = replace(normalize(batch()), continuity_generation=MAX_SAFE)
     with pytest.raises(ValueError, match="generation"):
         normalize(batch(lost=True), {16: old})
+
+
+def persisted_batch(cid, now, **changes):
+    return replace(
+        batch(),
+        events=(
+            StatusEvent(
+                cid,
+                "synthetic-status-asset",
+                "normal",
+                now - timedelta(hours=1),
+                now.date(),
+                10,
+                "synthetic-status-baseline",
+            ),
+        ),
+        observed_at=now,
+        admission_generation=4,
+        **changes,
+    )
+
+
+async def test_real_status_persistence_and_restart_invalidation(status_case):
+    from app.services.stock_status import invalidate_status, load_status, persist_status_batch
+
+    factory, cid, now = status_case
+    before = await financial_snapshot(factory)
+    source = persisted_batch(cid, now)
+    async with factory.begin() as db:
+        saved = await persist_status_batch(db, source, coin_id=cid)
+    assert saved.state == "normal" and status_current(saved, now)
+    async with factory.begin() as db:
+        assert await load_status(db, cid) == saved
+        assert await persist_status_batch(db, source, coin_id=cid) == saved
+    async with factory.begin() as db:
+        assert await invalidate_status(db, cid)
+    async with factory.begin() as db:
+        lost = await load_status(db, cid)
+        assert lost.state == "unknown" and lost.valid_until is None
+        assert lost.continuity_generation == saved.continuity_generation + 1
+        assert not await invalidate_status(db, cid)
+    assert await financial_snapshot(factory) == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"state": "denied"},
+        {"retention_allowed": False},
+        {"scope": {}},
+        {"allowed_fields": []},
+        {"generation": 5},
+    ],
+)
+async def test_unadmitted_status_never_persists_normal(status_case, change):
+    from sqlalchemy import update
+
+    from app.models.stock import StockDataAdmission
+    from app.services.stock_status import StatusUnavailable, load_status, persist_status_batch
+
+    factory, cid, now = status_case
+    before = await financial_snapshot(factory)
+    async with factory.begin() as db:
+        await db.execute(
+            update(StockDataAdmission)
+            .where(StockDataAdmission.product == "status")
+            .values(**change)
+        )
+    with pytest.raises(StatusUnavailable):
+        async with factory.begin() as db:
+            await persist_status_batch(db, persisted_batch(cid, now), coin_id=cid)
+    async with factory() as db:
+        assert await load_status(db, cid) is None
+    assert await financial_snapshot(factory) == before
+
+
+async def financial_snapshot(factory):
+    from sqlalchemy import func, select
+
+    from app.models.corporate_action import StockOwnershipMovement
+    from app.models.trade import Holding, Trade
+    from app.models.user import Account
+
+    async with factory() as db:
+        return tuple(
+            (
+                await db.execute(
+                    select(
+                        select(func.count(Account.id)).scalar_subquery(),
+                        select(func.sum(Account.cash)).scalar_subquery(),
+                        select(func.count(Trade.id)).scalar_subquery(),
+                        select(func.sum(Holding.quantity)).scalar_subquery(),
+                        select(func.sum(Holding.cost_basis)).scalar_subquery(),
+                        select(func.count(StockOwnershipMovement.id)).scalar_subquery(),
+                    )
+                )
+            ).one()
+        )
+
+
+async def test_shared_stock_fixture_has_real_independent_authority(stock_trade_case):
+    from sqlalchemy import func, select
+
+    from app.models.corporate_action import StockActionState
+    from app.models.stock import StockDataAdmission, StockQuote, StockSession
+    from app.services.stock_status import load_status
+
+    factory, cid, uid, now = stock_trade_case
+    async with factory() as db:
+        assert (
+            await db.execute(select(func.count()).select_from(StockDataAdmission))
+        ).scalar_one() == 5
+        assert (await db.execute(select(StockQuote.coin_id))).scalar_one() == cid
+        assert (
+            await db.execute(select(StockSession.calendar_admission_generation))
+        ).scalar_one() == 4
+        state = (
+            await db.execute(select(StockActionState).where(StockActionState.coin_id == cid))
+        ).scalar_one()
+        assert state.complete_from is not None and state.journal_start_at is not None
+        status = await load_status(db, cid)
+        assert status_current(status, now)
+
+
+@pytest.mark.parametrize("case", ["same_generation_change", "expiry"])
+async def test_permission_change_or_expiry_during_real_write_wait_rolls_back(status_case, case):
+    import asyncio
+
+    from sqlalchemy import select, text, update
+
+    from app.models.stock import StockDataAdmission
+    from app.models.stock_execution import StockStatusEvidence
+    from app.services.stock_status import StatusUnavailable, load_status, persist_status_batch
+
+    factory, cid, now = status_case
+    before = await financial_snapshot(factory)
+    source = persisted_batch(cid, now)
+    async with factory.begin() as db:
+        saved = await persist_status_batch(db, source, coin_id=cid)
+    frame = replace(source.events[0], sequence=11, event_at=now - timedelta(minutes=30))
+    pending = replace(source, events=(frame,), baseline_verified=False)
+    if case == "expiry":
+        async with factory.begin() as db:
+            await db.execute(
+                text("""UPDATE stock_data_admissions
+                SET valid_until=clock_timestamp()+interval '3 seconds' WHERE product='status'""")
+            )
+
+    async def writer():
+        reason = (
+            "authority_changed" if case == "same_generation_change" else "admission_unavailable"
+        )
+        with pytest.raises(StatusUnavailable, match=reason):
+            async with factory.begin() as db:
+                await db.execute(text("SET LOCAL application_name='birja-status-wait-test'"))
+                await persist_status_batch(db, pending, coin_id=cid)
+
+    task = None
+    try:
+        async with factory.begin() as blocker:
+            await blocker.execute(
+                select(StockStatusEvidence.coin_id)
+                .where(StockStatusEvidence.coin_id == cid)
+                .with_for_update()
+            )
+            task = asyncio.create_task(writer())
+            async with asyncio.timeout(5):
+                while True:
+                    if task.done():
+                        await task
+                        raise AssertionError("Status writer did not reach the row wait")
+                    async with factory() as observer:
+                        waiting = (
+                            await observer.execute(
+                                text("""SELECT EXISTS(
+                            SELECT FROM pg_stat_activity
+                            WHERE application_name='birja-status-wait-test'
+                            AND wait_event_type='Lock')""")
+                            )
+                        ).scalar_one()
+                    if waiting:
+                        break
+                    await asyncio.sleep(0.01)
+            if case == "same_generation_change":
+                async with factory.begin() as editor:
+                    await editor.execute(
+                        update(StockDataAdmission)
+                        .where(StockDataAdmission.product == "status")
+                        .values(attribution="changed-synthetic-attribution")
+                    )
+            else:
+                await blocker.execute(text("SELECT pg_sleep(3.1)"))
+    finally:
+        if task is not None:
+            await asyncio.wait_for(task, 5)
+    async with factory() as db:
+        assert await load_status(db, cid) == saved
+    assert await financial_snapshot(factory) == before
