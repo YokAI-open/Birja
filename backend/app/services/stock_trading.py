@@ -8,7 +8,7 @@ business SQL statement; commit alone follows it.
 import json
 from dataclasses import asdict
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any, cast
 
 from sqlalchemy import bindparam, select, text
@@ -44,6 +44,7 @@ from app.services.stock_ownership import (
     append_stock_movement,
 )
 from app.services.stock_trade_math import StockTradePlan, buy_max_quantity, plan_stock_trade
+from app.services.stock_trading_rules import ValuationEvidence, evaluate_valuation
 from app.services.trade_idempotency import find_user_trade, require_same_order
 from app.services.trade_math import Q2, TradeRefused
 
@@ -53,7 +54,9 @@ ZERO = Decimal(0)
 class PriceChanged(TradeRefused):
     def __init__(self, quote: QuoteOut, previous: Decimal) -> None:
         super().__init__("price_changed", "The price moved. Review and confirm again.")
-        before = (previous * quote.quantity).quantize(Q2)
+        with localcontext() as ctx:
+            ctx.prec = 64
+            before = (previous * quote.quantity).quantize(Q2, rounding=ROUND_HALF_EVEN)
         if quote.side == "buy":
             before = -before
         self.detail = PriceChangedOut(
@@ -404,7 +407,15 @@ async def context(db: AsyncSession, *, user_id: int, symbol: str, settings: Sett
     if not loaded.symbol or loaded.decision.reason == "permission_unavailable":
         raise _refuse("permission_unavailable")
     e, d, q = loaded.evidence, loaded.decision, loaded.evidence.quote
-    safe_quote = d.allowed or d.reason in ("market_closed", "halted")
+    mark = evaluate_valuation(
+        ValuationEvidence(
+            e,
+            loaded.quote_retained_until,
+            next((a.valid_until for a in e.admissions if a.product == "quotes"), None),
+        ),
+        d.evaluated_at,
+    )
+    safe_quote = mark.mode != "unavailable"
     quote_facts = None
     if safe_quote and all(
         value is not None for value in (q.bid, q.ask, q.event_at, q.collected_at, q.session_date)
@@ -458,5 +469,5 @@ async def context(db: AsyncSession, *, user_id: int, symbol: str, settings: Sett
         authority=_authority(loaded),
         execution_enabled=d.allowed,
         execution_reason=d.reason,
-        valid_until=d.valid_until,
+        valid_until=mark.valid_until if quote_facts is not None else d.valid_until,
     )
