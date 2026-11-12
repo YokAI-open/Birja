@@ -226,3 +226,86 @@ async def stock_trade_case(status_case, ownership, monkeypatch, request):
         yield factory, cid, uid, now
     finally:
         stock_sessions._calendar_bounds.cache_clear()
+
+
+@pytest_asyncio.fixture
+async def stock_pair_case(stock_trade_case):
+    """Two explicitly verified instruments; cleanup owns only the second slot."""
+    from sqlalchemy import literal, text
+
+    from app.models.corporate_action import StockActionState, StockOwnershipMovement
+    from app.models.stock import StockQuote
+    from app.models.stock_execution import StockFillFacts
+    from app.models.trade import Holding, Trade
+
+    factory, first, uid, now = stock_trade_case
+    async with factory.begin() as db:
+        cid, old_asset, old_verified = (
+            await db.execute(
+                select(
+                    StockInstrument.coin_id,
+                    StockInstrument.provider_asset_id,
+                    StockInstrument.provider_verified_at,
+                )
+                .where(StockInstrument.coin_id != first)
+                .order_by(StockInstrument.coin_id)
+                .limit(1)
+            )
+        ).one()
+        await db.execute(
+            update(StockInstrument)
+            .where(StockInstrument.coin_id == cid)
+            .values(provider_asset_id="synthetic-second-asset", provider_verified_at=now)
+        )
+        for model in (StockQuote, StockActionState, StockStatusEvidence):
+            columns = list(model.__table__.columns)
+            expressions = [
+                literal(cid)
+                if c.name == "coin_id"
+                else literal("synthetic-second-asset")
+                if c.name == "provider_asset_id"
+                else c
+                for c in columns
+            ]
+            await db.execute(
+                insert(model).from_select(
+                    [c.name for c in columns], select(*expressions).where(model.coin_id == first)
+                )
+            )
+    try:
+        yield factory, (first, cid), uid, now
+    finally:
+        async with factory.begin() as db:
+            allowed = (
+                await db.execute(
+                    text(
+                        "SELECT current_database()='birja_test' AND current_user='birja_test' "
+                        "AND rolsuper FROM pg_roles WHERE rolname=current_user"
+                    )
+                )
+            ).scalar_one()
+            if not allowed:
+                raise RuntimeError("Explicit isolated fixture cleanup only")
+            for table in ("stock_fill_facts", "stock_ownership_movements", "trades"):
+                await db.execute(
+                    text(f"ALTER TABLE public.{table} DISABLE TRIGGER stock_record_immutable")
+                )
+            for model in (
+                StockFillFacts,
+                StockOwnershipMovement,
+                Holding,
+                Trade,
+                StockActionState,
+                StockQuote,
+                StockStatusEvidence,
+            ):
+                await db.execute(delete(model).where(model.coin_id == cid))
+            for table in ("stock_fill_facts", "stock_ownership_movements", "trades"):
+                await db.execute(
+                    text(f"ALTER TABLE public.{table} ENABLE TRIGGER stock_record_immutable")
+                )
+            await db.execute(
+                update(StockInstrument)
+                .where(StockInstrument.coin_id == cid)
+                .values(provider_asset_id=old_asset, provider_verified_at=old_verified)
+            )
