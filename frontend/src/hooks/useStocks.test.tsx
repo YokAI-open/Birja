@@ -1229,15 +1229,17 @@ it.each(["action epoch", "admission generation"])(
   },
 );
 
-it("removes cached execution authority at the independent status lease boundary",()=>{
-  const data=payload() as unknown as TimedStocks;
-  data.transport={started_at:0,received_at:0,round_trip_ms:0};
-  data.items.forEach(item=>{
-    item.status={state:"normal",observed_at:stamp(-1),valid_until:stamp(1)};
-    item.status_reason="normal";item.execution_enabled=true;item.execution_reason="available";
+it("removes cached execution authority at the independent status lease boundary", () => {
+  const data = payload() as unknown as TimedStocks;
+  data.transport = { started_at: 0, received_at: 0, round_trip_ms: 0 };
+  data.items.forEach((item) => {
+    item.status = { state: "normal", observed_at: stamp(-1), valid_until: stamp(1) };
+    item.status_reason = "normal";
+    item.execution_enabled = true;
+    item.execution_reason = "available";
   });
-  expect(projectStocks(data,999).items[0].execution_enabled).toBe(true);
-  const expired=projectStocks(data,1000).items[0];
+  expect(projectStocks(data, 999).items[0].execution_enabled).toBe(true);
+  const expired = projectStocks(data, 1000).items[0];
   expect(expired.execution_enabled).toBe(false);
   expect(expired.status.state).toBe("unknown");
   expect(expired.execution_reason).toBe("status_unavailable");

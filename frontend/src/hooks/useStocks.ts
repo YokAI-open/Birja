@@ -1,7 +1,13 @@
 import { useEffect, useReducer } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
-import { fetchStocks, stockInstant, type StocksResponse, type TimedStocks } from "@/api/stocks";
+import {
+  fetchStocks,
+  stockInstant,
+  type StocksResponse,
+  type TimedStocks,
+  type StockItem,
+} from "@/api/stocks";
 import { useMe } from "./useMe";
 
 // Date.parse truncates fractional milliseconds. Round authority time up and
@@ -54,6 +60,12 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
                 valid_until: null,
               }
             : item.action;
+      const status: StockItem["status"] =
+        item.status.valid_until !== null &&
+        item.status.observed_at !== null &&
+        upper < floorTime(item.status.valid_until)
+          ? item.status
+          : { state: "unknown", observed_at: null, valid_until: null };
       const age =
         item.quote === null
           ? 0
@@ -83,10 +95,44 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
                 ? "session_unavailable"
                 : "recent"
             : item.quote_reason;
+      const execution_enabled =
+        item.execution_enabled &&
+        allowed &&
+        reviewed &&
+        state === "open" &&
+        action.state === "current" &&
+        status.state === "normal" &&
+        quote !== null &&
+        reason === "recent";
+      const execution_reason: StockItem["execution_reason"] = execution_enabled
+        ? "available"
+        : !item.execution_enabled
+          ? item.execution_reason
+          : !allowed
+            ? "permission_unavailable"
+            : action.state !== "current"
+              ? "action_unavailable"
+              : status.state !== "normal"
+                ? status.state === "halted"
+                  ? "halted"
+                  : status.state === "frozen"
+                    ? "frozen"
+                    : "status_unavailable"
+                : state !== "open"
+                  ? state === "closed"
+                    ? "market_closed"
+                    : "session_unavailable"
+                  : age >= 120
+                    ? "quote_stale"
+                    : "quote_unavailable";
       return {
         ...item,
         quote,
         action,
+        status,
+        status_reason: status.state,
+        execution_enabled,
+        execution_reason,
         quote_reason: reason,
         valuation_reason:
           quote !== null
@@ -136,7 +182,10 @@ function safetyChanged(previous: TimedStocks, next: TimedStocks): boolean {
         item.action.epoch !== other.action.epoch ||
         item.action.reason !== other.action.reason ||
         item.session.state !== other.session.state ||
-        item.quote_reason !== other.quote_reason
+        item.quote_reason !== other.quote_reason ||
+        item.status.state !== other.status.state ||
+        item.execution_enabled !== other.execution_enabled ||
+        item.execution_reason !== other.execution_reason
       );
     })
   );
@@ -152,6 +201,7 @@ function nextDeadline(data: TimedStocks): number {
     add(item.session.valid_until);
     if (item.session.state === "open") add(item.session.closes_at);
     if (item.action.state === "current") add(item.action.valid_until);
+    if (item.status.state !== "unknown") add(item.status.valid_until);
     if (item.quote !== null)
       deadlines.push(
         Math.min(
@@ -267,7 +317,22 @@ function mergeReduction(previous: TimedStocks, response: TimedStocks): TimedStoc
     admission: response.admission.state === "unavailable" ? response.admission : previous.admission,
     items: previous.items.map((old) => {
       const next = incoming.get(old.id);
-      if (!next || next.action.state === "current") return old;
+      if (!next) return old;
+      if (next.action.state === "current") {
+        if (next.status.state === "normal") return old;
+        return {
+          ...old,
+          status: next.status,
+          status_reason: next.status.state,
+          execution_enabled: false,
+          execution_reason:
+            next.status.state === "halted"
+              ? ("halted" as const)
+              : next.status.state === "frozen"
+                ? ("frozen" as const)
+                : ("status_unavailable" as const),
+        };
+      }
       const action =
         next.action.epoch === 0
           ? next.action
@@ -316,7 +381,8 @@ export function useStocks() {
               current.items.some(
                 (item, i) =>
                   item.action.state !== "current" ||
-                  item.action.epoch > (initial?.items[i].action.epoch ?? 0),
+                  item.action.epoch > (initial?.items[i].action.epoch ?? 0) ||
+                  (initial?.items[i].execution_enabled === true && !item.execution_enabled),
               )))
         )
           superseded.abort();
@@ -335,7 +401,12 @@ export function useStocks() {
         const previous = guard.latest;
         const reducing =
           response.admission.state === "unavailable" ||
-          response.items.some((item) => item.action.state !== "current");
+          response.items.some(
+            (item) =>
+              item.action.state !== "current" ||
+              item.status.state === "halted" ||
+              item.status.state === "frozen",
+          );
         if (
           reducing &&
           previous &&
