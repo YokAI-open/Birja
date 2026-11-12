@@ -128,3 +128,23 @@ it("GETs through shared client with cancellation/no-store and rejects malformed 
   expect(fetch.mock.calls[0][1]).toMatchObject({ signal, cache: "no-store" });
   await expect(fetchPortfolio()).rejects.toThrow("Unexpected portfolio response");
 });
+it("rejects a source timestamp after valuation and prices attached to unavailable authority", () => {
+  const future = mixedPortfolio();
+  future.valued_at = "2026-11-10T14:59:59Z";
+  expect(isPortfolio(future)).toBe(false);
+  const p = mixedPortfolio();
+  p.holdings[0].stock_mark = {
+    mark_mode: "unavailable",
+    valuation_reason: "action_unavailable",
+    source: null,
+    feed: null,
+    event_at: null,
+    collected_at: null,
+    historical_admission_until: null,
+    retained_until: null,
+    valid_until: null,
+    authority: null,
+    units_safe: false,
+  };
+  expect(isPortfolio(p)).toBe(false);
+});

@@ -339,3 +339,117 @@ it("does not accept a server max above cash or remaining whole-share room", () =
   c.held_quantity = "999999999999";
   expect(isStockContext(c)).toBe(false);
 });
+it("accepts exact half-even odd-cent ties without binary arithmetic", () => {
+  const q = quoteFixture();
+  Object.assign(q, {
+    bid: "0.014",
+    ask: "0.015",
+    exact_mid: "0.0145",
+    exec_price: "0.015",
+    quantity: "1",
+    notional: "0.02",
+    cash_delta: "-0.02",
+    cash_after: "9999.98",
+    held_after: "1",
+  });
+  expect(isStockTradeQuote(q)).toBe(true);
+});
+it("rejects malformed independent quote, status, action and reversed session evidence", () => {
+  for (const change of [
+    { quote: {} },
+    { quote: [] },
+    { session: { ...contextFixture().session, opens_at: contextFixture().session.closes_at } },
+    { status: {} },
+    { status: { ...contextFixture().status, state: "active" } },
+    { action: {} },
+    { action: { ...contextFixture().action, reason: "ignore-risk" } },
+    { session: { ...contextFixture().session, session_date: "2026-11-11" } },
+  ])
+    expect(isStockContext({ ...contextFixture(), ...change })).toBe(false);
+});
+it("disabled drafts may disclose an independently bounded quote but cannot attach a deadline to no quote", () => {
+  const c = contextFixture();
+  Object.assign(c, {
+    execution_enabled: false,
+    execution_reason: "market_closed",
+    buy_max_quantity: "0",
+  });
+  expect(isStockContext(c)).toBe(true);
+  expect(isStockContext({ ...c, quote: null })).toBe(false);
+  expect(isStockContext({ ...c, valid_until: c.observed_at })).toBe(false);
+});
+it("rejects malformed repricing numbers and accepts a signed sell replacement", () => {
+  for (const field of [
+    "previous_exec_price",
+    "previous_cash_delta",
+    "exec_price_change",
+    "cash_delta_change",
+  ])
+    expect(isStockPriceChanged({ ...changed(), [field]: "invalid" })).toBe(false);
+  expect(isStockPriceChanged({ ...changed(), previous_cash_delta: "-1000000000000.00" })).toBe(
+    false,
+  );
+  const q = quoteFixture();
+  Object.assign(q, {
+    side: "sell",
+    exec_price: "100",
+    notional: "200",
+    cash_delta: "200",
+    cash_after: "10200",
+    held_before: "2",
+    held_after: "0",
+  });
+  expect(
+    isStockPriceChanged({
+      code: "price_changed",
+      previous_exec_price: "101",
+      previous_cash_delta: "202",
+      exec_price_change: "-1",
+      cash_delta_change: "-2",
+      quote: q,
+    }),
+  ).toBe(true);
+});
+it("malformed or mismatched preview success is refused without returning unverified figures", async () => {
+  document.cookie = "bj_csrf=test; path=/";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}")),
+  );
+  await expect(fetchStockQuote(order)).rejects.toMatchObject({ kind: "unknown" });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(quoteFixture()))),
+  );
+  await expect(fetchStockQuote({ ...order, quantity: "3" })).rejects.toMatchObject({
+    kind: "unknown",
+  });
+});
+it.each([
+  [409, "insufficient_cash"],
+  [422, "idempotency_conflict"],
+  [409, "receipt_unavailable"],
+])(
+  "ambiguous status/code combination %s/%s cannot abandon a possible fill",
+  async (status, code) => {
+    document.cookie = "bj_csrf=test; path=/";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: { code } }), { status: status as number }),
+      ),
+    );
+    await expect(executeStockTrade(attempt)).rejects.toMatchObject({ kind: "unknown" });
+  },
+);
+it("a current action must carry its affirmative independent reason", () => {
+  const c = contextFixture();
+  c.action.reason = "monitor_unavailable";
+  expect(isStockContext(c)).toBe(false);
+});
+it("a preview deadline cannot cross an upcoming corporate-action cutoff", () => {
+  const c = contextFixture();
+  c.action.next_blocking_at = "2026-11-10T15:00:59Z";
+  expect(isStockContext(c)).toBe(false);
+});

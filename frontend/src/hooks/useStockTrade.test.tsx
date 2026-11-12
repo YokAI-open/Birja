@@ -650,3 +650,269 @@ it("observing a different provider identity removes the previous executable prev
     client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
   ).toBeNull();
 });
+it.each([
+  [
+    "permission_unavailable",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.authority!.admissions[0].valid_until = c.observed_at;
+    },
+  ],
+  [
+    "action_unavailable",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.action.next_blocking_at = c.observed_at;
+    },
+  ],
+  [
+    "halted",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.status.state = "halted";
+    },
+  ],
+  [
+    "frozen",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.status.state = "frozen";
+    },
+  ],
+  [
+    "status_unavailable",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.status.continuity_current = false;
+    },
+  ],
+  [
+    "session_unavailable",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.session.valid_until = null;
+    },
+  ],
+  [
+    "market_closed",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.session.state = "closed";
+    },
+  ],
+  [
+    "quote_unavailable",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.quote = null;
+    },
+  ],
+  [
+    "quote_stale",
+    (c: ReturnType<typeof contextFixture>) => {
+      c.quote!.event_at = "2026-11-10T14:58:10Z";
+    },
+  ],
+] as const)("local context projection can only reduce %s authority", (reason, mutate) => {
+  const c = contextFixture();
+  mutate(c);
+  const safe = projectStockContext(timed(c));
+  expect(safe.execution_enabled).toBe(false);
+  expect(safe.execution_reason).toBe(reason);
+  expect(safe.quote).toBeNull();
+  expect(safe.buy_max_quantity).toBe("0");
+});
+it("a disabled context with a contradictory available reason stays disabled", () => {
+  const c = contextFixture();
+  c.execution_enabled = false;
+  expect(projectStockContext(timed(c)).execution_reason).toBe("quote_unavailable");
+});
+it("failed read-only context refresh retains no authority after a known restriction", async () => {
+  let fail = false;
+  mockStockHttp({
+    context: () =>
+      fail
+        ? new Response(JSON.stringify({ detail: { code: "permission_unavailable" } }), {
+            status: 409,
+          })
+        : new Response(JSON.stringify(contextFixture())),
+  });
+  const { result, client } = setup();
+  await readyPreview(result);
+  fail = true;
+  await act(async () => {
+    await result.current.refreshContext();
+  });
+  expect(result.current.canConfirm).toBe(false);
+  expect(result.current.quote).toBeNull();
+  expect(
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+  ).toBeNull();
+});
+it("refused preview is recoverable without submitting an order", async () => {
+  const calls = mockStockHttp({
+    quote: () =>
+      new Response(JSON.stringify({ detail: { code: "insufficient_cash" } }), { status: 422 }),
+  });
+  const { result } = setup();
+  await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
+  act(() => result.current.setQuantity("2"));
+  await act(async () => {
+    await result.current.preview();
+  });
+  expect(result.current.phase).toBe("draft");
+  expect(result.current.error).toBe("insufficient_cash");
+  expect(calls.some((c) => c.path === "/api/v1/stock-trades")).toBe(false);
+});
+it("authentication failure during preview clears private context and draft", async () => {
+  mockStockHttp({ quote: () => new Response("{}", { status: 401 }) });
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
+  act(() => result.current.setQuantity("2"));
+  await act(async () => {
+    await result.current.preview();
+  });
+  expect(result.current.quote).toBeNull();
+  expect(result.current.quantity).toBe("");
+  expect(client.getQueryData(["stockTradeState", "first@example.test"])).toBeUndefined();
+});
+it("confirmed order authentication failure clears the owner attempt and never installs a receipt", async () => {
+  mockStockHttp({ trade: () => new Response("{}", { status: 401 }) });
+  const { result, client } = setup();
+  await readyPreview(result);
+  await act(async () => {
+    await result.current.confirm();
+  });
+  expect(result.current.fill).toBeNull();
+  expect(client.getQueryData(["stockTradeState", "first@example.test"])).toBeUndefined();
+});
+it("Sell all only drafts the server whole holding and requires a preview", async () => {
+  const c = contextFixture();
+  c.held_quantity = "8.00000000";
+  const calls = mockStockHttp({ context: () => new Response(JSON.stringify(c)) });
+  const { result } = setup();
+  await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
+  act(() => {
+    result.current.setSide("sell");
+    result.current.sellAll();
+  });
+  expect(result.current.quantity).toBe("8");
+  expect(result.current.canConfirm).toBe(false);
+  expect(calls.some((c) => c.path.endsWith("/quote"))).toBe(false);
+});
+it("an expired quote is refused at confirm even before the display timer fires", async () => {
+  let clock = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => clock);
+  const calls = mockStockHttp();
+  const { result } = setup();
+  await readyPreview(result);
+  clock = 50_000;
+  await act(async () => {
+    await result.current.confirm();
+  });
+  expect(result.current.phase).toBe("draft");
+  expect(result.current.interrupted).toBe(true);
+  expect(calls.some((c) => c.path === "/api/v1/stock-trades")).toBe(false);
+});
+it("a different immutable fill identity remains unknown instead of publishing a foreign receipt", async () => {
+  const f = fillFixture();
+  f.provider_asset_id = "foreign-id";
+  mockStockHttp({ trade: () => new Response(JSON.stringify(f)) });
+  const { result } = setup();
+  await readyPreview(result);
+  await act(async () => {
+    await result.current.confirm();
+  });
+  expect(result.current.phase).toBe("unknown");
+  expect(result.current.fill).toBeNull();
+  expect(result.current.attempt).not.toBeNull();
+});
+it("route changes reset a resolved draft while an unknown order remains protected separately", async () => {
+  mockStockHttp();
+  const { result, rerender } = setup();
+  await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
+  act(() => result.current.setQuantity("2"));
+  rerender({ symbol: "MSFT" });
+  await waitFor(() => expect(result.current.symbol).toBe("MSFT"));
+  expect(result.current.quantity).toBe("");
+});
+it("an obsolete preview cannot publish even when cancellation is ineffective", async () => {
+  vi.spyOn(AbortSignal.prototype, "throwIfAborted").mockImplementation(() => {});
+  let finish!: (r: Response) => void;
+  mockStockHttp({
+    quote: () =>
+      new Promise<Response>((r) => {
+        finish = r;
+      }),
+  });
+  const { result } = setup();
+  await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
+  act(() => result.current.setQuantity("2"));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = result.current.preview();
+  });
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  act(() => result.current.setQuantity("3"));
+  await act(async () => {
+    finish(new Response(JSON.stringify(quoteFixture())));
+    await pending;
+  });
+  expect(result.current.quote).toBeNull();
+  expect(result.current.quantity).toBe("3");
+});
+it("late failed execution cannot write into a replacement account", async () => {
+  let fail!: (e: Error) => void;
+  mockStockHttp({
+    trade: () =>
+      new Promise<Response>((_, reject) => {
+        fail = reject;
+      }),
+  });
+  const { result, client } = setup();
+  await readyPreview(result);
+  let pending!: Promise<void>;
+  act(() => {
+    pending = result.current.confirm();
+  });
+  await waitFor(() => expect(fail).toBeTypeOf("function"));
+  act(() => client.setQueryData(["me"], { email: "second@example.test", cash_usd: "10000" }));
+  await act(async () => {
+    fail(new Error("lost"));
+    await pending;
+  });
+  expect(result.current.phase).toBe("draft");
+  expect(result.current.error).toBeNull();
+  expect(result.current.attempt).toBeNull();
+});
+it("context authentication refusal clears the private owner before further previewing", async () => {
+  mockStockHttp({ context: () => new Response("{}", { status: 401 }) });
+  const { result, client } = setup();
+  await waitFor(() => expect(client.getQueryData(["me"])).toBeNull());
+  expect(result.current.context).toBeUndefined();
+  expect(result.current.canPreview).toBe(false);
+});
+it("superseded context cannot publish even when cancellation is ineffective", async () => {
+  vi.spyOn(AbortSignal.prototype, "throwIfAborted").mockImplementation(() => {});
+  let finish!: (r: Response) => void;
+  mockStockHttp({
+    context: () =>
+      new Promise<Response>((r) => {
+        finish = r;
+      }),
+  });
+  const { result, client } = setup();
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  const key = ["stockContext", "first@example.test", "AAPL"];
+  act(() => {
+    client.removeQueries({ queryKey: key, exact: true });
+    client.setQueryData(
+      key,
+      timed({
+        ...contextFixture(),
+        execution_enabled: false,
+        execution_reason: "market_closed",
+        quote: null,
+        valid_until: null,
+        buy_max_quantity: "0",
+      }),
+    );
+  });
+  await act(async () => {
+    finish(new Response(JSON.stringify(contextFixture())));
+  });
+  expect(result.current.context?.execution_enabled).toBe(false);
+  expect(result.current.context?.quote).toBeNull();
+});
