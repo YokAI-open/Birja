@@ -44,6 +44,20 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_dividend_clone_authority_authenticated_before_any_grants(self):
+        restore = load('verify-restore')
+        self.assertTrue(callable(getattr(restore,'restore_dividend_authority',None)),
+            'Clone must authenticate exact0014 authority before granting access')
+        calls=[]
+        def query(dc, sql, db=None):
+            calls.append(sql)
+            return b'{"functions":[]}'
+        with mock.patch.object(restore,'sql',side_effect=query), mock.patch.object(restore,'recovery_contract',return_value=load('backup-snapshot')):
+            with self.assertRaises(ValueError):
+                restore.restore_dividend_authority([])
+        self.assertEqual(len(calls),1)
+        self.assertNotIn('GRANT', calls[0])
+
     def test_all_predecessor_queries_remain_byte_exact(self):
         producer=load('backup-snapshot')
         hashes={'0011':'a4917389531c8ded7ba4e080a529490661ffdee1d3058d44efd428aa2004c72d',
