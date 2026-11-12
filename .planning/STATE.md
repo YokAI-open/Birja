@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan09-12 complete; continue09-11 stock ticket.
+stopped_at: Plan09-11 complete; continue09-13 browser proof.
 last_updated: "2026-11-12T12:46:04.552Z"
 last_activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 37
-  percent: 88
+  completed_plans: 38
+  percent: 90
 ---
 
 # Project State
@@ -21,17 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 10)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 11)
 
 ## Current Position
 
 Phase: 9
-Plan: 11/15 complete; 09-11 stock ticket (Wave 10/13)
+Plan: 12/15 complete; 09-13 real browser proof (Wave 11/13)
 Status: In progress
 Last activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
-Progress: [███████░░░] 88% (37/42 tracked plans complete)
+Progress: [███████░░░] 90% (38/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-11 reachable stock ticket/receipt complete. Focused152tests6.48s, full
+frontend556tests/96.42%statement/92.40%branch coverage and lint/types pass.
+Resolved saved-receipt ambiguity preserves UNKNOWN and frozen key. Continue
+09-13 real API-backed browser then14full gates and15owner new-UI acceptance.
 
 Plan09-12 protected mixed portfolio and UI complete. Focused59tests and scoped
 static gates pass; inline review resolves late restrictive response restoration
@@ -561,8 +566,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-12 complete; continue09-11 stock ticket.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-11-PLAN.md
+Stopped at: Plan09-11 complete; continue09-13 browser proof.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-13-PLAN.md
 Phase9 plans01–09 are complete with actual source/test/summary commits. Do not
 restart completed work. Existing isolated birja-test stack is available; all DB
 and ops gates must run serially. Production and live Phase7/8 activation remain
