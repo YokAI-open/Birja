@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from tests.test_migrations import _versions
+from tests.test_migrations import EXPECTED_HEAD, _versions
 from tests.test_stock_migrations import _financial_snapshot, migrate
 
 ACTION_TABLES = {
@@ -304,7 +304,7 @@ async def test_populated_0010_upgrade_preserves_legacy(engine: AsyncEngine, migr
     try:
         before = await _financial_snapshot(engine)
         await migrate("head")
-        assert await _versions(engine) == ["0013"]
+        assert await _versions(engine) == [EXPECTED_HEAD]
         assert await _financial_snapshot(engine) == before
         await migrate("0010", down=True)
         assert await _financial_snapshot(engine) == before
@@ -366,7 +366,9 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
             await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
             await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))  # noqa: S608
     try:
-        await migrate("head")
+        # This fixture proves the retained00011–0013 runtime/bootstrap policy;
+        # successor dividend authority has its own fresh/upgraded role proof.
+        await migrate("0013")
         yield
     finally:
         async with engine.begin() as conn:
@@ -379,6 +381,7 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
                 if exists:
                     await conn.execute(text(f"DROP OWNED BY {role}"))  # noqa: S608 - fixed isolated roles
                     await conn.execute(text(f"DROP ROLE {role}"))  # noqa: S608
+        await migrate("head")
 
 
 async def test_upgrade_grants_support_quantity_but_deny_cash_and_authority(
@@ -874,7 +877,7 @@ async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
             await conn.execute(text("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT"))
         code, output = await restricted_upgrade()
         assert code == 0, output
-        assert await _versions(engine) == ["0013"]
+        assert await _versions(engine) == [EXPECTED_HEAD]
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("REASSIGN OWNED BY birja_action_retry_migrator TO birja_test"))
@@ -980,7 +983,7 @@ async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
                 )
             ).scalar_one()
         await migrate("head")
-        assert await _versions(engine) == ["0013"]
+        assert await _versions(engine) == [EXPECTED_HEAD]
         async with engine.connect() as conn:
             assert (
                 await conn.execute(

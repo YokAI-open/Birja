@@ -17,7 +17,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0013"
+EXPECTED_HEAD = "0014"
 
 
 def _config() -> Config:

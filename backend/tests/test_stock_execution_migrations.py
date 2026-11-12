@@ -163,7 +163,7 @@ async def test_crypto_cannot_receive_stock_facts(receipt):
 
 
 async def test_empty_downgrade_and_populated_upgrade_preserve_financial_rows(engine, migrated):
-    from tests.test_migrations import _versions
+    from tests.test_migrations import EXPECTED_HEAD, _versions
     from tests.test_stock_migrations import _financial_snapshot, migrate
 
     before = await _financial_snapshot(engine)
@@ -171,7 +171,7 @@ async def test_empty_downgrade_and_populated_upgrade_preserve_financial_rows(eng
     assert await _versions(engine) == ["0012"]
     assert await _financial_snapshot(engine) == before
     await migrate("head")
-    assert await _versions(engine) == ["0013"]
+    assert await _versions(engine) == [EXPECTED_HEAD]
     assert await _financial_snapshot(engine) == before
 
 
