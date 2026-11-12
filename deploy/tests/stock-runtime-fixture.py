@@ -170,12 +170,15 @@ async def main():
     assert result.cash==9796 and not result.valuation_complete and result.unvalued_holding_count==1
     await stock_trading.context(db,user_id=uid,symbol='MCD',settings=settings)
     await db.rollback()
-   # Actual scheduler service with permitted write, rolled back: exact restore unchanged.
+   # Actual scheduler service must also respect the clone's stock quarantine.
    async with sessions['scheduler']() as db:
     old=await db.get(StockStatusEvidence,cid);now=(await db.execute(select(func.clock_timestamp()))).scalar_one()
     status=StatusBatch((StatusEvent(cid,'synthetic-actual-MCD','normal',now,now.date(),old.sequence+1,'synthetic-restored-status'),),now,2000,old.continuity_generation+1,baseline_verified=True,contiguous=True,complete=True,end_marker=True)
-    assert (await persist_status_batch(db,status,coin_id=cid)).continuity_current
-    await db.rollback()
+    try:await persist_status_batch(db,status,coin_id=cid)
+    except Exception as exc:
+     assert getattr(getattr(exc,'orig',None),'sqlstate',None)=='42501'
+     await db.rollback()
+    else:raise AssertionError('quarantined stock ACL was broadened')
   print('runtime_original_receipt_sha256='+digest,flush=True)
   print('runtime_stock_quote_execute_replay_context_portfolio=true actual_split_cutoff=true crypto_shared_cash=true restored_owner_reads_only='+str(bool(RUNTIME_DATABASE)).lower()+' verified_tls='+str(bool(args.get('ssl'))).lower(),flush=True)
  finally:

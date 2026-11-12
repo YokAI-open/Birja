@@ -647,7 +647,10 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation-1 WHERE product='calendar'")
                 r.verify(dc, manifest)
                 for table, query in (
-                    ('stock_sessions', "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-12-01','2026-11-01','2026-12-01',3) RETURNING id"),
+                    # The actual runtime consumer now builds the complete
+                    # calendar. Choose a genuinely unused day without changing
+                    # sequence state or weakening the unique/check constraints.
+                    ('stock_sessions', "WITH target AS (SELECT COALESCE(MAX(session_date)+1,DATE '2026-12-01') AS day FROM stock_sessions) INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) SELECT 'NYSE',day,day,day,3 FROM target RETURNING id"),
                     # Isolated clone only, after exact verification.0013 has
                     # all five admission products, so free the unique slot
                     # without changing the identity counter being probed.
