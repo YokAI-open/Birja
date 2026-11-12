@@ -44,6 +44,14 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_all_predecessor_queries_remain_byte_exact(self):
+        producer=load('backup-snapshot')
+        hashes={'0011':'a4917389531c8ded7ba4e080a529490661ffdee1d3058d44efd428aa2004c72d',
+            '0012':'d8ae9ab6d6d307c4b6a37b9871aa0462c6cf593a485d184f6d505ec1f93eba46',
+            '0013':'2306b52d3f9f5a6bfafa60b2d475390e4ce4d7d03d2bf162e44ce338d9d72734'}
+        for revision,digest in hashes.items():
+            self.assertEqual(hashlib.sha256(producer.manifest_sql(revision).encode()).hexdigest(),digest)
+
     def test_dividend_dispatch_preserves_every_original_and_nullable_decision(self):
         producer = load('backup-snapshot')
         self.assertIn('0014', producer.SUPPORTED_REVISIONS)
@@ -88,7 +96,7 @@ class RevisionContracts(unittest.TestCase):
                 for column in columns.split():
                     self.assertIn(column, query)
         with self.assertRaises(ValueError):
-            producer.manifest_sql("0014")
+            producer.manifest_sql("0015")
 
     def test_execution_revision_is_explicit_and_preserves_predecessors(self):
         producer = load("backup-snapshot")

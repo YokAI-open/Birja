@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014")
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -119,6 +119,93 @@ EXECUTION_FUNCTIONS = {
     "assert_stock_execution_current": "b3fed4dfaec09d8f6174a471796795ea5a1d324037d8412efb5954f2567f5a24",
     "check_stock_fill_integrity": "dbfbbcc20567be709b34a88f1b900ac0151c27c175444914d80344c8b1322647",
 }
+
+DIVIDEND_COLUMNS = {
+    'stock_dividend_payments': 'id event_id coin_id user_id revision_id revision_fingerprint entitlement_id entitlement_fingerprint symbol company_name cutoff cutoff_rule units_basis unit_epoch eligible_quantity rate ex_date record_date payable_date original_amount recorded_at cash_after',
+    'stock_dividend_decisions': 'id payment_id user_id event_id coin_id revision_id revision_fingerprint entitlement_id entitlement_fingerprint previous_decision_id previous_application_id desired_total cumulative_applied_before proposed_delta applied_delta outcome reason status_identity recorded_at cash_after symbol company_name cutoff cutoff_rule units_basis unit_epoch eligible_quantity rate ex_date record_date payable_date',
+}
+# Independently reviewed0014 prosrc and complete declaration identities. These
+# are trusted producer constants, never hashes supplied by a retained manifest.
+DIVIDEND_FUNCTIONS = {
+    'apply_stock_dividend': ('public.apply_stock_dividend(bigint,bigint,text,text)', '4fa0589f573067ee7a870addce0e303a79152ee47cb7c857632104c9d5bd0507', True,
+        ['bigint','bigint','text','text'], ['bigint','bigint','text','text','bigint','bigint','text'], ['i','i','i','i','t','t','t'], ['p_event','p_entitlement','p_revision','p_fingerprint','payment_id','decision_id','outcome'], 'record'),
+    'record_stock_dividend_hold': ('public.record_stock_dividend_hold(bigint,text)', '68b31d48ee5036cd962770b6a0be7d29a50a3d9e8a7f709faf728344d6c6072b', True,
+        ['bigint','text'], ['bigint','text','bigint','bigint','text'], ['i','i','t','t','t'], ['p_payment','p_revision','payment_id','decision_id','outcome'], 'record'),
+    'reject_stock_dividend_mutation': ('public.reject_stock_dividend_mutation()', '1ed29a1005ee6925f954852f4aec69abf2f4865a3a6a0b7cab53391c4cc5c2fa', False,
+        [], None, None, None, 'trigger'),
+    'stock_dividend_authority': ('public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)', '7861fec1e2552603ad9d5b8c9d314572dee859fa0f6d2e2247812e793e121d23', False,
+        ['bigint','bigint','text','text','boolean','jsonb'], None, None, ['p_event','p_entitlement','p_revision','p_fingerprint','p_verified','p_expected'], 'jsonb'),
+}
+DIVIDEND_SCHEMA_SHA256 = '691aaca6ec9c3e386910b55849091cdaa989345bb16f177f92dc478ccee2e247'
+DIVIDEND_TRIGGERS_SHA256 = '94a79eff11bd9d0db43a2d2ad38c69cda7a6a012e42f1f8a6e9291dca72c2aef'
+
+
+def dividend_authority_sql():
+    names = ','.join("'" + name + "'" for name in sorted(DIVIDEND_FUNCTIONS))
+    # Complete declaration identity includes OUT names/modes/types; regprocedure
+    # alone authenticates only input types and cannot establish a returned tuple.
+    return """json_build_object(
+      'functions',(SELECT json_agg(json_build_object(
+        'name',p.proname,'body',p.prosrc,'owner',pg_get_userbyid(p.proowner),
+        'inputs',(SELECT coalesce(json_agg(t::regtype::text ORDER BY n),'[]'::json) FROM unnest(p.proargtypes) WITH ORDINALITY x(t,n)),
+        'allargs',(SELECT json_agg(t::regtype::text ORDER BY n) FROM unnest(p.proallargtypes) WITH ORDINALITY x(t,n)),
+        'modes',p.proargmodes,'names',p.proargnames,'returns',p.prorettype::regtype::text,
+        'definer',p.prosecdef,'set',p.proretset,'kind',p.prokind,'parallel',p.proparallel,
+        'strict',p.proisstrict,'leakproof',p.proleakproof,'defaults',p.pronargdefaults,
+        'support',p.prosupport::text,'language',l.lanname,'volatility',p.provolatile,
+        'configuration',p.proconfig,'acl',(SELECT coalesce(json_agg(json_build_array(
+          CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+          a.privilege_type,a.is_grantable) ORDER BY a.grantee,a.privilege_type),'[]'::json)
+          FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)) ORDER BY p.proname)
+        FROM pg_proc p JOIN pg_language l ON l.oid=p.prolang WHERE p.pronamespace='public'::regnamespace
+        AND p.proname IN (""" + names + """)),
+      'owners',(SELECT json_agg(json_build_array(c.relname,pg_get_userbyid(c.relowner)) ORDER BY c.relname)
+        FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relname IN
+        ('stock_dividend_payments','stock_dividend_decisions','stock_dividend_payments_id_seq','stock_dividend_decisions_id_seq')),
+      'runtime_acl',(SELECT json_agg(json_build_array(r.rolname,c.relname,
+        has_table_privilege(r.oid,c.oid,'SELECT'),has_table_privilege(r.oid,c.oid,'INSERT'),
+        has_table_privilege(r.oid,c.oid,'UPDATE'),has_table_privilege(r.oid,c.oid,'DELETE'),
+        has_table_privilege(r.oid,c.oid,'TRUNCATE'),has_table_privilege(r.oid,c.oid,'REFERENCES'),
+        has_table_privilege(r.oid,c.oid,'TRIGGER'),has_table_privilege(r.oid,c.oid,'MAINTAIN')) ORDER BY r.rolname,c.relname)
+        FROM pg_roles r CROSS JOIN pg_class c WHERE r.rolname IN ('birja_app','birja_scheduler')
+        AND c.relnamespace='public'::regnamespace AND c.relname IN ('stock_dividend_decisions','stock_dividend_payments')),
+      'runtime_columns',(SELECT json_agg(json_build_array(r.rolname,c.relname,a.attname,
+        has_column_privilege(r.oid,c.oid,a.attnum,'SELECT'),has_column_privilege(r.oid,c.oid,a.attnum,'INSERT'),
+        has_column_privilege(r.oid,c.oid,a.attnum,'UPDATE'),has_column_privilege(r.oid,c.oid,a.attnum,'REFERENCES'))
+        ORDER BY r.rolname,c.relname,a.attname) FROM pg_roles r CROSS JOIN pg_class c JOIN pg_attribute a ON a.attrelid=c.oid
+        AND a.attnum>0 AND NOT a.attisdropped WHERE r.rolname IN ('birja_app','birja_scheduler')
+        AND c.relnamespace='public'::regnamespace AND c.relname IN ('stock_dividend_decisions','stock_dividend_payments')),
+      'sequence_acl',(SELECT json_agg(json_build_array(r.rolname,c.relname,
+        has_sequence_privilege(r.oid,c.oid,'USAGE'),has_sequence_privilege(r.oid,c.oid,'SELECT'),
+        has_sequence_privilege(r.oid,c.oid,'UPDATE')) ORDER BY r.rolname,c.relname)
+        FROM pg_roles r CROSS JOIN pg_class c WHERE r.rolname IN ('birja_app','birja_scheduler')
+        AND c.relnamespace='public'::regnamespace AND c.relname IN ('stock_dividend_decisions_id_seq','stock_dividend_payments_id_seq')))
+    """
+
+
+def validate_dividend_functions(functions, *, acl_mode='source'):
+    require(acl_mode in ('source','quarantined','no_acl'))
+    require(isinstance(functions,list) and len(functions)==len(DIVIDEND_FUNCTIONS))
+    for row,name in zip(functions,sorted(DIVIDEND_FUNCTIONS),strict=True):
+        signature,body,definer,inputs,allargs,modes,names,returns=DIVIDEND_FUNCTIONS[name]
+        expected=dict(name=name,owner='birja_migrator',inputs=inputs,allargs=allargs,modes=modes,
+            names=names,returns=returns,definer=definer,set=definer,kind='f',parallel='u',
+            strict=False,leakproof=False,defaults=0,support='-',language='plpgsql',volatility='v',
+            configuration=['search_path=pg_catalog, public, pg_temp'])
+        expected['acl']=([['PUBLIC','EXECUTE',False]] if acl_mode=='no_acl' else
+            [['birja_scheduler','EXECUTE',False]] if definer and acl_mode=='source' else [])
+        require(isinstance(row,dict) and set(row)==set(expected)|{'body'})
+        require(isinstance(row['body'],str) and hashlib.sha256(row['body'].encode()).hexdigest()==body)
+        require({k:v for k,v in row.items() if k!='body'}==expected)
+
+
+def validate_dividend_authority(authority, *, quarantined=False):
+    require(isinstance(authority,dict) and set(authority)=={'functions','owners','runtime_acl','runtime_columns','sequence_acl'})
+    validate_dividend_functions(authority['functions'],acl_mode='quarantined' if quarantined else 'source')
+    require(authority['owners']==[[name,'birja_migrator'] for name in sorted([*DIVIDEND_COLUMNS,*[t+'_id_seq' for t in DIVIDEND_COLUMNS]])])
+    require(authority['runtime_acl']==[[role,table,True,*([False]*7)] for role in ('birja_app','birja_scheduler') for table in sorted(DIVIDEND_COLUMNS)])
+    require(authority['runtime_columns']==[[role,table,column,True,False,False,False] for role in ('birja_app','birja_scheduler') for table in sorted(DIVIDEND_COLUMNS) for column in sorted(DIVIDEND_COLUMNS[table].split())])
+    require(authority['sequence_acl']==[[role,table+'_id_seq',False,False,False] for role in ('birja_app','birja_scheduler') for table in sorted(DIVIDEND_COLUMNS)])
 
 
 def execution_authority_sql():
@@ -159,7 +246,7 @@ def execution_authority_sql():
     """
 
 
-def validate_execution_authority(authority):
+def validate_execution_authority(authority, revision="0013"):
     require(isinstance(authority, dict) and set(authority) == {'functions','triggers','runtime_acl','runtime_columns','owners'})
     require(authority['owners'] == [[t,'birja_migrator'] for t in sorted(EXECUTION_COLUMNS)])
     require(len(authority['functions']) == 2)
@@ -168,7 +255,7 @@ def validate_execution_authority(authority):
         require(hashlib.sha256(row[1].encode()).hexdigest() == EXECUTION_FUNCTIONS[name])
         require(row[2:5] == ['birja_migrator',False,['search_path=pg_catalog, public']])
         require(row[5] == ([['birja_app','EXECUTE',False]] if name == 'assert_stock_execution_current' else []))
-    require(hashlib.sha256(json.dumps(authority['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest() == EXECUTION_TRIGGERS_SHA256)
+    require(hashlib.sha256(json.dumps(authority['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest() == (DIVIDEND_TRIGGERS_SHA256 if revision=="0014" else EXECUTION_TRIGGERS_SHA256))
     require(authority['runtime_acl'] == [
         ['birja_app','stock_fill_facts',True,True,False,False,False,False,False,False],
         ['birja_app','stock_status_evidence',True,False,False,False,False,False,False,False],
@@ -248,7 +335,7 @@ def validate_resolution_authority(authority, revision='0012'):
     require(hashlib.sha256(authority['definition'].encode()).hexdigest() == RESOLUTION_FUNCTION_SHA256)
     require(authority['owner'] == 'birja_migrator' and authority['security_definer'] is True)
     require(authority['configuration'] == ['search_path=pg_catalog, public'])
-    require(type(authority['function_count']) is int and authority['function_count'] == (3 if revision=='0013' else 1))
+    require(type(authority['function_count']) is int and authority['function_count'] == (7 if revision=='0014' else 3 if revision=='0013' else 1))
     require(authority['execute_acl'] == [['birja_action_operator','EXECUTE',False]])
     require(authority['operator_attributes'] == [False]*7)
     require(authority['runtime_operator_membership'] is False)
@@ -267,14 +354,16 @@ def validate_resolution_authority(authority, revision='0012'):
 
 def identity_tables(revision):
     names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
-    if revision in ("0009", "0010", "0011", "0012", "0013"):
+    if revision in ("0009", "0010", "0011", "0012", "0013", "0014"):
         names += ["stock_sessions", "stock_data_admissions"]
-    if revision in ("0011", "0012", "0013"):
+    if revision in ("0011", "0012", "0013", "0014"):
         names += [table for table, columns in ACTION_COLUMNS.items() if columns.startswith("id ")]
+    if revision == '0014':
+        names += list(DIVIDEND_COLUMNS)
     return sorted(names)
 
 
-def dump_identity_state(raw):
+def dump_identity_state(raw, revision="0011"):
     """Parse only the allowlisted SEQUENCE SET output; never execute dump SQL.
 
     Sequences are not MVCC. Their actual archived values, rather than values
@@ -288,24 +377,26 @@ def dump_identity_state(raw):
         match = re.fullmatch(r"SELECT pg_catalog\.setval\('public\.([a-z_]+)_id_seq', ([0-9]{1,19}), (true|false)\);", line)
         require(match is not None)
         table, value, called = match.groups()
-        require(table in identity_tables("0011") and table not in states)
+        require(table in identity_tables(revision) and table not in states)
         require(1 <= int(value) <= 9223372036854775807)
         states[table] = [table, int(value), called == "true"]
-    require(set(states) == set(identity_tables("0011")))
+    require(set(states) == set(identity_tables(revision)))
     return [states[table] for table in sorted(states)]
 
 
 def contract_columns(revision):
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
-    if revision in ("0009", "0010", "0011", "0012", "0013"):
+    if revision in ("0009", "0010", "0011", "0012", "0013", "0014"):
         columns["coins"] += " asset_class"
         columns.update(STOCK_COLUMNS)
-    if revision in ("0011", "0012", "0013"):
+    if revision in ("0011", "0012", "0013", "0014"):
         columns["stock_quotes"] += " unit_epoch"
         columns.update(ACTION_COLUMNS)
-    if revision == "0013":
+    if revision in ("0013","0014"):
         columns.update(EXECUTION_COLUMNS)
+    if revision == '0014':
+        columns.update(DIVIDEND_COLUMNS)
     return {table: set(value.split()) for table, value in columns.items()}
 
 
@@ -348,12 +439,12 @@ def manifest_sql(revision):
         "  'sequences',(SELECT json_agg(json_build_array(s.relname,t.relname,a.attname,q.seqtypid::regtype::text,q.seqincrement,q.seqmin,q.seqmax,q.seqcache,q.seqcycle) ORDER BY s.relname) FROM pg_class s JOIN pg_sequence q ON q.seqrelid=s.oid LEFT JOIN pg_depend d ON d.objid=s.oid AND d.deptype='i' LEFT JOIN pg_class t ON t.oid=d.refobjid LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid WHERE s.relnamespace='public'::regnamespace),\n"
         "  'constraints',",
     )
-    if revision in ("0011", "0012", "0013"):
+    if revision in ("0011", "0012", "0013", "0014"):
         quote = fragment("STOCK_ROWS").splitlines()[1]
         result = result.replace(quote, quote.replace("admission_generation)::text", "admission_generation,unit_epoch)::text"))
         rows = []
         timestamps = {"cutoff", "verified_cutoff", "coverage_start", "covered_until", "complete_from", "quote_not_before", "next_blocking_at"}
-        for table, columns in (ACTION_COLUMNS | (EXECUTION_COLUMNS if revision=='0013' else {})).items():
+        for table, columns in (ACTION_COLUMNS | (EXECUTION_COLUMNS if revision in ('0013','0014') else {}) | (DIVIDEND_COLUMNS if revision=='0014' else {})).items():
             expressions = []
             for column in columns.split():
                 if column.endswith("_at") or column == "valid_until" or column in timestamps:
@@ -364,16 +455,21 @@ def manifest_sql(revision):
             rows.append(" UNION ALL SELECT '" + table + "'," + key + ",json_build_array(" + ",".join(expressions) + ")::text FROM " + table)
         result = result.replace("\n), names(name) AS (", "\n" + "\n".join(rows) + "\n), names(name) AS (")
         result = result.replace("('stock_data_admissions')\n", "('stock_data_admissions')," + ",".join("('" + t + "')" for t in ACTION_COLUMNS) + "\n")
-        if revision == '0013':
+        if revision in ('0013','0014'):
             result = result.replace("('stock_ownership_movements')\n", "('stock_ownership_movements')," + ",".join("('" + t + "')" for t in EXECUTION_COLUMNS) + "\n")
+        if revision == '0014':
+            result = result.replace("('stock_status_evidence')\n", "('stock_status_evidence')," + ",".join("('" + t + "')" for t in DIVIDEND_COLUMNS) + "\n")
         sequences = " UNION ALL ".join("SELECT '" + t + "',last_value,is_called FROM " + t + "_id_seq" for t in identity_tables(revision))
         result = result.replace(" 'schema',json_build_object(", " 'identity_state',(SELECT json_agg(json_build_array(name,last_value,is_called) ORDER BY name) FROM (" + sequences + ") AS s(name,last_value,is_called)),\n 'schema',json_build_object(")
-    if revision in ('0012','0013'):
+    if revision in ('0012','0013','0014'):
         result = result.replace(" 'schema',json_build_object(",
             " 'resolution_authority'," + resolution_authority_sql() + ",\n 'schema',json_build_object(")
-    if revision == '0013':
+    if revision in ('0013','0014'):
         result = result.replace(" 'schema',json_build_object(",
             " 'execution_authority'," + execution_authority_sql() + ",\n 'schema',json_build_object(")
+    if revision == '0014':
+        result = result.replace(" 'schema',json_build_object(",
+            " 'dividend_authority'," + dividend_authority_sql() + ",\n 'schema',json_build_object(")
     return result
 
 
@@ -398,13 +494,15 @@ def schema_guard_sql(revision):
     )
 
 
-def validate_manifest(manifest):
+def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
-    if manifest['revision'] in ('0012','0013'):
+    if manifest['revision']=='0014':
+        validate_dividend_authority(manifest.get('dividend_authority'),quarantined=quarantined)
+    if manifest['revision'] in ('0012','0013','0014'):
         validate_resolution_authority(manifest.get('resolution_authority'),manifest['revision'])
-    if manifest['revision'] == '0013':
-        validate_execution_authority(manifest.get('execution_authority'))
+    if manifest['revision'] in ('0013','0014'):
+        validate_execution_authority(manifest.get('execution_authority'),manifest['revision'])
     require(set(manifest["tables"]) == set(expected))
     for row in manifest["tables"].values():
         require(set(row) == {"count", "sha256"})
@@ -432,12 +530,12 @@ def validate_manifest(manifest):
             isinstance(manifest["financial"][key], str)
             and Decimal(manifest["financial"][key]).is_finite()
         )
-    if manifest["revision"] in ("0011", "0012", "0013"):
+    if manifest["revision"] in ("0011", "0012", "0013", "0014"):
         require(type(manifest["stock_invalid"]) is int and manifest["stock_invalid"] == 0)
-        require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == (EXECUTION_SCHEMA_SHA256 if manifest['revision']=='0013' else ACCOUNTING_SCHEMA_SHA256))
+        require(hashlib.sha256(json.dumps(manifest["schema"], sort_keys=True, separators=(",", ":")).encode()).hexdigest() == (DIVIDEND_SCHEMA_SHA256 if manifest['revision']=='0014' else EXECUTION_SCHEMA_SHA256 if manifest['revision']=='0013' else ACCOUNTING_SCHEMA_SHA256))
         states = manifest["identity_state"]
-        require(isinstance(states, list) and len(states) == len(identity_tables("0011")))
-        require([row[0] for row in states] == identity_tables("0011"))
+        require(isinstance(states, list) and len(states) == len(identity_tables(manifest["revision"])))
+        require([row[0] for row in states] == identity_tables(manifest["revision"]))
         for name, value, called in states:
             require(type(value) is int and 1 <= value <= 9223372036854775807)
             require(type(called) is bool)
@@ -1258,11 +1356,11 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012", "0013"):
+            if revision in ("0011", "0012", "0013", "0014"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
-                manifest["identity_state"] = dump_identity_state(raw_states)
+                manifest["identity_state"] = dump_identity_state(raw_states, revision)
                 validate_manifest(manifest)
             proc.stdin.write(b"ROLLBACK;\n")
             proc.stdin.close()
