@@ -49,7 +49,7 @@ if Path(sys.argv[0]).name=='docker':
    elif 'ROLLBACK' in line: break
   (root/'exporter').unlink(missing_ok=True)
  elif 'pg_dump' in a:
-  if '--version' in a: print('pg_dump (PostgreSQL) 18.7'); sys.exit(0)
+  if '--version' in a: print('pg_dump (PostgreSQL) '+(fail.removeprefix('dump-version:') if fail.startswith('dump-version:') else '18.7')); sys.exit(0)
   assert (root/'exporter').exists()
   assert '--snapshot=00000001-00000001-1' in a
   if fail=='dump': print('SECRET-dump',file=sys.stderr); sys.exit(3)
@@ -306,6 +306,17 @@ class Backup(unittest.TestCase):
   self.assertEqual(json.loads((self.p/'state'/'last-success.json').read_text())['snapshot_id'],SID)
   self.assertFalse((self.p/'exporter').exists())
   self.assertFalse((self.p/'state'/'stage').exists())
+ def test_reviewed_dump_minors_allow_preupgrade_backup_and_reject_other_versions(self):
+  for version in ['18.6','18.7','18.6 (Debian 18.6-1.pgdg13+1)']:
+   with self.subTest(version=version):
+    r=self.run_script(fail='dump-version:'+version)
+    self.assertEqual(r.returncode,0,r.stdout)
+  for version in ['18.5','18.70','19.0','18.6evil']:
+   with self.subTest(version=version):
+    (self.p/'calls').unlink(missing_ok=True)
+    r=self.run_script(fail='dump-version:'+version)
+    self.assertNotEqual(r.returncode,0)
+    self.assertNotIn('backup',self.cmds())
  def test_failures_preserve_previous_success_and_redact(self):
   for failure in ['dump','empty','archive','manifest','unknown-schema','upload','partial','identity','contents','verify']:
    with self.subTest(failure=failure):
