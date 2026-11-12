@@ -225,6 +225,16 @@ async def stock_trade_case(status_case, ownership, monkeypatch, request):
     try:
         yield factory, cid, uid, now
     finally:
+        from app.models.corporate_action import StockActionEvent, StockActionObservation
+
+        async with factory.begin() as db:
+            await db.execute(
+                delete(StockActionObservation).where(
+                    StockActionObservation.event_id.in_(
+                        select(StockActionEvent.id).where(StockActionEvent.coin_id == cid)
+                    )
+                )
+            )
         stock_sessions._calendar_bounds.cache_clear()
 
 

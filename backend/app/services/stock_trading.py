@@ -276,7 +276,26 @@ async def _replay(db: AsyncSession, user_id: int, order: TradeIn) -> FillOut | N
         raise _refuse("receipt_unavailable") from None
 
 
+class _QuoteRefreshed(Exception):
+    """Tentative immutable metadata must be rebuilt after a full rollback."""
+
+
 async def execute(
+    db: AsyncSession, *, user_id: int, order: TradeIn, settings: Settings
+) -> tuple[FillOut, bool]:
+    # Exactly one clean rebuild for quote metadata; never retry deadlock, timeout,
+    # cancellation, ownership, constraint or permission failure. All authority and
+    # cash locks are reacquired. A changed selected price still needs confirmation.
+    try:
+        return await _execute_once(db, user_id=user_id, order=order, settings=settings)
+    except _QuoteRefreshed:
+        try:
+            return await _execute_once(db, user_id=user_id, order=order, settings=settings)
+        except _QuoteRefreshed:
+            raise _refuse("quote_unavailable") from None
+
+
+async def _execute_once(
     db: AsyncSession, *, user_id: int, order: TradeIn, settings: Settings
 ) -> tuple[FillOut, bool]:
     try:
@@ -338,7 +357,7 @@ async def execute(
             if replacement.exec_price != order.expected_exec_price:
                 raise PriceChanged(_preview(current, replacement), order.expected_exec_price)
             # Already inserted immutable Trade metadata must not be rewritten.
-            raise _refuse("quote_unavailable")
+            raise _QuoteRefreshed
         authority = json.loads(json.dumps(asdict(current.evidence), default=_encoded))
         e, q = current.evidence, current.evidence.quote
         facts = StockFillFacts(
@@ -393,6 +412,8 @@ async def execute(
     except DBAPIError as exc:
         await db.rollback()
         if getattr(exc.orig, "sqlstate", None) == "22023":
+            if "stock quote unavailable" in str(exc.orig):
+                raise _QuoteRefreshed from None
             raise _refuse("quote_unavailable") from None
         raise
     except BaseException:
