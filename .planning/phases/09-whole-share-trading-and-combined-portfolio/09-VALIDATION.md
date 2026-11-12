@@ -1,7 +1,7 @@
 ---
 phase: 9
 slug: whole-share-trading-and-combined-portfolio
-status: planned
+status: in_progress
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-11-11

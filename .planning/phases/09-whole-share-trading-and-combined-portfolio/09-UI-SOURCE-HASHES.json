@@ -1,0 +1,17 @@
+{
+  "commit": "ee585dc6e52e8b7612e9d99c9c688a69d5fc3c3e",
+  "sha256": {
+    "frontend/src/pages/StockTradePage.tsx": "7553ddf9c111de625b9b4a6f45b2f2c4dbad5c84ab37001c834f5382254e1a4f",
+    "frontend/src/components/StockTradeReceipt.tsx": "aa4a675ed8642976d77d538399bfb4f572eac4068ad9d40eb470b011454f6841",
+    "frontend/src/hooks/useStockTrade.ts": "dd201fe9ed933db392ae5420888aecc324d74309b208c790e3be184a2bcf8874",
+    "frontend/src/api/stockTrades.ts": "471ac6ea31f8a976940384d33df2afb2f44c801782271c7f85ec97bb1d081c06",
+    "frontend/src/hooks/usePortfolio.ts": "492b326ab4731d298668223a1048ccb6940568e10668d017c94f1781dfc8c3df",
+    "frontend/src/api/portfolio.ts": "dc7af4822c227cc27c38c6ee51d4b3baff02f339b3cf8829085761fb0c3e47cf",
+    "frontend/src/pages/PortfolioPage.tsx": "aaeabd961d862da38208aadf0eea18735e16ed460d75cfc8a372f697f404e98b",
+    "frontend/src/components/PortfolioHoldings.tsx": "2ea5262baec57d9cbbc62fa327174301685aad35db05330c96466c74a989c884",
+    "frontend/src/components/PortfolioAllocation.tsx": "997171b51f04adf4c3248557108d68050254237307a0b1b7d435512635a5c789",
+    "frontend/e2e/stock-trades.spec.ts": "17e9e235f805ad4566543c7609d3a2b0f9b92550356a575a7cc09df12cedf488",
+    "frontend/e2e/stock-trade-fixture.py": "36eeca01ca876d810a649ef087e582ea65061f093b1b725d2a283ce1d3de0e0a"
+  },
+  "screenshots_manifest": "/tmp/birja-phase09-ui-proof/screenshots.json"
+}
