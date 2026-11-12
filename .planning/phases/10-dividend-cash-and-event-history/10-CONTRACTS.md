@@ -137,6 +137,25 @@ no amount and no Account.cash update. PUBLIC/app EXECUTE revoked; scheduler
 EXECUTE only. Pin and prove this new definer owner/body/path/signature/ACL exactly
 like apply_stock_dividend. No arbitrary owner or proposal amount is accepted.
 
+### C03a — Implemented result and retained helper identities (Plan10-02)
+
+The apply entry point returns `(payment_id bigint, decision_id bigint,
+outcome text)`. `outcome='original'` with `decision_id=NULL` identifies the
+first persisted original or its immutable replay. It is an internal SQL result,
+not a new Decision outcome or additional History credit. Other outcomes use
+C01 decision vocabulary and their retained decision ID. Consumers must not
+fabricate a second original/decision to eliminate this null.
+
+Both entry points, private invoker
+`stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)` and immutable
+trigger `reject_stock_dividend_mutation()` are exact recovery authorities.
+The private helper is never granted to app/scheduler/PUBLIC. Full input/output
+argument types, names/modes, normalized body, owner, path, security mode,
+volatility and ACL are part of identity, not just regprocedure input identity.
+Current calendar overrides and coverage must independently agree with retained
+cutoff session even under an unchanged admission generation. Reviewed fixes
+and genuine SQL rechecks are recorded in10-AUTHORITY-REVIEW.
+
 ## C04 — Scheduler and pre-consumer operational gate
 
 `services/dividends.py: process_dividend(db, *, event_id, entitlement_id,

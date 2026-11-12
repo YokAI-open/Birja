@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave1 verified3/18; next10-02 narrow SQL payout authority.
-last_updated: "2026-11-12T18:49:13.501Z"
-last_activity: 2026-11-12 -- Phase 10 planning complete
+stopped_at: Wave2 reviewed and full gates pass; executing10-04 retained contracts.
+last_updated: "2026-11-12T20:10:53.627770+00:00"
+last_activity: 2026-11-12 -- Plan10-02 authority fixed and independently rechecked
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 44
-  percent: 73
+  completed_plans: 45
+  percent: 75
 ---
 
 # Project State
@@ -26,12 +26,20 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 3/18 complete; executing10-02 (Wave2/13)
-Status: Executing Wave1
+Plan: 4/18 complete; executing10-04 (Wave3/13)
+Status: Executing Wave3
 Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [███████░░░] 73% (44/60 currently tracked plans complete; Phase11 unplanned)
+Progress: [████████░░] 75% (45/60 currently tracked plans complete; Phase11 unplanned)
 
 ## Completion and next action
+
+Current:Plan10-02complete49authority/191affectedtests; independentreview
+reproducedcalendarclosure+OUTidentitygaps, actualREDedc0af8→fix4de3977,
+recheck9passed/0findingsat6f60ce4. FullWave2backend2233pass/99.86%,40critical100% andfullstaticpass.
+Continue04exactretainedproducer/consumercontracts. All4SQLfunctionidentitiesmustcarryintorecoveryproducer/
+consumerbootstrap. NewSQLfunctionsinlocal0014only,noservices/workers/HistoryAPI
+yet. OlderinitialWave1/planningparagraphsbelowarehistoricalpointers.
+
 
 Current:Wave1complete01/03/12,3/18plans. Actualfullbackend2184/99.86%,
 40criticalmodules100%,frontend660/98.49% andstaticpass. Independentreview
@@ -619,11 +627,10 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Wave1verified3/18plans; next10-02SQLpayoutauthority.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-02-PLAN.md
-Completed01/03/12haveactualsource+test+summarycommits; do not repeat them.
-Ownedisolatedteststackrunningat0014, nootheragentactive. KeepDB/opsserial.
-No payoutfunction/worker/HistoryAPI/UIyet.40criticalmodule/fullbackend/frontend
-wavegatespassandindependentreviewclean. Required04–06proofprecedesconsumers.
-Liveprovider7/8status/action/dataactivationandproduction/publicationremain
-ownerdeferred. No nextphaseauto-advance or repeatedpushquestion.
+Stopped at: Wave2review/fullgatespass; execute10-04retainedcontracts.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-04-PLAN.md
+Completed01/02/03/12source/test/summarycommits. Fullbackend2233pass,40critical100%,independentreviewclean; noactiveDBops.
+Ownedisolatedteststack0014; keepDB/opsserial. No agentcurrentlyactive.
+Noapplicationservices/workers/HistoryAPI/UIyet.04–06exactretained/restrictedTLS
+stillblockingbefore07/10consumers. Preservealllive7/8/status/action/data,
+production/B2/timer/publication/deploymentdeferrals; norepeatedpushquestion.

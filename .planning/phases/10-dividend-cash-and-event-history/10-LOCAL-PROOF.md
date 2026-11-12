@@ -31,3 +31,18 @@ before07/10consumers. All4Phase10requirements remainpending.
 
 FullfrontendESLint/TypeScript/Prettierpassafterreviewfix; formatlog
 /tmp/birja-phase10-wave1-frontend-format.log. No new runtimechangeafterfullsuites.
+
+## Wave2 — authority review and integration in progress
+
+Plan02narrowSQLauthoritycommitted576b667; reviewedbugsreproducedinrollback-only
+probes(currentcalendarclosurepaymentandchangedOUTsignatureacceptedbybootstrap).
+ActualREDedc0af8→fix4de3977,finalsummary6f60ce4.49authority/191affectedtests
+pass24.25s. Fullargument/outputmetadataandcurrentclosure/changedhour/session/
+horizonguardsareexactlypinned. Independenttargetedrecheck9pass2.45s:
+/tmp/birja-phase10-authority-review-recheck.log. Report10-AUTHORITY-REVIEWclean,
+0remainingfindings; retainsoriginal1blocker/1warningandprovenance.
+Fullbackend2233passed93warnings306.61s,99.86%overall:
+/tmp/birja-phase10-wave2-backend.log.40criticalmodules3947statements/1258branches
+100%with0missing:/tmp/birja-phase10-wave2-critical.log. NoTLS/archiveconsumer
+proofclaimed;04–06stillblockingruntime. All4newfunction/helperidentitiesmustbe
+addedtoexactproducer/consumercontracts. No private/production/provideraction.
