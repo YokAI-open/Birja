@@ -182,9 +182,97 @@ def test_rounded_zero_value_is_still_a_real_allocation_and_zero_cash_is_known():
 
 
 def test_known_subtotal_and_class_values_are_explicit_when_incomplete():
-    p=calculate_portfolio(D("5"),D("10"),[position("1","2","3"),position("1","2",None,"ETH")])
-    assert p.known_value==D("8.00")
-    assert p.unvalued_holding_count==1
-    assert p.class_values.cash==5 and p.class_values.crypto is None and p.class_values.stocks==0
-    assert p.class_allocation_percent.cash is p.class_allocation_percent.crypto is p.class_allocation_percent.stocks is None
+    p = calculate_portfolio(
+        D("5"), D("10"), [position("1", "2", "3"), position("1", "2", None, "ETH")]
+    )
+    assert p.known_value == D("8.00")
+    assert p.unvalued_holding_count == 1
+    assert p.class_values.cash == 5 and p.class_values.crypto is None and p.class_values.stocks == 0
+    assert (
+        p.class_allocation_percent.cash
+        is p.class_allocation_percent.crypto
+        is p.class_allocation_percent.stocks
+        is None
+    )
     assert p.total_value is None and all(h.allocation_percent is None for h in p.holdings)
+
+
+def test_mixed_classes_stable_symbols_exact_mid_and_unsafe_unit_costs():
+    from dataclasses import replace
+
+    stock = replace(
+        position("2", "204", "101", "AAPL"),
+        asset_class="stock",
+        coin_id="20",
+        provider_asset_id="asset-aapl",
+    )
+    crypto = replace(position("1", "49", "50", "BTC"), coin_id="1")
+    p = calculate_portfolio(D(100), D(10000), [crypto, stock])
+    assert [h.symbol for h in p.holdings] == ["AAPL", "BTC"]
+    assert p.known_value == p.total_value == 352 and p.unvalued_holding_count == 0
+    assert (p.class_values.cash, p.class_values.stocks, p.class_values.crypto) == (100, 202, 50)
+    assert p.class_allocation_percent.stocks == D("57.39")
+    assert p.holdings[0].average_cost == 102 and p.holdings[0].unrealized_pl == -2
+    incomplete = calculate_portfolio(
+        D(100), D(10000), [crypto, replace(stock, mid=None, units_safe=False)]
+    )
+    assert incomplete.known_value == 150 and incomplete.class_values.stocks is None
+    assert incomplete.class_values.crypto == 50 and incomplete.holdings[0].average_cost is None
+    assert incomplete.holdings[0].cost_basis == 204 and incomplete.holdings[1].unrealized_pl == 1
+    assert incomplete.total_value is incomplete.total_pl is incomplete.total_pl_percent is None
+    assert all(h.allocation_percent is None for h in incomplete.holdings)
+    assert (
+        incomplete.class_allocation_percent.cash
+        is incomplete.class_allocation_percent.stocks
+        is incomplete.class_allocation_percent.crypto
+        is None
+    )
+    exact = calculate_portfolio(
+        D(0), D(1), [replace(stock, quantity=D("100000000000"), mid=D("1.000000005"))]
+    )
+    assert exact.total_value == D("100000000500.00")
+
+
+def test_class_values_sum_raw_positions_and_dividend_cash_only_once():
+    from dataclasses import replace
+
+    positions = [
+        replace(position("1", "0.01", "0.014", "AAPL"), asset_class="stock", coin_id="2"),
+        replace(position("1", "0.01", "0.014", "MSFT"), asset_class="stock", coin_id="3"),
+    ]
+    p = calculate_portfolio(D("0.01"), D("0.02"), positions)
+    assert p.class_values.stocks == D("0.03") and p.known_value == D("0.04")
+    # A future dividend is already credited in Account.cash; the calculator
+    # takes no entitlement/payment input that could add it again.
+    before = calculate_portfolio(D(100), D(10000), positions)
+    after = calculate_portfolio(D("100.50"), D(10000), positions)
+    assert after.known_value - before.known_value == D("0.50")
+    assert after.total_pl - before.total_pl == D("0.50")
+    tied = [replace(positions[0], coin_id="10"), replace(positions[0], coin_id="2")]
+    assert [h.coin_id for h in calculate_portfolio(D(0), D(0), tied).holdings] == ["2", "10"]
+
+
+def test_large_mixed_aggregates_keep_64_digit_precision_and_nullable_zero_denominator():
+    from dataclasses import replace
+
+    with localcontext() as context:
+        context.prec = 5
+        positions = [
+            replace(
+                position("999999999999", "0.00000001", "999999999999.999999995", f"S{i:02d}"),
+                asset_class="stock",
+                coin_id=str(i + 1),
+            )
+            for i in range(35)
+        ]
+        p = calculate_portfolio(D("999999999999.99"), D("0.00000001"), positions)
+    assert p.total_value == D("34999999999965999999824999.99")
+    assert p.total_pl_percent is not None and p.total_pl_percent > D("1e35")
+    zero = calculate_portfolio(D(0), D(0), [])
+    assert zero.class_values.stocks == zero.class_values.crypto == 0
+    assert (
+        zero.class_allocation_percent.cash
+        is zero.class_allocation_percent.stocks
+        is zero.class_allocation_percent.crypto
+        is None
+    )
