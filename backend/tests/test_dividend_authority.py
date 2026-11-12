@@ -721,10 +721,12 @@ async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority
             await outer.rollback()
 
 
-@pytest.mark.parametrize("change", ["closed", "shortened", "coverage"])
+@pytest.mark.parametrize(
+    "change", ["closed", "shortened", "shortened_close", "shortened_matching", "coverage"]
+)
 async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(authority_case, change):
     from dataclasses import fields
-    from datetime import datetime, time
+    from datetime import UTC, datetime, time
     from zoneinfo import ZoneInfo
 
     from app.services.stock_admission import ProductAdmission, evaluate_admission
@@ -743,6 +745,21 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
     ).scalar_one()
     cal = dict(row["calendar"])
     ex_date = rv["ex_date"]
+    if change in ("shortened_close", "shortened_matching"):
+        original = ProductAdmission(**{f.name: row[f.name] for f in fields(ProductAdmission)})
+        now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+        base = next(
+            s
+            for s in build_sessions(now, original)
+            if s.exchange == "NASDAQ" and str(s.session_date) == ex_date
+        )
+        await conn.execute(
+            text("UPDATE stock_sessions SET opens_at=:o,closes_at=:c"),
+            {"o": base.opens_at, "c": base.closes_at},
+        )
+        await conn.execute(
+            text("UPDATE stock_dividend_entitlements SET cutoff=:o"), {"o": base.opens_at}
+        )
     if change == "coverage":
         now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
         cal["coverage_start"] = str(now.date())
@@ -750,18 +767,25 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
         override = {
             "exchange": "XNAS",
             "date": ex_date,
-            "state": change,
+            "state": "shortened" if change in ("shortened_close", "shortened_matching") else change,
             "source": "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
         }
-        if change == "shortened":
+        if change in ("shortened", "shortened_close", "shortened_matching"):
             day = datetime.fromisoformat(ex_date).date()
             override.update(
-                opens_at=datetime.combine(
-                    day, time(9, 30), ZoneInfo("America/New_York")
-                ).isoformat(),
-                closes_at=datetime.combine(day, time(13), ZoneInfo("America/New_York")).isoformat(),
+                opens_at=datetime.combine(day, time(9, 30), ZoneInfo("America/New_York"))
+                .astimezone(UTC)
+                .isoformat(),
+                closes_at=datetime.combine(day, time(13), ZoneInfo("America/New_York"))
+                .astimezone(UTC)
+                .isoformat(),
             )
         cal["overrides"] = [override]
+        if change == "shortened_matching":
+            await conn.execute(
+                text("UPDATE stock_sessions SET closes_at=:c"),
+                {"c": datetime.fromisoformat(override["closes_at"])},
+            )
     row["calendar"] = cal
     admission = ProductAdmission(**{f.name: row[f.name] for f in fields(ProductAdmission)})
     now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
@@ -775,13 +799,26 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
     else:
         assert len(expected) == 1 and expected[0].opens_at is not None
         cached = (await conn.execute(text("SELECT opens_at FROM stock_sessions"))).scalar_one()
-        assert expected[0].opens_at != cached
+        if change in ("shortened_close", "shortened_matching"):
+            assert expected[0].opens_at == cached
+            cached_close = (
+                await conn.execute(text("SELECT closes_at FROM stock_sessions"))
+            ).scalar_one()
+            assert (expected[0].closes_at == cached_close) == (change == "shortened_matching")
+        else:
+            assert expected[0].opens_at != cached
     await conn.execute(
         text(
             "UPDATE stock_data_admissions SET calendar=CAST(:c AS jsonb) WHERE product='calendar'"
         ),
         {"c": json.dumps(cal)},
     )
+    if change == "shortened_matching":
+        assert (await apply(conn, ids))["outcome"] == "original"
+        assert (
+            await conn.execute(text("SELECT cash FROM accounts WHERE user_id=:user_id"), ids)
+        ).scalar_one() == Decimal(101)
+        return
     with pytest.raises(DBAPIError):
         await apply(conn, ids)
     assert (
@@ -825,17 +862,20 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
     await conn.execute(text(definition))
     await conn.execute(
         text(
-            "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) OWNER TO birja_migrator"
+            "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) "
+            "OWNER TO birja_migrator"
         )
     )
     await conn.execute(
         text(
-            "REVOKE ALL ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) FROM PUBLIC"
+            "REVOKE ALL ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) "
+            "FROM PUBLIC"
         )
     )
     await conn.execute(
         text(
-            "GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) TO birja_scheduler"
+            "GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) "
+            "TO birja_scheduler"
         )
     )
     source = await asyncio.to_thread(

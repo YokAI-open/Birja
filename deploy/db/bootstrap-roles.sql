@@ -52,7 +52,7 @@ DECLARE expected record; actual record;
 BEGIN
  IF (SELECT version_num FROM public.alembic_version)<>'0014' THEN RETURN; END IF;
  FOR expected IN SELECT * FROM (VALUES
- ('public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)','fe437e97d823601e7d2a3be22e416f0287aacf6bcb466faae3101d1d2acd588b',false),
+ ('public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)','7861fec1e2552603ad9d5b8c9d314572dee859fa0f6d2e2247812e793e121d23',false),
  ('public.apply_stock_dividend(bigint,bigint,text,text)','4fa0589f573067ee7a870addce0e303a79152ee47cb7c857632104c9d5bd0507',true),
  ('public.record_stock_dividend_hold(bigint,text)','68b31d48ee5036cd962770b6a0be7d29a50a3d9e8a7f709faf728344d6c6072b',true),
  ('public.reject_stock_dividend_mutation()','1ed29a1005ee6925f954852f4aec69abf2f4865a3a6a0b7cab53391c4cc5c2fa',false)
@@ -65,6 +65,21 @@ BEGIN
      OR actual.prokind<>'f' OR actual.proparallel<>'u' OR actual.lanname<>'plpgsql'
      OR actual.proretset<>expected.definer OR actual.proisstrict OR actual.proleakproof
      OR actual.pronargdefaults<>0 OR actual.prosupport<>0
+     OR actual.proallargtypes IS DISTINCT FROM (CASE
+       WHEN expected.definer AND actual.proname='apply_stock_dividend'
+         THEN ARRAY[20,20,25,25,20,20,25]::oid[]
+       WHEN expected.definer THEN ARRAY[20,25,20,20,25]::oid[] ELSE NULL END)
+     OR actual.proargmodes IS DISTINCT FROM (CASE
+       WHEN expected.definer AND actual.proname='apply_stock_dividend'
+         THEN ARRAY['i','i','i','i','t','t','t']::"char"[]
+       WHEN expected.definer THEN ARRAY['i','i','t','t','t']::"char"[] ELSE NULL END)
+     OR actual.proargnames IS DISTINCT FROM (CASE actual.proname
+       WHEN 'apply_stock_dividend' THEN ARRAY['p_event','p_entitlement','p_revision',
+         'p_fingerprint','payment_id','decision_id','outcome']
+       WHEN 'record_stock_dividend_hold' THEN ARRAY['p_payment','p_revision',
+         'payment_id','decision_id','outcome']
+       WHEN 'stock_dividend_authority' THEN ARRAY['p_event','p_entitlement','p_revision',
+         'p_fingerprint','p_verified','p_expected'] ELSE NULL END)
      OR actual.prorettype<>(CASE WHEN expected.definer THEN 'record'::regtype
        WHEN expected.signature='public.reject_stock_dividend_mutation()' THEN 'trigger'::regtype
        ELSE 'jsonb'::regtype END)

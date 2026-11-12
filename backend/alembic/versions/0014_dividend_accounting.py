@@ -276,6 +276,12 @@ NULL END
       AND jsonb_array_length(a->'calendar'->'overrides')<=272,false)
    THEN RAISE EXCEPTION 'dividend calendar unavailable' USING ERRCODE='22023'; END IF;
    IF a->>'product'='calendar' THEN
+     IF p_verified AND NOT coalesce(
+       ((r.revision).normalized_terms->>'ex_date')::date BETWEEN
+         (a->'calendar'->>'coverage_start')::date AND
+         (a->'calendar'->>'coverage_end')::date,false) THEN
+       RAISE EXCEPTION 'dividend cutoff outside calendar horizon' USING ERRCODE='22023';
+     END IF;
      IF (SELECT count(DISTINCT (o->>'exchange',o->>'date'))
          FROM jsonb_array_elements(a->'calendar'->'overrides') o)
         <>jsonb_array_length(a->'calendar'->'overrides') THEN
@@ -301,6 +307,13 @@ NULL END
              AND ((v->>'closes_at')::timestamptz AT TIME ZONE 'America/New_York')::time
                <time '16:00')),false) THEN
          RAISE EXCEPTION 'invalid dividend calendar override' USING ERRCODE='22023'; END IF;
+       IF p_verified AND v->>'exchange'=(CASE (r.instrument).listing_exchange
+           WHEN 'NASDAQ' THEN 'XNAS' ELSE 'XNYS' END)
+         AND (v->>'date')::date=((r.revision).normalized_terms->>'ex_date')::date
+         AND (v->>'state'='closed'
+           OR (v->>'opens_at')::timestamptz IS DISTINCT FROM (r.cutoff_session).opens_at
+           OR (v->>'closes_at')::timestamptz IS DISTINCT FROM (r.cutoff_session).closes_at)
+       THEN RAISE EXCEPTION 'dividend cutoff calendar changed' USING ERRCODE='22023'; END IF;
      END LOOP;
    ELSIF a->'calendar'<>'{}'::jsonb THEN
      RAISE EXCEPTION 'unexpected dividend calendar evidence' USING ERRCODE='22023';
