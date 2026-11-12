@@ -179,3 +179,12 @@ def test_rounded_zero_value_is_still_a_real_allocation_and_zero_cash_is_known():
     assert zero.total_pl == D("-1.00")
     assert zero.total_pl_percent == D("-100.00")
     assert zero.cash_allocation_percent is None
+
+
+def test_known_subtotal_and_class_values_are_explicit_when_incomplete():
+    p=calculate_portfolio(D("5"),D("10"),[position("1","2","3"),position("1","2",None,"ETH")])
+    assert p.known_value==D("8.00")
+    assert p.unvalued_holding_count==1
+    assert p.class_values.cash==5 and p.class_values.crypto is None and p.class_values.stocks==0
+    assert p.class_allocation_percent.cash is p.class_allocation_percent.crypto is p.class_allocation_percent.stocks is None
+    assert p.total_value is None and all(h.allocation_percent is None for h in p.holdings)
