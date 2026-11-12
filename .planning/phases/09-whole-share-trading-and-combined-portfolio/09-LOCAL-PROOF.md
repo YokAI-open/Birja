@@ -94,3 +94,16 @@ validation. Original receipt replay survives sale/rename/revocation; changed
 payload conflicts; late authority, integrity, DB, ownership and cancellation
 failures leave exact pre-state. Actual multi-session races and opposite-side
 metadata refinement remain07. No live/provider/production/publication change.
+
+
+## Plan09-07 actual contention and waits —2026-11-12
+
+Sourcea185fba; summaryf8de7cf. Final248tests pass63.39s;185statements/42branches
+100%. /tmp/birja-phase09-07-services.log records the serial gate. Actual PG
+instrument/account/holder/helper/final-boundary waits, current authority changes,
+real clock expiry, original replay and causal action processing are verified.
+No relation wait INSIDE the final function is claimed by boundary instrumentation.
+One full rollback quote-metadata rebuild resolves actual RED050bfa0 without
+rewriting immutable rows or retrying lock/constraint/permission failures.
+Distinct inline review is clear. API/portfolio/UI/recovered runtime/full gates
+remain08–15; no live/provider/production/publication change.

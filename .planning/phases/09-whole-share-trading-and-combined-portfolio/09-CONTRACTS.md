@@ -41,6 +41,20 @@ The cached-past action boundary is deliberately conservative for NEW fills,
 matching0013's guard; compatible dated display can remain available after the
 verified application consumed it. Portfolio09 must preserve that distinction.
 
+## Plans06–07 service seams
+
+stock_trading.quote(db,*,user_id,order:QuoteIn,settings)->QuoteOut;
+context(db,*,user_id,symbol,settings)->ContextOut;
+execute(db,*,user_id,order:TradeIn,settings)->(FillOut,created).
+PriceChanged.detail is the exact PriceChangedOut; ordinary TradeRefused.code maps
+through the frozen HTTP contract below. No provider call occurs.
+Global find_user_trade has no asset filter. Stock replay uses only original
+Trade/facts/journal economic_at, without current catalogue/holding/rights.
+Exactly one FULL rollback/rebuild is allowed for changed quote metadata while
+selected price remains confirmed. No lock/deadlock/timeout/constraint/permission
+retry. Final guard remains last business SQL on each attempt. Context quote
+uses separately verified historical valuation and its conservative purge deadline.
+
 ## API and immutable receipt
 
 All routes require existing authenticated current user; POST also requires CSRF.
