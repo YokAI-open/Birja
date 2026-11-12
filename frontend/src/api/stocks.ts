@@ -41,15 +41,32 @@ export type StockItem = {
   currency: "USD";
   quote: StockQuote | null;
   session: StockSession;
-  status: { state: "unknown"; observed_at: string | null; valid_until: string | null };
+  status: {
+    state: "normal" | "halted" | "frozen" | "unknown";
+    observed_at: string | null;
+    valid_until: string | null;
+  };
   action: StockAction;
   valuation_reason:
     "available" | "action_unavailable" | "post_split_quote_missing" | "quote_unavailable";
-  execution_enabled: false;
-  execution_reason: "phase_disabled";
+  execution_enabled: boolean;
+  execution_reason:
+    | "available"
+    | "phase_disabled"
+    | "permission_unavailable"
+    | "action_unavailable"
+    | "units_changed"
+    | "halted"
+    | "frozen"
+    | "status_unavailable"
+    | "session_unavailable"
+    | "market_closed"
+    | "quote_unavailable"
+    | "quote_stale"
+    | "receipt_unavailable";
   quote_reason: "permission_unavailable" | "missing" | "stale" | "session_unavailable" | "recent";
   session_reason: "open" | "closed" | "unknown";
-  status_reason: "unknown";
+  status_reason: "normal" | "halted" | "frozen" | "unknown";
 };
 export type StocksResponse = {
   server_now: string;
@@ -110,7 +127,8 @@ export function stockInstant(value: string): bigint {
 
 /** Exact NUMERIC(20,8) comparison; money never enters JS Number arithmetic. */
 function units(value: unknown): bigint | null {
-  if (typeof value !== "string" || !/^\d{1,12}(?:\.\d{1,8})?$/.test(value)) return null;
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]{0,11})(?:\.\d{1,8})?$/.test(value))
+    return null;
   const [whole, fraction = ""] = value.split(".");
   const result = BigInt(whole + fraction.padEnd(8, "0"));
   return result > 0n ? result : null;
@@ -127,6 +145,8 @@ function quote(value: unknown): value is StockQuote {
     mid !== null &&
     bid <= mid &&
     mid <= ask &&
+    mid ===
+      (bid + ask) / 2n + ((bid + ask) % 2n !== 0n && ((bid + ask) / 2n) % 2n !== 0n ? 1n : 0n) &&
     timestamp(value.event_at) &&
     timestamp(value.collected_at) &&
     value.source === "alpaca" &&
@@ -223,11 +243,25 @@ function item(value: unknown, now: string): value is StockItem {
     value.currency === "USD" &&
     (value.quote === null || quote(value.quote)) &&
     session(value.session) &&
-    value.status.state === "unknown" &&
+    enumValue(value.status.state, ["normal", "halted", "frozen", "unknown"]) &&
     nullableTime(value.status.observed_at) &&
     nullableTime(value.status.valid_until) &&
-    value.execution_enabled === false &&
-    value.execution_reason === "phase_disabled" &&
+    typeof value.execution_enabled === "boolean" &&
+    enumValue(value.execution_reason, [
+      "available",
+      "phase_disabled",
+      "permission_unavailable",
+      "action_unavailable",
+      "units_changed",
+      "halted",
+      "frozen",
+      "status_unavailable",
+      "session_unavailable",
+      "market_closed",
+      "quote_unavailable",
+      "quote_stale",
+      "receipt_unavailable",
+    ]) &&
     enumValue(value.quote_reason, [
       "permission_unavailable",
       "missing",
@@ -236,11 +270,34 @@ function item(value: unknown, now: string): value is StockItem {
       "recent",
     ]) &&
     enumValue(value.session_reason, ["open", "closed", "unknown"]) &&
-    value.status_reason === "unknown"
+    value.status_reason === value.status.state
   );
 }
 function coherent(item: StockItem, now: string): boolean {
   if (item.session_reason !== item.session.state) return false;
+  if (item.execution_enabled !== (item.execution_reason === "available")) return false;
+  const status = item.status;
+  if (status.state === "unknown") {
+    if (status.observed_at !== null || status.valid_until !== null) return false;
+  } else if (
+    status.observed_at === null ||
+    status.valid_until === null ||
+    stockInstant(status.observed_at) > stockInstant(now) ||
+    stockInstant(status.valid_until) <= stockInstant(now) ||
+    stockInstant(status.valid_until) > stockInstant(status.observed_at) + 60_000_000_000n
+  )
+    return false;
+  if (
+    item.execution_enabled &&
+    (status.state !== "normal" ||
+      item.action.state !== "current" ||
+      item.session.state !== "open" ||
+      item.quote === null ||
+      item.quote_reason !== "recent" ||
+      item.session.valid_until === null ||
+      stockInstant(item.session.valid_until) <= stockInstant(now))
+  )
+    return false;
   const value = item.quote;
   if (value === null) return item.quote_reason !== "recent";
   if (
@@ -303,7 +360,7 @@ export function isStocks(value: unknown): value is StocksResponse {
       (x) =>
         item(x, value.server_now as string) &&
         coherent(x, value.server_now as string) &&
-        (admission.state === "approved" || x.quote === null),
+        (admission.state === "approved" || (x.quote === null && !x.execution_enabled)),
     ) &&
     new Set(value.items.map((x) => x.id)).size === 20 &&
     new Set(value.items.map((x) => x.symbol)).size === 20
@@ -322,3 +379,5 @@ export async function fetchStocks(signal?: AbortSignal): Promise<TimedStocks> {
     transport: { started_at, received_at, round_trip_ms: Math.max(0, received_at - started_at) },
   };
 }
+
+export { timestamp as stockTimestamp };

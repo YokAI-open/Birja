@@ -438,11 +438,26 @@ it.each([
   expect(isStocks({ ...valid, items: valid.items.map((x) => ({ ...x, ...update })) })).toBe(false);
 });
 
-it("accepts independently verified normal status and server execution eligibility",()=>{
-  const live={...valid,items:valid.items.map(x=>({...x,
-    status:{state:"normal",observed_at:"2026-11-10T15:00:05Z",valid_until:"2026-11-10T15:01:05Z"},
-    status_reason:"normal",execution_enabled:true,execution_reason:"available",
-  }))};
+it("accepts independently verified normal status and server execution eligibility", () => {
+  const live = {
+    ...valid,
+    items: valid.items.map((x) => ({
+      ...x,
+      status: {
+        state: "normal",
+        observed_at: "2026-11-10T15:00:05Z",
+        valid_until: "2026-11-10T15:01:05Z",
+      },
+      status_reason: "normal",
+      execution_enabled: true,
+      execution_reason: "available",
+    })),
+  };
   expect(isStocks(live)).toBe(true);
-  expect(isStocks({...live,items:live.items.map(x=>({...x,status:{...x.status,state:"unknown"}}))})).toBe(false);
+  expect(
+    isStocks({
+      ...live,
+      items: live.items.map((x) => ({ ...x, status: { ...x.status, state: "unknown" } })),
+    }),
+  ).toBe(false);
 });
