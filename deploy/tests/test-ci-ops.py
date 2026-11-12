@@ -313,7 +313,11 @@ class CI(unittest.TestCase):
             self.assertIn(text, j["frontend"])
         self.assertIn("PRICE_SOURCE=fake", j["e2e"])
         self.assertIn("EMAIL_BACKEND=console", j["e2e"])
-        self.assertRegex(j["e2e"], r"(?m)^        run: npx playwright test$")
+        self.assertRegex(j["e2e"], r"(?m)^        run: python3 deploy/tests/run-stock-browser.py$")
+        browser = (ROOT / "deploy/tests/run-stock-browser.py").read_text()
+        for token in ('"frontend/node_modules/.bin/playwright"', '"test"', '"--workers=1"', '"--retries=0"', 'default="all"', 'COMPOSE_DISABLE_ENV_FILE'):
+            self.assertIn(token, browser)
+        self.assertNotIn('"--grep"', browser)
         self.assertIn("target: test-builder", j["image"])
         self.assertIn("target: runtime", j["image"])
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])

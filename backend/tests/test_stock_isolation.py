@@ -111,7 +111,10 @@ async def test_held_stock_remains_visible_but_cannot_reuse_crypto_price(
     held = snapshot.holdings[0]
     assert (held.symbol, held.quantity, held.cost_basis) == ("AAPL", D("2"), D("300"))
     assert (held.mid, held.as_of, held.current_value, held.status) == (None, None, None, "unpriced")
-    assert not held.is_active
+    assert held.is_active and held.asset_class == "stock"
+    assert held.stock_mark is not None and held.stock_mark.mark_mode == "unavailable"
+    assert not held.stock_mark.units_safe and held.average_cost is None
+    assert held.allocation_percent is snapshot.cash_allocation_percent is None
 
 
 async def financial_rows(engine: AsyncEngine, user_id: int) -> tuple:
@@ -372,5 +375,5 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
             expected_mid=D("200"),
             idempotency_key=key,
         )
-    assert exc.value.code == "unknown_coin"
+    assert exc.value.code == "idempotency_conflict"
     assert await financial_rows(engine, user_id) == before
