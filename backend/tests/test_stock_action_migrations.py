@@ -361,6 +361,7 @@ async def test_populated_accounting_downgrade_refuses_before_alter(
 @pytest_asyncio.fixture
 async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
     await migrate("0010", down=True)
+    created_roles: set[str] = set()
     async with engine.begin() as conn:
         for role in ("birja_app", "birja_scheduler", "birja_migrator"):
             if not (
@@ -369,6 +370,7 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
                 )
             ).scalar_one():
                 await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
+                created_roles.add(role)
             await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))  # noqa: S608
     try:
         # This fixture proves the retained00011–0013 runtime/bootstrap policy;
@@ -378,6 +380,10 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
     finally:
         async with engine.begin() as conn:
             for role in ("birja_app", "birja_scheduler", "birja_action_operator", "birja_migrator"):
+                # The guarded0014 test bootstrap may have provisioned this
+                # owner before our historical role fixture. Never remove it.
+                if role == "birja_migrator" and role not in created_roles:
+                    continue
                 exists = (
                     await conn.execute(
                         text("SELECT count(*) FROM pg_roles WHERE rolname=:r"), {"r": role}
