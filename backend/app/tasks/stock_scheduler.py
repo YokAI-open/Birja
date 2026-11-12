@@ -259,6 +259,11 @@ async def run_stock_cycle(
     settings: SchedulerSettings,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> CycleResult:
+    from app.tasks.stock_status import run_stock_status_cycle
+
+    status_result = await run_stock_status_cycle(sessionmaker)
+    if status_result.status != "ok":
+        return status_result
     if not settings.stock_data_enabled:
         return CycleResult("ok")
     token = secrets.token_hex(16)

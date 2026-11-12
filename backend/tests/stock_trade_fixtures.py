@@ -5,7 +5,7 @@ No enabled boolean or live credential supplies product rights.
 """
 
 from dataclasses import asdict, replace
-from datetime import timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest_asyncio
@@ -70,7 +70,7 @@ async def status_case(engine, migrated, clean_stock_discovery):
 
 
 @pytest_asyncio.fixture
-async def stock_trade_case(status_case, ownership):
+async def stock_trade_case(status_case, ownership, monkeypatch, request):
     """Real independent rows and a deliberately synthetic open session.
 
     Official schedules have separate tests. This fixture exercises finances at
@@ -79,6 +79,7 @@ async def stock_trade_case(status_case, ownership):
     """
     from app.models.corporate_action import StockActionState
     from app.models.stock import StockQuote, StockSession
+    from app.services import stock_sessions
     from app.services.stock_status import persist_status_batch
     from app.services.stock_status_rules import StatusBatch, StatusEvent
     from tests.test_stock_sessions import evidence
@@ -86,30 +87,89 @@ async def stock_trade_case(status_case, ownership):
     factory, cid, now = status_case
     _, owner_cid, uid = ownership
     assert cid == owner_cid
+
+    # Replace only the external calendar dataset. Real build_sessions/session_at
+    # and their permission/generation/coverage validation still run, as does the
+    # advancing DB clock/final SQL guard. Never cache this data outside fixture.
+    class Stamp:
+        def __init__(self, value):
+            self.value = value
+
+        def date(self):
+            return self.value
+
+        def to_pydatetime(self):
+            return self.value
+
+    class SyntheticCalendar:
+        def __init__(self, start, end):
+            first, last = date.fromisoformat(start), date.fromisoformat(end)
+            self.sessions = [
+                Stamp(first + timedelta(days=i)) for i in range((last - first).days + 1)
+            ]
+
+        def session_open(self, day):
+            day = date.fromisoformat(day)
+            if day == now.date():
+                hours = 1 if getattr(request, "param", "open") == "closed" else -1
+                return Stamp(now + timedelta(hours=hours))
+            return Stamp(datetime.combine(day, time(14), UTC))
+
+        def session_close(self, day):
+            day = date.fromisoformat(day)
+            if day == now.date():
+                hours = 7 if getattr(request, "param", "open") == "closed" else 1
+                return Stamp(now + timedelta(hours=hours))
+            return Stamp(datetime.combine(day, time(21), UTC))
+
+    stock_sessions._calendar_bounds.cache_clear()
+    request.addfinalizer(stock_sessions._calendar_bounds.cache_clear)
+    monkeypatch.setattr(
+        stock_sessions.calendars,
+        "get_calendar",
+        lambda alias, *, start, end: SyntheticCalendar(start, end),
+    )
     async with factory.begin() as db:
+        # Display/collection alone cannot authorize permanent financial receipts
+        # or their retained recovery copies. These remain synthetic permissions.
+        await db.execute(
+            update(StockDataAdmission).values(
+                scope=StockDataAdmission.scope.op("||")(
+                    {
+                        "durable_accounting": True,
+                        "backup_restore": True,
+                        "retention_mode": "durable-accounting",
+                    }
+                )
+            )
+        )
         for authority in (admitted("quotes"), action_admitted(), evidence(now)):
             authority = replace(
                 authority,
                 reviewed_at=now - timedelta(hours=1),
                 valid_from=now - timedelta(hours=1),
                 valid_until=now + timedelta(hours=1),
+                scope={
+                    **authority.scope,
+                    "durable_accounting": True,
+                    "backup_restore": True,
+                    "retention_mode": "durable-accounting",
+                },
             )
             await db.execute(insert(StockDataAdmission).values(**asdict(authority)))
-        exchange = (
-            await db.execute(
-                select(StockInstrument.listing_exchange).where(StockInstrument.coin_id == cid)
-            )
-        ).scalar_one()
         await db.execute(
-            insert(StockSession).values(
-                exchange=exchange,
-                session_date=now.date(),
-                opens_at=now - timedelta(hours=1),
-                closes_at=now + timedelta(hours=1),
-                coverage_start=now.date() - timedelta(days=45),
-                coverage_end=now.date() + timedelta(days=90),
-                calendar_admission_generation=4,
-            )
+            insert(StockSession),
+            [
+                asdict(row)
+                for row in stock_sessions.build_sessions(
+                    now,
+                    replace(
+                        evidence(now),
+                        valid_from=now - timedelta(hours=1),
+                        valid_until=now + timedelta(hours=1),
+                    ),
+                )
+            ],
         )
         await db.execute(
             insert(StockQuote).values(
@@ -162,4 +222,7 @@ async def stock_trade_case(status_case, ownership):
             ),
             coin_id=cid,
         )
-    yield factory, cid, uid, now
+    try:
+        yield factory, cid, uid, now
+    finally:
+        stock_sessions._calendar_bounds.cache_clear()

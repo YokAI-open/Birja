@@ -213,7 +213,8 @@ async def test_exact_quote_and_independent_facts(engine, settings, clean_stock_d
     assert first["quote"]["mid"] == "100.00000002"
     assert first["session"]["state"] == "open"
     assert first["status"] == {"state": "unknown", "observed_at": None, "valid_until": None}
-    assert first["execution_reason"] == "phase_disabled"
+    # Quote/calendar/action data alone does not establish reference or status rights.
+    assert first["execution_reason"] == "permission_unavailable"
     assert first["quote_reason"] == "recent"
     assert result["attribution"]["label"] == "IEX prices"
     assert "simulat" in result["attribution"]["explanation"].lower()

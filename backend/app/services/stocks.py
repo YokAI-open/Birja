@@ -2,21 +2,16 @@
 
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import case, exists, func, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.models.corporate_action import (
-    StockActionEvent,
-    StockActionRevision,
-    StockActionState,
-    StockSplitApplication,
-)
 from app.models.price import Coin
-from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
+from app.models.stock import StockInstrument, StockQuote
 from app.schemas.stocks import (
     StockActionOut,
     StockAdmission,
@@ -25,129 +20,24 @@ from app.schemas.stocks import (
     StockQuoteOut,
     StockSessionOut,
     StocksResponse,
+    StockStatus,
 )
-from app.services.corporate_actions import action_hold_queries
 from app.services.stock_action_rules import evaluate_action_state
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_eligibility import (
+    admission_rows as _admissions,
+)
+from app.services.stock_eligibility import execution_snapshot_query, executions_from_snapshot
+from app.services.stock_eligibility import (
+    session_rows as _sessions,
+)
 from app.services.stock_quote_rules import CURATED_SYMBOLS, ValidatedStockQuote, quote_eligibility
 from app.services.stock_sessions import RegularSession, load_sessions, session_at
+from app.services.stock_trading_rules import status_current
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _json_rows(model: Any, maximum: int, anchor: datetime | None = None) -> Any:
-    query = select(model.__table__).order_by(*model.__table__.primary_key.columns)
-    if model is StockSession and anchor is not None:
-        query = query.where(
-            StockSession.session_date >= anchor.date() - timedelta(days=45),
-            StockSession.session_date <= anchor.date() + timedelta(days=90),
-        )
-    bounded = query.limit(maximum).subquery()
-    return select(func.jsonb_agg(func.to_jsonb(bounded.table_valued()))).scalar_subquery()
-
-
-def _admissions(rows: list[dict[str, Any]]) -> dict[str, ProductAdmission]:
-    result = {}
-    for row in rows:
-        row = {key: value for key, value in row.items() if key != "id"}
-        for key in ("reviewed_at", "valid_from", "valid_until"):
-            if row[key] is not None:
-                row[key] = datetime.fromisoformat(row[key])
-        item = ProductAdmission(**row)
-        result[item.product] = item
-    return result
-
-
-def _sessions(rows: list[dict[str, Any]]) -> list[RegularSession]:
-    result = []
-    for row in rows:
-        row = {key: value for key, value in row.items() if key != "id"}
-        for key in ("session_date", "coverage_start", "coverage_end"):
-            row[key] = date.fromisoformat(row[key])
-        for key in ("opens_at", "closes_at"):
-            if row[key] is not None:
-                row[key] = datetime.fromisoformat(row[key])
-        result.append(RegularSession(**row))
-    return result
-
-
-def _action_rows() -> Any:
-    """Twenty fixed-size authority facts; no event/audit payload crosses to Python."""
-    state = StockActionState.__table__
-    held, missing = action_hold_queries(Coin.id)
-    held = held.correlate(Coin)
-    missing = missing.correlate(Coin)
-    safe_reason = case(
-        *(
-            (exists(held.where(StockActionRevision.reason == reason)), reason)
-            for reason in ("unsupported", "fractional", "conflicting", "identity_change")
-        ),
-        (exists(held), "conflicting"),
-        (exists(missing), "source_gap"),
-        else_=None,
-    )
-    applied = StockSplitApplication
-    event = StockActionEvent
-    revision = StockActionRevision
-    boundary = (
-        select(applied.cutoff)
-        .where(applied.coin_id == Coin.id, applied.new_unit_epoch == state.c.unit_epoch)
-        .order_by(applied.id.desc())
-        .limit(1)
-        .correlate(Coin, state)
-        .scalar_subquery()
-    )
-    changed_split = exists(
-        select(applied.id)
-        .join(event, event.id == applied.economic_event_id)
-        .where(applied.coin_id == Coin.id, applied.revision_id != event.current_revision_id)
-        .correlate(Coin)
-    )
-    pending_boundary = (
-        select(func.min(revision.verified_cutoff))
-        .join(event, event.current_revision_id == revision.id)
-        .where(
-            event.coin_id == Coin.id,
-            revision.classification == "supported_forward_split",
-            ~exists(
-                select(applied.id).where(applied.economic_event_id == event.id).correlate(event)
-            ),
-        )
-        .correlate(Coin)
-        .scalar_subquery()
-    )
-    query = (
-        select(
-            Coin.id.label("coin_id"),
-            *(
-                state.c[name]
-                for name in (
-                    "epoch",
-                    "unit_epoch",
-                    "health",
-                    "checked_at",
-                    "valid_until",
-                    "admission_generation",
-                    "coverage_start",
-                    "covered_until",
-                    "quote_not_before",
-                    "next_blocking_at",
-                )
-            ),
-            safe_reason.label("hold"),
-            boundary.label("split_boundary"),
-            changed_split.label("changed_split"),
-            pending_boundary.label("pending_boundary"),
-        )
-        .outerjoin(state, state.c.coin_id == Coin.id)
-        .where(Coin.asset_class == "stock", Coin.is_active, Coin.symbol.in_(CURATED_SYMBOLS))
-        .order_by(Coin.sort_order, Coin.id)
-        .limit(20)
-        .subquery()
-    )
-    return select(func.jsonb_agg(func.to_jsonb(query.table_valued()))).scalar_subquery()
 
 
 def _action_projection(
@@ -286,27 +176,32 @@ async def list_stocks(
     authority: dict[str, ProductAdmission] = {}
     sessions: list[RegularSession] = []
     actions: dict[int, dict[str, Any]] = {}
+    current_rows: dict[int, dict[str, Any]] = {}
+    final = None
     try:
-        final = (
-            await db.execute(
-                select(
-                    _json_rows(StockDataAdmission, 6).label("admissions"),
-                    _json_rows(StockSession, 273, staged_at).label("sessions"),
-                    _action_rows().label("actions"),
-                    func.current_setting("transaction_isolation").label("isolation"),
-                ).execution_options(stock_final_evidence=True)
-            )
-        ).one()
+        final = (await db.execute(execution_snapshot_query(staged_at))).one()
         if final.isolation == "read committed" and len(final.admissions or []) <= 5:
             authority = _admissions(final.admissions or [])
             sessions = _sessions(final.sessions or [])
             if len(final.actions or []) <= 20:
                 actions = {row["coin_id"]: row for row in final.actions or []}
+            if len(final.instruments or []) <= 20:
+                current_rows = {row["coin_id"]: row for row in final.instruments or []}
     except SQLAlchemyError, ValueError, TypeError, KeyError:
         # Safe SEC metadata survives; never return/log driver/provider evidence.
         authority = {}
         sessions = []
     checked_at = now()
+    try:
+        loaded = (
+            executions_from_snapshot(final, settings, now=checked_at) if final is not None else {}
+        )
+    except ValueError, TypeError, KeyError:
+        loaded = {}
+        authority = {}
+        sessions = []
+        actions = {}
+        current_rows = {}
     quote_authority = authority.get("quotes")
     scope: dict[str, Any] = {
         "account": settings.stock_data_account,
@@ -328,11 +223,65 @@ async def list_stocks(
     }
     items = []
     disclosure_deadline = permission.valid_until
-    for row in catalogue:
-        session = decisions[row.listing_exchange]
+    for original in catalogue:
+        row = dict(original)
+        current_row = current_rows.get(row["id"], {})
+        for column in StockQuote.__table__.columns:
+            name = column.name
+            value = current_row.get("quote_" + name)
+            if name in ("bid", "ask", "mid"):
+                value = Decimal(current_row[name]) if current_row.get(name) is not None else None
+            elif name in ("event_at", "collected_at") and value is not None:
+                value = datetime.fromisoformat(value)
+            elif name == "session_date" and value is not None:
+                value = date.fromisoformat(value)
+            row["quote_" + name] = value
+        if current_row:
+            row["symbol"] = current_row["symbol"]
+            row["name"] = current_row["company_name"]
+            row["listing_exchange"] = current_row["listing_exchange"]
+        execution = loaded.get(row["id"])
+        status = StockStatus()
+        if execution is not None:
+            facts = execution.evidence.status
+            status_rights = {
+                product: authority[product]
+                for product in ("reference", "status")
+                if product in authority
+                and all(
+                    evaluate_admission(
+                        authority[product],
+                        product,
+                        purpose,
+                        checked_at,
+                        **scope,
+                    ).allowed
+                    for purpose in ("collection", "display", "derived", "retention")
+                )
+            }
+            if (
+                len(status_rights) == 2
+                and bool(execution.evidence.admissions)
+                and status_current(facts, checked_at)
+                and facts.state in ("normal", "halted", "frozen")
+                and facts.provider_asset_id == execution.evidence.provider_asset_id
+                and facts.admission_generation == status_rights["status"].generation
+            ):
+                deadlines = [cast(datetime, a.valid_until) for a in status_rights.values()]
+                # status_current above guarantees both timestamps are present.
+                deadlines.append(cast(datetime, facts.valid_until))
+                deadlines.append(
+                    cast(datetime, facts.observed_at)
+                    + timedelta(seconds=status_rights["status"].quota["retention_seconds"])
+                )
+                if checked_at < min(deadlines):
+                    status = StockStatus(
+                        state=facts.state, observed_at=facts.observed_at, valid_until=min(deadlines)
+                    )
+        session = decisions[row["listing_exchange"]]
         current = session.current
         action, action_safe = _action_projection(
-            actions.get(row.id),
+            actions.get(row["id"]),
             authority.get("actions"),
             session.valid_until
             if all(
@@ -342,8 +291,8 @@ async def list_stocks(
             else None,
             checked_at,
             scope,
-            row.quote_unit_epoch,
-            row.quote_event_at,
+            row["quote_unit_epoch"],
+            row["quote_event_at"],
         )
         quote = None
         reason = "permission_unavailable"
@@ -352,7 +301,7 @@ async def list_stocks(
             # Local accounting provenance is not a provider validation field.
             # Current action/unit authority governs both recent and historical
             # disclosures; safety epochs do not change the quote's local units.
-            if row.quote_coin_id is not None:
+            if row["quote_coin_id"] is not None:
                 fields = {
                     name: row["quote_" + name]
                     for name in (
@@ -368,7 +317,7 @@ async def list_stocks(
                         "admission_generation",
                     )
                 }
-                candidate = ValidatedStockQuote(symbol=row.symbol, **fields)
+                candidate = ValidatedStockQuote(symbol=row["symbol"], **fields)
                 matched = evaluate_admission(
                     quote_authority,
                     "quotes",
@@ -419,12 +368,18 @@ async def list_stocks(
                     )
         items.append(
             StockItem(
-                id=row.id,
-                symbol=row.symbol,
-                company_name=row.name,
-                listing_exchange=row.listing_exchange,
+                id=row["id"],
+                symbol=row["symbol"],
+                company_name=row["name"],
+                listing_exchange=row["listing_exchange"],
                 quote=quote,
                 action=action,
+                status=status,
+                status_reason=status.state,
+                execution_enabled=execution.decision.allowed if execution else False,
+                execution_reason=execution.decision.reason
+                if execution
+                else "permission_unavailable",
                 valuation_reason=(
                     "available"
                     if quote is not None

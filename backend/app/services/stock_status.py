@@ -1,7 +1,7 @@
 """Scheduler-owned finite status persistence; caller owns one short transaction."""
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from typing import Any
 from typing import cast as typecast
 
@@ -14,9 +14,14 @@ from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.stock_execution import StockStatusEvidence
 from app.services.stock_admission import ProductAdmission, evaluate_admission
 from app.services.stock_ownership import acquire_stock_gate
-from app.services.stock_quote_rules import CURATED_SYMBOLS
+from app.services.stock_quote_rules import CURATED_SYMBOLS, utc
 from app.services.stock_status_rules import StatusBatch, StatusEvent, normalize_status_batch
-from app.services.stock_trading_rules import StatusEvidence, lose_status_continuity, status_current
+from app.services.stock_trading_rules import (
+    MAX_SAFE,
+    StatusEvidence,
+    lose_status_continuity,
+    status_current,
+)
 
 
 class StatusUnavailable(ValueError):
@@ -116,7 +121,19 @@ async def invalidate_status(db: AsyncSession, coin_id: int) -> bool:
         and old.valid_until is None
     ):
         return False
-    await _write(db, lose_status_continuity(old))
+    if old.continuity_generation == MAX_SAFE:
+        # Terminal exhaustion cannot advance or wrap, but must remove authority.
+        # No later supported baseline generation can exceed this value.
+        lost = replace(
+            old,
+            state="unknown",
+            bootstrap_verified=False,
+            continuity_current=False,
+            valid_until=None,
+        )
+    else:
+        lost = lose_status_continuity(old)
+    await _write(db, lost)
     return True
 
 
@@ -158,16 +175,20 @@ async def persist_status_batch(
         raise ValueError("One instrument per status transaction")
     await acquire_stock_gate(db, coin_id)
     authority = await _authority(db, coin_id, account, server)
-    if batch.admission_generation != next(
-        a.generation for a in authority.admissions if a.product == "status"
-    ):
+    status_permission = next(a for a in authority.admissions if a.product == "status")
+    if batch.admission_generation != status_permission.generation:
         raise StatusUnavailable("status_generation_changed")
     old = await load_status(db, coin_id)
     value = normalize_status_batch(
         batch,
         {coin_id: old} if old is not None else {},
         {coin_id: authority.identity[0]},
-        admission_until=authority.valid_until,
+        admission_until=min(
+            authority.valid_until,
+            batch.observed_at + timedelta(seconds=status_permission.quota["retention_seconds"]),
+        )
+        if utc(batch.observed_at)
+        else authority.valid_until,
         now=authority.checked_at,
     )[coin_id]
     if value != old:

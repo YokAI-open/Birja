@@ -41,6 +41,50 @@ class StatusBatch:
     reconnected: bool = False
 
 
+def status_batch_within_bounds(batch: StatusBatch) -> bool:
+    """Whole-envelope size guard only; this does not establish authority."""
+    if (
+        not isinstance(batch, StatusBatch)
+        or type(batch.events) is not tuple
+        or not 0 < len(batch.events) <= 1000
+        or not utc(batch.observed_at)
+        or any(
+            type(value) is not int or not 0 < value <= MAX_SAFE
+            for value in (batch.admission_generation, batch.continuity_generation)
+        )
+        or any(
+            type(value) is not bool
+            for value in (
+                batch.baseline_verified,
+                batch.contiguous,
+                batch.complete,
+                batch.end_marker,
+                batch.lost,
+                batch.reconnected,
+            )
+        )
+    ):
+        return False
+    if any(
+        not isinstance(event, StatusEvent)
+        or not isinstance(event.provider_asset_id, str)
+        or len(event.provider_asset_id) > 128
+        or not isinstance(event.source_ref, str)
+        or len(event.source_ref) > 2048
+        or not isinstance(event.state, str)
+        or len(event.state) > 32
+        or not utc(event.event_at)
+        or type(event.session_date) is not date
+        or type(event.coin_id) is not int
+        or not 0 < event.coin_id < 2**63
+        or type(event.sequence) is not int
+        or not 0 <= event.sequence <= MAX_SAFE
+        for event in batch.events
+    ):
+        return False
+    return len(json.dumps(asdict(batch), default=str, ensure_ascii=False).encode()) <= 1048576
+
+
 def normalize_status_batch(
     batch: StatusBatch,
     previous: Mapping[int, StatusEvidence],
@@ -69,7 +113,12 @@ def normalize_status_batch(
     ):
         raise ValueError("Invalid bounded status scope")
     initial = {
-        cid: previous.get(cid, StatusEvidence(coin_id=cid, provider_asset_id=asset))
+        cid: previous.get(
+            cid,
+            StatusEvidence(
+                coin_id=cid, provider_asset_id=asset, source_ref="continuity-unavailable"
+            ),
+        )
         for cid, asset in identities.items()
     }
 
@@ -113,7 +162,7 @@ def normalize_status_batch(
             or not 0 < len(event.source_ref) <= 2048
         ):
             return invalidate()
-    if len(json.dumps(asdict(batch), default=str, ensure_ascii=False).encode()) > 1048576:
+    if not status_batch_within_bounds(batch):
         return invalidate()
     grouped: dict[int, list[StatusEvent]] = {}
     for event in batch.events:
