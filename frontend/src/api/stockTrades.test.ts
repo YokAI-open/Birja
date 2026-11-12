@@ -331,3 +331,11 @@ it("validates sell-side midpoint, proceeds and half-even cent ties exactly", () 
   const buy = { ...sale, side: "buy", held_before: "0", held_after: "1" };
   expect(isStockTradeQuote(buy)).toBe(false);
 });
+it("does not accept a server max above cash or remaining whole-share room", () => {
+  const c = contextFixture();
+  c.buy_max_quantity = "99";
+  expect(isStockContext(c)).toBe(false);
+  c.buy_max_quantity = "98";
+  c.held_quantity = "999999999999";
+  expect(isStockContext(c)).toBe(false);
+});

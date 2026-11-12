@@ -491,6 +491,8 @@ export function isStockContext(v: unknown): v is StockContext {
     ].every((x) => until <= stockInstant(x as string)) &&
     (a.next_blocking_at === null || until <= stockInstant(a.next_blocking_at as string)) &&
     until <= stockInstant(q.event_at) + 120_000_000_000n &&
+    shares(v.buy_max_quantity)! <= (balance(v.cash)! / price(q.ask)!) * STOCK_SCALE &&
+    shares(v.held_quantity)! + shares(v.buy_max_quantity)! <= MAX_SHARES &&
     q.admission_generation ===
       v.authority.admissions.find((x) => x.product === "quotes")?.generation &&
     q.unit_epoch === v.authority.unit_epoch
