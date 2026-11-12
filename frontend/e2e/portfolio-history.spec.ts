@@ -48,6 +48,10 @@ for (const width of [375, 768, 1024, 1440]) {
           total_pl_percent: "19999999899.99",
           cash_allocation_percent: "50.00",
           valuation_complete: true,
+          known_value: "1999999999999.98",
+          unvalued_holding_count: 0,
+          class_values: { cash: "999999999999.99", stocks: "0", crypto: "999999999999.99" },
+          class_allocation_percent: { cash: "50.00", stocks: "0.00", crypto: "50.00" },
           valued_at: timestamp,
           prices_as_of: timestamp,
           fresh_seconds: 120,
@@ -56,6 +60,10 @@ for (const width of [375, 768, 1024, 1440]) {
             {
               symbol: "BTC",
               name: "Bitcoin",
+              coin_id: "1",
+              asset_class: "crypto",
+              provider_asset_id: null,
+              stock_mark: null,
               is_active: true,
               quantity: "123456789012.12345678",
               cost_basis: "100.00",
@@ -82,6 +90,10 @@ for (const width of [375, 768, 1024, 1440]) {
               created_at: timestamp,
               symbol: "BTC",
               name: "Bitcoin",
+              coin_id: "1",
+              asset_class: "crypto",
+              provider_asset_id: null,
+              stock_mark: null,
               side: "buy",
               quantity: "123456789012.12345678",
               exec_price: "999999999999.99",
@@ -105,22 +117,15 @@ for (const width of [375, 768, 1024, 1440]) {
         "page",
       );
       const label = name === "Portfolio" ? "Holdings" : "Trade history";
-      const records = page.getByRole(width < 768 ? "list" : "table", { name: label, exact: true });
+      const mobile = width < (name === "Portfolio" ? 1024 : 768);
+      const records = page.getByRole(mobile ? "list" : "table", { name: label, exact: true });
       await expect(records).toBeVisible();
       await expect(
-        page.getByRole(width < 768 ? "table" : "list", { name: label, exact: true }),
+        page.getByRole(mobile ? "table" : "list", { name: label, exact: true }),
       ).toHaveCount(0);
       const fields =
         name === "Portfolio"
-          ? [
-              "Quantity",
-              "Average cost",
-              "Mid price",
-              "Current value",
-              "Unrealized P/L",
-              "Allocation",
-              "Price updated",
-            ]
+          ? ["Quantity", "Average cost", "Cost basis", "Current value", "Gain/loss", "Allocation"]
           : [
               "Date/time",
               "Coin",
@@ -136,12 +141,9 @@ for (const width of [375, 768, 1024, 1440]) {
       await expect
         .poll(() => page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
         .toBe(true);
-      if (width >= 768) {
+      if (width >= 768 && name === "History") {
         const scroll = page.getByRole("region", {
-          name:
-            name === "Portfolio"
-              ? "Holdings table, scroll to see all columns"
-              : "Trade history table",
+          name: "Trade history table",
           exact: true,
         });
         await page.keyboard.press("Tab");
@@ -154,7 +156,7 @@ for (const width of [375, 768, 1024, 1440]) {
           await expect.poll(() => scroll.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
         }
       } else {
-        await expect(nav).toHaveCSS("position", "fixed");
+        if (width < 768) await expect(nav).toHaveCSS("position", "fixed");
         const last =
           name === "Portfolio"
             ? records.getByRole("link", { name: "Trade BTC" })
@@ -166,7 +168,7 @@ for (const width of [375, 768, 1024, 1440]) {
         await expect(last).toHaveCSS("outline-width", "2px");
         const bottom = await last.boundingBox();
         const tabs = await nav.boundingBox();
-        expect(bottom!.y + bottom!.height).toBeLessThanOrEqual(tabs!.y);
+        if (width < 768) expect(bottom!.y + bottom!.height).toBeLessThanOrEqual(tabs!.y);
       }
     }
     // Browser-equivalent enlarged text; subjective 200% browser zoom remains 05-08.

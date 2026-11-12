@@ -34,7 +34,7 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   await expect(stocks.getByRole("note", { name: "Stock price source" })).toContainText(
     "IEX prices",
   );
-  await expect(stocks.getByRole("link")).toHaveCount(0);
+  await expect(stocks.getByRole("link")).toHaveCount(20);
 
   // Refetch without reload (PRICE-03).
   await page.waitForResponse((r) => r.url().endsWith("/api/v1/prices") && r.status() === 200, {

@@ -54,7 +54,7 @@ for (const width of [320, 375, 768, 1280])
     await signInNewUser(page);
     await expect(records(page)).toHaveCount(20);
     await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
-    await expect(section(page).getByRole("link")).toHaveCount(0);
+    await expect(section(page).getByRole("link")).toHaveCount(20);
     await expect(section(page).getByRole("button")).toHaveCount(0);
     await expect(section(page).getByRole("table", { name: "US stocks" })).toHaveCount(
       width >= 1024 ? 1 : 0,
@@ -64,7 +64,9 @@ for (const width of [320, 375, 768, 1280])
     );
     await expect(section(page).getByRole("note")).toContainText("IEX prices");
     await expect(section(page).getByRole("note")).toContainText("Fixture provider attribution");
-    await expect(section(page).getByText(/Stock trading coming later/)).toBeVisible();
+    await expect(
+      section(page).getByText(/Whole-share stock orders use your existing USD balance/),
+    ).toBeVisible();
     await expect(records(page).first()).toContainText("NASDAQ");
     await expect(records(page).last()).toContainText("NYSE");
     await expect(records(page).first().locator("time").first()).toHaveAttribute(

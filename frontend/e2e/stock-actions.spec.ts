@@ -76,13 +76,13 @@ for (const width of [320, 375, 768, 1280]) {
     await expect(records(page).first()).not.toContainText("$100.00");
     await expect(records(page).nth(1)).toContainText("$100.00");
     await expect(records(page).first()).toContainText("Stock status unverified.");
-    await expect(records(page).first()).toContainText("Trading coming later.");
+    await expect(records(page).first()).toContainText("View stock AAPL");
     await expect(region(page).getByRole("status")).toContainText("AAPL:");
     await expect(region(page).getByRole("note")).toContainText("IEX prices");
     await expect(region(page).getByRole("note")).toContainText("one US exchange");
     await expect(region(page).getByRole("note")).toContainText("simulated execution");
     await expect(region(page).getByRole("button")).toHaveCount(0);
-    await expect(region(page).getByRole("link")).toHaveCount(0);
+    await expect(region(page).getByRole("link")).toHaveCount(20);
     await expect(region(page).getByRole("table")).toHaveCount(width >= 1024 ? 1 : 0);
     await expect(region(page).getByRole("list")).toHaveCount(width < 1024 ? 1 : 0);
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
@@ -181,7 +181,10 @@ test("nearest action deadline removes prices before polling and stale replies ca
   await page.clock.install();
   let calls = 0;
   let body = snapshot();
-  body.items[0].action.valid_until = "2026-11-10T15:00:00.500Z";
+  // Leave initial transport/render headroom. Exact subsecond cache expiry has
+  // independent fake-clock unit coverage; this browser check must expire
+  // before polling without assuming a sub-500ms page bootstrap.
+  body.items[0].action.valid_until = "2026-11-10T15:00:03.000Z";
   await page.route("**/api/v1/stocks", (route) => {
     calls++;
     return route.fulfill({ json: body });
@@ -189,7 +192,7 @@ test("nearest action deadline removes prices before polling and stale replies ca
   await signInNewUser(page);
   await expect(records(page).first()).toContainText("$100.00");
   const initialCalls = calls;
-  await page.clock.runFor(500);
+  await page.clock.runFor(3000);
   await expect(records(page).first()).not.toContainText("$100.00");
   await expect(records(page).first()).toContainText("Corporate-action checks unavailable.");
   expect(calls).toBe(initialCalls);
