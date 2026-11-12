@@ -80,7 +80,10 @@ function isMark(v: unknown): v is StockMark {
       "mark_mode valuation_reason source feed event_at collected_at historical_admission_until retained_until valid_until authority units_safe",
     ) ||
     !["fresh", "closed", "halted", "unavailable"].includes(v.mark_mode as string) ||
-    !(v.valuation_reason === "available" || STOCK_REFUSALS.includes(v.valuation_reason as StockRefusal)) ||
+    !(
+      v.valuation_reason === "available" ||
+      STOCK_REFUSALS.includes(v.valuation_reason as StockRefusal)
+    ) ||
     typeof v.units_safe !== "boolean"
   )
     return false;
@@ -247,7 +250,8 @@ export function isPortfolio(v: unknown): v is Portfolio {
     (stockFixed(p.starting_cash) === 0n) !== (p.total_pl_percent === null)
   )
     return false;
-  return stockFixed(p.total_value) === 0n
+  return stockFixed(p.total_value) === 0n &&
+    !p.holdings.some((h) => h.mid !== null && stockFixed(h.mid)! > 0n)
     ? allocations.every((x) => x === null)
     : allocations.every((x) => x !== null) &&
         stockFixed(p.cash_allocation_percent) === stockFixed(p.class_allocation_percent.cash);
