@@ -166,6 +166,31 @@ and distinct retention/admission/action/unit/status continuity deadlines.
 Unknown/frozen has no fallback; uncertain actions/unit mismatch suppress even
 recent values. Exact midpoint `(bid+ask)/2` preserves ninth fractional place.
 
+## Plan09 portfolio implementation seam
+
+PortfolioOut adds known_value, unvalued_holding_count, class_values and
+class_allocation_percent (cash/stocks/crypto keys). HoldingOut adds asset_class,
+string coin_id, nullable provider_asset_id and nullable average_cost. The existing
+money fields stay string-exact. Derived aggregate parser bound is plain signed
+decimal with at most38integer digits and9fractional digits, no exponent; this
+covers35NUMERIC positions, exact midpoint9 and returns against the smallest
+stored positive baseline. Requests retain their much narrower existing limits.
+
+HoldingOut.stock_mark is null for crypto. For stocks its exact fields are:
+mark_mode(fresh|closed|halted|unavailable), valuation_reason(RefusalReason),
+source(alpaca|null), feed(iex|null), event_at, collected_at,
+historical_admission_until, retained_until, valid_until, authority(AuthorityIdentity
+or null), units_safe(boolean). All six time/source bounds and authority are null
+when unavailable; fixed reason and independent unit safety remain. Position.mid
+is the authorized exact midpoint, not an extra duplicate mark amount.
+
+value_stock consumes original financial/source snapshot plus current authority;
+current data can only suppress, never replace original prices/quantities. Source
+quote generation needs existing immutable original admission hash/validity proof;
+missing proof or same-generation changed terms suppresses. A fresh new permitted
+quote generation may gain its own proof through a real new fill. Never extend an
+old generation's rights/deadline. No new schema/permission is inferred.
+
 ## Portfolio consumer fields
 
 Plan09-09 extends `get_portfolio(db,*,user_id,settings,now=...) -> PortfolioSnapshot`
