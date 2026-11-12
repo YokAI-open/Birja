@@ -1,7 +1,60 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 import { stockFixture } from "./stock-trade-fixtures.js";
 import { signInNewUser } from "./helpers.js";
 type StockFill = Record<"exec_price" | "cash_after" | "fee" | "held_after", string>;
+
+/** Actual DOM/CSS, frozen for offline owner zoom review; no API, script or navigation. */
+async function reviewSnapshot(page: Page, info: TestInfo, name: string) {
+  let css = await page.evaluate<string>(String.raw`
+    Array.from(document.styleSheets)
+      .flatMap((sheet) => Array.from(sheet.cssRules, (rule) => rule.cssText))
+      .join("\n")
+  `);
+  const origin = new URL(page.url()).origin;
+  for (const match of Array.from(css.matchAll(/url\((["']?)([^)"']+)\1\)/g))) {
+    if (match[2].startsWith("data:")) continue;
+    const url = new URL(match[2], page.url());
+    expect(url.origin).toBe(origin);
+    expect(url.pathname).toMatch(/\.(woff2?|ttf|otf)$/);
+    const response = await page.request.get(url.href);
+    expect(response.ok()).toBe(true);
+    css = css.replaceAll(
+      match[0],
+      `url("data:font/woff2;base64,${(await response.body()).toString("base64")}")`,
+    );
+  }
+  const snapshotBuilder = String.raw`(styles) => {
+    const copy = document.cloneNode(true);
+    copy.querySelectorAll("script, link, style, iframe").forEach((el) => el.remove());
+    const style = copy.createElement("style");
+    style.textContent = styles;
+    copy.head.append(style);
+    copy.querySelectorAll("form").forEach((form) => {
+      const block = copy.createElement("div");
+      block.className = form.className;
+      block.replaceChildren(...form.childNodes);
+      form.replaceWith(block);
+    });
+    copy.querySelectorAll("a").forEach((el) => el.setAttribute("href", "#"));
+    copy.querySelectorAll("button").forEach((el) => el.setAttribute("type", "button"));
+    copy.querySelectorAll("input").forEach((el) => el.setAttribute("readonly", ""));
+    const note = copy.createElement("p");
+    note.textContent =
+      "Read-only synthetic Phase 9 review snapshot. Actions do not execute. Use your browser menu to check 200% zoom.";
+    note.setAttribute("style", "padding:16px;border:2px solid currentColor");
+    copy.body.prepend(note);
+    return "<!doctype html>\n" + copy.documentElement.outerHTML;
+  }`;
+  // A string expression is evaluated as-is; explicitly invoke it rather than
+  // asking Playwright to serialize a returned function. CSS is a JSON argument,
+  // never interpolated as executable source or passed to a shell.
+  const html = await page.evaluate<string>(`(${snapshotBuilder})(${JSON.stringify(css)})`);
+  expect(html).not.toContain("<script");
+  expect(html).not.toContain("<form");
+  expect(html).not.toMatch(/\s(?:src|href|action)=["']https?:/);
+  await writeFile(info.outputPath(name + ".html"), html);
+}
 
 test.beforeEach(() => stockFixture("fresh"));
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
@@ -46,7 +99,7 @@ async function noOverflow(page: Page) {
 
 test("actual ask buy and bid sale preserve immutable receipt, shared cash and combined allocation", async ({
   page,
-}) => {
+}, info) => {
   await ticket(page);
   await page.getByRole("button", { name: "Buy max", exact: true }).click();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("98");
@@ -97,6 +150,14 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(mixed.cash).toBe("9794.00");
   expect(mixed.starting_cash).toBe("10000.00");
   expect(mixed.holdings.map((h: { symbol: string }) => h.symbol)).toEqual(["AAPL", "BTC"]);
+  await expect(
+    page.getByRole("table", { name: "Holdings", exact: true }).getByText("BTC", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("actual-stock-and-crypto-portfolio.png"),
+    fullPage: true,
+  });
+  await reviewSnapshot(page, info, "combined-portfolio-review");
 });
 
 test("actual changed ask requires renewed confirmation with the exact server delta", async ({
@@ -113,6 +174,7 @@ test("actual changed ask requires renewed confirmation with the exact server del
   const before = await (await page.request.get("/api/v1/portfolio")).json();
   expect(before.cash).toBe("10000.00");
   await page.screenshot({ path: info.outputPath("stock-reprice.png"), fullPage: true });
+  await reviewSnapshot(page, info, "stock-reprice-review");
   const saved = await fill(page);
   expect(saved.cash_after).toBe("9794.00000000");
 });
@@ -206,11 +268,13 @@ test("real historical closed/halted marks survive execution age while uncertain 
   await expect(
     page.getByRole("table", { name: "Holdings", exact: true }).getByText(/Last verified midpoint/),
   ).toBeVisible();
+  await page.screenshot({ path: info.outputPath("stock-closed-portfolio.png"), fullPage: true });
   stockFixture("halt");
   await page.getByRole("button", { name: "Refresh portfolio", exact: true }).click();
   await expect(
     page.getByRole("table", { name: "Holdings", exact: true }).getByText("Halted", { exact: true }),
   ).toBeVisible();
+  await page.screenshot({ path: info.outputPath("stock-halted-portfolio.png"), fullPage: true });
   stockFixture("hold");
   await page.getByRole("button", { name: "Refresh portfolio", exact: true }).click();
   await expect(
@@ -224,6 +288,7 @@ test("real historical closed/halted marks survive execution age while uncertain 
     path: info.outputPath("stock-incomplete-portfolio.png"),
     fullPage: true,
   });
+  await reviewSnapshot(page, info, "incomplete-portfolio-review");
 });
 
 for (const width of [320, 375, 768, 1024, 1440]) {
@@ -242,9 +307,11 @@ for (const width of [320, 375, 768, 1024, 1440]) {
         .evaluate((el) => el.getBoundingClientRect().height),
     ).toBeGreaterThanOrEqual(44);
     await page.screenshot({ path: info.outputPath(`stock-preview-${width}.png`), fullPage: true });
+    if (width === 1440) await reviewSnapshot(page, info, "stock-preview-review");
     await fill(page);
     await noOverflow(page);
     await page.screenshot({ path: info.outputPath(`stock-receipt-${width}.png`), fullPage: true });
+    if (width === 1440) await reviewSnapshot(page, info, "stock-receipt-review");
     await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
     await expect(page.getByRole("table", { name: "Holdings", exact: true })).toHaveCount(
       width >= 1024 ? 1 : 0,
