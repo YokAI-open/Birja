@@ -384,8 +384,12 @@ async def _execute_once(
         )
         db.add(facts)
         account.cash = plan.cash_after
-        fill = _receipt(trade, facts, movement.economic_at)
         await db.flush()
+        # Build BOTH new and replay receipts from the exact persisted NUMERIC
+        # scales. These refresh waits precede constraints and final authority.
+        await db.refresh(trade)
+        await db.refresh(facts)
+        fill = _receipt(trade, facts, movement.economic_at)
         await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         # LAST business SQL: no refresh, read, helper or provider await follows.
         await db.execute(
