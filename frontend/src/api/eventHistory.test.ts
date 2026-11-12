@@ -388,3 +388,7 @@ it("propagates abort and the existing 401 auth error", async () => {
   );
   await expect(fetchEventHistory()).rejects.toBeInstanceOf(ApiError);
 });
+
+it("accepts the unmodified correction baseline before rejection mutations", () => {
+  expect(isEventHistoryPage(page([correction]))).toBe(true);
+});
