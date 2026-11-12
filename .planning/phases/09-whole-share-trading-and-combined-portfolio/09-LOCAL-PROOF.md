@@ -107,3 +107,15 @@ One full rollback quote-metadata rebuild resolves actual RED050bfa0 without
 rewriting immutable rows or retrying lock/constraint/permission failures.
 Distinct inline review is clear. API/portfolio/UI/recovered runtime/full gates
 remain08–15; no live/provider/production/publication change.
+
+
+## Plan09-08 private HTTP —2026-11-12
+
+Source77a4001/ea2472b. Actual HTTP RED04067a0 precedes wiring. Final224tests
+pass58.92s plus matched split1test2.08s;253statements/50branches100%.
+/tmp/birja-phase09-08-final.log. No-store validation/auth/refusal and uncertain
+post-commit outcome recovery are tested; deep receipt JSON uses actual persisted
+Decimal scales before final guard. Shared sale cash funds crypto then stock
+without a new grant. Owner-scoped same keys never expose another receipt.
+Separate inline review is clear; portfolio/UI/recovered runtime/full gates
+remain09–15. No provider, production, B2, timer or publication change.

@@ -246,7 +246,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 09-08-PLAN.md — Expose authenticated stock preview, context and fill APIs
+- [x] 09-08-PLAN.md — Expose authenticated stock preview, context and fill APIs
 - [ ] 09-09-PLAN.md — Compute honest mixed portfolio from one financial snapshot
 
 **Wave 9** *(blocked on Wave 8 completion)*
@@ -336,7 +336,7 @@ do not establish live acceptance or phase completion.
 |-------|-----------|----------------|--------|-----------|
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
-| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 7/15 | In Progress|  |
+| 9. Whole-Share Trading and Combined Portfolio | v1.1 | 8/15 | In Progress|  |
 | 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 

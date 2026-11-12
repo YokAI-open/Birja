@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan09-06 complete; continue09-07 real concurrency and waits.
-last_updated: "2026-11-12T12:09:57.926Z"
-last_activity: 2026-11-12 -- Plan09-07 concurrency proof complete
+stopped_at: Plan09-07 complete; continue09-08 API then09-09 mixed portfolio.
+last_updated: "2026-11-12T12:18:02.341Z"
+last_activity: 2026-11-12 -- Plan09-08 authenticated API complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 33
+  completed_plans: 34
   percent: 20
 ---
 
@@ -26,12 +26,19 @@ See: .planning/PROJECT.md (updated 2026-11-11)
 ## Current Position
 
 Phase: 9
-Plan: 7/15 complete; 09-08 API then 09-09 portfolio (Wave 8/13)
+Plan: 8/15 complete; 09-09 mixed portfolio (Wave 8/13)
 Status: In progress
-Last activity: 2026-11-12 -- Plan09-07 concurrency proof complete
-Progress: [███████░░░] 79% (33/42 tracked plans complete)
+Last activity: 2026-11-12 -- Plan09-08 authenticated API complete
+Progress: [███████░░░] 81% (34/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-08 completes actual private stock HTTP routes with current-user/CSRF,
+read-only context/preview, immutable persisted receipts and uncertain-result
+recovery. Source77a4001/ea2472b. Final224tests pass58.92s plus split1test2.08s;
+API/execution/keys253statements/50branches100%; scoped static checks pass.
+Distinct inline review is clear. Continue09-09 mixed single-snapshot portfolio,
+then client/UI and full gates. No provider/production/publication change.
 
 Plan09-07 completes actual shared-cash/journal contention, adversarial lock waits,
 clock deadlines, same-generation guards and first-fill/action cutoff proof.
@@ -524,6 +531,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P05 | 115min | 2 tasks | 10 files |
 | Phase 9 P06 | 18min | 2 tasks | 5 files |
 | Phase 9 P07 | 15min | 2 tasks | 4 files |
+| Phase 9 P08 | 8min | 2 tasks | 4 files |
 
 ## Operations
 
@@ -533,9 +541,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-07 complete; continue09-08 API then09-09 mixed portfolio.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-08-PLAN.md
-Phase9 plans01–07 are complete with actual source/test/summary commits. Do not
+Stopped at: Plan09-08 complete; continue09-09 mixed portfolio.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-09-PLAN.md
+Phase9 plans01–08 are complete with actual source/test/summary commits. Do not
 restart completed work. Existing isolated birja-test stack is available; all DB
 and ops gates must run serially. Production and live Phase7/8 activation remain
 owner-deferred; no private provider/B2/timer/publication operation is authorized.
