@@ -200,6 +200,12 @@ class RevisionContracts(unittest.TestCase):
 )
 class PostgreSQLContracts(unittest.TestCase):
     @classmethod
+    def tearDownClass(cls):
+        # Leave the owned disposable stack at the application head. Authority
+        # probes below stay at their exact historical revision, not moving head.
+        cls.migrate("head")
+
+    @classmethod
     def query(cls, query):
         result = subprocess.run(
             [
@@ -270,7 +276,7 @@ class PostgreSQLContracts(unittest.TestCase):
         ):
             restore.verify([], manifest)
 
-    def test_all_revisions_and_stock_mutation_hashes(self):
+    def test_legacy_revisions_and_stock_mutation_hashes(self):
         producer = load("backup-snapshot")
         # This suite owns only fixed, disposable birja-test and is repeatable.
         if (
@@ -278,7 +284,11 @@ class PostgreSQLContracts(unittest.TestCase):
             == "t"
         ):
             self.migrate("base", "downgrade")
-        for revision in producer.SUPPORTED_REVISIONS[:-1]:
+        # Accounting11 and resolution12 have separate actual SQL probes below;
+        # execution13 has retained/runtime coverage in the all-lane rehearsal.
+        # A moving slice silently included successor authority under the old
+        # thirteen-table expectations when the supported-revision list grew.
+        for revision in ("0007", "0008", "0009", "0010"):
             self.migrate(revision)
             baseline = self.manifest(revision)
             self.verify(baseline)
@@ -474,7 +484,7 @@ INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,s
         # The standalone probe rebuilds empty0011/0012 role grants after
         # unrelated runtime fixtures intentionally DROP OWNED operator roles.
         self.migrate('0010','downgrade')
-        self.migrate('head')
+        self.migrate('0012')
         # Explicit synthetic ownership provision inside a rollback-only probe.
         # No runtime grants are repaired;0011/0012 supply the actual operator ACL.
         setup="""BEGIN;
