@@ -125,3 +125,25 @@ it("full transport time exhausting the mark suppresses the first result", async 
   expect(result.current.data?.known_value).toBeNull();
   expect(result.current.data?.holdings[0].mid).toBeNull();
 });
+it("exact deadline timers remove values without waiting for the display interval", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  let clock = 0; vi.spyOn(performance, "now").mockImplementation(() => clock);
+  const p = mixedPortfolio(); p.holdings[0].stock_mark!.valid_until = "2026-11-10T15:00:10.125Z"; mock(p);
+  const { result, client } = setup();
+  await act(async () => { for(let i=0;i<8;i++) await vi.advanceTimersByTimeAsync(0); });
+  expect(result.current.data?.total_value).toBe("9998.00");
+  clock = 125; await act(async () => { await vi.advanceTimersByTimeAsync(125); });
+  expect(result.current.data?.known_value).toBeNull(); expect(client.getQueryData<Portfolio>(["portfolio", "first@example.test"])?.holdings[0].mid).toBeNull();
+});
+it("a later old restrictive response suppresses current values without rolling cash back", async () => {
+  mock(); const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.total_value).toBe("9998.00"));
+  const key = ["portfolio", "first@example.test"];
+  const older = structuredClone(client.getQueryData(key)) as ReturnType<typeof mixedPortfolio>;
+  older.valued_at = "2026-11-10T15:00:09Z"; older.cash = "9000";
+  Object.assign(older.holdings[0].stock_mark!, { mark_mode: "unavailable", authority: null, valid_until: null, units_safe: false });
+  act(() => client.setQueryData(key, older));
+  expect(result.current.data?.cash).toBe("9796.00");
+  expect(result.current.data?.holdings[0].mid).toBeNull();
+  expect(result.current.data?.known_value).toBeNull();
+});
