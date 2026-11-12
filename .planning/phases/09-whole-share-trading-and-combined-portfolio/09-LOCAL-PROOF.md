@@ -119,3 +119,15 @@ Decimal scales before final guard. Shared sale cash funds crypto then stock
 without a new grant. Owner-scoped same keys never expose another receipt.
 Separate inline review is clear; portfolio/UI/recovered runtime/full gates
 remain09–15. No provider, production, B2, timer or publication change.
+
+
+## Plan09-09 coherent mixed valuation —2026-11-12
+
+Source64c8611; puremath844f957. ActualRED9c72830/72dbda3 and reviewRED689567b
+precede fixes. Final66tests14.45s,171statements/42branches100%, scoped static
+checks pass. /tmp/birja-phase09-09-final.log. One financial statement plus
+suppress-only current authority; actual mixed commits, old/new units, original
+rights, strict deadlines and HTTP plain values are proved. No mark is minted
+without original quote-generation permission proof. No new schema/grant or
+retained recovery identity. Client/UI/full gates and owner acceptance remain.
+No provider/production/B2/timer/publication change.

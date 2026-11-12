@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan09-07 complete; continue09-08 API then09-09 mixed portfolio.
-last_updated: "2026-11-12T12:18:02.341Z"
-last_activity: 2026-11-12 -- Plan09-08 authenticated API complete
+stopped_at: Plan09-08 complete; continue09-09 mixed portfolio.
+last_updated: "2026-11-12T12:46:04.552Z"
+last_activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 34
+  completed_plans: 35
   percent: 20
 ---
 
@@ -21,17 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 8)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 9)
 
 ## Current Position
 
 Phase: 9
-Plan: 8/15 complete; 09-09 mixed portfolio (Wave 8/13)
+Plan: 9/15 complete; 09-10 client then 09-12 portfolio UI (Wave 9/13)
 Status: In progress
-Last activity: 2026-11-12 -- Plan09-08 authenticated API complete
-Progress: [███████░░░] 81% (34/42 tracked plans complete)
+Last activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
+Progress: [███████░░░] 83% (35/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-09 completes coherent mixed portfolio and original-rights-bound dated
+marks. Source64c8611; math844f957 and actual RED9c72830/72dbda3; review
+RED689567b prevents supplied prices under uncertain units. Final66tests pass
+14.45s;171statements/42branches100%; scoped static gates pass. Separate inline
+review is clear. Immutable original quote-generation proof conservatively bounds
+historical rights; schema/grants/recovery identities remain unchanged. Continue
+09-10 typed client and09-12 portfolio UI, then ticket/browser/full gates/owner
+acceptance. No provider/production/publication change. Whole requirements pending.
 
 Plan09-08 completes actual private stock HTTP routes with current-user/CSRF,
 read-only context/preview, immutable persisted receipts and uncertain-result
@@ -532,6 +541,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P06 | 18min | 2 tasks | 5 files |
 | Phase 9 P07 | 15min | 2 tasks | 4 files |
 | Phase 9 P08 | 8min | 2 tasks | 4 files |
+| Phase 9 P09 | 24min | 2 tasks | 8 files |
 
 ## Operations
 
@@ -541,9 +551,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-08 complete; continue09-09 mixed portfolio.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-09-PLAN.md
-Phase9 plans01–08 are complete with actual source/test/summary commits. Do not
+Stopped at: Plan09-09 complete; continue09-10 client then09-12 portfolio UI.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-10-PLAN.md
+Phase9 plans01–09 are complete with actual source/test/summary commits. Do not
 restart completed work. Existing isolated birja-test stack is available; all DB
 and ops gates must run serially. Production and live Phase7/8 activation remain
 owner-deferred; no private provider/B2/timer/publication operation is authorized.
