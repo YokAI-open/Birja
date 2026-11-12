@@ -1,15 +1,15 @@
 ---
 phase: 9
 slug: whole-share-trading-and-combined-portfolio
-status: in_progress
-nyquist_compliant: false
-wave_0_complete: false
+status: completed
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-11
 ---
 
 # Phase9 — Validation Strategy
 
-Execution contract: plans01–14 have actual local automated evidence;15 owner UI/nativezoom answers remain pending. Source creation and behavioral RED/GREEN are recorded in plan summaries. Existing guarded PG+Redis, Vitest/RTL and Playwright run against owned fixtures, never dev/prod. HTTP external inputs are finite transport fakes; no provider keys/calls. See09-LOCAL-PROOF for final evidence and exact archive/source hashes.
+Execution contract: plans01–14 have actual local automated evidence;15 has actual owner ticket/portfolio approval and native200%zoom confirmation on2026-11-12 (09-HUMAN-UAT). Source creation and behavioral RED/GREEN are recorded in plan summaries. Existing guarded PG+Redis, Vitest/RTL and Playwright run against owned fixtures, never dev/prod. HTTP external inputs are finite transport fakes; no provider keys/calls. See09-LOCAL-PROOF for final evidence and exact archive/source hashes.
 
 ## Exact per-task wave/requirement/threat map
 
@@ -69,11 +69,15 @@ Schema04 gates and final14 replay are serial: `python3 deploy/tests/test-stock-r
 
 ## Sign-off after execution
 
-- [ ] All30 tasks have actual automated evidence or actual owner answer, mapped to current source.
+- [x] All30 tasks have actual automated evidence or actual owner answer, mapped to current source.
 - [x] Exact0013/legacy recovery and both restricted verified-TLS lanes pass.
 - [x] Financial concurrency/last-wait/current-authority and crypto regressions pass.
 - [x]80%overall and100%critical statement/branch coverage, strict audits/scans and fullstatic pass.
-- [ ] Actual browser/reflow/keyboard and honest nativezoom evidence pass.
+- [x] Actual browser/reflow/keyboard and honest nativezoom evidence pass.
 - [x] Required code/security/UI/goal roles run as distinct sequential inline passes; no implementation blockers, all9requirements/16decisions mapped. Independence is not claimed; unavailable delegation fallback follows AGENTS/adapter.
-- [ ] Owner accepts new UI; existing live deferrals preserved.
-- [ ] Only then set nyquist_compliant and wave_0_complete from actual evidence.
+- [x] Owner accepts new UI; existing live deferrals preserved.
+- [x] Only then set nyquist_compliant and wave_0_complete from actual evidence.
+
+Sign-off: 2026-11-12. All30tasks have recorded evidence in15summaries. Native200%
+is owner-observed; automated zoom remains unsupported. No external activation is
+claimed. Current source/ZIP hashes and whitespace rechecked at closeout.

@@ -1,6 +1,6 @@
 ---
 phase: 09-whole-share-trading-and-combined-portfolio
-status: human_needed
+status: passed_with_advisories
 review_mode: sequential-inline
 reviewed: 2026-11-12
 ---
@@ -23,10 +23,10 @@ UI registry block or new dependency was introduced.
 | Color |4/4 | Neutral inherited tokens, single inherited portfolio highlight, selected bid/ask blue tint, gain/loss sign+text/icons. No raw ad-hoc color in new components. Master documents text contrast; this is not a new measured blanket contrast certification. |
 | Typography |4/4 | Inter, declared13/15/24/32/40px scales, tabular financial figures, wrapping actual64-character catalogue name. All fields render without horizontal page overflow at320/375/768/1024/1440. |
 | Spacing |3/4 | Existing4/8/12/16/24/32 rhythm and44px actions retained. Full session timestamps repeat timezone wording and make the narrow ticket tall; no clipped data/control. |
-| Experience design |3/4 | Actual keyboard/radio/error/expiry/UNKNOWN/reprice/receipt flows and focused confirm-above-navigation pass. Native200% zoom could not be applied in headless browser; owner check remains mandatory15. |
+| Experience design |3/4 | Actual keyboard/radio/error/expiry/UNKNOWN/reprice/receipt flows and focused confirm-above-navigation pass. Native200% zoom could not be applied in headless browser; owner subsequently confirmed the actual desktop200% check in15. |
 
 Score21/24. No task-blocking visual defect observed in inspected evidence.
-Human acceptance and native zoom are outstanding gates, not automated passes.
+Human acceptance and native zoom passed on owner responses recorded in09-HUMAN-UAT; these are not automated passes.
 
 ## Actual evidence and limits
 
@@ -51,8 +51,8 @@ checks establish review-file integrity and reflow, not native200% success.
 
 ## Priority follow-ups
 
-1. Complete actual owner ticket/receipt and combined-portfolio acceptance plus
-native200% check in15 after final operational gates.
+1. Completed: actual owner ticket/receipt, combined-portfolio and native200%
+acceptance in15. Remaining copy/spacing observations are nonblocking.
 2. Optional copy polish: distinguish the two unavailable return fields and
 avoid repeating Known value; no accounting calculation or permission change.
 3. Optional timestamp density polish retaining full date, timezone and source.

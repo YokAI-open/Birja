@@ -1,11 +1,11 @@
 ---
 phase: 09-whole-share-trading-and-combined-portfolio
-status: human_needed
+status: passed
 verified: 2026-11-12
 review_mode: sequential-inline
 operational_gates: passed
-owner_acceptance: pending
-score: 16/18 local behavioral and acceptance truths
+owner_acceptance: passed
+score: 18/18 local behavioral and acceptance truths
 ---
 
 # Phase 9 goal-backward verification
@@ -14,9 +14,10 @@ Goal: users safely trade whole stocks with existing cash and inspect truthful
 combined holdings without compromising crypto or corporate-action accounting.
 This is a distinct inline verifier pass, not independent-agent assurance. Source
 and actual assertions, not file existence, support the behavioral matrix. All
-Plan14 local automated gates pass. Human acceptance15 and actual native zoom
-are pending. No production/live readiness
-or final requirement completion is claimed.
+Plan14 local automated gates pass. Both Plan15 owner UI approvals and actual
+native200%zoom confirmation are recorded in09-HUMAN-UAT on2026-11-12. All nine
+assigned requirements are locally verified; production/live readiness is not
+claimed. Current17source hashes and reviewed ZIP hash match final proof.
 
 ## Observable decisions
 
@@ -38,13 +39,14 @@ or final requirement completion is claimed.
 | D-14 | VERIFIED | One bounded eligibility snapshot and final invoker SQL after every staged wait/constraint, last business statement before commit. Real PG barriers test quote/session/status/rights/action/units, clock equality and cancellation. |
 | D-15 | VERIFIED | User-global key before availability, account and holdings locks, no new grant, same-key postclose original receipt; actual HTTP/drop transport/crypto concurrency and immutable split history assertions. |
 | D-16 | VERIFIED | Exact midpoint9-place derived values; original dated marks, conservative incompatible-unit suppression and one Account.cash reference. Tests simulate future credited cash once; Phase10 dividends are not implemented here. |
-| Owner ticket/receipt | UNCERTAIN — HUMAN | Actual owner response to09-15.1 required; previous Phase7/8 UI approvals do not apply. |
-| Owner combined UI/nativezoom | UNCERTAIN — HUMAN | Actual owner response to09-15.2 required; headless zoom was observed false, supplementary640px is not native200%. |
+| Owner ticket/receipt | VERIFIED — OWNER | Actual response: “Approve ticket and receipt UI”;09-HUMAN-UAT. |
+| Owner combined UI/nativezoom | VERIFIED — OWNER | “Approve combined portfolio UI”; explicit “yes” to native200% readability/reachability/no overlap or horizontal page scrolling. Headless zoom remains unsupported. |
 
 ## Requirement evidence
 
-All nine remain pending in canonical REQUIREMENTS until final gates and actual
-owner acceptance; the following is implementation evidence, not checkbox closure.
+All nine assigned requirements pass locally based on the actual implementation,
+Plan14 regression/recovery/security evidence and Plan15 owner acceptance.
+Canonical closure follows this verifier pass; live activation remains deferred.
 
 | Requirement | Actual chain and tests |
 | --- | --- |
@@ -87,7 +89,8 @@ Backend2086tests239.75s,99.86%overall; exact39critical modules100%statements and
 branches. Frontend590tests and full static/build/audits pass. Full browser45pass
 plus1expectedCSPskip; final changed stock file14pass97.5s. Five actual read-only
 DOM/CSS/font pages pass separate offline reflow/zero-network verification. The
-real owner200%zoom and new-UI answers remain explicitly pending.
+owner confirmed native200%zoom and explicitly accepted both new UI areas;
+09-HUMAN-UAT preserves exact responses. No automated nativezoom pass is claimed.
 No stub/TODO was found in the inspected new runtime paths. Cosmetic UI copy and
 timestamp-density observations are recorded in UI-REVIEW, not hidden as4/4.
 Provider product rights, status continuity/access, quotas/latency and live data
