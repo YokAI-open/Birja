@@ -56,10 +56,14 @@ async def seed(conn):
    ON CONFLICT(coin_id) DO UPDATE SET event_at=excluded.event_at,observed_at=excluded.observed_at,
     session_date=excluded.session_date,valid_until=excluded.valid_until""",cid,now)
   await conn.execute("""INSERT INTO stock_action_state
-   (coin_id,health,admission_generation,checked_at,valid_until,coverage_start,covered_until)
-   VALUES ($1,'current',1000,$2,$2::timestamptz+interval '1 hour',$2::timestamptz-interval '1 day',$2)
+   (coin_id,health,admission_generation,checked_at,valid_until,coverage_start,covered_until,
+    journal_start_at,complete_from)
+   VALUES ($1,'current',1000,$2,$2::timestamptz+interval '1 hour',$2::timestamptz-interval '1 day',$2,
+    $2::timestamptz-interval '1 day',$2::timestamptz-interval '1 day')
    ON CONFLICT(coin_id) DO UPDATE SET health='current',admission_generation=1000,checked_at=excluded.checked_at,
-    valid_until=excluded.valid_until,coverage_start=excluded.coverage_start,covered_until=excluded.covered_until""",cid,now)
+    valid_until=excluded.valid_until,coverage_start=excluded.coverage_start,covered_until=excluded.covered_until,
+    journal_start_at=coalesce(stock_action_state.journal_start_at,excluded.journal_start_at),
+    complete_from=coalesce(stock_action_state.complete_from,excluded.complete_from)""",cid,now)
   snapshot=await conn.fetchval("""SELECT jsonb_build_object(
    'coin_id',i.coin_id,'provider_asset_id',i.provider_asset_id,
    'admissions',(SELECT jsonb_agg(jsonb_build_object('product',product,'generation',generation,
@@ -84,7 +88,7 @@ async def seed(conn):
    FROM stock_instruments i JOIN coins c ON c.id=i.coin_id WHERE i.coin_id=$5""",tid,uid,now,snapshot,cid)
   await conn.execute("""INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,
    recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,trade_id,causal_key)
-   SELECT $1,$2,coalesce(max(sequence),899999999)+1,$3,$3,2,0,2,0,20,0,'fill',$4,
+   SELECT $1,$2,coalesce(max(sequence),0)+1,$3,$3,2,0,2,0,20,0,'fill',$4,
     'synthetic-execution:'||($4::bigint)::text FROM stock_ownership_movements WHERE coin_id=$1""",cid,uid,now,tid)
   await conn.execute('INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) VALUES ($1,$2,2,20)',uid,cid)
   await conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
