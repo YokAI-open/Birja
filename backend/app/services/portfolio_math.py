@@ -1,7 +1,7 @@
 """Pure mid-price valuation. Only response boundaries are rounded."""
 
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Literal
@@ -77,7 +77,12 @@ def calculate_portfolio(
     with localcontext() as ctx:
         ctx.prec = 64
         held = sorted(
-            (p for p in positions if p.quantity > 0), key=lambda p: (p.symbol, int(p.coin_id))
+            (
+                p if p.units_safe else replace(p, mid=None, as_of=None)
+                for p in positions
+                if p.quantity > 0
+            ),
+            key=lambda p: (p.symbol, int(p.coin_id)),
         )
         raw_values = [p.quantity * p.mid if p.mid is not None else None for p in held]
         complete = all(value is not None for value in raw_values)

@@ -280,8 +280,11 @@ def test_large_mixed_aggregates_keep_64_digit_precision_and_nullable_zero_denomi
 
 def test_uncertain_units_cannot_keep_a_supplied_price_or_timestamp():
     from dataclasses import replace
-    unsafe=replace(position("2","204","101","AAPL"),asset_class="stock",coin_id="20",units_safe=False)
-    p=calculate_portfolio(D(9796),D(10000),[unsafe])
-    assert p.total_value is None and p.known_value==9796
+
+    unsafe = replace(
+        position("2", "204", "101", "AAPL"), asset_class="stock", coin_id="20", units_safe=False
+    )
+    p = calculate_portfolio(D(9796), D(10000), [unsafe])
+    assert p.total_value is None and p.known_value == 9796
     assert p.holdings[0].mid is p.holdings[0].as_of is p.holdings[0].average_cost is None
-    assert p.holdings[0].cost_basis==204 and p.class_values.stocks is None
+    assert p.holdings[0].cost_basis == 204 and p.class_values.stocks is None
