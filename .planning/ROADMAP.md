@@ -308,7 +308,59 @@ Live/provider/publication deferrals remain; production is unchanged.
   3. A verified post-payment correction produces a separate linked adjustment, preserving the original. Repetition cannot duplicate its delta; uncertain or unaffordable negative adjustments stay visibly held for reconciliation without negative cash. (DIV-05)
   4. User privately pages through deterministic newest-first crypto/stock fills, Dividend credits, forward splits and corrections with event-specific details and preserved crypto history. Portfolio return includes dividend cash exactly once. (HIST-03; consumes PORT-06)
 
-**Plans**: TBD
+**Plans**: 18 plans /36tasks in13execution waves
+
+**Wave 1**
+- [ ] 10-01-PLAN.md — Constrain immutable dividend accounting
+- [ ] 10-03-PLAN.md — Define exact dividend targets and corrections
+- [ ] 10-12-PLAN.md — Validate exact mixed History client values
+
+**Wave 2** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-02-PLAN.md — Authorize only verified atomic dividend cash
+
+**Wave 3** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-04-PLAN.md — Retain exact0014 data and authority contracts
+
+**Wave 4** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-05-PLAN.md — Exercise real restricted dividend SQL and TLS
+
+**Wave 5** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-06-PLAN.md — Pass retained recovery before financial consumers
+
+**Wave 6** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-07-PLAN.md — Process historical dividends and immutable adjustments
+- [ ] 10-10-PLAN.md — Project immutable private mixed-event History
+
+**Wave 7** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-08-PLAN.md — Prove waits, concurrency and shared cash atomicity
+- [ ] 10-11-PLAN.md — Expose authenticated mixed History without legacy breakage
+
+**Wave 8** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-09-PLAN.md — Schedule bounded durable payouts independently
+- [ ] 10-13-PLAN.md — Isolate paginated events across auth and cash refresh
+
+**Wave 9** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-14-PLAN.md — Render accessible mixed History and held corrections
+
+**Wave 10** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-15-PLAN.md — Prove real cash and mixed History in browser
+
+**Wave 11** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-16-PLAN.md — Enforce complete gates and final exact recovery
+
+**Wave 12** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-17-PLAN.md — Review code, threats, UI and phase goal
+
+**Wave 13** *(blocked on declared predecessor waves; see plan dependencies)*
+- [ ] 10-18-PLAN.md — Accept new mixed History and native zoom
+
+**Planning boundary:** Research, concrete pattern map, checked UI contract,
+execution contracts and exact task validation map saved. Independent plan check
+passes after one targeted revision:0blockers/0warnings,4/4requirements. No tests
+or implementation performed by planning. Live7/8 activation/publication remains
+deferred. Required0014 restricted-role/TLS/exact recovery proof precedes runtime
+consumers; final actual financial/browser/security/owner gates remain mandatory.
+
 **UI hint**: yes
 
 ### Phase 11: Mixed-Asset Recovery and Acceptance
@@ -342,7 +394,7 @@ do not establish live acceptance or phase completion.
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
-| 10. Dividend Cash and Event History | v1.1 | 0/TBD | Not started | - |
+| 10. Dividend Cash and Event History | v1.1 | 0/18 | Planned | - |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:
