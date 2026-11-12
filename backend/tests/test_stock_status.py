@@ -308,6 +308,36 @@ async def test_shared_stock_fixture_has_real_independent_authority(stock_trade_c
         assert status_current(status, now)
 
 
+async def test_stock_scheduler_default_invalidates_pre_restart_status(
+    status_case, settings, redis_client
+):
+    import httpx
+
+    from app.services.stock_status import load_status, persist_status_batch
+    from app.tasks.stock_scheduler import run_stock_cycle
+
+    factory, cid, now = status_case
+    async with factory.begin() as db:
+        await persist_status_batch(db, persisted_batch(cid, now), coin_id=cid)
+    before = await financial_snapshot(factory)
+
+    def no_http(request):
+        raise AssertionError("Default status transport must not make provider calls")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(no_http)) as http:
+        result = await run_stock_cycle(
+            sessionmaker=factory,
+            redis=redis_client,
+            http=http,
+            settings=settings.model_copy(update={"stock_data_enabled": False}),
+        )
+    assert result.status == "ok"
+    async with factory() as db:
+        status = await load_status(db, cid)
+        assert status.state == "unknown" and not status.continuity_current
+    assert await financial_snapshot(factory) == before
+
+
 @pytest.mark.parametrize("case", ["same_generation_change", "expiry"])
 async def test_permission_change_or_expiry_during_real_write_wait_rolls_back(status_case, case):
     import asyncio
