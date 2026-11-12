@@ -120,6 +120,10 @@ def main():
                                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
         require(probe.returncode == 0 and probe.stdout == b"collation_ok\n")
         prefix = "".join("\\set " + k + " '" + v + "'\n" for k, v in values.items())
+        # The revision-selected bootstrap validates exact0014 definer/helper
+        # bodies, owners, paths and ACLs before any role/table privilege change.
+        # Inspection executes that same read-only identity preflight; it cannot
+        # silently repair a substituted financial function.
         sql = prefix + (source / "db/bootstrap-roles.sql").read_text()
         result = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-U", c["bootstrap"], "-d", c["db_name"]],
                                 input=sql.encode(), capture_output=True, timeout=150, check=False,

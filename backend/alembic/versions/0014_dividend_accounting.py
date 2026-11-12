@@ -113,6 +113,10 @@ GRANTS = """DO $grants$ BEGIN
  IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_app') THEN
    GRANT SELECT ON public.stock_dividend_payments,public.stock_dividend_decisions TO birja_app;
  END IF;
+ IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
+   GRANT SELECT ON public.stock_dividend_payments,public.stock_dividend_decisions
+     TO birja_scheduler;
+ END IF;
 END $grants$"""
 
 # Private invoker helper. Only the two fixed definer entry points may call it.
@@ -122,7 +126,7 @@ AUTHORITY = r"""CREATE FUNCTION public.stock_dividend_authority(
  p_verified boolean,p_expected jsonb)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY INVOKER
 SET search_path=pg_catalog,public,pg_temp AS $authority$
-DECLARE r record; a jsonb; n timestamptz; result jsonb; terms jsonb;
+DECLARE r record; a jsonb; n timestamptz; result jsonb; terms jsonb; v jsonb;
 BEGIN
  SELECT ev AS event,rv AS revision,en AS entitlement,st AS action,
    i AS instrument,c AS coin,se AS cutoff_session,
@@ -222,6 +226,10 @@ NULL END
 (a->'quota'->>'retention_seconds')::numeric=trunc((a->'quota'->>'retention_seconds')::numeric)
      AND jsonb_typeof(a->'allowed_fields')='array'
      AND jsonb_array_length(a->'allowed_fields') BETWEEN 1 AND 64
+     AND NOT EXISTS(SELECT FROM jsonb_array_elements(a->'allowed_fields') fld
+       WHERE jsonb_typeof(fld)<>'string' OR length(fld#>>'{}') NOT BETWEEN 1 AND 64)
+     AND (SELECT count(DISTINCT fld) FROM jsonb_array_elements(a->'allowed_fields') fld)
+       =jsonb_array_length(a->'allowed_fields')
      AND a->'allowed_fields' @> CASE a->>'product'
        WHEN 'actions' THEN '["provider_event_id","symbol","event_type","process_date"]'::jsonb
        WHEN 'reference' THEN '["symbol","name","exchange","provider_asset_id"]'::jsonb
@@ -229,6 +237,13 @@ NULL END
    THEN RAISE EXCEPTION 'dividend rights unavailable' USING ERRCODE='22023'; END IF;
    IF a->>'product'='actions' AND NOT coalesce(
       a->'scope'->'capabilities' @> '["rest"]'::jsonb
+      AND jsonb_typeof(a->'scope'->'capabilities')='array'
+      AND jsonb_array_length(a->'scope'->'capabilities') BETWEEN 1 AND 2
+      AND NOT EXISTS(SELECT FROM jsonb_array_elements(a->'scope'->'capabilities') cap
+        WHERE cap NOT IN ('"rest"'::jsonb,'"replay"'::jsonb))
+      AND (NOT a->'scope'->'capabilities' @> '["replay"]'::jsonb OR
+        (a->'scope'->'all_us_replay_ingress'='true'::jsonb
+          AND a->'scope'->>'replay_region'='us'))
       AND a->'scope'->'rest_symbols' @> to_jsonb(ARRAY[
        'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','AVGO','AMD','COST',
        'JPM','V','JNJ','PG','KO','XOM','CVX','HD','MCD','DIS'])
@@ -242,10 +257,54 @@ NULL END
         <=(a->>'reviewed_at')::timestamptz+interval '24 hours'
       AND (a->'calendar'->>'coverage_start')::date <= (n AT TIME ZONE 'UTC')::date
       AND (n AT TIME ZONE 'UTC')::date <= (a->'calendar'->>'coverage_end')::date
+      AND (a->'calendar'->>'coverage_start')::date
+        >=((a->>'reviewed_at')::timestamptz AT TIME ZONE 'UTC')::date-45
+      AND (a->'calendar'->>'coverage_end')::date
+        <=((a->>'reviewed_at')::timestamptz AT TIME ZONE 'UTC')::date+90
       AND a->'calendar'->'exchanges' @> '["XNYS","XNAS"]'::jsonb
       AND jsonb_array_length(a->'calendar'->'exchanges')=2
-      AND length(a->'calendar'->>'version') BETWEEN 1 AND 256,false)
+      AND length(a->'calendar'->>'version') BETWEEN 1 AND 256
+      AND jsonb_typeof(a->'calendar'->'sources')='array'
+      AND jsonb_array_length(a->'calendar'->'sources') BETWEEN 2 AND 8
+      AND NOT EXISTS(SELECT FROM jsonb_array_elements_text(a->'calendar'->'sources') src
+        WHERE src !~ '^https://(www[.])?(nyse[.]com|nasdaq[.]com)([:]443)?(/|$)')
+      AND EXISTS(SELECT FROM jsonb_array_elements_text(a->'calendar'->'sources') src
+        WHERE src ~ '^https://(www[.])?nyse[.]com([:]443)?(/|$)')
+      AND EXISTS(SELECT FROM jsonb_array_elements_text(a->'calendar'->'sources') src
+        WHERE src ~ '^https://(www[.])?nasdaq[.]com([:]443)?(/|$)')
+      AND jsonb_typeof(a->'calendar'->'overrides')='array'
+      AND jsonb_array_length(a->'calendar'->'overrides')<=272,false)
    THEN RAISE EXCEPTION 'dividend calendar unavailable' USING ERRCODE='22023'; END IF;
+   IF a->>'product'='calendar' THEN
+     IF (SELECT count(DISTINCT (o->>'exchange',o->>'date'))
+         FROM jsonb_array_elements(a->'calendar'->'overrides') o)
+        <>jsonb_array_length(a->'calendar'->'overrides') THEN
+       RAISE EXCEPTION 'duplicate dividend calendar override' USING ERRCODE='22023'; END IF;
+     FOR v IN SELECT value FROM jsonb_array_elements(a->'calendar'->'overrides') LOOP
+       IF NOT coalesce(v->>'exchange' IN ('XNYS','XNAS')
+         AND (v->>'date')::date BETWEEN (a->'calendar'->>'coverage_start')::date
+           AND (a->'calendar'->>'coverage_end')::date
+         AND v->>'source' ~ CASE WHEN v->>'exchange'='XNYS'
+           THEN '^https://(www[.])?nyse[.]com([:]443)?(/|$)'
+           ELSE '^https://(www[.])?nasdaq[.]com([:]443)?(/|$)' END
+         AND ((v->>'state'='closed' AND v->>'opens_at' IS NULL AND v->>'closes_at' IS NULL)
+           OR (v->>'state'='shortened'
+             AND (v->>'opens_at')::timestamptz<(v->>'closes_at')::timestamptz
+             AND (v->>'closes_at')::timestamptz-(v->>'opens_at')::timestamptz
+               <interval '6 hours 30 minutes'
+             AND ((v->>'opens_at')::timestamptz AT TIME ZONE 'America/New_York')::date
+               =(v->>'date')::date
+             AND ((v->>'closes_at')::timestamptz AT TIME ZONE 'America/New_York')::date
+               =(v->>'date')::date
+             AND ((v->>'opens_at')::timestamptz AT TIME ZONE 'America/New_York')::time
+               =time '09:30'
+             AND ((v->>'closes_at')::timestamptz AT TIME ZONE 'America/New_York')::time
+               <time '16:00')),false) THEN
+         RAISE EXCEPTION 'invalid dividend calendar override' USING ERRCODE='22023'; END IF;
+     END LOOP;
+   ELSIF a->'calendar'<>'{}'::jsonb THEN
+     RAISE EXCEPTION 'unexpected dividend calendar evidence' USING ERRCODE='22023';
+   END IF;
  END LOOP;
  IF p_verified THEN
    terms:=(r.revision).normalized_terms;

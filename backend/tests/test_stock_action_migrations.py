@@ -846,7 +846,7 @@ async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
         proc = await asyncio.create_subprocess_exec(
             str(root / ".venv/bin/alembic"),
             "upgrade",
-            "head",
+            "0013",
             cwd=root,
             env={
                 "PATH": os.defpath,
@@ -882,7 +882,7 @@ async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
             await conn.execute(text("CREATE ROLE birja_action_operator NOLOGIN NOINHERIT"))
         code, output = await restricted_upgrade()
         assert code == 0, output
-        assert await _versions(engine) == [EXPECTED_HEAD]
+        assert await _versions(engine) == ["0013"]
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("REASSIGN OWNED BY birja_action_retry_migrator TO birja_test"))

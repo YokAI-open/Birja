@@ -34,23 +34,70 @@ async def test_scheduler_boundary_requires_narrow_authority(engine, migrated):
         ).scalar_one(), "Scheduler needs both narrow retained-row financial authorities"
 
 
-async def test_acl_bootstrap_accepts_exact_current_authority(engine,migrated):
+async def test_acl_bootstrap_accepts_exact_current_authority(engine, migrated):
     import asyncio
     import subprocess
     from pathlib import Path
 
-    root=Path(__file__).resolve().parents[2]
-    script=(root/"deploy/db/bootstrap-roles.sql").read_text()
-    script=script.rsplit("COMMIT;",1)[0]+"SELECT 'dividend_bootstrap_ok';\nROLLBACK;\n"
-    result=await asyncio.to_thread(subprocess.run,[
-        "docker","compose","-f",str(root/"docker-compose.test.yml"),"exec","-T","postgres",
-        "psql","-U","birja_test","-d","birja_test","-XqAt","-v","ON_ERROR_STOP=1",
-        "-v","bootstrap=birja_test","-v","apply=true","-v","db_name=birja_test",
-        "-v","app_password=test-only-app","-v","scheduler_password=test-only-scheduler",
-        "-v","migrator_password=test-only-migrator"],input=script,text=True,
-        capture_output=True,timeout=30,check=False)
-    assert result.returncode==0,result.stderr
-    assert result.stdout.strip()=="dividend_bootstrap_ok"
+    root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[2])
+    script = await asyncio.to_thread((root / "deploy/db/bootstrap-roles.sql").read_text)
+    matrix = """SELECT CASE WHEN
+      has_function_privilege('birja_scheduler',
+        'public.apply_stock_dividend(bigint,bigint,text,text)','EXECUTE') AND
+      has_function_privilege('birja_scheduler',
+        'public.record_stock_dividend_hold(bigint,text)','EXECUTE') AND NOT
+      has_function_privilege('birja_app',
+        'public.apply_stock_dividend(bigint,bigint,text,text)','EXECUTE') AND NOT
+      has_function_privilege('birja_scheduler',
+        'public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)','EXECUTE') AND NOT
+      has_column_privilege('birja_scheduler','accounts','cash','UPDATE') AND
+      has_table_privilege('birja_app','stock_dividend_payments','SELECT') AND
+      has_table_privilege('birja_scheduler','stock_dividend_payments','SELECT') AND NOT
+      has_table_privilege('birja_scheduler','stock_dividend_payments','INSERT') AND NOT
+      has_sequence_privilege('birja_scheduler','stock_dividend_payments_id_seq','USAGE')
+      THEN 'dividend_bootstrap_ok' ELSE 'unsafe_bootstrap' END;
+      ROLLBACK;
+    """
+    script = script.rsplit("COMMIT;", 1)[0] + matrix
+    result = await asyncio.to_thread(
+        subprocess.run,
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(root / "docker-compose.test.yml"),
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "birja_test",
+            "-d",
+            "birja_test",
+            "-XqAt",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-v",
+            "bootstrap=birja_test",
+            "-v",
+            "apply=true",
+            "-v",
+            "db_name=birja_test",
+            "-v",
+            "app_password=test-only-app",
+            "-v",
+            "scheduler_password=test-only-scheduler",
+            "-v",
+            "migrator_password=test-only-migrator",
+        ],
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "dividend_bootstrap_ok"
 
 
 @pytest_asyncio.fixture
@@ -215,6 +262,46 @@ async def test_scheduler_boundary_real_credit_and_original_replay(authority_case
     assert (
         await conn.execute(text("SELECT count(*) FROM stock_dividend_payments"))
     ).scalar_one() == 1
+
+
+async def test_scheduler_boundary_reconciled_successor_preserves_held_original(authority_case):
+    conn, ids = authority_case
+    original = await apply(conn, ids)
+    uncertain = await successor(conn, ids, classification="uncertain", eligible=False)
+    held = await hold(conn, original["payment_id"], uncertain["revision_fingerprint"])
+    corrected = await successor(conn, uncertain, rate="0.75")
+    # Retained reviewed reconciliation has its independent operator-only proof.
+    # This is synthetic external/review evidence, never a financial bypass.
+    await conn.execute(
+        text("""INSERT INTO stock_action_resolutions(event_id,coin_id,
+      expected_revision,admission_generation,epoch,decision,decision_key,evidence,
+      evidence_hash,before_digest,after_digest,actor_ref,created_at)
+      SELECT :event_id,:coin_id,:revision_id,4,3,'accept_corrected_supported_revision',
+      'synthetic-dividend-reconciliation',jsonb_build_object('format',1,'held_revision_ids',
+      (SELECT jsonb_agg(r.id ORDER BY r.id) FROM stock_action_revisions r
+       WHERE r.event_id=:event_id)),repeat('a',64),repeat('b',64),repeat('c',64),
+      'synthetic-reviewed-operator',clock_timestamp()"""),
+        corrected,
+    )
+    result = await apply(conn, corrected)
+    assert result["outcome"] == "applied" and await apply(conn, corrected) == result
+    row = (
+        await conn.execute(
+            text("""SELECT previous_decision_id,applied_delta FROM
+      stock_dividend_decisions WHERE id=:d"""),
+            {"d": result["decision_id"]},
+        )
+    ).one()
+    assert tuple(row) == (held["decision_id"], Decimal(".5"))
+    assert (
+        await conn.execute(text("SELECT original_amount FROM stock_dividend_payments"))
+    ).scalar_one() == Decimal(1)
+    assert (
+        await conn.execute(
+            text("SELECT outcome,applied_delta FROM stock_dividend_decisions WHERE id=:d"),
+            {"d": held["decision_id"]},
+        )
+    ).one() == ("held_uncertain", Decimal(0))
 
 
 @pytest.mark.parametrize("quantity,rate,expected", TARGET_VECTORS)
@@ -433,6 +520,15 @@ async def test_scheduler_boundary_no_anchor_or_healthy_target_cannot_hold(author
         "UPDATE stock_data_admissions SET scope=scope-'backup_restore' WHERE product='actions'",
         "UPDATE stock_data_admissions SET valid_until=clock_timestamp()-interval '1 second'",
         "UPDATE stock_sessions SET calendar_admission_generation=5",
+        "UPDATE stock_data_admissions SET calendar=jsonb_set(calendar,'{sources}',"
+        "'[\"https://evil.test/\",\"https://www.nyse.com/\"]'::jsonb) WHERE product='calendar'",
+        "UPDATE stock_data_admissions SET calendar=jsonb_set(calendar,'{overrides}',"
+        '\'[{"exchange":"XNYS","date":"2026-11-12","state":"unknown",'
+        '"source":"https://www.nyse.com/"}]\'::jsonb) WHERE product=\'calendar\'',
+        "UPDATE stock_data_admissions SET scope=jsonb_set(scope,'{capabilities}',"
+        "'[\"rest\",\"arbitrary\"]'::jsonb) WHERE product='actions'",
+        "UPDATE stock_data_admissions SET scope=scope-'all_us_replay_ingress' "
+        "WHERE product='actions'",
     ],
 )
 async def test_scheduler_boundary_unverified_retained_work_refuses_no_cash(authority_case, sql):
@@ -514,3 +610,112 @@ async def test_scheduler_boundary_actual_producer_snapshot_without_split_cutoff(
         }
         await db.flush()
         assert (await apply(conn, actual))["outcome"] == "original"
+
+
+@pytest.mark.parametrize("role", ["birja_app", "birja_scheduler"])
+async def test_acl_direct_write_and_private_helper_denials(authority_case, role):
+    conn, ids = authority_case
+    await apply(conn, ids)
+    async with conn.begin_nested():
+        await conn.execute(text(f"SET LOCAL ROLE {role}"))
+        for statement in (
+            "UPDATE public.accounts SET cash=999999",
+            "INSERT INTO public.stock_dividend_payments(event_id) VALUES (1)",
+            "INSERT INTO public.stock_dividend_decisions(payment_id) VALUES (1)",
+            "UPDATE public.stock_dividend_payments SET original_amount=0",
+            "DELETE FROM public.stock_dividend_decisions",
+            "SELECT public.stock_dividend_authority(1,1,'a','b',false,NULL)",
+            "DROP FUNCTION public.record_stock_dividend_hold(bigint,text)",
+            "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) "
+            "OWNER TO birja_scheduler",
+            "ALTER TABLE public.stock_dividend_payments DISABLE TRIGGER stock_dividend_immutable",
+            "CREATE FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) "
+            "RETURNS void LANGUAGE SQL AS 'SELECT 1'",
+            "CREATE TABLE public.accounts_shadow(user_id bigint,cash numeric)",
+        ):
+            with pytest.raises(DBAPIError) as error:
+                async with conn.begin_nested():
+                    await conn.execute(text(statement))
+            assert error.value.orig.sqlstate == "42501", statement
+        if role == "birja_app":
+            for statement in (
+                "SELECT public.apply_stock_dividend(1,1,'a','b')",
+                "SELECT public.record_stock_dividend_hold(1,'a')",
+            ):
+                with pytest.raises(DBAPIError) as error:
+                    async with conn.begin_nested():
+                        await conn.execute(text(statement))
+                assert error.value.orig.sqlstate == "42501"
+        await conn.execute(text("RESET ROLE"))
+
+
+async def test_acl_function_identity_exact_and_public_cannot_execute(authority_case):
+    import hashlib
+    import re
+
+    conn, _ = authority_case
+    module = migration()
+    for signature, body, definer in (
+        (module.APPLY_SIGNATURE, module.APPLY, True),
+        (module.HOLD_SIGNATURE, module.HOLD, True),
+        (module.AUTHORITY_SIGNATURE, module.AUTHORITY, False),
+        ("public.reject_stock_dividend_mutation()", module.IMMUTABILITY, False),
+    ):
+        row = (
+            await conn.execute(
+                text("""SELECT pg_get_userbyid(proowner) AS owner,
+              prosrc,provolatile::text,prosecdef,proconfig FROM pg_proc
+              WHERE oid=to_regprocedure(:s)"""),
+                {"s": signature},
+            )
+        ).one()
+        assert row.owner == "birja_migrator" and row.provolatile == "v" and row.prosecdef == definer
+        assert row.proconfig == ["search_path=pg_catalog, public, pg_temp"]
+        expected = re.search(r"AS \$[a-z]+\$(.*?)\$[a-z]+\$", body, re.S)[1]
+        assert (
+            hashlib.sha256(row.prosrc.encode()).digest()
+            == hashlib.sha256(expected.encode()).digest()
+        )
+    await conn.execute(text("CREATE ROLE birja_dividend_public_test NOLOGIN NOINHERIT"))
+    await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_dividend_public_test"))
+    async with conn.begin_nested():
+        await conn.execute(text("SET LOCAL ROLE birja_dividend_public_test"))
+        for statement in (
+            "SELECT public.apply_stock_dividend(1,1,'a','b')",
+            "SELECT public.record_stock_dividend_hold(1,'a')",
+            "SELECT public.stock_dividend_authority(1,1,'a','b',false,NULL)",
+        ):
+            with pytest.raises(DBAPIError) as error:
+                async with conn.begin_nested():
+                    await conn.execute(text(statement))
+            assert error.value.orig.sqlstate == "42501"
+        await conn.execute(text("RESET ROLE"))
+
+
+async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority_case):
+    import asyncio
+    from pathlib import Path
+
+    conn, _ = authority_case
+    source = await asyncio.to_thread(
+        lambda: (Path(__file__).resolve().parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
+    )
+    guard = source[source.index("DO $dividend_identity$") : source.index("\\if :apply")]
+    await conn.execute(text(guard))
+    for statement in (
+        "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) SECURITY INVOKER",
+        "GRANT EXECUTE ON FUNCTION public.record_stock_dividend_hold(bigint,text) TO PUBLIC",
+        "ALTER FUNCTION public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb) "
+        "SET search_path=public,pg_temp",
+        "ALTER FUNCTION public.record_stock_dividend_hold(bigint,text) OWNER TO birja_test",
+        "ALTER FUNCTION public.record_stock_dividend_hold(bigint,text) STABLE",
+        migration()
+        .HOLD.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION")
+        .replace("status:='epoch:'", "status:='forged:'"),
+    ):
+        async with conn.begin_nested() as outer:
+            await conn.execute(text(statement))
+            with pytest.raises(DBAPIError, match="authority mismatch"):
+                async with conn.begin_nested():
+                    await conn.execute(text(guard))
+            await outer.rollback()
