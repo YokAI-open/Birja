@@ -97,6 +97,18 @@ async def denied(conn,query,expected='42501'):
  except asyncpg.PostgresError as exc:assert exc.sqlstate==expected,(query,exc.sqlstate)
  else:raise AssertionError('forbidden execution operation succeeded: '+query)
 
+async def check_history(database,coin_id):
+ from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+ from app.services.stock_ownership import assert_ownership_consistent
+ settings=SchedulerSettings()
+ url=urlsplit(str(settings.database_url))
+ if database:url=url._replace(path='/'+database)
+ engine=create_async_engine(urlunsplit(url),connect_args=database_connect_args(settings))
+ try:
+  async with async_sessionmaker(engine).begin() as db:
+   await assert_ownership_consistent(db,coin_id)
+ finally:await engine.dispose()
+
 async def consume(database=None):
  app=await connect('app',database);scheduler=await connect('scheduler',database)
  reader=await connect(database=database) if database else app
@@ -105,6 +117,7 @@ async def consume(database=None):
     f.held_after,f.authority FROM trades t JOIN stock_fill_facts f ON f.trade_id=t.id
     WHERE t.idempotency_key='99999999-1111-4111-8111-111111111111'""")
   assert row and row['cash_after']==9980 and row['held_after']==2
+  await check_history(database,row['coin_id'])
   assert await app.fetchval('SELECT held_after FROM stock_fill_facts WHERE trade_id=$1',row['id'])==2
   if database:await denied(app,'SELECT * FROM trades')
   before=await reader.fetchval('SELECT count(*) FROM trades')
@@ -146,7 +159,7 @@ async def run():
  finally:await conn.close()
  return verified_tls
 actual_tls=asyncio.run(run())
-print('execution_receipt_exact=true duplicate_fill_rejected=true guard_consumer='+str(FIXTURE_SEED).lower()+' verified_tls='+str(actual_tls).lower()+' runtime_grants_narrow=true')
+print('execution_receipt_exact=true duplicate_fill_rejected=true ownership_consistent=true guard_consumer='+str(FIXTURE_SEED).lower()+' verified_tls='+str(actual_tls).lower()+' runtime_grants_narrow=true')
 '''
 
 
