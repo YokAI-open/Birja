@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 09-03; schema review before 09-04
-last_updated: "2026-11-11T20:28:23.972Z"
-last_activity: 2026-11-11 -- Phase 9 planning complete
+stopped_at: 09-04 Task 1 complete; corrected canonical recovery/roles/TLS validation running
+last_updated: "2026-11-12"
+last_activity: 2026-11-12 -- Phase 9 recovery validation resumed
 progress:
   total_phases: 5
   completed_phases: 1
@@ -28,10 +28,23 @@ See: .planning/PROJECT.md (updated 2026-11-11)
 Phase: 9
 Plan: 3/15 complete; 09-04 recovery/TLS (Wave 4/13)
 Status: In progress
-Last activity: 2026-11-11 -- Phase 9 planning complete
+Last activity: 2026-11-12 -- Phase 9 recovery validation resumed
 Progress: [███████░░░] 69% (29/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-04 is active. Task1 exact0013 recovery contracts are committed8cfd6b9;
+inline review found and fixed unique receipt hash ordering5a59aa0/603e43a.
+Task2 fixtures are committed3a06a32. Corrected two-fill retained recovery passed:
+exact rows/schema/identity,10 corruption refusals, duplicate rejection, narrow
+quarantined clone rights and unchanged source. ArchiveSHA256
+08131798ce5d3893bde0da4cf566d46de5e77654f47b87dbd3f912898e14278c.
+Canonical serial --all validation is running; do not mark04 complete or begin
+dependent runtime consumers before its retained0007–0013/roles/both TLS lanes
+pass. Prior full attempt reached exact0013 restore but hit a now-corrected
+fixture-only duplicate admission slot in the next-identity probe. No full-gate
+success is claimed. Two agent attempts had no filesystem/shell tools; review
+roles run sequentially inline, with honest provenance in09-04-REVIEW.md.
 
 Plan09-03 is complete locally: additive0013stock facts/status, deferred
 financial integrity, immutable rows, narrow grants and fixed invoker finalguard.
