@@ -88,9 +88,9 @@ it("preserves twenty identities, separate listing/source, exact money and semant
   expect(first).toHaveTextContent("Recent · 10s ago");
   expect(first).toHaveTextContent("Market open");
   expect(first).toHaveTextContent("Stock status unverified");
-  expect(screen.queryAllByRole("link")).toHaveLength(0);
+  expect(screen.getAllByRole("link", { name: "View stock AA" })[0]).toHaveAttribute("href", "/trade/stocks/AA");
   expect(screen.queryAllByRole("button")).toHaveLength(0);
-  expect(screen.getByText(/Stock trading coming later/)).toBeVisible();
+  expect(screen.getByText(/Whole-share stock orders use your existing USD balance/)).toBeVisible();
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
 it("keeps the catalogue but removes all quote values and times on denial", () => {
@@ -199,7 +199,7 @@ it("shows a scoped corporate-action hold with fixed reason, no numeric mark, and
   expect(rows[1]).toHaveTextContent("This action may create fractional shares and needs review.");
   expect(rows[1]).toHaveTextContent("Valuation unavailable");
   expect(rows[1]).toHaveTextContent("Stock status unverified.");
-  expect(rows[1]).toHaveTextContent("Trading coming later.");
+  expect(within(rows[1]).getByRole("link", { name: "View stock AA" })).toHaveAttribute("href", "/trade/stocks/AA");
   expect(rows[1]).not.toHaveTextContent("$100.00");
   expect(rows[2]).toHaveTextContent("$100.00");
   expect(screen.getByRole("status")).toHaveTextContent("AA");
