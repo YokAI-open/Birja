@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan09-08 complete; continue09-09 mixed portfolio.
+stopped_at: Plan09-10 complete; continue09-12 portfolio UI.
 last_updated: "2026-11-12T12:46:04.552Z"
 last_activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 35
-  percent: 20
+  completed_plans: 36
+  percent: 86
 ---
 
 # Project State
@@ -26,12 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-11)
 ## Current Position
 
 Phase: 9
-Plan: 9/15 complete; 09-10 client then 09-12 portfolio UI (Wave 9/13)
+Plan: 10/15 complete; 09-12 portfolio UI (Wave 9/13)
 Status: In progress
 Last activity: 2026-11-12 -- Plan09-09 mixed portfolio complete
-Progress: [███████░░░] 83% (35/42 tracked plans complete)
+Progress: [███████░░░] 86% (36/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-10 strict client and protected attempt lifecycle complete. Final247focused
+tests pass5.24s plus scoped types/lint/format. Inline review resolves replaced
+query-owner loading and changed-identity retention regressions. Continue09-12
+portfolio, then09-11 ticket, browser/full gates and actual owner acceptance.
 
 Plan09-09 completes coherent mixed portfolio and original-rights-bound dated
 marks. Source64c8611; math844f957 and actual RED9c72830/72dbda3; review
@@ -551,8 +556,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan09-09 complete; continue09-10 client then09-12 portfolio UI.
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-10-PLAN.md
+Stopped at: Plan09-10 complete; continue09-12 portfolio UI.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-12-PLAN.md
 Phase9 plans01–09 are complete with actual source/test/summary commits. Do not
 restart completed work. Existing isolated birja-test stack is available; all DB
 and ops gates must run serially. Production and live Phase7/8 activation remain
