@@ -513,3 +513,19 @@ async def test_malformed_saved_receipt_is_unavailable(ownership, settings):
 def test_unsupported_authority_encoding_refuses():
     with pytest.raises(TypeError):
         stock_trading._encoded(object())
+
+
+async def test_halt_context_does_not_disclose_unverified_future_quote(stock_trade_case, settings):
+    from datetime import timedelta
+    from sqlalchemy import update
+    from app.models.stock import StockQuote
+    from app.models.stock_execution import StockStatusEvidence
+    factory, cid, uid, now = stock_trade_case
+    async with factory.begin() as db:
+        await db.execute(update(StockStatusEvidence).values(state="halted"))
+        await db.execute(update(StockQuote).values(
+            event_at=now+timedelta(minutes=1), collected_at=now+timedelta(minutes=1)))
+    async with factory() as db:
+        result = await stock_trading.context(db, user_id=uid, symbol="AAPL", settings=settings)
+        assert result.quote is None
+        assert not result.execution_enabled and result.execution_reason == "halted"
