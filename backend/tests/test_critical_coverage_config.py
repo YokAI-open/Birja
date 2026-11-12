@@ -33,6 +33,16 @@ CRITICAL_MODULES = (
     "app/tasks/stock_actions.py",
     "app/tasks/stock_scheduler.py",
     "app/services/stock_action_reconciliation.py",
+    "app/services/stock_trade_math.py",
+    "app/services/stock_trading_rules.py",
+    "app/services/stock_status_rules.py",
+    "app/services/stock_status.py",
+    "app/services/stock_eligibility.py",
+    "app/services/stock_trading.py",
+    "app/services/trade_idempotency.py",
+    "app/services/stock_valuation.py",
+    "app/api/v1/stock_trades.py",
+    "app/tasks/stock_status.py",
 )
 
 
@@ -48,3 +58,12 @@ def test_critical_coverage_gate_includes_all_financial_services() -> None:
         assert all((root / "backend" / module).is_file() for module in modules)
         lists.append(matches[0])
     assert lists[0] == lists[1]
+
+
+def test_stock_browser_ci_uses_guarded_isolated_runner() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text()
+    assert "python3 deploy/tests/run-stock-browser.py" in workflow
+    runner = (root / "deploy/tests/run-stock-browser.py").read_text()
+    assert "COMPOSE_DISABLE_ENV_FILE" in runner
+    assert "birja-phase09-e2e-test" in runner
