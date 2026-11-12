@@ -221,13 +221,23 @@ function acceptContext(g: ContextGuard, incoming: TimedStockContext): TimedStock
     incoming.execution_enabled &&
     (backwards ||
       oldTime ||
-      identity ||
       (previous !== null &&
         !previous.execution_enabled &&
         stockInstant(incoming.observed_at) <= stockInstant(previous.observed_at)))
   ) {
     if (previous !== null) return projectStockContext(previous, now);
     return redact(incoming, "permission_unavailable");
+  }
+  if (identity && previous !== null) {
+    // A changed mapping is a restriction until fresh, newer safety evidence
+    // establishes the new identity. Never retain an old executable mapping.
+    const newer =
+      !backwards &&
+      !oldTime &&
+      incoming.authority !== null &&
+      incoming.authority.safety_epoch > (previous.authority?.safety_epoch ?? 0) &&
+      stockInstant(incoming.observed_at) > stockInstant(previous.observed_at);
+    if (!newer) incoming = redact(incoming, "action_unavailable");
   }
   let data =
     !incoming.execution_enabled && (oldTime || backwards) && previous !== null
@@ -512,12 +522,12 @@ export function useStockTrade(routeSymbol: string) {
         auth.version !== version ||
         who(client) !== email ||
         quoteSerial.current !== serial ||
-        client.getQueryCache().find({ queryKey: stateKey, exact: true }) !== owner ||
-        client.getQueryCache().find({ queryKey: key, exact: true }) !== contextOwner
+        client.getQueryCache().find({ queryKey: stateKey, exact: true }) !== owner
       )
         return;
       const current = currentContext();
       if (
+        client.getQueryCache().find({ queryKey: key, exact: true }) !== contextOwner ||
         cg.serial !== contextSerial ||
         (cg.restrictionAt !== null && stockInstant(q.observed_at) <= cg.restrictionAt) ||
         !quoteCurrent(q, current)

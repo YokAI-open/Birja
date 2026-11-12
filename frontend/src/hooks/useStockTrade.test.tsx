@@ -634,7 +634,6 @@ it("read-only errors do not publish foreign or unverified context", async () => 
   expect(result.current.canPreview).toBe(false);
 });
 
-
 it("observing a different provider identity removes the previous executable preview", async () => {
   mockStockHttp();
   const { result, client } = setup();
@@ -647,5 +646,7 @@ it("observing a different provider identity removes the previous executable prev
   expect(result.current.context?.quote).toBeNull();
   expect(result.current.quote).toBeNull();
   expect(result.current.quantity).toBe("2");
-  expect(client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote).toBeNull();
+  expect(
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+  ).toBeNull();
 });
