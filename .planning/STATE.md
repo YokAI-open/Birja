@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: ready_to_execute
-stopped_at: Phase10 planning verified; ready to execute18plans/13waves.
+status: executing
+stopped_at: Wave1 verified3/18; next10-02 narrow SQL payout authority.
 last_updated: "2026-11-12T18:49:13.501Z"
 last_activity: 2026-11-12 -- Phase 10 planning complete
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 41
-  percent: 68
+  completed_plans: 44
+  percent: 73
 ---
 
 # Project State
@@ -26,12 +26,27 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 0/18 executed; planning verified (13 waves)
-Status: Ready to execute
+Plan: 3/18 complete; executing10-02 (Wave2/13)
+Status: Executing Wave1
 Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [███████░░░] 68% (41/60 currently tracked plans complete; Phase11 unplanned)
+Progress: [███████░░░] 73% (44/60 currently tracked plans complete; Phase11 unplanned)
 
 ## Completion and next action
+
+Current:Wave1complete01/03/12,3/18plans. Actualfullbackend2184/99.86%,
+40criticalmodules100%,frontend660/98.49% andstaticpass. Independentreview
+clean afteractualWR01REDf0bf398→fix90cef7a; exactwireC05afrozen. See10-LOCAL-PROOF.
+Next10-02deliberate narrowSQLdefinerpayout/holdauthority, then04–06exactretained
+recovery/restrictedTLSbeforeconsumers. No payoutfunction/worker/API/UIyet.
+OlderPhase10planning/initialpointersbelowarehistory,notcurrentnextaction.
+
+
+Phase10 execution:10-01 complete (summary5c4340d),112actualPGtests16.43s,
+scopedstatic/metadata equality pass. Schema0014 adds immutable exact linked
+payment/decision storage and safe populateddowngrade; no payoutfunction or
+consumer yet. Teststackemptyat0014. ContinueWave1exactrules03thenclient12.
+Historicalhead/bootstraptestcompatibilitydeviationsareinsummary.
+
 
 Plan09-14 complete: backend2086/39critical modules100%,frontend590,fullbrowser45
 plus1expectedCSPskip,finalstock14,strict5image scans,audits,standaloneSQL13 and
@@ -604,11 +619,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Phase10 planning verified; ready to execute18plans/13waves.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-01-PLAN.md
-Start Phase10 execution only on owner instruction. Plans01/03/12 areWave1;
-actual0014 migration/restrictedTLS/exact recovery proof precedes consumers07/10.
-Review10-CONTRACTS,10-PLAN-CHECK and10-VALIDATION before implementation.
-Phase9 is locally complete; do not repeat completed work. All provider/live7/8/
-production/B2/timer/publication/deployment boundaries remain unchanged.
-Publication remains owner-deferred; no repeated push question or auto-advance.
+Stopped at: Wave1verified3/18plans; next10-02SQLpayoutauthority.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-02-PLAN.md
+Completed01/03/12haveactualsource+test+summarycommits; do not repeat them.
+Ownedisolatedteststackrunningat0014, nootheragentactive. KeepDB/opsserial.
+No payoutfunction/worker/HistoryAPI/UIyet.40criticalmodule/fullbackend/frontend
+wavegatespassandindependentreviewclean. Required04–06proofprecedesconsumers.
+Liveprovider7/8status/action/dataactivationandproduction/publicationremain
+ownerdeferred. No nextphaseauto-advance or repeatedpushquestion.

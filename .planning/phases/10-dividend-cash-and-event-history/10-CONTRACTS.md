@@ -203,6 +203,85 @@ focused by stable anchor; otherwise render inline detail with Back to correction
 Publication time orders events; economic dates do not rewrite chronology.
 Portfolio value uses Account.cash once, no dividend sum or client credit math.
 
+### C05a — Implemented exact wire names (Plan10-12)
+
+The following frozen TypeScript shape supplies the exact names/nullability for
+backend10-10/11 and UI13/14. It refines C05, adds no feature or new authority.
+All Decimal/IDs remain strings; server schemas/projectors must emit exactly
+these fields, including explicit nulls. `original` is the full immutable,
+owner-filtered Dividend, never a cross-owner lookup or an unbounded page fetch.
+
+```typescript
+type EventBase<K extends string, A extends "crypto" | "stock"> = {
+  kind: K;
+  /** Stable public identity, kind + ':' + canonical source bigint. */
+  id: string;
+  recorded_at: string;
+  asset_type: A;
+  symbol: string;
+  name: string;
+  cash_delta: string;
+};
+export type EventTrade = EventBase<"trade", "crypto" | "stock"> & {
+  side: "buy" | "sell";
+  quantity: string;
+  exec_price: string;
+  fee: string;
+  filled_at: string;
+  source: "alpaca" | null;
+  feed: "iex" | null;
+  quote_at: string | null;
+};
+export type DividendTerms = {
+  eligible_quantity: string;
+  rate: string;
+  cutoff: string;
+  ex_date: string | null;
+  record_date: string | null;
+  payable_date: string;
+};
+export type EventDividend = EventBase<"dividend", "stock"> &
+  DividendTerms & {
+    payment_reference: string;
+    credited_amount: string;
+    credited_at: string;
+  };
+export type EventSplit = EventBase<"split", "stock"> & {
+  ratio_new: string;
+  ratio_old: string;
+  quantity_before: string;
+  quantity_after: string;
+  cost_basis_before: string;
+  cost_basis_after: string;
+  effective_at: string;
+};
+export type EventDividendCorrection = EventBase<"dividend_correction", "stock"> & {
+  payment_reference: string;
+  decision_reference: string;
+  outcome: "applied" | "held_uncertain" | "held_unaffordable" | "verified_no_change";
+  reason: "target_applied" | "terms_unverified" | "insufficient_cash" | "target_unchanged";
+  desired_total: string | null;
+  cumulative_applied_before: string;
+  proposed_delta: string | null;
+  applied_delta: string;
+  /** Null means no current verified terms; never a fabricated zero entitlement. */
+  terms: DividendTerms | null;
+  /** Bounded, owner-filtered immutable original, including when outside this page. */
+  original: EventDividend;
+};
+export type EventHistoryItem = EventTrade | EventDividend | EventSplit | EventDividendCorrection;
+export type EventHistoryPage = { items: EventHistoryItem[]; next_cursor: string | null };
+
+```
+
+Split ratio_new/ratio_old are positive whole-number ratio components on this
+wire. If retained rates are decimal (e.g.1.5:1), the backend must convert them
+by exact rational reduction to3:2 without rounding or modifying retained facts.
+Include a decimal-stored-ratio→wire→parser compatibility regression before
+consumer completion; if a valid supported ratio cannot fit bounded components,
+revise this explicit wire contract and parser/tests together rather than silently
+omit the event. Historical shares/basis remain exact from owner movement.
+
 ## C06 — Browser, evidence and completion
 
 Strict tagged wire parser rejects malformed Decimal/date/ID/lineage/discriminator
