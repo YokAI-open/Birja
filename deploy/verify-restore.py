@@ -22,16 +22,16 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
-COMPOSE_SHA = "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c"
+COMPOSE_SHA = "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91"
 BOOT = "birja_ops_bootstrap"
 CLONE = "birja_restore_test"
 RESTIC_SHA = "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639"
 # Config identity is distinct from registry and engine identities. Docker's
 # classic store exposes the config ID; containerd exposes the manifest ID.
-IMAGE_ID = "sha256:91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4"
-INDEX_DIGEST = "sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4"
+IMAGE_ID = "sha256:4ee05252904571f8901ceb47916108d7da51fc6ecc3edbfa4a161b8b9225051e"
+INDEX_DIGEST = "sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
 PLATFORM_DIGEST = (
-    "sha256:4401cf2919e749cd77b634a72e4a677c1a1afc12baddb21faf28df326162472e"
+    "sha256:42c334e9e4d30cf6f99ac6bbc411910d020b02dfb693604887e9cdc9188e3a48"
 )
 REGISTRY_REF = "cgr.dev/chainguard/postgres@" + INDEX_DIGEST
 RECOVERY_IMAGE = "birja-recovery-postgres:verified-" + IMAGE_ID[7:]

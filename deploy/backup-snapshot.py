@@ -624,7 +624,7 @@ def load_config(args):
         require(source == source.resolve() and source.is_file())
         require(
             hashlib.sha256(source.read_bytes()).hexdigest()
-            == "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c"
+            == "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91"
         )
     require(c["source_project"] == ("birja-ops-test" if synthetic else "birja-prod"))
     require(re.fullmatch(r"[0-9a-f]{40}", c["release"]))
@@ -1194,7 +1194,7 @@ class Job:
     def snapshot(self):
         self.step = "snapshot"
         version = self.call(self.dc + ["pg_dump", "--version"]).decode().strip()
-        require(version.startswith("pg_dump (PostgreSQL) 18.6"))
+        require(version.startswith("pg_dump (PostgreSQL) 18.7"))
         psql = self.dc + [
             "psql",
             "-X",

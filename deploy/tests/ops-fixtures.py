@@ -528,6 +528,22 @@ def execution_program(*, seed, database=None):
     return module.program(seed=seed, database=database)
 
 
+def runtime_program(*, seed, database=None, expected=None):
+    spec = importlib.util.spec_from_file_location(
+        'runtime_fixture', ROOT / 'deploy/tests/stock-runtime-fixture.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.program(seed=seed, database=database, expected=expected)
+
+
+def runtime_receipt_digest(output):
+    rows = [line.split(b'=',1)[1].decode() for line in output.splitlines()
+            if line.startswith(b'runtime_original_receipt_sha256=')]
+    assert len(rows)==1 and len(rows[0])==64
+    assert b'runtime_stock_quote_execute_replay_context_portfolio=true' in output
+    return rows[0]
+
+
 def successor_roundtrips(dc, session, unchanged):
     """Fresh retained bytes perform real dump/retrieval/restore of every revision."""
     release = source_git('rev-parse', 'HEAD').decode().strip()
@@ -565,6 +581,7 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             request=json.loads(role_python(RESOLUTION_SCENARIO + RECOVERY_SEED_SCENARIO, 'birja_migrator'))
         if revision == '0013':
             assert b'execution_receipt_exact=true' in role_python(execution_program(seed=True), 'birja_migrator')
+            runtime_digest=runtime_receipt_digest(role_python(runtime_program(seed=True), 'birja_migrator'))
         before = r.canonical(dc, 'birja_source_test')
         if revision == '0010':
             assert before['tables']['stock_instruments']['count'] == 20
@@ -614,7 +631,11 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
                 r.sql(dc, 'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator', 'birja_ops_test')
                 assert b'duplicate_fill_rejected=true' in role_python(
                     execution_program(seed=False, database='birja_restore_test'), 'birja_migrator')
+                restored_runtime=role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest),'birja_migrator')
+                assert runtime_receipt_digest(restored_runtime)==runtime_digest
+                assert b'restored_owner_reads_only=true' in restored_runtime
                 r.verify(dc,manifest)
+                print('actual_restored_stock_receipt_replay=true actual_mixed_portfolio=true quarantine_acl_unchanged=true exact_original_receipt_sha256='+runtime_digest,flush=True)
             if revision in ('0009','0010','0011','0012','0013'):
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
                 try:
@@ -1011,7 +1032,7 @@ def smoke():
     try:
         r.call(dc + ["up", "-d", "--wait"], timeout=120)
         r.check_running(dc)
-        assert r.sql(dc, "SHOW server_version;", "birja_ops_test").startswith(b"18.6")
+        assert r.sql(dc, "SHOW server_version;", "birja_ops_test").startswith(b"18.7")
         print("isolated_pg18=true")
     finally:
         r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
@@ -1203,7 +1224,7 @@ def image_transition():
             # Debian appends its package build to server_version. Existing
             # recovery equality compares schema/data/money/revision, not that
             # distro label; actual PG/libc majors are separately checked.
-            assert data.pop("server_version").startswith("18.6")
+            assert data.pop("server_version").startswith("18.6" if service == "original" else "18.7")
             return data
 
         def readonly_original_fingerprint(volume=original_volume):
@@ -2597,7 +2618,7 @@ def tls(fresh_bootstrap=False):
         try:
             r.call(dc + ["up", "-d", "--wait", "postgres", "redis"], timeout=120)
             assert r.sql(dc, "SHOW server_version", "birja_source_test").startswith(
-                b"18.6"
+                b"18.7"
             )
             # Validate pinned image ownership rather than guessing uid/gid.
             assert (
@@ -2695,6 +2716,10 @@ def tls(fresh_bootstrap=False):
             execution_consumer=client('migrate',execution_program(seed=True))
             assert b'guard_consumer=true verified_tls=true' in execution_consumer.stdout
             print('execution_verified_tls=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
+            actual_runtime=client('migrate',runtime_program(seed=True))
+            runtime_receipt_digest(actual_runtime.stdout)
+            assert b'verified_tls=true' in actual_runtime.stdout
+            print('actual_stock_services_verified_tls=true actual_split_cutoff=true crypto_cashreuse=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
             assert (
                 role_sql(
                     dc,

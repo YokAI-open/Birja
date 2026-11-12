@@ -4,7 +4,7 @@ services:
   postgres:
     # Run the entrypoint as70: existing UID999 data must fail, never auto-chown.
     user: "70:70"
-    image: birja-recovery-postgres:verified-91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4
+    image: birja-recovery-postgres:verified-4ee05252904571f8901ceb47916108d7da51fc6ecc3edbfa4a161b8b9225051e
     pull_policy: never
     environment:
       PGDATA: /var/lib/postgresql/18/docker

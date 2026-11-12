@@ -416,7 +416,9 @@ capacity, custody and maintenance approval still require separate preflight.
 
 ### PostgreSQL and Redis clone compatibility
 
-The reviewed PostgreSQL18.6 image uses glibc2.44 and postgres UID/GID70;
+The current source pins PostgreSQL18.7 with glibc2.44 and postgres UID/GID70;
+the deployed/recovery release may retain its separately approved18.6 pin.
+Changing this source pin does not upgrade a running service or installed archive;
 the old Debian image used glibc2.41 and UID/GID999. PGDATA is explicitly
 `/var/lib/postgresql/18/docker`, with the volume still mounted at
 `/var/lib/postgresql`. A matching major version does not establish physical

@@ -13,7 +13,7 @@ services:
   postgres:
     # Run the entrypoint as70: existing UID999 data must fail, never auto-chown.
     user: "70:70"
-    image: cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4
+    image: cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de
     restart: unless-stopped
     environment:
       PGDATA: /var/lib/postgresql/18/docker

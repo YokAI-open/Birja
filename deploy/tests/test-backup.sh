@@ -45,11 +45,11 @@ if Path(sys.argv[0]).name=='docker':
     if fail=='manifest': financial['negative_cash']=1
     spec=importlib.util.spec_from_file_location('contract',(root/'contract-source').read_text()); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     identities=[[table,column,'a' if column=='id' else '', 'bigint' if column=='id' else 'text'] for table,columns in module.contract_columns('0008').items() for column in sorted(columns)]
-    print(json.dumps({'tables':tables,'revision':'0008','server_version':'18.6','financial':financial,'schema':{'identities':identities,'indexes':[],'constraints':[]}}),flush=True)
+    print(json.dumps({'tables':tables,'revision':'0008','server_version':'18.7','financial':financial,'schema':{'identities':identities,'indexes':[],'constraints':[]}}),flush=True)
    elif 'ROLLBACK' in line: break
   (root/'exporter').unlink(missing_ok=True)
  elif 'pg_dump' in a:
-  if '--version' in a: print('pg_dump (PostgreSQL) 18.6'); sys.exit(0)
+  if '--version' in a: print('pg_dump (PostgreSQL) 18.7'); sys.exit(0)
   assert (root/'exporter').exists()
   assert '--snapshot=00000001-00000001-1' in a
   if fail=='dump': print('SECRET-dump',file=sys.stderr); sys.exit(3)
