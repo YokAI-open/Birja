@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 """Global economic keys cannot be hidden by an asset-specific route."""
 
 from decimal import Decimal
