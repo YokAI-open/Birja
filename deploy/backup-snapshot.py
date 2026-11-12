@@ -360,7 +360,7 @@ def manifest_sql(revision):
                     expressions.append("to_char(" + column + ",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')")
                 else:
                     expressions.append(column + "::text")
-            key = "id" if columns.startswith("id ") else "coin_id"
+            key = "trade_id" if table == "stock_fill_facts" else "id" if columns.startswith("id ") else "coin_id"
             rows.append(" UNION ALL SELECT '" + table + "'," + key + ",json_build_array(" + ",".join(expressions) + ")::text FROM " + table)
         result = result.replace("\n), names(name) AS (", "\n" + "\n".join(rows) + "\n), names(name) AS (")
         result = result.replace("('stock_data_admissions')\n", "('stock_data_admissions')," + ",".join("('" + t + "')" for t in ACTION_COLUMNS) + "\n")
