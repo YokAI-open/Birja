@@ -92,6 +92,13 @@ class RevisionContracts(unittest.TestCase):
         for revision in ("0011", "0012"):
             self.assertEqual(len(producer.contract_columns(revision)), 22)
 
+    def test_execution_receipts_hash_in_unique_trade_order(self):
+        producer = load("backup-snapshot")
+        query = producer.manifest_sql("0013")
+        # A stock can have many fills: coin_id is not a deterministic row key.
+        self.assertIn("SELECT 'stock_fill_facts',trade_id,json_build_array(", query)
+        self.assertNotIn("SELECT 'stock_fill_facts',coin_id,", query)
+
     def test_resolution_authority_has_explicit_exact_contract(self):
         producer = load("backup-snapshot")
         query = producer.manifest_sql("0012")
