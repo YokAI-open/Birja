@@ -87,3 +87,9 @@ it("GETs through the shared client forwarding cancellation and rejects invalid d
   expect(fetch.mock.calls[0]?.[1].signal).toBe(signal);
   await expect(fetchPortfolio()).rejects.toThrow("Unexpected portfolio response");
 });
+
+it("rejects contradictory complete and class allocation fields", () => {
+  expect(isPortfolio({ ...cashPortfolio, known_value: "9999.00", unvalued_holding_count: 1,
+    class_values: { cash: "9999.00", stocks: null, crypto: "0" },
+    class_allocation_percent: { cash: "100", stocks: "0", crypto: "0" } })).toBe(false);
+});
