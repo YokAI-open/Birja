@@ -107,7 +107,7 @@ function hide(h: PortfolioHolding): PortfolioHolding {
     status: "unpriced",
     stock_mark: {
       mark_mode: "unavailable",
-      valuation_reason: "action_unavailable",
+      valuation_reason: "quote_unavailable",
       source: null,
       feed: null,
       event_at: null,
@@ -132,6 +132,7 @@ function externalRestriction(
     (context.coin_id !== h.coin_id ||
       context.provider_asset_id !== h.provider_asset_id ||
       context.action.state !== "current" ||
+      (context.status.state === "halted" && h.stock_mark?.mark_mode !== "halted") ||
       (a &&
         context.authority &&
         (context.authority.unit_epoch !== a.unit_epoch ||
@@ -147,6 +148,7 @@ function externalRestriction(
   return (
     item !== undefined &&
     (item.action.state !== "current" ||
+      (item.status.state === "halted" && h.stock_mark?.mark_mode !== "halted") ||
       (a !== null && a !== undefined && item.action.epoch > a.safety_epoch))
   );
 }

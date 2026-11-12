@@ -162,7 +162,7 @@ function Asset({
       )}
       {m?.mark_mode === "unavailable" && (
         <span>
-          {!m.units_safe
+          {m.valuation_reason === "action_unavailable" || m.valuation_reason === "units_changed"
             ? "Suspended for corporate-action review. Units and valuation are unavailable."
             : "Stock valuation unavailable. A verified permitted price is required."}
         </span>
