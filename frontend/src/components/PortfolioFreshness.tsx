@@ -17,6 +17,9 @@ export function PortfolioFreshness({
   isError: boolean;
 }) {
   const [firstUpdate] = useState(dataUpdatedAt);
+  const historical = portfolio.holdings.some(
+    (h) => h.stock_mark?.mark_mode === "closed" || h.stock_mark?.mark_mode === "halted",
+  );
   const ages = portfolio.holdings.flatMap((h) =>
     h.age_seconds === null ? [] : [h.age_seconds + elapsed],
   );
@@ -27,7 +30,7 @@ export function PortfolioFreshness({
       : freshnessStatus(oldest, portfolio.fresh_seconds, portfolio.stale_seconds);
   const incomplete = !portfolio.valuation_complete;
   const warning = incomplete
-    ? "Some holdings have no price. Total value, profit/loss and allocation are unavailable until prices return."
+    ? "Some holdings cannot be valued. Overall profit/loss and allocation are unavailable until a verified update."
     : status === "stale"
       ? "Some prices are out of date. Values use the last known prices."
       : status === "aging"
@@ -35,9 +38,11 @@ export function PortfolioFreshness({
         : null;
   const state = incomplete
     ? "Valuation incomplete"
-    : status
-      ? statusLabel(status)
-      : "No market prices needed";
+    : historical
+      ? "Values include dated stock marks"
+      : status
+        ? statusLabel(status)
+        : "No market prices needed";
   // Only semantic state and request transitions enter the live region. Ages and
   // full timestamps below remain readable without announcing each display tick.
   const announcement = isFetching
@@ -52,9 +57,11 @@ export function PortfolioFreshness({
       <p>
         {incomplete
           ? "Valuation incomplete"
-          : status
-            ? "Values use market mid prices."
-            : "No market prices needed"}
+          : historical
+            ? "Values include dated stock marks."
+            : status
+              ? "Values use market mid prices."
+              : "No market prices needed"}
       </p>
       {oldest !== null && (
         <p className="wrap-anywhere">

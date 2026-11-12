@@ -103,30 +103,83 @@ function Return({ holding }: { holding: PortfolioHolding }) {
 
 function Trade({ holding }: { holding: PortfolioHolding }) {
   return holding.is_active ? (
-    <Button
-      asChild
-      variant="secondary"
-      className="min-h-11 min-w-11 text-[15px] font-medium motion-reduce:transform-none motion-reduce:transition-none"
-    >
-      <Link to={`/trade/${encodeURIComponent(holding.symbol)}`}>Trade {holding.symbol}</Link>
+    <Button asChild variant="secondary" className="min-h-11 min-w-11">
+      <Link
+        to={
+          holding.asset_class === "stock"
+            ? `/trade/stocks/${encodeURIComponent(holding.symbol)}`
+            : `/trade/${encodeURIComponent(holding.symbol)}`
+        }
+      >
+        Trade {holding.symbol}
+      </Link>
     </Button>
   ) : (
     <span>Inactive · trading unavailable</span>
   );
 }
-
+function Asset({
+  holding,
+  elapsed,
+  freshSeconds,
+  staleSeconds,
+}: {
+  holding: PortfolioHolding;
+  elapsed: number;
+  freshSeconds: number;
+  staleSeconds: number;
+}) {
+  const m = holding.stock_mark;
+  const historical = m?.mark_mode === "closed" || m?.mark_mode === "halted";
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-2 wrap-anywhere">
+      <span className="font-medium">{holding.symbol}</span>
+      <span>{holding.name}</span>
+      <Badge variant="neutral">{holding.asset_class === "stock" ? "Stock" : "Crypto"}</Badge>
+      {holding.mid !== null && (
+        <span>
+          {holding.asset_class === "stock" ? "IEX midpoint" : "Mid price"}:{" "}
+          {formatUnitPrice(holding.mid)}
+        </span>
+      )}
+      {historical ? (
+        <>
+          <Badge variant="warning">{m.mark_mode === "halted" ? "Halted" : "Market closed"}</Badge>
+          <span>
+            Last verified midpoint ·{" "}
+            <time dateTime={holding.as_of!} title={holding.as_of!}>
+              {fullLocalTimestamp(holding.as_of!)}
+            </time>
+          </span>
+        </>
+      ) : (
+        <PriceUpdated
+          holding={holding}
+          elapsed={elapsed}
+          freshSeconds={freshSeconds}
+          staleSeconds={staleSeconds}
+        />
+      )}
+      {m?.mark_mode === "unavailable" && (
+        <span>
+          {!m.units_safe
+            ? "Suspended for corporate-action review. Units and valuation are unavailable."
+            : "Stock valuation unavailable. A verified permitted price is required."}
+        </span>
+      )}
+      <Trade holding={holding} />
+    </div>
+  );
+}
 const columns = [
-  "Coin",
+  "Asset",
   "Quantity",
   "Average cost",
-  "Mid price",
+  "Cost basis",
   "Current value",
-  "Unrealized P/L",
+  "Gain/loss",
   "Allocation",
-  "Price updated",
-  "Trade",
 ];
-
 export function PortfolioHoldings({
   holdings,
   elapsed,
@@ -138,23 +191,27 @@ export function PortfolioHoldings({
   freshSeconds: number;
   staleSeconds: number;
 }) {
-  function fields(holding: PortfolioHolding): ReactNode[] {
+  const sorted = [...holdings].sort((a, b) =>
+    a.symbol < b.symbol
+      ? -1
+      : a.symbol > b.symbol
+        ? 1
+        : BigInt(a.coin_id) < BigInt(b.coin_id)
+          ? -1
+          : 1,
+  );
+  function fields(h: PortfolioHolding): ReactNode[] {
     return [
-      formatQuantity(holding.quantity),
-      outcome(holding.average_cost) === "zero"
-        ? formatUsd("0")
-        : formatUnitPrice(holding.average_cost),
-      holding.mid === null ? "Unavailable" : formatUnitPrice(holding.mid),
-      holding.current_value === null ? "Unavailable" : formatUsd(holding.current_value),
-      <Return holding={holding} />,
-      holding.allocation_percent === null ? "Unavailable" : `${holding.allocation_percent}%`,
-      <PriceUpdated
-        holding={holding}
-        elapsed={elapsed}
-        freshSeconds={freshSeconds}
-        staleSeconds={staleSeconds}
-      />,
-      <Trade holding={holding} />,
+      h.stock_mark && !h.stock_mark.units_safe
+        ? "Unavailable"
+        : h.asset_class === "stock"
+          ? h.quantity.split(".")[0]
+          : formatQuantity(h.quantity),
+      h.average_cost === null ? "Unavailable" : formatUnitPrice(h.average_cost),
+      formatUsd(h.cost_basis),
+      h.current_value === null ? "Unavailable" : formatUsd(h.current_value),
+      <Return holding={h} />,
+      h.allocation_percent === null ? "Unavailable" : `${h.allocation_percent}%`,
     ];
   }
   return (
@@ -162,59 +219,53 @@ export function PortfolioHoldings({
       <CardContent>
         <h2 className="font-medium">Holdings</h2>
         <p className="text-muted-foreground">
-          Average cost includes buy fees. Values use market mid prices.
+          Average cost includes crypto buy fees. Values use market mid prices.
         </p>
-        {holdings.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="flex flex-col items-start gap-3">
             <h3 className="font-medium">No holdings yet</h3>
-            <p>Your cash is available to trade. Browse markets to choose a coin.</p>
-            <Button
-              asChild
-              className="min-h-11 motion-reduce:transform-none motion-reduce:transition-none"
-            >
-              <Link to="/">Browse markets</Link>
+            <p>Explore Markets to buy your first stock or crypto.</p>
+            <Button asChild className="min-h-11">
+              <Link to="/">Explore Markets</Link>
             </Button>
           </div>
         ) : (
           <>
-            <div
-              role="region"
-              aria-label="Holdings table, scroll to see all columns"
-              tabIndex={0}
-              className="hidden overflow-x-auto rounded-control focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:block"
-            >
-              <table aria-label="Holdings" className="w-full border-collapse text-left">
+            <div className="hidden min-w-0 lg:block">
+              <table aria-label="Holdings" className="w-full table-fixed border-collapse text-left">
                 <thead>
                   <tr className="border-b border-border">
-                    {columns.map((column, index) => (
+                    {columns.map((c, i) => (
                       <th
-                        key={column}
+                        key={c}
                         scope="col"
-                        className={`px-2 py-3 text-[13px] leading-[18px] font-medium text-muted-foreground ${index > 0 && index < 7 ? "text-right" : ""}`}
+                        className={`px-2 py-3 text-[13px] leading-[18px] font-medium text-muted-foreground ${i ? "text-right" : "w-[24%]"}`}
                       >
-                        {column}
+                        {c}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {holdings.map((holding) => (
+                  {sorted.map((h) => (
                     <tr
-                      key={holding.symbol}
-                      className="h-[52px] border-b border-border hover:bg-accent"
+                      key={h.coin_id}
+                      className="border-b border-border align-top hover:bg-accent"
                     >
-                      <th scope="row" className="min-w-24 px-2 py-3 font-medium wrap-anywhere">
-                        <span className="block">{holding.symbol}</span>
-                        <span className="block text-[13px] leading-[18px] font-normal text-muted-foreground">
-                          {holding.name}
-                        </span>
+                      <th scope="row" className="px-2 py-3 text-[13px] leading-[18px] font-normal">
+                        <Asset
+                          holding={h}
+                          elapsed={elapsed}
+                          freshSeconds={freshSeconds}
+                          staleSeconds={staleSeconds}
+                        />
                       </th>
-                      {fields(holding).map((field, index) => (
+                      {fields(h).map((v, i) => (
                         <td
-                          key={columns[index + 1]}
-                          className={`px-2 py-3 align-top wrap-anywhere tabular-nums ${index < 6 ? "text-right" : "min-w-40"} ${index === 4 ? "min-w-48 [&>div]:items-end" : ""}`}
+                          key={columns[i + 1]}
+                          className="min-w-0 px-2 py-3 text-right wrap-anywhere tabular-nums [&>div]:items-end"
                         >
-                          {field}
+                          {v}
                         </td>
                       ))}
                     </tr>
@@ -222,48 +273,27 @@ export function PortfolioHoldings({
                 </tbody>
               </table>
             </div>
-            <ol aria-label="Holdings" className="flex flex-col gap-3 md:hidden">
-              {holdings.map((holding) => {
-                const values = fields(holding);
-                return (
-                  <li
-                    key={holding.symbol}
-                    className="min-w-0 rounded-control border border-border p-4"
-                  >
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-medium wrap-anywhere">{holding.symbol}</h3>
-                        <p className="text-[13px] leading-[18px] text-muted-foreground">
-                          {holding.name}
-                        </p>
+            <ol aria-label="Holdings" className="flex flex-col gap-3 lg:hidden">
+              {sorted.map((h) => (
+                <li key={h.coin_id} className="min-w-0 rounded-control border border-border p-4">
+                  <Asset
+                    holding={h}
+                    elapsed={elapsed}
+                    freshSeconds={freshSeconds}
+                    staleSeconds={staleSeconds}
+                  />
+                  <dl className="mt-4 flex flex-col gap-3">
+                    {fields(h).map((v, i) => (
+                      <div key={columns[i + 1]} className="flex flex-wrap justify-between gap-2">
+                        <dt className="text-[13px] leading-[18px] font-medium text-muted-foreground">
+                          {columns[i + 1]}
+                        </dt>
+                        <dd className="min-w-0 max-w-full wrap-anywhere tabular-nums">{v}</dd>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[13px] leading-[18px] font-medium text-muted-foreground">
-                          Current value
-                        </p>
-                        <p className="wrap-anywhere tabular-nums">{values[3]}</p>
-                      </div>
-                    </div>
-                    <dl className="flex flex-col gap-3">
-                      {values.map((value, index) =>
-                        index === 3 ? null : (
-                          <div
-                            key={columns[index + 1]}
-                            className="flex flex-wrap justify-between gap-2"
-                          >
-                            <dt className="text-[13px] leading-[18px] font-medium text-muted-foreground">
-                              {columns[index + 1]}
-                            </dt>
-                            <dd className="min-w-0 max-w-full wrap-anywhere tabular-nums">
-                              {value}
-                            </dd>
-                          </div>
-                        ),
-                      )}
-                    </dl>
-                  </li>
-                );
-              })}
+                    ))}
+                  </dl>
+                </li>
+              ))}
             </ol>
           </>
         )}

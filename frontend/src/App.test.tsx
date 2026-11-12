@@ -112,10 +112,14 @@ describe("App", () => {
       cash,
       starting_cash: "10000.00",
       total_value: cash,
-      total_pl: "0.00",
-      total_pl_percent: "0.00",
+      total_pl: cash === "10000.00" ? "0.00" : "-1876.55",
+      total_pl_percent: cash === "10000.00" ? "0.00" : "-18.77",
       cash_allocation_percent: "100.00",
       valuation_complete: true,
+      known_value: cash,
+      unvalued_holding_count: 0,
+      class_values: { cash, stocks: "0", crypto: "0" },
+      class_allocation_percent: { cash: "100", stocks: "0", crypto: "0" },
       valued_at: "2026-10-30T07:00:00Z",
       prices_as_of: null,
       fresh_seconds: 120,
@@ -207,7 +211,7 @@ describe("App", () => {
       await client.invalidateQueries({ queryKey: ["me"] });
     });
     expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-    expect(client.getQueryData(["portfolio"])).toEqual(portfolio("8123.45"));
+    expect(client.getQueryData(["portfolio", "a@example.test"])).toBeUndefined();
     expect(aSignal.aborted).toBe(false);
     const frames: string[] = [];
     const observer = new MutationObserver(() => {
@@ -220,7 +224,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(releasePortfolioB).toBeTypeOf("function"));
     expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(oldMe);
-    expect(oldMe!.getObserversCount()).toBe(1);
+    expect(oldMe!.getObserversCount()).toBe(2);
     expect(aSignal.aborted).toBe(true);
     expect(screen.queryByText("$8,123.45")).toBeNull();
     await user.click(screen.getByRole("link", { name: "History" }));

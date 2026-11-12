@@ -159,10 +159,13 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
       ownUpper,
       g.clock === null ? ownUpper : g.clock.upper + Math.max(0, now - g.clock.at),
     );
-  if (upper > ownUpper)
-    p = { ...p, authority_offset_ms: (p.authority_offset_ms ?? 0) + Math.ceil(upper - ownUpper) };
   const staleSnapshot =
     g.latest !== null && stockInstant(p.valued_at) < stockInstant(g.latest.valued_at);
+  const lateRestrictions = new Set(
+    staleSnapshot
+      ? p.holdings.filter((h) => h.stock_mark?.mark_mode === "unavailable").map((h) => h.coin_id)
+      : [],
+  );
   if (staleSnapshot) p = g.latest!;
   let changed = false;
   const at = stockInstant(p.valued_at);
@@ -191,6 +194,7 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
       ...(a?.admissions.map((x) => x.valid_until) ?? []),
     ].some((x) => x !== null && upper >= Date.parse(x));
     const restricted =
+      lateRestrictions.has(h.coin_id) ||
       backwards ||
       hashChanged ||
       identityChanged ||
@@ -301,7 +305,7 @@ export function usePortfolio() {
         const safe = project(client, g, cached);
         if (safe !== cached) {
           writing = true;
-          client.setQueryData(key, safe);
+          client.getQueryCache().find({ queryKey: key, exact: true })?.setState({ data: safe });
           writing = false;
         }
         const upper = upperAt(safe, performance.now());
