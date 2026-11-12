@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { usePortfolio } from "./usePortfolio";
 import { mixedPortfolio } from "@/test/portfolioFixtures";
+import { contextFixture } from "@/test/stockTradeFixtures";
 import type { Portfolio } from "@/api/portfolio";
 const clients: QueryClient[] = [];
 function setup() {
@@ -162,6 +163,23 @@ it("a later old restrictive response suppresses current values without rolling c
   });
   act(() => client.setQueryData(key, older));
   expect(result.current.data?.cash).toBe("9796.00");
+  expect(result.current.data?.holdings[0].mid).toBeNull();
+  expect(result.current.data?.known_value).toBeNull();
+});
+it("an independently observed halt cannot leave a cached fresh stock mark advertised live", async () => {
+  mock();
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.total_value).toBe("9998.00"));
+  const c = contextFixture();
+  Object.assign(c, {
+    execution_enabled: false,
+    execution_reason: "halted",
+    quote: null,
+    valid_until: null,
+    buy_max_quantity: "0",
+  });
+  c.status.state = "halted";
+  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], c));
   expect(result.current.data?.holdings[0].mid).toBeNull();
   expect(result.current.data?.known_value).toBeNull();
 });
