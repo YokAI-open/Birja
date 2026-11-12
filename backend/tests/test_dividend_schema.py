@@ -1,14 +1,20 @@
 """Real PostgreSQL dividend identities, saved terms and append-only lineage."""
 
 from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime
 from decimal import Decimal
+import importlib.util
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from app.models.dividend import StockDividendDecision
 from tests.test_stock_action_migrations import event, ledger
 
 __all__ = ["ledger"]
@@ -127,3 +133,125 @@ async def test_anchor_immutable_even_owner(dividend_case, operation: str) -> Non
         async with conn.begin_nested():
             await conn.execute(text(f"{operation} WHERE id=:p"), {"p": pid})
     assert error.value.orig.sqlstate == "23514"
+
+
+async def test_populated_downgrade_refuses_before_ddl(dividend_case) -> None:
+    conn, terms = dividend_case
+    await payment(conn, terms)
+    path = Path(__file__).resolve().parents[1] / "alembic/versions/0014_dividend_accounting.py"
+    spec = importlib.util.spec_from_file_location("dividend_migration", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def downgrade(sync_conn):
+        with Operations.context(MigrationContext.configure(sync_conn)):
+            module.downgrade()
+
+    with pytest.raises(DBAPIError, match="populated dividend accounting"):
+        async with conn.begin_nested():
+            await conn.run_sync(downgrade)
+
+
+async def decision(conn: AsyncConnection, terms: dict[str, object], pid: int,
+                   **changes: object) -> int:
+    values = {
+        **terms, "payment_id": pid, "previous_decision_id": None,
+        "previous_application_id": None, "desired_total": Decimal("0.50"),
+        "cumulative_applied_before": Decimal("1.00"), "proposed_delta": Decimal("-0.50"),
+        "applied_delta": Decimal(0), "outcome": "held_unaffordable",
+        "reason": "insufficient_cash", "status_identity": "epoch:1:insufficient_cash",
+        "recorded_at": datetime.now(UTC), "cash_after": Decimal("0.20"),
+        "symbol": "AAPL", "company_name": "Saved Apple", "cutoff": datetime.now(UTC),
+        "cutoff_rule": "exclusive", "units_basis": "shares", "unit_epoch": 0,
+        "eligible_quantity": Decimal(2), "rate": Decimal("0.25"),
+        "ex_date": date(2026,11,1), "record_date": date(2026,11,2),
+        "payable_date": date(2026,11,10), **changes,
+    }
+    return (await conn.execute(insert(StockDividendDecision).values(**values)
+                               .returning(StockDividendDecision.id))).scalar_one()
+
+
+def uncertain_terms() -> dict[str, object]:
+    return dict.fromkeys(("entitlement_id", "entitlement_fingerprint", "desired_total",
+        "proposed_delta", "eligible_quantity", "rate", "cutoff", "cutoff_rule",
+        "units_basis", "unit_epoch", "ex_date", "record_date", "payable_date")) | {
+            "outcome": "held_uncertain", "reason": "terms_unverified",
+            "status_identity": "epoch:2:terms_unverified"}
+
+
+async def test_nullable_uncertain_existing_anchor_deduplicates(dividend_case) -> None:
+    conn, terms = dividend_case
+    pid = await payment(conn, terms)
+    held = await decision(conn, terms, pid, **uncertain_terms())
+    assert held > 0
+    with pytest.raises(DBAPIError) as error:
+        async with conn.begin_nested():
+            await decision(conn, terms, pid, **uncertain_terms(),
+                           recorded_at=datetime.now(UTC), cash_after=Decimal(123))
+    assert error.value.orig.sqlstate == "23505"
+    assert (await conn.execute(text(
+        "SELECT desired_total IS NULL AND proposed_delta IS NULL AND applied_delta=0 "
+        "FROM stock_dividend_decisions WHERE id=:d"), {"d": held})).scalar_one()
+
+
+async def test_uncertainty_without_anchor_does_not_publish(dividend_case) -> None:
+    conn, terms = dividend_case
+    with pytest.raises(DBAPIError) as error:
+        async with conn.begin_nested():
+            await decision(conn, terms, 9223372036854775807, **uncertain_terms())
+    assert error.value.orig.sqlstate == "23503"
+    assert (await conn.execute(text("SELECT count(*) FROM stock_dividend_payments "
+        "WHERE event_id=:event_id"), terms)).scalar_one() == 0
+
+
+async def test_held_then_applied_successor_and_target_dedup(dividend_case) -> None:
+    conn, terms = dividend_case
+    pid = await payment(conn, terms)
+    held = await decision(conn, terms, pid)
+    applied = await decision(conn, terms, pid, previous_decision_id=held, outcome="applied",
+        reason="target_applied", applied_delta=Decimal("-0.50"), cash_after=Decimal("0.50"))
+    assert applied > held
+    with pytest.raises(DBAPIError) as error:
+        async with conn.begin_nested():
+            await decision(conn, terms, pid, previous_decision_id=applied,
+                previous_application_id=applied, outcome="applied", reason="target_applied",
+                applied_delta=Decimal("-0.50"), cash_after=Decimal("0.50"))
+    assert error.value.orig.sqlstate == "23505"
+    assert (await conn.execute(text("SELECT original_amount FROM stock_dividend_payments "
+        "WHERE id=:p"), {"p":pid})).scalar_one() == Decimal(1)
+
+
+@pytest.mark.parametrize("operation", ["UPDATE stock_dividend_decisions SET cash_after=99",
+                                       "DELETE FROM stock_dividend_decisions"])
+async def test_decision_immutable(dividend_case, operation: str) -> None:
+    conn, terms = dividend_case
+    pid = await payment(conn, terms)
+    did = await decision(conn, terms, pid)
+    with pytest.raises(DBAPIError) as error:
+        async with conn.begin_nested():
+            await conn.execute(text(f"{operation} WHERE id=:d"), {"d":did})
+    assert error.value.orig.sqlstate == "23514"
+
+
+async def test_runtime_direct_writes_denied_and_app_read_only(dividend_case) -> None:
+    conn, terms = dividend_case
+    pid = await payment(conn, terms)
+    for role in ("birja_app", "birja_scheduler"):
+        # Roles exist only in this rollback-owned test transaction.
+        await conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
+        await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))
+    for role in ("birja_app", "birja_scheduler"):
+        async with conn.begin_nested():
+            await conn.execute(text(f"SET LOCAL ROLE {role}"))
+            if role == "birja_app":
+                assert (await conn.execute(text("SELECT id FROM stock_dividend_payments "
+                    "WHERE id=:p"), {"p":pid})).scalar_one() == pid
+            for table in ("stock_dividend_payments", "stock_dividend_decisions"):
+                for operation in (f"INSERT INTO {table}(event_id) VALUES (1)",
+                                  f"UPDATE {table} SET event_id=1", f"DELETE FROM {table}"):
+                    with pytest.raises(DBAPIError) as error:
+                        async with conn.begin_nested():
+                            await conn.execute(text(operation))
+                    assert error.value.orig.sqlstate == "42501"
+            await conn.execute(text("RESET ROLE"))
