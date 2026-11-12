@@ -42,3 +42,28 @@ Exact existingCLAUDEcritical list plus newstock math/rules was measured from
 the actual full-run coverage data. CI/CLAUDElist expansion remains09-14.
 Runtime stock consumers remain behind09-04 recovery/role/TLS proof. No packages,
 private calls, installed production-tool changes, activation or publication.
+
+
+## Plan09-04 final recovery proof —2026-11-12
+
+Source/test commits through e8d3bb2. Final canonical serial --all exits0;
+log /tmp/birja-phase09-04-all-consistent.log. One retained archive
+08131798ce5d3893bde0da4cf566d46de5e77654f47b87dbd3f912898e14278c
+(152197120bytes) covers exact0007–0013 rows/schema/identities with unchanged
+source and denied feature checkout. Retained recovery395.688s, restricted
+roles181.408s (63 denied operations), populated0012→0013 TLS126.301s and
+fresh0013 TLS122.868s. Both TLS lanes pass certificate/hostname/plaintext
+negatives, exact runtime ACL parity and actual invoker/ownership consumers.
+
+Actual new stock source/restored history has two same-stock receipts, complete
+baseline and contiguous journal; duplicate rejection adds no effect/counter.
+Ten new execution corruptions, nine accounting, seventeen identity and thirteen
+operator-authority corruptions are rejected. Offline10passed/3explicit SQL-only
+skips0.044s; restore-safety6passed1.402s; compile/shell/whitespace pass.
+
+Inline review found and fixed nonunique receipt hash ordering (5a59aa0/603e43a)
+and synthetic missing history (e17ef25/e8d3bb2). Both real RED/GREEN proofs are
+recorded in09-04-SUMMARY/REVIEW. Agents lacked filesystem/shell tools; review
+was a distinct inline pass, not independent. Actual stock execution service
+replay/concurrency and its restored TLS consumers remain06/07/14 obligations.
+No provider, production, B2, timer, push, merge or deployment change.

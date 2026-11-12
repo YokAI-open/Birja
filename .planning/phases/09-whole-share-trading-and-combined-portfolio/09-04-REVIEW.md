@@ -22,6 +22,13 @@ tool, real database, B2 repository or provider was accessed.
   Its already-verified quarantined clone now frees that unique product slot
   before the insertion; the sequence itself is untouched. No source writes or
   runtime grant expansion is needed.
+- R04-02: the synthetic journal lacked its historical baseline and allocated
+  a noncontiguous initial sequence. The added actual ownership-service check
+  in e17ef25 demonstrated `OwnershipHeld: missing_baseline`. The fixture now
+  preserves a complete initial baseline and allocates contiguous tail values;
+  the service must accept both source and restored histories before the
+  fixture can report success. This is test-data repair, with no runtime
+  implementation or recovery-tool contract change. Resolved in e8d3bb2; short real-service GREEN and the final canonical retained/roles/both-TLS run pass.
 
 ## Review conclusions and limits
 
@@ -38,6 +45,6 @@ cannot silently advance a sequence. It tests database duplicate rejection,
 not an implemented execution service: actual service replay, final-wait races
 and retained restricted-service consumers remain Plans06/07/14 obligations.
 
-No remaining source finding was identified in this pass. Acceptance remains
-conditional on the final corrected canonical --all run; its receipt belongs
-in09-04-SUMMARY.md and09-LOCAL-PROOF.md, not inferred from this review.
+No remaining source finding was identified in this pass. The final corrected canonical --all run passes. Its actual timings and archive
+identity are recorded in09-04-SUMMARY.md and09-LOCAL-PROOF.md; this review itself
+is not a substitute for that execution evidence.
