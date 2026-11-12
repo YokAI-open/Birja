@@ -11,12 +11,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from tests.test_migrations import _config, _versions
+from tests.test_migrations import _config, _versions, ensure_dividend_test_owner
 
 STOCK_TABLES = {"stock_instruments", "stock_quotes", "stock_sessions", "stock_data_admissions"}
 
 
 async def migrate(target: str, *, down: bool = False) -> None:
+    if not down and target in ("head", "0014"):
+        await ensure_dividend_test_owner()
     await asyncio.to_thread(command.downgrade if down else command.upgrade, _config(), target)
 
 
@@ -108,13 +110,14 @@ async def test_populated_0008_preserves_exact_financial_identity(engine: AsyncEn
         await migrate("0009")
         assert await _versions(engine) == ["0009"]
         assert await _financial_snapshot(engine) == before
-        # No production roles are provisioned by the migration in development.
+        # Runtime roles are not provisioned by0009. The guarded test bootstrap
+        # preprovisions the canonical NOLOGIN owner for0014 independently.
         async with engine.connect() as conn:
             assert not (
                 await conn.execute(
                     text(
                         "SELECT rolname FROM pg_roles WHERE rolname IN "
-                        "('birja_app','birja_scheduler','birja_migrator')"
+                        "('birja_app','birja_scheduler')"
                     )
                 )
             ).all()

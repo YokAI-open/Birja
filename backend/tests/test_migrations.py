@@ -10,7 +10,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 import app.models  # noqa: F401
 from app.db.base import Base
@@ -18,6 +18,41 @@ from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 EXPECTED_HEAD = "0014"
+
+
+async def ensure_dividend_test_owner() -> None:
+    """Only guarded disposable DB administration, no production provisioning."""
+    import os
+
+    from tests.guard import ensure_test_stack
+
+    url = os.environ["DATABASE_URL"]
+    ensure_test_stack(url, os.environ["REDIS_URL"])
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as conn:
+            assert (
+                await conn.execute(
+                    text(
+                        "SELECT current_database()='birja_test' AND current_user='birja_test' "
+                        "AND rolsuper FROM pg_roles WHERE rolname=current_user"
+                    )
+                )
+            ).scalar_one()
+            await conn.execute(
+                text("""DO $test$ BEGIN
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
+                CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator' AND
+                (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                 OR rolreplication OR rolbypassrls)) THEN
+                RAISE EXCEPTION 'unsafe disposable migration owner'; END IF;
+            END $test$""")
+            )
+    finally:
+        await engine.dispose()
 
 
 def _config() -> Config:

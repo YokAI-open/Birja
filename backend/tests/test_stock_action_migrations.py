@@ -363,7 +363,12 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
     await migrate("0010", down=True)
     async with engine.begin() as conn:
         for role in ("birja_app", "birja_scheduler", "birja_migrator"):
-            await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
+            if not (
+                await conn.execute(
+                    text("SELECT EXISTS(SELECT FROM pg_roles WHERE rolname=:r)"), {"r": role}
+                )
+            ).scalar_one():
+                await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))  # noqa: S608 - fixed isolated roles
             await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))  # noqa: S608
     try:
         # This fixture proves the retained00011–0013 runtime/bootstrap policy;

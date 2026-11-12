@@ -65,6 +65,21 @@ def app(settings: Settings) -> FastAPI:
 
 
 @pytest.fixture(scope="session")
+def dividend_owner_prerequisite() -> None:
+    """Explicit disposable-test bootstrap; application migrations never create roles."""
+    import asyncio
+
+    from tests.test_migrations import ensure_dividend_test_owner
+
+    asyncio.run(ensure_dividend_test_owner())
+
+
+@pytest.fixture(scope="session", autouse=True)
+def provision_test_migration_owner(dividend_owner_prerequisite: None) -> None:
+    pass
+
+
+@pytest.fixture(scope="session")
 def migrated() -> None:
     from pathlib import Path
 
