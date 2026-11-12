@@ -67,3 +67,18 @@ recorded in09-04-SUMMARY/REVIEW. Agents lacked filesystem/shell tools; review
 was a distinct inline pass, not independent. Actual stock execution service
 replay/concurrency and its restored TLS consumers remain06/07/14 obligations.
 No provider, production, B2, timer, push, merge or deployment change.
+
+
+## Plan09-05 verified status and eligibility —2026-11-12
+
+Source732af2c; summary/review89f4245. Finite normalized status batches,
+post-wait persistence guards, no-source startup invalidation and current
+execution snapshots pass actual isolated PostgreSQL tests. Durable financial
+facts require explicit accounting/backup scope; data retention deadlines cap
+final authority without changing0013 identities. No live transport is enabled.
+Full backend1889passed202.08s,99.85%overall; all35critical modules
+3534statements/1154branches100%. Ruff, format and Mypy pass. Logs:
+/tmp/birja-phase09-05-backend-final.log and
+/tmp/birja-phase09-05-critical-all.log. Separate inline review has no open
+blocker; agents lacked tools, so independence is not claimed. Actual execution,
+API/client integration and production/provider acceptance remain later plans.

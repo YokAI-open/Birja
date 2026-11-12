@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 09-03; schema review before 09-04
-last_updated: "2026-11-12T09:38:50.914Z"
-last_activity: 2026-11-12 -- Plan09-04 recovery and TLS complete
+stopped_at: Completed 09-05; continuing 09-06 atomic execution
+last_updated: "2026-11-12T11:44:00.908Z"
+last_activity: 2026-11-12 -- Plan09-05 status and eligibility complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 30
-  percent: 20
+  completed_plans: 31
+  percent: 74
 ---
 
 # Project State
@@ -21,17 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 5)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 6)
 
 ## Current Position
 
 Phase: 9
-Plan: 4/15 complete; 09-05 status/eligibility (Wave 5/13)
+Plan: 5/15 complete; 09-06 atomic execution (Wave 6/13)
 Status: In progress
-Last activity: 2026-11-12 -- Plan09-04 recovery and TLS complete
-Progress: [███████░░░] 71% (30/42 tracked plans complete)
+Last activity: 2026-11-12 -- Plan09-05 status and eligibility complete
+Progress: [███████░░░] 74% (31/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-05 is complete: finite independent status, fail-closed scheduler startup,
+current execution authority and explicit durable accounting/recovery scope.
+Source732af2c; summary89f4245. Full backend1889passed202.08s/99.85%;
+35critical modules3534statements/1154branches100%. Ruff/format/Mypy pass.
+Distinct inline review has no open blocker; no independent review is claimed.
+Continue09-06 atomic execution and global idempotency. Actual fills, UI and
+external activation remain pending; no provider/production/publication change.
 
 Plan09-04 is complete:2tasks, summary7ae2dbf. Final canonical serial gate
 exits0 with one exact retained0007–0013 archive (SHA256
@@ -497,6 +505,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P02 | 7min | 2 tasks | 2 files |
 | Phase 9 P03 | 19min | 2 tasks | 8 files |
 | Phase 9 P04 | 14min | 2 tasks | 8 files |
+| Phase 9 P05 | 115min | 2 tasks | 10 files |
 
 ## Operations
 
