@@ -96,7 +96,7 @@ const SCALE = 100000000n,
 function fixed(v: unknown, signed = false): bigint | null {
   if (
     typeof v !== "string" ||
-    !/^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,8})?$/.test(v) ||
+    !/^-?(?:0|[1-9][0-9]{0,12})(?:\.[0-9]{1,8})?$/.test(v) ||
     (!signed && v.startsWith("-"))
   )
     return null;
@@ -323,7 +323,8 @@ export async function fetchEventHistory(
     signal,
     cache: "no-store",
   });
-  if (!isEventHistoryPage(body)) throw new Error("Unexpected event history response");
+  if (!isEventHistoryPage(body) || body.items.length > (limit ?? 25))
+    throw new Error("Unexpected event history response");
   signal?.throwIfAborted();
   return body;
 }

@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "./client";
 import { fetchEventHistory, isEventHistoryPage } from "./eventHistory";
+import { fillFixture } from "@/test/stockTradeFixtures";
 
 export const dividend = {
   kind: "dividend",
@@ -83,12 +84,149 @@ const page = (items: unknown[] = [dividend]) => ({ items, next_cursor: null });
 afterEach(() => vi.unstubAllGlobals());
 
 it("refuses a response exceeding the requested page bound", async () => {
-  vi.stubGlobal("fetch", () => Promise.resolve(new Response(JSON.stringify(page([trade, dividend])))));
-  await expect(fetchEventHistory({ limit: 1 })).rejects.toThrow("Unexpected event history response");
+  vi.stubGlobal("fetch", () =>
+    Promise.resolve(new Response(JSON.stringify(page([trade, dividend])))),
+  );
+  await expect(fetchEventHistory({ limit: 1 })).rejects.toThrow(
+    "Unexpected event history response",
+  );
+});
+const token = (raw: string) => btoa(raw).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+const cursorBody = {
+  v: 2,
+  recorded_at: "2026-11-12T15:00:00.000001Z",
+  kind_rank: 3,
+  source_id: "9007199254740993",
+};
+it("retains a canonical bounded cursor and sends it without financial ID coercion", async () => {
+  const cursor = token(JSON.stringify(cursorBody));
+  const body = { items: [dividend], next_cursor: cursor };
+  expect(isEventHistoryPage(body)).toBe(true);
+  const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
+  vi.stubGlobal("fetch", mock);
+  expect(await fetchEventHistory({ cursor })).toEqual(body);
+  expect(mock).toHaveBeenCalledWith(`/api/v1/history?cursor=${cursor}`, expect.any(Object));
+});
+it.each([
+  "!",
+  "a",
+  "A".repeat(513),
+  token("null"),
+  token("{bad}"),
+  token(JSON.stringify({ ...cursorBody, v: 1 })),
+  token(JSON.stringify({ ...cursorBody, kind_rank: 5 })),
+  token(JSON.stringify({ ...cursorBody, source_id: "01" })),
+  token(JSON.stringify({ ...cursorBody, recorded_at: "2026-11-12T15:00:00Z" })),
+  token('{"v":2,"v":2,"recorded_at":"2026-11-12T15:00:00.000001Z","kind_rank":3,"source_id":"1"}'),
+  token(JSON.stringify({ ...cursorBody, extra: true })),
+])("rejects noncanonical cursor %s", (next_cursor) => {
+  expect(isEventHistoryPage({ items: [], next_cursor })).toBe(false);
+});
+it("projects an existing immutable stock receipt without recalculating its fill", () => {
+  const f = fillFixture();
+  expect(
+    isEventHistoryPage(
+      page([
+        {
+          kind: "trade",
+          id: `trade:${f.trade_id}`,
+          recorded_at: f.executed_at,
+          asset_type: "stock",
+          symbol: f.symbol,
+          name: f.company_name,
+          cash_delta: f.cash_delta,
+          side: f.side,
+          quantity: f.quantity,
+          exec_price: f.exec_price,
+          fee: f.fee,
+          filled_at: f.executed_at,
+          source: f.source,
+          feed: f.feed,
+          quote_at: f.event_at,
+        },
+      ]),
+    ),
+  ).toBe(true);
+});
+it("distinguishes verified zero and exact half-even ties from unknown terms", () => {
+  for (const [rate, amount] of [
+    ["0.005", "0.00"],
+    ["0.015", "0.02"],
+    ["0.025", "0.02"],
+    ["0", "0.00"],
+  ]) {
+    expect(
+      isEventHistoryPage(
+        page([
+          {
+            ...dividend,
+            eligible_quantity: "1",
+            rate,
+            credited_amount: amount,
+            cash_delta: amount,
+            ex_date: null,
+            record_date: null,
+          },
+        ]),
+      ),
+    ).toBe(true);
+  }
+});
+it.each([
+  { eligible_quantity: "1000000000000" },
+  { eligible_quantity: "-1" },
+  { rate: "-0" },
+  { rate: "-1" },
+  { rate: "999999999999.999999999" },
+  { credited_amount: "999999999999.99999999" },
+  { recorded_at: "0000-01-01T00:00:00Z" },
+  { recorded_at: "2026-11-12T15:00:60Z" },
+  { name: "x".repeat(257) },
+  { name: "a\nb" },
+  { asset_type: "crypto" },
+  { kind: "income" },
+  { cutoff: "2026-11-13T00:00:00Z" },
+])("rejects unsupported dividend range or identity %o", (change) => {
+  expect(isEventHistoryPage(page([{ ...dividend, ...change }]))).toBe(false);
+});
+it("rejects stock fractional shares, false feed and foreign original chronology", () => {
+  const stock = {
+    ...trade,
+    asset_type: "stock",
+    quantity: "1",
+    fee: "0",
+    source: "alpaca",
+    feed: "iex",
+    quote_at: trade.filled_at,
+  };
+  for (const change of [
+    { quantity: "1.5" },
+    { source: null },
+    { feed: "sip" },
+    { quote_at: "2026-11-13T00:00:00Z" },
+    { fee: "0.01" },
+  ])
+    expect(isEventHistoryPage(page([{ ...stock, ...change }]))).toBe(false);
+  expect(isEventHistoryPage(page([{ ...correction, recorded_at: "2026-11-12T14:00:00Z" }]))).toBe(
+    false,
+  );
 });
 
 it("accepts an exact tiny rate and bigint identity without financial coercion", () => {
   expect(isEventHistoryPage(page())).toBe(true);
+});
+it("accepts a real sell cash sign and rejects negative zero/noncanonical encodings", () => {
+  expect(isEventHistoryPage(page([{ ...trade, side: "sell", cash_delta: "0.01" }]))).toBe(true);
+  expect(isEventHistoryPage({ items: [], next_cursor: "Zh" })).toBe(false);
+  for (const change of [
+    { cash_delta: "-0.00" },
+    { side: "short" },
+    { exec_price: "0" },
+    { quantity: "NaN" },
+    { exec_price: "1000000000000" },
+    { extra: 1 },
+  ])
+    expect(isEventHistoryPage(page([{ ...trade, ...change }]))).toBe(false);
 });
 it("accepts legacy fractional crypto, whole stock and a basis-conserving split", () => {
   expect(isEventHistoryPage(page([trade, split]))).toBe(true);
