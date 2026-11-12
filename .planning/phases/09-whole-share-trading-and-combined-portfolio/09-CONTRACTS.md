@@ -5,6 +5,42 @@ not permission to activate data or trade in production. Phase7/8 live deferrals
 remain. Source of truth for concrete fields: `app/schemas/stock_trades.py` and
 `app/services/stock_trading_rules.py`. No package or provider entitlement inferred.
 
+## Plan05 consumer seams
+
+`stock_eligibility.load_execution_evidence(db, coin_id, settings) -> LoadedExecution`
+uses a single materialized bounded snapshot and an advancing DB timestamp. It
+returns immutable candidate `evidence`, its `decision`, saved-current metadata
+`symbol/company_name/listing_exchange` and `quote_retained_until`. Only
+`decision.allowed` / nonnull `decision.evidence` authorize NEW financial work;
+candidate data on a denied result is not authorization or automatic disclosure.
+The financial loader accepts no clock override. Its pure
+`executions_from_snapshot(raw,settings,now=...)` is also used by discovery.
+`execution_snapshot_query(anchor)` provides the materialized SQL boundary;
+portfolio integration must preserve its one financial statement/snapshot.
+
+Execution approval includes explicit `scope.durable_accounting=true`,
+`scope.backup_restore=true`, `scope.retention_mode="durable-accounting"` for
+every required product, in addition to collection/display/derived/retention and
+existing scope/capability/calendar checks. Current display rights alone cannot
+mint a durable fill receipt. No real provider rights are asserted by test scopes.
+Source quote/status use deadlines can be earlier than freshness/continuity;
+expired data denies approval. Conservative `session_valid_until` also includes
+these deadlines, while admission dates/hashes and the raw status object remain
+exact for final SQL equality checks. Do not rewrite them to manufacture a bound.
+
+`stock_status.persist_status_batch(db,batch,coin_id=...,account="birja",server="birja")`
+owns no commit. Caller uses one instrument transaction and commits immediately
+after its final authority check; the finite scheduler partitions sorted IDs.
+`run_stock_status_cycle(session_factory,source=None,settings=...)` defaults to
+invalidation. A nonnull finite StatusBatch requires explicit test settings;
+there is no production transport/configurable fake source and no provider call.
+Input consists of normalized verified finite observations, not decoded raw
+Alpaca messages. Rights/bootstrap/continuity remain activation prerequisites.
+
+The cached-past action boundary is deliberately conservative for NEW fills,
+matching0013's guard; compatible dated display can remain available after the
+verified application consumed it. Portfolio09 must preserve that distinction.
+
 ## API and immutable receipt
 
 All routes require existing authenticated current user; POST also requires CSRF.
