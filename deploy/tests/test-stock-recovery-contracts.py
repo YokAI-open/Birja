@@ -44,6 +44,22 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_dividend_dispatch_preserves_every_original_and_nullable_decision(self):
+        producer = load('backup-snapshot')
+        self.assertIn('0014', producer.SUPPORTED_REVISIONS)
+        columns = producer.contract_columns('0014')
+        self.assertEqual(len(columns), 26)
+        self.assertIn('original_amount', columns['stock_dividend_payments'])
+        self.assertTrue({'previous_application_id','entitlement_fingerprint','status_identity',
+            'desired_total','applied_delta'} <= columns['stock_dividend_decisions'])
+        self.assertEqual(set(producer.identity_tables('0014')) - set(producer.identity_tables('0013')),
+            {'stock_dividend_payments','stock_dividend_decisions'})
+        query = producer.manifest_sql('0014')
+        for token in ('dividend_authority','proallargtypes','proargmodes','proargnames',
+                      'stock_dividend_payments','stock_dividend_decisions'):
+            self.assertIn(token, query)
+        self.assertNotIn('stock_dividend_payments', producer.manifest_sql('0013'))
+
     def test_dump_sequence_states_are_exact_bounded_and_allowlisted(self):
         producer = load("backup-snapshot")
         rows = [f"SELECT pg_catalog.setval('public.{table}_id_seq', {index+11}, {'true' if index % 2 else 'false'});" for index,table in enumerate(producer.identity_tables("0011"))]
