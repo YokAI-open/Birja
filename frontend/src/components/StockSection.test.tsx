@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router";
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
@@ -88,7 +89,10 @@ it("preserves twenty identities, separate listing/source, exact money and semant
   expect(first).toHaveTextContent("Recent · 10s ago");
   expect(first).toHaveTextContent("Market open");
   expect(first).toHaveTextContent("Stock status unverified");
-  expect(screen.getAllByRole("link", { name: "View stock AA" })[0]).toHaveAttribute("href", "/trade/stocks/AA");
+  expect(screen.getAllByRole("link", { name: "View stock AA" })[0]).toHaveAttribute(
+    "href",
+    "/trade/stocks/AA",
+  );
   expect(screen.queryAllByRole("button")).toHaveLength(0);
   expect(screen.getByText(/Whole-share stock orders use your existing USD balance/)).toBeVisible();
   expect(screen.getAllByRole("status")).toHaveLength(1);
@@ -140,7 +144,11 @@ it("uses one non-ticking contextual announcement and retains original dated valu
   const announcement = status.textContent;
   expect(status).toHaveTextContent("Couldn’t refresh stocks");
   state.data!.items[0].quote!.age_seconds = 11;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(status.textContent).toBe(announcement);
   expect(
     within(screen.getByRole("table", { name: "US stocks" })).getAllByRole("row")[1],
@@ -156,7 +164,11 @@ it("renders independent loading and actionable retry without raw error details",
   );
   state.isPending = false;
   state.isError = true;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.getByRole("status")).toHaveTextContent("Can’t load stock prices right now");
   await user.click(screen.getByRole("button", { name: "Retry stock prices" }));
   expect(state.refetch).toHaveBeenCalledOnce();
@@ -199,7 +211,10 @@ it("shows a scoped corporate-action hold with fixed reason, no numeric mark, and
   expect(rows[1]).toHaveTextContent("This action may create fractional shares and needs review.");
   expect(rows[1]).toHaveTextContent("Valuation unavailable");
   expect(rows[1]).toHaveTextContent("Stock status unverified.");
-  expect(within(rows[1]).getByRole("link", { name: "View stock AA" })).toHaveAttribute("href", "/trade/stocks/AA");
+  expect(within(rows[1]).getByRole("link", { name: "View stock AA" })).toHaveAttribute(
+    "href",
+    "/trade/stocks/AA",
+  );
   expect(rows[1]).not.toHaveTextContent("$100.00");
   expect(rows[2]).toHaveTextContent("$100.00");
   expect(screen.getByRole("status")).toHaveTextContent("AA");
@@ -258,7 +273,11 @@ it.each([
 );
 
 it("announces contextual hold changes once without ticks or background focus movement", () => {
-  const { rerender } = render(<StockSection />);
+  const { rerender } = render(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   const heading = screen.getByRole("heading", { name: "US stocks · 20" });
   heading.focus();
   const item = state.data!.items[0];
@@ -271,12 +290,20 @@ it("announces contextual hold changes once without ticks or background focus mov
   };
   item.quote = null;
   item.valuation_reason = "action_unavailable";
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   const announcement = screen.getByRole("status").textContent;
   expect(announcement).toContain("AA:");
   expect(announcement).toContain("Suspended for corporate-action review");
   state.data!.items[1].quote!.age_seconds += 1;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.getByRole("status").textContent).toBe(announcement);
   expect(screen.getAllByRole("status")).toHaveLength(1);
   expect(heading).toHaveFocus();
@@ -294,28 +321,56 @@ it("keeps retry focus after failure and suppresses action-derived check times on
 
 it("retains request failure through a local safety purge, clearing only a completed fetch or new pending lifecycle", () => {
   state.isError = true;
-  const { rerender } = render(<StockSection />);
+  const { rerender } = render(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
   state.isError = false; // a local cache safety projection is not a network recovery
   state.data!.admission = { state: "unavailable", generation: null, valid_until: null };
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.getByRole("button", { name: "Retry stock prices" })).toBeVisible();
   expect(screen.getByRole("status")).toHaveTextContent("Couldn’t refresh stocks");
   state.isFetching = true;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   state.isFetching = false;
   state.data = payload();
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.queryByRole("button")).toBeNull();
   expect(screen.getByRole("heading", { name: "US stocks · 20" })).not.toHaveFocus();
   state.isError = true;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   state.isError = false;
   state.isPending = true;
   state.data = undefined;
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   state.isPending = false;
   state.data = payload();
-  rerender(<StockSection />);
+  rerender(
+    <MemoryRouter>
+      <StockSection />
+    </MemoryRouter>,
+  );
   expect(screen.queryByRole("button")).toBeNull();
 });

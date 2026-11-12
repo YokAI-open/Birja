@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router";
 import type { StockItem } from "@/api/stocks";
 import { StockActionState } from "@/components/StockActionState";
 import { stockActionSummary } from "@/lib/stockActionCopy";
@@ -172,7 +173,10 @@ export function StockSection() {
             US stocks · 20
           </h2>
           <StockAttribution context="listing" required_text={data?.attribution.required_text} />
-          <p>Stock trading coming later. You can browse prices; crypto trading is available.</p>
+          <p>
+            Whole-share stock orders use your existing USD balance. Availability is verified
+            separately for each stock. Crypto trading remains independent.
+          </p>
           <p className="text-[13px] leading-[18px] text-muted-foreground">
             IEX quotes are checked about every minute. A check may return an older quote; the time
             shown is the source quote time.
@@ -277,11 +281,29 @@ export function StockSection() {
                             />
                             <div>
                               <p className="font-medium">Stock status</p>
-                              <p>Stock status unverified.</p>
+                              <p>
+                                {item.status.state === "normal"
+                                  ? "Normal"
+                                  : item.status.state === "halted"
+                                    ? "Halted"
+                                    : item.status.state === "frozen"
+                                      ? "Frozen"
+                                      : "Stock status unverified."}
+                              </p>
                             </div>
                             <div>
                               <p className="font-medium">Trading</p>
-                              <p>Trading coming later.</p>
+                              <Button
+                                asChild
+                                variant="secondary"
+                                className="min-h-11 whitespace-normal"
+                              >
+                                <Link to={`/trade/stocks/${encodeURIComponent(item.symbol)}`}>
+                                  {allowed && item.execution_enabled
+                                    ? `Trade ${item.symbol}`
+                                    : `View stock ${item.symbol}`}
+                                </Link>
+                              </Button>
                             </div>
                           </div>
                         </td>
@@ -327,11 +349,29 @@ export function StockSection() {
                         />
                         <div>
                           <p className="font-medium">Stock status</p>
-                          <p>Stock status unverified.</p>
+                          <p>
+                            {item.status.state === "normal"
+                              ? "Normal"
+                              : item.status.state === "halted"
+                                ? "Halted"
+                                : item.status.state === "frozen"
+                                  ? "Frozen"
+                                  : "Stock status unverified."}
+                          </p>
                         </div>
                         <div>
                           <p className="font-medium">Trading</p>
-                          <p>Trading coming later.</p>
+                          <Button
+                            asChild
+                            variant="secondary"
+                            className="min-h-11 whitespace-normal"
+                          >
+                            <Link to={`/trade/stocks/${encodeURIComponent(item.symbol)}`}>
+                              {allowed && item.execution_enabled
+                                ? `Trade ${item.symbol}`
+                                : `View stock ${item.symbol}`}
+                            </Link>
+                          </Button>
                         </div>
                       </div>
                     </div>

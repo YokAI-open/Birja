@@ -578,6 +578,7 @@ function failure(error: unknown, started: number, order?: StockAttempt): never {
       error.detail &&
       stockExact(error.detail, "code") &&
       member(error.code, STOCK_REFUSALS) &&
+      !(order && error.code === "receipt_unavailable") &&
       ((error.status === 422 &&
         ["invalid_quantity", "insufficient_cash", "insufficient_holding", "numeric_range"].includes(
           error.code,
