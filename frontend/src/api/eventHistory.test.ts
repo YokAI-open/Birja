@@ -38,8 +38,8 @@ export const correction = {
   proposed_delta: "-0.50",
   applied_delta: "-0.50",
   terms: {
-    eligible_quantity: "100000000",
-    rate: "0.000000005",
+    eligible_quantity: "50000000",
+    rate: "0.00000001",
     cutoff: dividend.cutoff,
     ex_date: dividend.ex_date,
     record_date: dividend.record_date,
@@ -296,7 +296,7 @@ it("preserves uncertain unknown terms and accepts all fixed outcomes", () => {
           applied_delta: "0.00",
           proposed_delta: "0.00",
           desired_total: "1.00",
-          terms: { ...correction.terms, rate: "0.00000001" },
+          terms: { ...correction.terms, eligible_quantity: "100000000", rate: "0.00000001" },
         },
       ]),
     ),
@@ -391,4 +391,17 @@ it("propagates abort and the existing 401 auth error", async () => {
 
 it("accepts the unmodified correction baseline before rejection mutations", () => {
   expect(isEventHistoryPage(page([correction]))).toBe(true);
+});
+
+it.each([
+  { terms: null },
+  { terms: { ...correction.terms, unexpected: true } },
+  { terms: { ...correction.terms, eligible_quantity: "0.5" } },
+  { desired_total: "0.501" },
+  { proposed_delta: "-0.501" },
+  { terms: { ...correction.terms, rate: "0.00000002" } },
+  { cumulative_applied_before: "0.99" },
+])("rejects inconsistent verified correction terms from a valid baseline %o", (change) => {
+  expect(isEventHistoryPage(page([correction]))).toBe(true);
+  expect(isEventHistoryPage(page([{ ...correction, ...change }]))).toBe(false);
 });
