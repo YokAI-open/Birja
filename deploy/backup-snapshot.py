@@ -1194,7 +1194,14 @@ class Job:
     def snapshot(self):
         self.step = "snapshot"
         version = self.call(self.dc + ["pg_dump", "--version"]).decode().strip()
-        require(version.startswith("pg_dump (PostgreSQL) 18.7"))
+        # A protected pre-upgrade backup runs in the still-old source
+        # container. Accept only the two reviewed minor clients, including
+        # Debian's package suffix, while retaining the pinned18.7 restore.
+        require(
+            re.fullmatch(
+                r"pg_dump \(PostgreSQL\) 18\.(?:6|7)(?: \([^()\r\n]+\))?", version
+            )
+        )
         psql = self.dc + [
             "psql",
             "-X",
