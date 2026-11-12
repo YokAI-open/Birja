@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: 09-04 Task 1 complete; corrected canonical recovery/roles/TLS validation running
-last_updated: "2026-11-12"
-last_activity: 2026-11-12 -- Phase 9 recovery validation resumed
+stopped_at: Completed 09-03; schema review before 09-04
+last_updated: "2026-11-12T09:38:50.914Z"
+last_activity: 2026-11-12 -- Plan09-04 recovery and TLS complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 29
-  percent: 69
+  completed_plans: 30
+  percent: 20
 ---
 
 # Project State
@@ -21,30 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 4)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 5)
 
 ## Current Position
 
 Phase: 9
-Plan: 3/15 complete; 09-04 recovery/TLS (Wave 4/13)
+Plan: 4/15 complete; 09-05 status/eligibility (Wave 5/13)
 Status: In progress
-Last activity: 2026-11-12 -- Phase 9 recovery validation resumed
-Progress: [███████░░░] 69% (29/42 tracked plans complete)
+Last activity: 2026-11-12 -- Plan09-04 recovery and TLS complete
+Progress: [███████░░░] 71% (30/42 tracked plans complete)
 
 ## Completion and next action
 
-Plan09-04 is active. Task1 exact0013 recovery contracts are committed8cfd6b9;
-inline review found and fixed unique receipt hash ordering5a59aa0/603e43a.
-Task2 fixtures are committed3a06a32. Corrected two-fill retained recovery passed:
-exact rows/schema/identity,10 corruption refusals, duplicate rejection, narrow
-quarantined clone rights and unchanged source. ArchiveSHA256
-08131798ce5d3893bde0da4cf566d46de5e77654f47b87dbd3f912898e14278c.
-Canonical serial --all validation is running; do not mark04 complete or begin
-dependent runtime consumers before its retained0007–0013/roles/both TLS lanes
-pass. Prior full attempt reached exact0013 restore but hit a now-corrected
-fixture-only duplicate admission slot in the next-identity probe. No full-gate
-success is claimed. Two agent attempts had no filesystem/shell tools; review
-roles run sequentially inline, with honest provenance in09-04-REVIEW.md.
+Plan09-04 is complete:2tasks, summary7ae2dbf. Final canonical serial gate
+exits0 with one exact retained0007–0013 archive (SHA256
+08131798ce5d3893bde0da4cf566d46de5e77654f47b87dbd3f912898e14278c),
+usable source/restored ownership history and narrow verified-TLS authority.
+Retained395.688s; roles181.408s/63denials; populated TLS126.301s; fresh TLS122.868s.
+Offline10passed/3explicit SQL-only skips; restore-safety6passed; static checks pass.
+Source/test commits through e8d3bb2 resolve unique receipt ordering and complete
+synthetic baseline/contiguous history regressions. Inline review is recorded
+honestly after agents lacked tools; no independent review claimed for04.
+Continue09-05 status/eligibility, then06 execution/07 real financial waits.
+Actual stock-service recovery/TLS remains14; whole requirements remain pending.
+No provider/production/B2/timer/publication change. Live7/8 deferrals persist.
+The14min metric measures the final serial proof, not total multi-session work.
 
 Plan09-03 is complete locally: additive0013stock facts/status, deferred
 financial integrity, immutable rows, narrow grants and fixed invoker finalguard.
@@ -56,7 +57,6 @@ Final1793backend tests pass168.97s,99.83%overall; all31critical modules
 3217statements/1052branches100%. Continue09-04exact encrypted recovery and
 actual restricted verified-TLS proof. See09-03-REVIEW/INTEGRATION andLOCAL-PROOF.
 No runtime stock consumer/liveactivation/production change. Requirements pending.
-
 
 Plan09-02 is complete:2tasks,186affected tests pass1.78s; stockmath
 72statements/24branches100%, scoped Ruff/format/Mypy pass. Source16b6c55,
@@ -496,6 +496,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P01 | 10m16s | 2 tasks | 5 files |
 | Phase 9 P02 | 7min | 2 tasks | 2 files |
 | Phase 9 P03 | 19min | 2 tasks | 8 files |
+| Phase 9 P04 | 14min | 2 tasks | 8 files |
 
 ## Operations
 
