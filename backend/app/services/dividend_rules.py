@@ -80,12 +80,18 @@ def evaluate_dividend_target(
         desired_total = raw_target.quantize(CENT, rounding=ROUND_HALF_EVEN)
         if desired_total > MAX_MONEY:
             raise DividendRuleError
-        # Stage one defines exact original targets. Correction semantics follow
-        # under their own behavioral RED gate in task two.
-        if cumulative_applied != ZERO:
-            raise DividendRuleError
-        delta = desired_total
+        delta = desired_total - cumulative_applied
         cash_after = cash + delta
+        if cash_after < ZERO:
+            return DividendTarget(
+                desired_total,
+                cumulative_applied,
+                delta,
+                ZERO,
+                cash,
+                "held_unaffordable",
+                "insufficient_cash",
+            )
         if cash_after > MAX_MONEY:
             raise DividendRuleError
         return DividendTarget(
