@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 09-05; continuing 09-06 atomic execution
-last_updated: "2026-11-12T11:44:00.908Z"
-last_activity: 2026-11-12 -- Plan09-05 status and eligibility complete
+stopped_at: Completed 09-03; schema review before 09-04
+last_updated: "2026-11-12T11:56:22.440Z"
+last_activity: 2026-11-12 -- Plan09-06 atomic execution complete
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 42
-  completed_plans: 31
-  percent: 74
+  completed_plans: 32
+  percent: 20
 ---
 
 # Project State
@@ -21,17 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-11)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 6)
+**Current focus:** Phase 9 — Whole-Share Trading and Combined Portfolio (executing Wave 7)
 
 ## Current Position
 
 Phase: 9
-Plan: 5/15 complete; 09-06 atomic execution (Wave 6/13)
+Plan: 6/15 complete; 09-07 concurrency proof (Wave 7/13)
 Status: In progress
-Last activity: 2026-11-12 -- Plan09-05 status and eligibility complete
-Progress: [███████░░░] 74% (31/42 tracked plans complete)
+Last activity: 2026-11-12 -- Plan09-06 atomic execution complete
+Progress: [███████░░░] 76% (32/42 tracked plans complete)
 
 ## Completion and next action
+
+Plan09-06 completes global economic keys, exact read-only stock preview/context,
+shared-cash atomic execution and immutable original receipt replay. Sourcee7e3a47;
+summaryce025f9. Final153tests pass20.76s; both new services174statements/40branches
+100%; scoped static checks pass. Separate inline review resolves actual halted-
+quote display RED; no independent review claimed. Continue09-07 real-session
+contention/post-wait/action-cutoff proof, including opposite-side quote refinement.
+API/UI/recovered actual services/live activation remain pending. No provider,
+production, installed tool, B2, timer or publication changes.
 
 Plan09-05 is complete: finite independent status, fail-closed scheduler startup,
 current execution authority and explicit durable accounting/recovery scope.
@@ -506,6 +515,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P03 | 19min | 2 tasks | 8 files |
 | Phase 9 P04 | 14min | 2 tasks | 8 files |
 | Phase 9 P05 | 115min | 2 tasks | 10 files |
+| Phase 9 P06 | 18min | 2 tasks | 5 files |
 
 ## Operations
 
@@ -515,13 +525,13 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Last session:2026-11-11T20:28:23.947Z
-Stopped at: Completed 09-03; schema review before 09-04
-Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-04-PLAN.md
-Resume: Phase9 plans09-01/02 are complete; continue09-03 then09-04 proof before runtime consumers. New stock schemas/pure rules are tested; financial writers and activation have not run. Phase8 independent goal verification passed and local completion is recorded. Phase7 UI remains accepted and its live review remains owner-deferred; do not inspect or alter its old process/receipt, refresh source hashes, relaunch a campaign or infer its outcome without a new owner request. Phase8 admission source changed after that campaign was frozen, so its original fail-closed source checks remain intact. Existing quote permission is owner-attested, not a distinct action REST/replay/long-lived accounting/backup grant. No new private provider/production/B2/installed-tool/publication operation is authorized.
-Completed verification: .planning/phases/08-corporate-action-safe-ownership/08-VERIFICATION.md (passed locally).
-Completed reviews: 08-REVIEW.md,08-SECURITY.md and08-UI-REVIEW.md are clear; actual owner checkpoints are recorded separately.
-Deferred Phase 7 plans/review remain in07-permitted-stock-discovery.
-07-01 through07-13 summaries committed; whole-phase requirements remain pending.
-All Phase8 owned proof resources were cleaned; no stack remains for this owner
-checkpoint. No production services changed or provider data activated.
+Stopped at: Plan09-06 complete; continue09-07 real concurrency and waits.
+Resume file: .planning/phases/09-whole-share-trading-and-combined-portfolio/09-07-PLAN.md
+Phase9 plans01–06 are complete with actual source/test/summary commits. Do not
+restart completed work. Existing isolated birja-test stack is available; all DB
+and ops gates must run serially. Production and live Phase7/8 activation remain
+owner-deferred; no private provider/B2/timer/publication operation is authorized.
+Agents lacked filesystem/shell tools in this session; required roles are distinct
+inline passes with honest provenance. Whole requirements remain pending until
+end-to-end verification and actual new-UI owner acceptance. Next phase is not
+authorized by auto-advance.

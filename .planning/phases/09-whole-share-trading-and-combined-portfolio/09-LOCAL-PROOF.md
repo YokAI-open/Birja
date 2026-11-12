@@ -82,3 +82,15 @@ Full backend1889passed202.08s,99.85%overall; all35critical modules
 /tmp/birja-phase09-05-critical-all.log. Separate inline review has no open
 blocker; agents lacked tools, so independence is not claimed. Actual execution,
 API/client integration and production/provider acceptance remain later plans.
+
+
+## Plan09-06 atomic execution —2026-11-12
+
+Sourcee7e3a47; summaryce025f9. Final153 service/key/crypto/ownership tests
+pass20.76s; new services174statements/40branches100%. Scoped Ruff/format/Mypy
+pass. Actual key/filter REDf04b90a and preview REDd26c35c preceded implementation.
+Review REDc0037e4 fixes halted future-quote disclosure using historical mark
+validation. Original receipt replay survives sale/rename/revocation; changed
+payload conflicts; late authority, integrity, DB, ownership and cancellation
+failures leave exact pre-state. Actual multi-session races and opposite-side
+metadata refinement remain07. No live/provider/production/publication change.
