@@ -94,6 +94,9 @@ class StockActionRevision(Base):
         UniqueConstraint("event_id", "ordinal", name="uq_stock_action_revision_ordinal"),
         UniqueConstraint("event_id", "fingerprint", name="uq_stock_action_revision_fingerprint"),
         UniqueConstraint("id", "event_id", name="uq_stock_action_revisions_id_event"),
+        UniqueConstraint(
+            "id", "event_id", "fingerprint", name="uq_stock_action_revision_dividend_identity"
+        ),
         UniqueConstraint("id", "source_id", name="uq_stock_action_revisions_id_source"),
         ForeignKeyConstraint(
             ["source_id", "event_id"],
@@ -350,6 +353,7 @@ class StockOwnershipMovement(Base):
             name="opening_baseline",
         ),
         Index("ix_stock_ownership_user_economic_id", "user_id", "economic_at", "id"),
+        Index("ix_stock_ownership_user_recorded_id", "user_id", "recorded_at", "id"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
@@ -375,6 +379,15 @@ class StockDividendEntitlement(Base):
     __tablename__ = "stock_dividend_entitlements"
     __table_args__ = (
         UniqueConstraint("id", "event_id", "user_id", name="uq_stock_entitlement_id_event_user"),
+        UniqueConstraint(
+            "id",
+            "event_id",
+            "user_id",
+            "revision_id",
+            "fingerprint",
+            name="uq_stock_entitlement_dividend_identity",
+        ),
+        Index("ix_stock_entitlement_current_work", "event_id", "user_id", "id"),
         ForeignKeyConstraint(
             ["supersedes_id", "event_id", "user_id"],
             [
