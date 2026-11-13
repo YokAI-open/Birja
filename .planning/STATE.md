@@ -813,7 +813,12 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Stopped at: Phase 11 complete; independent verification passed3/3.
 Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md
-Next: Check PR#31 requiredCI and review; merge requires separate owner approval.
+Next: Repair PR#31 hosted CI failures via .planning/debug/pr31-ci-failures.md.
+Local approved OTEL inventory and cold recovery fixes pass 15 image, 16 CI and
+24 real PostgreSQL contracts; exact dnspython2.9.2 review is prepared, with owner
+installation approval pending. Independent code/security reviews report no active
+findings; fresh hosted CI remains pending. Publication and merge require separate
+owner approval. Historical Phase11 proof remains qualified.
 Review deferredPhase7live acceptance when owner chooses; production remains separate.
 CompletedPhase11:4plans/8tasks,63/64trackedplans,4/5phases. No outstandinglocalhuman checks.
 Current finalreceipt/archive/source qualifications are in11-03/04SUMMARY and11-LOCAL-PROOF.
