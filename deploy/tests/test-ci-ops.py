@@ -311,7 +311,7 @@ class CI(unittest.TestCase):
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
             self.assertNotIn(forbidden, ops)
-        self.assertIn("timeout-minutes: 30", ops)
+        self.assertIn("timeout-minutes: 45", ops)
         self.assertNotIn("secrets.", ops)
         self.assertIn("fetch-depth: 0", ops)
         self.assertIn("CF8F18F2844575973F79D4E191A6868BD3F7A907", ops)

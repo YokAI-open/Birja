@@ -373,7 +373,9 @@ class Identity(unittest.TestCase):
         frontend = (ROOT / "frontend/Dockerfile").read_text()
         self.assertIn("python-3.14=3.14.10_git20261104-r0", backend)
         self.assertIn("python-3.14-base=3.14.10_git20261104-r0", backend)
-        self.assertIn("nodejs-24=24.22.2-r2", frontend)
+        self.assertIn("nodejs-24=24.22.3-r0", frontend)
+        for pin in ("icu79-data-full=79.1-r1", "libicu79=79.1-r1", "libstdc++=16.2.0-r2"):
+            self.assertIn(pin, frontend)
         self.assertIn("ghcr.io/astral-sh/uv:0.13.5", backend)
         for source in [backend, frontend]:
             self.assertIn("apk add --no-cache", source)
