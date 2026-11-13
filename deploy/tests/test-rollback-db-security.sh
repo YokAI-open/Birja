@@ -407,4 +407,5 @@ else:
     selected = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(selected)
     selected.integration(args.recovery_bundle)
+    selected.integration_current0014(args.recovery_bundle)
 PY

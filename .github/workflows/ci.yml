@@ -284,6 +284,8 @@ jobs:
           set -Eeuo pipefail
           python3 deploy/tests/test-ci-ops.py
           bash deploy/tests/test-backup.sh
+          bash deploy/tests/test-deploy-compatibility.sh
+          python3 deploy/tests/test-selected-cutover-contracts.py
           bash deploy/tests/test-restore-safety.sh
           bash deploy/tests/test-db-config.sh
           sudo -- python3 deploy/tests/test-deploy-prerequisites.py

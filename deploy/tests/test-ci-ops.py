@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Stdlib structural/behavioral CI contracts; no YAML package dependency."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -10,6 +11,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -83,6 +85,56 @@ def recovery_policy(ops):
         raise ValueError("recovery stages reordered")
     if ops.count("unchanged()") != 7:
         raise ValueError("every recovery stage must preserve archive and source identity")
+    for command in ("bash deploy/tests/test-deploy-compatibility.sh",
+                    "python3 deploy/tests/test-selected-cutover-contracts.py"):
+        if command not in ops:
+            raise ValueError("missing selected compatibility contract: " + command)
+
+
+def selected_policy(rollback):
+    """Execute actual default dispatch with effect fakes, including each failure."""
+    body = rollback.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    tree = ast.parse(body)
+    dispatch = tree.body[-1]
+    if not isinstance(dispatch, ast.If) or not isinstance(dispatch.orelse[0], ast.If):
+        raise ValueError("missing runner dispatch")
+    code = compile(ast.fix_missing_locations(ast.Module(
+        body=dispatch.orelse[0].orelse, type_ignores=[])), "<actual-rollback-dispatch>", "exec")
+    expected = ["self-test", "rollback", "legacy0008", "current0014"]
+    archive = object()  # identity, not just equal path spelling
+    for failed in [None, *expected]:
+        calls = []
+        failure = RuntimeError("synthetic stage failure")
+
+        def stage(name, argument=archive):
+            if argument is not archive:
+                raise ValueError("selected archive replaced")
+            calls.append(name)
+            if name == failed:
+                raise failure
+
+        selected = SimpleNamespace(
+            integration=lambda arg: stage("legacy0008", arg),
+            integration_current0014=lambda arg: stage("current0014", arg))
+        fake_import = SimpleNamespace(util=SimpleNamespace(
+            spec_from_file_location=lambda *args: SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module: None)),
+            module_from_spec=lambda spec: selected))
+        scope = dict(ROOT=ROOT, importlib=fake_import,
+                     args=SimpleNamespace(recovery_bundle=archive),
+                     orchestration_self_test=lambda: stage("self-test"),
+                     integration=lambda arg: stage("rollback", arg))
+        try:
+            exec(code, scope)
+        except RuntimeError as exc:
+            if exc is not failure:
+                raise
+            wanted = expected[:expected.index(failed) + 1]
+        else:
+            if failed is not None:
+                raise ValueError("runner swallowed stage failure: " + failed)
+            wanted = expected
+        if calls != wanted:
+            raise ValueError("selected stages omitted or reordered")
 
 
 def dev_authority_policy(ops, compose_files):
@@ -97,7 +149,60 @@ def dev_authority_policy(ops, compose_files):
             raise ValueError("dev owner authority stages reordered")
 
 
+def required_gate_policy(j):
+    # Reuse the independent fixed inventory without importing pytest/DB code.
+    tree = ast.parse((ROOT / "backend/tests/test_critical_coverage_config.py").read_text())
+    modules = ast.literal_eval(next(node.value for node in tree.body
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and
+            t.id == "CRITICAL_MODULES" for t in node.targets)))
+    required = {
+        "backend": ["pytest --cov=app --cov-branch --cov-fail-under=80",
+                    "coverage report --include=" + ",".join(modules) + " --fail-under=100",
+                    "uv run pip-audit"],
+        "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+        "ci-pass": ["needs: [backend, frontend, image, e2e, ops]", "if: always()",
+                    *["contains(needs.*.result, '" + result + "')"
+                      for result in ("failure", "cancelled", "skipped")], "exit 1"],
+    }
+    for job, tokens in required.items():
+        if any(token not in j[job] for token in tokens):
+            raise ValueError("required coverage/security/aggregate gate removed: " + job)
+    image_policy(j["image"], j["ci-pass"])
+
+
 class CI(unittest.TestCase):
+    def test_mandatory_coverage_audits_and_aggregate_reject_omission_mutations(self):
+        j = jobs()
+        required_gate_policy(j)
+        mutations = {
+            "backend": ["--cov-branch", "--cov-fail-under=80", "--fail-under=100",
+                        "uv run pip-audit", *re.findall(r"app/[\w/]+\.py", j["backend"])],
+            "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+            "ci-pass": ["backend, ", "frontend, ", "image, ", "e2e, ", ", ops",
+                        "if: always()", "'failure'", "'cancelled'", "'skipped'", "exit 1"],
+        }
+        for job, tokens in mutations.items():
+            for token in tokens:
+                with self.subTest(job=job, omitted=token), self.assertRaises(ValueError):
+                    required_gate_policy({**j, job: j[job].replace(token, "omitted")})
+
+    def test_selected_runner_requires_both_same_archive_serial_fail_closed_lanes(self):
+        runner = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
+        selected_policy(runner)
+        legacy = "selected.integration(args.recovery_bundle)"
+        current = "selected.integration_current0014(args.recovery_bundle)"
+        mutations = [runner.replace(call, "pass") for call in (legacy, current)]
+        mutations += [runner.replace(call, call.replace("args.recovery_bundle", "None"))
+                      for call in (legacy, current)]
+        mutations.append(runner.replace(legacy + "\n    " + current,
+                                        current + "\n    " + legacy))
+        for call in (legacy, current):
+            mutations.append(runner.replace(call, "try:\n        " + call +
+                                            "\n    except RuntimeError:\n        pass"))
+        for index, mutation in enumerate(mutations):
+            with self.subTest(mutation=index), self.assertRaises(ValueError):
+                selected_policy(mutation)
+
     def test_actual_ordinary_dev_financial_gate_and_postmigration_order_are_required(self):
         ops = jobs()["ops"]
         sources = [(ROOT / name).read_text() for name in ("docker-compose.yml", "docker-compose.override.yml")]
@@ -121,6 +226,9 @@ class CI(unittest.TestCase):
             '"--recovery-bundle", str(archive)], check=True)',
             "assert ops.r.digest(archive) == expected",
             "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
+            "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
+            "bash deploy/tests/test-deploy-compatibility.sh",
+            "python3 deploy/tests/test-selected-cutover-contracts.py",
         ]:
             with self.assertRaises(ValueError):
                 recovery_policy(ops.replace(old, "omitted_stage"))
@@ -327,6 +435,7 @@ class CI(unittest.TestCase):
         ops = jobs().get("ops", "")
         rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
         self.assertIn("selected.integration(args.recovery_bundle)", rollback)
+        selected_policy(rollback)
         self.assertIn("sudo -- python3 deploy/tests/test-deploy-prerequisites.py", ops)
         self.assertIn("sudo -- python3 deploy/tests/test-datastore-bindings.py", ops)
         self.assertRegex(
