@@ -82,6 +82,23 @@ class RevisionContracts(unittest.TestCase):
             self.assertIn(token, query)
         self.assertNotIn('stock_dividend_payments', producer.manifest_sql('0013'))
 
+    def test_dividend_dump_identity_contract_is_revision_selected(self):
+        producer=load('backup-snapshot')
+        raw='\n'.join("SELECT pg_catalog.setval('public."+table+"_id_seq', 1, false);"
+            for table in producer.identity_tables('0014')).encode()
+        self.assertEqual(len(producer.dump_identity_state(raw,'0014')),19)
+        with self.assertRaises(ValueError):
+            producer.dump_identity_state(raw,'0013')
+        for table in producer.DIVIDEND_COLUMNS:
+            with self.assertRaises(ValueError):
+                producer.dump_identity_state(b'\n'.join(line for line in raw.splitlines() if table.encode() not in line),'0014')
+
+    def test_dividend_authority_rejects_manifest_selected_bodies(self):
+        producer=load('backup-snapshot')
+        for forged in (None,{}, {'functions':[]}, {'functions':[], 'body_sha256':hashlib.sha256(b'SELECT true').hexdigest()}):
+            with self.assertRaises(ValueError):
+                producer.validate_dividend_authority(forged)
+
     def test_dump_sequence_states_are_exact_bounded_and_allowlisted(self):
         producer = load("backup-snapshot")
         rows = [f"SELECT pg_catalog.setval('public.{table}_id_seq', {index+11}, {'true' if index % 2 else 'false'});" for index,table in enumerate(producer.identity_tables("0011"))]
@@ -550,6 +567,172 @@ ALTER FUNCTION """+producer.RESOLUTION_SIGNATURE+" OWNER TO birja_migrator;\nSET
         for damaged in manifests[1:]:
             with self.assertRaises(ValueError):
                 producer.validate_manifest(damaged)
+
+    def test_zzz_dividend_exact_catalog_and_no_repair(self):
+        self.migrate('head')
+        producer=load('backup-snapshot')
+        restore=load('verify-restore')
+        # Reviewed administrative bootstrap is fixture preparation in a rollback
+        # only transaction, never a repair step in the consumer under test.
+        boot=(ROOT/'deploy/db/bootstrap-roles.sql').read_text().rsplit('COMMIT;',1)[0]
+        for key,value in {'bootstrap':'birja_test','db_name':'birja_test',
+            'app_password':'test-only-app','scheduler_password':'test-only-scheduler',
+            'migrator_password':'test-only-migrator'}.items():
+            boot=boot.replace(":'"+key+"'","'"+value+"'").replace(':"'+key+'"','"'+value+'"')
+        boot=boot.replace('\\if :apply','\\if true')
+        initial_states=None
+        def capture(change='',seed=''):
+            reset=''
+            if initial_states is not None:
+                reset='DO $reset$ BEGIN '+''.join("PERFORM setval('"+table+"_id_seq',"+str(value)+","+str(called).lower()+");" for table,value,called in initial_states)+' END $reset$;'
+                self.query(reset)
+            seed=seed.replace('now()',"'2026-11-01T15:00:00Z'::timestamptz")
+            raw=self.query(boot+"\nSET LOCAL TIME ZONE 'UTC';\n"+seed+'\n'+change+';\n'+producer.manifest_sql('0014')+'\nROLLBACK;')
+            if reset:
+                self.query(reset)
+            return json.loads(next(line for line in raw.splitlines() if line.startswith('{')))
+        baseline=capture()
+        initial_states=baseline['identity_state']
+        producer.validate_manifest(baseline)
+        self.assertEqual(len(baseline['tables']),26)
+        self.assertEqual(len(baseline['identity_state']),19)
+        # Synthetic retained storage fixtures: zero original, unknown entitlement
+        # hold and separately linked applied successor. These are not a claim of
+        # provider authorization or payout-function execution (proved in02/05).
+        seed="INSERT INTO users(email) VALUES ('dividend-recovery@example.invalid');\n"+ACTION_SEED.replace('BEGIN;','').replace('COMMIT;','')+"""
+INSERT INTO stock_dividend_payments(event_id,coin_id,user_id,revision_id,revision_fingerprint,
+ entitlement_id,entitlement_fingerprint,symbol,company_name,cutoff,cutoff_rule,units_basis,
+ unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date,original_amount,recorded_at,cash_after)
+ SELECT e.event_id,v.coin_id,e.user_id,e.revision_id,r.fingerprint,e.id,e.fingerprint,
+ 'AAPL','Saved Apple',e.cutoff,e.cutoff_rule,e.units_basis,e.unit_epoch,e.eligible_quantity,0,
+ '2026-11-01','2026-11-02','2026-11-03',0,now(),100 FROM stock_dividend_entitlements e
+ JOIN stock_action_events v ON v.id=e.event_id JOIN stock_action_revisions r ON r.id=e.revision_id
+ WHERE e.version=1;
+INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revision_id,revision_fingerprint,
+ cumulative_applied_before,applied_delta,outcome,reason,status_identity,recorded_at,cash_after,symbol,company_name)
+ SELECT id,user_id,event_id,coin_id,revision_id,revision_fingerprint,0,0,'held_uncertain','terms_unverified',
+ 'synthetic-held',now(),100,symbol,company_name FROM stock_dividend_payments;
+INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revision_id,revision_fingerprint,
+ entitlement_id,entitlement_fingerprint,previous_decision_id,desired_total,cumulative_applied_before,
+ proposed_delta,applied_delta,outcome,reason,status_identity,recorded_at,cash_after,symbol,company_name,
+ cutoff,cutoff_rule,units_basis,unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date)
+ SELECT p.id,p.user_id,p.event_id,p.coin_id,p.revision_id,p.revision_fingerprint,
+ p.entitlement_id,p.entitlement_fingerprint,d.id,1,0,1,1,'applied','target_applied','synthetic-applied',
+ now(),101,p.symbol,p.company_name,p.cutoff,p.cutoff_rule,p.units_basis,p.unit_epoch,p.eligible_quantity,
+ 0.25,p.ex_date,p.record_date,p.payable_date FROM stock_dividend_payments p
+ JOIN stock_dividend_decisions d ON d.payment_id=p.id;
+"""
+        stored=capture(seed=seed)
+        producer.validate_manifest(stored)
+        self.assertEqual(stored['tables']['stock_dividend_payments']['count'],1)
+        self.assertEqual(stored['tables']['stock_dividend_decisions']['count'],2)
+        for change in [
+            'ALTER TABLE stock_dividend_payments DISABLE TRIGGER stock_dividend_immutable; UPDATE stock_dividend_payments SET original_amount=0.01; ALTER TABLE stock_dividend_payments ENABLE TRIGGER stock_dividend_immutable',
+            'ALTER TABLE stock_dividend_decisions DISABLE TRIGGER stock_dividend_immutable; UPDATE stock_dividend_decisions SET status_identity=status_identity||\'-changed\'; ALTER TABLE stock_dividend_decisions ENABLE TRIGGER stock_dividend_immutable',
+            'ALTER TABLE stock_dividend_decisions DISABLE TRIGGER stock_dividend_immutable; UPDATE stock_dividend_decisions SET previous_decision_id=NULL; ALTER TABLE stock_dividend_decisions ENABLE TRIGGER stock_dividend_immutable',
+            'ALTER TABLE stock_dividend_payments DISABLE TRIGGER stock_dividend_immutable; UPDATE stock_dividend_payments SET cash_after=999; ALTER TABLE stock_dividend_payments ENABLE TRIGGER stock_dividend_immutable',
+        ]:
+            changed=capture(change,seed)
+            producer.validate_manifest(changed)
+            with mock.patch.object(restore,'canonical',return_value=changed):
+                with self.assertRaises(ValueError):
+                    restore.verify([],stored,quarantined=False)
+        # The genuine source data remain byte hashed and sequences exact. Every
+        # original/decision column is in the independently selected row producer.
+        for table in producer.DIVIDEND_COLUMNS:
+            damaged=copy.deepcopy(baseline)
+            damaged['tables'][table]['sha256']='0'*64
+            with self.assertRaises(ValueError):
+                with mock.patch.object(restore,'canonical',return_value=baseline):
+                    restore.verify([],damaged,quarantined=False)
+        corruptions=[
+            'ALTER TABLE stock_dividend_decisions ALTER entitlement_id SET NOT NULL',
+            'DROP INDEX uq_stock_dividend_decision_held_status',
+            'ALTER TABLE stock_dividend_decisions DROP CONSTRAINT fk_dividend_decision_previous_owner',
+            'ALTER TABLE stock_dividend_payments DISABLE TRIGGER stock_dividend_immutable',
+            'ALTER SEQUENCE stock_dividend_payments_id_seq INCREMENT BY 2',
+            'GRANT UPDATE(cash_after) ON stock_dividend_payments TO birja_app',
+            'GRANT USAGE ON SEQUENCE stock_dividend_decisions_id_seq TO birja_scheduler',
+        ]
+        for name,(signature,*_) in producer.DIVIDEND_FUNCTIONS.items():
+            corruptions += [
+                'ALTER FUNCTION '+signature+' OWNER TO birja_test',
+                'GRANT EXECUTE ON FUNCTION '+signature+' TO PUBLIC',
+                'GRANT EXECUTE ON FUNCTION '+signature+' TO birja_app',
+                'ALTER FUNCTION '+signature+" SET search_path='public'",
+                'ALTER FUNCTION '+signature+' STABLE',
+            ]
+            corruptions.append("DO $tamper$ DECLARE d text; BEGIN SELECT pg_get_functiondef('"+signature+"'::regprocedure) INTO d; EXECUTE replace(d,'BEGIN',E'BEGIN\\n -- changed body'); END $tamper$")
+        # Real DROP/CREATE substitutes only TABLE output type/name; prosrc and
+        # input regprocedure stay byte identical, so body-only checks would pass.
+        signature='public.apply_stock_dividend(bigint,bigint,text,text)'
+        for old,new in [('payment_id bigint','payment_id text'),('payment_id bigint','other_id bigint')]:
+            corruptions.append("DO $tamper$ DECLARE d text; BEGIN SELECT pg_get_functiondef('"+signature+"'::regprocedure) INTO d; DROP FUNCTION "+signature+"; EXECUTE replace(d,'"+old+"','"+new+"'); ALTER FUNCTION "+signature+" OWNER TO birja_migrator; GRANT EXECUTE ON FUNCTION "+signature+" TO birja_scheduler; END $tamper$")
+        for change in corruptions:
+            with self.subTest(change=change):
+                damaged=capture(change)
+                with self.assertRaises(ValueError):
+                    producer.validate_manifest(damaged)
+                # Pre-grant consumer must reject changed declarations/bodies/ACL
+                # rather than normalizing an untrusted authority into acceptance.
+                calls=[]
+                def query(dc,statement,db=None):
+                    calls.append(statement)
+                    return json.dumps(damaged['dividend_authority']).encode()
+                with mock.patch.object(restore,'sql',side_effect=query), mock.patch.object(restore,'recovery_contract',return_value=producer):
+                    with self.assertRaises(ValueError):
+                        restore.restore_dividend_authority([])
+                self.assertEqual(len(calls),1)
+        for table in producer.DIVIDEND_COLUMNS:
+            row=next(row for row in baseline['identity_state'] if row[0]==table)
+            damaged=capture("SELECT setval('"+table+"_id_seq',"+str(row[1]+77)+",true)")
+            self.assertNotEqual(damaged['identity_state'],baseline['identity_state'])
+
+        # Exercise the real consumer's exact statements on one rollback-only
+        # PostgreSQL connection. PUBLIC EXECUTE is the actual --no-acl default;
+        # no SQL financial function, grant or denial is mocked in this probe.
+        command=['docker','compose','--env-file','/dev/null','-f',str(ROOT/'docker-compose.test.yml'),
+            'exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d','birja_test']
+        with subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) as proc:
+            def live(dc,statement,db=None):
+                proc.stdin.write(statement+'\n;\n\\echo PHASE10_QUERY_DONE\n')
+                proc.stdin.flush()
+                output=[]
+                while True:
+                    line=proc.stdout.readline()
+                    if not line:
+                        raise AssertionError('isolated persistent SQL failed: '+proc.stderr.read()[-400:])
+                    if line.strip()=='PHASE10_QUERY_DONE':
+                        return '\n'.join(output).encode()
+                    output.append(line.rstrip('\n'))
+            live([],boot)
+            live([],"SET LOCAL statement_timeout='30s';")
+            for signature,*_ in producer.DIVIDEND_FUNCTIONS.values():
+                live([],'REVOKE ALL ON FUNCTION '+signature+' FROM PUBLIC,birja_app,birja_scheduler; GRANT EXECUTE ON FUNCTION '+signature+' TO PUBLIC;')
+            live([],'REVOKE ALL ON stock_dividend_payments,stock_dividend_decisions FROM PUBLIC,birja_app,birja_scheduler; REVOKE ALL ON accounts FROM birja_app,birja_scheduler;')
+            # NOINHERIT does not deny SET ROLE membership. A clone must refuse
+            # this noncanonical authority before making its fixed ACL changes.
+            live([], 'SAVEPOINT unsafe_runtime_member; GRANT birja_migrator TO birja_app;')
+            self.assertEqual(live([], "SELECT pg_has_role('birja_app','birja_migrator','SET');").strip(), b't')
+            with mock.patch.object(restore,'sql',side_effect=live),mock.patch.object(restore,'recovery_contract',return_value=producer):
+                with self.assertRaises(ValueError):
+                    restore.restore_dividend_authority([])
+            live([], 'ROLLBACK TO SAVEPOINT unsafe_runtime_member; RELEASE SAVEPOINT unsafe_runtime_member;')
+            with mock.patch.object(restore,'sql',side_effect=live),mock.patch.object(restore,'recovery_contract',return_value=producer):
+                restore.restore_dividend_authority([])
+            for role in ('birja_app','birja_scheduler'):
+                for statement in [
+                    'SELECT * FROM public.apply_stock_dividend(1,1,repeat(\'a\',64),repeat(\'b\',64))',
+                    'SELECT * FROM public.record_stock_dividend_hold(1,repeat(\'a\',64))',
+                    'SELECT public.stock_dividend_authority(1,1,repeat(\'a\',64),repeat(\'b\',64),true,NULL)',
+                    'UPDATE public.accounts SET cash=cash+1',
+                    'INSERT INTO public.stock_dividend_payments DEFAULT VALUES',
+                    'INSERT INTO public.stock_dividend_decisions DEFAULT VALUES',
+                ]:
+                    live([],'SET LOCAL ROLE '+role+'; DO $deny$ BEGIN BEGIN '+statement+'; RAISE EXCEPTION \'unexpected restored financial authority\'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $deny$; RESET ROLE;')
+            live([],'ROLLBACK;')
+            proc.stdin.close()
+            self.assertEqual(proc.wait(timeout=5),0)
 
 
 if __name__ == "__main__":
