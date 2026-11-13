@@ -26,7 +26,7 @@ from app.services.corporate_actions import derive_dividend_entitlements,latest_v
 from app.services.trading import execute as crypto_execute,Order
 
 EMAIL='actual-dividend-sql@example.invalid'
-SYMBOL='NVDA'
+SYMBOL='AMD'
 EVENT='a1111111-1111-4111-8111-111111111111'
 
 def digest(value):
@@ -91,7 +91,7 @@ async def prepare(owner):
  async with owner.transaction():
   uid=await owner.fetchval('INSERT INTO users(email) VALUES ($1) RETURNING id',EMAIL)
   await owner.execute('INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,100,10000)',uid)
-  await owner.execute("UPDATE stock_instruments SET provider_asset_id='synthetic-dividend-NVDA',provider_verified_at=$1 WHERE coin_id=$2",now,cid)
+  await owner.execute("UPDATE stock_instruments SET provider_asset_id='synthetic-dividend-AMD',provider_verified_at=$1 WHERE coin_id=$2",now,cid)
   for product in ('reference','actions','calendar','quotes','status'):
    values=asdict(admission(product,now));names=list(values)
    args=[json.dumps(v) if isinstance(v,(dict,list)) else v for v in values.values()]
@@ -177,7 +177,9 @@ async def sold_after_cutoff(owner):
  try:
   async with async_sessionmaker(engine).begin() as db:
    now=await owner.fetchval('SELECT clock_timestamp()')
-   await persist_status_batch(db,StatusBatch((StatusEvent(cid,'synthetic-dividend-NVDA','normal',now,now.date(),1,'synthetic-dividend-status'),),now,2000,1,baseline_verified=True,contiguous=True,complete=True,end_marker=True),coin_id=cid)
+   await owner.execute('UPDATE stock_quotes SET event_at=$2,collected_at=$2,session_date=$3 WHERE coin_id=$1',cid,now,now.date())
+   await owner.execute('UPDATE stock_action_state SET checked_at=$2,covered_until=$2 WHERE coin_id=$1',cid,now)
+   await persist_status_batch(db,StatusBatch((StatusEvent(cid,'synthetic-dividend-AMD','normal',now,now.date(),1,'synthetic-dividend-status'),),now,2000,1,baseline_verified=True,contiguous=True,complete=True,end_marker=True),coin_id=cid)
  finally:await engine.dispose()
  appurl=urlunsplit(url._replace(netloc='birja_app:'+'a'*64+'@postgres:5432'))
  engine=create_async_engine(appurl,connect_args=args)

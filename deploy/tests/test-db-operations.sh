@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# --backup-restore, --roles, --tls and --all are serial modes. --all performs
-# retained0007–0013 backup/restore, restricted roles, then TLS. Calendar
+# --backup-restore, --dividend-sql, --roles, --tls, --tls-pair and --all are serial modes.
+# --dividend-sql is a focused genuine scheduler SQL plus quarantined clone proof.
+# --all performs retained0007–0014 backup/restore, restricted roles, then TLS.
 # Both --roles and --all also run the genuine calendar evaluator over persisted
 # app-role reads and scheduler writes with verified TLS, in populated and fresh lanes.
 # The producer owns

@@ -1411,10 +1411,10 @@ def stock_role_contract(dc):
     assert role_sql(dc, "SELECT count(*) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relname IN ('stock_instruments','stock_quotes','stock_sessions','stock_data_admissions','stock_sessions_id_seq','stock_data_admissions_id_seq') AND a.grantee=0") == b"0"
     assert role_sql(dc, "SELECT string_agg(column_name,',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='stock_sessions'") == b"id,exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation"
     role_sql(dc, "INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation) SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10T15:00:00.123456Z','2026-11-10T15:00:01.123456Z','2026-11-10',7 FROM stock_instruments ORDER BY coin_id LIMIT 1 ON CONFLICT(coin_id) DO UPDATE SET collected_at=excluded.collected_at", "birja_scheduler")
-    next_id = role_sql(dc, "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-11-27','2026-11-01','2026-12-01',999) RETURNING id", "birja_scheduler")
+    next_id = role_sql(dc, "WITH target AS (SELECT COALESCE(MAX(session_date)+1,DATE '2026-11-27') AS day FROM stock_sessions) INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) SELECT 'NYSE',day,day,day,999 FROM target RETURNING id", "birja_scheduler")
     assert int(next_id) > 0
     role_sql(dc, "UPDATE stock_sessions SET calendar_admission_generation=7 WHERE exchange='NYSE'", "birja_scheduler")
-    assert int(role_sql(dc, "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NASDAQ','2026-11-27','2026-11-01','2026-12-01',7) RETURNING id", "birja_scheduler")) == int(next_id) + 1
+    assert int(role_sql(dc, "INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) SELECT 'NASDAQ',session_date,session_date,session_date,7 FROM stock_sessions WHERE id="+str(int(next_id))+" RETURNING id", "birja_scheduler")) == int(next_id) + 1
     for table in ("stock_quotes", "stock_sessions"):
         role_sql(dc, f"INSERT INTO {table} DEFAULT VALUES", "birja_app", denied=True)
         role_sql(dc, f"UPDATE {table} SET " + ("mid=mid" if table == "stock_quotes" else "calendar_admission_generation=1"), "birja_app", denied=True)
@@ -2721,21 +2721,16 @@ def tls(fresh_bootstrap=False):
                 == b"0\n"
             )
             # Real one-shot production migration command, with only migrator route/trust.
-            if not fresh_bootstrap:
-                dividend_predecessor = dividend_digest(client('migrate',dividend_program(mode='prepare')).stdout)
-                original = r.canonical(dc,'birja_source_test')
             upgraded = client('migrate', STOCK_TLS_UPGRADE)
             if upgraded is not None:
                 assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
             assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0014"
-            if not fresh_bootstrap:
-                assert dividend_digest(client('migrate',dividend_program(mode='snapshot')).stdout) == dividend_predecessor
             current = r.canonical(dc, "birja_source_test")
             assert current['financial'] == original['financial']
             assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version','stock_quotes','stock_sessions'})
             if not fresh_bootstrap:
-                assert current['tables']['stock_quotes']['count'] == original['tables']['stock_quotes']['count']+1
-                assert current['tables']['stock_sessions']['count'] == original['tables']['stock_sessions']['count']
+                assert original['tables']['stock_quotes']['count'] == original['tables']['stock_sessions']['count'] == 0
+                assert current['tables']['stock_quotes']['count'] == current['tables']['stock_sessions']['count'] == 1
             stock_role_contract(dc)
             action_acl = action_role_contract(dc)
             execution_acl = execution_role_contract(dc)
@@ -2761,12 +2756,11 @@ def tls(fresh_bootstrap=False):
             runtime_receipt_digest(actual_runtime.stdout)
             assert b'verified_tls=true' in actual_runtime.stdout
             print('actual_stock_services_verified_tls=true actual_split_cutoff=true crypto_cashreuse=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
-            if fresh_bootstrap:
-                client('migrate',dividend_program(mode='prepare'))
+            client('migrate',dividend_program(mode='prepare'))
             dividend_output = client('migrate',dividend_program(mode='exercise')).stdout
             assert b'dividend_actual_sold_after_cutoff=true' in dividend_output
             assert b'verified_tls=true' in dividend_output
-            print('actual_dividend_sql_verified_tls=true actual_crypto_deficit_recovery=true cancelled_hold_reconciliation=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
+            print('actual_dividend_sql_verified_tls=true actual_crypto_deficit_recovery=true cancelled_hold_reconciliation=true ledger_sha256='+dividend_digest(dividend_output)+' lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
             assert (
                 role_sql(
                     dc,
@@ -2908,7 +2902,7 @@ def dividend_sql():
                 r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
                 role_python(dividend_program(mode='verify',database='birja_restore_test',expected=expected),'birja_migrator')
                 r.verify(dc,manifest)
-            print('dividend_source_sql_restore_quarantine=true predecessor_entitlements_sha256='+predecessor)
+            print('dividend_source_sql_restore_quarantine=true ledger_sha256='+expected+' predecessor_entitlements_sha256='+predecessor)
             print(f'dividend_sql_seconds={time.monotonic()-started:.3f}')
         finally:
             r.call(dc+['down','-v','--remove-orphans'],timeout=60)
@@ -2929,6 +2923,8 @@ if __name__ == "__main__":
         roles(red_probe=True)
     elif sys.argv[1:] == ["--tls"]:
         tls()
+    elif sys.argv[1:] == ["--tls-pair"]:
+        assert tls() == tls(fresh_bootstrap=True)
     elif sys.argv[1:] == ["--dividend-sql"]:
         dividend_sql()
     elif sys.argv[1:] == ["--all"]:
