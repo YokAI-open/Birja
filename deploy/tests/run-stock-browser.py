@@ -18,8 +18,11 @@ PROJECT = "birja-phase09-e2e-test"
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "stocks", "actions"), default="all")
+    parser.add_argument("--suite", choices=("all", "stocks", "actions", "dividends"), default="all")
+    parser.add_argument("--grep", help="Optional bounded Playwright test-name selector")
     args = parser.parse_args()
+    if args.grep is not None and (not args.grep or len(args.grep) > 256):
+        parser.error("--grep must contain1..256 characters")
     os.umask(0o077)
     work = Path(tempfile.mkdtemp(prefix="birja-phase09-browser-"))
     work.chmod(0o700)
@@ -40,9 +43,7 @@ def main():
         name: {"restart": "no"}
         for name in ("postgres", "redis", "backend", "scheduler", "frontend")
     }
-    services["postgres"].update(
-        volumes="RESET", tmpfs=["/var/lib/postgresql:size=268435456"]
-    )
+    services["postgres"].update(volumes="RESET", tmpfs=["/var/lib/postgresql:size=268435456"])
     services["redis"].update(
         volumes="RESET", tmpfs=["/data:size=67108864,uid=65532,gid=65532,mode=0750"]
     )
@@ -53,7 +54,13 @@ def main():
                 "source": str(ROOT / "frontend/e2e"),
                 "target": "/e2e",
                 "read_only": True,
-            }
+            },
+            {
+                "type": "bind",
+                "source": str(ROOT / "deploy/tests"),
+                "target": "/browser-fixtures",
+                "read_only": True,
+            },
         ],
         environment={
             "BIRJA_E2E_GUARD": "phase09-isolated",
@@ -104,10 +111,14 @@ def main():
     ]
     if args.suite != "all":
         pw.append(
-            "e2e/stock-trades.spec.ts"
-            if args.suite == "stocks"
-            else "e2e/stock-actions.spec.ts"
+            {
+                "stocks": "e2e/stock-trades.spec.ts",
+                "actions": "e2e/stock-actions.spec.ts",
+                "dividends": "e2e/dividends-history.spec.ts",
+            }[args.suite]
         )
+    if args.grep is not None:
+        pw.extend(["--grep", args.grep])
 
     def run(name, argv, timeout=600, required=True):
         print("START " + name, flush=True)
@@ -122,9 +133,7 @@ def main():
             stderr=subprocess.STDOUT,
             timeout=timeout,
         )
-        safe = re.sub(
-            r"code=\d{6}", "code=******", re.sub(r"to=[^\s]+", "to=***", result.stdout)
-        )
+        safe = re.sub(r"code=\d{6}", "code=******", re.sub(r"to=[^\s]+", "to=***", result.stdout))
         (work / (name + ".log")).write_text(safe)
         print(
             f"{name} exit={result.returncode} seconds={time.monotonic() - started:.1f}",
@@ -150,9 +159,7 @@ def main():
                 "label=com.docker.compose.project=" + PROJECT,
             ],
         ).stdout.strip():
-            raise RuntimeError(
-                "Existing browser project; refusing ownership and cleanup"
-            )
+            raise RuntimeError("Existing browser project; refusing ownership and cleanup")
     print("EVIDENCE " + str(work), flush=True)
     try:
         cfg = json.loads(run("render", dc + ["config", "--format", "json"]).stdout)
@@ -162,26 +169,19 @@ def main():
             assert service["restart"] == "no"
             if name == "backend":
                 mounts = service.get("volumes", [])
-                assert (
-                    len(mounts) == 1
-                    and mounts[0]["read_only"]
-                    and mounts[0]["target"] == "/e2e"
-                )
+                assert len(mounts) == 2 and mounts[0]["read_only"] and mounts[0]["target"] == "/e2e"
                 assert mounts[0]["source"] == str(ROOT / "frontend/e2e")
+                assert mounts[1]["read_only"] and mounts[1]["target"] == "/browser-fixtures"
+                assert mounts[1]["source"] == str(ROOT / "deploy/tests")
             else:
                 assert not service.get("volumes")
             if name != "frontend":
                 assert not service.get("ports")
         assert cfg["services"]["frontend"]["ports"][0]["host_ip"] == "127.0.0.1"
         assert cfg["services"]["backend"]["environment"]["EMAIL_BACKEND"] == "console"
-        assert (
-            cfg["services"]["backend"]["environment"]["STOCK_DATA_ENABLED"] == "false"
-        )
+        assert cfg["services"]["backend"]["environment"]["STOCK_DATA_ENABLED"] == "false"
         assert cfg["services"]["scheduler"]["environment"]["PRICE_SOURCE"] == "fake"
-        assert (
-            cfg["services"]["scheduler"]["environment"]["STOCK_ACTIONS_ENABLED"]
-            == "false"
-        )
+        assert cfg["services"]["scheduler"]["environment"]["STOCK_ACTIONS_ENABLED"] == "false"
         run("build", dc + ["build", "backend", "scheduler", "frontend"], timeout=900)
         run(
             "up-data",
@@ -203,7 +203,7 @@ def main():
                 "-v",
                 "ON_ERROR_STOP=1",
                 "-c",
-                "CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS",
+                "CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; CREATE ROLE birja_scheduler LOGIN PASSWORD 'syntheticSchedulerE2E' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS",
             ],
         )
         run(

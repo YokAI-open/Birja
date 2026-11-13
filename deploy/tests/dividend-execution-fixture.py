@@ -338,10 +338,294 @@ def program(*, mode: str, database: str | None = None, expected: str | None = No
     if database not in (None, "birja_restore_test") or (mode != "verify" and database):
         raise ValueError("Financial intent is source-only")
     if mode == "verify" and (
-        database != "birja_restore_test" or expected is None or len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected)
+        database != "birja_restore_test"
+        or expected is None
+        or len(expected) != 64
+        or any(c not in "0123456789abcdef" for c in expected)
     ):
         raise ValueError("Expected retained dividend fingerprint required")
     return (
         f"DIVIDEND_MODE={mode!r}\nDIVIDEND_DATABASE={database!r}\nDIVIDEND_EXPECTED={expected!r}\n"
         + PROGRAM
     )
+
+
+async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
+    """Guarded local browser evidence; never imported by the application."""
+    import json
+    import os
+    import re
+    import runpy
+    import sys
+    import uuid
+    from datetime import timedelta
+    from pathlib import Path
+    from types import SimpleNamespace
+    from urllib.parse import urlsplit, urlunsplit
+
+    import asyncpg
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    sys.path.insert(0, "/app")
+    from app.services.corporate_actions import derive_dividend_entitlements
+    from app.tasks.dividends import run_dividend_cycle
+
+    helper = runpy.run_path("/e2e/stock-trade-fixture.py", run_name="browser_evidence")
+    helper["guard"]()
+    helper["patch_calendar"]()
+    if operation not in {
+        "seed",
+        "cycle",
+        "up",
+        "down",
+        "uncertain",
+        "reconcile",
+        "bulk",
+        "preanchor",
+        "split",
+        "inspect",
+    }:
+        raise ValueError("Unknown browser evidence operation")
+    if re.fullmatch(r"e2e-[a-z0-9-]+@example\.com", email) is None:
+        raise ValueError("Requires disposable synthetic browser owner")
+    if symbol not in {"AMD", "MSFT", "NVDA"}:
+        raise ValueError("Unsupported browser evidence symbol")
+    raw = urlsplit(os.environ["DATABASE_URL"])
+    owner = await asyncpg.connect(urlunsplit(raw._replace(scheme="postgresql")))
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    scheduler_url = urlunsplit(
+        raw._replace(netloc="birja_scheduler:syntheticSchedulerE2E@postgres:5432")
+    )
+    restricted = create_async_engine(scheduler_url)
+    try:
+        assert await owner.fetchval("SELECT current_database()") == "birja_e2e"
+        uid = await owner.fetchval("SELECT id FROM users WHERE email=$1", email)
+        if uid is None:
+            raise ValueError("Browser owner must sign in through real OTP first")
+        state = Path(f"/tmp/birja-phase10-dividend-{uid}.json")
+        cid = await owner.fetchval("SELECT id FROM coins WHERE symbol=$1", symbol)
+        # The approved definer's minimum owned-database rights; scheduler never
+        # receives cash UPDATE. The entire uniquely named browser DB is disposable.
+        await owner.execute("GRANT USAGE ON SCHEMA public TO birja_migrator,birja_scheduler")
+        await owner.execute(
+            "GRANT SELECT ON stock_action_events,stock_action_revisions,stock_action_observations,stock_action_resolutions,stock_action_state,stock_instruments,coins,stock_data_admissions,stock_sessions,stock_ownership_movements,stock_split_applications,stock_dividend_entitlements,stock_dividend_payments,stock_dividend_decisions,accounts TO birja_migrator"
+        )
+        await owner.execute(
+            "GRANT INSERT ON stock_dividend_payments,stock_dividend_decisions TO birja_migrator; GRANT USAGE ON SEQUENCE stock_dividend_payments_id_seq,stock_dividend_decisions_id_seq TO birja_migrator; GRANT UPDATE(cash) ON accounts TO birja_migrator"
+        )
+        await owner.execute(
+            "GRANT SELECT ON stock_dividend_entitlements,stock_action_events,stock_action_revisions,stock_dividend_payments,stock_action_state,stock_action_observations TO birja_scheduler"
+        )
+        assert not await owner.fetchval(
+            "SELECT has_column_privilege('birja_scheduler','accounts','cash','UPDATE')"
+        )
+        if operation in {"seed", "bulk", "preanchor"}:
+            now = await owner.fetchval("SELECT clock_timestamp()")
+            sessions = helper["admission"]("calendar")
+            from app.services.stock_sessions import build_sessions
+
+            exchange = await owner.fetchval(
+                "SELECT listing_exchange FROM stock_instruments WHERE coin_id=$1", cid
+            )
+            bounds = [
+                row
+                for row in build_sessions(now, sessions)
+                if row.exchange == exchange
+                and row.opens_at
+                and row.closes_at < now - timedelta(days=2)
+            ]
+            cutoff = max(bounds, key=lambda row: row.session_date)
+            async with owner.transaction():
+                held = await owner.fetchval(
+                    "SELECT quantity FROM holdings WHERE user_id=$1 AND coin_id=$2", uid, cid
+                )
+                if held is None:
+                    # Explicit retained opening input, not a historical executed
+                    # trade or cash effect. All published income uses real SQL.
+                    seq = await owner.fetchval(
+                        "SELECT coalesce(max(sequence),0)+1 FROM stock_ownership_movements WHERE coin_id=$1",
+                        cid,
+                    )
+                    await owner.execute(
+                        "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) VALUES($1,$2,2,0)",
+                        uid,
+                        cid,
+                    )
+                    await owner.execute(
+                        "INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) VALUES($1,$2,$3,$4,$4,2,0,2,0,0,0,'opening',$5)",
+                        cid,
+                        uid,
+                        seq,
+                        cutoff.opens_at - timedelta(days=1),
+                        f"phase10-browser-opening:{uid}",
+                    )
+                await owner.execute(
+                    "UPDATE stock_action_state SET journal_start_at=least(journal_start_at,$2),complete_from=least(complete_from,$2),coverage_start=least(coverage_start,$2),covered_until=$3 WHERE coin_id=$1",
+                    cid,
+                    cutoff.opens_at - timedelta(days=1),
+                    now,
+                )
+            events = []
+            for index in range(28 if operation == "bulk" else 1):
+                async with owner.transaction():
+                    event_key = str(uuid.uuid4())
+                    eid = await owner.fetchval(
+                        "INSERT INTO stock_action_events(coin_id,economic_key,first_observed_at) VALUES($1,$2,$3) RETURNING id",
+                        cid,
+                        event_key,
+                        now,
+                    )
+                    source = await owner.fetchval(
+                        "INSERT INTO stock_action_sources(event_id,provider,product,provider_event_id) VALUES($1,'alpaca','actions',$2) RETURNING id",
+                        eid,
+                        event_key,
+                    )
+                    terms = {
+                        "event_type": "cash_dividend",
+                        "currency": "USD",
+                        "subtype": "ordinary",
+                        "foreign": False,
+                        "special": False,
+                        "due_bills": False,
+                        "identity_verified": True,
+                        "dates_verified": True,
+                        "cancelled": False,
+                        "identity_changed": False,
+                        "symbol": symbol,
+                        "coin_id": cid,
+                        "process_date": str(cutoff.session_date),
+                        "rate": "5000" if operation == "seed" else "0.00000001",
+                        "ex_date": str(cutoff.session_date),
+                        "record_date": str(cutoff.session_date),
+                        "payable_date": str(cutoff.session_date + timedelta(days=1)),
+                    }
+                    import hashlib
+
+                    fp = hashlib.sha256(json.dumps(terms, sort_keys=True).encode()).hexdigest()
+                    if operation == "preanchor":
+                        terms["cancelled"] = True
+                    rid = await owner.fetchval(
+                        "INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason) VALUES($1,$2,1,$3,'snapshot',$4,4,$5::jsonb,$6,'supported') RETURNING id",
+                        eid,
+                        source,
+                        fp,
+                        now,
+                        json.dumps(terms),
+                        "cancelled" if operation == "preanchor" else "supported_dividend",
+                    )
+                    await owner.execute(
+                        "UPDATE stock_action_events SET current_revision_id=$1 WHERE id=$2",
+                        rid,
+                        eid,
+                    )
+                async with async_sessionmaker(engine).begin() as db:
+                    rows = await derive_dividend_entitlements(db, eid)
+                    if operation != "preanchor":
+                        assert any(
+                            row.user_id == uid
+                            and row.state == "eligible"
+                            and row.eligible_quantity == 2
+                            for row in rows
+                        )
+                events.append(eid)
+            state.write_text(json.dumps({"event": events[0], "events": events, "symbol": symbol}))
+        elif operation == "split":
+            from decimal import Decimal
+            from app.services.corporate_action_rules import NormalizedAction
+            from app.services.alpaca_actions import ActionBatch, ActionObservation
+            from app.services.corporate_actions import persist_action_batch, apply_due_actions
+
+            now = await owner.fetchval("SELECT clock_timestamp()")
+            action = NormalizedAction(
+                provider_event_id=str(uuid.uuid4()),
+                coin_id=cid,
+                symbol=symbol,
+                event_type="forward_split",
+                process_date=now.date(),
+                observed_at=now,
+                economic_at=now - timedelta(hours=1),
+                ex_date=now.date(),
+                record_date=now.date(),
+                payable_date=now.date(),
+                currency="USD",
+                new_rate=Decimal("1.5"),
+                old_rate=Decimal(1),
+                foreign=False,
+                special=False,
+                due_bills=False,
+                identity_verified=True,
+                dates_verified=True,
+                units="pre_split",
+            )
+            async with async_sessionmaker(engine).begin() as db:
+                await persist_action_batch(
+                    db,
+                    ActionBatch(
+                        records=(action,), observations=(ActionObservation(action),), complete=True
+                    ),
+                    helper["admission"]("actions"),
+                )
+                applied = await apply_due_actions(db, cid)
+                assert len(applied) == 1
+            assert (
+                await owner.fetchval(
+                    "SELECT quantity FROM holdings WHERE user_id=$1 AND coin_id=$2", uid, cid
+                )
+                == 3
+            )
+        elif operation in {"up", "down", "uncertain", "reconcile"}:
+            eid = json.loads(state.read_text())["event"]
+            # Reuse established structured revision/reconciliation evidence,
+            # preserving the original operations program unchanged.
+            namespace = {}
+            exec(PROGRAM.split("async def main():")[0].replace("2000", "4"), namespace)
+
+            async def derive_current(event_id, expected_quantity=None):
+                async with async_sessionmaker(engine).begin() as db:
+                    await derive_dividend_entitlements(db, event_id)
+
+            namespace["derive"] = derive_current
+            await namespace["revise"](
+                owner,
+                eid,
+                {"up": "5001", "down": "0.5", "uncertain": "5002", "reconcile": "5002"}[operation],
+                uncertain=operation == "uncertain",
+                reconcile=operation == "reconcile",
+            )
+        if operation != "inspect":
+            result = await run_dividend_cycle(
+                sessionmaker=async_sessionmaker(restricted, expire_on_commit=False),
+                settings=SimpleNamespace(stock_actions_enabled=True),
+            )
+            assert result.status == "ok"
+        cash = await owner.fetchval("SELECT cash::text FROM accounts WHERE user_id=$1", uid)
+        rows = await owner.fetch(
+            "SELECT id,original_amount::text amount FROM stock_dividend_payments WHERE user_id=$1 ORDER BY id",
+            uid,
+        )
+        decisions = await owner.fetch(
+            "SELECT id,outcome,applied_delta::text delta,desired_total::text desired FROM stock_dividend_decisions WHERE user_id=$1 ORDER BY id",
+            uid,
+        )
+        print(
+            json.dumps(
+                {
+                    "cash": cash,
+                    "originals": [dict(row) for row in rows],
+                    "decisions": [dict(row) for row in decisions],
+                }
+            )
+        )
+    finally:
+        await restricted.dispose()
+        await engine.dispose()
+        await owner.close()
+
+
+if __name__ == "__main__":
+    import asyncio
+    import sys
+
+    if len(sys.argv) not in (3, 4):
+        raise SystemExit("Expected guarded operation, synthetic owner and optional symbol")
+    asyncio.run(browser_main(*sys.argv[1:]))

@@ -27,7 +27,7 @@ type Portfolio = Record<"cash" | "total_value" | "total_pl" | "total_pl_percent"
 };
 type HistoryPage = {
   items: Array<
-    Record<"id" | "quantity" | "exec_price" | "fee" | "total" | "created_at" | "side", string>
+    Record<"id" | "quantity" | "exec_price" | "fee" | "cash_delta" | "filled_at" | "side", string>
   >;
 };
 
@@ -81,24 +81,26 @@ for (const width of [375, 768, 1024, 1440]) {
         },
       }),
     );
-    await page.route("**/api/v1/trades", (route) =>
+    await page.route("**/api/v1/history*", (route) =>
       route.fulfill({
         json: {
           items: [
             {
-              id: "9007199254740993",
-              created_at: timestamp,
+              kind: "trade",
+              id: "trade:9007199254740993",
+              recorded_at: timestamp,
+              filled_at: timestamp,
               symbol: "BTC",
               name: "Bitcoin",
-              coin_id: "1",
-              asset_class: "crypto",
-              provider_asset_id: null,
-              stock_mark: null,
+              asset_type: "crypto",
               side: "buy",
               quantity: "123456789012.12345678",
               exec_price: "999999999999.99",
               fee: "100.25",
-              total: "-999999999999.99",
+              cash_delta: "-999999999999.99",
+              source: null,
+              feed: null,
+              quote_at: null,
             },
           ],
           next_cursor: null,
@@ -116,8 +118,8 @@ for (const width of [375, 768, 1024, 1440]) {
         "aria-current",
         "page",
       );
-      const label = name === "Portfolio" ? "Holdings" : "Trade history";
-      const mobile = width < (name === "Portfolio" ? 1024 : 768);
+      const label = name === "Portfolio" ? "Holdings" : "Account activity";
+      const mobile = width < 1024;
       const records = page.getByRole(mobile ? "list" : "table", { name: label, exact: true });
       await expect(records).toBeVisible();
       await expect(
@@ -126,24 +128,16 @@ for (const width of [375, 768, 1024, 1440]) {
       const fields =
         name === "Portfolio"
           ? ["Quantity", "Average cost", "Cost basis", "Current value", "Gain/loss", "Allocation"]
-          : [
-              "Date/time",
-              "Coin",
-              "Side",
-              "Quantity",
-              "Execution price",
-              "Fee",
-              "Total cash change",
-            ];
+          : ["Recorded", "Event", "Asset", "Details", "Cash change"];
       for (const field of fields)
         await expect(records.getByText(field, { exact: true })).toBeVisible();
-      await expect(records.locator("time")).toHaveAttribute("datetime", timestamp);
+      await expect(records.locator("time").first()).toHaveAttribute("datetime", timestamp);
       await expect
         .poll(() => page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
         .toBe(true);
-      if (width >= 768 && name === "History") {
+      if (width >= 1024 && name === "History") {
         const scroll = page.getByRole("region", {
-          name: "Trade history table",
+          name: "Account activity table",
           exact: true,
         });
         await page.keyboard.press("Tab");
@@ -160,7 +154,7 @@ for (const width of [375, 768, 1024, 1440]) {
         const last =
           name === "Portfolio"
             ? records.getByRole("link", { name: "Trade BTC" })
-            : page.getByText("All trades loaded.", { exact: true });
+            : page.getByText("All events loaded.", { exact: true });
         await page.keyboard.press("Tab");
         await last.focus();
         await last.scrollIntoViewIfNeeded();
@@ -272,23 +266,25 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
 
   async function openHistory(expected: Fill[]) {
     const response = page.waitForResponse(
-      (r) => /\/api\/v1\/trades(?:\?|$)/.test(r.url()) && r.request().method() === "GET" && r.ok(),
+      (r) => /\/api\/v1\/history(?:\?|$)/.test(r.url()) && r.request().method() === "GET" && r.ok(),
     );
     await page.getByRole("link", { name: "History", exact: true }).click();
     const data = (await (await response).json()) as HistoryPage;
     expect(data.items).toHaveLength(expected.length);
     expect(data.items.map((item) => item.id)).toEqual(
-      expected.map((fill) => String(fill.trade_id)),
+      expected.map((fill) => `trade:${fill.trade_id}`),
     );
-    const rows = page.getByRole("table", { name: "Trade history", exact: true }).getByRole("row");
+    const rows = page
+      .getByRole("table", { name: "Account activity", exact: true })
+      .getByRole("row");
     for (const [index, fill] of expected.entries()) {
       const item = data.items[index]!;
       expect(item).toMatchObject({
         quantity: fill.quantity,
         exec_price: fill.exec_price,
         fee: fill.fee,
-        total: fill.cash_delta,
-        created_at: fill.created_at,
+        cash_delta: fill.cash_delta,
+        filled_at: fill.created_at,
         side: fill.side,
       });
       const row = rows.nth(index + 1);
@@ -300,9 +296,9 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
         `${fill.cash_delta.startsWith("-") ? "−" : "+"}${formatUsd(fill.cash_delta.replace(/^-/, ""))}`,
       ])
         await expect(row).toContainText(value);
-      await expect(row.locator("time")).toHaveAttribute("datetime", fill.created_at);
+      await expect(row.locator("time").first()).toHaveAttribute("datetime", fill.created_at);
     }
-    await expect(page.getByText("All trades loaded.", { exact: true })).toBeVisible();
+    await expect(page.getByText("All events loaded.", { exact: true })).toBeVisible();
   }
   await openHistory([buy]);
   await page.getByRole("link", { name: "Markets", exact: true }).click();

@@ -237,7 +237,12 @@ test("keyboard retry preserves failed focus and restores the heading only on suc
   await signInNewUser(page);
   const retry = region(page).getByRole("button", { name: "Retry stock prices" });
   await retry.focus();
+  const failedRetry = page.waitForResponse(
+    (response) => response.url().endsWith("/api/v1/stocks") && response.status() === 503,
+  );
   await page.keyboard.press("Enter");
+  await failedRetry;
+  await expect(retry).toBeEnabled();
   await expect(retry).toBeFocused();
   fail = false;
   await page.keyboard.press("Enter");
