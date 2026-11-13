@@ -174,7 +174,7 @@ describe("App", () => {
             : new Promise<Response>((resolve) => {
                 releasePortfolioB = resolve;
               });
-        if (path.startsWith("/api/v1/trades")) {
+        if (path.startsWith("/api/v1/trades") || path.startsWith("/api/v1/history")) {
           if (identity === "a") {
             aSignal = init!.signal as AbortSignal;
             return new Promise<Response>((resolve) => {
@@ -189,6 +189,26 @@ describe("App", () => {
       }),
     );
     client.setQueryData(["history"], { pages: [aHistory], pageParams: [undefined] });
+    client.setQueryData(["eventHistory", "a@example.test", 0], {
+      pages: [
+        {
+          items: aHistory.items.map(({ id, created_at, total, ...fill }) => ({
+            ...fill,
+            kind: "trade",
+            asset_type: "crypto",
+            id: `trade:${id}`,
+            recorded_at: created_at,
+            filled_at: created_at,
+            cash_delta: total,
+            source: null,
+            feed: null,
+            quote_at: null,
+          })),
+          next_cursor: null,
+        },
+      ],
+      pageParams: [undefined],
+    });
     const { container, unmount } = render(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={["/portfolio"]}>
@@ -236,7 +256,7 @@ describe("App", () => {
       releaseHistoryB(response({ items: [], next_cursor: null }));
       await pendingA;
     });
-    expect(await screen.findByText("No trades yet")).toBeVisible();
+    expect(await screen.findByText("No activity yet")).toBeVisible();
     expect(client.getQueryData(["history", "pending"])).toBeUndefined();
     expect(
       frames.every((frame) => !frame.includes("$8,123.45") && !frame.includes("Private A coin")),

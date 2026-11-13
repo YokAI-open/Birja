@@ -1,52 +1,31 @@
 import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
-import type { HistoryItem } from "@/api/history";
+import type { EventHistoryItem } from "@/api/eventHistory";
+import {
+  HistoryEventCash,
+  HistoryEventDetails,
+  HistoryEventTime,
+  HistoryEventTitle,
+} from "@/components/HistoryEventDetails";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useHistory } from "@/hooks/useHistory";
-import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
+import { useEventHistory } from "@/hooks/useEventHistory";
 
-function total(value: string) {
-  if (/^-?0+(\.0+)?$/.test(value)) return formatUsd("0");
-  return value.startsWith("-") ? `−${formatUsd(value.slice(1))}` : `+${formatUsd(value)}`;
-}
-
-function fillTime(value: string) {
-  const local = new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(value));
-  return (
-    <time dateTime={value} title={value} aria-label={`${local}; UTC ${value}`}>
-      {local}
-    </time>
-  );
-}
-
-function fields(item: HistoryItem) {
+function fields(item: EventHistoryItem, prefix: string) {
   return [
-    ["Date/time", fillTime(item.created_at)],
+    ["Recorded", <HistoryEventTime value={item.recorded_at} />],
+    ["Event", <HistoryEventTitle item={item} />],
     [
-      "Coin",
+      "Asset",
       <span className="wrap-anywhere">
+        <span className="block text-[13px] text-muted-foreground">
+          {item.asset_type === "stock" ? "Stock" : "Crypto"}
+        </span>
         <span className="font-medium">{item.symbol}</span> · {item.name}
       </span>,
     ],
-    [
-      "Side",
-      <span className="rounded-pill bg-muted px-2 py-1 text-sm">
-        {item.side === "buy" ? "Buy" : "Sell"}
-      </span>,
-    ],
-    ["Quantity", formatQuantity(item.quantity)],
-    ["Execution price", formatUnitPrice(item.exec_price)],
-    ["Fee", formatUsd(item.fee)],
-    ["Total cash change", total(item.total)],
+    ["Details", <HistoryEventDetails item={item} anchorPrefix={prefix} />],
+    ["Cash change", <HistoryEventCash item={item} />],
   ] as const;
 }
 
@@ -62,7 +41,7 @@ export default function HistoryPage() {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useHistory();
+  } = useEventHistory();
   const items = data?.pages.flatMap((page) => page.items);
   const appendButton = useRef<HTMLButtonElement | null>(null);
   const refreshButton = useRef<HTMLButtonElement | null>(null);
@@ -95,12 +74,12 @@ export default function HistoryPage() {
         result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;
       setAnnouncement({
         updatedAt: result.dataUpdatedAt,
-        text: `${count - previousCount} more trades loaded. ${count} trades shown.`,
+        text: `${count - previousCount} more events loaded. ${count} events shown.`,
       });
     }
   }
   return (
-    <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
+    <div className="my-8 flex min-w-0 flex-col gap-4 pb-24 text-[15px] leading-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
           History
@@ -116,7 +95,7 @@ export default function HistoryPage() {
         </Button>
       </div>
       {isPending ? (
-        <Card role="status" aria-label="Loading trade history" aria-busy="true">
+        <Card role="status" aria-label="Loading history" aria-busy="true">
           <CardContent>
             {[0, 1, 2].map((i) => (
               <div key={i} aria-hidden="true" className="h-12 w-full rounded-control bg-muted" />
@@ -126,7 +105,7 @@ export default function HistoryPage() {
       ) : !items ? (
         <Card>
           <CardContent>
-            <p role="alert">Can&apos;t load your trade history right now. Try again.</p>
+            <p role="alert">Can&apos;t load your history right now. Try again.</p>
             <Button ref={captureRetryButton} aria-disabled={isFetching} onClick={refresh}>
               Try again
             </Button>
@@ -139,7 +118,7 @@ export default function HistoryPage() {
               role="alert"
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
             >
-              <p>Couldn&apos;t refresh your trade history. Showing the last successful update.</p>
+              <p>Couldn&apos;t refresh your history. Showing the last successful update.</p>
               <Button
                 ref={captureRetryButton}
                 variant="secondary"
@@ -153,17 +132,19 @@ export default function HistoryPage() {
           )}
           <Card className="min-w-0">
             <CardContent>
-              <h2 className="font-medium">Executed trades</h2>
+              <h2 className="font-medium">Account activity</h2>
               <p className="text-muted-foreground">
-                Newest first. Times are shown in your local timezone.
+                Newest recorded first. Times are shown in your local timezone.
               </p>
-              <p className="text-muted-foreground">Total is the cash change including fees.</p>
+              <p className="text-muted-foreground">
+                Cash change is the amount actually added to or taken from your shared USD balance.
+              </p>
               {items.length === 0 ? (
                 <div className="flex flex-col items-start gap-3">
-                  <h2 className="font-medium">No trades yet</h2>
+                  <h2 className="font-medium">No activity yet</h2>
                   <p>
-                    Your executed buys and sells will appear here. Browse markets to make your first
-                    trade.
+                    Your trades, dividends, splits and corrections will appear here. Browse markets
+                    to make your first trade.
                   </p>
                   <Button asChild>
                     <Link to="/">Browse markets</Link>
@@ -172,19 +153,26 @@ export default function HistoryPage() {
               ) : (
                 <>
                   <div
-                    className="hidden min-w-0 overflow-x-auto md:block"
+                    className="hidden min-w-0 lg:block"
                     role="region"
-                    aria-label="Trade history table"
+                    aria-label="Account activity table"
                     tabIndex={0}
                   >
-                    <table aria-label="Trade history" className="w-full text-left">
+                    <table aria-label="Account activity" className="w-full table-fixed text-left">
+                      <colgroup>
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[18%]" />
+                        <col className="w-[37%]" />
+                        <col className="w-[15%]" />
+                      </colgroup>
                       <thead>
                         <tr>
-                          {fields(items[0]!).map(([label], index) => (
+                          {fields(items[0]!, "history-desktop-").map(([label], index) => (
                             <th
                               key={label}
                               scope="col"
-                              className={`p-3 text-sm font-medium text-muted-foreground ${index > 2 ? "text-right" : ""}`}
+                              className={`p-4 text-[13px] font-medium text-muted-foreground ${index === 4 ? "text-right" : ""}`}
                             >
                               {label}
                             </th>
@@ -195,17 +183,19 @@ export default function HistoryPage() {
                         {items.map((item) => (
                           <tr
                             key={item.id}
-                            className="h-[52px] border-t border-border hover:bg-accent"
+                            id={`history-desktop-${item.id}`}
+                            tabIndex={-1}
+                            className="h-[52px] scroll-mb-24 border-t border-border align-top wrap-anywhere hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
                           >
-                            {fields(item).map(([label, value], index) =>
-                              index === 1 ? (
-                                <th key={label} scope="row" className="p-3 font-normal">
+                            {fields(item, "history-desktop-").map(([label, value], index) =>
+                              index === 2 ? (
+                                <th key={label} scope="row" className="min-w-0 p-4 font-normal">
                                   {value}
                                 </th>
                               ) : (
                                 <td
                                   key={label}
-                                  className={`p-3 tabular-nums ${index > 2 ? "text-right" : ""}`}
+                                  className={`min-w-0 p-4 tabular-nums ${index === 4 ? "text-right" : ""}`}
                                 >
                                   {value}
                                 </td>
@@ -216,19 +206,19 @@ export default function HistoryPage() {
                       </tbody>
                     </table>
                   </div>
-                  <ol aria-label="Trade history" className="min-w-0 md:hidden">
+                  <ol aria-label="Account activity" className="min-w-0 lg:hidden">
                     {items.map((item) => (
-                      <li key={item.id} className="border-t border-border py-4">
+                      <li
+                        key={item.id}
+                        id={`history-mobile-${item.id}`}
+                        tabIndex={-1}
+                        className="scroll-mb-24 border-t border-border py-4 focus-visible:outline-2 focus-visible:outline-ring"
+                      >
                         <dl className="flex flex-col gap-3">
-                          {fields(item).map(([label, value]) => (
-                            <div
-                              key={label}
-                              className="flex flex-wrap items-start justify-between gap-2"
-                            >
+                          {fields(item, "history-mobile-").map(([label, value]) => (
+                            <div key={label} className="flex min-w-0 flex-col items-start gap-2">
                               <dt className="text-muted-foreground">{label}</dt>
-                              <dd className="min-w-0 text-right wrap-anywhere tabular-nums">
-                                {value}
-                              </dd>
+                              <dd className="w-full min-w-0 wrap-anywhere tabular-nums">{value}</dd>
                             </div>
                           ))}
                         </dl>
@@ -244,7 +234,7 @@ export default function HistoryPage() {
               <div className="flex flex-col items-start gap-3">
                 {isFetchNextPageError && (
                   <p role="alert">
-                    Couldn&apos;t load more trades. Your loaded trades are still here.
+                    Couldn&apos;t load more events. Your loaded events are still here.
                   </p>
                 )}
                 <Button
@@ -254,7 +244,7 @@ export default function HistoryPage() {
                   onClick={() => void loadMore()}
                 >
                   {isFetchingNextPage
-                    ? "Loading more trades…"
+                    ? "Loading more events…"
                     : isFetchNextPageError
                       ? "Try loading more"
                       : "Load more"}
@@ -263,7 +253,7 @@ export default function HistoryPage() {
             ) : (
               <p
                 tabIndex={-1}
-                className="text-muted-foreground"
+                className="scroll-mb-24 text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
                 ref={(node) => {
                   if (node && focusEnd.current) {
                     node.focus({ preventScroll: true });
@@ -271,17 +261,17 @@ export default function HistoryPage() {
                   }
                 }}
               >
-                All trades loaded.
+                All events loaded.
               </p>
             ))}
           <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {isFetchingNextPage
-              ? "Loading more trades…"
+              ? "Loading more events…"
               : isFetching
                 ? "Refreshing history…"
                 : announcement?.updatedAt === dataUpdatedAt
                   ? announcement.text
-                  : `${items.length} trades shown.`}
+                  : `${items.length} events shown.`}
           </p>
         </>
       )}

@@ -95,7 +95,7 @@ export function HistoryEventDetails({
   const originalButton = useRef<HTMLButtonElement>(null);
   const headingId = useId();
   const captureOriginalHeading = useCallback((node: HTMLHeadingElement | null) => {
-    node?.focus({ preventScroll: true });
+    node?.focus();
   }, []);
   return (
     <div className="flex min-w-0 flex-col gap-4 text-[13px] leading-[18px]">
@@ -230,7 +230,7 @@ export function HistoryEventDetails({
                 className="mt-4 min-h-11"
                 onClick={() => {
                   setOriginalOpen(false);
-                  originalButton.current?.focus({ preventScroll: true });
+                  originalButton.current?.focus();
                 }}
               >
                 Back to correction
