@@ -77,7 +77,41 @@ def integration_current0014(archive=None):
 
 
 def assert_preserved(expected, actual):
-    assert actual == expected, 'selected0014 preservation comparison failed'
+    def differences(left, right, path='state'):
+        if isinstance(left, dict) and isinstance(right, dict):
+            return [item for key in sorted(left.keys() | right.keys())
+                    for item in differences(left.get(key), right.get(key), path+'.'+str(key))]
+        if isinstance(left, (tuple, list)) and isinstance(right, (tuple, list)) and len(left)==len(right):
+            return [item for index,(a,b) in enumerate(zip(left,right))
+                    for item in differences(a,b,path+'.'+str(index))]
+        return [] if left == right else [path]
+    assert actual == expected, 'selected0014 preservation comparison failed paths='+','.join(differences(expected,actual))
+
+
+def source_role_config(root, roles):
+    """Use the unchanged synthetic helper's private root/path contract."""
+    config = {**roles, 'password_files': {}}
+    for role, source in roles['password_files'].items():
+        destination = root / role
+        destination.write_bytes(Path(source).read_bytes())
+        destination.chmod(0o600)
+        config['password_files'][role] = str(destination)
+    path = root / 'roles.json'
+    path.write_text(json.dumps(config))
+    path.chmod(0o600)
+    return path
+
+
+def assert_current0014_financial(expected, actual):
+    # The selected candidate physically upgrades pinned PG18.6 to pinned18.7.
+    # Assert that exact metadata transition independently; all saved financial,
+    # schema/authority and identity facts must still equal the original.
+    before, identities_before = expected
+    after, identities_after = actual
+    before, after = dict(before), dict(after)
+    assert re.fullmatch(r'18\.6(?: \([^)]*\))?', before.pop('server_version')), 'unexpected original server version'
+    assert re.fullmatch(r'18\.7(?: \([^)]*\))?', after.pop('server_version')), 'unexpected candidate server version'
+    assert_preserved((before, identities_before), (after, identities_after))
 
 
 def refused_rollback(target, launcher, snapshot):
@@ -104,7 +138,7 @@ def current0014_checks(*, session, current, old, app, root, launcher, target,
         return canonical, identity
 
     def unchanged():
-        assert_preserved((original_canonical, original_identity), financial())
+        assert_current0014_financial((original_canonical, original_identity), financial())
         assert all(fingerprint(name) == value for name,value in originals.items())
         assert all(r.digest(path) == value for path,value in retained.items())
 
@@ -526,7 +560,8 @@ def _integration(archive=None, *, current0014):
 
             if current0014:
                 source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")
-                call(['bash', str(ROOT / 'deploy/configure-db.sh'), '--synthetic', str(etc / 'db-roles.json'), '--apply', '--approved-operation', 'populated-role-transition'])
+                source_roles = source_role_config(root, roles)
+                call(['bash', str(ROOT / 'deploy/configure-db.sh'), '--synthetic', str(source_roles), '--apply', '--approved-operation', 'populated-role-transition'])
                 # Pre-TLS fixture clients use the existing all-a credential
                 # convention; TLS provisioning below restores distinct secrets.
                 # Source fixture programs select app/scheduler a*64 without TLS.
@@ -536,6 +571,9 @@ def _integration(archive=None, *, current0014):
                 source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0014')", 'birja_migrator')
                 source_python(f.dividend_program(mode='prepare'), 'birja_migrator')
                 dividend_saved = f.dividend_digest(source_python(f.dividend_program(mode='exercise'), 'birja_migrator'))
+                # The unchanged clone verifier uses this fixed maintenance DB;
+                # create it while preparing originals, before physical copies.
+                r.sql(dc0, 'CREATE DATABASE birja_ops_test OWNER birja_ops_bootstrap', 'birja_source_test')
                 original_canonical = r.canonical(dc0, 'birja_source_test')
                 identity_tables = r.backup_module().identity_tables('0014')
                 original_identity = {name:r.sql(dc0, 'SELECT last_value,is_called FROM '+name+'_id_seq', 'birja_source_test').strip() for name in identity_tables}

@@ -20,6 +20,46 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_pinned_server_transition_keeps_all_financial_and_identity_oracles(self):
+        before = {'server_version': '18.6 (Debian 18.6-1)', 'cash': '10.00',
+                  'schema': {'authority': ['fixed']}, 'tables': {'payment': 'original'}}
+        after = {**before, 'server_version': '18.7'}
+        original = (before, {'users': b'2|t'})
+        selected.assert_current0014_financial(original, (after, {'users': b'2|t'}))
+        for changed in ({**after, 'cash': '9.00'},
+                        {**after, 'schema': {'authority': ['forged']}},
+                        {**after, 'tables': {'payment': 'new'}}):
+            with self.assertRaisesRegex(AssertionError, 'preservation'):
+                selected.assert_current0014_financial(original, (changed, {'users': b'2|t'}))
+        with self.assertRaisesRegex(AssertionError, 'preservation'):
+            selected.assert_current0014_financial(original, (after, {'users': b'3|t'}))
+        for version in ('18.6', '18.70', '18.8', '19.0'):
+            with self.assertRaisesRegex(AssertionError, 'candidate server version'):
+                selected.assert_current0014_financial(original, ({**after, 'server_version': version}, {'users': b'2|t'}))
+
+    def test_source_role_config_obeys_synthetic_private_root_contract(self):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-') as directory:
+            root = Path(directory)
+            (root / 'etc').mkdir()
+            roles = {'project': 'birja-ops-test', 'db_name': 'birja_source_test',
+                     'bootstrap': 'birja_ops_bootstrap', 'password_files': {}}
+            for role, char in (('app', 'a'), ('scheduler', 'b'), ('migrator', 'c')):
+                source = root / 'etc' / role
+                source.write_text(char * 64)
+                roles['password_files'][role] = str(source)
+            path = selected.source_role_config(root, roles)
+            import json
+            config = json.loads(path.read_text())
+            self.assertEqual(path, root / 'roles.json')
+            self.assertEqual(config.keys(), roles.keys())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            for role, source in roles['password_files'].items():
+                credential = Path(config['password_files'][role])
+                self.assertEqual(credential, root / role)
+                self.assertEqual(credential.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(credential.read_bytes(), Path(source).read_bytes())
+
     def test_current_lane_runs_replay_refusal_and_failed_attempt_recovery(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
@@ -28,7 +68,7 @@ class Contracts(unittest.TestCase):
             (root/'history/deploys.log').write_bytes(b'unchanged log')
             (root/'web').mkdir()
             (root/'web/current').symlink_to('release')
-            canonical = {'revision':'0014', 'cash':'10.00', 'authority':['fixed']}
+            canonical = {'revision':'0014', 'cash':'10.00', 'authority':['fixed'], 'server_version':'18.7'}
             identities = {'users':b'2|t'}
             events = []
             def compose(*args, **kw):
@@ -50,7 +90,7 @@ class Contracts(unittest.TestCase):
                           root=root, launcher=root/'launcher', target=target,
                           git=lambda *a:'tested', dc=['docker'], compose_env={}, compose=compose,
                           originals={'volume':'fingerprint'}, fingerprint=lambda n:'fingerprint', retained={},
-                          original_canonical=canonical, original_identity=identities,
+                          original_canonical={**canonical, 'server_version':'18.6'}, original_identity=identities,
                           runtime_saved='r'*64, dividend_saved='d'*64, inherited=9)
             with mock.patch.object(selected.r, 'canonical', return_value=canonical), \
                  mock.patch.object(selected.r, 'sql', return_value=b'2|t'), \
