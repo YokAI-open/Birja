@@ -193,3 +193,13 @@ async def test_stored_totals_inactive_and_bigint(db, engine, new_user):
     finally:
         async with engine.begin() as conn:
             await conn.execute(update(Coin).where(Coin.symbol == "BTC").values(is_active=True))
+
+
+async def test_bigint_fill_fixture_does_not_collide_between_owners(db, engine, new_user):
+    first, second = await new_user(), await new_user()
+    first_id = await put_fill(engine, first, high=True)
+    second_id = await put_fill(engine, second, high=True)
+    assert first_id != second_id
+    assert first_id > 9007199254740991 and second_id > 9007199254740991
+    assert [item.id for item in (await list_history(db, user_id=first)).items] == [str(first_id)]
+    assert [item.id for item in (await list_history(db, user_id=second)).items] == [str(second_id)]
