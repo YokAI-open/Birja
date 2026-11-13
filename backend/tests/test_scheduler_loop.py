@@ -354,3 +354,58 @@ def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None
         if name != "scheduler":
             assert "ALPACA_" not in value
     assert "VITE_ALPACA" not in content
+
+
+@pytest.mark.parametrize("failure", [False, True])
+async def test_dividend_loop_is_independent_and_awaits_cancellation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: bool
+) -> None:
+    from app.core.config import SchedulerSettings
+    from app.tasks import dividends, stock_actions
+
+    settings = SchedulerSettings(
+        env="test",
+        price_source="fake",
+        database_url="postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
+        redis_url="redis://:test@127.0.0.1:56379/0",
+        stock_actions_enabled=True,
+        stock_actions_coverage_start="2026-11-01T00:00:00Z",
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
+    started, cleaned, stop = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    calls = []
+
+    async def crypto(**kwargs: Any) -> CycleResult:
+        calls.append(1)
+        if len(calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def actions(**kwargs: Any) -> CycleResult:
+        return CycleResult("ok")
+
+    async def dividend(**kwargs: Any) -> CycleResult:
+        assert "http" not in kwargs and "redis" not in kwargs
+        started.set()
+        try:
+            if failure:
+                raise RuntimeError("private-synthetic-payload")
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+        return CycleResult("ok")
+
+    real_run = scheduler.run
+
+    async def accelerated(**kwargs: Any) -> None:
+        await real_run(**{**kwargs, "interval": 0.02, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_actions, "run_stock_action_cycle", actions)
+    monkeypatch.setattr(dividends, "run_dividend_cycle", dividend)
+    monkeypatch.setattr(scheduler, "run", accelerated)
+    async with asyncio.timeout(2):
+        await scheduler.amain(stop)
+    assert started.is_set() and cleaned.is_set() and len(calls) == 3
