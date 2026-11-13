@@ -1,5 +1,19 @@
 # Phase10 local execution evidence
 
+## Current gate — Wave 9 UI complete, 2026-11-13
+
+Plan14 summary9ce7c52, source36a1642. Exact mixed event details, applied versus
+held proposals, saved rates/dates, loaded/offpage original focus, responsive
+five-column desktop/table-equivalent cards and immediate auth hiding.
+Component/page27tests3.54s; App/page/component47tests3.64s. First full run694
+passed/onefailed16.06s due stale Appfixture legacy endpoint; narrow authorized
+fixture correction preserves all auth/privacy assertions. Final fullfrontend
+695passed/36files/16.11s,98.40%statements94.89%branches98.95%functions99.09%lines;
+/tmp/birja-phase10-wave9-frontend-fixed.log. Full ESLint/TypeScript/Prettier pass.
+No backend changed; prior full backend2527/46critical100% remains current.
+These are component/transport tests, not actual browser reflow, screenshot,
+native200% or owner new-UI acceptance. Plans15–18 retain those gates.
+
 ## Current gate — Wave 8 complete, 2026-11-13
 
 Plan09 summary1ea1565:132 actual affected tests; bounded independent target/paid-

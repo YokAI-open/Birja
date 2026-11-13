@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave 8 fully verified; execute Plan 10-14 mixed History UI.
+stopped_at: Plan 10-14 complete; execute Plan 10-15 real browser and review bundle.
 last_updated: "2026-11-13T12:19:02.519396+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 54
-  percent: 90
+  completed_plans: 55
+  percent: 92
 ---
 
 # Project State
@@ -26,12 +26,19 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 13/18 complete; executing 10-14 (Wave 9/13)
-Status: Executing Wave 9
+Plan: 14/18 complete; executing 10-15 (Wave 10/13)
+Status: Executing Wave 10
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [█████████░] 90% (54/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [█████████░] 92% (55/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan14 complete9ce7c52: typed mixed History table/cards and immutable-original
+focus navigation; 695 frontend tests/36files/16.11s,98.40% statements, full
+static checks pass. App auth fixture needed a narrow endpoint/wire update;
+earlier694pass/onefailure remains recorded. No browser/reflow/nativezoom pass
+is inferred. Next15 actual financial browser flows and source-hashed offline
+review ZIP, then16 final gates,17 reviews,18 owner UI/native200% acceptance.
 
 Plans 10-09/13 complete through 1ea1565/f516d51. Worker proof132 tests,
 100% worker/scheduler/service; owner/epoch hook68 affected tests with synchronous
@@ -710,9 +717,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Wave 8 fully verified; execute Plan 10-14 mixed History UI.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-14-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13. Thirteen of eighteen plans complete.
+Stopped at: Plan 10-14 complete; execute Plan 10-15 real browser and review bundle.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-15-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14. Fourteen of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
 Latest passing gates: /tmp/birja-phase10-wave8-backend.log,
 /tmp/birja-phase10-wave8-critical.log and /tmp/birja-phase10-wave8-frontend.log.
