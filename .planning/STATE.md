@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan10-06 pregrant repair reviewed; replacement archive full replay pending.
+stopped_at: Plan 10-06 fully verified; execute payout service 10-07.
 last_updated: "2026-11-13T09:15:15.623935+00:00"
-last_activity: 2026-11-13 -- Fresh-cluster pregrant repair independently verified
+last_activity: 2026-11-13 -- Retained recovery, role/TLS gate and independent review passed
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 47
-  percent: 78
+  completed_plans: 48
+  percent: 80
 ---
 
 # Project State
@@ -26,12 +26,24 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 6/18 complete; executing10-06 (Wave5/13)
-Status: Executing Wave5
+Plan: 7/18 complete; executing 10-07 (Wave 6/13)
+Status: Executing Wave 6
 Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [████████░░] 78% (47/60 currently tracked plans complete; Phase11 unplanned)
+Progress: [████████░░] 80% (48/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan 10-06 is complete. Replacement archive 1faa8277…52cc1 passed the entire
+0007–0014 encrypted retained recovery, restricted roles and both TLS lanes in
+1047.402 seconds. All 11 CORE/unit files and fixture hashes match; every owned
+project is cleaned. Independent Task 2 review is clean with zero findings.
+The earlier failing archive and its fresh-cluster regression remain recorded.
+Next: Plan 10-07 payout service, then Plan 10-10 mixed History projection in
+Wave 6. The pre-consumer recovery prerequisite is now satisfied locally.
+Whole-phase requirements, final integration and owner UI/native zoom acceptance
+remain pending. Live/provider and publication deferrals remain unchanged.
+Older entries below preserve historical intermediate pointers.
+
 
 Phase 10 has 6/18 completed plans. Plan 10-06 remains in progress.
 The first retained archive (637516d8…) passed schemas 0007–0013, then failed
@@ -661,14 +673,13 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-06 repair reviewed; replacement archive replay pending.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-06-PLAN.md
-Completed plans: 01, 02, 03, 04, 05, 12. No active DB/ops process.
-Old archive /tmp/birja-backup-test-phase10-preconsumer/recovery.tar (637516d8…)
-and gate-report.json record the genuine 0014 failure; do not overwrite them.
-Current verifier fix 64f7795 is independently reviewed in 10-PREGRANT-REVIEW.md.
-Use a new archive/output directory and repeat the full canonical all-lanes
-sequence serially. Verify every current CORE/unit byte and retain the exact
-archive, hashes, logs and cleanup evidence. Task 2 review and Plan 06 summary
-remain pending; no payout-service or History API consumer may start yet.
-Preserve all live/provider/production/B2/timer/installed-tool/publication deferrals.
+Stopped at: Plan 10-06 complete; execute 10-07 payout service.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-07-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 12. Seven of eighteen plans complete.
+All test/ops/restore containers, networks and volumes are removed. Recreate only
+the owned test stack for application tests; keep all SQL/ops tests serial.
+Use frozen C03a SQL result vocabulary and C05a exact History wire types.
+The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
+old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates
+unless subsequent source/authority changes, failure or a required final gate warrants it.
+No provider/.env/production/B2/timer/installed-tool/publication action is authorized.
