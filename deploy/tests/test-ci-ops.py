@@ -89,6 +89,8 @@ class CI(unittest.TestCase):
     def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
         ops = jobs()["ops"]
         recovery_policy(ops)
+        body = ops.split("sudo -- python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        compile(textwrap.dedent(body), ".github/workflows/ci.yml:serial-recovery", "exec")
         for old in [
             "ops.r.bundle_package(archive)", "ops.image_transition()", "ops.roundtrip(archive)",
             "ops.roles()", "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
