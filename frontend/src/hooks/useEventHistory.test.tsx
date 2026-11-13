@@ -80,7 +80,7 @@ it("does not fetch or expose private History while logged out", async () => {
 });
 
 it("loads exact server order under an owner and epoch key without local money", async () => {
-  const fetch = vi.fn((_input: RequestInfo | URL) => Promise.resolve(page(["3", "2"])));
+  const fetch = vi.fn((input: RequestInfo | URL) => { void input; return Promise.resolve(page(["3", "2"])); });
   vi.stubGlobal("fetch", fetch);
   const { result, client } = setup();
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -267,4 +267,19 @@ it("does not log out a new owner when the previous request returns401 late", asy
   });
   expect(client.getQueryData(["me"])).toEqual({ email: "second@example.test" });
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("invalidates authoritative owner cash and portfolio once for newly accepted event identities", async () => {
+  const fetch = vi.fn((input: RequestInfo | URL) => Promise.resolve(String(input).endsWith("/me") ? new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10001.00" })) : page(["3"])));
+  vi.stubGlobal("fetch", fetch);
+  const { result, client } = setup();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["portfolio", "first@example.test"] }));
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["me"], exact: true });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["stockContext", "first@example.test"] });
+  const count = invalidate.mock.calls.length;
+  await act(async () => { await result.current.refetch(); });
+  expect(invalidate).toHaveBeenCalledTimes(count);
+  expect(client.getQueryData(["me"])).toEqual({ email: "first@example.test", cash_usd: "10001.00" });
 });
