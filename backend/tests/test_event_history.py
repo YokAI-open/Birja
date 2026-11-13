@@ -50,10 +50,13 @@ async def fill(conn, uid, stamp, *, cid=None, stock=False, high=False):
         sql = sql.replace("quantity',2,2,10,", "quantity',2,2,9.5,")
     if high:
         sql = sql.replace("(user_id,", "(id,user_id,").replace(
-            "VALUES (:u,", "OVERRIDING SYSTEM VALUE VALUES (9007199254740993,:u,"
+            "VALUES (:u,", "OVERRIDING SYSTEM VALUE VALUES (:high_id,:u,"
         )
     tid = (
-        await conn.execute(text(sql), {"u": uid, "c": cid, "t": stamp, "k": uuid4()})
+        await conn.execute(
+            text(sql),
+            {"u": uid, "c": cid, "t": stamp, "k": uuid4(), "high_id": 9007199254740993 + uid},
+        )
     ).scalar_one()
     if stock:
         await conn.execute(

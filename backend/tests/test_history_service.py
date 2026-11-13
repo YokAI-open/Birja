@@ -127,10 +127,10 @@ async def put_fill(engine, uid, *, stamp=STAMP, side="buy", total="-100.00", hig
                 (id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
                  exec_price,fee,cash_delta,cash_after,idempotency_key,created_at)
                 OVERRIDING SYSTEM VALUE VALUES
-                (9007199254740993,:user_id,:coin_id,:side,:input_kind,:input_value,:quantity,
+                (:high_id,:user_id,:coin_id,:side,:input_kind,:input_value,:quantity,
                  :mid_price,:price_as_of,:exec_price,:fee,:cash_delta,:cash_after,:idempotency_key,:created_at)
                 RETURNING id"""),
-                values,
+                {**values, "high_id": 9007199254740993 + uid},
             )
         else:
             result = await conn.execute(
