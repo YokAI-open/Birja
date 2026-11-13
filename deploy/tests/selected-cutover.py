@@ -69,6 +69,103 @@ def isolate_entrypoint_environment(text, root):
 
 
 def integration(archive=None):
+    return _integration(archive, current0014=False)
+
+
+def integration_current0014(archive=None):
+    return _integration(archive, current0014=True)
+
+
+def assert_preserved(expected, actual):
+    assert actual == expected, 'selected0014 preservation comparison failed'
+
+
+def refused_rollback(target, launcher, snapshot):
+    before = snapshot()
+    result = target([str(launcher), '--rollback'], ok=False)
+    assert b'application_schema_incompatible=true' in result.stderr, 'wrong rollback refusal'
+    assert_preserved(before, snapshot())
+    print('selected0014_unsupported_rollback_refused=true revision0014=true', flush=True)
+
+
+def current0014_checks(*, session, current, old, app, root, launcher, target,
+                       git, dc, compose_env, compose, originals, fingerprint,
+                       retained, original_canonical, original_identity,
+                       runtime_saved, dividend_saved, inherited):
+    # Recovery helpers invoke Compose with a clean environment. Bind the same
+    # fixed fixture routing explicitly rather than inheriting operator state.
+    command = ['env', *[key+'='+value for key,value in compose_env.items()], *dc]
+    database = 'birja_source_test'
+
+    def financial():
+        canonical = r.canonical(command, database)
+        identity = {name:r.sql(command, 'SELECT last_value,is_called FROM '+name+'_id_seq', database).strip()
+                    for name in original_identity}
+        return canonical, identity
+
+    def unchanged():
+        assert_preserved((original_canonical, original_identity), financial())
+        assert all(fingerprint(name) == value for name,value in originals.items())
+        assert all(r.digest(path) == value for path,value in retained.items())
+
+    def snapshot():
+        return {
+            'financial': financial(),
+            'originals': {name:fingerprint(name) for name in originals},
+            'head': git('rev-parse', 'HEAD'),
+            'web': os.readlink(root / 'web/current'),
+            'log': (root / 'history/deploys.log').read_bytes(),
+            'pending': (root / 'history/deploy.pending').read_bytes() if (root / 'history/deploy.pending').exists() else None,
+            'containers': compose('ps', '-q'),
+            'runtime': compose('images', '--format', 'json'),
+        }
+
+    def replay():
+        manifest, _ = financial()
+        dump = compose('exec', '-T', 'postgres', 'pg_dump', '-U', r.BOOT,
+                       '-d', database, '--format=custom', '--no-owner', '--no-acl')
+        with r.restored(command, dump):
+            r.verify(command, manifest)
+            r.sql(command, 'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator', 'birja_ops_test')
+
+            def owner(code):
+                return compose('run', '--rm', '--no-deps', '-T',
+                               '-e', 'ENV=test', '-e', 'EMAIL_BACKEND=console',
+                               '-e', 'OTP_HMAC_SECRET=synthetic-only-otp-secret-00000000000000',
+                               '-e', 'JWT_SECRET=synthetic-only-jwt-secret-00000000000000',
+                               'migrate', 'python', '-', data=code.encode())
+
+            runtime = owner(f.runtime_program(seed=False, database='birja_restore_test', expected=runtime_saved))
+            assert f.runtime_receipt_digest(runtime) == runtime_saved
+            assert b'runtime_current_mixed_history=true revision0014=true' in runtime
+            assert b'verified_tls=true' in runtime
+            dividend = owner(f.dividend_program(mode='verify', database='birja_restore_test', expected=dividend_saved))
+            assert f.dividend_digest(dividend) == dividend_saved
+            assert b'scheduler_quarantine=true' in dividend and b'verified_tls=true' in dividend
+            r.verify(command, manifest)
+        unchanged()
+        print('selected0014_owner_clone_replay=true app_scheduler_42501_quarantine=true revision0014=true', flush=True)
+
+    assert git('rev-parse', 'HEAD') == current
+    assert r.canonical(command, database)['revision'] == '0014'
+    unchanged()
+    replay()
+    f.recovery_roundtrip(session, source_revision='0014', source_release=current, inherited=inherited)
+    print('selected0014_current_cutover=true verified_tls=true revision0014=true', flush=True)
+    refused_rollback(target, launcher, snapshot)
+    # Only the existing failed-attempt marker is changed. The release log still
+    # identifies the last good tested source; no schema downgrade is attempted.
+    (root / 'history/deploy.pending').write_text('synthetic failed attempt\n')
+    result = target([str(launcher), '--rollback'])
+    assert b'Rolling back' in result.stdout and git('rev-parse', 'HEAD') == current
+    assert not (root / 'history/deploy.pending').exists()
+    unchanged()
+    replay()
+    print('selected0014_failed_attempt_rollback_to_tested_source=true revision0014=true', flush=True)
+    print('selected0014_source_sha='+current+' unsupported_source_sha='+old, flush=True)
+
+
+def _integration(archive=None, *, current0014):
     started = time.monotonic()
     owned = [
         PROJECT + "_cutover_" + name
@@ -121,11 +218,12 @@ def integration(archive=None):
         # Preserve the actual legacy0008 rollout/old-runtime rollback lane.
         # Only this private clone receives immutable v0.4.0 application/schema
         # bytes; reviewed current retained ops and build instructions remain.
-        for directory in ("backend/app", "backend/alembic"):
-            shutil.rmtree(app / directory)
-        with tarfile.open(fileobj=io.BytesIO(f.source_git("archive", "v0.4.0", "backend/app", "backend/alembic"))) as archive:
-            archive.extractall(app, filter="data")
-        git("add", "backend/app", "backend/alembic")
+        if not current0014:
+            for directory in ("backend/app", "backend/alembic"):
+                shutil.rmtree(app / directory)
+            with tarfile.open(fileobj=io.BytesIO(f.source_git("archive", "v0.4.0", "backend/app", "backend/alembic"))) as legacy_archive:
+                legacy_archive.extractall(app, filter="data")
+            git("add", "backend/app", "backend/alembic")
         etc = root / "etc"
         etc.mkdir(mode=0o700)
         (root / "bin").mkdir(mode=0o700)
@@ -418,6 +516,30 @@ def integration(archive=None):
             )
             print("selected_cutover_originals_seeded=true", flush=True)
 
+            def source_python(code, role=r.BOOT):
+                password = 'synthetic-ops-only' if role == r.BOOT else 'c' * 64
+                return call(seed + [
+                    '-e', 'DATABASE_URL=postgresql+asyncpg://' + role + ':' + password + '@postgres:5432/birja_source_test',
+                    '-v', str(app / 'backend/app') + ':/app/app:ro',
+                    '-v', str(app / 'backend/alembic') + ':/app/alembic:ro',
+                    '--entrypoint', 'python', 'birja-backend-test:phase05-07', '-'], code.encode())
+
+            if current0014:
+                source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")
+                call(['bash', str(ROOT / 'deploy/configure-db.sh'), '--synthetic', str(etc / 'db-roles.json'), '--apply', '--approved-operation', 'populated-role-transition'])
+                # Pre-TLS fixture clients use the existing all-a credential
+                # convention; TLS provisioning below restores distinct secrets.
+                # Source fixture programs select app/scheduler a*64 without TLS.
+                query_roles = "ALTER ROLE birja_scheduler PASSWORD '" + 'a'*64 + "';"
+                r.sql(dc0, query_roles, 'birja_source_test')
+                runtime_saved = f.runtime_receipt_digest(source_python(f.runtime_program(seed=True), 'birja_migrator'))
+                source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0014')", 'birja_migrator')
+                source_python(f.dividend_program(mode='prepare'), 'birja_migrator')
+                dividend_saved = f.dividend_digest(source_python(f.dividend_program(mode='exercise'), 'birja_migrator'))
+                original_canonical = r.canonical(dc0, 'birja_source_test')
+                identity_tables = r.backup_module().identity_tables('0014')
+                original_identity = {name:r.sql(dc0, 'SELECT last_value,is_called FROM '+name+'_id_seq', 'birja_source_test').strip() for name in identity_tables}
+
             def query(command, sql):
                 return call(
                     command
@@ -490,6 +612,7 @@ def integration(archive=None):
             (root / "history").mkdir(mode=0o700)
             (root / "history/deploys.log").write_text(
                 "t " + old + " " + str(root / "web/releases/old") + " v0.3.1\n"
+                + ("t " + current + " " + str(root / "web/releases/old") + " main\n" if current0014 else '')
             )
             c = json.loads(session.config_path.read_text())
             c["recovery_files"] += [
@@ -561,8 +684,8 @@ m.main(['--check-volumes'])
             # Required pre-start proof is real installed backup + exact restore.
             f.recovery_roundtrip(
                 session,
-                source_revision="0007",
-                source_release=old,
+                source_revision="0014" if current0014 else "0007",
+                source_release=current if current0014 else old,
                 inherited=held.fileno(),
             )
             call(dc0 + ["down"])
@@ -734,6 +857,17 @@ m.main(['--check-volumes'])
             result = target([str(launcher)])
             assert b"Deploy complete" in result.stdout
             check_redis_state()
+            if current0014:
+                current0014_checks(
+                    session=session, current=current, old=old, app=app,
+                    root=root, launcher=launcher, target=target, git=git,
+                    dc=dc, compose_env=compose_env, compose=compose,
+                    originals=originals, fingerprint=fingerprint, retained=retained,
+                    original_canonical=original_canonical, original_identity=original_identity,
+                    runtime_saved=runtime_saved, dividend_saved=dividend_saved,
+                    inherited=held.fileno(),
+                )
+                return
             assert selected_query("SELECT version_num FROM alembic_version") == b"0008"
             f.recovery_roundtrip(
                 session,
@@ -794,6 +928,8 @@ m.main(['--check-volumes'])
                     ]
                 ).strip()
             print("selected_cutover_cleanup_complete=true", flush=True)
+            if current0014:
+                print('selected0014_cleanup_complete=true revision0014=true', flush=True)
 
 
 if __name__ == "__main__":
