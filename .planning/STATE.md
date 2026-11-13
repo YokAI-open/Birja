@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: phase_complete
-stopped_at: Phase 11 complete (4/4); Phase 7 live acceptance remains deferred
-last_updated: "2026-11-13T20:01:31.280851+00:00"
+stopped_at: Phase 11 complete; PR 31 open into develop; CI pending; Phase 7 live deferred
+last_updated: "2026-11-13T20:32:11.520738+00:00"
 last_activity: 2026-11-13
 progress:
   total_phases: 5
@@ -27,11 +27,19 @@ See: .planning/PROJECT.md (updated 2026-11-13)
 
 Phase: 11 — complete
 Plan: 4/4 complete
-Status: Phase 11 complete; Phase 7 live acceptance deferred
+Status: Phase 11 complete; PR #31 open into develop; Phase 7 live acceptance deferred
 Last activity: 2026-11-13
 Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
+
+Publication2026-11-13: owner explicitly approved “push and open pr”. Branch
+feature/v1.1-stock-planning published; PR#31 into develop is open:
+https://github.com/YokAI-open/Birja/pull/31
+The PR covers accumulatedPhases7–11, with Phase7live acceptance explicitly
+deferred. Source/acceptancecloseout5f2d00f is published; subsequent shipping
+receipt is documentationonly. HostedCI pending at creation, not declared green.
+Merge/production/provider activation/archival are not authorized by this push.
 
 Phase11 COMPLETE:4/4plans,8/8tasks; independent goal verification PASSED3/3
 and SAFE-02/03 marked Complete. Independent code0blockers/0warnings,
@@ -805,7 +813,8 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Stopped at: Phase 11 complete; independent verification passed3/3.
 Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md
-Next: Review deferredPhase7live acceptance when owner chooses; publication remains separate.
+Next: Check PR#31 requiredCI and review; merge requires separate owner approval.
+Review deferredPhase7live acceptance when owner chooses; production remains separate.
 CompletedPhase11:4plans/8tasks,63/64trackedplans,4/5phases. No outstandinglocalhuman checks.
 Current finalreceipt/archive/source qualifications are in11-03/04SUMMARY and11-LOCAL-PROOF.
 Planning artifacts and independent verdict: 11-PLAN-CHECK.md.
