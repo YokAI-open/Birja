@@ -20,7 +20,7 @@ authorize a software release or deployment.
 - [x] **Phase 8: Corporate-Action-Safe Ownership** — Protect ownership with event monitoring, historical dividend eligibility, ordinary forward splits and visible uncertainty suspensions. (completed 2026-11-11)
 - [x] **Phase 9: Whole-Share Trading and Combined Portfolio** — Trade stocks against shared cash with safe previews/retries and honest mixed-asset valuations. (completed 2026-11-12)
 - [x] **Phase 10: Dividend Cash and Event History** — Receive dividends and auditable corrections in shared cash and complete paginated History. (completed 2026-11-13)
-- [ ] **Phase 11: Mixed-Asset Recovery and Acceptance** — Restore the complete ledger exactly and prove full user journeys under existing CI gates.
+- [x] **Phase 11: Mixed-Asset Recovery and Acceptance** — Restore the complete ledger exactly and prove full user journeys under existing CI gates. (completed 2026-11-13)
 
 ## Activation and compatibility boundaries
 
@@ -404,7 +404,13 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 11-04-PLAN.md — Review code/security/UI and verify complete local acceptance honestly. (Wave 4)
+- [x] 11-04-PLAN.md — Review code/security/UI and verify complete local acceptance honestly. (Wave 4)
+
+**Local completion:**4/4plans,8/8tasks; independent3/3goalverification,
+code0/0,security14/14closed,UI24/24. SAFE-02/03 complete. Exact samearchive
+proof is source-qualified acrossfb926d8/22c44d6/a7f965f; no fresh completeCI
+block atfinalsource or hostedCIpass claimed. Phase7live acceptance remains
+pending; milestone completion/publication/rollout are separate.
 
 **UI hint**: yes
 
@@ -426,7 +432,7 @@ do not establish live acceptance or phase completion.
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
 | 10. Dividend Cash and Event History | v1.1 | 18/18 | Complete    | 2026-11-13 |
-| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 3/4 | In Progress|  |
+| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 4/4 | Complete    | 2026-11-13 |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:
 6 in Phase 7, 5 in Phase 8, 9 in Phase 9, 4 in Phase 10 and 2 in Phase 11.

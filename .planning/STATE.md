@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: executing
-stopped_at: Completed 11-03-PLAN.md
-last_updated: "2026-11-13T19:40:37.297Z"
+status: phase_complete
+stopped_at: Phase 11 complete (4/4); Phase 7 live acceptance remains deferred
+last_updated: "2026-11-13T20:01:31.280851+00:00"
 last_activity: 2026-11-13
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 64
-  completed_plans: 62
-  percent: 97
+  completed_plans: 63
+  percent: 98
 ---
 
 # Project State
@@ -21,35 +21,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 11 — Mixed-Asset Recovery and Acceptance
+**Current focus:** Phase 11 complete; Phase 7 live acceptance remains deferred
 
 ## Current Position
 
-Phase: 11 (Mixed-Asset Recovery and Acceptance) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
+Phase: 11 — complete
+Plan: 4/4 complete
+Status: Phase 11 complete; Phase 7 live acceptance deferred
 Last activity: 2026-11-13
-Progress: [██████████] 97% (62/64 tracked plans complete; Phase 11 3/4)
+Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
 
-Phase11 Plans01–03 complete. Plan03 actual backend2557/99.87%, all47critical
-modules100%, frontend697, browser49+sole existingCSPskip, five strict scans,
-locked audits/native/image/dev gates pass. Exact same-archive proof is explicitly
-qualified: five real stages atfb926d8, actual legacy0008 at22c44d6, fresh complete
-current0014 ata7f965f. Three test-harness files differ; retained11CORE/unit bytes,
-archive, producer/restore/authority/runtime/build and all other source are exact.
-Actual current cutover/replay twice/42501, unsupported-source refusal and
-tested-source failed-attempt recovery pass with full private snapshot equality.
+Phase11 COMPLETE:4/4plans,8/8tasks; independent goal verification PASSED3/3
+and SAFE-02/03 marked Complete. Independent code0blockers/0warnings,
+security14/14closed, UI24/24/no newhuman needs; validation/nyquist/wave0 complete.
+Final patchedbackend2557/99.87%, all47critical100%statements+branches;
+frontend697, browser49+soleexpectedCSPskip, PG24, CI16, selected7 pass.
+Five strict image scans0HIGH/CRITICAL includingunfixed; pip auditclean,
+npm configuredhighgatepasses with2low/15moderate. Exact owner-approved
+OpenTelemetry1.45.1→1.45.2 patch and absentattestation are documented.
+Qualified samearchive proof: five actualstagesatfb926d8, legacy0008at22c44d6,
+fresh completecurrent0014ata7f965f. Exactlythreeharnessfiles differ; retained
+11CORE/unit bytes,archive,application/authority/build/runtime/images unchanged.
+No freshcompleteCIblock atfinalsource or hostedCIpass is claimed. All sixowned
+projects empty. Current0014 exactfinancial/schema/identity/fullruntime snapshot
+preservation, replaytwice/42501/refusal/tested-source recovery all verified.
 Receipt /tmp/birja-phase11-gates/final-receipt.json SHA256
 bb90d570e6b2313f7b1fd3fc5d53cf2a6ebe558831b7f0e57a4760d16255f5af.
-Failed full/affected reports remain preserved; no fresh full CI-block pass at
-final source or hosted CI pass is claimed. All six owned projects are empty.
-Next execute11-04 independent code/security/UI/goal reviews. SAFE-02/03 remain
-pending; validation review/sign-off incomplete. Current progress62/64(97%),
-Phase11 3/4, completed phases3/5. Prior owner48d970c UI/native200% is reused by
-unchanged presentation/response scope, subject to04 review. SAFE-01/live/provider,
-production/B2/installed tools/timers/publication and W-debt remain deferred.
+Prior ownerUI/native200% reused only after independent continuity review.
+Current progress63/64(98%), completedphases4/5. Phase7Plan14 and its6primary
+requirements includingSAFE-01 remain pending; owner deferredlive acceptance.
+Milestone is NOT complete/archived. No nextphase is created. Live provider/status/
+corporate-action activation,production/B2/installedtools/timers/publication and
+W01–W08 stayseparate. Do not rerununchangedgates or re-askacceptedUIchecks.
+SDK final-phase/progress assumptions were reconciled to actualROADMAP evidence.
+No automatic publication, deployment or archival is authorized.
 
 Historical Phase10 completion and earlier execution notes follow.
 
@@ -796,9 +803,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Completed 11-03-PLAN.md
-Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-04-PLAN.md
-Next: Execute11-04 independent reviews; Phase11 3/4 plans complete.
+Stopped at: Phase 11 complete; independent verification passed3/3.
+Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md
+Next: Review deferredPhase7live acceptance when owner chooses; publication remains separate.
+CompletedPhase11:4plans/8tasks,63/64trackedplans,4/5phases. No outstandinglocalhuman checks.
+Current finalreceipt/archive/source qualifications are in11-03/04SUMMARY and11-LOCAL-PROOF.
 Planning artifacts and independent verdict: 11-PLAN-CHECK.md.
 Historical Phase10 acceptance references follow:
 Completed: 01–18; all36task outcomes and4Phase10requirements verified.
@@ -820,4 +829,4 @@ old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates
 unless subsequent source/authority changes, failure or a required final gate warrants it.
 No provider/.env/production/B2/timer/installed-tool/publication action is authorized.
 Do not rerun finished gates or re-ask accepted checks absent source changes or
-new failures. Do not automatically execute Phase11 or publish/deploy.
+new failures. Do not repeat completed Phase11 or automatically resume live activation/publish/deploy.

@@ -53,8 +53,8 @@ Owner approved all 26 requirements and the exact boundaries below, including a s
 ### Compatibility and acceptance
 
 - [ ] **SAFE-01**: Existing users retain their accounts, balances, instrument identities, holdings and immutable crypto history through reviewed migrations; mixed-asset services continue to work with restricted PostgreSQL roles and verified TLS.
-- [ ] **SAFE-02**: Operator can recover mixed stock/crypto holdings, dividend entitlements/payments, action revisions and event history from an exact encrypted backup with consistent totals and duplicate-prevention state; schema, grant and retained recovery-tool compatibility are proven before rollout.
-- [ ] **SAFE-03**: User stock journeys are verified through real isolated PostgreSQL accounting/concurrency tests and browser flows for open/closed sessions, dividends, splits, stale data and crypto coexistence; applicable CI coverage/security gates remain enforced.
+- [x] **SAFE-02**: Operator can recover mixed stock/crypto holdings, dividend entitlements/payments, action revisions and event history from an exact encrypted backup with consistent totals and duplicate-prevention state; schema, grant and retained recovery-tool compatibility are proven before rollout.
+- [x] **SAFE-03**: User stock journeys are verified through real isolated PostgreSQL accounting/concurrency tests and browser flows for open/closed sessions, dividends, splits, stale data and crypto coexistence; applicable CI coverage/security gates remain enforced.
 
 ## Future Requirements
 
@@ -106,8 +106,8 @@ Every approved requirement has exactly one approved primary phase owner. The own
 | ACT-02 | Phase 8 | Complete |
 | ACT-03 | Phase 8 | Complete |
 | SAFE-01 | Phase 7 | Pending |
-| SAFE-02 | Phase 11 | Pending |
-| SAFE-03 | Phase 11 | Pending |
+| SAFE-02 | Phase 11 | Complete |
+| SAFE-03 | Phase 11 | Complete |
 
 **Coverage:** 26/26 approved requirements mapped exactly once across approved Phases 7–11; zero orphans or duplicate owners. No requirement is implemented or validated by writing this file.
 
@@ -121,3 +121,9 @@ Every approved requirement has exactly one approved primary phase owner. The own
 - Quote/event display permission, actual feed coverage/access, timely action/status availability and quota compliance remain activation gates; no free public-use entitlement has been obtained.
 - Research remains dated evidence; later user decisions above supersede its formerly open policy options. See [research summary](research/SUMMARY.md).
 - Requirements and the five-phase roadmap were explicitly approved on 2026-11-10. Implementation, provider agreements, publication and deployment remain separate.
+
+- Phase11 SAFE-02/03 passed independent local verification on2026-11-13:3/3
+  roadmap goals, exact current0014 recovery/compatibility, protected DB/browser
+  journeys and required local gates. Qualified samearchive sources and retained
+  failed reports remain in11-VERIFICATION. This does not close Phase7 SAFE-01
+  or live rights/access/freshness; no hostedCI/publication/production pass inferred.

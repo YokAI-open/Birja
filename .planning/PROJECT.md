@@ -47,11 +47,15 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   original-reference details and owner/session isolation (HIST-03) — validated
   in Phase10; owner accepted the new UI and genuine native200% on2026-11-13.
 
+- [x] Exact mixed-asset encrypted recovery, current0014 cutover/replay/refusal/
+  tested-source rollback and complete protected local journeys (SAFE-02/03) —
+  verified in Phase11 with four independent reviews; live activation deferred.
+
 ### Active
 
 - [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Complete the approved Phase11 mixed-asset recovery and acceptance scope;
-  live activation and rollout remain separately gated.
+- [ ] Complete deferred Phase7 live data/provider acceptance; publication and
+  production rollout remain separately gated.
 
 ### Out of Scope
 
@@ -119,8 +123,15 @@ Current0014 retained/current-service recovery and legacy0008 selected cutover/
 old-app rollback remain distinct. Exact authority/CORE bytes were preserved;
 actual review findings were fixed and affected gates independently rechecked.
 See10-VERIFICATION/18-SUMMARY/VALIDATION. No software publication or deployment
-occurred. Phase11 final mixed-asset recovery/acceptance is ready to plan;
-no next-phase execution or live activation is implied.
+occurred. Phase11 mixed-asset recovery/acceptance is locally complete:4plans/8tasks,
+SAFE-02/03 verified3/3, independentcode0/0,security14/14,UI24/24. Exact samearchive
+proof is qualified acrossfb926d8/22c44d6/a7f965f with unchanged retained/runtime
+bytes; no fresh completeCIblock or hostedCIpass atfinalsource is claimed.
+The approved OpenTelemetry1.45.2 patch passes all affected gates; finalbackend
+2557/47critical100%,frontend697,browser49+existingCSPskip,PG24 andfive strict
+scans0HIGH/CRITICAL pass. See11-VERIFICATION and11-03/04SUMMARY. Phase7live
+acceptance remains pending, so v1.1 is not complete/archived. No live activation,
+publication or production change occurred.
 
 ## Current Milestone: v1.1 US Stock Trading
 
@@ -220,4 +231,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-13 after Phase10 verification and explicit owner UI/native200% acceptance*
+*Last updated: 2026-11-13 after Phase11 independent local acceptance; Phase7 live evidence deferred*
