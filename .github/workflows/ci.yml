@@ -296,7 +296,17 @@ jobs:
           bash deploy/tests/test-smoke-ports.sh
           bash deploy/tests/test-smoke-trading.sh
           sudo -- bash deploy/check-nginx-config.sh
-          sudo -- python3 deploy/tests/test-stock-recovery-contracts.py --postgres
+      - name: Real PostgreSQL recovery contracts with owned stack
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          stack = ["docker", "compose", "-f", "docker-compose.test.yml"]
+          try:
+              subprocess.run(stack + ["up", "-d", "--wait"], check=True)
+              subprocess.run(["sudo", "--", "python3", "deploy/tests/test-stock-recovery-contracts.py", "--postgres"], check=True)
+          finally:
+              subprocess.run(stack + ["down", "-v"], check=True)
+          PY
       - name: Ordinary dev financial authority on fresh and upgraded schemas
         run: python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback

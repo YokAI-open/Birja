@@ -266,6 +266,29 @@ class RevisionContracts(unittest.TestCase):
     "--postgres" in sys.argv, "real SQL proof explicitly uses isolated birja-test"
 )
 class PostgreSQLContracts(unittest.TestCase):
+    SOURCE_OWNER = """DO $$ BEGIN
+      IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
+        CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+          NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      END IF;
+    END $$;"""
+
+    @classmethod
+    def setUpClass(cls):
+        # A fresh standalone probe cannot inherit the full pytest suite's
+        # preprovisioned owner. Existing roles are deliberately never repaired;
+        # the unchanged0014 migration authenticates their flags/memberships.
+        cls.query(cls.SOURCE_OWNER)
+
+    def test_00_source_owner_setup_never_repairs_existing_unsafe_role(self):
+        alias = 'birja_contract_owner_probe'
+        self.assertEqual(self.query("SELECT NOT EXISTS(SELECT FROM pg_roles WHERE rolname='"+alias+"')"), 't')
+        result = self.query("BEGIN; CREATE ROLE "+alias+" NOLOGIN INHERIT;\n"+
+            self.SOURCE_OWNER.replace('birja_migrator', alias)+
+            "\nSELECT rolinherit FROM pg_roles WHERE rolname='"+alias+"'; ROLLBACK;")
+        self.assertEqual(result, 't')
+        self.assertEqual(self.query("SELECT NOT EXISTS(SELECT FROM pg_roles WHERE rolname='"+alias+"')"), 't')
+
     def test_zzzz_dividend_restore_on_genuinely_fresh_cluster(self):
         """A separate cluster must not inherit source runtime/operator roles."""
         self.migrate('head')

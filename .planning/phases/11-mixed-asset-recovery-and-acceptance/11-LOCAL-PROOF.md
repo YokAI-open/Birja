@@ -14,6 +14,22 @@ binds sourcef970d90, full source/image/package inventories, exact commands/log
 hashes and independent zero-container/network/volume results for all six owned
 projects. Task2 recovery/compatibility and Plan04 review remain separate.
 
+Standalone recovery prerequisite correction: the first PostgreSQL attempt lacked
+its already-cleaned birja-test stack. Once healthy,0014 correctly refused a
+missing safe owner; earlier full pytest supplied that prerequisite. CI now starts
+and always cleans its owned stack in try/finally. Dynamic AST regressions reject
+setup/test/cleanup failure swallowing, omission, reorder, wrong targets and
+disabled checks. The fixture creates only an absent fixed restricted NOLOGIN
+owner; a real rollback-only regression proves existing unsafe roles untouched.
+No application, migration, authority, grant or retained CORE/unit byte changed.
+Final real PostgreSQL contracts pass24/114.510s; CI contracts pass16. Private
+logs postgres-contracts-provisioned-final.log and ci-readiness-final-mutated.log
+retain results; earlier failures are preserved. Only ci.yml, test-ci-ops.py and
+test-stock-recovery-contracts.py differ from Task1's source map; all386other
+files remain identical. Final campaign attribution uses the separately retained
+campaign-source-bytes.json at the new committed source, without relabelling
+the earlier Task1 receipt.
+
 | Final patched gate | Actual outcome |
 |---|---|
 | Canonical full backend |2557passed/93warnings/310.53s,99.87%overall|

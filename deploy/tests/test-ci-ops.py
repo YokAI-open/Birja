@@ -91,6 +91,46 @@ def recovery_policy(ops):
             raise ValueError("missing selected compatibility contract: " + command)
 
 
+def postgres_stack_policy(ops):
+    """Execute the actual CI try/finally with command effects replaced."""
+    marker = "- name: Real PostgreSQL recovery contracts with owned stack"
+    if ops.count(marker) != 1:
+        raise ValueError("missing owned PostgreSQL contract step")
+    step = ops.split(marker, 1)[1].split("\n      - name:", 1)[0]
+    if ops.index(marker) < ops.index("bash deploy/tests/test-db-config.sh"):
+        raise ValueError("PostgreSQL contracts precede prior stack cleanup")
+    lines = step.splitlines()
+    start = lines.index("          python3 - <<'PY'") + 1
+    end = lines.index("          PY", start)
+    tree = ast.parse(textwrap.dedent("\n".join(lines[start:end])))
+    body = [node for node in tree.body if not isinstance(node, ast.Import)]
+    code = compile(ast.fix_missing_locations(ast.Module(body=body, type_ignores=[])),
+                   "<actual-postgres-stack-step>", "exec")
+    stack = ["docker", "compose", "-f", "docker-compose.test.yml"]
+    expected = [stack + ["up", "-d", "--wait"],
+                ["sudo", "--", "python3", "deploy/tests/test-stock-recovery-contracts.py", "--postgres"],
+                stack + ["down", "-v"]]
+    for failed in (None, 0, 1, 2):
+        calls = []
+        failure = RuntimeError("synthetic command failure")
+        def run(argv, *, check):
+            if check is not True or argv not in expected:
+                raise ValueError("changed PostgreSQL command or failure policy")
+            calls.append(argv)
+            if failed is not None and argv == expected[failed]:
+                raise failure
+        try:
+            exec(code, {"subprocess": SimpleNamespace(run=run)})
+        except RuntimeError as error:
+            if error is not failure or failed is None:
+                raise ValueError("unexpected PostgreSQL failure") from error
+        else:
+            if failed is not None:
+                raise ValueError("swallowed PostgreSQL setup/test/cleanup failure")
+        if calls != ([expected[0], expected[2]] if failed == 0 else expected):
+            raise ValueError("PostgreSQL setup/order/cleanup missing")
+
+
 def selected_policy(rollback):
     """Execute actual default dispatch with effect fakes, including each failure."""
     body = rollback.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
@@ -171,6 +211,26 @@ def required_gate_policy(j):
 
 
 class CI(unittest.TestCase):
+    def test_actual_postgres_stack_order_and_failure_cleanup(self):
+        ops = jobs()["ops"]
+        postgres_stack_policy(ops)
+        up = 'subprocess.run(stack + ["up", "-d", "--wait"], check=True)'
+        contracts = 'subprocess.run(["sudo", "--", "python3", "deploy/tests/test-stock-recovery-contracts.py", "--postgres"], check=True)'
+        mutations = [
+            ops.replace('subprocess.run(stack + ["up", "-d", "--wait"], check=True)', 'pass'),
+            ops.replace('subprocess.run(stack + ["down", "-v"], check=True)', 'pass'),
+            ops.replace('          finally:', '          except Exception:'),
+            ops.replace('"deploy/tests/test-stock-recovery-contracts.py", "--postgres"', '"deploy/tests/test-stock-recovery-contracts.py", "--offline"'),
+            ops.replace('docker-compose.test.yml', 'docker-compose.yml'),
+            ops.replace('check=True', 'check=False'),
+            ops.replace(up, '__swap__').replace(contracts, up).replace('__swap__', contracts),
+            ops.replace(contracts, 'try:\n                  '+contracts+
+                        '\n              except RuntimeError:\n                  pass'),
+        ]
+        for mutated in mutations:
+            with self.assertRaises((ValueError, SyntaxError)):
+                postgres_stack_policy(mutated)
+
     def test_mandatory_coverage_audits_and_aggregate_reject_omission_mutations(self):
         j = jobs()
         required_gate_policy(j)
@@ -245,7 +305,7 @@ class CI(unittest.TestCase):
         ]:
             self.assertIn("app/" + module + ".py", backend)
         self.assertIn("--cov-branch", backend)
-        self.assertIn("test-stock-recovery-contracts.py --postgres", jobs()["ops"])
+        self.assertIn('"deploy/tests/test-stock-recovery-contracts.py", "--postgres"', jobs()["ops"])
         fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
         for proof in [
             "actual_restored_dividend_saved_replay=true financial_quarantine=true",
