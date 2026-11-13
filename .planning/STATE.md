@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave 7 fully verified; execute Plan 10-09 bounded dividend worker.
+stopped_at: Wave 8 fully verified; execute Plan 10-14 mixed History UI.
 last_updated: "2026-11-13T12:19:02.519396+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 52
-  percent: 87
+  completed_plans: 54
+  percent: 90
 ---
 
 # Project State
@@ -26,12 +26,20 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 11/18 complete; executing 10-09 (Wave 8/13)
-Status: Executing Wave 8
+Plan: 13/18 complete; executing 10-14 (Wave 9/13)
+Status: Executing Wave 9
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [█████████░] 87% (52/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [█████████░] 90% (54/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plans 10-09/13 complete through 1ea1565/f516d51. Worker proof132 tests,
+100% worker/scheduler/service; owner/epoch hook68 affected tests with synchronous
+private-page hiding and cancel-before-invalidate authoritative cash refresh.
+Full backend2527/296.52s/99.87%,46 critical modules4521 statements/1442 branches
+100%; full frontend681/35 files/98.44% statements; all static checks pass.
+Next 10-14 approved mixed History UI, then15 real browser/review bundle,
+16 final gates,17 reviews and18 real owner UI/native200% acceptance.
 
 Plan 10-11 complete 71d0edf: authenticated no-store History, actual owner
 isolation and legacy/Portfolio cash compatibility; 286 affected tests and
@@ -702,13 +710,14 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Wave 7 fully verified; execute Plan 10-09 bounded dividend worker.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-09-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12. Eleven of eighteen plans complete.
+Stopped at: Wave 8 fully verified; execute Plan 10-14 mixed History UI.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-14-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13. Thirteen of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
-Latest passing full gate: /tmp/birja-phase10-wave7-backend-fixed.log;
-critical report: /tmp/birja-phase10-wave7-critical.log. Earlier failing logs
-remain preserved. Execute 10-09 then 10-13 before the Wave 8 gates.
+Latest passing gates: /tmp/birja-phase10-wave8-backend.log,
+/tmp/birja-phase10-wave8-critical.log and /tmp/birja-phase10-wave8-frontend.log.
+Earlier failing logs remain preserved. All CI critical-list and Node24 pin
+updates remain Plan16. No human/nativezoom acceptance is inferred.
 Use frozen C03a SQL result vocabulary and C05a exact History wire types.
 The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
 old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates

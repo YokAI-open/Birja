@@ -1,5 +1,31 @@
 # Phase10 local execution evidence
 
+## Current gate — Wave 8 complete, 2026-11-13
+
+Plan09 summary1ea1565:132 actual affected tests; bounded independent target/paid-
+anchor keysets, 105-owner50/50/5/wrap and shared100/40s budget, actual restricted
+worker→SQL→History uncertainty/reconciliation, sold-after-cutoff and account-wait
+timeout. Worker, modified scheduler and service311 statements/64 branches100%.
+No authority/schema/recovery changes; temporary fixture state verified removed.
+
+Plan13 summaryf516d51:68 affected hook tests; owner+epoch pages, immediate
+private-page removal through synchronous subscription, late-response refusal,
+accepted-page retention and cancel-before-invalidate authoritative financial
+refresh. Full frontend681 passed/35files/16.46s,98.44%statements94.88%branches,
+98.93%functions99.14%lines. Full ESLint/TypeScript/Prettier pass. No optimistic
+cash or History-derived balance. New hook96.92%statements94.73%branches.
+
+Full backend2527 passed/93 existing warnings/296.52s/99.87% overall;
+/tmp/birja-phase10-wave8-backend.log. Actual46-module critical report includes
+the existing39 plus seven Phase10 consumers/rules/schemas/scheduler modules:
+4521 statements/1442 branches, zero misses/partials,100%;
+/tmp/birja-phase10-wave8-critical.log. Full Ruff/format188 files and Mypy87
+sources pass. Frontend log/tmp/birja-phase10-wave8-frontend.log. Independent
+backend gate ran during the frontend-only plan; no shared DB work overlapped.
+CI-list expansion/Node24 pin remain Plan16. Next14 UI,15 actual browser,
+16 final integration/recovery/image gates,17 reviews,18 real owner acceptance.
+No whole requirement/human/live completion is inferred from local tests.
+
 ## Current gate — Wave 7 complete, 2026-11-13
 
 Plan 08 summary b003692: 57 independent-client contention/wait tests and 161
