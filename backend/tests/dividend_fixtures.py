@@ -33,7 +33,7 @@ async def require_owned(db):
 
 
 @pytest_asyncio.fixture
-async def dividend_case(stock_trade_case, engine):
+async def dividend_case(stock_trade_case, engine, request):
     factory, cid, uid, now = stock_trade_case
     added = []
     async with engine.begin() as conn:
@@ -123,7 +123,12 @@ async def dividend_case(stock_trade_case, engine):
                 {"d": now.date() - timedelta(days=3)},
             )
             assert cutoff is not None
-            await synthetic_opening(db, cid, uid, cutoff - timedelta(days=1), basis=Decimal(20))
+            quantity = getattr(request.node, "callspec", None)
+            quantity = Decimal(quantity.params.get("quantity", 2)) if quantity else Decimal(2)
+            if quantity:
+                await synthetic_opening(
+                    db, cid, uid, cutoff - timedelta(days=1), quantity=quantity, basis=Decimal(20)
+                )
             await db.execute(
                 text(
                     "UPDATE stock_action_revisions SET classification='supported_dividend',"
@@ -137,10 +142,17 @@ async def dividend_case(stock_trade_case, engine):
                     "INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,cutoff,"
                     "cutoff_rule,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,"
                     "state,version,fingerprint) VALUES (:e,:u,:r,:cutoff,"
-                    "'exclusive-regular-session-open','unit_epoch:0',0,1,2,'eligible',1,"
+                    "'exclusive-regular-session-open','unit_epoch:0',0,:seq,:q,'eligible',1,"
                     "repeat('b',64)) RETURNING id"
                 ),
-                {"e": eid, "u": uid, "r": rid, "cutoff": cutoff},
+                {
+                    "e": eid,
+                    "u": uid,
+                    "r": rid,
+                    "cutoff": cutoff,
+                    "seq": 1 if quantity else 0,
+                    "q": quantity,
+                },
             )
             await db.execute(
                 text(
