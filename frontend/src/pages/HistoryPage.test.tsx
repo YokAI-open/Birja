@@ -16,6 +16,11 @@ const item = {
 };
 const ok = (items = [item], next_cursor: string | null = null) =>
   Promise.resolve(new Response(JSON.stringify({ items, next_cursor })));
+it("renders the mixed Account activity heading", async () => {
+  vi.stubGlobal("fetch", () => ok([]));
+  renderWithClient(<HistoryPage />);
+  expect(await screen.findByRole("heading", { name: "Account activity" })).toBeVisible();
+});
 afterEach(() => vi.unstubAllGlobals());
 it("reserves the initial loading region", () => {
   vi.stubGlobal("fetch", () => new Promise(() => {}));
