@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import type { EventHistoryItem } from "@/api/eventHistory";
 import {
   HistoryEventCash,
@@ -9,7 +10,7 @@ import {
 } from "@/components/HistoryEventDetails";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useEventHistory } from "@/hooks/useEventHistory";
+import { eventHistorySession, useEventHistory } from "@/hooks/useEventHistory";
 
 function fields(item: EventHistoryItem, prefix: string) {
   return [
@@ -30,6 +31,7 @@ function fields(item: EventHistoryItem, prefix: string) {
 }
 
 export default function HistoryPage() {
+  const client = useQueryClient();
   const {
     data,
     dataUpdatedAt,
@@ -52,12 +54,14 @@ export default function HistoryPage() {
     }
     retryButton.current = node;
   }, []);
-  const focusEnd = useRef(false);
+  const focusEnd = useRef<{
+    button: HTMLButtonElement;
+    session: ReturnType<typeof eventHistorySession>;
+  } | null>(null);
   const [announcement, setAnnouncement] = useState<{ updatedAt: number; text: string } | null>(
     null,
   );
   const captureAppendButton = useCallback((node: HTMLButtonElement | null) => {
-    if (!node && appendButton.current === document.activeElement) focusEnd.current = true;
     appendButton.current = node;
   }, []);
 
@@ -67,8 +71,25 @@ export default function HistoryPage() {
 
   async function loadMore() {
     if (isFetching || !hasNextPage) return;
+    const session = eventHistorySession(client);
+    const button = appendButton.current;
+    // Native disabled controls can blur in Chromium before their final unmount.
+    // Capture intent before fetching; never infer it from the disabled element.
+    const intent = button && button === document.activeElement ? { button, session } : null;
+    focusEnd.current = intent;
     const previousCount = items?.length ?? 0;
     const result = await fetchNextPage({ cancelRefetch: false });
+    const current = eventHistorySession(client);
+    if (current.email !== session.email || current.epoch !== session.epoch) return;
+    if (result.isError || result.data?.pages.at(-1)?.next_cursor !== null) {
+      if (
+        intent &&
+        appendButton.current === intent.button &&
+        document.activeElement === document.body
+      )
+        intent.button.focus({ preventScroll: true });
+      focusEnd.current = null;
+    }
     if (!result.isError) {
       const count =
         result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;
@@ -256,8 +277,16 @@ export default function HistoryPage() {
                 className="scroll-mb-24 text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
                 ref={(node) => {
                   if (node && focusEnd.current) {
-                    node.focus({ preventScroll: true });
-                    focusEnd.current = false;
+                    const intent = focusEnd.current;
+                    const current = eventHistorySession(client);
+                    if (
+                      current.email === intent.session.email &&
+                      current.epoch === intent.session.epoch &&
+                      (document.activeElement === document.body ||
+                        document.activeElement === intent.button)
+                    )
+                      node.focus({ preventScroll: true });
+                    focusEnd.current = null;
                   }
                 }}
               >

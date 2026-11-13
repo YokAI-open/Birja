@@ -320,6 +320,33 @@ it("disables append during background refresh and preserves focus elsewhere on e
   expect(refresh).toHaveFocus();
 });
 
+it("preserves append focus intent when a native disabled control blurs before final publication", async () => {
+  let finish: (value: Response) => void = () => {};
+  historyFetch(
+    vi
+      .fn()
+      .mockImplementationOnce(() => ok([item], cursor()))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((done) => {
+            finish = done;
+          }),
+      ),
+  );
+  const { user } = renderWithClient(<HistoryPage />);
+  const append = await screen.findByRole("button", { name: "Load more" });
+  await user.click(append);
+  expect(append).toBeDisabled();
+  // JSDOM retains native disabled focus, unlike Chromium. Explicitly model
+  // that browser blur while preserving the original keyboard activation.
+  document.body.tabIndex = -1;
+  document.body.focus();
+  document.body.removeAttribute("tabindex");
+  expect(document.body).toHaveFocus();
+  finish(new Response(JSON.stringify({ items: [{ ...item, id: "trade:2" }], next_cursor: null })));
+  expect(await screen.findByText("All events loaded.")).toHaveFocus();
+});
+
 it("keeps focus on another control when append finishes and refresh announces the current count", async () => {
   let finish: (value: Response) => void = () => {};
   historyFetch(
