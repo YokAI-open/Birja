@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
-status: ready_to_execute
-stopped_at: Phase 11 planning complete (4 plans, 8 tasks); ready to execute
-last_updated: "2026-11-13T17:25:06.850Z"
-last_activity: 2026-11-13 -- Phase 11 planning complete
+status: executing
+stopped_at: Completed 11-01; current0014 integration remains Plan03.
+last_updated: "2026-11-13T17:37:31.150Z"
+last_activity: 2026-11-13
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 64
-  completed_plans: 59
-  percent: 92
+  completed_plans: 60
+  percent: 94
 ---
 
 # Project State
@@ -21,29 +21,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 11 — mixed asset recovery and acceptance
+**Current focus:** Phase 11 — Mixed-Asset Recovery and Acceptance
 
 ## Current Position
 
-Phase: 11
-Plan: 0/4 (planning complete; execution not started)
-Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 11 planning complete
-Progress: [█████████░] 92% (59/64 tracked plans complete; Phase 11 planned 0/4)
+Phase: 11 (Mixed-Asset Recovery and Acceptance) — EXECUTING
+Plan: 2 of 4
+Status: Executing Phase 11
+Last activity: 2026-11-13
+Progress: [█████████░] 94% (60/64 tracked plans complete; Phase 11 1/4)
 
 ## Completion and next action
 
-Phase11 PLANNED:4plans/8tasks in4sequential waves. Research, approved UI
-verification contract, pattern map, per-task validation and independent plan
-check complete. One focused revision resolved both planning blockers; final
-checker reports no findings. Next execute11-01 local current0014 compatibility
-guard/fixture, then mandatory CI wiring, final source-bound same-archive gates
-and independent reviews. SAFE-02/03 remain pending actual execution; validation
-is draft. No implementation, workload, provider or production access occurred.
-Existing owner UI/native200% evidence is conditional on relevant continuity.
-Phase7live/SAFE-01 and activation/publication/production remain deferred.
-Current tracked progress59/64 (92%); completed phases remain3/5. SDK's status/
-progress fields were reconciled to actual plan counts; no phase was executed.
+Phase11 Plan01 complete: authenticated0014 source/schema admission precedes
+pending state and checkout/writers; separate current0014 selected fixture shares
+legacy0008 setup without replacing its old-runtime rollback lane. RED602948c,
+GREEN7ddc5fc, scenario eaccf5f. All63 offline checks pass in1.12s; no Docker
+integration run. Actual current0014 positive/refusal/failed-attempt recovery,
+exact financial/identity/authority and restricted-service quarantine remain
+mandatory Plan03 gates after Plan02 wiring. SAFE-02/03 remain pending; validation
+is draft. Next execute11-02. Current tracked progress60/64 (94%); completed
+phases remain3/5. Existing owner UI/native200% evidence remains conditional on
+continuity; Phase7live/SAFE-01, provider/production/publication remain deferred.
 
 Historical Phase10 completion and earlier execution notes follow.
 
@@ -705,6 +704,7 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 - [Phase 8]: Plan07 requires complete fixed-target REST/known-ID/replay coverage and final all-twenty authority/epoch guards for bounded monitoring health; immutable holds remain independent.
 - [Phase 8]: Scoped reconciliation binds the exact validated action/calendar snapshots and immutable event history; unsupported financial repair remains held.
 - [Phase 8]: 0012 recovery independently authenticates function authority before fixed NOLOGIN operator privileges are recreated in a quarantined clone.
+- [Phase 11]: Schema0014 admits only retained tested-source SHA; actual current0014 proof remains Plan03.
 
 ### Blockers/Concerns
 
@@ -774,6 +774,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 9 P08 | 8min | 2 tasks | 4 files |
 | Phase 9 P09 | 24min | 2 tasks | 8 files |
 | Phase 09 P14 | 117min | 2 tasks | 35 files |
+| Phase 11 P01 | 7min | 2 tasks | 4 files |
 
 ## Operations
 
@@ -783,9 +784,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Phase 11 planning complete; independent plan check passed.
-Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-01-PLAN.md
-Next: $gsd-execute-phase 11; four plans/eight tasks, no execution yet.
+Stopped at: Completed 11-01; actual current0014 integration remains Plan03.
+Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-02-PLAN.md
+Next: Execute11-02 runner/CI wiring; Phase11 1/4 plans complete.
 Planning artifacts and independent verdict: 11-PLAN-CHECK.md.
 Historical Phase10 acceptance references follow:
 Completed: 01–18; all36task outcomes and4Phase10requirements verified.
