@@ -659,8 +659,12 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             if revision == '0014':
                 r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
                 assert dividend_digest(role_python(dividend_program(mode='verify',database='birja_restore_test',expected=dividend_saved),'birja_migrator')) == dividend_saved
+                current_runtime = role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest),'birja_migrator')
+                assert runtime_receipt_digest(current_runtime) == runtime_digest
+                assert b'runtime_current_mixed_history=true revision0014=true' in current_runtime
                 r.verify(dc,manifest)
                 print('actual_restored_dividend_saved_replay=true financial_quarantine=true sha256='+dividend_saved,flush=True)
+                print('actual_restored_current_stock_history_0014=true original_receipt_unchanged=true financial_quarantine=true',flush=True)
             if revision in ('0009','0010','0011','0012','0013','0014'):
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
                 try:

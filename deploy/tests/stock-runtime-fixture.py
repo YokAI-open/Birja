@@ -169,9 +169,13 @@ async def main():
     assert (await db.execute(select(func.count()).select_from(Trade))).scalar_one()==count
     result=await portfolio.get_portfolio(db,user_id=uid,settings=settings)
     assert result.cash==9796 and not result.valuation_complete and result.unvalued_holding_count==1
-    page=await list_event_history(db,user_id=uid,limit=100)
-    assert {'trade','split'}<={item.kind for item in page.items}
-    assert len({item.id for item in page.items})==len(page.items)
+    revision=(await db.execute(text('SELECT version_num FROM alembic_version'))).scalar_one()
+    assert revision in ('0013','0014')
+    if revision=='0014':
+     page=await list_event_history(db,user_id=uid,limit=100)
+     assert {'trade','split'}<={item.kind for item in page.items}
+     assert len({item.id for item in page.items})==len(page.items)
+     print('runtime_current_mixed_history=true revision0014=true',flush=True)
     await stock_trading.context(db,user_id=uid,symbol='MCD',settings=settings)
     await db.rollback()
    # Actual scheduler service must also respect the clone's stock quarantine.

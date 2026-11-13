@@ -117,6 +117,8 @@ class CI(unittest.TestCase):
         fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
         for proof in [
             "actual_restored_dividend_saved_replay=true financial_quarantine=true",
+            "actual_restored_current_stock_history_0014=true original_receipt_unchanged=true financial_quarantine=true",
+            "assert b'runtime_current_mixed_history=true revision0014=true' in current_runtime",
             "actual_dividend_sql_verified_tls=true", "dividend_authority",
             "tls(fresh_bootstrap=True)",
         ]:
