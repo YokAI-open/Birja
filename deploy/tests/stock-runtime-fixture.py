@@ -35,6 +35,7 @@ from app.services.alpaca_actions import ActionBatch,ActionObservation
 from app.services.trading import execute as crypto_execute,Order
 from app.services.prices import AcceptedPrice,upsert_prices
 from app.services.trade_math import TradeRefused
+from app.services.event_history import list_event_history
 
 KEY=uuid.UUID('88888888-2222-4222-8222-222222222222')
 EMAIL='actual-stock-runtime@example.invalid'
@@ -168,6 +169,9 @@ async def main():
     assert (await db.execute(select(func.count()).select_from(Trade))).scalar_one()==count
     result=await portfolio.get_portfolio(db,user_id=uid,settings=settings)
     assert result.cash==9796 and not result.valuation_complete and result.unvalued_holding_count==1
+    page=await list_event_history(db,user_id=uid,limit=100)
+    assert {'trade','split'}<={item.kind for item in page.items}
+    assert len({item.id for item in page.items})==len(page.items)
     await stock_trading.context(db,user_id=uid,symbol='MCD',settings=settings)
     await db.rollback()
    # Actual scheduler service must also respect the clone's stock quarantine.

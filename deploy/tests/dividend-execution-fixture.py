@@ -24,6 +24,10 @@ from app.services.stock_status import persist_status_batch
 from app.services.stock_status_rules import StatusBatch,StatusEvent
 from app.services.corporate_actions import derive_dividend_entitlements,latest_verified_entitlements
 from app.services.trading import execute as crypto_execute,Order
+from app.services.dividends import process_dividend,record_dividend_hold
+from app.services.event_history import list_event_history
+from app.services.portfolio import get_portfolio
+from app.tasks.dividends import run_dividend_cycle
 
 EMAIL='actual-dividend-sql@example.invalid'
 SYMBOL='AMD'
@@ -128,8 +132,49 @@ async def target(owner,event):
  return dict(row)
 
 async def apply(scheduler,work):
- row=await scheduler.fetchrow('SELECT * FROM public.apply_stock_dividend($1,$2,$3,$4)',work['event_id'],work['entitlement_id'],work['revision_fingerprint'],work['entitlement_fingerprint'])
- return dict(row)
+ return await service_work(work)
+
+def service_engine(role='scheduler'):
+ s=SchedulerSettings(env='test');args=database_connect_args(s);url=urlsplit(str(s.database_url))
+ if role:
+  char={'app':'a','scheduler':'b'}[role] if args.get('ssl') else 'a'
+  url=url._replace(netloc='birja_'+role+':'+char*64+'@postgres:5432')
+ if DIVIDEND_DATABASE:url=url._replace(path='/'+DIVIDEND_DATABASE)
+ return create_async_engine(urlunsplit(url),connect_args=args)
+
+async def service_work(work,role='scheduler',hold=False):
+ engine=service_engine(role)
+ try:
+  async with async_sessionmaker(engine)() as db:
+   if hold:result=await record_dividend_hold(db,payment_id=work['payment_id'],expected_revision_fingerprint=work['revision_fingerprint'])
+   else:result=await process_dividend(db,event_id=work['event_id'],entitlement_id=work['entitlement_id'],expected_revision_fingerprint=work['revision_fingerprint'],expected_entitlement_fingerprint=work['entitlement_fingerprint'])
+   return asdict(result)
+ finally:await engine.dispose()
+
+async def cycle():
+ engine=service_engine()
+ try:
+  result=await run_dividend_cycle(sessionmaker=async_sessionmaker(engine),settings=SchedulerSettings(env='test',stock_actions_enabled=True,stock_actions_coverage_start='2026-01-01T00:00:00Z',alpaca_api_key='synthetic-no-provider',alpaca_secret_key='synthetic-no-provider'))
+  assert result.status=='ok',result
+ finally:await engine.dispose()
+
+async def current_reads(owner):
+ engine=service_engine(None)
+ try:
+  uid=await owner.fetchval('SELECT id FROM users WHERE email=$1',EMAIL)
+  cash=await owner.fetchval('SELECT cash FROM accounts WHERE user_id=$1',uid)
+  settings=Settings(env='test',database_url=str(engine.url),price_source='fake',redis_url='redis://localhost:6379/0',otp_hmac_secret='synthetic-only-otp-secret-'+'a'*64,jwt_secret='synthetic-only-jwt-secret-'+'a'*64)
+  async with async_sessionmaker(engine)() as db:
+   page=await list_event_history(db,user_id=uid,limit=100)
+   kinds={item.kind for item in page.items}
+   assert {'trade','dividend','dividend_correction'}<=kinds,kinds
+   for item in page.items:
+    if item.kind=='dividend_correction':assert item.original.payment_reference==item.payment_reference
+   result=await get_portfolio(db,user_id=uid,settings=settings)
+   assert result.cash==cash
+   await db.rollback()
+  print('dividend_current_mixed_history_portfolio_cash_once=true restored='+str(bool(DIVIDEND_DATABASE)).lower(),flush=True)
+ finally:await engine.dispose()
 
 async def revise(owner,event,rate,*,uncertain=False,reconcile=False):
  async with owner.transaction():
@@ -208,7 +253,9 @@ async def account_wait_revalidation(owner,scheduler,event):
   try:
    await owner.fetchval('SELECT cash FROM accounts WHERE user_id=$1 FOR UPDATE',uid)
    pid=scheduler.get_server_pid()
-   task=asyncio.create_task(apply(scheduler,work))
+   # Keep the observed asyncpg PID for this genuine SQL lock timing probe;
+   # all ordinary/replay/held paths above use the current application service.
+   task=asyncio.create_task(scheduler.fetchrow('SELECT * FROM public.apply_stock_dividend($1,$2,$3,$4)',work['event_id'],work['entitlement_id'],work['revision_fingerprint'],work['entitlement_fingerprint']))
    for _ in range(100):
     if await owner.fetchval('SELECT pg_backend_pid()=ANY(pg_blocking_pids($1))',pid):break
     if task.done():await task;raise AssertionError('authority finished before account wait')
@@ -259,7 +306,9 @@ async def exercise(owner):
  try:
   await sold_after_cutoff(owner)
   event=await owner.fetchval('SELECT id FROM stock_action_events WHERE economic_key=$1',EVENT)
-  work=await target(owner,event);original=await apply(scheduler,work)
+  work=await target(owner,event);await cycle()
+  assert await owner.fetchval('SELECT count(*) FROM stock_dividend_payments WHERE event_id=$1',event)==1
+  original=await apply(scheduler,work)
   assert original['outcome']=='original' and original['decision_id'] is None
   assert await apply(scheduler,work)==original
   assert await owner.fetchval('SELECT original_amount FROM stock_dividend_payments WHERE id=$1',original['payment_id'])==D(1)
@@ -273,13 +322,19 @@ async def exercise(owner):
   try:
    async with async_sessionmaker(engine)() as db:assert await latest_verified_entitlements(db,event)==()
   finally:await engine.dispose()
-  held=dict(await scheduler.fetchrow('SELECT * FROM public.record_stock_dividend_hold($1,$2)',original['payment_id'],uncertain))
+  await cycle()
+  assert await owner.fetchval("SELECT count(*) FROM stock_dividend_decisions WHERE payment_id=$1 AND outcome='held_uncertain'",original['payment_id'])==1
+  held=await service_work({'payment_id':original['payment_id'],'revision_fingerprint':uncertain},hold=True)
   assert held['outcome']=='held_uncertain'
-  assert dict(await scheduler.fetchrow('SELECT * FROM public.record_stock_dividend_hold($1,$2)',original['payment_id'],uncertain))==held
+  await cycle()
+  assert await owner.fetchval("SELECT count(*) FROM stock_dividend_decisions WHERE payment_id=$1 AND outcome='held_uncertain'",original['payment_id'])==1
+  assert await service_work({'payment_id':original['payment_id'],'revision_fingerprint':uncertain},hold=True)==held
   assert await owner.fetchval('SELECT applied_delta FROM stock_dividend_decisions WHERE id=$1',held['decision_id'])==0
   unknown=await owner.fetchrow('SELECT desired_total,proposed_delta,entitlement_id FROM stock_dividend_decisions WHERE id=$1',held['decision_id'])
   assert all(value is None for value in unknown.values())
   await revise(owner,event,'0.75',reconcile=True)
+  await cycle()
+  assert await owner.fetchval("SELECT count(*) FROM stock_dividend_decisions WHERE previous_decision_id=$1 AND outcome='applied'",held['decision_id'])==1
   corrected=await target(owner,event);result=await apply(scheduler,corrected)
   assert result['outcome']=='applied' and await apply(scheduler,corrected)==result
   assert await owner.fetchval('SELECT previous_decision_id FROM stock_dividend_decisions WHERE id=$1',result['decision_id'])==held['decision_id']
@@ -298,6 +353,8 @@ async def exercise(owner):
   await zero_original(owner,scheduler,event)
   assert await owner.fetchval('SELECT count(*) FROM stock_dividend_payments p JOIN users u ON u.id=p.user_id WHERE u.email=$1',EMAIL)==2
   assert await owner.fetchval('SELECT count(*) FROM stock_dividend_decisions d JOIN users u ON u.id=d.user_id WHERE u.email=$1',EMAIL)==9
+  await current_reads(owner)
+  print('dividend_current_cycle_paidA_heldB_dedup_reconciled_once=true',flush=True)
   for conn in (app,scheduler):
    for query in ('UPDATE stock_dividend_payments SET original_amount=original_amount','DELETE FROM stock_dividend_decisions',"SELECT public.stock_dividend_authority(1,1,'a','b',true,NULL)",'SET ROLE birja_migrator','CREATE TABLE public.forbidden_dividend_ddl(id bigint)','ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) RENAME TO forbidden_dividend_replace'):
     await denied(conn,query)
@@ -310,6 +367,14 @@ async def exercise(owner):
 async def verify(owner):
  before=await fingerprint(owner)
  assert before==DIVIDEND_EXPECTED
+ event=await owner.fetchval('SELECT id FROM stock_action_events WHERE economic_key=$1',EVENT)
+ original=await owner.fetchrow('SELECT event_id,entitlement_id,revision_fingerprint,entitlement_fingerprint FROM stock_dividend_payments WHERE event_id=$1',event)
+ assert (await service_work(dict(original),role=None))['outcome']=='original'
+ for decision in await owner.fetch("SELECT id,event_id,entitlement_id,revision_fingerprint,entitlement_fingerprint,outcome FROM stock_dividend_decisions WHERE event_id=$1 AND outcome IN ('applied','verified_no_change') ORDER BY id",event):
+  work=dict(decision);expected_id=work.pop('id');outcome=work.pop('outcome')
+  replay=await service_work(work,role=None)
+  assert replay['decision_id']==expected_id and replay['outcome']==outcome
+ await current_reads(owner)
  for role in ('app','scheduler'):
   conn=await connect(role)
   try:
@@ -317,6 +382,7 @@ async def verify(owner):
     await denied(conn,query)
   finally:await conn.close()
  assert await fingerprint(owner)==before
+ print('dividend_current_service_retained_original_replay=true correction_held_lineage_unchanged=true scheduler_quarantine=true',flush=True)
 
 async def main():
  owner=await connect()
