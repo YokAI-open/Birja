@@ -82,7 +82,8 @@ def orchestration_self_test():
         replacements = {'/srv/birja':str(app), '/var/lib/birja/ops':str(root/'ops'),
                         '/usr/local/sbin/birja-deploy':str(root/'bin/birja-deploy'),
                         '/var/lock/birja-deploy.lock':str(root/'operation.lock'),
-                        '/var/www/birja':str(root/'web'), '/var/lib/birja':str(root/'state')}
+                        '/var/www/birja':str(root/'web'), '/var/lib/birja':str(root/'state'),
+                        '/etc/birja':str(root/'etc')}
         def relocated(text):
             for a,b in replacements.items(): text = text.replace(a,b)
             return text
@@ -153,34 +154,54 @@ def orchestration_self_test():
         legacy.chmod(0o500)
         run(['bash','-c','. "$1"; checkout_source main','_',str(release/'deploy/deploy.sh')],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
         assert legacy.read_bytes() == saved and git('rev-parse','HEAD') == old
-        # Real checkout remains safe, but an offline service mock must fail
-        # the selected-runtime guard before static swap or successful record.
+        # Real checkout remains safe. Without authenticated schema admission,
+        # an offline service mock must fail before any checkout or mutation.
         checkout(current)
         state=root/'state'
         web=root/'web'; (web/'releases/old').mkdir(parents=True)
         (web/'releases/new').mkdir()
         log=state/'deploys.log'
         log.write_text('t '+old+' '+str(web/'releases/old')+' v0.3.1\nt '+current+' '+str(web/'releases/new')+' main\n')
+        pending=state/'deploy.pending'
+        calls=state/'offline-mutation-calls'
+        def snapshot():
+            return (git('rev-parse','HEAD'), legacy.read_bytes(), log.read_bytes(),
+                    pending.read_bytes() if pending.exists() else None,
+                    os.readlink(web/'current') if (web/'current').is_symlink() else None)
+        before=snapshot()
         script='''set -Eeuo pipefail
 . "$1"
 exec 9>"$LOCK"
 flock -n 9
 BIRJA_TESTED_SOURCE=$2
-dc() { if [ "$1" = config ]; then printf 'backend\\nscheduler\\n'; fi; }
-health_check() { :; }
+dc() { printf '%s\\n' "$*" >> "$STATE_DIR/offline-mutation-calls"; if [ "$1" = config ]; then printf 'backend\\nscheduler\\n'; fi; }
+health_check() { printf 'health\\n' >> "$STATE_DIR/offline-mutation-calls"; }
 do_rollback
 [ ! -e "$PENDING_MARK" ]
 [ "$(live_sha "$DEPLOY_LOG")" = "$3" ]
 [ "$(readlink -f "$WEB_ROOT/current")" = "$WEB_ROOT/releases/old" ]
 '''
-        # An offline service mock cannot satisfy the real selected identity
-        # guard. Preserve that rejection; real success is exercised below.
-        run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        # Reject the intended missing-admission condition, not an arbitrary
+        # later failure. Real legacy/current selected success is tested below.
+        result=run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        assert b'application_schema_incompatible=true' in result.stderr
+        assert snapshot() == before and git('rev-parse','HEAD') == current
+        assert not calls.exists()
+        # Keep the original admitted legacy rollback path as a separate case:
+        # its offline mocks reach checkout but cannot satisfy real selected
+        # datastore identity. The missing synthetic binding file must refuse.
+        admitted=script.replace('BIRJA_TESTED_SOURCE=$2',
+            'BIRJA_TESTED_SOURCE=$2\nADMITTED_REVISION=0008')
+        result=run(['bash','-c',admitted,'_',str(release/'deploy/deploy.sh'),current,old],
+            env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        assert b'datastore_bindings_failed=true' in result.stderr
         assert git('rev-parse','HEAD') == old
+        assert snapshot()[1:] == before[1:]
+        assert calls.read_text().splitlines() == ['config --services', 'build backend scheduler', 'up -d --wait --remove-orphans backend scheduler']
         assert b'Usage:' in run([str(legacy),'--help']).stdout
         assert git('status','--porcelain') in ['', 'M deploy/deploy.sh']
         assert all(r.digest(p)==sha for p,sha in retained.items())
-        print('retained_installer_real_git_checkout=true offline_rollback_mock_identity_rejected=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
+        print('retained_installer_real_git_checkout=true offline_rollback_missing_admission_rejected=true missing_admission_mutation_calls=0 offline_rollback_mock_identity_rejected=true admitted_checkout_old=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
 
 
 def integration(archive_arg):
