@@ -43,6 +43,14 @@ CRITICAL_MODULES = (
     "app/services/stock_valuation.py",
     "app/api/v1/stock_trades.py",
     "app/tasks/stock_status.py",
+    "app/services/dividend_rules.py",
+    "app/services/dividends.py",
+    "app/services/event_history.py",
+    "app/schemas/event_history.py",
+    "app/api/v1/event_history.py",
+    "app/tasks/dividends.py",
+    "app/tasks/scheduler.py",
+    "app/db/dev_bootstrap.py",
 )
 
 
@@ -58,6 +66,16 @@ def test_critical_coverage_gate_includes_all_financial_services() -> None:
         assert all((root / "backend" / module).is_file() for module in modules)
         lists.append(matches[0])
     assert lists[0] == lists[1]
+
+
+def test_backend_branch_coverage_and_node24_are_explicit() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text().split("  frontend:", 1)[0]
+    assert "pytest --cov=app --cov-branch --cov-fail-under=80" in workflow
+    assert "uses: actions/setup-node@v7" in workflow
+    assert "node-version-file: frontend/.nvmrc" in workflow
+    assert workflow.index("uses: actions/setup-node@v7") < workflow.index("uv run pytest")
+    assert (root / "frontend/.nvmrc").read_text().strip().split(".")[0] == "24"
 
 
 def test_stock_browser_ci_uses_guarded_isolated_runner() -> None:
