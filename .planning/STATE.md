@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan10-04 reviewed clean; execute10-05 restricted dividend fixtures.
+stopped_at: Plan10-05 complete; same-archive retained gate10-06 before consumers.
 last_updated: "2026-11-13T09:15:15.623935+00:00"
-last_activity: 2026-11-13 -- Plan10-04 exact recovery contracts verified
+last_activity: 2026-11-13 -- Plan10-05 restricted SQL and TLS proof complete
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 46
-  percent: 77
+  completed_plans: 47
+  percent: 78
 ---
 
 # Project State
@@ -26,12 +26,23 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 5/18 complete; executing10-05 (Wave4/13)
-Status: Executing Wave4
+Plan: 6/18 complete; executing10-06 (Wave5/13)
+Status: Executing Wave5
 Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [████████░░] 77% (46/60 currently tracked plans complete; Phase11 unplanned)
+Progress: [████████░░] 78% (47/60 currently tracked plans complete; Phase11 unplanned)
 
 ## Completion and next action
+
+Current:10-05complete697a32c. GenuineAMDsource/clone36.512s, twooriginals/
+ninedecisions, realstock/cryptocashflows, held/reconciled andpostwaitrefusal,
+immutableclonefingerprint662abb0caaff9069c2761a2298fd19fc99f216928a01d7b16b074936e4291610.
+Rolessegment192.187s/63denials;finalpopulated/freshTLSpair136.777/133.869s
+passesalloldconsumersandnewdividendcasesplusrealtransport/isolationchecks.
+Earliercombinedroles/TLSfailureisnotclaimedgreen. Allopsresourcesclean.
+Next06samearchive0007–0014encryptedlocalretained/restrictedTLSproofand
+separatereviewbefore07/10services. No fullretained--allclaimyet.
+Olderentriesbelowarehistory; usecurrentpointerand06plan.
+
 
 Current:10-04complete/source0c6f11d. Final21/21SQLcontracts91.538s/zero
 skips;offline15pass6SQL-onlyskips. Exact0014role/function/dataidentity+
@@ -637,11 +648,12 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at:10-04reviewclean;execute10-05restrictedSQL/recovery/TLSfixtures.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-05-PLAN.md
-Completed01/02/03/04/12source/test/summarycommits. TestDBhead0014financialrows0;
-noactiveDBops. Newrestoresource/clone3rolesafetyguardandfreshNOINHERITcreation
-reviewedclean;21actualSQLcasespass.05/06stillmustproveactualsamearchive
-retained0007–0014andbothrestrictedTLSlanesbeforeany07/10runtimeconsumer.
-Preserveprovider/live7/8/production/B2/timer/installedtool/publicationdeferrals.
-No repeatedpushquestionorautomaticPhase11execution.
+Stopped at:10-05complete;execute10-06samearchivepre-consumerverification.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-06-PLAN.md
+Completed01/02/03/04/05/12withsource/test/summarycommits. NoactiveDBops;ops
+resourcesclean. CurrenttestfixtureusesAMDseparatefromoldresolution/scenarios.
+Retained--all0014dispatchiswiredbutNOTexecuted. Useexactretainedarchiveand
+currentCOREhashes, serialsame-archivelegacy0007–0014/roles/bothTLSplusreview
+beforeany07/10runtimeconsumer. Priorbackend2233/40critical100%,frontend660
+remaincurrentforunchangedappsource. Preservealllive/provider/production/B2/
+timer/installedtool/publicationdeferrals; no repeatedpushquestion.

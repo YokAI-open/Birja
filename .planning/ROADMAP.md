@@ -322,7 +322,7 @@ Live/provider/publication deferrals remain; production is unchanged.
 - [x] 10-04-PLAN.md — Retain exact0014 data and authority contracts
 
 **Wave 4** *(blocked on declared predecessor waves; see plan dependencies)*
-- [ ] 10-05-PLAN.md — Exercise real restricted dividend SQL and TLS
+- [x] 10-05-PLAN.md — Exercise real restricted dividend SQL and TLS
 
 **Wave 5** *(blocked on declared predecessor waves; see plan dependencies)*
 - [ ] 10-06-PLAN.md — Pass retained recovery before financial consumers
@@ -394,7 +394,7 @@ do not establish live acceptance or phase completion.
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
-| 10. Dividend Cash and Event History | v1.1 | 5/18 | In Progress|  |
+| 10. Dividend Cash and Event History | v1.1 | 6/18 | In Progress|  |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:
