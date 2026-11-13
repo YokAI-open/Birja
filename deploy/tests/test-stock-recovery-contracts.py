@@ -568,6 +568,56 @@ ALTER FUNCTION """+producer.RESOLUTION_SIGNATURE+" OWNER TO birja_migrator;\nSET
             with self.assertRaises(ValueError):
                 producer.validate_manifest(damaged)
 
+    def restored_owner_entry(self, *, existing_unsafe=False):
+        """Use the actual restored() entry SQL against a fresh rollback role.
+
+        Archive/database creation is deliberately outside this focused probe.
+        Only the canonical role name is substituted so no existing test owner
+        or owned application relation can be dropped or altered.
+        """
+        restore=load('verify-restore')
+        producer=load('backup-snapshot')
+        alias='birja_phase10_fresh_owner'
+        self.assertEqual(self.query("SELECT NOT EXISTS(SELECT FROM pg_roles WHERE rolname='"+alias+"');"),'t')
+        prefix=("CREATE ROLE "+alias+" LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;" if existing_unsafe else '')
+        calls=[]
+        state={}
+        def query(dc,statement,db=restore.CLONE):
+            calls.append(statement)
+            if 'DO $$BEGIN IF NOT EXISTS' in statement and 'CREATE ROLE birja_migrator' in statement:
+                self.assertNotIn('ALTER ROLE',statement)
+                state['creation']=statement.replace('birja_migrator',alias)
+                raw=self.query('BEGIN;'+prefix+state['creation']+"; SELECT json_build_array(rolname,rolinherit,rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls) FROM pg_roles WHERE rolname='"+alias+"'; ROLLBACK;")
+                state['flags']=json.loads(raw)
+                state['flags'][0]='birja_migrator'
+                return b''
+            if 'SELECT NOT (rolsuper' in statement:
+                return self.query('BEGIN;'+prefix+state['creation']+';'+statement.replace('birja_migrator',alias)+';ROLLBACK;').encode()
+            if 'SELECT NOT EXISTS(SELECT FROM pg_database' in statement:
+                return b't'
+            if 'SELECT version_num' in statement:
+                return b'0014'
+            return b''
+        def pregrant(dc):
+            producer.validate_dividend_role_boundary({'roles':[state['flags']],'memberships':[]},allow_missing_runtime=True)
+        with mock.patch.object(restore,'call',return_value=b''),mock.patch.object(restore,'sql',side_effect=query),mock.patch.object(restore,'restore_dividend_authority',side_effect=pregrant),mock.patch.object(restore,'restore_execution_authority'),mock.patch.object(restore,'restore_resolution_authority'):
+            if existing_unsafe:
+                with self.assertRaises(ValueError):
+                    with restore.restored([],b'synthetic-entry-probe'):
+                        self.fail('unsafe owner reached restored database')
+                self.assertFalse(any(statement.startswith('CREATE DATABASE') for statement in calls))
+            else:
+                with restore.restored([],b'synthetic-entry-probe'):
+                    self.assertEqual(state['flags'],['birja_migrator',False,False,False,False,False,False])
+                self.assertTrue(any(statement.startswith('CREATE DATABASE') for statement in calls))
+        self.assertEqual(self.query("SELECT NOT EXISTS(SELECT FROM pg_roles WHERE rolname='"+alias+"');"),'t')
+
+    def test_zz_fresh_restored_owner_reaches_0014_pregrant(self):
+        self.restored_owner_entry()
+
+    def test_zz_existing_unsafe_restored_owner_refused_before_database(self):
+        self.restored_owner_entry(existing_unsafe=True)
+
     def test_zzz_dividend_exact_catalog_and_no_repair(self):
         self.migrate('head')
         producer=load('backup-snapshot')
