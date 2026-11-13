@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan 10-16 verified; execute Plan 10-17 independent reviews and owner packet.
-last_updated: "2026-11-13T15:24:24.134495+00:00"
-last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
+stopped_at: Plan 10-17 complete; Plan 10-18 awaits owner UI and native 200% verification.
+last_updated: "2026-11-13T16:28:46.245687+00:00"
+last_activity: 2026-11-13 -- Independent reviews complete; current owner packet ready
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 57
-  percent: 95
+  completed_plans: 58
+  percent: 97
 ---
 
 # Project State
@@ -26,12 +26,29 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 16/18 complete; executing 10-17 (Wave 12/13)
-Status: Executing Wave 12
-Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [██████████] 95% (57/60 currently tracked plans complete; Phase 11 unplanned)
+Plan: 17/18 complete; Plan 10-18 owner checkpoint (Wave 13/13)
+Status: Awaiting owner UI acceptance and genuine desktop native 200% result
+Last activity: 2026-11-13 -- Plan 10-17 complete; implementation reviews clear
+Progress: [██████████] 97% (58/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan17 complete41fccff: four genuinely independent reviews; code0active,
+security70fully verified/two18human outcomes pending/no technical gaps,
+UI24/24 and goal4/4 HUMAN_NEEDED. Actual ordinary-dev privilege and offscreen
+focus defects were reproduced, fixed and independently re-reviewed. Final
+backend2557/99.87%,47critical4565statements/1462branches100%; frontend697;
+frozen fullbrowser49/one expected CSPskip317.3s; all static/native/inventory and
+five strict image gates pass. Only the two Plan18 human checks remain.
+Current review ZIP /tmp/birja-phase10-ui-review.zip,15497014bytes,SHA256
+cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d,
+source48d970c. Root independently verified22 sealed artifacts,385 sources,
+107UI sources,49 review files, ZIP CRC/SHA/offline safety and visible end-focus.
+Open extracted index.html and follow10-HUMAN-UAT.md. Record explicit new-UI
+acceptance and real browser-menu200% outcome before18summary/requirements/
+validation closure. No previous-phase acceptance or elapsed time substitutes.
+All owned resources/processes are cleared. No more tests needed absent a new
+finding/change. Older completion entries below are historical evidence.
 
 Plan16 completea11bcb3: backend2550/99.87%,47 critical4545 statements/1452
 branches100%; repaired-image frontend697/36files, full static/build/native pass;
@@ -741,18 +758,21 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-16 verified; execute Plan 10-17 independent reviews and owner packet.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-17-PLAN.md
-Completed: 01–16. Sixteen of eighteen plans complete.
-Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
-Latest final gates: 10-16-SUMMARY.md and 10-LOCAL-PROOF.md;
-/tmp/birja-backup-test-phase10-final/gate-report.json (six passes,1391.017s),
-/tmp/birja-phase10-16-final-integrity.json. All384 frozen sources independently
-verified; all12 sealed artifacts match. Review ZIP from15 is historical and
-must be refreshed/source-attributed in17 using current browser captures
-/tmp/birja-phase09-browser-8w6nln0e before18 owner acceptance. Source/UI and
-compiled JS/CSS are unchanged; three post-browser ops-only files differ.
-No processes or owned containers/networks/volumes remain. Native200% pending.
+Stopped at: Plan 10-17 complete; Plan 10-18 awaits owner UI and native 200% verification.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-18-PLAN.md
+Completed: 01–17. Seventeen of eighteen plans complete; no18summary yet.
+All six owned test projects have zero containers/networks/volumes; no process.
+Current packet /tmp/birja-phase10-ui-review.zip SHA cf4e4817…fb9845d;
+index /tmp/birja-phase10-ui-review/index.html, source48d970c.
+HUMAN-UAT and VERIFICATION contain exactly two unrecorded owner outcomes;
+VALIDATION has all36task statuses but nyquist/wave0 remainfalse until signoff.
+Root verified385current sources/107UI/49review/22sealed hashes and ZIP safety.
+Current browser captures /tmp/birja-phase09-browser-5bjhfgb1; receipt
+/tmp/birja-phase10-17-final-integrity.json. Plan16 retained1391.017s is its
+original-source proof; unchanged authority/CORE/financial consumer bytes and
+affected17checks are separately recorded. No fresh fullsixstage claim at48d970c.
+Current0014 retained/current-service recovery and legacy0008 selected rollback
+remain distinct; Phase11 rollout/live activation/publication remain deferred.
 Use frozen C03a SQL result vocabulary and C05a exact History wire types.
 The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
 old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates
