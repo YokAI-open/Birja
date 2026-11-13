@@ -73,7 +73,7 @@ services:
     command:
       - sh
       - -c
-      - alembic upgrade head && exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+      - python -m app.db.dev_bootstrap && alembic upgrade head && exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
     networks: [data, app]
     healthcheck:
       test:

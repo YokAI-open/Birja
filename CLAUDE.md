@@ -49,10 +49,11 @@ cd backend && uv sync --locked              # install from uv.lock
 cd backend && uv add <pkg>                  # add a dependency (updates uv.lock)
 
 # Backend tests: against the isolated test stack, never the dev stack
+# Node 24 (frontend/.nvmrc) is required for native TypeScript parser compatibility tests.
 docker compose -f docker-compose.test.yml up -d --wait
-cd backend && uv run pytest --cov=app --cov-fail-under=80
+cd backend && uv run pytest --cov=app --cov-branch --cov-fail-under=80
 # critical paths: login/OTP, sessions, authz, money, trades, stock actions/authority
-cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py,app/services/portfolio_math.py,app/services/portfolio.py,app/services/history.py,app/api/v1/history.py,app/services/stock_admission.py,app/services/stock_quote_rules.py,app/services/stock_quotes.py,app/services/stock_sessions.py,app/services/stocks.py,app/api/v1/stocks.py,app/services/corporate_action_rules.py,app/services/stock_action_rules.py,app/services/alpaca_actions.py,app/services/stock_ownership.py,app/services/corporate_actions.py,app/tasks/stock_actions.py,app/tasks/stock_scheduler.py,app/services/stock_action_reconciliation.py,app/services/stock_trade_math.py,app/services/stock_trading_rules.py,app/services/stock_status_rules.py,app/services/stock_status.py,app/services/stock_eligibility.py,app/services/stock_trading.py,app/services/trade_idempotency.py,app/services/stock_valuation.py,app/api/v1/stock_trades.py,app/tasks/stock_status.py --fail-under=100
+cd backend && uv run coverage report --include=app/services/otp.py,app/services/auth.py,app/services/accounts.py,app/services/ratelimit.py,app/services/email.py,app/core/security.py,app/core/deps.py,app/services/price_rules.py,app/services/prices.py,app/services/trade_math.py,app/services/trading.py,app/services/portfolio_math.py,app/services/portfolio.py,app/services/history.py,app/api/v1/history.py,app/services/stock_admission.py,app/services/stock_quote_rules.py,app/services/stock_quotes.py,app/services/stock_sessions.py,app/services/stocks.py,app/api/v1/stocks.py,app/services/corporate_action_rules.py,app/services/stock_action_rules.py,app/services/alpaca_actions.py,app/services/stock_ownership.py,app/services/corporate_actions.py,app/tasks/stock_actions.py,app/tasks/stock_scheduler.py,app/services/stock_action_reconciliation.py,app/services/stock_trade_math.py,app/services/stock_trading_rules.py,app/services/stock_status_rules.py,app/services/stock_status.py,app/services/stock_eligibility.py,app/services/stock_trading.py,app/services/trade_idempotency.py,app/services/stock_valuation.py,app/api/v1/stock_trades.py,app/tasks/stock_status.py,app/services/dividend_rules.py,app/services/dividends.py,app/services/event_history.py,app/schemas/event_history.py,app/api/v1/event_history.py,app/tasks/dividends.py,app/tasks/scheduler.py,app/db/dev_bootstrap.py --fail-under=100
 docker compose -f docker-compose.test.yml down -v
 
 # Frontend tests
@@ -60,6 +61,11 @@ cd frontend && npm run test -- --coverage   # Vitest
 
 # e2e (owned disposable stack, fake prices and console email only)
 python3 deploy/tests/run-stock-browser.py
+# Serial retained0007–0014 recovery, restricted roles and fresh/upgraded TLS
+python3 deploy/tests/test-stock-recovery-contracts.py --postgres
+bash deploy/tests/test-db-operations.sh --all
+bash deploy/tests/test-db-operations.sh --image-transition
+bash deploy/tests/test-rollback-db-security.sh
 
 # Production (on the server, as root). Details: deploy/RUNBOOK.md
 /srv/birja/deploy/deploy.sh                 # deploy main (DEPLOY_REF=<ref> for another ref)

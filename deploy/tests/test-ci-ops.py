@@ -65,6 +65,26 @@ def image_policy(image, aggregate):
 
 
 class CI(unittest.TestCase):
+    def test_dividend_authority_history_and_schedulers_are_required(self):
+        backend = jobs()["backend"]
+        for module in [
+            "services/dividend_rules", "services/dividends", "services/event_history",
+            "schemas/event_history", "api/v1/event_history", "tasks/dividends",
+            "tasks/scheduler", "db/dev_bootstrap",
+        ]:
+            self.assertIn("app/" + module + ".py", backend)
+        self.assertIn("--cov-branch", backend)
+        self.assertIn("test-stock-recovery-contracts.py --postgres", jobs()["ops"])
+        fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
+        for proof in [
+            "actual_restored_dividend_saved_replay=true financial_quarantine=true",
+            "actual_dividend_sql_verified_tls=true", "dividend_authority",
+            "tls(fresh_bootstrap=True)",
+        ]:
+            self.assertIn(proof, fixture)
+        dividend = (ROOT / "deploy/tests/dividend-execution-fixture.py").read_text()
+        self.assertIn("record_stock_dividend_hold", dividend)
+
     def test_stock_safety_and_real_tls_evaluator_are_required(self):
         j = jobs()
         for module in ["stock_admission", "stock_quote_rules", "stock_quotes", "stock_sessions", "stocks"]:
@@ -317,7 +337,9 @@ class CI(unittest.TestCase):
         browser = (ROOT / "deploy/tests/run-stock-browser.py").read_text()
         for token in ('"frontend/node_modules/.bin/playwright"', '"test"', '"--workers=1"', '"--retries=0"', 'default="all"', 'COMPOSE_DISABLE_ENV_FILE'):
             self.assertIn(token, browser)
-        self.assertNotIn('"--grep"', browser)
+        self.assertIn('default="all"', browser)
+        self.assertIn('len(args.grep) > 256', browser)
+        self.assertRegex(j["e2e"], r"(?m)^        run: python3 deploy/tests/run-stock-browser.py$")
         self.assertIn("target: test-builder", j["image"])
         self.assertIn("target: runtime", j["image"])
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])
