@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EventHistoryItem } from "@/api/eventHistory";
@@ -64,6 +64,20 @@ export default function HistoryPage() {
   const captureAppendButton = useCallback((node: HTMLButtonElement | null) => {
     appendButton.current = node;
   }, []);
+  useEffect(() => {
+    const intent = focusEnd.current;
+    const button = appendButton.current;
+    if (isFetching || !intent || !button) return;
+    const current = eventHistorySession(client);
+    if (
+      current.email === intent.session.email &&
+      current.epoch === intent.session.epoch &&
+      button === intent.button &&
+      (document.activeElement === document.body || document.activeElement === button)
+    )
+      button.focus({ preventScroll: true });
+    focusEnd.current = null;
+  }, [client, isFetching, hasNextPage]);
 
   function refresh() {
     if (!isFetching) void refetch({ cancelRefetch: false });
@@ -81,15 +95,6 @@ export default function HistoryPage() {
     const result = await fetchNextPage({ cancelRefetch: false });
     const current = eventHistorySession(client);
     if (current.email !== session.email || current.epoch !== session.epoch) return;
-    if (result.isError || result.data?.pages.at(-1)?.next_cursor !== null) {
-      if (
-        intent &&
-        appendButton.current === intent.button &&
-        document.activeElement === document.body
-      )
-        intent.button.focus({ preventScroll: true });
-      focusEnd.current = null;
-    }
     if (!result.isError) {
       const count =
         result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;

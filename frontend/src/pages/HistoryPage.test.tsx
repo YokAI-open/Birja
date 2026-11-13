@@ -347,6 +347,31 @@ it("preserves append focus intent when a native disabled control blurs before fi
   expect(await screen.findByText("All events loaded.")).toHaveFocus();
 });
 
+it("restores the native-blurred retry control only after the failed append is rendered", async () => {
+  let finish: (value: Response) => void = () => {};
+  historyFetch(
+    vi
+      .fn()
+      .mockImplementationOnce(() => ok([item], cursor()))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((done) => {
+            finish = done;
+          }),
+      ),
+  );
+  const { user } = renderWithClient(<HistoryPage />);
+  const append = await screen.findByRole("button", { name: "Load more" });
+  await user.click(append);
+  document.body.tabIndex = -1;
+  document.body.focus();
+  document.body.removeAttribute("tabindex");
+  finish(new Response("unavailable", { status: 503 }));
+  const retry = await screen.findByRole("button", { name: "Try loading more" });
+  expect(retry).not.toBeDisabled();
+  await vi.waitFor(() => expect(retry).toHaveFocus());
+});
+
 it("keeps focus on another control when append finishes and refresh announces the current count", async () => {
   let finish: (value: Response) => void = () => {};
   historyFetch(
