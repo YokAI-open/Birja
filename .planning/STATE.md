@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave2 reviewed and full gates pass; executing10-04 retained contracts.
-last_updated: "2026-11-12T20:10:53.627770+00:00"
-last_activity: 2026-11-12 -- Plan10-02 authority fixed and independently rechecked
+stopped_at: Plan10-04 reviewed clean; execute10-05 restricted dividend fixtures.
+last_updated: "2026-11-13T09:15:15.623935+00:00"
+last_activity: 2026-11-13 -- Plan10-04 exact recovery contracts verified
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 45
-  percent: 75
+  completed_plans: 46
+  percent: 77
 ---
 
 # Project State
@@ -26,12 +26,22 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 4/18 complete; executing10-04 (Wave3/13)
-Status: Executing Wave3
+Plan: 5/18 complete; executing10-05 (Wave4/13)
+Status: Executing Wave4
 Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [████████░░] 75% (45/60 currently tracked plans complete; Phase11 unplanned)
+Progress: [████████░░] 77% (46/60 currently tracked plans complete; Phase11 unplanned)
 
 ## Completion and next action
+
+Current:10-04complete/source0c6f11d. Final21/21SQLcontracts91.538s/zero
+skips;offline15pass6SQL-onlyskips. Exact0014role/function/dataidentity+
+quarantine/directtransitiveSETRoleproof. FreshrestoreINHERITreviewblocker
+reproducedff10840→fixed03f912d;independentrecheck2pass/0findings.
+Next05actualrestrictedSQLfixturesandTLSintegration,then06samearchive
+retained0007–0014/restrictedfresh+upgradeTLSproofbefore07/10consumers.
+Priorbackend2233/40critical100%,frontend660remaincurrentforunchangedappsource.
+Noactualarchive/TLSclaimfrom04. Olderentriesbelowarehistoricalpointers.
+
 
 Current:Plan10-02complete49authority/191affectedtests; independentreview
 reproducedcalendarclosure+OUTidentitygaps, actualREDedc0af8→fix4de3977,
@@ -627,10 +637,11 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Wave2review/fullgatespass; execute10-04retainedcontracts.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-04-PLAN.md
-Completed01/02/03/12source/test/summarycommits. Fullbackend2233pass,40critical100%,independentreviewclean; noactiveDBops.
-Ownedisolatedteststack0014; keepDB/opsserial. No agentcurrentlyactive.
-Noapplicationservices/workers/HistoryAPI/UIyet.04–06exactretained/restrictedTLS
-stillblockingbefore07/10consumers. Preservealllive7/8/status/action/data,
-production/B2/timer/publication/deploymentdeferrals; norepeatedpushquestion.
+Stopped at:10-04reviewclean;execute10-05restrictedSQL/recovery/TLSfixtures.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-05-PLAN.md
+Completed01/02/03/04/12source/test/summarycommits. TestDBhead0014financialrows0;
+noactiveDBops. Newrestoresource/clone3rolesafetyguardandfreshNOINHERITcreation
+reviewedclean;21actualSQLcasespass.05/06stillmustproveactualsamearchive
+retained0007–0014andbothrestrictedTLSlanesbeforeany07/10runtimeconsumer.
+Preserveprovider/live7/8/production/B2/timer/installedtool/publicationdeferrals.
+No repeatedpushquestionorautomaticPhase11execution.

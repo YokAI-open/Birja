@@ -46,3 +46,23 @@ Fullbackend2233passed93warnings306.61s,99.86%overall:
 100%with0missing:/tmp/birja-phase10-wave2-critical.log. NoTLS/archiveconsumer
 proofclaimed;04–06stillblockingruntime. All4newfunction/helperidentitiesmustbe
 addedtoexactproducer/consumercontracts. No private/production/provideraction.
+
+## Wave3 — exact recovery contracts verified2026-11-13
+
+Plan04completed0c6f11d. Producer9feca5bRED→b6184e3;clone23973adRED→68882db,
+additionalmembershipRED1ba1300resolvedinsameGREEN. RealNOINHERITSETROLE
+membershipescapeandunsafe6flagsnowrefusedby0014source+cloneboundary;
+LOGINexcludedintentionally. All4functionmetadataand26tables19sequences/55FKs
+pinned, no arbitrarysourcegrant/definitionrepair. Twelveactualapp/scheduler
+financial/directwrite42501denialspassandimplicitPUBLICrightsrevoked.
+All0007–0013generatedmanifest/schemaSQLbyteequalvs5925b52.
+
+IndependentrecoveryreviewCR01reproducedfreshmigratorINHERITcreationfailure:
+REDff10840→fix03f912d,summary0c6f11d. Actualrestored()emittedSQLnowcreates
+NOINHERIT/NOBYPASSRLS;unsafeexistinginheritancerefusesbeforeCREATEDATABASE,
+noALTERrepair. Focusedentry2pass2.345s;independentrecheck2pass2.433s:
+/tmp/birja-phase10-recovery-review-recheck.log. Reviewreportclean0remaining.
+FinalallSQL21/21pass91.538s/zeroskips;offline15pass6explicitSQLskips.
+ActualentryroleSQLusedrollbackalias;archive/transportadapted,sofullretained
+archiveandTLSareNOTclaimed. OwnedtestDB0014/payments0/decisions0/entitlements0,
+no temporarytestroleoractiveDBops. See04SUMMARYforexactlogs/staticchecks.
