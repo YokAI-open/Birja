@@ -70,7 +70,44 @@ asyncio.run(main())
 '''
 
 
+def approved_runtime_artifacts(old_lock, current_lock):
+    def artifacts(lock):
+        return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
+    approved = {'exchange-calendars':'4.13.2','numpy':'2.5.4','pandas':'3.1.1','pyluach':'2.3.0','toolz':'1.2.0','tzdata':'2026.6','korean-lunar-calendar':'0.4.0','python-dateutil':'4.0.0'}
+    original, current = artifacts(old_lock), artifacts(current_lock)
+    additions = {name:current.pop(name) for name in approved}
+    assert {name:p['version'] for name,p in additions.items()} == approved
+    fingerprint=lambda value:hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    assert fingerprint(additions) == 'e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7'
+    before, after = original.pop('opentelemetry-api'), current.pop('opentelemetry-api')
+    # Exact owner-approved patch only; no ranges, substitutions or other drift.
+    assert before['version']=='1.45.1' and after['version']=='1.45.2'
+    assert before['dependencies']==after['dependencies']
+    assert fingerprint(before)=='14df8ffb9308919c95c868cab20e0bb9ac56f34a01a9f712955d15ea734642f1'
+    assert fingerprint(after)=='430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c'
+    assert original == current
+
+
 def orchestration_self_test():
+    historical=tomllib.loads(f.source_git('show','v0.3.1:backend/uv.lock').decode())
+    current_lock=tomllib.loads((ROOT/'backend/uv.lock').read_text())
+    approved_runtime_artifacts(historical,current_lock)
+    # Exercise actual positive contract and independent unapproved mutations
+    # before the real runner can spend time building the legacy image.
+    for package, field, value in [('opentelemetry-api','version','1.45.3'),
+                                  ('opentelemetry-api','dependencies',[]),
+                                  ('typing-extensions','version','0.0.0')]:
+        damaged=copy.deepcopy(current_lock)
+        next(p for p in damaged['package'] if p['name']==package)[field]=value
+        try: approved_runtime_artifacts(historical,damaged)
+        except AssertionError: pass
+        else: raise AssertionError('unapproved package drift accepted')
+    for package in ('opentelemetry-api','exchange-calendars'):
+        damaged=copy.deepcopy(current_lock)
+        next(p for p in damaged['package'] if p['name']==package)['wheels'][0]['hash']='sha256:'+'0'*64
+        try: approved_runtime_artifacts(historical,damaged)
+        except AssertionError: pass
+        else: raise AssertionError('unapproved artifact drift accepted')
     # Exercise the actual installer and repeated launchers in a private fake
     # host. Only fixed production path literals are relocated; no host checkout
     # config, services, credentials or security decisions are substituted.
@@ -219,16 +256,7 @@ def integration(archive_arg):
             assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
         old_lock = tomllib.loads((old / 'backend/uv.lock').read_text())
         current_lock = tomllib.loads((ROOT / 'backend/uv.lock').read_text())
-        def artifacts(lock):
-            return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
-        approved = {'exchange-calendars':'4.13.2','numpy':'2.5.4','pandas':'3.1.1','pyluach':'2.3.0','toolz':'1.2.0','tzdata':'2026.6','korean-lunar-calendar':'0.4.0','python-dateutil':'4.0.0'}
-        current_artifacts = artifacts(current_lock)
-        additions = {name:current_artifacts.pop(name) for name in approved}
-        assert {name:package['version'] for name,package in additions.items()} == approved
-        assert artifacts(old_lock) == current_artifacts
-        # Same exact independently reviewed addition-artifact fingerprint.
-        addition_digest = hashlib.sha256(json.dumps(additions,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-        assert addition_digest == 'e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7'
+        approved_runtime_artifacts(old_lock,current_lock)
         old_project = tomllib.loads((old / 'backend/pyproject.toml').read_text())
         current_project = tomllib.loads((ROOT / 'backend/pyproject.toml').read_text())
         assert sorted(old_project['project']['dependencies'] + ['exchange-calendars==4.13.2']) == sorted(current_project['project']['dependencies'])
