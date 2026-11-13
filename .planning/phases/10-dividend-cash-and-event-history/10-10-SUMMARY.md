@@ -182,3 +182,36 @@ exist, no tracked deletion;149new/235affected tests and100%statement/branch
 coverage plus static checks pass. SQL authority/recovery unchanged. Owned empty
 0014 test stack remains running; DB ownership is released to parent. Unrelated
 `.claude/` and canonical project state are preserved.
+
+## Full-wave fixture collision and verified correction
+
+Parent's first complete financial-wave run failed6tests/2428 in299.35s:
+the five mixed tied-time variants and legacy stored-BIGINT case collided on
+fixed trade ID9007199254740993. The earlier affected legacy run had committed
+that test record; existing new_user fixtures intentionally retain their rows,
+whereas mixed records roll back. Initial scoped passes therefore did not prove
+repeatability against committed legacy records. This failure is not a passing
+full-wave gate. Evidence: `/tmp/birja-phase10-wave6-backend.log`.
+
+Parent extended ownership solely to the existing legacy History test file.
+Actual regression REDf1e312e adds two distinct-owner high-ID records; it fails
+with the existing duplicate PK before repair,1failed1.12s. Fix6f9af5c binds
+high ID9007199254740993+test-owner-ID in both helpers, preserving values beyond
+JavaScript's exact-integer range and using returned IDs in all assertions.
+No production source, schema, sequence, existing row or invariant was changed
+or deleted. Canonical parent STATE/ROADMAP edits remain untouched.
+
+On the same owned database, with no cleanup/reset between runs:
+
+| Order | Actual result |
+|---|---|
+| Legacy History service → mixed History |74passed3.76s |
+| Mixed History → legacy History service |74passed3.10s |
+| Repeat legacy → mixed |74passed3.08s |
+
+Logs: `/tmp/birja-phase10-10-fixture-{red,order1,order2,repeat}.log`.
+Ruff/format on both changed tests and whitespace checks pass. New runtime
+modules are unchanged from their100%statement/branch proof. Parent must rerun
+the full financial wave; no full-suite pass is claimed here. No process remains;
+DB ownership is released, test stack still0014. Legacy test-owned rows remain
+under their existing fixture policy, with collision-free owner identities.
