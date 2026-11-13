@@ -1,15 +1,15 @@
 ---
 phase: 10
 slug: dividend-cash-and-event-history
-status: human_needed
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-12
 ---
 
 # Phase10 — Validation Strategy
 
-Execution ledger refreshed during Plan17 on2026-11-13. Plans01–16 have actual recorded local gates below; all four distinct independent review roles are complete. CR-01 ordinary dev payout permission failure was reproduced, fixed and independently re-reviewed; its new affected gates are below. Owner18 acceptance/native200% remain pending. Existing isolated pytest/PostgreSQL+Redis, Vitest/RTL and Playwright were reused; no production data or credentials. The exact owner-approved Node patch and its signed-index trust chain are recorded in10-IMAGE-REPAIR-REVIEW.md; no lockfile change.
+Execution ledger completed through Plan18 on2026-11-13. All four distinct independent review roles and actual execution gates are recorded below. CR-01 ordinary dev payout permission failure and UX-01 offscreen completion focus were reproduced, fixed and independently re-reviewed. The owner explicitly answered “Reviewed: accept the new UI” and “Checked native 200%: passes” for source48d970c/ZIPcf4e4817…fb9845d; exact questions/results are in10-HUMAN-UAT.md. Existing isolated tools were reused; no production data or credentials. The exact owner-approved Node patch and signed-index trust chain are recorded in10-IMAGE-REPAIR-REVIEW.md; no lockfile change.
 
 ## Sampling and feedback
 
@@ -105,8 +105,8 @@ Every task is recorded below. Command column preserves the planned quick selecto
 | 10-16-2 | 11 | DIV-03, DIV-04, DIV-05, HIST-03 | T-10-16-01/02/03/SC | `python3 -m py_compile deploy/tests/dividend-execution-fixture.py deploy/tests/stock-runtime-fixture.py` | PASS recorded local execution: Backend2550/294.73s,47critical100%;frontend69731.40s;5strictscans0HIGH/CRITICAL;SQL23/111.574s;sixstage1391.017s;10-LOCAL-PROOF.md; /tmp/birja-phase10-16-final-same-archive.log. Scoped static and behavioral RED/GREEN details:10-16-SUMMARY.md. |
 | 10-17-1 | 12 | DIV-03, DIV-04, DIV-05, HIST-03 | T-10-17-01/02/03/SC | `git diff --check` | PASS: three distinct independent reviewers; code0active, security70full+2Phase18humanpending/0implementationgap, UI24/24 after actualCR01/UX01 RED/fixes/rechecks.10-REVIEW/SECURITY/UI-REVIEW;dev+focus logs above;Task1reportcommit7af5011;git diff --check pass. |
 | 10-17-2 | 12 | DIV-03, DIV-04, DIV-05, HIST-03 | T-10-17-01/02/03/SC | `git diff --check` | PASS: fresh independent10-VERIFICATION human_needed,4/4roadmaptruths/all4requirements implementation-supported; no gap/override. Current385source/49browser317.3s/ZIPcf4e4817...fb9845d/owner packet integrity verified. Actual18answers remainpending; no documentation-only test creation claimed. |
-| 10-18-1 | 13 | HIST-03, DIV-03, DIV-05 | T-10-18-01/02/03/SC | `git diff --check` | PENDING HUMAN: Plan18 actual owner answer;10-HUMAN-UAT.md; no git/static/test result substitutes. |
-| 10-18-2 | 13 | HIST-03, DIV-03, DIV-05 | T-10-18-01/02/03/SC | `git diff --check` | PENDING HUMAN: Plan18 actual owner answer;10-HUMAN-UAT.md; no git/static/test result substitutes. |
+| 10-18-1 | 13 | HIST-03, DIV-03, DIV-05 | T-10-18-01/02/03/SC | `git diff --check` | PASS OWNER: “Reviewed: accept the new UI”; source48d970c/ZIPcf4e4817…fb9845d;10-HUMAN-UAT.md. Actual current-phase answer, not a test substitute. |
+| 10-18-2 | 13 | HIST-03, DIV-03, DIV-05 | T-10-18-01/02/03/SC | `git diff --check` | PASS OWNER: “Checked native 200%: passes”; explicit desktop browser-menu200% readability/reachability/no overlap/no horizontal page overflow;10-HUMAN-UAT.md. No automated native claim. |
 
 ## Source and dependency checks
 
@@ -139,18 +139,18 @@ consumers. Every plan now names actual wiring links and task-local source analog
 
 ## Sign-off
 
-Security accounting remains70fully verified plus T-10-18-01/02code controls
-evidenced with actual human completion pending; zero absent implemented
-mitigations. This is not72fullyclosed, acceptedrisk or a fabricated owneranswer.
-Owner UI/native200% remains the required Plan18 checkpoint, so both Nyquist
-flags remainfalse until the actual required sign-off under this contract.
+The independent security audit originally verified70technical entries and left
+T-10-18-01/02human completion pending. The actual Plan18 answers now close those
+two entries, with zero absent implemented mitigation or accepted-risk override.
+All36task outcomes and the required owner sign-off are recorded; the Nyquist
+and wave0 flags are now true. This does not certify live provider activation.
 
 
-- [x] All applicable executed task01–17 behavioral/static gates pass; each row records actual selectors or broader/superseding proof. Planned quick-command text is not a claim of verbatim execution. Tasks17review/packet use evidence/integrity checks; actual bugs received genuine RED/GREEN. Tasks18remain human-pending.
-- [x] Current critical100% statement/branch list agrees in CI/docs/regression (47modules4545statements/1452branches,0miss/partial;16critical log).
+- [x] All applicable task01–18 outcomes pass; rows identify actual selectors, broader/superseding proof or the actual human answer. No tests were invented for review/owner-record tasks; actual bugs received genuine RED/GREEN.
+- [x] Current critical100% statement/branch list agrees in CI/docs/regression (47modules4565statements/1462branches,0miss/partial;17critical log).
 - [x] Real postwait/concurrent/shared-cash and restricted SQL bypass denials pass (08/09 suites,final16SQL23 and63roles denials).
 - [x] Exact retained0007–0014 recovery, fresh/upgraded TLS and final same-archive current-app replay pass; selectedcutover/old-app rollback actually0008. No old-runtime0014 or selected0014candidatecutover claim (16finalreport).
-- [x] Full backend/frontend/browser/configured audit/five strict image gates pass. Browser49+one expected deployed-CSPskip; npm highgate passes with2low/15moderate,not zero all vulnerabilities. Backend2550;repaired-image frontend697;all5scans0HIGH/CRITICAL.
-- [x] Four distinct independent code/security/UI/goal roles recorded; code0active, security70fullyverified+2humanpending/0implementationgaps, UI24/24, goal4/4technicaltruths/HUMAN_NEEDED. Both actual defects and minor UI drifts closed without a waiver.
-- [ ] Owner accepts new UI and genuine native200% outcome is recorded.
-- [ ] Set nyquist_compliant/wave_0_complete true only from actual execution evidence.
+- [x] Full backend/frontend/browser/configured audit/five strict image gates pass. Browser49+one expected deployed-CSPskip; npm highgate passes with2low/15moderate,not zero all vulnerabilities. Backend2557;frontend697;all5scans0HIGH/CRITICAL.
+- [x] Four independent code/security/UI/goal roles recorded; code0active, no absent technical mitigation, UI24/24 and4/4technical goals. Plan18 records the two previously pending owner results; final verifier reconciles overall status separately.
+- [x] Owner accepts new UI and genuine native200% outcome is recorded verbatim in10-HUMAN-UAT.md.
+- [x] Set nyquist_compliant/wave_0_complete true only after all required actual execution and human sign-off.

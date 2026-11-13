@@ -1,15 +1,16 @@
 ---
 phase: 10-dividend-cash-and-event-history
-status: partial
+status: passed
 prepared: 2026-11-13
 review_source: 48d970c
-native_zoom: pending-owner
+native_zoom: owner-verified
 ---
 
 # Phase10 owner review packet
 
-Plan18 UI acceptance is recorded below; its native200% answer is reconciled in
-Task18-2. Earlier Phase9 UI approval is not used for these new states.
+Plan18 is passed from the two explicit owner answers below, recorded
+2026-11-13T16:33:06Z. Earlier Phase9 approval and automated reflow are not used
+as substitutes for either current-phase answer.
 Live provider access/rights and publication remain explicitly deferred.
 
 ## Open the reviewed version
@@ -91,8 +92,14 @@ approval, automation or elapsed time. No UI defect was reported.
    the confirmed native200% setting, pass/fail and any affected page/detail.
    Reset browser zoom afterward if desired.
 
-**Owner result: PENDING.** Earlier automatic320–1440 viewport checks, root-font
-reflow and previous-phase owner zoom do not complete this check.
+**Owner result: PASSED.** Exact answer to the current Plan18-2 question:
+“Checked native 200%: passes”. The question explicitly required the desktop
+browser's own Zoom menu at200%, readable/reachable text and controls, no
+obscuring overlap and no horizontal page scrolling on the reviewed pages.
+This is the owner's actual confirmation, not automated native-zoom measurement.
+Browser name and window dimensions were optional and were not supplied; none
+are invented. No layout issue was reported. The reviewed source and exact ZIP
+SHA are the same as Plan18-1 above. The accepted ZIP remains byte-unchanged.
 
 ## Automated evidence and limits
 

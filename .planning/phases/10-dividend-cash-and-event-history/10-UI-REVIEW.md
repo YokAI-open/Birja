@@ -1,5 +1,11 @@
 # Phase 10 — UI Review
 
+**Plan18 coordinator sign-off,2026-11-13T16:33:06Z:** the owner explicitly
+answered “Reviewed: accept the new UI” and “Checked native 200%: passes” for
+source48d970c and ZIPcf4e4817…fb9845d. See10-HUMAN-UAT.md for the exact questions
+and source binding. This completes the two audit-time human needs below; it is
+owner confirmation, not a new automated/native measurement by this auditor.
+
 **Audited:** 2026-11-13, independent initial audit and final re-audit at48d970c
 **Baseline:** approved `10-UI-SPEC.md` / `10-UI-CHECK.md`, `10-CONTRACTS.md` C05a/C06 and `design-system/birja/MASTER.md`
 **Screenshots:** fresh final Plan17 actual Chromium captures independently visually inspected. The coordinator executed the browser run; this auditor inspected its source, logs and captures without starting another run.
@@ -15,7 +21,7 @@
 | Spacing | 4/4 | All four undeclared12px gaps replaced with declared16px gaps. |
 | Experience Design | 4/4 | Guarded native focus scrolling keeps final completion visible; real five-width regression passes. |
 
-**Overall: 24/24.** Zero active product findings; all three initial warnings are resolved with source/evidence below. Owner acceptance of the new UI and genuine native200% zoom remain pending, separately from these scores. This score records the inspected technical/visual contract, not human acceptance or blanket accessibility certification.
+**Overall: 24/24.** Zero active product findings; all three initial warnings are resolved with source/evidence below. The owner acceptance/native200% needs were pending at the independent audit and are now completed by the attributed Plan18 sign-off above. The score itself remains a technical/visual audit, not blanket accessibility certification.
 
 ## Initial Top 3 Findings — All Resolved
 
@@ -62,7 +68,7 @@ PASS: loading/empty/initial-error/retained-refresh-error/append-error states rem
 - Independently checked107current UI/support source hashes,385current source hashes and capture/current equality,49review-file hashes, ZIP SHA and50-entry CRC: no mismatch. ZIP `/tmp/birja-phase10-ui-review.zip`,15,497,014bytes, SHA256 `cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d`. Tracked manifest binds48exact exports as well.
 - The16HTML pages preserve actual rendered DOM/CSS/local fonts. Exported controls do not execute; the screenshots/exports support presentation review, while source and prior real browser journeys support interactions. Actual financial effects used real services/SQL; synthetic long labels and tied read-only timestamps remain presentation fixtures, not provider/financial mutation claims.
 - No Playwright MCP available. Dev-server probes at3000/5173/8080 found none; no server/stack/install started. Screenshot storage gate was inspected: `.planning/ui-reviews/.gitignore` is absent. No screenshot was captured or copied into the repository; existing evidence remains under`/tmp`, outside git. A future repository capture must create the prescribed ignore gate first. This audit's only write is this report.
-- **needs_human_review: true:** new Dividend/correction/held UI acceptance and genuine native200% browser zoom remain Plan18 owner checks. Root-font enlargement/deviceScale/CSS zoom are not native zoom. Earlier Phase9 approval does not accept Phase10. No live-provider, deployed-CSP, publication or deployment acceptance inferred.
+- **needs_human_review: false (Plan18 owner results recorded):** the original new-UI/native200% needs are completed by the exact current-phase answers above. Root-font enlargement/deviceScale/CSS zoom and earlier Phase9 approval were not used. No live-provider, deployed-CSP, publication or deployment acceptance is inferred.
 
 ## Registry Safety
 

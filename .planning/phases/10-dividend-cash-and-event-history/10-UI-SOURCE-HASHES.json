@@ -850,7 +850,7 @@
     "path": "/tmp/birja-phase10-ui-review-before-focus17.zip",
     "sha256": "482f3ec3f763d273416cfe8ec80a8dd6f94c0e6624a3c5d7812a46a4eb409862"
   },
-  "native_200_percent_zoom": "pending owner verification; CSS zoom/root font-size/deviceScale are supplementary only",
+  "native_200_percent_zoom": "Owner explicitly confirmed genuine desktop browser-menu200% passes; not automated; recorded2026-11-13T16:33:06Z",
   "source_sha256": {
     "frontend/src/App.test.tsx": "3e6d01be3f291cbe98188ed37505e0ff30a306ce74a871ef387c2208e915640d",
     "frontend/src/App.tsx": "f2615ad572d1ac303e0abed40fe1bb2a193b14739cef5e12c75646cc90d11e7d",
@@ -1016,5 +1016,16 @@
     "sha256": "cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d",
     "bytes": 15497014
   },
-  "archive_manifest_sha256": "a87370055e73d2758d8b87da7f21bb022536afbc84cddf90d3bda18fc7ac7743"
+  "archive_manifest_sha256": "a87370055e73d2758d8b87da7f21bb022536afbc84cddf90d3bda18fc7ac7743",
+  "owner_verification": {
+    "recorded_at_utc": "2026-11-13T16:33:06Z",
+    "reviewed_source": "48d970c262c7f52bb5692d38db0748e5169cf389",
+    "reviewed_zip_sha256": "cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d",
+    "ui_answer": "Reviewed: accept the new UI",
+    "native_zoom_answer": "Checked native 200%: passes",
+    "browser_name": "not supplied",
+    "evidence": "10-HUMAN-UAT.md",
+    "reviewed_zip_unchanged": true,
+    "archive_manifest_note": "The byte-unchanged reviewed ZIP retains its capture-time native-pending manifest; these later actual owner outcomes are recorded externally."
+  }
 }

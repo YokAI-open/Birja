@@ -1,6 +1,6 @@
 ---
 phase: 10-dividend-cash-and-event-history
-status: secured_implemented_pending_human
+status: secured
 reviewed: 2026-11-13
 review_mode: independent-agent
 initial_reviewed_head: f47af659e579f60015a740cbbafbf03b345ad837
@@ -11,14 +11,26 @@ asvs_level: 1
 asvs_scope: targeted-controls-only
 block_on: open
 threats_total: 72
-threats_closed: 70
+threats_closed: 72
 threats_open: 0
-threats_pending_human: 2
+threats_pending_human: 0
 unregistered_flags: 0
 accepted_phase10_risks: 0
 ---
 
 # Phase 10 security mitigation audit
+
+## Plan18 coordinator closure —2026-11-13T16:33:06Z
+
+The owner explicitly answered “Reviewed: accept the new UI” and “Checked native
+200%: passes” for source48d970c/ZIPcf4e4817…fb9845d. Exact questions, answers and
+source binding are in10-HUMAN-UAT.md. These actual answers complete T-10-18-01/02;
+current counts are72closed/0open/0pending, without accepted-risk or automated
+native-zoom claims. No implementation changed. The independent audit and its
+affected-check snapshots below originally recorded70verified/twohuman-pending;
+their historical attribution is preserved rather than presented as new execution.
+
+## Independent technical audit snapshot before owner sign-off
 
 **SECURED for implemented technical scope; HUMAN_NEEDED for phase completion.**
 No absent implementation mitigation was found. All 72 declared IDs are mapped
@@ -162,8 +174,8 @@ completion is unverified. It does not hide an absent implementation mitigation.
 | T-10-17-02 | Repudiation / Information disclosure | mitigate | CLOSED | Retained event and owner proof; A+K+P: retained12 artifacts/384 current hashes rechecked; pending honest. |
 | T-10-17-03 | Denial of service | mitigate | CLOSED | Queries, loops and tests; F+G+K+L: bounded work/read/dev/tooling; no new runtime query. |
 | T-10-17-SC | Tampering | mitigate | CLOSED | npm/uv packages and images; S: approved exact patch exception; locked manifests; strict five-image pass. |
-| T-10-18-01 | Tampering / Elevation | mitigate | PENDING_HUMAN | C06 financial or privacy boundary; G+H+I+J technical controls verified; P: actual new-UI/native200% completion pending. |
-| T-10-18-02 | Repudiation / Information disclosure | mitigate | PENDING_HUMAN | Retained event and owner proof; A+K+P: immutable/source evidence verified; owner answers expressly absent. |
+| T-10-18-01 | Tampering / Elevation | mitigate | CLOSED | G+H+I+J technical controls verified; actual Plan18 current-source UI acceptance/native200% answers recorded in10-HUMAN-UAT.md and coordinator closure above. |
+| T-10-18-02 | Repudiation / Information disclosure | mitigate | CLOSED | A+K+P immutable/source evidence plus exact owner answers bound to reviewed source/ZIP; coordinator closure above preserves audit-time pending attribution. |
 | T-10-18-03 | Denial of service | mitigate | CLOSED | Queries, loops and tests; F+G+J+L: bounded work/read/inline originals and script-free review packet. |
 | T-10-18-SC | Tampering | mitigate | CLOSED | npm/uv packages and images; S: approved exact patch exception; locked manifests; strict five-image pass. |
 
