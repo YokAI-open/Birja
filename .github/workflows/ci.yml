@@ -298,9 +298,40 @@ jobs:
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         run: |
           set -Eeuo pipefail
-          sudo -- bash deploy/tests/test-db-operations.sh --image-transition
-          sudo -- bash deploy/tests/test-db-operations.sh --all
-          sudo -- bash deploy/tests/test-rollback-db-security.sh
+          sudo -- python3 - <<'PY'
+          import importlib.util
+          import subprocess
+          import tarfile
+          from pathlib import Path
+          ROOT = Path.cwd()
+          spec = importlib.util.spec_from_file_location("ops", ROOT / "deploy/tests/ops-fixtures.py")
+          ops = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(ops)
+          archive = Path("/tmp/birja-backup-test-ci-final/recovery.tar")
+          archive.parent.mkdir(mode=0o700)
+          ops.r.bundle_package(archive)
+          expected = ops.r.digest(archive)
+          source = {name: ops.r.digest(ROOT / name) for name in ops.r.CORE + ops.r.UNITS}
+          def unchanged():
+              assert ops.r.digest(archive) == expected
+              assert source == {name: ops.r.digest(ROOT / name) for name in source}
+              with tarfile.open(archive, "r:") as retained:
+                  for name in source:
+                      assert retained.extractfile(name).read() == (ROOT / name).read_bytes()
+          unchanged()
+          ops.image_transition()
+          unchanged()
+          ops.roundtrip(archive)
+          unchanged()
+          ops.roles()
+          unchanged()
+          assert ops.tls() == ops.tls(fresh_bootstrap=True)
+          unchanged()
+          subprocess.run(["bash", str(ROOT / "deploy/tests/test-rollback-db-security.sh"),
+                          "--recovery-bundle", str(archive)], check=True)
+          unchanged()
+          print("same_archive_final_ci=true sha256=" + expected, flush=True)
+          PY
       - name: Clean fixed synthetic projects
         if: always()
         run: |

@@ -64,7 +64,44 @@ def image_policy(image, aggregate):
         raise ValueError("image is required")
 
 
+def recovery_policy(ops):
+    required = [
+        'archive = Path("/tmp/birja-backup-test-ci-final/recovery.tar")',
+        "ops.r.bundle_package(archive)", "ops.image_transition()",
+        "ops.roundtrip(archive)", "ops.roles()",
+        "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
+        '"--recovery-bundle", str(archive)], check=True)',
+        "assert ops.r.digest(archive) == expected",
+        "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
+        "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
+    ]
+    for text in required:
+        if text not in ops:
+            raise ValueError("missing retained recovery policy: " + text)
+    stages = required[1:7]
+    if [ops.index(text) for text in stages] != sorted(ops.index(text) for text in stages):
+        raise ValueError("recovery stages reordered")
+    if ops.count("unchanged()") != 7:
+        raise ValueError("every recovery stage must preserve archive and source identity")
+
+
 class CI(unittest.TestCase):
+    def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
+        ops = jobs()["ops"]
+        recovery_policy(ops)
+        for old in [
+            "ops.r.bundle_package(archive)", "ops.image_transition()", "ops.roundtrip(archive)",
+            "ops.roles()", "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
+            '"--recovery-bundle", str(archive)], check=True)',
+            "assert ops.r.digest(archive) == expected",
+            "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
+        ]:
+            with self.assertRaises(ValueError):
+                recovery_policy(ops.replace(old, "omitted_stage"))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("ops.roles()", "ops.roundtrip(archive)", 1))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("unchanged()", "omitted()", 1))
     def test_dividend_authority_history_and_schedulers_are_required(self):
         backend = jobs()["backend"]
         for module in [
@@ -267,12 +304,8 @@ class CI(unittest.TestCase):
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
-        for arguments in [
-            "test-db-operations.sh --image-transition",
-            "test-db-operations.sh --all",
-            "test-rollback-db-security.sh",
-        ]:
-            self.assertIn("sudo -- bash deploy/tests/" + arguments, ops)
+        self.assertIn("sudo -- python3 - <<'PY'", ops)
+        recovery_policy(ops)
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
             self.assertNotIn(forbidden, ops)
@@ -293,8 +326,6 @@ class CI(unittest.TestCase):
             "test-restore-safety.sh",
             "test-db-config.sh",
             "test-deploy-prerequisites.py",
-            "test-db-operations.sh --all",
-            "test-db-operations.sh --image-transition",
             "test-rollback-db-security.sh",
             "test-reexec.sh",
             "test-rollback-target.sh",
@@ -304,7 +335,7 @@ class CI(unittest.TestCase):
         ]:
             self.assertIn(producer, ops)
         self.assertLess(
-            ops.index("test-db-operations.sh --all"),
+            ops.index("ops.roundtrip(archive)"),
             ops.index("test-rollback-db-security.sh"),
         )
         cleanup = ops.split("- name: Clean fixed synthetic projects")[-1]

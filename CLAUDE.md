@@ -62,6 +62,10 @@ cd frontend && npm run test -- --coverage   # Vitest
 # e2e (owned disposable stack, fake prices and console email only)
 python3 deploy/tests/run-stock-browser.py
 # Serial retained0007–0014 recovery, restricted roles and fresh/upgraded TLS
+# The modes below are individual diagnostics. Final CI's ops job packages one
+# archive, checks current CORE/unit bytes after each stage, runs image transition,
+# roundtrip(archive), roles(), populated/fresh TLS with authority parity, then
+# rollback with --recovery-bundle pointing at that same checksum-pinned archive.
 python3 deploy/tests/test-stock-recovery-contracts.py --postgres
 bash deploy/tests/test-db-operations.sh --all
 bash deploy/tests/test-db-operations.sh --image-transition
