@@ -1,6 +1,6 @@
 ---
 phase: 10-dividend-cash-and-event-history
-status: human_needed
+status: partial
 prepared: 2026-11-13
 review_source: 48d970c
 native_zoom: pending-owner
@@ -8,8 +8,8 @@ native_zoom: pending-owner
 
 # Phase10 owner review packet
 
-Prepared for Plan18. **No owner answer has been recorded.** Earlier Phase9 UI
-approval does not accept these new Dividend/correction/held History states.
+Plan18 UI acceptance is recorded below; its native200% answer is reconciled in
+Task18-2. Earlier Phase9 UI approval is not used for these new states.
 Live provider access/rights and publication remain explicitly deferred.
 
 ## Open the reviewed version
@@ -65,8 +65,12 @@ originals remain traceable; desktop/mobile detail, loading, empty and error
 presentations are acceptable. Synthetic long labels are layout stress inputs,
 not provider identity assertions. Times reflect the capture timezone.
 
-**Owner result: PENDING.** Parent asks for explicit acceptance or specific issues
-in Plan18; this document does not supply an answer.
+**Owner result: PASSED.** Exact answer to the current Plan18-1 question:
+“Reviewed: accept the new UI”. This accepts reviewed source
+`48d970c262c7f52bb5692d38db0748e5169cf389` and ZIP SHA256
+`cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d`.
+The owner explicitly submitted this answer; it is not inferred from earlier
+approval, automation or elapsed time. No UI defect was reported.
 
 ## Plan18-2 — Genuine native200% desktop browser zoom
 
