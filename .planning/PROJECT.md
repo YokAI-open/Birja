@@ -38,14 +38,20 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   — locally validated in Phase9; live activation deferred.
 - [x] Shared original USD cash, immediately reusable proceeds, cross-asset
   concurrency safety and combined midpoint/dated/incomplete portfolio valuation
-  — locally validated in Phase9; dividend cash publication remains Phase10.
+  — locally validated in Phase9; dividend cash publication validated in Phase10.
+
+- [x] Verified ordinary gross USD dividends credit shared cash once, with
+  immutable corrections, affordability/uncertainty holds and recovery-safe
+  duplicate protection (DIV-03–05) — validated in Phase10.
+- [x] Private paginated mixed stock/crypto/Dividend/split/correction History,
+  original-reference details and owner/session isolation (HIST-03) — validated
+  in Phase10; owner accepted the new UI and genuine native200% on2026-11-13.
 
 ### Active
 
-- [ ] Complete combined stock/crypto/dividend/correction event History (Phase10).
 - [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Stock commission and added percentage spread are zero; simulate buys at IEX ask and sells at bid, disclosing omitted regulatory fees.
-- [ ] Credit verified cash dividends to shared USD and show separate Dividend history events, with revision, correction and duplicate-payment safeguards.
+- [ ] Complete the approved Phase11 mixed-asset recovery and acceptance scope;
+  live activation and rollout remain separately gated.
 
 ### Out of Scope
 
@@ -104,12 +110,17 @@ recorded in09-LOCAL-PROOF. Distinct inline late reviews do not claim agent indep
 
 Phase7 live evidence and Phase8/live status/data activation remain deferred;
 rights/access/quotas/latency are not established by synthetic tests. Production
-remains v0.4.0/schema0008. Phase10 dividend cash and public event History and
-Phase11 final acceptance/rollout remain future work. Phase10 is now planned:
-18plans/36tasks/13waves, researched contracts and existing-design UI contract,
-independent checker pass after one resolved revision (0blockers/0warnings).
-All4assigned requirements are covered; no implementation or tests ran during
-planning. Next: execute Phase10 on owner instruction.
+remains v0.4.0/schema0008. Phase10 is locally complete:18plans/36tasks/13waves,
+all4assigned requirements verified, all four independent review roles complete,
+and both current UI/native200%owner outcomes passed. Final backend2557tests,
+47critical modules100%statements/branches, frontend697 and browser49plus one
+expected deployed-CSPskip pass, with five strict image scans0HIGH/CRITICAL.
+Current0014 retained/current-service recovery and legacy0008 selected cutover/
+old-app rollback remain distinct. Exact authority/CORE bytes were preserved;
+actual review findings were fixed and affected gates independently rechecked.
+See10-VERIFICATION/18-SUMMARY/VALIDATION. No software publication or deployment
+occurred. Phase11 final mixed-asset recovery/acceptance is ready to plan;
+no next-phase execution or live activation is implied.
 
 ## Current Milestone: v1.1 US Stock Trading
 
@@ -209,4 +220,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-12 after local Phase9 verification and owner UI/nativezoom acceptance*
+*Last updated: 2026-11-13 after Phase10 verification and explicit owner UI/native200% acceptance*

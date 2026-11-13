@@ -1,24 +1,25 @@
 ---
 phase: 10-dividend-cash-and-event-history
-verified: 2026-11-13T16:20:13Z
-status: human_needed
+verified: 2026-11-13T16:36:25Z
+status: passed
 score: 4/4 roadmap must-haves verified
 overrides_applied: 0
 review_source: 48d970c262c7f52bb5692d38db0748e5169cf389
-human_verification:
-  - test: Accept the new mixed History, Dividend, correction/held and original-reference interface at the recorded source.
-    expected: Explicit owner acceptance or concrete defects recorded in 10-HUMAN-UAT.md.
-    why_human: Automated financial/browser proof and independent UI review cannot supply the owner's acceptance.
-  - test: Inspect the extracted review HTML in a desktop browser whose own Zoom menu visibly reads 200%.
-    expected: Readable text, reachable controls/details, no obscuring overlap and no horizontal page overflow.
-    why_human: Viewport tests, root-font enlargement and earlier Phase9 acceptance do not establish genuine current-phase native zoom.
+re_verification:
+  previous_outcome: human_needed
+  previous_score: 4/4 roadmap must-haves verified
+  gaps_closed:
+    - Explicit source-bound owner acceptance of the new Phase10 UI recorded.
+    - Actual owner native200% desktop browser confirmation recorded.
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 10: Dividend Cash and Event History Verification Report
 
 **Phase Goal:** Users receive verified dividend cash once and trace all mixed-asset trades, income, splits and corrections in History.
 
-**Status:** human_needed. **Re-verification:** No — no previous report existed. All four roadmap implementation truths are VERIFIED; two additional Plan18 acceptance truths are UNCERTAIN (WARNING, owner decision required). No implementation blocker or override found. This report does not complete Phase10 or check off its requirements.
+**Status:** passed. **Re-verification:** Yes — human-only closure after the initial2026-11-13T16:20:13Z independent4/4 implementation review. All four roadmap truths and both additional Plan18 acceptance truths are VERIFIED. No implementation blocker, remaining human item or override. Canonical requirement/phase closure remains the orchestrator's responsibility.
 
 ## Goal Achievement
 
@@ -48,11 +49,11 @@ All PLAN frontmatter was examined. Related implementation refinements are groupe
 | 09 | Independent uncertain paid-anchor discovery; dedup/reconciliation without blocking crypto | VERIFIED — separate VERIFIED/ANCHORS bounded keysets; scheduler tests and actual cycle→SQL→History. |
 | 10–11 | Strict cursor/tied private pages/offpage original; authenticated exact no-store API, legacy preservation and once-only portfolio | VERIFIED — full-tuple SQL and owner joins; actual DB service/API/portfolio assertions. |
 | 12–13 | Whole-page strict exact parser; owner/epoch late-response isolation and retained errors; authoritative cash refresh | VERIFIED — parser/hook source and malformed/late401/same-owner-relogin/cancel-before-invalidate tests. |
-| 14–15 | Actual versus proposed cash, reachable original; responsive focus/errors; genuine financial browser and source-bound captures | VERIFIED — renderer/page, real SQL/API browser assertions and current packet hashes; native zoom expressly pending. |
+| 14–15 | Actual versus proposed cash, reachable original; responsive focus/errors; genuine financial browser and source-bound captures | VERIFIED — renderer/page, real SQL/API browser assertions and current packet hashes; native zoom subsequently owner-confirmed in18. |
 | 16 | Complete critical CI contract; actual suites/audits/scans and final retained/TLS/current-service replay/rollback | VERIFIED — 47-module CI/docs/test list and measured gates. Same-archive proof retains its original source/image scope, detailed below. |
-| 17 | Current code/security/UI reviews have no unresolved blocker; four requirements mapped honestly | VERIFIED — `10-REVIEW.md`, `10-SECURITY.md`, `10-UI-REVIEW.md` and this report. Coordinator-owned final ledger/summary reconciliation follows this review; its timing is not a missing product artifact. |
-| 18, truth1 | Explicit owner acceptance of the new mixed History/held/correction/original UI | UNCERTAIN — WARNING: owner decision required; `10-HUMAN-UAT.md` records PENDING. |
-| 18, truth2 | Genuine desktop native200% usability with no overlap/horizontal overflow | UNCERTAIN — WARNING: owner observation required; no result invented. |
+| 17 | Current code/security/UI reviews have no unresolved blocker; four requirements mapped honestly | VERIFIED — independent reviews and this report; actual final ledger/17SUMMARY now present. |
+| 18, truth1 | Explicit owner acceptance of the new mixed History/held/correction/original UI | VERIFIED — actual answer “Reviewed: accept the new UI”, recorded2026-11-13T16:33:06Z in `10-HUMAN-UAT.md`, bound to48d970c/exact reviewed ZIP. |
+| 18, truth2 | Genuine desktop native200% usability with no overlap/horizontal overflow | VERIFIED — actual answer “Checked native 200%: passes” to the explicit desktop browser-menu200% readability/reachability/no overlap/no horizontal scrolling question; same source/ZIP binding. |
 
 ### Required Artifacts and Critical Links
 
@@ -79,7 +80,7 @@ All below exist, are substantive and wired; dynamic data is traced separately be
 
 ### Behavioral Spot-Checks and Execution Evidence
 
-This independent verifier read source, changed-file scope (`5925b52..HEAD`), actual assertions and logs; it did not start a database/browser/service, rerun long suites, change source or commit. Source build is48d970c; report-only HEAD7af5011 adds no product change.
+The initial independent verifier read source, changed-file scope (`5925b52..HEAD`), actual assertions and logs. Final re-verification confirms all18 paired plans/summaries exist, retains the prior all-plan must-have mapping, and reads the new18SUMMARY and actual HUMAN-UAT/validation/source-manifest outcomes; no nonplanning file changed since48d970c (`git diff --name-only 48d970c..HEAD -- . ':(exclude).planning'` is empty). Fresh read-only checks again pass385/385 source hashes,107/107UI hashes, exact ZIP SHA/size/CRC and its unchanged capture manifest. No database/browser/service was started, long suite rerun, source changed or commit made. Previous implementation evidence remains applicable; later metadata commits are not a new runtime build or sealed six-stage run.
 
 | Check | Command / evidence | Result |
 |---|---|---|
@@ -106,12 +107,12 @@ The **selected cutover/old-app rollback fixture is0008**. This is not proof of a
 
 | Requirement | Source plans | Status / evidence |
 |---|---|---|
-| DIV-03 — verified gross ordinary USD due cash and detailed Dividend |01–03,05,07–09,11–12,14–18 | Implementation SATISFIED — roadmap truth1, real sold-after-cutoff credit and C05a fields; owner new UI/nativezoom pending. |
+| DIV-03 — verified gross ordinary USD due cash and detailed Dividend |01–03,05,07–09,11–12,14–18 | SATISFIED — roadmap truth1, real sold-after-cutoff credit and C05a fields; actual18 UI/nativezoom acceptance recorded. |
 | DIV-04 — atomic once-only cash/History across retries, concurrency, revisions and recovery |01–02,04–09,13,15–17 | Implementation SATISFIED — truth2; actual transactional/concurrent/retained replay proof. |
-| DIV-05 — linked immutable correction, duplicate protection and visible uncertainty/affordability hold |01–05,07–12,14–18 | Implementation SATISFIED — truth3; real worker→restricted SQL→History paidA/heldB/dedup/reconciled successor and exact held authority recovery. Owner new UI/nativezoom pending. |
-| HIST-03 — private deterministic mixed event paging/details, preserved crypto fills |10–18 | Implementation SATISFIED — truth4; actual owner-filtered SQL/API/browser, full tuple cursor and bounded original. Owner new UI/nativezoom pending. |
+| DIV-05 — linked immutable correction, duplicate protection and visible uncertainty/affordability hold |01–05,07–12,14–18 | SATISFIED — truth3; real worker→restricted SQL→History paidA/heldB/dedup/reconciled successor and exact held authority recovery; actual18 UI/nativezoom acceptance. |
+| HIST-03 — private deterministic mixed event paging/details, preserved crypto fills |10–18 | SATISFIED — truth4; actual owner-filtered SQL/API/browser, full tuple cursor and bounded original; actual18 UI/nativezoom acceptance. |
 
-All four IDs assigned by REQUIREMENTS are claimed by plans; no orphaned requirement. Requirements remain unchecked until actual Plan18 acceptance and normal orchestrator closure. PORT-06 is consumed/protected, not claimed as a new Phase10 assignment.
+All four IDs assigned by REQUIREMENTS are claimed by plans; no orphaned requirement. Actual Plan18 acceptance is complete; only the orchestrator changes canonical requirement checkboxes and phase state. PORT-06 is consumed/protected, not claimed as a new Phase10 assignment.
 
 ### Anti-Patterns and Test Quality
 
@@ -121,20 +122,19 @@ Disconfirmation checks targeted duplicate-cash races, disappearing paid-anchor u
 
 Two potentially misleading green checks were explicitly limited: (1) the historical dev reproduction exits0 because it **asserts the42501 defect**, not financial success; real expected-success REDdd2ba3a then GREENf47af65 and permanent ordinary-dev CI regression close CR-01; (2) tied-time browser route fulfillment is a **read-only presentation fixture**, not proof of SQL tie ordering or financial mutation. Actual SQL paging tests and independent real browser financial flow supply those proofs. Failure/timeout monkeypatches exercise cleanup around real financial behavior; they do not replace successful financial writes. No disabled Phase10 financial requirement proof was found. The sole expected deployed-CSP skip is old accepted W07, not the sole evidence for a new requirement.
 
-The initial UI21/24 finding UX-01 was a real readiness defect despite its WARNING label: actual REDdb19cf5 measured focused completion bottom3616>viewport900. GREEN48d970c retains owner/epoch/append-intent/nonsteal guards and permits native focus scrolling; actual end/retry rectangle/navigation checks pass at320/375/768/1024/1440. Cash medium weight and four16px gaps now match the contract. Independent current UI24/24/code0active/security70fully verified+2pending human are consistent with inspected source and evidence. This does not mean72 threats closed or owner acceptance received.
+The initial UI21/24 finding UX-01 was a real readiness defect despite its WARNING label: actual REDdb19cf5 measured focused completion bottom3616>viewport900. GREEN48d970c retains owner/epoch/append-intent/nonsteal guards and permits native focus scrolling; actual end/retry rectangle/navigation checks pass at320/375/768/1024/1440. Cash medium weight and four16px gaps now match the contract. Initial independent UI24/24/code0active/security70verified+2pending-human conclusions remain historically attributed. The coordinator's later security72/0pending and UI owner closure are supported by the two actual18 answers; they do not rewrite the earlier independent audit as72automated technical proofs.
 
 ### Human Verification Required
 
-1. **New Phase10 UI acceptance — UNCERTAIN / WARNING.** Follow `10-HUMAN-UAT.md`: download/extract `/tmp/birja-phase10-ui-review.zip`, open local `index.html` in a desktop browser, inspect mixed desktop/mobile, original, unaffordable/uncertain/reconciled and loading/empty/error/end pages. Expected: clear actual versus proposed cash, truthful no-cash holds, traceable originals and acceptable new UI. Record the owner's explicit answer bound to48d970c. Offline exported controls are presentation only; browser/service tests prove interactions.
-2. **Genuine native200% — UNCERTAIN / WARNING.** In that desktop browser select Zoom200% in its own menu and confirm the displayed setting. Inspect mixed/held/append-error pages top to bottom. Expected: readable text, reachable controls/details, no obscuring overlap or horizontal page scrolling. Record browser/setting/result and any affected page. Smaller viewports, CSS/root-font/device scaling and Phase9 approval cannot answer this.
+None remaining. Both actual owner outcomes were recorded2026-11-13T16:33:06Z in `10-HUMAN-UAT.md` and the external manifest: **“Reviewed: accept the new UI”** and **“Checked native 200%: passes”**. The second question expressly required a desktop browser's own Zoom menu200%, readable/reachable text and controls, no obscuring overlap and no horizontal page scrolling. Browser name/window size were optional and not supplied; none are invented. This is actual owner confirmation, not automated native-zoom measurement or earlier-phase approval.
 
-The packet SHA256 is `cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d`;16HTML/32PNG plus index/manifest,385current capture hashes and107UI hashes verified. Neither owner answer is present. These are planned Plan18 human gates, not a circular Plan17 implementation blocker.
+Both answers bind source `48d970c262c7f52bb5692d38db0748e5169cf389` and packet SHA256 `cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d`,15,497,014bytes. Fresh verifier hash/CRC checks pass for this16HTML/32PNG/index/manifest packet. Its immutable capture-time manifest truthfully remains native-pending **at capture time**; later answers are recorded externally without altering the reviewed ZIP. Offline controls remain presentation only; actual service/browser tests prove interactions.
 
 ### Gaps and Deferred Boundary
 
-No actionable implementation gap found, so no fabricated `gaps` entry or override. Overall status remains **human_needed**, never `passed` while the two owner outcomes are pending. Later Phase11 scope was checked against ROADMAP; no failed Phase10 truth was moved there. Existing Phase7/8 live access/rights/activation, publication and accepted v1 W01–W08 deferrals are preserved. Synthetic admission/provider fixtures prove local safeguards and cannot establish live permission, freshness or rollout acceptance.
+No actionable implementation gap or remaining human item. All18 summaries and36 actual validation outcomes exist; final status is **passed**, with4/4 roadmap goals and4/4 assigned requirements supported. No override used. Later Phase11 scope was checked against ROADMAP; no failed Phase10 truth was moved there. Existing Phase7/8 live access/rights/activation, publication and accepted v1 W01–W08 deferrals are preserved. Synthetic admission/provider fixtures prove local safeguards and cannot establish live permission, freshness or rollout acceptance.
 
 ---
 
-_Verified: 2026-11-13T16:20:13Z_  
+_Initially verified: 2026-11-13T16:20:13Z; human closure re-verified: 2026-11-13T16:36:25Z_
 _Verifier: independent gsd-verifier agent; only this report written, no commits._

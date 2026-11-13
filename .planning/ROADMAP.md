@@ -19,7 +19,7 @@ authorize a software release or deployment.
 - [ ] **Phase 7: Permitted Stock Discovery** — Browse twenty stocks with truthful IEX prices, freshness and regular-session availability while preserving existing accounts.
 - [x] **Phase 8: Corporate-Action-Safe Ownership** — Protect ownership with event monitoring, historical dividend eligibility, ordinary forward splits and visible uncertainty suspensions. (completed 2026-11-11)
 - [x] **Phase 9: Whole-Share Trading and Combined Portfolio** — Trade stocks against shared cash with safe previews/retries and honest mixed-asset valuations. (completed 2026-11-12)
-- [ ] **Phase 10: Dividend Cash and Event History** — Receive dividends and auditable corrections in shared cash and complete paginated History.
+- [x] **Phase 10: Dividend Cash and Event History** — Receive dividends and auditable corrections in shared cash and complete paginated History. (completed 2026-11-13)
 - [ ] **Phase 11: Mixed-Asset Recovery and Acceptance** — Restore the complete ledger exactly and prove full user journeys under existing CI gates.
 
 ## Activation and compatibility boundaries
@@ -352,7 +352,7 @@ Live/provider/publication deferrals remain; production is unchanged.
 - [x] 10-17-PLAN.md — Review code, threats, UI and phase goal
 
 **Wave 13** *(blocked on declared predecessor waves; see plan dependencies)*
-- [ ] 10-18-PLAN.md — Accept new mixed History and native zoom
+- [x] 10-18-PLAN.md — Accept new mixed History and native zoom
 
 **Planning boundary:** Research, concrete pattern map, checked UI contract,
 execution contracts and exact task validation map saved. Independent plan check
@@ -394,7 +394,7 @@ do not establish live acceptance or phase completion.
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
-| 10. Dividend Cash and Event History | v1.1 | 17/18 | In Progress|  |
+| 10. Dividend Cash and Event History | v1.1 | 18/18 | Complete    | 2026-11-13 |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:

@@ -34,15 +34,15 @@ Owner approved all 26 requirements and the exact boundaries below, including a s
 
 - [x] **PORT-06**: User sees combined cash, crypto and stock holdings, allocation and portfolio return against the original stored starting cash; eligible stock valuation uses IEX bid/ask midpoint and dividend cash is counted once.
 - [x] **PORT-07**: User can inspect dated stock marks while the market is closed; missing or corporate-action-uncertain valuations are explicitly unavailable and make aggregate totals incomplete rather than silently zero or fresh.
-- [ ] **HIST-03**: User sees stock fills, Dividend credits, forward-split events and explicit corrections in a private, deterministic newest-first paginated History, with event-specific details and preserved existing crypto fills.
+- [x] **HIST-03**: User sees stock fills, Dividend credits, forward-split events and explicit corrections in a private, deterministic newest-first paginated History, with event-specific details and preserved existing crypto fills.
 
 ### Dividends
 
 - [x] **DIV-01**: User dividend entitlements use structured ordinary USD cash-dividend announcements whose identities, dates, amounts and revisions are retained and regularly rechecked; conflicting, incomplete, cancelled or uncertain events do not cause guessed payments.
 - [x] **DIV-02**: User dividend entitlement is based on holdings at the verified eligibility cutoff for that event, accounting for historical trades and processed splits; buying after the cutoff does not earn the dividend and selling afterward does not erase it.
-- [ ] **DIV-03**: User receives the verified gross ordinary USD cash dividend into shared cash on or after its payable date, without tax withholding or automatic reinvestment; the Dividend event shows stock, relevant dates, eligible quantity, per-share rate and credited amount.
-- [ ] **DIV-04**: User cannot receive duplicate dividend cash from retries, concurrent processing, revised announcements or recovery; credit and History publication are one atomic accounting operation.
-- [ ] **DIV-05**: User can trace a verified post-payment correction through a separate adjustment linked to the original event; prior history is retained, duplicate deltas are prevented and uncertain or unaffordable negative adjustments are held for reconciliation instead of making cash negative.
+- [x] **DIV-03**: User receives the verified gross ordinary USD cash dividend into shared cash on or after its payable date, without tax withholding or automatic reinvestment; the Dividend event shows stock, relevant dates, eligible quantity, per-share rate and credited amount.
+- [x] **DIV-04**: User cannot receive duplicate dividend cash from retries, concurrent processing, revised announcements or recovery; credit and History publication are one atomic accounting operation.
+- [x] **DIV-05**: User can trace a verified post-payment correction through a separate adjustment linked to the original event; prior history is retained, duplicate deltas are prevented and uncertain or unaffordable negative adjustments are held for reconciliation instead of making cash negative.
 
 ### Splits and uncertain corporate actions
 
@@ -96,12 +96,12 @@ Every approved requirement has exactly one approved primary phase owner. The own
 | STKTR-06 | Phase 9 | Complete |
 | PORT-06 | Phase 9 | Complete |
 | PORT-07 | Phase 9 | Complete |
-| HIST-03 | Phase 10 | Pending |
+| HIST-03 | Phase 10 | Complete |
 | DIV-01 | Phase 8 | Complete |
 | DIV-02 | Phase 8 | Complete |
-| DIV-03 | Phase 10 | Pending |
-| DIV-04 | Phase 10 | Pending |
-| DIV-05 | Phase 10 | Pending |
+| DIV-03 | Phase 10 | Complete |
+| DIV-04 | Phase 10 | Complete |
+| DIV-05 | Phase 10 | Complete |
 | ACT-01 | Phase 8 | Complete |
 | ACT-02 | Phase 8 | Complete |
 | ACT-03 | Phase 8 | Complete |
