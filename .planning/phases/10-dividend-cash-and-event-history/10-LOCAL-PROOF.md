@@ -1,5 +1,137 @@
 # Phase10 local execution evidence
 
+## Current gate — Plan16 final local gates complete, 2026-11-13
+
+Both Plan16 tasks pass locally. Current operations source is7196d5f; repaired
+Node source is6d95d19. Final serial proof1391.017s passes all six stages below.
+Phase/whole-requirement completion and actual owner/native200% acceptance remain
+separate Plans17/18; live activation and publication remain deferred.
+
+| Final same-archive stage | Actual seconds | Outcome |
+|---|---:|---|
+| Encrypted retained0007–0014 |458.785|Exact rows/schema/sequences/authority/source; current0014 replay/History/quarantine|
+| Restricted populated/fresh roles |183.898|63genuine denials; fresh/upgrade parity|
+| Populated verify-fullTLS |147.413|Real consumers/financial effects, transport negatives/isolation/renewal|
+| Fresh verify-fullTLS |160.010|Same consumers; authority result equals populated lane|
+| Physical image transition |39.011|Real collation drift/reindex/logical restore; original untouched|
+| Selected cutover/recreate/old-app rollback |395.051|Legacy0008, same installed archive, original fingerprints unchanged|
+
+**Scope:** selected-volume cutover and actual old-app rollback are proven at
+**0008**. No old-runtime-on0014 or selected0014candidate-cutover claim is made.
+Current0014 proof is exact retained restore plus genuine current owner/service
+replay/History/Portfolio and app/scheduler financial quarantine. Plan17 assesses
+these facts against the phase goal; Phase11 rollout remains separate.
+
+Actual command:`python3 /tmp/birja-phase10-16-final-gate.py`, not literal CLI
+`--all`. The wrapper invokes canonical roundtrip(explicit_archive),roles(),both
+TLS lanes with authority parity,image_transition(),then the actual rollback
+script with`--recovery-bundle`pointing to that same archive. It asserts archive,
+current CORE/unit bytes and all384source hashes after every stage; three built
+image IDs also match before/after. No retained byte changed or needed a rerun.
+
+Final archive`/tmp/birja-backup-test-phase10-final/recovery.tar`,152320000bytes,
+SHA256`1faa8277951d0c2a66ac10ffb8b39b5f85372acdacd10b3b3348126c90052cc1`.
+Packaging current11CORE/unit files reproduced the pre-consumer archive exactly;
+the final run genuinely repeated all stages with current services/fixtures.
+Report SHA256`0114bbd04e61756afd47fda9246eb333102d059af799c2e1db0efeadd471f972`;
+final log SHA256`a06b495303d4a23c93aadcda97f89d688d72c0185d3b84e445f55413622dd344`.
+Report/log:`/tmp/birja-backup-test-phase10-final/gate-report.json`,
+`/tmp/birja-phase10-16-final-same-archive.log`. Complete artifact hash/resource
+receipt:`/tmp/birja-phase10-16-final-integrity.json`.
+
+All exclusively owned test,ops,restore,browser,fresh-dev and upgrade-dev projects
+have zero containers/networks/volumes. No other project was stopped or changed.
+Accepted built image IDs(runtime,builder,Node), identical before/after:
+`045aab2958e5c7f8765b6c2819565c3f9a92ab66febc1ef7f8172f333c03a946`,
+`2eeaaf47451e20a59159f9fd2ca8235c91d2638629e7c24bfd0c6874cff6f405`,
+`7344f1b05de0e77f4156a04b73098bfbad78c81a2480efdc6645070b14e2a4db`.
+
+Final actual browser49passed/one expected deployed-CSPskip305.7s; cold build99.2s
+is separate. Evidence`/tmp/birja-phase09-browser-8w6nln0e`; runner log
+`/tmp/birja-phase10-16-browser-all-final.log`. All384captured source hashes
+matched during the run. The later operations-only0013compatibility repair
+changes precisely three files(ops-fixtures,stock-runtime-fixture,test-ci-ops);
+all other381hashes, including application/UI/browserCLI, are identical. Browser
+manifest/receipt are preserved separately from final operations manifest:
+`/tmp/birja-phase10-16-final-frozen-sources.json`,
+`/tmp/birja-phase10-16-browser-source-receipt.json`,
+`/tmp/birja-phase10-16-ops-frozen-sources.json`.
+
+The actual0013RED is`runtime-0013-red2.log`: new History UNION referenced absent
+dividend tables. The first temporary probe's private-config refusal did not
+exercise the consumer. Guard only the new History assertion to0014 and require
+an explicit0014restored callback; actual0013+0014proof41.322s has identical receipt
+0662ffd0e986719ef504f6b1ef10756042b3affd0fd5c7d200b7d3520ce89450,
+unchanged canonical state/quarantine. Final retained run verifies this again:
+0013receiptf55fb514ac6da8c87615c992208d7167fef337aa2358b11f80260ef37f3a4cb5;
+0014dividendledger5dc5c22c6454724df3f850fd21b66cf5908e732262de96312cfebb2b76008b92.
+Populated/fresh TLS dividend ledgers4c0966b4daede5747b54aee42bb1d98e1ac74a3b91b7017334f679fdfcdc0f3c
+and14f702f4ad62c48d17b00052e4be8dab44f0a099552eda143d323b637d09197f.
+Independently generated lane hashes need not equal each other.
+
+The following Plan16 detail records preserve the measured earlier gates and
+failure provenance. Review17 must refresh the current review packet before
+owner18; the earlier ZIP remains historical, not newly source-validated here.
+
+CI/docs/regression now preserve39 predecessor modules and add all7Phase10
+modules plus the privileged dev bootstrap:47critical,4545statements and1452
+branches,0misses/partials,100%. Full backend2550passed/93existingwarnings,
+294.73s,99.87%overall; full Ruff/190format/Mypy88 pass. Logs
+`/tmp/birja-phase10-16-backend-full.log`,`/tmp/birja-phase10-16-critical.log`.
+Backend explicitly prepares approved setup-node@v7/Node24 and collects branches.
+Actual CI runs one package/archive through image transition, retained roundtrip,
+roles, populated/freshTLS parity and selected rollback, checking archive hash
+and all11current CORE/unit bytes after every stage.12CI contracts pass0.346s,
+including stage/identity omission mutations and actual Python-block compilation.
+
+New dev-only prerequisite is guarded before connection by ENVdev and exact local
+Compose host/port/database/admin identity, then real superuser identity before
+role writes. It creates only an absent canonical safe owner, refuses unsafe
+flags or incoming/outgoing memberships without repair, and bounds connect/query/
+lock waits.25focused tests pass0.71s;24statements/10branches100%. Actual fresh
+startup20.531s and existing0013upgrade22.567s both reach0014, start backend/
+scheduler, preserve safe-role state on repetition and refuse real unsafe flags/
+memberships without changing them. Both owned disposable projects are cleaned.
+Logs`/tmp/birja-phase10-16-dev-startup-final.log`; no old dev/prod volume touched.
+
+Current-service focused source/clone proof passes35.224s, exact equal rows/schema/
+identities and ledger450d3a7560988fe9322a30e049c794097183220b7f5eb1611d22e39a8ab43c49.
+The real cycle must publish original/paidA→heldB/dedup/reconciled successor before
+direct service replay assertions. Clone owner replays original and all successful
+corrections/no-change decisions, current mixedHistory/Portfolio cash stays exact,
+and app/scheduler financial calls remain denied. No EXEC grant is added. Original
+raw-SQL PID wait probes stay separate and genuine. Full SQL23/23 passes111.574s;
+UID1001/networknone nativeXNYS/dividend/worker/History imports/exact target pass.
+
+Host frontend697/36files16.15s,98.37%statements94.82%branches; lint/types/format/
+build pass. Fixed-image UID1000/networknone/read-only fullfrontend697/36files
+31.40s and lint/types/format/build pass(build1.00s), with existing locked modules
+copied into bounded temporary storage, no install/host source writes. First
+temporary-work mount was noexec and refused before tests; corrected harness
+uses an executable bounded work tmpfs. Both logs remain under/tmp with the
+`birja-phase10-16-fixed-toolchain-frontend`prefix.384final source hashes match
+`/tmp/birja-phase10-16-final-frozen-sources.json`.
+
+Pip audit reports none2.841s; npm high-threshold audit exits0/3.103s with2low and
+15moderate, no HIGH/CRITICAL. Initial strict five scans genuinely failed the Node
+image on HIGH`CVE-2026-123863`; all4others passed. Explicit owner approval then
+authorized exact24.22.3-r0. Signed-index→APKcontrol→payload hashes authenticate
+the unsigned CAS APK; no keys/allow-untrusted/waiver. First fresh build drifted
+3transitive revisions and was rejected. Explicit old ICU/libstdc++ pins preserve
+all existing versions: accepted26-package delta is **Node only**, npm/base/locks
+unchanged. Actual installed Node binary matches authenticated payload SHA256
+ab0288bfcb13498568690d7c8e18281173cfdcdb72a8cf65a1151b62b7fcada2.
+See10-IMAGE-REPAIR-REVIEW for approval/provenance and preserved failure details.
+
+All5fresh strict including-unfixed scans now pass, zeroHIGH/CRITICAL:
+runtime15.251s,builder7.167s,PostgreSQL5.560s,Redis1.609s,Node3.702s. Reports
+`/tmp/birja-phase10-16-image-reports-final`; old failed reports are preserved.
+Offline image13,backup26,restore-safety6,DBconfig136,prerequisites20,datastore13,
+reexec14,rollback-target18,app-services8,smoke-ports11,smoke-trading7 and nginx
+config all pass. Prerequisite initially had6stale incomplete-manifest errors;
+authorized test-only fixture repair derives the full legacy shape from the real
+producer and adds genuine omission/invariant refusals; validator unchanged.
+
 ## Current gate — Wave 10 real browser complete, 2026-11-13
 
 Plan15 summary48e7fdb/evidencebf28579. Final frozen full browser49passed plus

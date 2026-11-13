@@ -207,3 +207,18 @@ CI's expanded serial recovery job allows45minutes rather than30: the measured
 predecessor retained/roles/TLS gate alone took1047.402s, plus selected rollback,
 image transition, actual SQL contracts and tool preparation. The larger bounded
 job budget preserves every stage; no gate is skipped to fit the old timeout.
+
+## Final accepted validation
+
+All five fresh strict scans pass with **zero HIGH/CRITICAL including unfixed**:
+runtime15.251s,builder7.167s,PostgreSQL5.560s,Redis1.609s,Node3.702s. No ignore,
+waiver or trust bypass. Reports`/tmp/birja-phase10-16-image-reports-final`,
+status SHA256`90046dcc77b874b69023dfd10c2e9e238ec9a9a0d486258663a14f06150db542`.
+Installed Node executable SHA256
+`ab0288bfcb13498568690d7c8e18281173cfdcdb72a8cf65a1151b62b7fcada2`
+matches the authenticated APK payload byte-for-byte. Repaired-image nonroot,
+network-disabled full frontend697tests/static/build and actual browser49tests
+pass; one pre-existing deployed-CSP skip remains explicit. All384final operations
+sources and three built image IDs are unchanged through the1391.017s final
+same-archive gate. Owner approval was for local security repair/validation only;
+it is not publication, deployment, provider access or final UI acceptance.
