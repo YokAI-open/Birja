@@ -45,16 +45,24 @@ async def test_due_original_retained_payment_once(authority_case):
     assert (
         await conn.execute(text("SELECT starting_cash FROM accounts WHERE user_id=:user_id"), ids)
     ).scalar_one() == Decimal("10000")
-    assert (await conn.execute(text("SELECT count(*) FROM stock_dividend_payments"))).scalar_one() == 1
+    assert (
+        await conn.execute(text("SELECT count(*) FROM stock_dividend_payments"))
+    ).scalar_one() == 1
 
 
 async def test_original_replay_after_rights_loss_and_symbol_rename(authority_case):
     conn, ids = authority_case
     result = await process(conn, ids)
-    original = (await conn.execute(text("SELECT row_to_json(p) FROM stock_dividend_payments p"))).scalar_one()
+    original = (
+        await conn.execute(text("SELECT row_to_json(p) FROM stock_dividend_payments p"))
+    ).scalar_one()
     await conn.execute(text("UPDATE stock_data_admissions SET state='denied'"))
-    await conn.execute(text("UPDATE coins SET symbol='RENAMED',name='Renamed' WHERE id=:coin_id"), ids)
-    await conn.execute(text("UPDATE stock_action_state SET health='held',epoch=epoch+1"))
+    await conn.execute(
+        text("UPDATE coins SET symbol='RENAMED',name='Renamed' WHERE id=:coin_id"), ids
+    )
+    await conn.execute(text("UPDATE stock_action_state SET health='unknown',epoch=epoch+1"))
     assert await process(conn, ids) == result
-    assert (await conn.execute(text("SELECT row_to_json(p) FROM stock_dividend_payments p"))).scalar_one() == original
+    assert (
+        await conn.execute(text("SELECT row_to_json(p) FROM stock_dividend_payments p"))
+    ).scalar_one() == original
     assert await cash(conn, ids) == Decimal("101")
