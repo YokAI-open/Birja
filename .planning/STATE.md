@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-11-13T17:45:36.402Z"
+stopped_at: Completed 11-03-PLAN.md
+last_updated: "2026-11-13T19:40:37.297Z"
 last_activity: 2026-11-13
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 64
-  completed_plans: 61
-  percent: 95
+  completed_plans: 62
+  percent: 97
 ---
 
 # Project State
@@ -26,25 +26,30 @@ See: .planning/PROJECT.md (updated 2026-11-13)
 ## Current Position
 
 Phase: 11 (Mixed-Asset Recovery and Acceptance) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-13
-Progress: [██████████] 95% (61/64 tracked plans complete; Phase 11 2/4)
+Progress: [██████████] 97% (62/64 tracked plans complete; Phase 11 3/4)
 
 ## Completion and next action
 
-Phase11 Plans01/02 complete. Plan01 authenticates0014 source/schema admission
-and implements distinct selected0014 compatibility. Plan02 commits96834e9 and
-1dd1147 wire both selected lanes to the same archive, reject dispatch/archive/
-order/swallowed-failure and coverage/security omissions, and map27 acceptance
-clauses/gates. Actual offline15+4+17 checks pass1.350s; receipt
-/tmp/birja-phase11-02-offline-1xneg7zh/receipt.json. No Docker integration run.
-Next execute11-03: actual current0014 positive/refusal/failed-attempt recovery,
-exact financial/identity/authority/quarantine and full financial/browser/security
-gates. SAFE-02/03 remain pending; validation is draft. Current progress61/64
-(95%), Phase11 2/4, completed phases3/5. Existing owner UI/native200% evidence
-requires final source/build/runtime/response continuity. SAFE-01/Phase7live,
-provider/production/publication remain deferred.
+Phase11 Plans01–03 complete. Plan03 actual backend2557/99.87%, all47critical
+modules100%, frontend697, browser49+sole existingCSPskip, five strict scans,
+locked audits/native/image/dev gates pass. Exact same-archive proof is explicitly
+qualified: five real stages atfb926d8, actual legacy0008 at22c44d6, fresh complete
+current0014 ata7f965f. Three test-harness files differ; retained11CORE/unit bytes,
+archive, producer/restore/authority/runtime/build and all other source are exact.
+Actual current cutover/replay twice/42501, unsupported-source refusal and
+tested-source failed-attempt recovery pass with full private snapshot equality.
+Receipt /tmp/birja-phase11-gates/final-receipt.json SHA256
+bb90d570e6b2313f7b1fd3fc5d53cf2a6ebe558831b7f0e57a4760d16255f5af.
+Failed full/affected reports remain preserved; no fresh full CI-block pass at
+final source or hosted CI pass is claimed. All six owned projects are empty.
+Next execute11-04 independent code/security/UI/goal reviews. SAFE-02/03 remain
+pending; validation review/sign-off incomplete. Current progress62/64(97%),
+Phase11 3/4, completed phases3/5. Prior owner48d970c UI/native200% is reused by
+unchanged presentation/response scope, subject to04 review. SAFE-01/live/provider,
+production/B2/installed tools/timers/publication and W-debt remain deferred.
 
 Historical Phase10 completion and earlier execution notes follow.
 
@@ -707,6 +712,9 @@ plan completion. Published application remains v0.4.0/46d24c8/schema0008.
 - [Phase 8]: Scoped reconciliation binds the exact validated action/calendar snapshots and immutable event history; unsupported financial repair remains held.
 - [Phase 8]: 0012 recovery independently authenticates function authority before fixed NOLOGIN operator privileges are recreated in a quarantined clone.
 - [Phase 11]: Schema0014 admits only retained tested-source SHA; actual current0014 proof remains Plan03.
+- [Phase 11]: Plan03 reuses five actual stages at fb926d8 and actual legacy lanes at 22c44d6 with fresh complete current0014 proof at a7f965f; only test-harness bytes differ and the exact archive/CORE/runtime/build remain unchanged.
+- [Phase 11]: Runtime preservation compares every image record field and multiplicity independently of CLI JSON ordering; full private before/after evidence is retained.
+- [Phase 11]: Owner approved only the exact OpenTelemetry1.45.2 artifact and local affected checks; SAFE-02/03 completion remains pending Plan04.
 
 ### Blockers/Concerns
 
@@ -778,6 +786,7 @@ Detailed impact, evidence and historical accepted risks remain in
 | Phase 09 P14 | 117min | 2 tasks | 35 files |
 | Phase 11 P01 | 7min | 2 tasks | 4 files |
 | Phase 11 P02 | 7min | 2 tasks | 4 files |
+| Phase 11 P03 | ~110min | 2 tasks | 11 files |
 
 ## Operations
 
@@ -787,9 +796,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Completed 11-02-PLAN.md
-Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-03-PLAN.md
-Next: Execute11-03 actual final gates; Phase11 2/4 plans complete.
+Stopped at: Completed 11-03-PLAN.md
+Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-04-PLAN.md
+Next: Execute11-04 independent reviews; Phase11 3/4 plans complete.
 Planning artifacts and independent verdict: 11-PLAN-CHECK.md.
 Historical Phase10 acceptance references follow:
 Completed: 01–18; all36task outcomes and4Phase10requirements verified.

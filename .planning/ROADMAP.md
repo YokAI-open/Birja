@@ -400,7 +400,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 11-03-PLAN.md — Run final source-bound financial/browser/security and identical-archive recovery gates. (Wave 3)
+- [x] 11-03-PLAN.md — Run final source-bound financial/browser/security and identical-archive recovery gates. (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -426,7 +426,7 @@ do not establish live acceptance or phase completion.
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
 | 10. Dividend Cash and Event History | v1.1 | 18/18 | Complete    | 2026-11-13 |
-| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 2/4 | In Progress|  |
+| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 3/4 | In Progress|  |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:
 6 in Phase 7, 5 in Phase 8, 9 in Phase 9, 4 in Phase 10 and 2 in Phase 11.

@@ -14,8 +14,8 @@ tech-stack:
   added: []
   patterns: [Source-byte-qualified affected reruns, full-field runtime snapshot comparison]
 key-files:
-  created: [11-LOCAL-PROOF.md, 11-DEPENDENCY-REVIEW.md]
-  modified: [backend/uv.lock, deploy/tests/selected-cutover.py, deploy/tests/test-selected-cutover-contracts.py, deploy/tests/test-stock-recovery-contracts.py, deploy/tests/test-rollback-db-security.sh, deploy/tests/test-ci-ops.py, .github/workflows/ci.yml, 11-ACCEPTANCE.md, 11-VALIDATION.md]
+  created: [.planning/phases/11-mixed-asset-recovery-and-acceptance/11-LOCAL-PROOF.md, .planning/phases/11-mixed-asset-recovery-and-acceptance/11-DEPENDENCY-REVIEW.md]
+  modified: [backend/uv.lock, deploy/tests/selected-cutover.py, deploy/tests/test-selected-cutover-contracts.py, deploy/tests/test-stock-recovery-contracts.py, deploy/tests/test-rollback-db-security.sh, deploy/tests/test-ci-ops.py, .github/workflows/ci.yml, .planning/phases/11-mixed-asset-recovery-and-acceptance/11-ACCEPTANCE.md, .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VALIDATION.md]
 key-decisions:
   - Retain five actual stages atfb926d8 and actual legacy lanes at22c44d6; fresh complete current0014 proof is ata7f965f, with identical archive/retained/runtime/build bytes.
   - Preserve every runtime field and duplicate row; canonicalize only CLI JSON ordering and retain full private before/after evidence.
@@ -83,15 +83,15 @@ unproven; a real24sample probe independently demonstrated raw ordering variance.
 
 ## Task and correction commits
 
--456c911: repair strict fixture credential paths, explicit18.6→18.7 metadata
+- 456c911: repair strict fixture credential paths, explicit18.6→18.7 metadata
   transition and fixed clone maintenance DB; preserve all financial oracles.
--f970d90: exact owner-approved OpenTelemetry1.45.1→1.45.2 lock/artifact repair.
--fed26d8: Task1 measured application acceptance proof.
--fb926d8: actual standalone PG stack/owner prerequisites and failure-cleanup CI.
--4c2dc03: both missing-admission zero-mutation and admitted0008 failure paths.
--22c44d6: exact approved patch fingerprint; all other baseline/calendar artifacts unchanged.
--a7f965f: complete runtime-field comparison/capture and mutation regressions.
--99181c2: Task2 measured qualified recovery proof and matrix/validation update.
+- f970d90: exact owner-approved OpenTelemetry1.45.1→1.45.2 lock/artifact repair.
+- fed26d8: Task1 measured application acceptance proof.
+- fb926d8: actual standalone PG stack/owner prerequisites and failure-cleanup CI.
+- 4c2dc03: both missing-admission zero-mutation and admitted0008 failure paths.
+- 22c44d6: exact approved patch fingerprint; all other baseline/calendar artifacts unchanged.
+- a7f965f: complete runtime-field comparison/capture and mutation regressions.
+- 99181c2: Task2 measured qualified recovery proof and matrix/validation update.
 
 ## Deviations and retained failures
 
