@@ -295,6 +295,8 @@ jobs:
           bash deploy/tests/test-smoke-trading.sh
           sudo -- bash deploy/check-nginx-config.sh
           sudo -- python3 deploy/tests/test-stock-recovery-contracts.py --postgres
+      - name: Ordinary dev financial authority on fresh and upgraded schemas
+        run: python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         run: |
           set -Eeuo pipefail

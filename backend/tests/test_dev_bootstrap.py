@@ -106,7 +106,7 @@ def test_main_uses_only_explicit_environment(monkeypatch):
     monkeypatch.setenv("ENV", "prod")
     monkeypatch.setenv("DATABASE_URL", URL)
     with pytest.raises(ValueError, match="local Compose"):
-        main()
+        main([])
     monkeypatch.delenv("ENV")
     monkeypatch.delenv("DATABASE_URL")
     with (
@@ -114,7 +114,45 @@ def test_main_uses_only_explicit_environment(monkeypatch):
             "app.db.dev_bootstrap.asyncio.run", side_effect=lambda coroutine: coroutine.close()
         ) as run,
         patch.dict(sys.modules),
+        patch.object(sys, "argv", ["dev_bootstrap"]),
     ):
         del sys.modules["app.db.dev_bootstrap"]
         runpy.run_module("app.db.dev_bootstrap", run_name="__main__")
     run.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "failure", [None, "missing_owner", "schema", "relations", "identity", "functions"]
+)
+async def test_postmigration_grants_only_after_all_fixed_provenance_checks(failure):
+    role = (
+        None
+        if failure == "missing_owner"
+        else DriverRecord({"oid": 123, **dict.fromkeys(FLAGS, False)})
+    )
+    conn = connection(role)
+    checks = [name != failure for name in ("schema", "relations", "identity", "functions")]
+    conn.fetchval = AsyncMock(side_effect=[True, False, *checks] if role else [True])
+    with patch("app.db.dev_bootstrap.asyncpg.connect", AsyncMock(return_value=conn)):
+        if failure:
+            with pytest.raises(ValueError, match="refusing"):
+                await bootstrap("dev", URL, after_migrations=True)
+        else:
+            await bootstrap("dev", URL, after_migrations=True)
+    sql = [call.args[0] for call in conn.execute.call_args_list]
+    assert len(sql) == (6 if failure is None else 1)
+    if failure is None:
+        assert all("TO birja_migrator" in statement for statement in sql[1:])
+        assert sql[-1] == "GRANT UPDATE(cash) ON public.accounts TO birja_migrator"
+        assert not any("ALL" in statement or "GRANT OPTION" in statement for statement in sql)
+    else:
+        assert not any("GRANT" in statement for statement in sql)
+    conn.close.assert_awaited_once()
+
+
+def test_postmigration_cli_mode_is_explicit(monkeypatch):
+    monkeypatch.setenv("ENV", "dev")
+    monkeypatch.setenv("DATABASE_URL", URL)
+    with patch("app.db.dev_bootstrap.bootstrap", new_callable=AsyncMock) as start:
+        main(["--after-migrations"])
+    start.assert_awaited_once_with("dev", URL, after_migrations=True)

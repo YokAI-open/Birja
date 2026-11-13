@@ -85,7 +85,31 @@ def recovery_policy(ops):
         raise ValueError("every recovery stage must preserve archive and source identity")
 
 
+def dev_authority_policy(ops, compose_files):
+    if "python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07" not in ops:
+        raise ValueError("missing actual ordinary dev financial gate")
+    for source in compose_files:
+        sequence = ["python -m app.db.dev_bootstrap &&", "alembic upgrade head &&",
+                    "python -m app.db.dev_bootstrap --after-migrations &&", "exec uvicorn"]
+        if any(part not in source for part in sequence):
+            raise ValueError("missing dev owner authority stage")
+        if [source.index(part) for part in sequence] != sorted(source.index(part) for part in sequence):
+            raise ValueError("dev owner authority stages reordered")
+
+
 class CI(unittest.TestCase):
+    def test_actual_ordinary_dev_financial_gate_and_postmigration_order_are_required(self):
+        ops = jobs()["ops"]
+        sources = [(ROOT / name).read_text() for name in ("docker-compose.yml", "docker-compose.override.yml")]
+        dev_authority_policy(ops, sources)
+        with self.assertRaises(ValueError):
+            dev_authority_policy(ops.replace("python3 deploy/tests/test-dev-bootstrap.py", "omitted"), sources)
+        for index in range(2):
+            changed = sources.copy()
+            changed[index] = changed[index].replace("python -m app.db.dev_bootstrap --after-migrations &&", "")
+            with self.assertRaises(ValueError):
+                dev_authority_policy(ops, changed)
+
     def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
         ops = jobs()["ops"]
         recovery_policy(ops)
