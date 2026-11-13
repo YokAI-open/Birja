@@ -343,7 +343,7 @@ Live/provider/publication deferrals remain; production is unchanged.
 - [x] 10-14-PLAN.md — Render accessible mixed History and held corrections
 
 **Wave 10** *(blocked on declared predecessor waves; see plan dependencies)*
-- [ ] 10-15-PLAN.md — Prove real cash and mixed History in browser
+- [x] 10-15-PLAN.md — Prove real cash and mixed History in browser
 
 **Wave 11** *(blocked on declared predecessor waves; see plan dependencies)*
 - [ ] 10-16-PLAN.md — Enforce complete gates and final exact recovery
@@ -394,7 +394,7 @@ do not establish live acceptance or phase completion.
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
-| 10. Dividend Cash and Event History | v1.1 | 14/18 | In Progress|  |
+| 10. Dividend Cash and Event History | v1.1 | 15/18 | In Progress|  |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:

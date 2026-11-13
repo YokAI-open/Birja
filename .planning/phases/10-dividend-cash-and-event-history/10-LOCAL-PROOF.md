@@ -1,5 +1,37 @@
 # Phase10 local execution evidence
 
+## Current gate — Wave 10 real browser complete, 2026-11-13
+
+Plan15 summary48e7fdb/evidencebf28579. Final frozen full browser49passed plus
+one expected CSPskip/314.1s; all112 captured run-source hashes unchanged and
+owned browser resources zero. Full frontend697/36files/18.04s,98.37%statements
+94.82%branches98.95%functions99.10%lines, all static checks pass. Actual cash
+10000→20000 dividend, stock−5100/crypto−10000→4900, verified+2, unaffordable
+−10001hold, real sale funding then one debit, uncertainty/reconciled+10003 once.
+No cash UPDATE or mocked financial mutation supplies these effects.
+
+Real native-disabled blur exposed final/end and failed-retry focus defects;
+scoped fixes944cb7f/7aa29fe capture same-session intent and restore post-render
+without stealing other-control focus. Twenty-nine focused tests and actual
+Chromium selector pass. Existing stock retry test needed response/re-enabled
+synchronization only, with assertions preserved. All failed/interrupted attempts
+remain in10-BROWSER; only final49passes is the full passing browser gate.
+
+Actual widths320/375/768/1024/1440, split3:2, offpage original,44px controls,
+nav clearance/overflow/error retention/owner change pass. Tied-time read-only
+presentation is separately labelled synthetic; actual SQL ties remain Plan10.
+Review ZIP /tmp/birja-phase10-ui-review.zip:15536733bytes, SHA256
+4f5d316ae29a6a2d9f9b7173b58715f6bee996191c5387effa7d51193ea49c7d,
+16HTML/32PNG. Root independently verified CRC, all106 source/all review hashes
+and ZIP SHA, and inspected375/1024 viewport images. No scripts/forms/network/
+OTP/session content. Native200% owner acceptance remains18.
+
+Fresh browser startup confirmed0014 safe migrator prerequisite; guarded runner
+bootstrap fixes its own stack. Ordinary fresh dev compose still lacks this role
+before migration; final16 must fix startup explicitly, without changing0014,
+production grants or retained recovery authority. Same final archive/current-app
+replay/rollback, audits/scans, CI mirror enforcement and reviews remain16/17.
+
 ## Current gate — Wave 9 UI complete, 2026-11-13
 
 Plan14 summary9ce7c52, source36a1642. Exact mixed event details, applied versus

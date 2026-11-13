@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan 10-14 complete; execute Plan 10-15 real browser and review bundle.
+stopped_at: Plan 10-15 verified; execute Plan 10-16 final gates and fresh-dev fix.
 last_updated: "2026-11-13T12:19:02.519396+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 55
-  percent: 92
+  completed_plans: 56
+  percent: 93
 ---
 
 # Project State
@@ -26,12 +26,23 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 14/18 complete; executing 10-15 (Wave 10/13)
-Status: Executing Wave 10
+Plan: 15/18 complete; executing 10-16 (Wave 11/13)
+Status: Executing Wave 11
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [█████████░] 92% (55/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [█████████░] 93% (56/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan15 complete48e7fdb: full frozen browser49passed/one expected CSPskip314.1s;
+frontend697/36files18.04s, all static checks pass. Actual dividend-funded stock/
+crypto buys, corrections/holds/reconciliation, responsive widths320–1440 and
+auth privacy pass. Real native-disabled focus bugs fixed944cb7f/7aa29fe; an
+existing retry-test synchronization race corrected without StockSection change.
+Review ZIP /tmp/birja-phase10-ui-review.zip SHA4f5d316a…ea49c7d,16HTML/32PNG,
+CRC/source/review hashes independently checked; mobile/desktop images inspected.
+Next16 final CI/audit/image/same-archive/current-app recovery/rollback gates.
+Also fix confirmed fresh-dev missing safe migrator role outside immutable0014;
+browser-only bootstrap already fixed. Native200% owner acceptance stays18.
 
 Plan14 complete9ce7c52: typed mixed History table/cards and immutable-original
 focus navigation; 695 frontend tests/36files/16.11s,98.40% statements, full
@@ -717,9 +728,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-14 complete; execute Plan 10-15 real browser and review bundle.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-15-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14. Fourteen of eighteen plans complete.
+Stopped at: Plan 10-15 verified; execute Plan 10-16 final gates and fresh-dev fix.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-16-PLAN.md
+Completed: 01–15. Fifteen of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
 Latest passing gates: /tmp/birja-phase10-wave8-backend.log,
 /tmp/birja-phase10-wave8-critical.log and /tmp/birja-phase10-wave8-frontend.log.
