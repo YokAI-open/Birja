@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.models.user import User
 from app.services.event_history import EventHistoryCursor, encode_cursor
@@ -197,3 +197,63 @@ async def test_mixed_history_openapi_has_no_owner_parameter(running_app):
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/EventHistoryPage"
     }
+
+
+async def test_mixed_history_and_portfolio_share_actual_cash_without_recredit(
+    dividend_case, auth_client, outbox
+):
+    factory, ids = dividend_case
+    await sign_in_owner(factory, ids, auth_client, outbox)
+    before = (await auth_client.get("/api/v1/portfolio")).json()
+    original = await process(factory, ids)
+    changed = await revise(factory, ids, rate="0.75")
+    applied = await process(factory, changed)
+    assert await process(factory, changed) == applied
+    response = await auth_client.get("/api/v1/history")
+    assert response.status_code == 200
+    records = response.json()["items"]
+    assert [item["kind"] for item in records] == ["dividend_correction", "dividend"]
+    assert records[0]["outcome"] == "applied" and Decimal(records[0]["cash_delta"]) == Decimal(".5")
+    assert records[0]["original"] == records[1]
+    portfolio = (await auth_client.get("/api/v1/portfolio")).json()
+    assert Decimal(portfolio["cash"]) == Decimal(before["cash"]) + Decimal("1.5")
+    assert portfolio["starting_cash"] == before["starting_cash"] == "10000.00"
+    unchanged = await books(factory, ids["user_id"])
+    async with factory.begin() as db:
+        previous = (
+            await db.execute(
+                text("SELECT symbol,name FROM coins WHERE id=:c"), {"c": ids["coin_id"]}
+            )
+        ).one()
+        await db.execute(
+            text("UPDATE coins SET symbol='RENAMED',name='Mutable label' WHERE id=:c"),
+            {"c": ids["coin_id"]},
+        )
+    try:
+        assert (await auth_client.get("/api/v1/history")).json() == response.json()
+        assert await process(factory, ids) == original
+        assert await books(factory, ids["user_id"]) == unchanged
+    finally:
+        async with factory.begin() as db:
+            await db.execute(
+                text("UPDATE coins SET symbol=:s,name=:n WHERE id=:c"),
+                {"s": previous.symbol, "n": previous.name, "c": ids["coin_id"]},
+            )
+
+
+async def test_mixed_history_preanchor_uncertainty_never_fabricates_dividend(
+    dividend_case, auth_client, outbox
+):
+    from app.services.dividends import DividendRefused
+
+    factory, ids = dividend_case
+    await sign_in_owner(factory, ids, auth_client, outbox)
+    await revise(factory, ids, classification="uncertain", eligible=False)
+    before = await books(factory, ids["user_id"])
+    for _ in range(3):
+        with pytest.raises(DividendRefused):
+            await process(factory, ids)
+        response = await auth_client.get("/api/v1/history")
+        assert response.status_code == 200
+        assert response.json() == {"items": [], "next_cursor": None}
+    assert await books(factory, ids["user_id"]) == before

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.models.trade import Holding
 from app.models.user import Account
 from app.services.portfolio import get_portfolio
+from tests.dividend_fixtures import dividend_case, hold, process, revise  # noqa: F401
 from tests.helpers import put_holding, put_price, set_cash
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 
@@ -176,3 +177,45 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
         after = await get_portfolio(reader, user_id=uid, settings=settings)
         assert after.cash == 9594 and after.total_value == D("10096.00")
         assert after.holdings[0].quantity == 3 and after.holdings[1].mid == 200
+
+
+async def test_actual_dividend_cash_and_correction_enter_portfolio_once(dividend_case, settings):
+    from app.services.event_history import list_event_history
+
+    factory, ids = dividend_case
+
+    async def snapshot():
+        async with factory() as db:
+            return await get_portfolio(db, user_id=ids["user_id"], settings=settings)
+
+    before = await snapshot()
+    assert before.cash == D(100) and before.starting_cash == D(10000)
+    original = await process(factory, ids)
+    assert await process(factory, ids) == original
+    credited = await snapshot()
+    assert credited.cash == D(101) and credited.starting_cash == before.starting_cash
+    assert credited.class_values.cash == credited.cash
+    assert credited.known_value == before.known_value + D(1)
+    corrected = await revise(factory, ids, rate="0.75")
+    correction = await process(factory, corrected)
+    assert correction.outcome == "applied" and await process(factory, corrected) == correction
+    applied = await snapshot()
+    assert applied.cash == D("101.50") and applied.starting_cash == before.starting_cash
+    assert applied.known_value == applied.cash + sum(
+        (h.current_value for h in applied.holdings if h.current_value is not None), D(0)
+    )
+    uncertain = await revise(factory, corrected, classification="uncertain", eligible=False)
+    held = await hold(factory, original.payment_id, uncertain["revision_fingerprint"])
+    assert await hold(factory, original.payment_id, uncertain["revision_fingerprint"]) == held
+    after = await snapshot()
+    assert after.cash == applied.cash and after.starting_cash == before.starting_cash
+    assert after.class_values.cash == D("101.50")
+    async with factory() as db:
+        history = await list_event_history(db, user_id=ids["user_id"])
+    assert [item.kind for item in history.items] == [
+        "dividend_correction",
+        "dividend_correction",
+        "dividend",
+    ]
+    assert sum((D(item.cash_delta) for item in history.items), D(0)) == D("1.50")
+    assert after.cash == before.cash + D("1.50")
