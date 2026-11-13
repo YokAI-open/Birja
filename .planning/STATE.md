@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan 10-06 fully verified; execute payout service 10-07.
-last_updated: "2026-11-13T09:15:15.623935+00:00"
-last_activity: 2026-11-13 -- Retained recovery, role/TLS gate and independent review passed
+stopped_at: Wave 6 fully verified; execute Plan 10-08 concurrency proof.
+last_updated: "2026-11-13T11:43:24.158233+00:00"
+last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 48
-  percent: 80
+  completed_plans: 50
+  percent: 83
 ---
 
 # Project State
@@ -26,12 +26,27 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 7/18 complete; executing 10-07 (Wave 6/13)
-Status: Executing Wave 6
-Last activity: 2026-11-12 -- Phase 10 planning complete
-Progress: [████████░░] 80% (48/60 currently tracked plans complete; Phase 11 unplanned)
+Plan: 9/18 complete; executing 10-08 (Wave 7/13)
+Status: Executing Wave 7
+Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
+Progress: [████████░░] 83% (50/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plans 10-07 and 10-10 are complete through 9fe5560 and a59d64c. Actual
+dividend service: 46 tests, 198 affected regressions, 100% statement/branch
+coverage. Mixed History: 149 tests, 235 affected regressions, both new modules
+100% statement/branch coverage. Scoped static checks pass; no SQL authority,
+schema or recovery changes. Full backend/critical financial-wave gate is now
+passed: 2429 tests/290.58s, 99.87% overall; 43 critical modules with 4235
+statements and 1382 branches at 100%. All backend static checks pass. The first
+full run exposed a fixed synthetic BIGINT-ID collision; regression f1e312e and
+fix 6f9af5c pass both module orders and repeat without deleting existing rows.
+Next execute 10-08 concurrency and 10-11 API sequentially.
+Plan 16 must pin existing approved Node 24 for the actual TypeScript parser
+compatibility test. Split History uses retained ticker where no historical
+company name exists. Final requirements and owner UI/native zoom remain pending.
+Older entries below preserve historical intermediate pointers.
 
 Plan 10-06 is complete. Replacement archive 1faa8277…52cc1 passed the entire
 0007–0014 encrypted retained recovery, restricted roles and both TLS lanes in
@@ -673,11 +688,13 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-06 complete; execute 10-07 payout service.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-07-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 12. Seven of eighteen plans complete.
-All test/ops/restore containers, networks and volumes are removed. Recreate only
-the owned test stack for application tests; keep all SQL/ops tests serial.
+Stopped at: Wave 6 fully verified; execute Plan 10-08 concurrency proof.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-08-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 07, 10, 12. Nine of eighteen plans complete.
+Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
+Passing full gate: /tmp/birja-phase10-wave6-backend-fixed.log;
+critical report: /tmp/birja-phase10-wave6-critical.log. The earlier failing
+log remains preserved. Execute 10-08 then 10-11 before the Wave 7 gate.
 Use frozen C03a SQL result vocabulary and C05a exact History wire types.
 The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
 old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates

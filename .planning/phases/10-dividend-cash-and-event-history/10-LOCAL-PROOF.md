@@ -1,5 +1,37 @@
 # Phase10 local execution evidence
 
+## Current gate — Wave 6 complete, 2026-11-13
+
+Plans 07 and 10 complete through summaries 9fe5560 and 2bd3365. Thin dividend
+service: 46 new tests, 198 affected regressions, 100% statement/branch coverage.
+History projection/schema: 149 new tests, 235 affected regressions, both modules
+100%. Actual mixed PostgreSQL page passes the installed TypeScript parser,
+including exact stored 1.5:1 split reduction to 3:2. Missing historical split
+company names use the retained ticker; rename cannot rewrite these entries.
+
+The first full suite failed six cases because retained legacy fixtures and new
+rollback fixtures reserved the same BIGINT trade ID. Actual regression f1e312e
+and fix 6f9af5c use bound owner-specific IDs beyond JavaScript's exact integer
+range. Normal/reverse/repeated combined modules each pass 74 tests with the
+same database, without deleting rows or weakening constraints. Failed log stays
+at /tmp/birja-phase10-wave6-backend.log (2422 passed, six failures, 299.35s).
+
+Final full backend: 2429 passed, 93 existing warnings, 290.58s, 99.87% overall;
+/tmp/birja-phase10-wave6-backend-fixed.log. Actual critical report explicitly
+includes existing 39 plus dividend_rules, dividends, event_history service and
+schema: 43 modules, 4235 statements/1382 branches, zero misses/partials, 100%;
+/tmp/birja-phase10-wave6-critical.log. Full Ruff/format (181 files) and Mypy
+(85 sources) pass. Actual CI-list expansion and Node 24 pin remain Plan 16,
+not claimed implemented by this report.
+
+Plan 06's independent Task 2 review is complete (29f49a4), zero findings;
+final summary cccb57a. Its exact archive remains unchanged. No subsequent SQL
+authority, schema or recovery source changed. Only owned birja-test runs at
+0014. Next: 08 real contention, then 11 API. Whole-phase requirements, final
+integration and owner UI/native zoom acceptance remain pending; all live,
+production and publication deferrals remain unchanged. Entries below are
+historical evidence, with their original intermediate gate statuses preserved.
+
 ## Wave1 — completed locally, 2026-11-12
 
 Plans01/03/12 complete; no payout authority/worker/HistoryAPI/UI yet.
