@@ -138,6 +138,7 @@ def test_route_allow_list_has_no_cash_mutation(running_app) -> None:  # type: ig
         ("POST", "/api/v1/stock-trades"),
         ("GET", "/api/v1/stock-trades/{symbol}/context"),
         ("GET", "/api/v1/portfolio"),
+        ("GET", "/api/v1/history"),
         ("GET", "/api/v1/auth/csrf"),
         ("POST", "/api/v1/auth/request-code"),
         ("POST", "/api/v1/auth/refresh"),
