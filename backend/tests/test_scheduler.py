@@ -60,7 +60,7 @@ async def test_independent_stock_loops(monkeypatch, quotes, actions_enabled, rai
     async def run_loop(*, cycle, interval, stop):
         result = await cycle()
         seen.append(result.accepted)
-        if len(seen) == 1 + int(quotes) + int(actions_enabled):
+        if len(seen) == 1 + int(quotes) + 2 * int(actions_enabled):
             stop.set()
 
     async def crypto(**kwargs):
@@ -79,16 +79,24 @@ async def test_independent_stock_loops(monkeypatch, quotes, actions_enabled, rai
             raise ValueError("private-provider-payload")
         return CycleResult("ok", accepted=30)
 
-    from app.tasks import stock_actions, stock_scheduler
+    async def dividend_cycle(**kwargs):
+        assert "http" not in kwargs and "redis" not in kwargs
+        if raises:
+            raise ValueError("private-dividend-payload")
+        return CycleResult("ok", accepted=40)
+
+    from app.tasks import dividends, stock_actions, stock_scheduler
 
     monkeypatch.setattr(stock_actions, "run_stock_action_cycle", actions)
     monkeypatch.setattr(stock_scheduler, "run_stock_cycle", quote_cycle)
+    monkeypatch.setattr(dividends, "run_dividend_cycle", dividend_cycle)
     monkeypatch.setattr(scheduler, "run", run_loop)
     monkeypatch.setattr(scheduler, "run_cycle", crypto)
     await scheduler.amain(stop)
     expected = (
         [15]
         + ([0 if raises else 20] if actions_enabled else [])
+        + ([0 if raises else 40] if actions_enabled else [])
         + ([0 if raises else 30] if quotes else [])
     )
     assert sorted(seen) == sorted(expected)

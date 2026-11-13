@@ -335,6 +335,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
 
             loops.append((stock_cycle, settings.stock_poll_interval_seconds))
         if settings.stock_actions_enabled:
+            from app.tasks.dividends import DividendCursor, run_dividend_cycle
             from app.tasks.stock_actions import run_stock_action_cycle
 
             key, secret = settings.alpaca_api_key, settings.alpaca_secret_key
@@ -359,6 +360,18 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                     return CycleResult("source_error")
 
             loops.append((action_cycle, settings.stock_actions_poll_interval_seconds))
+            dividend_cursor = DividendCursor()
+
+            async def dividend_cycle() -> CycleResult:
+                try:
+                    return await run_dividend_cycle(
+                        sessionmaker=sessionmaker, settings=settings, cursor=dividend_cursor
+                    )
+                except Exception as exc:
+                    logger.warning("dividend loop failed: %s", type(exc).__name__)
+                    return CycleResult("source_error")
+
+            loops.append((dividend_cycle, settings.stock_actions_poll_interval_seconds))
         async with asyncio.TaskGroup() as group:
             for callback, interval in loops:
                 group.create_task(run(cycle=callback, interval=interval, stop=stop))

@@ -2,6 +2,7 @@
 """Real retained work discovery and restricted cash publication."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -23,6 +24,7 @@ from tests.dividend_fixtures import (  # noqa: F401
     scheduler,
     status_case,
     stock_trade_case,
+    waiting,
 )
 from tests.helpers import unique_email
 
@@ -273,3 +275,76 @@ async def test_external_cancellation_propagates_after_cleanup(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert closed.is_set()
+
+
+async def test_bounded_cycle_cancels_actual_financial_account_wait(
+    dividend_case, worker, monkeypatch
+):
+    factory, ids = dividend_case
+    seen = []
+    started = asyncio.Event()
+
+    @asynccontextmanager
+    async def observed():
+        async with worker() as db:
+            seen.append(db.info["pid"])
+            if len(seen) == 3:
+                started.set()
+            yield db
+
+    monkeypatch.setattr(dividends, "CYCLE_SECONDS", 0.3)
+    async with factory.begin() as blocker:
+        await blocker.execute(text("SELECT FROM accounts WHERE user_id=:user_id FOR UPDATE"), ids)
+        task = asyncio.create_task(
+            run_dividend_cycle(
+                sessionmaker=observed, settings=SimpleNamespace(stock_actions_enabled=True)
+            )
+        )
+        await started.wait()
+        await waiting(factory, seen[-1], task)
+        result = await task
+    assert result.status == "source_error"
+    assert (await books(factory, ids["user_id"])) == (100, [[], [], []])
+
+
+async def test_duplicate_unaffordable_target_later_funded_once(dividend_case, worker):
+    factory, ids = dividend_case
+    settings = SimpleNamespace(stock_actions_enabled=True)
+    await run_dividend_cycle(sessionmaker=worker, settings=settings)
+    await revise(factory, ids, rate=".1")
+    async with factory.begin() as db:
+        await db.execute(text("UPDATE accounts SET cash=.79 WHERE user_id=:user_id"), ids)
+    for _ in range(2):
+        result = await run_dividend_cycle(sessionmaker=worker, settings=settings)
+        assert result.accepted == 1
+    cash, rows = await books(factory, ids["user_id"])
+    assert cash == Decimal(".79") and len(rows[1]) == 1
+    assert rows[1][0]["outcome"] == "held_unaffordable"
+    async with factory.begin() as db:
+        await db.execute(text("UPDATE accounts SET cash=.80 WHERE user_id=:user_id"), ids)
+    for _ in range(2):
+        await run_dividend_cycle(sessionmaker=worker, settings=settings)
+    cash, rows = await books(factory, ids["user_id"])
+    assert cash == 0 and len(rows[1]) == 2
+    assert rows[1][1]["outcome"] == "applied"
+
+
+async def test_retained_entitlement_discovered_after_actual_sale(dividend_case, worker, settings):
+    from tests.test_stock_trading_concurrency import stock_request
+    from tests.test_stock_trading_service import trade_order
+
+    factory, ids = dividend_case
+    receipt, created = await stock_request(
+        factory,
+        ids["user_id"],
+        settings,
+        trade_order(side="sell", quantity="2", expected_exec_price="100"),
+    )
+    assert created and receipt.held_after == 0
+    before = (await books(factory, ids["user_id"]))[0]
+    result = await run_dividend_cycle(
+        sessionmaker=worker, settings=SimpleNamespace(stock_actions_enabled=True)
+    )
+    cash, rows = await books(factory, ids["user_id"])
+    assert result.accepted == 1 and cash == before + 1
+    assert rows[0][0]["eligible_quantity"] == 2
