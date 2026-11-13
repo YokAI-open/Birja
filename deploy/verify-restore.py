@@ -928,6 +928,26 @@ def restore_execution_authority(dc, revision='0013'):
     contract.validate_execution_authority(authority, revision)
 
 
+def dividend_pregrant_structure(dc):
+    """Read only pinned0014 structure before any role/grant reconstruction.
+
+    A genuinely fresh cluster has no resolution operator yet. Its name-based
+    privilege lookups cannot run at this boundary. Replace only that exact
+    trusted fragment, fail closed on dispatch drift, and expose no partial
+    authority object to callers. Full canonical verification remains mandatory
+    after all independently authenticated reconstruction helpers complete.
+    """
+    contract=recovery_contract()
+    query=contract.manifest_sql('0014')
+    resolution=contract.resolution_authority_sql()
+    require(query.count(resolution)==1)
+    query=query.replace(resolution,'NULL',1)
+    actual=json.loads(sql(dc,"SET TIME ZONE 'UTC';\n"+
+        contract.schema_guard_sql('0014')+query))
+    return {'schema':actual['schema'],
+        'triggers':actual['execution_authority']['triggers']}
+
+
 def restore_dividend_authority(dc):
     """Authenticate no-ACL restore before changes; NEVER enable payout calls.
 
@@ -943,9 +963,9 @@ def restore_dividend_authority(dc):
     contract.validate_dividend_role_boundary(authority,allow_missing_runtime=True)
     require(authority['owners']==[[name,'birja_migrator'] for name in sorted(
         [*contract.DIVIDEND_COLUMNS,*[t+'_id_seq' for t in contract.DIVIDEND_COLUMNS]])])
-    actual=canonical(dc)
+    actual=dividend_pregrant_structure(dc)
     require(hashlib.sha256(json.dumps(actual['schema'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_SCHEMA_SHA256)
-    require(hashlib.sha256(json.dumps(actual['execution_authority']['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_TRIGGERS_SHA256)
+    require(hashlib.sha256(json.dumps(actual['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_TRIGGERS_SHA256)
     sql(dc,"""DO $$ DECLARE n text; BEGIN
       FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler'] LOOP
         IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
