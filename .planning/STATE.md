@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan 10-15 verified; execute Plan 10-16 final gates and fresh-dev fix.
-last_updated: "2026-11-13T12:19:02.519396+00:00"
+stopped_at: Plan 10-16 verified; execute Plan 10-17 independent reviews and owner packet.
+last_updated: "2026-11-13T15:24:24.134495+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 56
-  percent: 93
+  completed_plans: 57
+  percent: 95
 ---
 
 # Project State
@@ -26,12 +26,25 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 15/18 complete; executing 10-16 (Wave 11/13)
-Status: Executing Wave 11
+Plan: 16/18 complete; executing 10-17 (Wave 12/13)
+Status: Executing Wave 12
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [█████████░] 93% (56/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [██████████] 95% (57/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan16 completea11bcb3: backend2550/99.87%,47 critical4545 statements/1452
+branches100%; repaired-image frontend697/36files, full static/build/native pass;
+browser49/one expected CSPskip305.7s. Five fresh strict scans0HIGH/CRITICAL.
+Owner-approved exact Node24.22.3-r0 repair changes only Node, retaining base/npm/
+locks and existing transitive versions. Real dev fresh/0013 startup and unsafe
+role refusals pass. Complete same-archive proof1391.017s, all384 source/image/
+archive identities unchanged; all owned resources cleared. Root independently
+verified all12 sealed artifacts and384 source hashes. Current0014 recovery and
+legacy0008 selected cutover/old-app rollback scopes remain distinct.
+Next17 independent code/security/UI/goal review and refreshed current packet,
+then18 actual owner new-UI/native200% acceptance. No live/provider/publication
+activation or whole requirement completion is inferred.
 
 Plan15 complete48e7fdb: full frozen browser49passed/one expected CSPskip314.1s;
 frontend697/36files18.04s, all static checks pass. Actual dividend-funded stock/
@@ -728,14 +741,18 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-15 verified; execute Plan 10-16 final gates and fresh-dev fix.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-16-PLAN.md
-Completed: 01–15. Fifteen of eighteen plans complete.
+Stopped at: Plan 10-16 verified; execute Plan 10-17 independent reviews and owner packet.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-17-PLAN.md
+Completed: 01–16. Sixteen of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
-Latest passing gates: /tmp/birja-phase10-wave8-backend.log,
-/tmp/birja-phase10-wave8-critical.log and /tmp/birja-phase10-wave8-frontend.log.
-Earlier failing logs remain preserved. All CI critical-list and Node24 pin
-updates remain Plan16. No human/nativezoom acceptance is inferred.
+Latest final gates: 10-16-SUMMARY.md and 10-LOCAL-PROOF.md;
+/tmp/birja-backup-test-phase10-final/gate-report.json (six passes,1391.017s),
+/tmp/birja-phase10-16-final-integrity.json. All384 frozen sources independently
+verified; all12 sealed artifacts match. Review ZIP from15 is historical and
+must be refreshed/source-attributed in17 using current browser captures
+/tmp/birja-phase09-browser-8w6nln0e before18 owner acceptance. Source/UI and
+compiled JS/CSS are unchanged; three post-browser ops-only files differ.
+No processes or owned containers/networks/volumes remain. Native200% pending.
 Use frozen C03a SQL result vocabulary and C05a exact History wire types.
 The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
 old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates
