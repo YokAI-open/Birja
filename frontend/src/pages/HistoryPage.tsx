@@ -142,7 +142,7 @@ export default function HistoryPage() {
           {isError && !isFetchNextPageError && (
             <div
               role="alert"
-              className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
+              className="flex flex-wrap items-center gap-4 rounded-control bg-warn-soft p-4 text-warn-text"
             >
               <p>Couldn&apos;t refresh your history. Showing the last successful update.</p>
               <Button
@@ -166,7 +166,7 @@ export default function HistoryPage() {
                 Cash change is the amount actually added to or taken from your shared USD balance.
               </p>
               {items.length === 0 ? (
-                <div className="flex flex-col items-start gap-3">
+                <div className="flex flex-col items-start gap-4">
                   <h2 className="font-medium">No activity yet</h2>
                   <p>
                     Your trades, dividends, splits and corrections will appear here. Browse markets
@@ -240,7 +240,7 @@ export default function HistoryPage() {
                         tabIndex={-1}
                         className="scroll-mb-24 border-t border-border py-4 focus-visible:outline-2 focus-visible:outline-ring"
                       >
-                        <dl className="flex flex-col gap-3">
+                        <dl className="flex flex-col gap-4">
                           {fields(item, "history-mobile-").map(([label, value]) => (
                             <div key={label} className="flex min-w-0 flex-col items-start gap-2">
                               <dt className="text-muted-foreground">{label}</dt>
@@ -257,7 +257,7 @@ export default function HistoryPage() {
           </Card>
           {items.length > 0 &&
             (hasNextPage ? (
-              <div className="flex flex-col items-start gap-3">
+              <div className="flex flex-col items-start gap-4">
                 {isFetchNextPageError && (
                   <p role="alert">
                     Couldn&apos;t load more events. Your loaded events are still here.
@@ -290,7 +290,7 @@ export default function HistoryPage() {
                       (document.activeElement === document.body ||
                         document.activeElement === intent.button)
                     )
-                      node.focus({ preventScroll: true });
+                      node.focus();
                     focusEnd.current = null;
                   }
                 }}

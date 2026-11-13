@@ -50,7 +50,7 @@ export function HistoryEventCash({ item }: { item: EventHistoryItem }) {
   const positive = !item.cash_delta.startsWith("-") && !/^0+(\.0+)?$/.test(item.cash_delta);
   return (
     <span
-      className={`wrap-anywhere tabular-nums ${item.cash_delta.startsWith("-") ? "text-loss-text" : positive ? "text-gain-text" : ""}`}
+      className={`wrap-anywhere font-medium tabular-nums ${item.cash_delta.startsWith("-") ? "text-loss-text" : positive ? "text-gain-text" : ""}`}
     >
       {noCash ? "No cash changed" : signed(item.cash_delta)}
     </span>
