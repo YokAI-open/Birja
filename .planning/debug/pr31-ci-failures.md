@@ -19,7 +19,7 @@ reasoning_checkpoint:
     - Historical e728855 full package comparison shows only approved calendar additions and OTEL change; local13test image RED exactly matches hosted digest mismatch.
   falsification_test: A missing-alias startup succeeds, or importing/binding the same authenticated export does not permit unchanged guarded startup.
   fix_rationale: Initialize the authenticated image alias at the existing CI prerequisite; isolate the exact approved OTEL record while retaining historical all-other-entry identity.
-  blind_spots: Actual cold-alias startup and complete real PostgreSQL contracts still need execution; DNS lock/install remains owner-pending.
+  blind_spots: Original-source cold-alias RED and repaired guarded startup GREEN are complete; all24actual PostgreSQL contracts pass. Exact DNS lock/install approval and affected checks remain pending, and fresh hosted CI is not yet verified.
 
 ## Symptoms
 
@@ -80,7 +80,7 @@ commit: d855a0f (reviewed unaffected image/ops fixes, local only)
 
 specialist_hint: python/general. Mapped python-expert-best-practices-code-review
 and engineering:debug skills are not available locally; none invoked. Independent
-affected code/security reviews will be coordinated before local completion.
+affected code/security reviews are complete with no active findings, as recorded below.
 
 Independent code review: pr31-CODE-REVIEW.md, no active findings. Independent
 security review: pr31-SECURITY-REVIEW.md,6/6closed, no active findings. Both
