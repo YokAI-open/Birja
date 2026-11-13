@@ -311,47 +311,60 @@ Live/provider/publication deferrals remain; production is unchanged.
 **Plans**: 18 plans /36tasks in13execution waves
 
 **Wave 1**
+
 - [x] 10-01-PLAN.md — Constrain immutable dividend accounting
 - [x] 10-03-PLAN.md — Define exact dividend targets and corrections
 - [x] 10-12-PLAN.md — Validate exact mixed History client values
 
 **Wave 2** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-02-PLAN.md — Authorize only verified atomic dividend cash
 
 **Wave 3** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-04-PLAN.md — Retain exact0014 data and authority contracts
 
 **Wave 4** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-05-PLAN.md — Exercise real restricted dividend SQL and TLS
 
 **Wave 5** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-06-PLAN.md — Pass retained recovery before financial consumers
 
 **Wave 6** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-07-PLAN.md — Process historical dividends and immutable adjustments
 - [x] 10-10-PLAN.md — Project immutable private mixed-event History
 
 **Wave 7** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-08-PLAN.md — Prove waits, concurrency and shared cash atomicity
 - [x] 10-11-PLAN.md — Expose authenticated mixed History without legacy breakage
 
 **Wave 8** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-09-PLAN.md — Schedule bounded durable payouts independently
 - [x] 10-13-PLAN.md — Isolate paginated events across auth and cash refresh
 
 **Wave 9** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-14-PLAN.md — Render accessible mixed History and held corrections
 
 **Wave 10** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-15-PLAN.md — Prove real cash and mixed History in browser
 
 **Wave 11** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-16-PLAN.md — Enforce complete gates and final exact recovery
 
 **Wave 12** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-17-PLAN.md — Review code, threats, UI and phase goal
 
 **Wave 13** *(blocked on declared predecessor waves; see plan dependencies)*
+
 - [x] 10-18-PLAN.md — Accept new mixed History and native zoom
 
 **Planning boundary:** Research, concrete pattern map, checked UI contract,
@@ -374,7 +387,33 @@ consumers; final actual financial/browser/security/owner gates remain mandatory.
   2. Real isolated PostgreSQL tests prove stock/crypto contention, post-lock expiry, closed-market replay, dividend cutoff/revision/concurrency, split ordering and uncertain-action suspension with exact-money assertions. (SAFE-03)
   3. Browser journeys prove discovery, preview/confirmation, open/closed trading, combined portfolio, dividends, splits, corrections, stale/unknown states and crypto coexistence; applicable coverage, dependency/image security and required CI gates remain enforced. (SAFE-03)
 
-**Plans**: TBD
+**Plans**: 4 plans /8tasks in4execution waves
+
+Plans:
+**Wave 1**
+
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — Guard current0014 targets and implement bounded selected compatibility proof. (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-02-PLAN.md — Require both selected lanes in serial CI and map acceptance oracles. (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-03-PLAN.md — Run final source-bound financial/browser/security and identical-archive recovery gates. (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 11-04-PLAN.md — Review code/security/UI and verify complete local acceptance honestly. (Wave 4)
+
 **UI hint**: yes
 
 ## Progress
@@ -395,7 +434,7 @@ do not establish live acceptance or phase completion.
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
 | 10. Dividend Cash and Event History | v1.1 | 18/18 | Complete    | 2026-11-13 |
-| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
+| 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/4 | Planned | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:
 6 in Phase 7, 5 in Phase 8, 9 in Phase 9, 4 in Phase 10 and 2 in Phase 11.
