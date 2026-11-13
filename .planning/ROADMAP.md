@@ -332,7 +332,7 @@ Live/provider/publication deferrals remain; production is unchanged.
 - [x] 10-10-PLAN.md — Project immutable private mixed-event History
 
 **Wave 7** *(blocked on declared predecessor waves; see plan dependencies)*
-- [ ] 10-08-PLAN.md — Prove waits, concurrency and shared cash atomicity
+- [x] 10-08-PLAN.md — Prove waits, concurrency and shared cash atomicity
 - [ ] 10-11-PLAN.md — Expose authenticated mixed History without legacy breakage
 
 **Wave 8** *(blocked on declared predecessor waves; see plan dependencies)*
@@ -394,7 +394,7 @@ do not establish live acceptance or phase completion.
 | 7. Permitted Stock Discovery | v1.1 | 13/14 | Local work complete; live acceptance deferred |  |
 | 8. Corporate-Action-Safe Ownership | v1.1 | 13/13 | Complete    | 2026-11-11 |
 | 9. Whole-Share Trading and Combined Portfolio | v1.1 | 15/15 | Complete    | 2026-11-12 |
-| 10. Dividend Cash and Event History | v1.1 | 9/18 | In Progress|  |
+| 10. Dividend Cash and Event History | v1.1 | 10/18 | In Progress|  |
 | 11. Mixed-Asset Recovery and Acceptance | v1.1 | 0/TBD | Not started | - |
 
 **Coverage:** 26/26 approved requirements have exactly one primary owner:

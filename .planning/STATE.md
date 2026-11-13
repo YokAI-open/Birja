@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Wave 6 fully verified; execute Plan 10-08 concurrency proof.
+stopped_at: Plan 10-08 complete; execute Plan 10-11 authenticated History API.
 last_updated: "2026-11-13T11:43:24.158233+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 50
-  percent: 83
+  completed_plans: 51
+  percent: 85
 ---
 
 # Project State
@@ -26,12 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 9/18 complete; executing 10-08 (Wave 7/13)
+Plan: 10/18 complete; executing 10-11 (Wave 7/13)
 Status: Executing Wave 7
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [████████░░] 83% (50/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [████████░░] 85% (51/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan 10-08 complete b003692: 57 genuine independent-client concurrency/wait
+tests and 161 affected regressions pass; dividend service remains 100%. No
+application/SQL/recovery change. Temporary roles, barriers, grants and fixture
+rows are verified removed. Next execute 10-11 API, then full Wave 7 gate.
 
 Plans 10-07 and 10-10 are complete through 9fe5560 and a59d64c. Actual
 dividend service: 46 tests, 198 affected regressions, 100% statement/branch
@@ -688,9 +693,9 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Wave 6 fully verified; execute Plan 10-08 concurrency proof.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-08-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 07, 10, 12. Nine of eighteen plans complete.
+Stopped at: Plan 10-08 complete; execute Plan 10-11 authenticated History API.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-11-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 07, 08, 10, 12. Ten of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
 Passing full gate: /tmp/birja-phase10-wave6-backend-fixed.log;
 critical report: /tmp/birja-phase10-wave6-critical.log. The earlier failing
