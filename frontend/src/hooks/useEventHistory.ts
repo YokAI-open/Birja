@@ -1,17 +1,17 @@
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchEventHistory } from "@/api/eventHistory";
 import { useMe } from "./useMe";
 
-type Guard = { email: string | null; epoch: number };
+type Guard = { email: string | null; epoch: number; seen: Set<string> };
 const guards = new WeakMap<QueryClient, Guard>();
 const who = (client: QueryClient) =>
   client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
 function guardFor(client: QueryClient) {
   let guard = guards.get(client);
   if (guard) return guard;
-  guard = { email: who(client), epoch: 0 };
+  guard = { email: who(client), epoch: 0, seen: new Set() };
   guards.set(client, guard);
   const current = guard;
   client.getQueryCache().subscribe(() => {
@@ -20,9 +20,16 @@ function guardFor(client: QueryClient) {
     const old = current.email;
     current.email = email;
     current.epoch++;
+    current.seen.clear();
     if (old !== null) client.removeQueries({ queryKey: ["eventHistory", old] });
   });
   return guard;
+}
+
+/** Capture the current owner lifecycle when a financial mutation starts. */
+export function eventHistorySession(client: QueryClient) {
+  const { email, epoch } = guardFor(client);
+  return { email, epoch };
 }
 
 export function useEventHistory() {
@@ -70,6 +77,23 @@ export function useEventHistory() {
     refetchInterval: false,
     refetchOnWindowFocus: true,
   });
+  useEffect(() => {
+    if (email === null || who(client) !== email || guard.epoch !== epoch || !query.data) return;
+    const ids = query.data.pages.flatMap((page) => page.items.map((item) => item.id));
+    if (ids.every((id) => guard.seen.has(id))) return;
+    ids.forEach((id) => guard.seen.add(id));
+    const views = [
+      { queryKey: ["me"], exact: true },
+      { queryKey: ["portfolio", email] },
+      { queryKey: ["stockContext", email] },
+    ];
+    void (async () => {
+      // Drop pending pre-event views before requesting authoritative replacements.
+      await Promise.all(views.map((view) => client.cancelQueries(view)));
+      if (who(client) !== email || guard.epoch !== epoch) return;
+      await Promise.all(views.map((view) => client.invalidateQueries(view)));
+    })();
+  }, [client, email, epoch, guard, query.data]);
   return {
     ...query,
     data: email !== null && who(client) === email && guard.epoch === epoch ? query.data : undefined,

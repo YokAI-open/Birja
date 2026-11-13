@@ -585,9 +585,9 @@ export function useStockTrade(routeSymbol: string) {
       setState((s) => ({ ...s, phase: "filled", attempt: null, quote: null, fill, error: null }));
       auth.contexts.forEach((g) => g.serial++);
       await Promise.all(
-        ["me", "holding", "stockContext", "stocks", "prices", "portfolio", "history"].map(
-          (prefix) => client.invalidateQueries({ queryKey: [prefix] }),
-        ),
+        ["me", "holding", "stockContext", "stocks", "prices", "portfolio", "history"]
+          .map((prefix) => client.invalidateQueries({ queryKey: [prefix] }))
+          .concat(client.invalidateQueries({ queryKey: ["eventHistory", email] })),
       );
     } catch (error) {
       if (!stillOwn()) return;
