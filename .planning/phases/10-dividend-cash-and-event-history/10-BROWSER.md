@@ -1,5 +1,57 @@
 # Phase10 actual browser evidence
 
+## Plan17 final current UI and review packet — 2026-11-13
+
+Actual complete current-source command: `python3 deploy/tests/run-stock-browser.py
+--suite all`, wrapped by `/tmp/birja-phase10-17-browser-gate.py` to preserve
+385 before/after source hashes. **49passed, one expected deployed-CSPskip,
+317.3s**; cached build1.5s separate. Evidence:
+`/tmp/birja-phase09-browser-5bjhfgb1/browser-all.log`; runner:
+`/tmp/birja-phase10-17-browser-all-final.log`. All385 captured/current sources
+match, including current UI source48d970c. This is a fresh full run after the
+Plan17 focus/spacing/value-weight fixes, superseding the earlier UI captures.
+
+- Current ZIP: `/tmp/birja-phase10-ui-review.zip`,15,497,014bytes.
+- SHA256: `cf4e4817bdae885c2feea4c5fe9e6368ef834394a83f618e6bddddaa5fb9845d`.
+- Extracted entry: `/tmp/birja-phase10-ui-review/index.html`.
+- 16 actual rendered DOM/CSS/embedded-local-font HTML pages,32 PNGs;49review-file
+  hashes,48exact export hashes,107UI/support source hashes and385complete
+  capture/current source hashes. ZIP50members/CRC and all bytes/hashes checked.
+- `10-UI-SOURCE-HASHES.json` binds source48d970c, the new run/log/manifest,
+  current exports/review files, embedded manifest, archive SHA and size.
+- Both historical packets are retained: Plan15 `...ui-review-pre16.zip`
+  SHA4f5d316a…ea49c7d and pre-focus Plan17 `...ui-review-before-focus17.zip`
+  SHA482f3ec3…b409862, with extracted directories/source manifests.
+- No scripts/forms/HTTP references/CSS network URLs. Only synthetic HTML/PNG,
+  index and source manifest; no environment, OTP, trace or session material.
+  Offline controls do not execute.
+- Native200% and actual owner new-UI acceptance remain Plan18 PENDING.
+  Current independent visual assessment is `10-UI-REVIEW.md`.
+
+### Actual required focus finding and repair
+
+Independent UI audit found completion focused offscreen. The new real-browser
+REDdb19cf5 asserted target rectangle and fixed-navigation bounds: focused
+completion bottom3616 exceeded900px viewport. Diagnostic:
+`/tmp/birja-phase09-browser-nnh4g3e4/browser-dividends.log`;
+runner `/tmp/birja-phase10-17-ui-focus-red.log`. No product fix preceded RED.
+GREEN48d970c uses native focus scrolling only after unchanged owner/session/
+append-intent/active-element guards; background/retry/nonsteal protections stay.
+It also restores four declared16px gaps and500cash-value weight.
+
+Focused actual suite1passed39.4s (runner40.2s); it now repeats real final-page append at
+320/375/768/1024/1440 and checks visible focus above fixed navigation, retry
+visibility and no page overflow.29component/page tests4.15s; fullfrontend
+697/36files16.42s,98.37%statements94.82%branches; full ESLint/TypeScript/Prettier
+and build842ms pass. The frozen complete run above then passed once.
+Pre-fix screenshots/ZIP remain under `/tmp/birja-phase10-ui-review-before-focus17/`.
+Original UI warning findings remain historical in the re-audit, not waived.
+
+The sections below preserve **historical Plan15 evidence** and its original
+packet identity. Plan16 superseded its CI/image/recovery/dev-startup gate values;
+Plan17 supersedes UI captures and adds the guarded ordinary-dev financial repair.
+See16/17SUMMARIES, current REVIEW/SECURITY and VALIDATION.
+
 Verified locally2026-11-13. Final source includes focus fixes944cb7f/7aa29fe
 and financial browser fixture/spec commitababfd5. Parent owns phase state.
 
