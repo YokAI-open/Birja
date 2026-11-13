@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan 10-08 complete; execute Plan 10-11 authenticated History API.
-last_updated: "2026-11-13T11:43:24.158233+00:00"
+stopped_at: Wave 7 fully verified; execute Plan 10-09 bounded dividend worker.
+last_updated: "2026-11-13T12:19:02.519396+00:00"
 last_activity: 2026-11-13 -- Dividend service and mixed History projection verified locally
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 60
-  completed_plans: 51
-  percent: 85
+  completed_plans: 52
+  percent: 87
 ---
 
 # Project State
@@ -26,12 +26,21 @@ See: .planning/PROJECT.md (updated 2026-11-12)
 ## Current Position
 
 Phase: 10
-Plan: 10/18 complete; executing 10-11 (Wave 7/13)
-Status: Executing Wave 7
+Plan: 11/18 complete; executing 10-09 (Wave 8/13)
+Status: Executing Wave 8
 Last activity: 2026-11-13 -- Plans 10-07 and 10-10 complete
-Progress: [████████░░] 85% (51/60 currently tracked plans complete; Phase 11 unplanned)
+Progress: [█████████░] 87% (52/60 currently tracked plans complete; Phase 11 unplanned)
 
 ## Completion and next action
+
+Plan 10-11 complete 71d0edf: authenticated no-store History, actual owner
+isolation and legacy/Portfolio cash compatibility; 286 affected tests and
+304 statements/126 branches at 100%, scoped static checks pass. Full Wave 7
+passes 2513 tests/288.62s/99.87%; 44 critical modules, 4251 statements and
+1384 branches at 100%. Full backend static checks pass. The initial run's only
+failure was the exact endpoint allow-list omitting the new GET route; fix
+2964b77 preserves the cash-mutation prohibition, with 33 focused tests passing.
+Next execute 10-09 worker then 10-13 client hook.
 
 Plan 10-08 complete b003692: 57 genuine independent-client concurrency/wait
 tests and 161 affected regressions pass; dividend service remains 100%. No
@@ -693,13 +702,13 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at: Plan 10-08 complete; execute Plan 10-11 authenticated History API.
-Resume file: .planning/phases/10-dividend-cash-and-event-history/10-11-PLAN.md
-Completed: 01, 02, 03, 04, 05, 06, 07, 08, 10, 12. Ten of eighteen plans complete.
+Stopped at: Wave 7 fully verified; execute Plan 10-09 bounded dividend worker.
+Resume file: .planning/phases/10-dividend-cash-and-event-history/10-09-PLAN.md
+Completed: 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12. Eleven of eighteen plans complete.
 Only the owned birja-test stack runs at 0014; keep SQL/ops tests serial.
-Passing full gate: /tmp/birja-phase10-wave6-backend-fixed.log;
-critical report: /tmp/birja-phase10-wave6-critical.log. The earlier failing
-log remains preserved. Execute 10-08 then 10-11 before the Wave 7 gate.
+Latest passing full gate: /tmp/birja-phase10-wave7-backend-fixed.log;
+critical report: /tmp/birja-phase10-wave7-critical.log. Earlier failing logs
+remain preserved. Execute 10-09 then 10-13 before the Wave 8 gates.
 Use frozen C03a SQL result vocabulary and C05a exact History wire types.
 The verified archive is retained in /tmp/birja-backup-test-phase10-preconsumer-fixed;
 old6375 failure and reviewed repair are preserved. Do not repeat unchanged gates

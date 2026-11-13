@@ -1,5 +1,30 @@
 # Phase10 local execution evidence
 
+## Current gate — Wave 7 complete, 2026-11-13
+
+Plan 08 summary b003692: 57 independent-client contention/wait tests and 161
+affected regressions pass, dividend service 100%. Actual lock waits use observed
+pg_blocking_pids. The deferred-constraint case injects only a temporary test
+synchronization trigger; it does not claim a naturally occurring production
+constraint. All temporary roles/barriers/grants/fixture rows are verified gone.
+No service/authority/schema/recovery changes.
+
+Plan 11 summary 71d0edf: new authenticated no-store GET /api/v1/history,
+286 affected tests, four modules 304 statements/126 branches at 100%. Actual
+owner isolation, offpage originals, zero-cash holds, legacy cursor separation
+and once-only Portfolio cash pass. Scheduler integration remains Plan 09.
+
+Initial full run: 2512 passed/one failed/295.19s because the exact route allow-list
+omitted the new approved GET. Fix 2964b77 adds that sole read route, preserving
+the cash-mutation prohibition; 33 focused tests pass 4.26s. Failed log remains
+/tmp/birja-phase10-wave7-backend.log. Final full run: 2513 passed, 93 existing
+warnings, 288.62s, 99.87% overall; /tmp/birja-phase10-wave7-backend-fixed.log.
+Critical report explicitly adds five Phase 10 modules to the existing 39:
+44 modules, 4251 statements/1384 branches, no misses/partials, 100%;
+/tmp/birja-phase10-wave7-critical.log. Ruff/format186 files and Mypy86 sources
+pass. Final CI-list expansion/Node24 selection remain Plan 16. Only owned
+birja-test runs at0014. Next worker09 then client13; all human/live gates remain.
+
 ## Current gate — Wave 6 complete, 2026-11-13
 
 Plans 07 and 10 complete through summaries 9fe5560 and 2bd3365. Thin dividend
