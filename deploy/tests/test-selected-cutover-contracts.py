@@ -20,6 +20,26 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_runtime_cli_order_is_irrelevant_but_every_field_and_row_is_preserved(self):
+        import json
+        rows = [{'ID': 'one', 'ContainerName': 'backend', 'Tag': 'current',
+                 'Repository': 'local', 'Created': 1, 'LastTagTime': 2,
+                 'Platform': 'linux/amd64', 'Size': 3, 'extra': 'kept'},
+                {'ID': 'two', 'ContainerName': 'scheduler', 'Tag': 'current'}]
+        expected = selected.canonical_runtime_images(json.dumps(rows).encode())
+        self.assertEqual(expected, selected.canonical_runtime_images(json.dumps(rows[::-1]).encode()))
+        self.assertEqual(expected, selected.canonical_runtime_images(('\n'.join(json.dumps(x) for x in rows[::-1])).encode()))
+        for field in rows[0]:
+            changed = copy.deepcopy(rows)
+            changed[0][field] = 'different'
+            with self.assertRaisesRegex(AssertionError, 'preservation'):
+                selected.assert_preserved(expected, selected.canonical_runtime_images(json.dumps(changed).encode()))
+        for changed in (rows[:1], rows + [rows[0]]):
+            self.assertNotEqual(expected, selected.canonical_runtime_images(json.dumps(changed).encode()))
+        for invalid in (b'[]', b'null', b'"text"', b'[1]'):
+            with self.assertRaises(ValueError):
+                selected.canonical_runtime_images(invalid)
+
     def test_pinned_server_transition_keeps_all_financial_and_identity_oracles(self):
         before = {'server_version': '18.6 (Debian 18.6-1)', 'cash': '10.00',
                   'schema': {'authority': ['fixed']}, 'tables': {'payment': 'original'}}
@@ -68,11 +88,15 @@ class Contracts(unittest.TestCase):
             (root/'history/deploys.log').write_bytes(b'unchanged log')
             (root/'web').mkdir()
             (root/'web/current').symlink_to('release')
+            evidence = root/'runtime-evidence'
+            evidence.mkdir(mode=0o700)
             canonical = {'revision':'0014', 'cash':'10.00', 'authority':['fixed'], 'server_version':'18.7'}
             identities = {'users':b'2|t'}
             events = []
             def compose(*args, **kw):
                 events.append(args)
+                if args[0] == 'images':
+                    return b'[{"ID":"stable","ContainerName":"backend","Tag":"current"}]'
                 if args[0] == 'run':
                     return b'runtime_current_mixed_history=true revision0014=true verified_tls=true scheduler_quarantine=true'
                 return b'stable'
@@ -93,6 +117,7 @@ class Contracts(unittest.TestCase):
                           original_canonical={**canonical, 'server_version':'18.6'}, original_identity=identities,
                           runtime_saved='r'*64, dividend_saved='d'*64, inherited=9)
             with mock.patch.object(selected.r, 'canonical', return_value=canonical), \
+                 mock.patch.object(selected.tempfile, 'mkdtemp', return_value=str(evidence)), \
                  mock.patch.object(selected.r, 'sql', return_value=b'2|t'), \
                  mock.patch.object(selected.r, 'restored', side_effect=restored), \
                  mock.patch.object(selected.r, 'verify') as verify, \
@@ -103,6 +128,8 @@ class Contracts(unittest.TestCase):
                  mock.patch.object(selected.f, 'recovery_roundtrip') as recovery, \
                  redirect_stdout(io.StringIO()):
                 selected.current0014_checks(**kwargs)
+                self.assertTrue((evidence/'before-runtime-raw.json').is_file())
+                self.assertEqual((evidence/'before-snapshot.json').read_bytes(), (evidence/'after-snapshot.json').read_bytes())
                 self.assertEqual(verify.call_count,4)
                 self.assertEqual(events.count(('restored',)),2)
                 self.assertEqual([event for event in events if event[0]=='target'], [('target',False),('target',True)])

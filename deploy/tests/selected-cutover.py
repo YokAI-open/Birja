@@ -13,6 +13,7 @@ import shutil
 import ssl
 import subprocess
 import tarfile
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -114,11 +115,41 @@ def assert_current0014_financial(expected, actual):
     assert_preserved((before, identities_before), (after, identities_after))
 
 
-def refused_rollback(target, launcher, snapshot):
+def canonical_runtime_images(data):
+    """Compare every CLI field and duplicate row, independently of JSON order."""
+    try:
+        rows = json.loads(data)
+    except json.JSONDecodeError:
+        rows = [json.loads(line) for line in data.splitlines() if line.strip()]
+    if isinstance(rows, dict):
+        rows = [rows]
+    if not isinstance(rows, list) or not rows or not all(isinstance(row, dict) for row in rows):
+        raise ValueError('invalid runtime image records')
+    return tuple(sorted(json.dumps(row, sort_keys=True, separators=(',', ':')) for row in rows))
+
+
+def refused_rollback(target, launcher, snapshot, *, evidence_dir=None, raw_runtime=None):
+    def save(name, value):
+        if evidence_dir is None:
+            return
+        def encode(value):
+            if isinstance(value, bytes):
+                return {'bytes_hex': value.hex()}
+            raise TypeError('unexpected snapshot value')
+        path = evidence_dir / (name + '-snapshot.json')
+        path.write_text(json.dumps(value, sort_keys=True, default=encode) + '\n')
+        path.chmod(0o600)
+        if raw_runtime is not None:
+            path = evidence_dir / (name + '-runtime-raw.json')
+            path.write_bytes(raw_runtime())
+            path.chmod(0o600)
     before = snapshot()
+    save('before', before)
     result = target([str(launcher), '--rollback'], ok=False)
+    after = snapshot()
+    save('after', after)
     assert b'application_schema_incompatible=true' in result.stderr, 'wrong rollback refusal'
-    assert_preserved(before, snapshot())
+    assert_preserved(before, after)
     print('selected0014_unsupported_rollback_refused=true revision0014=true', flush=True)
 
 
@@ -142,7 +173,10 @@ def current0014_checks(*, session, current, old, app, root, launcher, target,
         assert all(fingerprint(name) == value for name,value in originals.items())
         assert all(r.digest(path) == value for path,value in retained.items())
 
+    runtime_samples = []
     def snapshot():
+        runtime = compose('images', '--format', 'json')
+        runtime_samples.append(runtime)
         return {
             'financial': financial(),
             'originals': {name:fingerprint(name) for name in originals},
@@ -151,7 +185,7 @@ def current0014_checks(*, session, current, old, app, root, launcher, target,
             'log': (root / 'history/deploys.log').read_bytes(),
             'pending': (root / 'history/deploy.pending').read_bytes() if (root / 'history/deploy.pending').exists() else None,
             'containers': compose('ps', '-q'),
-            'runtime': compose('images', '--format', 'json'),
+            'runtime': canonical_runtime_images(runtime),
         }
 
     def replay():
@@ -186,7 +220,13 @@ def current0014_checks(*, session, current, old, app, root, launcher, target,
     replay()
     f.recovery_roundtrip(session, source_revision='0014', source_release=current, inherited=inherited)
     print('selected0014_current_cutover=true verified_tls=true revision0014=true', flush=True)
-    refused_rollback(target, launcher, snapshot)
+    evidence_dir = Path(tempfile.mkdtemp(prefix='birja-backup-test-selected0014-evidence-'))
+    evidence_dir.chmod(0o700)
+    try:
+        refused_rollback(target, launcher, snapshot, evidence_dir=evidence_dir,
+                         raw_runtime=lambda: runtime_samples[-1])
+    finally:
+        print('selected0014_refusal_evidence='+str(evidence_dir), flush=True)
     # Only the existing failed-attempt marker is changed. The release log still
     # identifies the last good tested source; no schema downgrade is attempted.
     (root / 'history/deploy.pending').write_text('synthetic failed attempt\n')
