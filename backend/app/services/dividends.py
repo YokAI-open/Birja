@@ -58,7 +58,7 @@ async def _invoke(db: AsyncSession, statement: str, work: dict[str, int | str]) 
             "22003": "numeric_range",
             "22023": "authority_unavailable",
             "P0002": "authority_unavailable",
-        }.get(state, "financial_unavailable")
+        }.get(str(state), "financial_unavailable")
         raise DividendRefused(code) from None
 
 
@@ -91,5 +91,11 @@ async def process_dividend(
 async def record_dividend_hold(
     db: AsyncSession, *, payment_id: int, expected_revision_fingerprint: str
 ) -> DividendResult:
-    """Staged safe refusal until the separate uncertainty path is implemented."""
-    raise DividendRefused("authority_unavailable")
+    """Record one current uncertainty observation for an existing paid anchor."""
+    _id(payment_id)
+    _fingerprint(expected_revision_fingerprint)
+    return await _invoke(
+        db,
+        "SELECT * FROM public.record_stock_dividend_hold(:payment_id,:revision_fingerprint)",
+        {"payment_id": payment_id, "revision_fingerprint": expected_revision_fingerprint},
+    )
