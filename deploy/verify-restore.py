@@ -978,13 +978,13 @@ def restored(dc, dump):
         )
         sql(
             dc,
-            "DO $$BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN CREATE ROLE birja_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; END IF; END$$;",
+            "DO $$BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN CREATE ROLE birja_migrator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END$$;",
             "birja_ops_test",
         )
         require(
             sql(
                 dc,
-                "SELECT NOT (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_migrator';",
+                "SELECT NOT (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_migrator';",
                 "birja_ops_test",
             ).strip()
             == b"t"
