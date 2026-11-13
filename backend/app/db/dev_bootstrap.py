@@ -21,7 +21,10 @@ async def bootstrap(env: str, database_url: str) -> None:
     ):
         raise ValueError("Dev bootstrap requires the local Compose dev database")
     conn = await asyncpg.connect(
-        url.set(drivername="postgresql").render_as_string(hide_password=False)
+        url.set(drivername="postgresql").render_as_string(hide_password=False),
+        timeout=10,
+        command_timeout=15,
+        server_settings={"statement_timeout": "15000", "lock_timeout": "10000"},
     )
     try:
         async with conn.transaction():
