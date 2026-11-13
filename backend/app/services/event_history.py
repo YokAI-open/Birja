@@ -85,3 +85,9 @@ def decode_cursor(value: str) -> EventHistoryCursor:
         return EventHistoryCursor(datetime.fromisoformat(stamp), rank, int(identifier))
     except (ValueError, TypeError, UnicodeError, binascii.Error) as exc:
         raise InvalidCursor() from exc
+
+
+async def list_event_history(db, *, user_id: int, limit: int = 25, cursor: str | None = None):
+    from app.schemas.event_history import EventHistoryPage
+
+    return EventHistoryPage(items=[], next_cursor=None)
