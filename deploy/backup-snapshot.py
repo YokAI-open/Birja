@@ -162,6 +162,16 @@ def dividend_authority_sql():
       'owners',(SELECT json_agg(json_build_array(c.relname,pg_get_userbyid(c.relowner)) ORDER BY c.relname)
         FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relname IN
         ('stock_dividend_payments','stock_dividend_decisions','stock_dividend_payments_id_seq','stock_dividend_decisions_id_seq')),
+      'roles',(SELECT json_agg(json_build_array(rolname,rolinherit,rolsuper,
+        rolcreatedb,rolcreaterole,rolreplication,rolbypassrls) ORDER BY rolname)
+        FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator')),
+      'memberships',(SELECT coalesce(json_agg(json_build_array(parent.rolname,
+        member.rolname,m.admin_option,m.inherit_option,m.set_option)
+        ORDER BY parent.rolname,member.rolname),'[]'::json)
+        FROM pg_auth_members m JOIN pg_roles parent ON parent.oid=m.roleid
+        JOIN pg_roles member ON member.oid=m.member WHERE parent.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator') OR member.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator')),
       'runtime_acl',(SELECT json_agg(json_build_array(r.rolname,c.relname,
         has_table_privilege(r.oid,c.oid,'SELECT'),has_table_privilege(r.oid,c.oid,'INSERT'),
         has_table_privilege(r.oid,c.oid,'UPDATE'),has_table_privilege(r.oid,c.oid,'DELETE'),
@@ -199,9 +209,24 @@ def validate_dividend_functions(functions, *, acl_mode='source'):
         require({k:v for k,v in row.items() if k!='body'}==expected)
 
 
+def validate_dividend_role_boundary(authority, *, allow_missing_runtime=False):
+    # LOGIN intentionally differs between production and a quarantined clone;
+    # privilege flags and isolation must not. Any first membership edge into or
+    # out of a canonical role also rejects transitive SET ROLE escape paths.
+    expected=[[name,*([False]*6)] for name in ('birja_app','birja_migrator','birja_scheduler')]
+    roles=authority.get('roles')
+    require(isinstance(roles,list) and authority.get('memberships')==[])
+    if allow_missing_runtime:
+        require(['birja_migrator',*([False]*6)] in roles)
+        require(roles==[row for row in expected if row in roles])
+    else:
+        require(roles==expected)
+
+
 def validate_dividend_authority(authority, *, quarantined=False):
-    require(isinstance(authority,dict) and set(authority)=={'functions','owners','runtime_acl','runtime_columns','sequence_acl'})
+    require(isinstance(authority,dict) and set(authority)=={'functions','owners','roles','memberships','runtime_acl','runtime_columns','sequence_acl'})
     validate_dividend_functions(authority['functions'],acl_mode='quarantined' if quarantined else 'source')
+    validate_dividend_role_boundary(authority)
     require(authority['owners']==[[name,'birja_migrator'] for name in sorted([*DIVIDEND_COLUMNS,*[t+'_id_seq' for t in DIVIDEND_COLUMNS]])])
     require(authority['runtime_acl']==[[role,table,True,*([False]*7)] for role in ('birja_app','birja_scheduler') for table in sorted(DIVIDEND_COLUMNS)])
     require(authority['runtime_columns']==[[role,table,column,True,False,False,False] for role in ('birja_app','birja_scheduler') for table in sorted(DIVIDEND_COLUMNS) for column in sorted(DIVIDEND_COLUMNS[table].split())])

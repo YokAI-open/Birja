@@ -63,3 +63,8 @@ STOCK_INVALID */
 -- Revision0013 adds exact immutable fill/status rows, invoker function bodies,
 -- owners, search paths, ACLs and enabled trigger definitions, pinned independently.
 -- actual owner/EXECUTE ACL and operator boundaries in backup-snapshot.py.
+-- Revision0014 adds immutable dividend originals/decisions, every next identity,
+-- exact lineage/held-status schema, and independently pinned full declarations
+-- for both definers and their private authority/immutability helpers. Restored
+-- clones authenticate these identities before fixed grants and withhold payout
+-- EXECUTE from both runtime roles; raw legacy SQL remains byte-compatible.

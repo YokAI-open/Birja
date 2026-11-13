@@ -777,15 +777,21 @@ def canonical(dc, db=CLONE):
     )
 
 
-def verify(dc, manifest):
+def verify(dc, manifest, *, quarantined=True):
     contract = recovery_contract()
     contract.validate_manifest(manifest)
     actual = canonical(dc)
-    contract.validate_manifest(actual)
-    if manifest['revision'] in ('0012','0013'):
+    contract.validate_manifest(actual,quarantined=quarantined and manifest['revision']=='0014')
+    if manifest['revision'] in ('0012','0013','0014'):
         require(actual['resolution_authority'] == manifest['resolution_authority'])
-    if manifest['revision'] == '0013':
+    if manifest['revision'] in ('0013','0014'):
         require(actual['execution_authority'] == manifest['execution_authority'])
+    if manifest['revision']=='0014':
+        expected=json.loads(json.dumps(manifest['dividend_authority']))
+        if quarantined:
+            for function in expected['functions']:
+                function['acl']=[]
+        require(actual['dividend_authority']==expected)
     require(
         all(
             actual[k] == manifest[k]
@@ -804,9 +810,9 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    stock = manifest["revision"] in ("0009", "0010", "0011", "0012", "0013")
-    require(constraints == (b"43" if manifest['revision']=='0013' else b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
-    if manifest["revision"] in ('0011','0012','0013'):
+    stock = manifest["revision"] in ("0009", "0010", "0011", "0012", "0013", "0014")
+    require(constraints == (b"55" if manifest['revision']=='0014' else b"43" if manifest['revision']=='0013' else b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
+    if manifest["revision"] in ('0011','0012','0013','0014'):
         require(actual["identity_state"] == manifest["identity_state"])
     require(
         sql(
@@ -887,7 +893,7 @@ def restore_resolution_authority(dc, revision='0012'):
     contract.validate_resolution_authority(authority, revision)
 
 
-def restore_execution_authority(dc):
+def restore_execution_authority(dc, revision='0013'):
     """Reconstruct only fixed reviewed ACLs inside the quarantined clone.
 
     Never execute definitions or grants supplied by the manifest. Authenticate
@@ -919,7 +925,42 @@ def restore_execution_authority(dc):
       GRANT SELECT,INSERT,UPDATE ON stock_status_evidence TO birja_scheduler;
       GRANT EXECUTE ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb) TO birja_app;""")
     authority=json.loads(sql(dc,'SELECT '+contract.execution_authority_sql()))
-    contract.validate_execution_authority(authority)
+    contract.validate_execution_authority(authority, revision)
+
+
+def restore_dividend_authority(dc):
+    """Authenticate no-ACL restore before changes; NEVER enable payout calls.
+
+    The source manifest is validated separately before pg_restore. Because
+    --no-acl deliberately omits its ACLs, only the known default PUBLIC EXECUTE
+    state is accepted here. Unexpected grants cannot be repaired into validity.
+    All four complete declarations and independently pinned bodies precede any
+    clone role/grant reconstruction. The clone remains disconnected from apps.
+    """
+    contract=recovery_contract()
+    authority=json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql()))
+    contract.validate_dividend_functions(authority['functions'],acl_mode='no_acl')
+    contract.validate_dividend_role_boundary(authority,allow_missing_runtime=True)
+    require(authority['owners']==[[name,'birja_migrator'] for name in sorted(
+        [*contract.DIVIDEND_COLUMNS,*[t+'_id_seq' for t in contract.DIVIDEND_COLUMNS]])])
+    actual=canonical(dc)
+    require(hashlib.sha256(json.dumps(actual['schema'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_SCHEMA_SHA256)
+    require(hashlib.sha256(json.dumps(actual['execution_authority']['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_TRIGGERS_SHA256)
+    sql(dc,"""DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+          RAISE EXCEPTION 'unsafe restored runtime role'; END IF;
+      END LOOP; END $$;""",'birja_ops_test')
+    for signature,*_ in contract.DIVIDEND_FUNCTIONS.values():
+        sql(dc,'REVOKE ALL ON FUNCTION '+signature+' FROM PUBLIC,birja_app,birja_scheduler;')
+    sql(dc,"""REVOKE ALL ON stock_dividend_payments,stock_dividend_decisions FROM PUBLIC,birja_app,birja_scheduler;
+      GRANT SELECT ON stock_dividend_payments,stock_dividend_decisions TO birja_app,birja_scheduler;
+      REVOKE ALL ON SEQUENCE stock_dividend_payments_id_seq,stock_dividend_decisions_id_seq FROM PUBLIC,birja_app,birja_scheduler;""")
+    contract.validate_dividend_authority(json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql())),quarantined=True)
 
 
 @contextlib.contextmanager
@@ -977,9 +1018,11 @@ def restored(dc, dump):
             dump,
         )
         revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
-        if revision in (b'0012',b'0013'):
-            if revision == b'0013':
-                restore_execution_authority(dc)
+        if revision == b'0014':
+            restore_dividend_authority(dc)
+        if revision in (b'0012',b'0013',b'0014'):
+            if revision in (b'0013',b'0014'):
+                restore_execution_authority(dc, revision.decode())
             restore_resolution_authority(dc, revision.decode())
         yield
     finally:
@@ -1072,6 +1115,7 @@ def restore(args):
                         and p.stat().st_size <= c["max_stage_bytes"]
                     )
                 manifest = json.loads((target / "manifest.json").read_text())
+                recovery_contract().validate_manifest(manifest)
                 require(digest(target / "database.dump") == manifest["archive_sha256"])
                 with restored(dc, (target / "database.dump").read_bytes()):
                     verify(dc, manifest)

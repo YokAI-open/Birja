@@ -646,6 +646,12 @@ INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revisio
                 with mock.patch.object(restore,'canonical',return_value=baseline):
                     restore.verify([],damaged,quarantined=False)
         corruptions=[
+            'ALTER ROLE birja_migrator INHERIT',
+            'ALTER ROLE birja_app SUPERUSER',
+            'ALTER ROLE birja_scheduler CREATEROLE',
+            'GRANT birja_migrator TO birja_app',
+            'GRANT birja_migrator TO birja_scheduler',
+            'GRANT birja_app TO birja_scheduler',
             'ALTER TABLE stock_dividend_decisions ALTER entitlement_id SET NOT NULL',
             'DROP INDEX uq_stock_dividend_decision_held_status',
             'ALTER TABLE stock_dividend_decisions DROP CONSTRAINT fk_dividend_decision_previous_owner',
@@ -712,12 +718,17 @@ INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revisio
             live([],'REVOKE ALL ON stock_dividend_payments,stock_dividend_decisions FROM PUBLIC,birja_app,birja_scheduler; REVOKE ALL ON accounts FROM birja_app,birja_scheduler;')
             # NOINHERIT does not deny SET ROLE membership. A clone must refuse
             # this noncanonical authority before making its fixed ACL changes.
-            live([], 'SAVEPOINT unsafe_runtime_member; GRANT birja_migrator TO birja_app;')
-            self.assertEqual(live([], "SELECT pg_has_role('birja_app','birja_migrator','SET');").strip(), b't')
-            with mock.patch.object(restore,'sql',side_effect=live),mock.patch.object(restore,'recovery_contract',return_value=producer):
-                with self.assertRaises(ValueError):
-                    restore.restore_dividend_authority([])
-            live([], 'ROLLBACK TO SAVEPOINT unsafe_runtime_member; RELEASE SAVEPOINT unsafe_runtime_member;')
+            for role,grants in (
+                ('birja_app', 'GRANT birja_migrator TO birja_app;'),
+                ('birja_scheduler', 'GRANT birja_migrator TO birja_scheduler;'),
+                ('birja_app', 'CREATE ROLE birja_phase10_recovery_link NOLOGIN NOINHERIT; GRANT birja_migrator TO birja_phase10_recovery_link; GRANT birja_phase10_recovery_link TO birja_app;'),
+            ):
+                live([], 'SAVEPOINT unsafe_runtime_member; '+grants)
+                self.assertEqual(live([], "SELECT pg_has_role('"+role+"','birja_migrator','SET');").strip(), b't')
+                with mock.patch.object(restore,'sql',side_effect=live),mock.patch.object(restore,'recovery_contract',return_value=producer):
+                    with self.assertRaises(ValueError):
+                        restore.restore_dividend_authority([])
+                live([], 'ROLLBACK TO SAVEPOINT unsafe_runtime_member; RELEASE SAVEPOINT unsafe_runtime_member;')
             with mock.patch.object(restore,'sql',side_effect=live),mock.patch.object(restore,'recovery_contract',return_value=producer):
                 restore.restore_dividend_authority([])
             for role in ('birja_app','birja_scheduler'):
