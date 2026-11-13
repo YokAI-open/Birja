@@ -44,6 +44,18 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_dividend_pregrant_structure_refuses_ambiguous_query(self):
+        restore=load('verify-restore')
+        producer=load('backup-snapshot')
+        self.assertTrue(callable(getattr(restore,'dividend_pregrant_structure',None)))
+        original=producer.manifest_sql('0014')
+        fragment=producer.resolution_authority_sql()
+        for query in (original.replace(fragment,'NULL'),original+fragment):
+            with mock.patch.object(producer,'manifest_sql',return_value=query),mock.patch.object(restore,'recovery_contract',return_value=producer),mock.patch.object(restore,'sql') as sql:
+                with self.assertRaises(ValueError):
+                    restore.dividend_pregrant_structure([])
+                sql.assert_not_called()
+
     def test_dividend_clone_authority_authenticated_before_any_grants(self):
         restore = load('verify-restore')
         self.assertTrue(callable(getattr(restore,'restore_dividend_authority',None)),
@@ -254,6 +266,61 @@ class RevisionContracts(unittest.TestCase):
     "--postgres" in sys.argv, "real SQL proof explicitly uses isolated birja-test"
 )
 class PostgreSQLContracts(unittest.TestCase):
+    def test_zzzz_dividend_restore_on_genuinely_fresh_cluster(self):
+        """A separate cluster must not inherit source runtime/operator roles."""
+        self.migrate('head')
+        restore=load('verify-restore')
+        producer=load('backup-snapshot')
+        dump=subprocess.check_output(['docker','compose','--env-file','/dev/null','-f',
+            str(ROOT/'docker-compose.test.yml'),'exec','-T','postgres','pg_dump',
+            '-U','birja_test','-d','birja_test','--format=custom','--no-owner','--no-acl'])
+        dc=restore.compose()
+        for damage in ('none','function','schema','unsafe_runtime'):
+            with self.subTest(damage=damage):
+                try:
+                    restore.call(dc+['up','-d','--wait'])
+                    restore.check_running(dc)
+                    self.assertEqual(json.loads(restore.sql(dc,
+                        "SELECT json_agg(rolname ORDER BY rolname) FROM pg_roles WHERE rolname LIKE 'birja_%'",
+                        'birja_ops_test')),['birja_ops_bootstrap'])
+                    if damage=='unsafe_runtime':
+                        restore.sql(dc,'CREATE ROLE birja_app NOLOGIN INHERIT','birja_ops_test')
+                    original=restore.sql
+                    def observed_sql(target,statement,db=restore.CLONE):
+                        if statement=='SELECT version_num FROM public.alembic_version':
+                            # Tamper after actual pg_restore, before any authority
+                            # authentication or runtime/operator reconstruction.
+                            if damage=='function':
+                                original(target,'ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) STABLE',db)
+                            elif damage=='schema':
+                                original(target,'ALTER TABLE stock_dividend_decisions ADD COLUMN unreviewed text',db)
+                        return original(target,statement,db)
+                    with mock.patch.object(restore,'sql',side_effect=observed_sql):
+                        if damage=='none':
+                            with restore.restored(dc,dump):
+                                actual=restore.canonical(dc)
+                                producer.validate_manifest(actual,quarantined=True)
+                                self.assertEqual(actual['revision'],'0014')
+                                for role in ('birja_app','birja_scheduler'):
+                                    # The owner may SET ROLE but the target role
+                                    # must have no restored financial execution.
+                                    command="SET ROLE "+role+"; SELECT * FROM public.apply_stock_dividend(1,1,repeat('a',64),repeat('b',64));"
+                                    result=subprocess.run(dc+['exec','-T','postgres','psql','-XqAt',
+                                        '-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose','-U',restore.BOOT,
+                                        '-d',restore.CLONE],input=command.encode(),capture_output=True)
+                                    self.assertNotEqual(result.returncode,0)
+                                    self.assertIn(b'42501',result.stderr)
+                        else:
+                            with self.assertRaises(ValueError):
+                                with restore.restored(dc,dump):
+                                    self.fail('damaged authority accepted')
+                            roles=json.loads(original(dc,"SELECT coalesce(json_agg(rolname ORDER BY rolname),'[]'::json) FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler','birja_action_operator')",'birja_ops_test'))
+                            self.assertEqual(roles,['birja_app'] if damage=='unsafe_runtime' else [])
+                            if damage=='unsafe_runtime':
+                                self.assertEqual(original(dc,"SELECT rolinherit FROM pg_roles WHERE rolname='birja_app'",'birja_ops_test').strip(),b't')
+                finally:
+                    restore.call(dc+['down','-v','--remove-orphans'],timeout=60)
+
     @classmethod
     def tearDownClass(cls):
         # Leave the owned disposable stack at the application head. Authority
