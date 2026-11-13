@@ -2,7 +2,7 @@
 
 Prepared2026-11-13 at source `96834e9f566530dbff377cf1d09de8123d4b74b0`.
 SAFE-02 and SAFE-03 remain **PENDING**. This is an inspected oracle inventory,
-not a financial, browser, compatibility or rollout pass. Roadmap criterion1 is
+now supplemented by actual Task1/2 receipts A/N below; final review and rollout remain separate. Roadmap criterion1 is
 R01–R07, criterion2 is F01–F09, criterion3 is B01–B06/G01–G05.
 
 Identity/result references below are normalized to keep the matrix readable.
@@ -87,6 +87,26 @@ in Plan03 and assessed in Plan04. No historical count is a current execution.
   Private packet `/tmp/birja-phase10-ui-review.zip`; source/capture hashes in
   `10-UI-SOURCE-HASHES.json`. Browser/window dimensions not supplied.
 
+## N — final qualified recovery execution (Task11-03-2)
+
+PASS locally, with explicit approved source qualification rather than a new full
+CI block at the latest SHA. Receipt `/tmp/birja-phase11-gates/final-receipt.json`,
+SHA256 `bb90d570e6b2313f7b1fd3fc5d53cf2a6ebe558831b7f0e57a4760d16255f5af`,
+binds five real stages atfb926d8, actual legacy lanes at22c44d6 and fresh complete
+current0014 at a7f965f. SAME freshly packaged152320000byte archive SHA256
+`1faa8277951d0c2a66ac10ffb8b39b5f85372acdacd10b3b3348126c90052cc1` throughout.
+Only three test-harness files differ; all386other sources/11CORE-unit tar bytes/
+actual image IDs are identical. First-five durations39.639/452.729/178.205/
+145.445/145.753s; actual old-image100.375s/selected0008 276.057s/current0014
+342.673s. Exact financial/schema/identity/original-volume/replay/quarantine/
+intended refusal/failed-attempt recovery and independent zero-resource cleanup
+pass. Full/raw beforeafter evidence and all failed reports/log hashes are in
+11-LOCAL-PROOF.md and this receipt. Fresh actual snapshots equal in every field;
+raw image-row ordering differs. Historical unretained failed payload cause is
+not asserted. Current contracts24PG/16CI/7selected pass. Independent reviewer04
+still pending; SAFE-02/03 remain unchecked. No provider/production/publication
+claim follows these local results.
+
 ## A — actual final application gates (Task11-03-1)
 
 At sourcef970d90 with389frozen executable/config bytes, Task1 passes locally.
@@ -107,13 +127,13 @@ Task2 exact final same-archive campaign remains N; no SAFE requirement is closed
 
 | ID / behavior | Existing test/fixture | Independent expected oracle | Exact command | Source/image/archive | Result/time | Private log/hash | Safe summary | Reviewer | Blocker |
 |---|---|---|---|---|---|---|---|---|
-| R01 full0007–0014 holdings/cash, revisions, entitlement versions, payments/decisions, action and History | `ops-fixtures.py:roundtrip/successor_roundtrips`; producer/restore canonical contracts | All table row counts/hashes and financial totals equal exported snapshot; schema constraints/indexes and exact dumped sequence last_value/is_called match; next ID exceeds stored max. No sample-only/max-ID substitute | C-OPS | N; H-RECOVERY separately | PENDING; historical retained458.785s | N; H-RECOVERY | Exact encrypted local repository, not B2 proof | Pending04 | N |
-| R02 corruption/unavailable repository, source preservation | `roundtrip/negative_controls`; real PGContracts in `test-stock-recovery-contracts.py` | Wrong cash/checksum, truncated dump, missing FK/index/sequence/calendar/authority refuse; unavailable encrypted repo fails; original canonical/identities/config/credentials/containers/mounts unchanged, deliberate0007 concurrent writer separately observed | C-OPS | N; H-RECOVERY | PENDING | N | Rejection must be intended failure, never arbitrary green exit | Pending04 | N |
-| R03 immutable stock/crypto fills, splits, original payments/corrections/held/reconciled lineage and event replay | `stock-runtime-fixture.py`; `dividend-execution-fixture.py`;0014 successor callback | Persisted original receipt unchanged; saved dividend digest and full canonical state before/after equal; no second cash/count/quantity/basis effect on replay; current mixed History/Portfolio reads original account cash | C-OPS | N; H-RECOVERY | PENDING | N | Actual source services; owner clone replay distinct from runtime authority | Pending04 | N |
-| R04 restricted grants/schema/tools and quarantine | `roles`, both `tls` lanes, restore pregrant/authentication; fixture runtime denials | Actual app/scheduler financial calls deny SQLSTATE42501; owner verifies exact definitions/owners/ACLs; populated/fresh authority results equal; actual consumers use verify-full; plaintext/wrong-host/CA refused | C-OPS | N; H-RECOVERY | PENDING; historical roles183.898s/TLS147.413+160.010s | N | No financial EXEC added to unblock replay | Pending04 | N |
-| R05 current0014 selected startup/cutover and supported failed-attempt rollback | `selected-cutover.py:integration_current0014/current0014_checks` | Real restricted services start; revision0014; current tested SHA; canonical/identities/original volumes/retained bytes unchanged; owner replay twice and quarantined runtime denials; pending marker removed after rollback to tested source | C-OPS | N; offline O | **PENDING actual0014** | N | Only tested-source failed-attempt recovery supported; no downgrade | Pending04 | Actual service proof N |
-| R06 unsupported old-runtime/schema preservation | `refused_rollback`, actual deploy admission; offline compatibility/contracts | Exact `application_schema_incompatible=true`; no checkout/build/start/log/pending/web/image/container/financial/identity/original-volume changes | C-OPS; `bash deploy/tests/test-deploy-compatibility.sh`; `python3 deploy/tests/test-selected-cutover-contracts.py` | N; O | Actual PENDING; offline O pass | N; O | Old runtime refuses before mutation, no claim it runs0014 | Pending04 | N |
-| R07 separate legacy0008 downgrade rollback and source integrity | Runner `integration`; `selected.integration`; image transition | Actual v0.4.0/0008→v0.3.1 verified TLS and selected rollback;0008 retained; original volume fingerprints unchanged; archive/CORE/unit checks after each stage and owned cleanup even on failure | C-OPS | N; H-RECOVERY | PENDING; historical selected395.051s/image39.011s | N; H-RECOVERY | Legacy evidence cannot satisfy R05 | Pending04 | N |
+| R01 full0007–0014 holdings/cash, revisions, entitlement versions, payments/decisions, action and History | `ops-fixtures.py:roundtrip/successor_roundtrips`; producer/restore canonical contracts | All table row counts/hashes and financial totals equal exported snapshot; schema constraints/indexes and exact dumped sequence last_value/is_called match; next ID exceeds stored max. No sample-only/max-ID substitute | C-OPS | N; H-RECOVERY separately | PASS actual qualified N | N; H-RECOVERY | Exact encrypted local repository, not B2 proof | Pending04 | Review04 |
+| R02 corruption/unavailable repository, source preservation | `roundtrip/negative_controls`; real PGContracts in `test-stock-recovery-contracts.py` | Wrong cash/checksum, truncated dump, missing FK/index/sequence/calendar/authority refuse; unavailable encrypted repo fails; original canonical/identities/config/credentials/containers/mounts unchanged, deliberate0007 concurrent writer separately observed | C-OPS | N; H-RECOVERY | PASS actual qualified N | N | Rejection must be intended failure, never arbitrary green exit | Pending04 | Review04 |
+| R03 immutable stock/crypto fills, splits, original payments/corrections/held/reconciled lineage and event replay | `stock-runtime-fixture.py`; `dividend-execution-fixture.py`;0014 successor callback | Persisted original receipt unchanged; saved dividend digest and full canonical state before/after equal; no second cash/count/quantity/basis effect on replay; current mixed History/Portfolio reads original account cash | C-OPS | N; H-RECOVERY | PASS actual qualified N | N | Actual source services; owner clone replay distinct from runtime authority | Pending04 | Review04 |
+| R04 restricted grants/schema/tools and quarantine | `roles`, both `tls` lanes, restore pregrant/authentication; fixture runtime denials | Actual app/scheduler financial calls deny SQLSTATE42501; owner verifies exact definitions/owners/ACLs; populated/fresh authority results equal; actual consumers use verify-full; plaintext/wrong-host/CA refused | C-OPS | N; H-RECOVERY | PASS actual qualified N | N | No financial EXEC added to unblock replay | Pending04 | Review04 |
+| R05 current0014 selected startup/cutover and supported failed-attempt rollback | `selected-cutover.py:integration_current0014/current0014_checks` | Real restricted services start; revision0014; current tested SHA; canonical/identities/original volumes/retained bytes unchanged; owner replay twice and quarantined runtime denials; pending marker removed after rollback to tested source | C-OPS | N; offline O | PASS actual qualified N | N | Only tested-source failed-attempt recovery supported; no downgrade | Pending04 | Review04 |
+| R06 unsupported old-runtime/schema preservation | `refused_rollback`, actual deploy admission; offline compatibility/contracts | Exact `application_schema_incompatible=true`; no checkout/build/start/log/pending/web/image/container/financial/identity/original-volume changes | C-OPS; `bash deploy/tests/test-deploy-compatibility.sh`; `python3 deploy/tests/test-selected-cutover-contracts.py` | N; O | PASS actual N; offline O pass | N; O | Old runtime refuses before mutation, no claim it runs0014 | Pending04 | Review04 |
+| R07 separate legacy0008 downgrade rollback and source integrity | Runner `integration`; `selected.integration`; image transition | Actual v0.4.0/0008→v0.3.1 verified TLS and selected rollback;0008 retained; original volume fingerprints unchanged; archive/CORE/unit checks after each stage and owned cleanup even on failure | C-OPS | N; H-RECOVERY | PASS actual qualified N | N; H-RECOVERY | Legacy evidence cannot satisfy R05 | Pending04 | Review04 |
 
 ## SAFE-03 — real PostgreSQL money/concurrency (criterion2)
 
@@ -149,7 +169,7 @@ actual stock-fill and dividend service suites supply the financial integration.
 | G02 dependency audits/five strict actual images | CI dependency steps/image; `deploy/scan-images.py` | Locked pip audit and npm audit high gate; runtime/builder/Postgres/Redis/Node including-unfixed0HIGH/CRITICAL, fail-open flags absent; exact image inventory bound | `cd backend && uv run pip-audit`; `cd frontend && npm audit --audit-level=high`; exact five-image scan command in CI “Scan all five actual images” | A; H-APP | PASS actual Task1; see A | A | Historical npm2low/15moderate means not zero vulnerabilities; no waiver/new install | Pending04 | A |
 | G03 native runtime/dev startup | `test-dev-bootstrap.py`; native gates from `10-LOCAL-PROOF.md`/Plan03 | UID1001/networknone native XNYS/dividend/worker/History imports/target; fresh/upgraded0014 real financial service effects and unsafe-role refusal; original owner safe | `python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07`; Plan03 native exact invocation/receipt | A; H-APP | PASS actual Task1; see A | A | Existing installed dependencies only; no production access | Pending04 | A |
 | G04 mandatory serial dispatch/unchanged archive | Actual runner AST execution with failure fakes; `test-ci-ops.py`; selected/deploy offline contracts | Omit either selected lane, swap order, change either archive argument, swallow either failure all rejected; integrity omissions,47-module omissions, audits/scans/aggregate dependency failures rejected; actual CI Python block compiles | `python3 deploy/tests/test-ci-ops.py`; `python3 deploy/tests/test-selected-cutover-contracts.py`; `bash deploy/tests/test-deploy-compatibility.sh` | O | PASS15+4+17/1.350s | O | Offline graph proof only; current0014 integration still N | Self-check; review04 pending | N |
-| G05 required jobs/cleanup/skip boundary | CI `ci-pass`, image policy and ops always-cleanup; owned browser runner | backend/frontend/image/e2e/ops all required; failure/cancel/skip rejects success; fixed owned resources only; retain precisely deployed-CSP W07 skip, never skip financial/0014 proof | `python3 deploy/tests/test-ci-ops.py`; C-OPS/C-BROWSER actual receipts | O plus N | Offline PASS; actual PENDING | O; N | Existing45min ops timeout unchanged; extra0014 runtime unmeasured, assess measured total in03 | Pending04 | N |
+| G05 required jobs/cleanup/skip boundary | CI `ci-pass`, image policy and ops always-cleanup; owned browser runner | backend/frontend/image/e2e/ops all required; failure/cancel/skip rejects success; fixed owned resources only; retain precisely deployed-CSP W07 skip, never skip financial/0014 proof | `python3 deploy/tests/test-ci-ops.py`; C-OPS/C-BROWSER actual receipts | O plus N | PASS actual A/N; review pending | O; N | Existing45min ops timeout unchanged; extra0014 runtime unmeasured, assess measured total in03 | Pending04 | Review04 |
 
 ## UI continuity, exclusions and disposition
 
@@ -179,3 +199,14 @@ access/coverage/freshness/quota campaigns remain deferred. Synthetic admission,
 calendar and provider evidence establishes local safeguards only. Production,
 provider contact/agreements, B2, private.env, installed host tools, timers,
 publication/push/PR/merge/deployment and package installation are excluded.
+
+## Final execution disposition
+
+All mapped Task1/2 local oracles now have actual attributable evidence A/N.
+The old PENDING fields in the original planning/historical identity descriptions
+are superseded by those measured receipts, not by historical Phase10 counts.
+Plan04 must independently review the three-source qualification, raw/full runtime
+snapshot equality, archive/tool/image hashes and all acceptance clauses before
+SAFE-02/03 or the phase is marked complete. Local rollout compatibility supports
+only tested-source0014 failed-attempt recovery; actual old-app downgrade remains
+separately proven at0008. All external/live/SAFE-01 and W-debt boundaries remain.

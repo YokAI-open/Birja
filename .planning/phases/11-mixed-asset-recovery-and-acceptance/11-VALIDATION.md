@@ -1,9 +1,9 @@
 ---
 phase: 11
 slug: mixed-asset-recovery-and-acceptance
-status: draft
+status: in_progress
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-11-13
 ---
 
@@ -46,12 +46,12 @@ Long gates below are explicit integration exceptions, never short feedback.
 
 | Task | Req | Threats | Secure oracle / existing or Wave0 fixture | Automated verification | Status |
 |---|---|---|---|---|---|
-|11-01-1|SAFE-02|T-11-01-01/SC|Wave0 test-deploy-compatibility.sh:0014 old target refuses before checkout/build/start; tested source allowed; original legacy rollback/service tests retained|`bash deploy/tests/test-deploy-compatibility.sh && bash deploy/tests/test-rollback-target.sh && bash deploy/tests/test-app-services.sh && bash -n deploy/deploy.sh`|PENDING|
-|11-01-2|SAFE-02|T-11-01-01/02/03/SC|Wave0 test-selected-cutover-contracts.py: actual dispatch/archive, canonical/identity oracles and intended refusal/finally cleanup contract; existing RevisionContracts|`python3 deploy/tests/test-selected-cutover-contracts.py && python3 deploy/tests/test-stock-recovery-contracts.py RevisionContracts`|PENDING|
-|11-02-1|SAFE-02/03|T-11-02-01/SC|Existing test-ci-ops.py extended mutation cases reject missing/reordered current/legacy dispatch, changed archive and swallowed errors|`python3 deploy/tests/test-ci-ops.py && python3 deploy/tests/test-selected-cutover-contracts.py && bash deploy/tests/test-deploy-compatibility.sh`|PENDING|
-|11-02-2|SAFE-02/03|T-11-02-02/SC|Acceptance matrix maps exact oracles and distinguishes historical/synthetic/new PENDING; source review, no artificial RED|`git diff --check && rg -n 'SAFE-02\|SAFE-03\|0014\|0008\|PENDING\|48d970c\|SAFE-01' .planning/phases/11-mixed-asset-recovery-and-acceptance/11-ACCEPTANCE.md`|PENDING|
-|11-03-1|SAFE-02/03|T-11-03-01/02/03/SC|Existing actual DB/browser/dev/native gates, exact expected cash/counts, owner isolation,80%overall/47critical100%, all audits/five strict scans|`cd backend && uv run pytest --cov=app --cov-branch --cov-fail-under=80`; canonical exact critical/static/audit/scan commands in CLAUDE/CI; `cd frontend && npm run test -- --coverage`; `python3 deploy/tests/run-stock-browser.py`; `python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07`|PENDING — LONG|
-|11-03-2|SAFE-02|T-11-03-01/02/03/SC|Existing PGContracts and serial ops plus Wave0 current0014 actual startup/cutover/replay/refusal/rollback; exact rows/totals/schema/authority/identity and original volumes unchanged; cleanup|Exact runnable command reproduced below; extracts current CI block by unique step/heredoc markers and preserves all stage/integrity assertions|PENDING — LONG|
+|11-01-1|SAFE-02|T-11-01-01/SC|Wave0 test-deploy-compatibility.sh:0014 old target refuses before checkout/build/start; tested source allowed; original legacy rollback/service tests retained|`bash deploy/tests/test-deploy-compatibility.sh && bash deploy/tests/test-rollback-target.sh && bash deploy/tests/test-app-services.sh && bash -n deploy/deploy.sh`|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
+|11-01-2|SAFE-02|T-11-01-01/02/03/SC|Wave0 test-selected-cutover-contracts.py: actual dispatch/archive, canonical/identity oracles and intended refusal/finally cleanup contract; existing RevisionContracts|`python3 deploy/tests/test-selected-cutover-contracts.py && python3 deploy/tests/test-stock-recovery-contracts.py RevisionContracts`|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
+|11-02-1|SAFE-02/03|T-11-02-01/SC|Existing test-ci-ops.py extended mutation cases reject missing/reordered current/legacy dispatch, changed archive and swallowed errors|`python3 deploy/tests/test-ci-ops.py && python3 deploy/tests/test-selected-cutover-contracts.py && bash deploy/tests/test-deploy-compatibility.sh`|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
+|11-02-2|SAFE-02/03|T-11-02-02/SC|Acceptance matrix maps exact oracles and distinguishes historical/synthetic/new PENDING; source review, no artificial RED|`git diff --check && rg -n 'SAFE-02\|SAFE-03\|0014\|0008\|PENDING\|48d970c\|SAFE-01' .planning/phases/11-mixed-asset-recovery-and-acceptance/11-ACCEPTANCE.md`|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
+|11-03-1|SAFE-02/03|T-11-03-01/02/03/SC|Existing actual DB/browser/dev/native gates, exact expected cash/counts, owner isolation,80%overall/47critical100%, all audits/five strict scans|`cd backend && uv run pytest --cov=app --cov-branch --cov-fail-under=80`; canonical exact critical/static/audit/scan commands in CLAUDE/CI; `cd frontend && npm run test -- --coverage`; `python3 deploy/tests/run-stock-browser.py`; `python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07`|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
+|11-03-2|SAFE-02|T-11-03-01/02/03/SC|Existing PGContracts and serial ops plus Wave0 current0014 actual startup/cutover/replay/refusal/rollback; exact rows/totals/schema/authority/identity and original volumes unchanged; cleanup|Exact runnable command reproduced below; extracts current CI block by unique step/heredoc markers and preserves all stage/integrity assertions|PASS — actual execution; see11-LOCAL-PROOF/A/N; review04 pending|
 |11-04-1|SAFE-02/03|T-11-04-01/02/SC|Distinct code/security/UI reviews inspect actual receipts and all threats; HIGH/CRITICAL/missing mitigations block; UI continuity assessed|`git diff --check && bash deploy/tests/test-deploy-compatibility.sh && python3 deploy/tests/test-selected-cutover-contracts.py && python3 deploy/tests/test-ci-ops.py` plus distinct source/evidence review|PENDING|
 |11-04-2|SAFE-02/03|T-11-04-01/02/SC|Goal-verifier receipt/source comparison covers3criteria/all clauses; unproven0014 blocks SAFE-02; human needs remain pending|`git diff --check && rg -n 'SAFE-02\|SAFE-03\|0014\|0008\|SAFE-01\|48d970c' .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md` plus actual receipt SHA/source comparison|PENDING|
 
@@ -105,10 +105,10 @@ Existing infrastructure covers frameworks. Missing acceptance ledger/current0014
 selected-tool compatibility evidence must be implemented as bounded tests before
 claiming those clauses. No schema migration or new dependency is currently justified.
 
-- [ ]11-01-1 creates offline behavioral target/schema guard regressions first.
-- [ ]11-01-2 implements current0014 scenario and its bounded offline contracts.
-- [ ]11-02-1 wires both scenarios into required serial CI with mutation checks.
-- [ ]11-02-2 maps all clauses/oracles before Plan03 real integration.
+- [x]11-01-1 creates offline behavioral target/schema guard regressions first.
+- [x]11-01-2 implements current0014 scenario and its bounded offline contracts.
+- [x]11-02-1 wires both scenarios into required serial CI with mutation checks.
+- [x]11-02-2 maps all clauses/oracles before Plan03 real integration.
 Flags remain false until actual execution; fixture existence alone does not
 establish current0014 compatibility or supported rollback.
 
@@ -129,3 +129,14 @@ not passed by synthetic testing. Do not close Phase7 SAFE-01 or live prerequisit
 - [ ] Nyquist compliance and Wave0 completion set only from actual execution evidence.
 
 Approval: pending execution. Planning does not validate requirements.
+
+## Plan03 actual execution update
+
+Tasks01/02/03 pass with measured offline24PG/16CI/7selected and full application,
+browser/native/audit/image/dev results in11-LOCAL-PROOF.md. Task03-2 uses the
+explicitly approved three-source qualified same-archive proof: five actual stages
+atfb926d8, legacy22c44d6, fresh complete current0014 a7f965f. All11retained bytes,
+archive and runtime/build/authority remain identical; no new full CI-block pass
+is claimed at final source. Independent Plan04 reviews/sign-off remain pending;
+nyquist_compliant stays false, SAFE-02/03 stay incomplete, and phase status is
+not complete. Wave0 fixtures exist and their actual positive/negative paths pass.

@@ -1,8 +1,94 @@
 # Phase11 local execution evidence
 
-Execution is in progress. SAFE-02/03 remain pending final gates and Plan04
-independent reviews. These are local job equivalents, never hosted CI claims.
+Both Plan03 tasks pass under the explicitly approved qualified rerun below.
+SAFE-02/03 remain pending Plan04 independent reviews. These are local job
+equivalents, never hosted CI claims or a fresh complete CI block at final source.
 Provider/live/production/B2/installed tools/timers/publication remain excluded.
+
+## Task11-03-2 final qualified same-archive proof — passed
+
+Final receipt `/tmp/birja-phase11-gates/final-receipt.json`, SHA256
+`bb90d570e6b2313f7b1fd3fc5d53cf2a6ebe558831b7f0e57a4760d16255f5af`,
+binds every source/image/archive/log/report/snapshot hash and independent cleanup.
+One freshly packaged archive flowed through every real stage:
+`/tmp/birja-backup-test-phase11-final/recovery.tar`,152320000bytes, SHA256
+`1faa8277951d0c2a66ac10ffb8b39b5f85372acdacd10b3b3348126c90052cc1`.
+Its private checksum sidecar/profile and all11current CORE/unit tar-member bytes
+were authenticated before/after handoffs. Identical historical archive bytes
+mean unchanged retained tooling, not reused historical execution.
+
+| Actual real stage | Seconds | Actual source / outcome |
+|---|---:|---|
+| Physical image transition |39.639|fb926d8; real collation drift/reindex/logical restore, Redis AOF/auth/restart, original volumes unchanged|
+| Encrypted retained0007–0014 |452.729|fb926d8; exact rows/totals/schema/authority/dumped sequence state/next IDs, corruption controls, original stock/dividend/correction/held/reconciled replay and quarantine|
+| Restricted roles |178.205|fb926d8;63denials, populated/fresh authority/identity parity, actual runtime/upsert|
+| Populated verify-full TLS |145.445|fb926d8; actual calendar/stock/split/cutoff/dividend/crypto consumers, bad CA/host/plaintext refusal, isolation/renewal|
+| Fresh verify-full TLS |145.753|fb926d8; same consumers and exact authority parity with populated lane|
+| Legacy old-image0008 |100.375|22c44d6; actual v0.4.0→v0.3.1 TLS and same installed recovery|
+| Selected legacy0008 |276.057|22c44d6; actual deploy152.858s, rollback21.676s, original fingerprints and0008 preserved|
+| Selected current0014 |342.673|a7f965f; real cutover, replay twice/42501, unsupported old-source refusal and tested-source failed-attempt recovery; full before/after equality and cleanup|
+
+**Qualified source attribution is deliberate.** The exact extracted CI block
+ran at `fb926d8c9605452f30e18719d239826ab7d5628a`; its first five real stages
+passed, including the TLS equality assertion. It then failed an offline retained
+installer expectation. Original/executed block SHA256 are respectively
+`15cfbcaa9e6d434a4197bfebbfd38b0159fc2da00aefeaeee841d64b14b64ee7` and
+`8d8a897941a4c1f2f31db38ef3e1c9bd4e9ad44422dc120e5526c7d01fa108f5`.
+Only the synthetic archive output path differed; stage timings were observed
+without replacing functions or executable policy. Its970.754s failed report is
+retained unchanged and is not marked successful.
+
+The orchestrator explicitly approved reuse of unaffected stages after verifying
+no producer/restore/authority/runtime/build/CORE/unit/archive/image byte changed.
+Only three test-harness files differ from that389file map: selected-cutover.py,
+test-selected-cutover-contracts.py and test-rollback-db-security.sh. Actual legacy
+success is at `22c44d6e4098a8b0fa768a7d0dc542e82072b92b`; final current0014
+success is at `a7f965fe27bf3da6172f3110245ff31c3627fa12`. All386other source
+files and all11retained tar bytes match exactly; before/after image IDs match
+Task1. No replacement archive or duplicate five-stage campaign was needed.
+This is not a newly completed full CI block at a7f965f or a hosted CI pass.
+
+The strengthened offline installer retains both missing-admission zero-mutation
+refusal and admitted0008 checkout/identity refusal. The legacy artifact contract
+admits only the exact owner-approved OpenTelemetry entry fingerprints while
+preserving every other baseline entry and the reviewed calendar8digest; five
+unapproved version/dependency/wheel mutations reject. Their failed predecessors
+remain preserved, including the9.514s early affected attempt.
+
+A later actual current0014 refusal compared unequal raw Compose JSON bytes.
+The historical payload was not retained, so its exact cause remains unproven.
+A bounded real24sample probe then observed2raw orders but1identical complete
+record set. The corrected oracle preserves all fields, unknown fields and row
+multiplicity; only outer row/object-key order is canonicalized. Seven unit
+contracts reject field/ID/container/tag/metadata/multiplicity changes. The final
+actual current run independently confirms full snapshot equality and every raw
+runtime field equal, although the before/after raw bytes differ.
+
+Private final raw evidence:
+`/tmp/birja-backup-test-selected0014-evidence-p487c9dv`.
+Both full snapshot files have SHA256
+`b5c4d146f2af9b56f8ce8b25079ad834cda01a53ea9824f46e28ea76f50490be`.
+Before raw runtime SHA256
+`b30c2017cd43532acf1e4f71eda24972e1d1a6009efd06aa42c6c1dd553872bb`;
+after raw runtime SHA256
+`d645e0868878d98b5b3d401c652c1959383ee410c04450b535544d2e3be4c902`.
+Files are0600 inside a0700directory and survive fixture cleanup for Plan04.
+
+| Private artifact under /tmp/birja-phase11-gates | SHA256 |
+|---|---|
+| final-serial.log |6beb9cffdd59f8c60bacfb11bcfdb523cdd127cdbe4f290c14a5b259f24e072d|
+| final-serial-report.json (failed, first five pass) |98e7dd2559b2fb73257bb2ac32e6985127e545c0ea3877dc39f4e0479f990122|
+| affected-rollback.log (legacy passes, later raw comparison fails) |2f40f4a02de2f33887911726701a3de7356ac9ad07fcf691df69379194360a95|
+| affected-rollback-report.json |0195fad2b29e5665cce3823189fac074c5651ba3814e04f085c2791bb366bbc1|
+| current0014-only.log |8b57f962b7cd13db8e8952b3938ccd8b285b97d362fb5bcd446acb3bb21d85d4|
+| current0014-only-report.json (pass) |d6ad5c0973260385dfbaeffb5d365f14e27f92d501cb690bd48da394bcf8c770|
+
+The final receipt also hashes Task1's original source map, campaign source map,
+all24PG/16CI/7selected contracts and image reports. Current report includes the
+complete final389file map. All six owned test projects independently have zero
+containers, networks and volumes; no other project was stopped. No unresolved
+local technical blocker remains. SAFE-02/03, final review/sign-off and any
+public rollout remain pending04 or separately authorized external work.
 
 ## Task11-03-1 final actual gates — passed
 
