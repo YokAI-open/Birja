@@ -88,3 +88,24 @@ Observedfixturefailures(head0013,validatorrevision,calendarprobedates,SQLalias,
 NVDAresolutioncollision,invalidzerodeclaredrate)andcorrectionsinsummary;
 noapplicationfinancial/securitygateweakened. Fullretained--allNOTyetexecuted;
 06samearchiveproofmandatorybefore07/10runtimeconsumers.
+
+## Wave5 — initial retained failure and reviewed repair (not a passing gate)
+
+Initial exact archive:
+637516d8ccd487ef2c45ccba395782cba035d21d737abdca2827ffa9a9e7bbc5,
+152320000 bytes, deploy-recovery-v2, all 11 CORE/unit files matched.
+SQL contracts passed21/21/92.804s. Retained0007–0013 passed (including restored
+stock replay/portfolio and corruption controls), but0014 failed guard/verification
+at459.772s before roles/TLS. Fresh-cluster diagnostic: canonical resolution
+lookup referenced absent birja_action_operator before its reconstruction.
+Logs:/tmp/birja-phase10-06-all.log and /tmp/birja-phase10-06-diagnostic.log;
+old archive/gate-report remain under /tmp/birja-backup-test-phase10-preconsumer.
+
+Actual fresh-cluster RED50eff38 → verifier repair64f7795. The pre-grant helper
+requires exactly one trusted resolution fragment and returns only schema/triggers;
+full canonical verification and reconstruction order remain unchanged. Genuine
+fresh pg_restore positives, function/schema tamper, unsafe roles and42501runtime
+quarantine pass. Full SQL23/23/125.294s; independent recheck2/2/30.884s,0findings:
+/tmp/birja-phase10-pregrant-review-recheck.log,10-PREGRANT-REVIEW.md.
+All diagnostic/SQL resources cleaned. No source application/provider/production
+change. Replacement archive/full replay and Task2 review remain pending.

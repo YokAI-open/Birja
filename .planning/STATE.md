@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: executing
-stopped_at: Plan10-05 complete; same-archive retained gate10-06 before consumers.
+stopped_at: Plan10-06 pregrant repair reviewed; replacement archive full replay pending.
 last_updated: "2026-11-13T09:15:15.623935+00:00"
-last_activity: 2026-11-13 -- Plan10-05 restricted SQL and TLS proof complete
+last_activity: 2026-11-13 -- Fresh-cluster pregrant repair independently verified
 progress:
   total_phases: 5
   completed_phases: 2
@@ -32,6 +32,19 @@ Last activity: 2026-11-12 -- Phase 10 planning complete
 Progress: [████████░░] 78% (47/60 currently tracked plans complete; Phase11 unplanned)
 
 ## Completion and next action
+
+Phase 10 has 6/18 completed plans. Plan 10-06 remains in progress.
+The first retained archive (637516d8…) passed schemas 0007–0013, then failed
+0014 because a pre-grant full manifest queried the absent resolution role.
+The failing archive and report remain preserved; this is not a passing gate.
+Regression 50eff38 and fix 64f7795 add a role-independent structure check without
+changing final canonical validation or reconstruction order. Full SQL contracts
+pass 23/23; independent fresh-cluster recheck passes 2/2 with no findings.
+Next: build a replacement archive, verify current CORE bytes, and run the entire
+0007–0014 retained/roles/both-TLS sequence before the separate Task 2 review.
+Application consumers in Plans 07/10 remain blocked until that gate passes.
+Older entries below are historical pointers, not current instructions.
+
 
 Current:10-05complete697a32c. GenuineAMDsource/clone36.512s, twooriginals/
 ninedecisions, realstock/cryptocashflows, held/reconciled andpostwaitrefusal,
@@ -648,12 +661,14 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 ## Session Continuity
 
-Stopped at:10-05complete;execute10-06samearchivepre-consumerverification.
+Stopped at: Plan 10-06 repair reviewed; replacement archive replay pending.
 Resume file: .planning/phases/10-dividend-cash-and-event-history/10-06-PLAN.md
-Completed01/02/03/04/05/12withsource/test/summarycommits. NoactiveDBops;ops
-resourcesclean. CurrenttestfixtureusesAMDseparatefromoldresolution/scenarios.
-Retained--all0014dispatchiswiredbutNOTexecuted. Useexactretainedarchiveand
-currentCOREhashes, serialsame-archivelegacy0007–0014/roles/bothTLSplusreview
-beforeany07/10runtimeconsumer. Priorbackend2233/40critical100%,frontend660
-remaincurrentforunchangedappsource. Preservealllive/provider/production/B2/
-timer/installedtool/publicationdeferrals; no repeatedpushquestion.
+Completed plans: 01, 02, 03, 04, 05, 12. No active DB/ops process.
+Old archive /tmp/birja-backup-test-phase10-preconsumer/recovery.tar (637516d8…)
+and gate-report.json record the genuine 0014 failure; do not overwrite them.
+Current verifier fix 64f7795 is independently reviewed in 10-PREGRANT-REVIEW.md.
+Use a new archive/output directory and repeat the full canonical all-lanes
+sequence serially. Verify every current CORE/unit byte and retain the exact
+archive, hashes, logs and cleanup evidence. Task 2 review and Plan 06 summary
+remain pending; no payout-service or History API consumer may start yet.
+Preserve all live/provider/production/B2/timer/installed-tool/publication deferrals.
