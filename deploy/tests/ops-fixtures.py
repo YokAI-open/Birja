@@ -536,6 +536,21 @@ def runtime_program(*, seed, database=None, expected=None):
     return module.program(seed=seed, database=database, expected=expected)
 
 
+def dividend_program(*, mode, database=None, expected=None):
+    spec = importlib.util.spec_from_file_location(
+        'dividend_fixture', ROOT / 'deploy/tests/dividend-execution-fixture.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.program(mode=mode, database=database, expected=expected)
+
+
+def dividend_digest(output):
+    rows = [line.split(b'=',1)[1].decode() for line in output.splitlines()
+            if line.startswith(b'dividend_fixture_sha256=')]
+    assert len(rows)==1 and len(rows[0])==64
+    return rows[0]
+
+
 def runtime_receipt_digest(output):
     rows = [line.split(b'=',1)[1].decode() for line in output.splitlines()
             if line.startswith(b'runtime_original_receipt_sha256=')]
@@ -549,7 +564,9 @@ def successor_roundtrips(dc, session, unchanged):
     release = source_git('rev-parse', 'HEAD').decode().strip()
     source_container = r.call(dc + ['ps','-q','postgres']).strip()
     source_mounts = r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()])
-    for revision in ('0008','0009','0010','0011','0012','0013'):
+    for revision in ('0008','0009','0010','0011','0012','0013','0014'):
+        if revision == '0014':
+            dividend_predecessor = dividend_digest(role_python(dividend_program(mode='prepare'),'birja_migrator'))
         if revision == '0012':
             # Explicit synthetic predecessor role provisioning. The source's
             # migration owner is real before0012; restore never invents it.
@@ -564,7 +581,10 @@ def successor_roundtrips(dc, session, unchanged):
                 'bootstrap':r.BOOT,'password_files':password_files}));role_config.chmod(0o600)
             r.call(['bash',str(ROOT/'deploy/configure-db.sh'),'--synthetic',str(role_config),
                 '--apply','--approved-operation','populated-role-transition'])
-        role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")", 'birja_migrator' if revision in ('0012','0013') else r.BOOT)
+        role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")", 'birja_migrator' if revision in ('0012','0013','0014') else r.BOOT)
+        if revision == '0014':
+            assert dividend_digest(role_python(dividend_program(mode='snapshot'),'birja_migrator')) == dividend_predecessor
+            dividend_saved = dividend_digest(role_python(dividend_program(mode='exercise'),'birja_migrator'))
         if revision == '0009':
             r.sql(dc, STOCK_RECOVERY_SEED, 'birja_source_test')
         if revision == '0010':
@@ -636,7 +656,12 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
                 assert b'restored_owner_reads_only=true' in restored_runtime
                 r.verify(dc,manifest)
                 print('actual_restored_stock_receipt_replay=true actual_mixed_portfolio=true quarantine_acl_unchanged=true exact_original_receipt_sha256='+runtime_digest,flush=True)
-            if revision in ('0009','0010','0011','0012','0013'):
+            if revision == '0014':
+                r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
+                assert dividend_digest(role_python(dividend_program(mode='verify',database='birja_restore_test',expected=dividend_saved),'birja_migrator')) == dividend_saved
+                r.verify(dc,manifest)
+                print('actual_restored_dividend_saved_replay=true financial_quarantine=true sha256='+dividend_saved,flush=True)
+            if revision in ('0009','0010','0011','0012','0013','0014'):
                 r.sql(dc, "UPDATE stock_data_admissions SET generation=generation+1 WHERE product='calendar'")
                 try:
                     r.verify(dc, manifest)
@@ -943,7 +968,7 @@ def roundtrip(archive_arg=None):
             # intentionally measured with no writers in this isolated source.
             wrapper.write_text('#!/bin/bash\nexec /usr/bin/docker "$@"\n')
             successor_roundtrips(dc, session, unchanged)
-            assert r.canonical(dc, "birja_source_test")["revision"] == "0013", "retained recovery rehearsal never exercised populated execution state"
+            assert r.canonical(dc, "birja_source_test")["revision"] == "0014", "retained recovery rehearsal never exercised populated dividend state"
             print(
                 "integration_elapsed_seconds="
                 + str(round(time.monotonic() - started, 3))
@@ -1466,7 +1491,8 @@ def action_role_contract(dc):
 
 def execution_role_contract(dc):
     authority = role_manifest(dc)['execution_authority']
-    r.backup_module().validate_execution_authority(authority)
+    r.backup_module().validate_execution_authority(
+        authority, revision=role_sql(dc, 'SELECT version_num FROM alembic_version').decode())
     for role in ('birja_app','birja_scheduler'):
         for query in ('UPDATE stock_fill_facts SET held_after=held_after',
                       'DELETE FROM stock_fill_facts',
@@ -1653,13 +1679,17 @@ def roles(red_probe=False):
                 "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",
                 "birja_migrator",
             )
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0013"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0014"
             after = role_manifest(dc)
             assert after['financial'] == before['financial']
             assert all(after['tables'][table] == state for table,state in before['tables'].items() if table not in {'coins','alembic_version'})
             stock_role_contract(dc)
             upgraded_action_acl = action_role_contract(dc)
             upgraded_execution_acl = execution_role_contract(dc)
+            role_python(dividend_program(mode='prepare'), 'birja_migrator')
+            upgraded_dividend_authority = role_manifest(dc)['dividend_authority']
+            upgraded_dividend = role_python(dividend_program(mode='exercise'), 'birja_migrator')
+            assert b'dividend_actual_sold_after_cutoff=true' in upgraded_dividend
             assert (
                 role_sql(
                     dc,
@@ -1772,6 +1802,9 @@ def roles(red_probe=False):
             stock_role_contract(dc)
             assert action_role_contract(dc) == upgraded_action_acl
             assert execution_role_contract(dc) == upgraded_execution_acl
+            assert role_manifest(dc)['dividend_authority'] == upgraded_dividend_authority
+            role_python(dividend_program(mode='prepare'),'birja_migrator')
+            assert b'dividend_actual_sold_after_cutoff=true' in role_python(dividend_program(mode='exercise'),'birja_migrator')
             print('accounting_acl_upgrade_fresh_parity=true operator_nologin=true immutable_audit_denied=true quantity_only_scheduler=true', flush=True)
             print(
                 f"roles_populated_transfer=true fresh_bootstrap_parity=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
@@ -1882,16 +1915,16 @@ async def main():
   for role,char in [('app','a'),('scheduler','b')]:
    conn=await asyncpg.connect('postgresql://birja_'+role+':'+char*64+'@postgres:5432/birja_source_test',**args)
    assert await conn.fetchval('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')
-   assert await conn.fetchval('SELECT count(*) FROM coins')==35, 'populated0010 predecessor is mandatory before restricted accounting upgrade'
+   assert await conn.fetchval('SELECT count(*) FROM coins') in (15,35), 'known fresh or populated predecessor required'
    connections.append(conn)
   subprocess.run(['alembic','upgrade','head'],check=True,timeout=90)
   app,scheduler=connections
   for table in ['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions']:
    await app.fetch('SELECT * FROM '+table)
   await scheduler.execute("INSERT INTO stock_quotes(coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation) SELECT coin_id,100,102,101,'alpaca','iex','2026-11-10T15:00Z','2026-11-10T15:00:01Z','2026-11-10',1 FROM stock_instruments ORDER BY coin_id LIMIT 1")
-  identity=await scheduler.fetchval("INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-11-10','2026-11-01','2026-12-01',999) RETURNING id")
-  assert identity==1
-  await scheduler.execute("UPDATE stock_sessions SET calendar_admission_generation=1 WHERE id=1")
+  identity=await scheduler.fetchval("INSERT INTO stock_sessions(exchange,session_date,coverage_start,coverage_end,calendar_admission_generation) VALUES ('NYSE','2026-11-10','2026-11-01','2026-12-01',999) ON CONFLICT(exchange,session_date) DO UPDATE SET calendar_admission_generation=excluded.calendar_admission_generation RETURNING id")
+  assert identity>0
+  await scheduler.execute("UPDATE stock_sessions SET calendar_admission_generation=1 WHERE id=$1",identity)
   for conn in connections:
    for query in ["UPDATE stock_data_admissions SET reviewed_at=now()", "UPDATE stock_data_admissions SET calendar='{}'", "UPDATE stock_instruments SET provider_asset_id='forged'", "SELECT nextval('stock_data_admissions_id_seq')", "CREATE TABLE forbidden_tls(id bigint)", "SET ROLE birja_migrator"]:
     try: await conn.execute(query)
@@ -2649,7 +2682,7 @@ def tls(fresh_bootstrap=False):
             client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0007')", bootstrap)
             secure_seed = secure_seed.replace("cfg=Config('/app/alembic.ini');cfg.set_main_option('script_location',legacy+'/backend/alembic');command.upgrade(cfg,'0007')", "")
             client("backend", secure_seed, [*bootstrap, '-v', str(legacy / 'backend/app') + ':/app/app:ro'])
-            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('head' if fresh_bootstrap else '0012') + ")", bootstrap)
+            client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr('0008' if fresh_bootstrap else '0013') + ")", bootstrap)
             original = r.canonical(dc, "birja_source_test")
             config = root / "roles.json"
             config.write_text(
@@ -2688,41 +2721,52 @@ def tls(fresh_bootstrap=False):
                 == b"0\n"
             )
             # Real one-shot production migration command, with only migrator route/trust.
-            upgraded = client('migrate', STOCK_TLS_UPGRADE) if not fresh_bootstrap else None
+            if not fresh_bootstrap:
+                dividend_predecessor = dividend_digest(client('migrate',dividend_program(mode='prepare')).stdout)
+                original = r.canonical(dc,'birja_source_test')
+            upgraded = client('migrate', STOCK_TLS_UPGRADE)
             if upgraded is not None:
                 assert b'existing_tls_connections_immediate_stock_grants=true' in upgraded.stdout
-            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0013"
+            assert role_sql(dc, "SELECT version_num FROM alembic_version") == b"0014"
+            if not fresh_bootstrap:
+                assert dividend_digest(client('migrate',dividend_program(mode='snapshot')).stdout) == dividend_predecessor
             current = r.canonical(dc, "birja_source_test")
             assert current['financial'] == original['financial']
             assert all(current['tables'][table] == state for table,state in original['tables'].items() if table not in {'coins','alembic_version','stock_quotes','stock_sessions'})
             if not fresh_bootstrap:
-                assert original['tables']['stock_quotes']['count'] == original['tables']['stock_sessions']['count'] == 0
-                assert current['tables']['stock_quotes']['count'] == current['tables']['stock_sessions']['count'] == 1
+                assert current['tables']['stock_quotes']['count'] == original['tables']['stock_quotes']['count']+1
+                assert current['tables']['stock_sessions']['count'] == original['tables']['stock_sessions']['count']
             stock_role_contract(dc)
             action_acl = action_role_contract(dc)
             execution_acl = execution_role_contract(dc)
             action_consumer = client('migrate', ACTION_TLS_CONSUMER)
             assert b'accounting_tls_actual_append=true immutable_denials=true quantity_only=true' in action_consumer.stdout
-            print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'), flush=True)
+            print('accounting_tls_actual_append=true immutable_denials=true quantity_only=true lane=' + ('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'), flush=True)
             ownership_consumer=client('migrate',OWNERSHIP_TLS_CONSUMER)
             assert b'ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true' in ownership_consumer.stdout
-            print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
+            print('ownership_tls_actual_app_append_replay_reconstruct=true scheduler_consistency=true six_column_read_only=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
             # Dedicated isolated logins are provisioned only AFTER migration
             # authority checks. NOLOGIN operator remains a separate group role.
             role_sql(dc,"CREATE ROLE birja_operator_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'d'*64+"'; CREATE ROLE birja_public_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'e'*64+"'; GRANT birja_action_operator TO birja_operator_fixture")
             resolution_consumer=client('migrate',RESOLUTION_SCENARIO+RESOLUTION_TLS_CONSUMER)
             assert b'resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true' in resolution_consumer.stdout
-            print('resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
+            print('resolution_verified_tls_operator_service_replay=true stale_denied=true public_app_scheduler_denied=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
-            print('calendar_runtime_tls_consumer=true lane=' + ('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'), flush=True)
+            print('calendar_runtime_tls_consumer=true lane=' + ('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'), flush=True)
             execution_consumer=client('migrate',execution_program(seed=True))
             assert b'guard_consumer=true verified_tls=true' in execution_consumer.stdout
-            print('execution_verified_tls=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
+            print('execution_verified_tls=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
             actual_runtime=client('migrate',runtime_program(seed=True))
             runtime_receipt_digest(actual_runtime.stdout)
             assert b'verified_tls=true' in actual_runtime.stdout
-            print('actual_stock_services_verified_tls=true actual_split_cutoff=true crypto_cashreuse=true lane='+('fresh0013' if fresh_bootstrap else 'populated0012_no_grant_repair'),flush=True)
+            print('actual_stock_services_verified_tls=true actual_split_cutoff=true crypto_cashreuse=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
+            if fresh_bootstrap:
+                client('migrate',dividend_program(mode='prepare'))
+            dividend_output = client('migrate',dividend_program(mode='exercise')).stdout
+            assert b'dividend_actual_sold_after_cutoff=true' in dividend_output
+            assert b'verified_tls=true' in dividend_output
+            print('actual_dividend_sql_verified_tls=true actual_crypto_deficit_recovery=true cancelled_hold_reconciliation=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
             assert (
                 role_sql(
                     dc,
@@ -2826,10 +2870,48 @@ def tls(fresh_bootstrap=False):
             print(
                 f"tls_fixture_setup_seconds={setup - started:.3f} tls_integration_seconds={time.monotonic() - started:.3f}"
             )
-            return action_acl,execution_acl
+            return action_acl,execution_acl,role_manifest(dc)['dividend_authority']
         finally:
             r.call(dc + ["down", "-v", "--remove-orphans"], timeout=60)
             assert not r.call(dc + ["ps", "-q"]).strip()
+
+
+def dividend_sql():
+    """Fast genuine SQL/restore proof on the fixed disposable ops target."""
+    dc = r.compose()
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix='birja-backup-test-') as tmp:
+        root = Path(tmp)
+        config = root / 'roles.json'
+        config.write_text(json.dumps({'project':'birja-ops-test',
+            'db_name':'birja_source_test','bootstrap':r.BOOT,
+            'password_files':{n:str(root/n) for n in ('app','scheduler','migrator')}}))
+        for name in ('app','scheduler','migrator'):
+            (root/name).write_text('a'*64)
+        try:
+            r.call(dc + ['up','-d','--wait'])
+            r.check_running(dc)
+            r.sql(dc,'CREATE DATABASE birja_source_test','birja_ops_test')
+            role_python(SEED)
+            role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")
+            r.call(['bash',str(ROOT/'deploy/configure-db.sh'),'--synthetic',str(config),
+                '--apply','--approved-operation','populated-role-transition'])
+            predecessor = dividend_digest(role_python(dividend_program(mode='prepare'),'birja_migrator'))
+            role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",'birja_migrator')
+            assert dividend_digest(role_python(dividend_program(mode='snapshot'),'birja_migrator')) == predecessor
+            expected = dividend_digest(role_python(dividend_program(mode='exercise'),'birja_migrator'))
+            manifest = r.canonical(dc,'birja_source_test')
+            dump = r.call(dc+['exec','-T','postgres','pg_dump','-U',r.BOOT,'-d',
+                'birja_source_test','--format=custom','--no-owner','--no-acl'])
+            with r.restored(dc,dump):
+                r.verify(dc,manifest)
+                r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
+                role_python(dividend_program(mode='verify',database='birja_restore_test',expected=expected),'birja_migrator')
+                r.verify(dc,manifest)
+            print('dividend_source_sql_restore_quarantine=true predecessor_entitlements_sha256='+predecessor)
+            print(f'dividend_sql_seconds={time.monotonic()-started:.3f}')
+        finally:
+            r.call(dc+['down','-v','--remove-orphans'],timeout=60)
 
 
 if __name__ == "__main__":
@@ -2847,6 +2929,8 @@ if __name__ == "__main__":
         roles(red_probe=True)
     elif sys.argv[1:] == ["--tls"]:
         tls()
+    elif sys.argv[1:] == ["--dividend-sql"]:
+        dividend_sql()
     elif sys.argv[1:] == ["--all"]:
         roundtrip()
         roles()
