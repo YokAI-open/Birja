@@ -86,3 +86,10 @@ async def process_dividend(
             "entitlement_fingerprint": expected_entitlement_fingerprint,
         },
     )
+
+
+async def record_dividend_hold(
+    db: AsyncSession, *, payment_id: int, expected_revision_fingerprint: str
+) -> DividendResult:
+    """Staged safe refusal until the separate uncertainty path is implemented."""
+    raise DividendRefused("authority_unavailable")
