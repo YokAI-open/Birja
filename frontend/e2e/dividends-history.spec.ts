@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
@@ -40,6 +40,20 @@ const activity = (page: Page) =>
     name: "Account activity",
     exact: true,
   });
+async function focusedInView(page: Page, target: Locator) {
+  await expect(target).toBeFocused();
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  const viewport = page.viewportSize()!;
+  const nav =
+    viewport.width < 768
+      ? await page.getByRole("navigation", { name: "Main" }).boundingBox()
+      : null;
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(nav?.y ?? viewport.height);
+}
 async function history(page: Page) {
   await page.goto("/history");
   await expect(page.getByRole("heading", { name: "Account activity", exact: true })).toBeVisible();
@@ -246,6 +260,7 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await page.getByRole("button", { name: "Load more", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your loaded events are still here");
   await expect(page.getByRole("button", { name: "Try loading more", exact: true })).toBeFocused();
+  await focusedInView(page, page.getByRole("button", { name: "Try loading more", exact: true }));
   await expect(activity(page)).toContainText("Forward split");
   await snapshot(page, info, "history-append-error");
   await page.unroute("**/api/v1/history*");
@@ -253,11 +268,22 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await page.getByRole("button", { name: "Try loading more", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(end).toBeFocused();
+  await focusedInView(page, end);
   const all = await (await page.request.get(`/api/v1/history?limit=100`)).json();
   expect(all.items).toHaveLength(31);
   expect(new Set(all.items.map((item: { id: string }) => item.id)).size).toBe(31);
   await expect(page.getByRole("status")).toContainText("6 more events loaded. 31 events shown.");
   await snapshot(page, info, "history-all-loaded");
+  for (const width of [320, 375, 768, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.reload();
+    const more = page.getByRole("button", { name: "Load more", exact: true });
+    await more.focus();
+    await page.keyboard.press("Enter");
+    await focusedInView(page, end);
+    expect(await page.evaluate("document.documentElement.scrollWidth<=innerWidth")).toBe(true);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.route("**/api/v1/history*", (route) =>
     route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } }),
   );
