@@ -190,3 +190,40 @@ All four source/test paths and all listed RED/GREEN commits exist. Final19/19
 SQL contracts and scoped checks pass. No tracked file deletion, package install,
 canonical-state update or unrelated `.claude/` modification occurred. Parent
 should independently review this recovery boundary before advancing consumers.
+
+## Independent review correction — fresh owner CR-01
+
+The independent recovery-contract review found one BLOCKER in the actual
+`restored()` entry path: creating a missing migrator omitted NOINHERIT, so
+PostgreSQL supplied inheritance=true and the new0014 pre-grant role validator
+correctly rejected the otherwise valid fresh restore. The earlier consumer
+probe began after safe source bootstrap and therefore did not cover this entry
+condition. The original19/19 results above remain historical evidence, not proof
+that this fresh-owner path was correct.
+
+- Behavioral RED `ff10840`: two regressions invoke real `restored()`, capture
+  its emitted role-creation and role-check statements, and execute those exact
+  statements on fresh rollback-only test aliases. The actual created flags are
+  passed to the real0014 pre-grant validator. A valid fresh entry failed there,
+  and an unsafe pre-existing alias reached database creation before refusal:
+  one failure/one error2.202s, `/tmp/birja-phase10-04-fresh-owner-red.log`.
+- GREEN `03f912d` makes new migrator creation explicitly LOGIN NOINHERIT,
+  NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION and NOBYPASSRLS. Its immediate
+  existing-owner guard now includes inheritance. No ALTER ROLE or unsafe-owner
+  repair is introduced; an unsafe existing owner is refused before CREATE DATABASE.
+- Focused actual-entry SQL GREEN:2passed2.345s,
+  `/tmp/birja-phase10-04-fresh-owner-green.log`.
+- Final affected SQL suite:21executed/21passed/0skipped91.538s,
+  `/tmp/birja-phase10-04-fresh-owner-all-sql.log`.
+- Final offline suite:21discovered/15executed passed/6explicit SQL skips0.039s,
+  `/tmp/birja-phase10-04-fresh-owner-offline.log`.
+- Python syntax, scoped Ruff F and whitespace checks pass. Only the verifier,
+  recovery-contract tests and this summary changed for the review correction.
+
+The role probes replace only the fixed canonical role name with a test alias;
+they never drop/alter the existing canonical owner. Alias creation and flags are
+actual PostgreSQL behavior in owned `birja-test`. Archive operations and clone
+database creation are transport-adapted in this focused test, so this is not a
+claim of full retained-archive/TLS restoration. Plans05/06 remain mandatory.
+No producer query or0007–0013 manifest/schema-guard bytes changed. Independent
+recheck of this correction remains the parent's gate before advancing Plan05.
