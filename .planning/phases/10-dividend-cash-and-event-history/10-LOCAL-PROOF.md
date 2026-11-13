@@ -89,6 +89,97 @@ NVDAresolutioncollision,invalidzerodeclaredrate)andcorrectionsinsummary;
 noapplicationfinancial/securitygateweakened. Fullretained--allNOTyetexecuted;
 06samearchiveproofmandatorybefore07/10runtimeconsumers.
 
+## Wave5 — Plan06 Task1 same-archive preconsumer gate
+
+Completed locally 2026-11-13, checked at10:50UTC. This records Task1 evidence;
+Plan06 Task2 independent gate review and the final summary remain separate.
+No Phase10 application payout worker or mixed History consumer is claimed.
+
+The first exact retained archive failed its mandatory0014 isolated restore:
+`/tmp/birja-backup-test-phase10-preconsumer/recovery.tar`, SHA256
+`637516d8ccd487ef2c45ccba395782cba035d21d737abdca2827ffa9a9e7bbc5`,
+152320000bytes. It passed0007–0013 but stopped before roles/TLS after459.772s.
+The actual fresh-cluster diagnostic identified PostgreSQL's
+`role "birja_action_operator" does not exist`: dividend pregrant checks called
+the full canonical query before the resolution helper created its fixed role.
+The same-server clone had masked this because source roles already existed.
+Archive, sidecar and failed report/log remain preserved, never relabelled green:
+`/tmp/birja-phase10-06-all.log`, `/tmp/birja-phase10-06-diagnostic.log`,
+and the original directory's `gate-report.json`.
+
+Actual RED50eff38 (fresh entry28.134s, one expected failure) → GREEN64f7795
+adds only a role-independent pregrant schema/trigger reader. It requires exactly
+one trusted resolution SQL fragment before omitting that lookup at this boundary;
+it returns only schema/triggers. Complete function metadata, six role flags,
+membership and owner authentication still precede reconstruction. Reconstruction
+order, full final canonical validation and financial quarantine are unchanged.
+The fresh-cluster regression starts with only bootstrap present and uses real
+pg_dump/pg_restore. Function/schema tampering and an unsafe existing runtime role
+are refused before runtime/operator creation; unsafe flags are not repaired.
+Both runtime roles' payout execution produces actual42501. Initial test-draft
+query interception/NULL-aggregate handling was corrected before final RED.
+
+Focused fresh/dispatch2/2 passed30.636s; independent repair recheck2/2
+passed30.884s with no findings (`10-PREGRANT-REVIEW.md`, root commitd86e759).
+Full actual SQL contracts23/23 passed125.294s, zero skips:
+`python3 deploy/tests/test-stock-recovery-contracts.py --postgres`, log
+`/tmp/birja-phase10-06-sql-green.log`. Syntax, RuffF and whitespace checks pass.
+
+The replacement archive is retained privately outside fixture cleanup:
+`/tmp/birja-backup-test-phase10-preconsumer-fixed/recovery.tar` plus `.sha256`.
+SHA256 `1faa8277951d0c2a66ac10ffb8b39b5f85372acdacd10b3b3348126c90052cc1`,
+152320000bytes, profile`deploy-recovery-v2`, revisions0007–0014, directory0700
+and archive/sidecar0600. Its inventory retains the approved restic0.19.1 binary
+SHA256`20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639`
+and PostgreSQL18.7 amd64 provenance: index`adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de`,
+manifest`42c334e9e4d30cf6f99ac6bbc411910d020b02dfb693604887e9cdc9188e3a48`,
+config`4ee05252904571f8901ceb47916108d7da51fc6ecc3edbfa4a161b8b9225051e`.
+All11 CORE/unit file bytes were compared directly with the tar before and after
+the run; the report retains every hash and fixture/migration/bootstrap identity.
+Only the verifier differs from the failed archive, current verifier SHA256
+`2a9009e4c6332be4d551cd7b1d503edc376ade24f459d0fa6d02595fbfeb4d4e`.
+The old archive's checksum was independently rechecked unchanged after success.
+
+Exact execution command:
+`python3 /tmp/birja-phase10-06-fixed-gate.py > /tmp/birja-phase10-06-fixed-all.log 2>&1`.
+This wrapper uses the actual canonical all-mode call sequence, with an explicit
+retained archive: `ops.roundtrip(archive)`, `ops.roles()`, populated`ops.tls()`,
+fresh`ops.tls(fresh_bootstrap=True)`, then asserts equality of TLS authority results.
+The literal CLI`--all` was not invoked because it cannot accept a retained archive.
+The wrapper and its delegated `/tmp/birja-phase10-06-gate.py` remain available.
+
+| Actual stage | Wrapper elapsed seconds | Result |
+| --- | ---: | --- |
+| Retained encrypted0007–0014 roundtrip |503.681|Pass|
+| Restricted populated/fresh roles |210.330|Pass|
+| Populated verify-full TLS |163.830|Pass|
+| Fresh-bootstrap verify-full TLS |162.172|Pass|
+
+Full run1047.402s, including archive preparation and final integrity/cleanup.
+Retained revisions all prove exact rows/schema/sequences and original source
+identity unchanged;0011 rejects9 catalog and17 identity corruptions,0012 rejects13
+resolution corruptions,0013 rejects10 execution corruptions with real restored
+stock receipt replay/portfolio, and0014 passes installed isolated recovery,
+saved decision replay and financial quarantine. Its source/clone ledger SHA256
+is`7f06d31ab8315914b282b6d04e0c1c0f5d3f5b84362b721372c2287a5697dfb8`.
+Roles pass63 genuine denials and populated/fresh parity. Both TLS lanes exercise
+existing stock/crypto/accounting/ownership/operator/calendar/execution consumers
+and the new real dividend SQL original/correction/race/deficit/held paths;
+bad CA, hostname and plaintext rejection, mount isolation and renewal all pass.
+Populated ledger`a690843347c5f04e1461d51b09c7af2a1dead377f03dfe57bdf3871cb85811a3`,
+fresh ledger`4808dc6f997969a0a58cfd3f0c79b75d124a555b5c303419415d7547c40dada5`.
+Independent datasets need not have identical ledger hashes. No successful
+financial effects are mocked; synthetic fixture data use reviewed migrations
+and real existing services/new SQL authority, with no provider activation.
+
+Report `/tmp/birja-backup-test-phase10-preconsumer-fixed/gate-report.json` records
+all four passes, identical before/after archive/current CORE identities and
+zero owned ops/restore containers, volumes or networks. After all probes ended,
+the empty isolated`birja-test` stack was also stopped with its own compose file
+and volumes. No provider/private production/B2/timer/installed-tool operation,
+package/image/lock change, push or deployment occurred. Consumers remain subject
+to Task2's distinct review; no canonical phase/requirement state is advanced here.
+
 ## Wave5 — initial retained failure and reviewed repair (not a passing gate)
 
 Initial exact archive:
