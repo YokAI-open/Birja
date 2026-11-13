@@ -2,6 +2,7 @@
 """Image identity and offline recovery contracts at actual command boundaries."""
 
 import datetime
+import copy
 import hashlib
 import importlib.util
 import io
@@ -36,6 +37,53 @@ def sha(data):
 
 
 class Identity(unittest.TestCase):
+    def test_ci_recovery_preparation_requires_verification_before_import_and_binding(self):
+        spec = importlib.util.spec_from_file_location("check_recovery", ROOT / "deploy/tests/check-recovery-image.py")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        for failure in (None, "archive", "alias"):
+            with self.subTest(failure=failure):
+                events = []
+                def command(argv, **kwargs):
+                    if "load" in argv:
+                        events.append("load")
+                    return subprocess.CompletedProcess(argv, 0)
+                def verify(*args):
+                    events.append("verify")
+                    if failure == "archive":
+                        raise ValueError("unverified archive")
+                def alias():
+                    events.append("alias")
+                    if failure == "alias":
+                        raise ValueError("wrong image identity")
+                with patch.object(helper.r, "call", return_value=b'[["driver-type","io.containerd.snapshotter.v1"]]'), patch.object(helper.r, "registry_manifests", return_value=(b"index", b"manifest")), patch.object(helper.r, "verify_saved_image", side_effect=verify), patch.object(helper.r, "loaded_recovery_image", side_effect=alias), patch.object(helper.r, "bind_recovery_image", side_effect=lambda: events.append("bind")), patch.object(helper.subprocess, "run", side_effect=command):
+                    if failure:
+                        with self.assertRaises(ValueError):
+                            helper.main()
+                        self.assertNotIn("load", events)
+                        self.assertNotIn("bind", events)
+                    else:
+                        helper.main()
+                        self.assertEqual(events, ["verify", "alias", "load", "bind"])
+
+    def test_exact_inventory_rejects_unapproved_versions_and_artifact_changes(self):
+        parse = tomllib.loads
+        for target, field in (("opentelemetry-api", "version"), ("opentelemetry-api", "artifact"), ("dnspython", "version"), ("fastapi", "artifact")):
+            with self.subTest(target=target, field=field):
+                def changed(source):
+                    value = parse(source)
+                    if "package" in value:
+                        value = copy.deepcopy(value)
+                        record = next(p for p in value["package"] if p["name"] == target)
+                        if field == "version":
+                            record["version"] = "999.0"
+                        else:
+                            record["wheels"][0]["hash"] = "sha256:" + "0" * 64
+                    return value
+                with patch.object(tomllib, "loads", side_effect=changed):
+                    with self.assertRaises(AssertionError):
+                        self.test_signed_exact_packages_and_complete_group_boundaries()
+
     def test_anonymous_registry_fixed_origin_and_bounded_graph(self):
         config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
         manifest = json.dumps({"config": {"digest": sha(config), "size": len(config)}}).encode()
@@ -400,10 +448,16 @@ class Identity(unittest.TestCase):
         additions = {name: distributions.pop(name) for name in approved}
         # Exact reviewed wheels/sdist/source metadata, not just name/version.
         self.assertEqual(hashlib.sha256(json.dumps(additions, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7")
+        # Phase11's separately owner-approved exact OTEL1.45.2 repair is the
+        # sole changed predecessor entry (11-DEPENDENCY-REVIEW.md). Authenticate
+        # its complete record, then retain e728855's other records unchanged.
+        otel = distributions.pop("opentelemetry-api")
+        self.assertEqual(otel["version"], "1.45.2")
+        self.assertEqual(hashlib.sha256(json.dumps(otel, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c")
         encoded = json.dumps(distributions, sort_keys=True, separators=(",", ":"))
         self.assertEqual(
             hashlib.sha256(encoded.encode()).hexdigest(),
-            "c1aed6af821462b2d8734a0a02dae4bf71f21028b3ba125be631256474a1f9ba",
+            "8b0f58d9199b3dad2d27d9b398d33cc578b8a819307a3838dfc1cb32934991f1",
         )
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):

@@ -393,6 +393,7 @@ class CI(unittest.TestCase):
                     return_value=(b"index", b"manifest"),
                 ) as manifests,
                 patch.object(preflight.r, "verify_saved_image") as verify,
+                patch.object(preflight.r, "bind_recovery_image") as bind,
             ):
                 if not store:
                     with self.assertRaises(ValueError):
@@ -400,10 +401,11 @@ class CI(unittest.TestCase):
                     save.assert_not_called()
                     manifests.assert_not_called()
                     verify.assert_not_called()
+                    bind.assert_not_called()
                 else:
                     preflight.main()
                     self.assertEqual(
-                        save.call_args.args[0],
+                        save.call_args_list[0].args[0],
                         [
                             "/usr/bin/docker",
                             "image",
@@ -414,6 +416,8 @@ class CI(unittest.TestCase):
                         ],
                     )
                     self.assertEqual(verify.call_args.args[1:], (b"index", b"manifest"))
+                    self.assertEqual(save.call_args_list[-1].args[0], ["/usr/bin/docker", "image", "load"])
+                    bind.assert_called_once_with()
 
     def test_ops_prepares_default_socket_docker_platform_api_before_fixtures(self):
         ops = jobs()["ops"]
