@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { StockAttribution } from "@/components/StockAttribution";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useNow } from "@/hooks/useNow";
 import { PortfolioFreshness } from "@/components/PortfolioFreshness";
@@ -72,7 +73,10 @@ export default function PortfolioPage() {
               role="alert"
               className="flex flex-wrap items-center gap-3 rounded-control bg-warn-soft p-4 text-warn-text"
             >
-              <p>Couldn&apos;t refresh your portfolio. Showing the last successful update.</p>
+              <p>
+                Couldn&apos;t refresh your portfolio. Only still-permitted values from the last
+                update are shown.
+              </p>
               <Button
                 ref={captureRetryButton}
                 variant="secondary"
@@ -84,6 +88,15 @@ export default function PortfolioPage() {
               </Button>
             </div>
           )}
+          {data.holdings.some((h) => h.asset_class === "stock") && (
+            <div className="flex flex-col gap-2">
+              <StockAttribution context="valuation" />
+              <p className="text-[13px] leading-[18px] text-muted-foreground">
+                Stock values use the IEX bid/ask midpoint; this may differ from the buy or sell
+                price.
+              </p>
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-12">
             <Card
               role="region"
@@ -91,10 +104,25 @@ export default function PortfolioPage() {
               className="min-w-0 bg-[image:var(--highlight-gradient)] lg:col-span-8"
             >
               <CardContent className="items-start rounded-control bg-primary/80 p-4 text-primary-foreground">
-                <h2 className="font-medium">Total portfolio value</h2>
+                <h2 className="font-medium">
+                  {data.valuation_complete ? "Total portfolio value" : "Known value"}
+                </h2>
                 <p className="w-full text-[32px] leading-9 font-medium wrap-anywhere tabular-nums md:text-[40px] md:leading-[44px]">
-                  {data.total_value === null ? "Value unavailable" : formatUsd(data.total_value)}
+                  {data.valuation_complete
+                    ? data.total_value === null
+                      ? "Unavailable"
+                      : formatUsd(data.total_value)
+                    : data.known_value === null
+                      ? "Value unavailable — refresh required"
+                      : `Known value: ${formatUsd(data.known_value)} — incomplete`}
                 </p>
+                {!data.valuation_complete && (
+                  <p>
+                    {data.unvalued_holding_count}{" "}
+                    {data.unvalued_holding_count === 1 ? "holding cannot" : "holdings cannot"} be
+                    valued. Overall gain/loss and allocation are unavailable.
+                  </p>
+                )}
                 <h3 className="font-medium">Total profit/loss</h3>
                 <div className="flex flex-wrap gap-2 tabular-nums">
                   {data.total_pl === null ? (

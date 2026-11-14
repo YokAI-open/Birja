@@ -1,183 +1,238 @@
-# Feature Landscape
+# Feature Research: v1.1 US Stock Trading
 
-**Domain:** Crypto paper-trading web app (virtual USD, real prices), small friends audience, learning focus
-**Researched:** 2026-10-20
-**Overall confidence:** MEDIUM. Based on well-known behavior of Investopedia Simulator, Binance/Bybit demo trading, eToro virtual portfolio, Wall Street Survivor, and standard brokerage cost-basis conventions. Web research was not run this session. The P/L conventions are standard accounting, so they carry more confidence than the competitor feature lists, which come from training data and should be treated as LOW-MEDIUM.
+**Domain:** Virtual-money stock trading added to Birja's existing crypto simulator
+**Researched:** 2026-11-10
+**Confidence:** HIGH on exchange mechanics and confirmed scope; MEDIUM on the proposed MVP boundary; stock-feed feasibility and public display rights remain unresolved by this features research.
 
-## Table Stakes
+## Scope and evidence
 
-Missing any of these makes a simulator feel broken or untrustworthy.
+The owner confirmed 20 curated NYSE/Nasdaq stocks, whole-share market orders,
+one existing virtual USD balance, combined portfolio/history, and regular-session
+trading only. Desired quote recency is comparable to crypto's roughly one-minute
+refresh; a fifteen-minute delay was explicitly rejected. This document proposes
+requirements for approval, not additional owner decisions.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Email OTP login, account auto-created on first verify | Zero-friction signup for friends | Med | Security-heavy (HMAC code, rate limits, refresh rotation). Per CLAUDE.md. |
-| $10,000 starting cash, granted exactly once | Every simulator has a starting balance | Low | Seed in the same transaction as user creation. Record as a ledger or "initial deposit" row so P/L baseline is 10000 by definition. |
-| Coin list with price, "as of" time, 24h change | Users must see what they can buy | Low-Med | 24h change needs the provider to return it; otherwise omit. It is a nice-to-have, not core. |
-| Buy and sell market orders, by $ amount or by quantity | Core loop | Med | Single DB transaction with `FOR UPDATE` on cash and holding rows. |
-| Trade preview with confirm step | Shows spread and fee and prevents fat-finger trades. Binance, eToro and Investopedia all have a preview or confirm step. | Med | See "Trade UX". |
-| Insufficient funds / insufficient holdings validation | Basic correctness | Low | Server-side. Client-side hints only. |
-| "Max" / "Sell all" shortcut | Selling an exact fractional balance by typing is error-prone. Every exchange has a 25/50/75/100% or Max control. | Low | "Sell all" must send the exact stored quantity so no dust is left behind. |
-| Portfolio screen: cash, holdings, total value, total P/L ($ and %) | Core value | Med | See "Portfolio screen". |
-| Per-holding quantity, avg cost, current value, unrealized P/L ($ and %) | Learning loop: "what is it worth now" | Med | Average-cost method. |
-| Trade history (date, coin, side, qty, price, fee) | Audit trail; needed for trust | Low-Med | Keyset pagination, newest first (`created_at, id`). Also show total $ and realized P/L on sells. |
-| Stale-price protection | Project core value: "correct to the cent" | Med | Max age check at execution, plus visible as-of times. |
-| Logout and session persistence | Expected | Low | Part of auth. |
-| Mobile-usable layout | Friends will open it on phones | Low-Med | Responsive tables or cards. No native app. |
-| Clear empty states and errors | First login has no holdings. A refused trade needs a human message. | Low | "Price is 6 min old, trading paused until next refresh." |
+NYSE's published core session is 09:30–16:00 Eastern Time. Its calendar and
+Nasdaq's calendar include holidays and 13:00 early closes. Nasdaq explicitly
+lists 27 November and 24 December 2026 as early closes. A Monday–Friday timer is
+insufficient. [NYSE calendar](https://www.nyse.com/trade/hours-calendars),
+[Nasdaq calendar](https://www.nasdaqtrader.com/Trader.aspx?id=Calendar).
 
-## Differentiators
+Fractional shares are offered by some brokers under varying conditions;
+whole-share orders are Birja's confirmed first-version choice, not a universal
+claim about stock markets. [SEC fractional-share bulletin](https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-bulletins/fractional-share-investing-buying-slice-instead-whole-share).
 
-Not expected in an MVP, but valuable. Only the first group is cheap enough for v1.
+## Feature Landscape
 
-| Feature | Value Proposition | Complexity | v1? |
-|---------|-------------------|------------|-----|
-| Spread and fee itemized in the preview, in dollars ("Total cost of this trade: $X") | Teaches that trading costs money, a lesson most simulators hide by using zero-fee fills at mid. This is already in scope and is the main learning differentiator. | Low | YES |
-| Realized vs unrealized P/L split on the portfolio | Most simple simulators show only a total. Learners benefit from seeing banked vs paper gains. | Low-Med | YES, if cheap (see P/L model). Otherwise show realized on sell rows in history only. |
-| "Fees paid to date" total | Shows the drag of costs | Low | Optional. One SUM query. |
-| Portfolio allocation (% by holding) | Teaches diversification. Can be a column, not a chart. | Low | Column yes, pie chart no. |
-| Quote staleness shown inline, relative ("2 min ago") with color states | Builds trust and also teaches that prices move | Low | YES |
-| Portfolio value-over-time chart | Strongest engagement feature in this category | High (snapshot job + storage) | v2 (already out of scope) |
-| Per-coin price chart | Standard in Binance/eToro | High | v2 |
-| Leaderboard, sharing | Competitive hook for friends | Med-High | v2 |
-| Limit/stop orders | Real-trading learning | High (matcher) | v2 |
-| Watchlist | Convenience | Low-Med | v2 (needs a table) |
-| Trade notes or journaling ("why did I buy?") | Strong learning value, unusual in simulators | Low-Med | v2 candidate. Single nullable text column on a trade, but still a v1 scope creep. |
-| Reset portfolio | Common in competitors | Low | Deliberately excluded by user. Keep excluded. |
-| Education content, contests, achievements | Wall Street Survivor's angle | High | Never for this project. |
+### Table Stakes
 
-## Anti-Features
+| Feature | Why expected | Complexity | Proposed acceptance outcome |
+|---|---|---|---|
+| Curated stock catalogue with stable identities | Tickers, exchange and asset class must be distinguishable | MEDIUM | Exactly 20 enabled common-stock instruments with name, display ticker, USD denomination, primary listing metadata and provider mapping; ambiguous/unknown symbols cannot execute |
+| Stock and crypto discovery in the existing app | Users need to find both without confusing their rules | MEDIUM | Clear asset-class labels/filtering; stock closure never disables crypto |
+| Timestamped, honestly described stock prices | Recent polling cannot repair delayed source data | HIGH | Show source event time and feed coverage; refuse missing, future, stale, malformed or nonpositive execution prices; never relabel a fifteen-minute feed as live |
+| Server-owned regular-session admission | Browser clocks/buttons cannot enforce trading rules | HIGH | Stock buy and sell both reject outside the scheduled regular session, on holidays and after early close; decisions account for America/New_York DST |
+| Per-symbol availability | An open exchange does not guarantee a stock can trade | HIGH | Known halt, suspended/inactive instrument or unresolved status blocks that stock; unknown status fails closed according to an approved validity policy |
+| Whole-share buy/sell | Confirmed order model | MEDIUM | Positive integral quantities only, including direct API requests; fractional quantities and stock dollar-amount orders rejected; crypto fractional and dollar orders keep working |
+| Explicit preview and exact fill | Cash changes must be understandable | HIGH | Server preview shows quantity, execution basis, all simulated costs, total debit/credit and quote time; changed inputs or market state cannot silently execute an obsolete preview |
+| Shared cash with atomic execution | Stocks and crypto compete for the same money | HIGH | Concurrent cross-asset purchases cannot overspend; repeat idempotency key does not duplicate a fill; sell cannot exceed owned quantity |
+| Combined portfolio with per-asset valuation status | Closed stocks are still owned | HIGH | Cash counted once; both asset classes included; market closure retains last-known stock marks with an as-of/closed label; missing marks make totals explicitly incomplete rather than silently zero |
+| Immutable combined history | Historical stock trades must remain interpretable | MEDIUM | Existing keyset history includes asset type and exact stock fills/costs/time; old crypto rows retain meaning; corporate actions, if supported, are distinguishable from trades |
+| Safe corporate-action boundary | Real share units can change without a trade | HIGH | A documented action/reconciliation policy prevents mixing pre-action quantities with post-action prices; unresolved affected valuations cannot appear complete |
+| Safe rollout for existing accounts | Adding stocks must not reset or mutate prior outcomes | MEDIUM | No second starting balance, crypto holdings/trades/basis preserved, normal refresh/logout/relogin persists both asset classes |
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Price lock / quote hold timers ("price valid for 15s") | Needs quote storage, expiry and race handling. Overkill for tens of users on 1-min prices. | Preview shows the price and its as-of time. Confirm is rejected with 409 if a newer price has arrived since. User re-previews. |
-| Instant fills at exact mid, zero fees | Teaches the wrong lesson and breaks the learning goal | Fixed spread and fee, already decided |
-| Silent execution on stale prices | Breaks the core promise | Refuse with a clear message |
-| Streaming/websocket prices, ticking P/L | Complexity and free-tier limits for no learning value | Poll with TanStack Query `refetchInterval` about 30-60s and show the as-of time |
-| FIFO/LIFO lot tracking and tax lots | Large complexity, irrelevant to a learning tool without taxes | Weighted-average cost |
-| Short, margin, leverage, futures | Complex and dangerous for beginners (already out of scope) | None |
-| Portfolio reset / "start over" button | Contradicts the no-hindsight philosophy | None |
-| Editing or deleting trades | Breaks the audit trail | Trades are immutable. Corrections would be new rows, and are not needed in v1. |
-| Deposits/withdrawals, "add funds" | It is a simulator, and it would invalidate the $10k baseline | None |
-| Per-coin custom spread based on volume or volatility | Speculative realism | One global config value, maybe per-coin override later |
-| Email notifications, price alerts | Extra background work and email cost | v2+ |
-| Public profiles, other users' portfolios | Privacy and scope | v1 is solo |
-| Hard-coded unlimited coin catalog or search over thousands of coins | Exceeds free-tier limits | Curated 10-20 coins in a config or DB table |
+**Proposed freshness contract:** target approximately 60-second collection and
+consider the existing crypto execution bound of strictly less than 120 seconds
+as the starting stock acceptance rule, subject to provider evidence and explicit
+requirements approval. Separate source event age from fetch age. At reopening,
+an old previous-session quote cannot be admitted merely because the clock says
+open. Recheck session, availability and quote validity after database-lock waits
+and immediately before a fill. A valid same-session quote must be available
+before trading resumes. These are design recommendations; the user has not
+chosen an exact stock age bound.
 
-## Detailed Expected Behavior (v1)
+**Halt feasibility:** Nasdaq publishes a free halt RSS feed for Nasdaq-listed and
+other exchange-listed securities and asks consumers to query no more than once
+per minute. It is a candidate input, not proof of complete instantaneous halt
+detection. Its terms and actual coverage/status history must be validated before
+selection; a fresh empty response must not automatically clear a previously
+known halt. Define an outage/recovery policy and a way to suspend all stock
+admission for emergency exchange closures. [Feed documentation](https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltRSS),
+[feed terms](https://www.nasdaqtrader.com/content/administrationsupport/agreementstrading/THRSSFeedTermsCond.pdf).
 
-### Trade UX (preview and confirmation)
+### Differentiators
 
-Common pattern (Binance convert and market order, eToro open-trade dialog, Investopedia trade page): select coin, choose Buy or Sell, enter an amount, see an estimate, click Preview or Review, then Confirm, then see a result.
+| Feature | Value | Complexity | Disposition |
+|---|---|---|---|
+| One virtual account across stock and crypto | Teaches trade-offs using the same finite cash | MEDIUM | Confirmed core value; include now |
+| Explain why a stock cannot trade, with next session when known | Helps friends understand US market hours | LOW–MEDIUM | Include a concise reason; do not promise reopening during unknown status |
+| Honest feed/mark explanations | Prevents mistaken confidence in exchange-wide or real broker execution | LOW | Include minimal source/as-of and simulated-fill wording |
+| Asset-class allocation summary | Makes the combined portfolio easier to read | LOW–MEDIUM | Optional enhancement after required combined holdings work |
+| Watchlists, charts, company fundamentals | Richer exploration | MEDIUM–HIGH | Defer; unrelated to the confirmed trade loop |
 
-Recommended flow:
+### Anti-Features / Explicit Exclusions
 
-1. Trade form per coin: Buy/Sell toggle, an input with a toggle between "$ amount" and "Quantity", and available balance shown beside it (cash for buy, coin quantity for sell). Include a Max button.
-2. Live client-side estimate as the user types. This is a computed hint only, never authoritative.
-3. Preview step. The best approach is a server-computed quote endpoint (`POST /trades/preview`, no side effects) that uses the exact same pricing function as execution, so preview and fill can't drift. It returns:
-   - market (mid) price and its as-of timestamp
-   - executed price (mid ± spread) and the spread as % and in $
-   - fee % and fee in $
-   - quantity, gross notional, and total cash out (buy) or net proceeds (sell)
-   - cash balance or holding after the trade
-   - warnings or errors (insufficient funds, below minimum, price too old)
-4. Confirm sends the same intent plus the price as-of timestamp the user saw. The server re-prices with the latest price. If a newer price arrived (the as-of differs), respond 409 with the new preview, so the user never pays a price they did not see. If the price is older than the max age, refuse with 422 or 409 and a clear message.
-5. Result: a success toast or screen showing the actual fill (qty, price, fee), a link to the portfolio and history, and idempotency protection. The confirm button disables on click, and the request carries an idempotency key so a double-click or retry can't double-trade. The key is cheap in the DB (unique column on the trade).
+| Feature | Why avoid in v1.1 | Alternative |
+|---|---|---|
+| Real brokerage accounts, funding or order routing | User asked for a simulator extension | Virtual fills only |
+| Margin, shorts, options, ETFs, OTC shares, multiple currencies | Adds products/accounting not requested | USD common-stock curation |
+| Limit/stop orders or orders queued overnight | Requires order lifecycle/matching and changes closed-market semantics | Refuse closed orders; user retries when open |
+| Premarket, after-hours, overnight trading | Owner explicitly wants closure with the regular session | Regular session only even if a provider publishes extended-session ticks |
+| Fractional stock orders/dollar buys | Conflicts with confirmed whole-share order scope | Quantity orders; display estimated cost |
+| Full consolidated order-book/queue/slippage simulator | No confirmed licensed depth or need at friend scale | Label deterministic fills as simulation |
+| A global “market closed” toggle for every asset | Would break crypto's independent availability | Per-asset admission and status |
+| Silently reusing crypto's spread/fee as stock reality | Existing costs are a simulation setting, not a stock-market rule | Obtain explicit stock-cost policy and show it in preview |
+| Ignoring splits while claiming correct holdings/P&L | Can manufacture catastrophic fictitious losses/gains | Reconcile or quarantine affected marks and trading |
+| Selecting a paid feed or silently relaxing freshness | No such authorization | Resolve feasibility with the owner before locking requirements |
 
-Semantics of the "$ amount" input, which must be decided once and displayed clearly:
-- Recommended: for Buy, "$ amount" means total cash spent including fee. Quantity = (amount) / (executed_price × (1 + fee%)), rounded DOWN or half-even to the coin's precision. For Sell by $ amount, it means gross notional to sell, and the fee is deducted from the proceeds. Alternative: the amount is the notional and the fee is charged on top. Either is fine if the preview shows the total unambiguously. The first is friendlier ("I spend $100").
-- Rounding: quantity rounded to the coin's step with `ROUND_HALF_EVEN` (or DOWN for buys so cash never goes negative), fee and cash totals quantized to cents or 8 dp at one defined point. Store the quantized values on the trade row. Never recompute them later.
+## Stock Accounting: Mandatory Decisions, Bounded Implementation
 
-### P/L and average cost
+Corporate-action handling is not implied consent to a full brokerage system.
+Its *safety boundary* is a launch requirement; the automation level and income
+simulation are scope choices that need approval.
 
-Convention for retail simulators and most broker UIs (Investopedia, Robinhood, Coinbase, Binance "average price"): weighted-average cost, not FIFO. FIFO and specific-lot methods are tax-driven and not needed here.
+### Splits and reverse splits
 
-Definitions (recommended for v1):
-- On a buy of q coins at executed price p with fee f (USD): cost_basis += q×p + f. Quantity += q. avg_cost = cost_basis / quantity. Including the buy fee in the basis is the broker convention and makes P/L honest. (Binance's displayed "avg price" often excludes fees, so document the choice.)
-- On a sell of q coins: avg_cost does NOT change. cost_basis -= q × avg_cost (reduce proportionally). Realized P/L for this sell = (q × executed_sell_price − sell_fee) − q × avg_cost. Cash += q×p − f.
-- If quantity reaches exactly 0, reset cost_basis to 0. Handle it with exact Decimal arithmetic so no residue is left.
-- Unrealized P/L per holding = quantity × mark_price − cost_basis. Percent = unrealized / cost_basis.
-- Mark price: recommend mid (the latest cached market price) for valuing holdings. A buy then shows an immediate small loss equal to roughly spread + fee, which is exactly the lesson. Alternative: mark at the sell-side price (mid × (1 − spread)), the true liquidation value, which is more honest but looks harsher. Pick one, label it ("valued at market price"), and use it everywhere. Flag as a requirements decision.
-- Total portfolio value = cash + sum(quantity × mark). Total P/L vs start = total value − 10,000 (and %). This is an identity, so it is robust and does not depend on the average-cost bookkeeping. Check: total P/L = total realized + total unrealized − (nothing else), because fees are already in cash and in the basis. Use this as an invariant in tests.
-- Store on the holding row: quantity, cost_basis (not avg_cost, which is derived). Store realized P/L on each sell trade row (computed at execution, immutable) so history can show it and the sum gives total realized P/L cheaply.
-- Selling every coin of a holding: keep the row with quantity 0 or delete it, but the portfolio view hides zero holdings.
+A forward split changes share count and per-share basis while preserving total
+basis, absent other consideration. Reverse splits may create fractional
+entitlements even when every purchase was a whole-share order, and some issuers
+pay cash instead. Real event terms govern treatment. [IRS split/basis FAQ](https://www.irs.gov/faqs/capital-gains-losses-and-sale-of-home/stocks-options-splits-traders/stocks-options-splits-traders-7),
+[SEC reverse-split explanation](https://www.investor.gov/introduction-investing/investing-basics/glossary/reverse-stock-splits).
 
-### Portfolio screen
+**Recommended minimal safe option:** verified operational monitoring of the 20
+instruments plus an explicit instrument quarantine/reconciliation workflow.
+Disable affected fills and suppress completeness of affected marks before the
+event becomes effective; reconcile units and basis exactly once before reopening.
+Document evidence, effective time and reconciliation outcome. This can avoid
+building a fully automated corporate-action service, but only if an enforceable
+monitoring/reconciliation owner and procedure exist. A vague promise to “handle
+splits later” is insufficient for ongoing held positions.
 
-Typical contents (Investopedia "Portfolio", eToro portfolio, Binance wallet overview):
-- Header summary: Total value, Cash available, Invested value (sum of holdings), Total P/L in $ and % vs $10,000 with green/red color and sign (plus an icon or text so color is not the only signal).
-- Holdings table: coin, quantity, avg cost, current price, current value, % of portfolio, unrealized P/L $ and %, and a Trade/Sell action. On mobile, collapse into cards.
-- Price as-of indicator for the page ("Prices as of 14:32, 1 min ago") using the OLDEST price among held coins, so the total is never presented as fresher than it is.
-- Optionally a realized P/L line and a "fees paid" line.
-- Empty state: "You have $10,000 in cash. Pick a coin to make your first trade."
-- Auto-refresh via TanStack Query at about the price refresh interval, with no flicker.
-- Show money to sensible display precision: USD to 2 dp, quantities up to 8 dp with trailing zeros trimmed, and tiny prices (e.g. $0.00001234) at enough significant digits. Values are formatted in the UI only from string decimals.
+For example, after a verified 2:1 split, 3 shares with $300 aggregate basis become
+6 with the same $300 aggregate basis; original executed trades stay unchanged.
+A reverse split yielding a nonintegral quantity must remain quarantined until
+an approved entitlement/cash-in-lieu policy resolves it. Do not round away value
+or assume it grants fractional order permission. Cash-in-lieu valuation and
+associated basis allocation require authoritative event terms and an audit
+record; unsupported mergers, spin-offs, delistings and ticker changes use the
+same safe quarantine boundary rather than invented conversions.
 
-### How stale prices are communicated
+### Dividends and return semantics
 
-Common patterns in trading UIs: a timestamp, a "live"/"delayed" badge, and disabling actions when data is unreliable.
-- Every price shows a relative as-of ("42 s ago", tooltip with absolute local time) wherever it appears (coin list, trade form, preview, portfolio).
-- Three states, tied to config thresholds: fresh (under about 2 refresh intervals), aging (amber badge and note "may be out of date"), stale (above the max trade age: red, trade button disabled, message "Prices are delayed, trading is paused. Last update 7 min ago.").
-- The server remains the authority: the max age check happens at execution (and preview), and the error is a typed code the UI maps to a friendly message.
-- If the provider is down, keep serving the last persisted price with its true timestamp (never fake "now"). Viewing the portfolio always works, and only trading is blocked.
-- Record the exact price, timestamp, and mid on each trade, and show the price timestamp on trade history rows or in a detail view.
-- Suggested starting thresholds (config, not code): refresh every 60 s, aging above 120 s, max trade age about 5 min. These are judgment values and should be tuned after real use.
+Dividend entitlement depends on ownership before the ex-date; receiving shares
+after the ex-date does not create entitlement. Cash payment has a separate
+payable date, and an ex-dividend price adjustment can affect measured
+performance. [SEC ex-dividend explanation](https://www.investor.gov/introduction-investing/investing-basics/glossary/ex-dividend-dates-when-are-you-entitled-stock-and).
 
-### Small quantity and minimum trade rules
+Choose explicitly between:
 
-Exchanges enforce a minimum notional (Binance spot: about $5 to $10, varying per pair) and a per-coin lot step/precision (e.g. BTC 0.00001 step, others coarser). Paper-trading apps usually enforce less.
-Recommended for v1:
-- Minimum order value of about $1 (config) for both sides. It blocks zero or dust trades and avoids pointless history rows. Exception: allow selling an entire position even if it is below the minimum, so dust can always be cleared.
-- Quantity precision: 8 decimal places max (matches NUMERIC(20,8)). A single global precision is enough for v1. A per-coin step is v2 and only if needed.
-- Reject quantity <= 0, amounts with more than 2 dp for $ inputs, and quantities with more than 8 dp (validate, don't silently round the user's input). Rounding is only for derived values (quantity computed from a $ amount).
-- Maximum: bounded by cash (buy) and by holding (sell). No other cap in v1.
-- Sell by $ amount that exceeds the holding value: reject with a message, or clamp to a full sell only via the explicit "Sell all" button. Never clamp silently.
-- A $-amount sell that would leave a tiny dust remainder is allowed. "Sell all" is the way to clear it.
+1. **Price-return-only first version (recommended for smallest scope):** no
+   dividend credits; disclose prominently that simulated stock performance
+   excludes dividends and is not total return. Do not change existing “total
+   account value” meaning, but clarify the return limitation. Ordinary dividends
+   are not automatically additions to the holding's acquisition basis.
+2. **Ordinary cash dividends now:** snapshot qualifying holdings at the approved
+   entitlement boundary, persist each entitlement, and credit shared cash once
+   on the payable date even if the shares were subsequently sold. Add separate
+   income records and include that cash in account performance. Corporate event
+   corrections must not double-credit. Defer reinvestment, tax lots, withholding
+   and return-of-capital cases unless specifically scoped.
 
-## Feature Dependencies
+Option 1 changes educational realism and therefore needs owner acceptance.
+Neither option permits ignoring a share-unit-changing action.
 
+### Execution costs and settlement
+
+The existing defaults in `backend/app/core/config.py` are a 0.25% simulated
+spread each side and a 0.25% fee with a one-cent minimum. Current
+`backend/app/services/trading.py` passes them into shared trade math. Do not
+apply these to stocks by accident when adding an asset type.
+
+Recommend retaining transparent *configurable simulated stock costs* rather than
+claiming real broker fees. Ask whether to retain the crypto-like settings or
+use a different/zero-commission stock policy; a zero commission does not by
+itself establish a zero market spread. Quote source selection must define
+whether the reference is a bid/ask midpoint, last eligible trade, or bar close.
+Never call a last trade “mid” without supporting bid/ask data.
+
+Real market orders do not guarantee the displayed price. Birja's server preview
+and atomic fill remain a disclosed simulation rather than an exchange execution
+promise. [SEC order-execution guidance](https://www.investor.gov/introduction-investing/investing-basics/how-stock-markets-work/executing-order).
+
+**Proposed deferral requiring clear disclosure:** retain immediate simulated cash
+availability after a sell; do not add settled/unsettled cash restrictions in
+this milestone. This is a simulator simplification, not a statement that real
+brokerage settlement is immediate.
+
+## Dependencies and Vertical Workflows
+
+```text
+Licensed feed + coverage/timestamp decision + 20 instrument mappings
+    -> calendar/availability + quote validation
+    -> whole-share preview/fill using shared locked cash
+    -> combined valuation and stored history
+    -> live acceptance + ongoing corporate-action operations
+
+Corporate-action and stock-cost scope decisions
+    -> execution and performance semantics
+    -> money invariants, action boundary and acceptance cases
 ```
-Email OTP login -> user account -> $10k seed (cash row)
-Price refresh job (single scheduler) -> price cache + persisted latest price -> coin list with as-of
-Price as-of + max age -> preview/quote endpoint -> trade execution (same pricing function)
-Config (spread, fee %, min order, max age) -> pricing function -> preview AND execution
-Trade execution (transaction, row locks, idempotency key) -> holdings (qty, cost_basis) -> portfolio view
-Trade execution -> trade rows (price, fee, realized P/L, price timestamp) -> trade history
-Portfolio view -> needs price cache; total P/L needs only cash + holdings + marks
-Realized P/L column -> needs avg cost at sell time (done in execution)
-Deployment (domain, TLS, nginx, Resend) -> everything above in production
-v2: portfolio chart -> snapshot job -> stored history
-v2: limit orders -> background matcher -> reservation of cash or holdings
-```
 
-## MVP Recommendation
+| Workflow | Minimum testable outcome |
+|---|---|
+| First stock trade | Existing account buys one share while open using unchanged USD balance; exact cash, quantity, costs and basis match history and portfolio after refresh |
+| Cross-asset contention | Concurrent crypto/stock orders serialize on the shared account; no overspend or duplicate fill |
+| Closed market | Existing stock holdings and historical marks remain visible, stock orders fail server-side, crypto still trades using its own freshness rules |
+| Open/close race | Preview before close, execution after close or after a lock wait cannot fill; holiday/early-close/DST boundary cases covered |
+| Bad or unavailable data | Provider outage, stale/future tick, unknown trading status or halt blocks affected stock fills without falsifying healthy crypto/other holdings |
+| Split safety | Event quarantine prevents inconsistent marks; approved reconciliation preserves aggregate basis and cannot apply twice; fractional reverse-split residual stays blocked pending decision |
+| Account persistence | No second $10k grant; existing crypto and stock history remain correctly paginated across relogin and migration |
 
-Prioritize, in order:
-1. Prices: scheduled refresh, coin list with as-of and stale states (the data foundation, and no trade is correct without it).
-2. Account: email OTP login plus the $10k seed.
-3. Trading engine: pricing function (spread, fee, rounding), preview endpoint, atomic execution with row locks, idempotency, stale and minimum checks. This is the 100%-coverage critical path.
-4. Portfolio and history: holdings with weighted-average cost (fees in basis), unrealized P/L, total P/L vs $10k, realized P/L stored per sell, keyset-paginated history.
-5. Deploy: domain, TLS, real email, so friends can use it.
+## MVP Definition and Prioritization
 
-Include only low-cost differentiators: itemized cost in the preview, realized P/L on sell rows, allocation % column, oldest-price-as-of on the portfolio.
+**P1 for v1.1:** free-feed/public-display feasibility gate; approved stock-cost,
+corporate-action and return semantics; 20 mapped common stocks; timestamped
+prices; calendar/status admission; integral quantity preview/fill; shared-cash
+concurrency; combined portfolio/history with honest closed/incomplete marks;
+focused cross-asset regression and real-session acceptance.
 
-Defer (v2 backlog): value-over-time chart, price charts, watchlist, leaderboard, limit orders, trade notes, fees-paid summary, per-coin lot steps, notifications, other asset classes.
+**P2 after validation:** additional catalogue filters, class allocation summaries,
+automated reconciliation for a narrow supported event set if manual operations
+prove burdensome.
 
-Push back on during requirements:
-- Price-lock quotes: use the 409-on-newer-price rule instead.
-- Per-coin precision rules: use one global precision.
-- 24h change column: only if the data provider returns it for free. Do not make a second API call for it.
+**Defer:** extended hours, fractionals, advanced orders, broker-grade routing,
+settlement restrictions, dividend reinvestment, tax reporting and broad product
+expansion. The owner must accept any omitted-income/settlement simplifications.
 
-## Open decisions to make in requirements (flag for the user)
+**Curation policy:** select 20 active, widely traded USD common stocks with
+provider coverage and both requested primary listing venues represented; verify
+listing/security type using authoritative metadata at implementation time.
+Avoid one-time hardcoded claims about liquidity or current venue. This research
+does not prescribe an investment list; the owner's list or a separately verified
+candidate list can be chosen during catalogue planning.
 
-1. Mark price for holdings: mid (recommended) or sell-side price.
-2. Meaning of the "$ amount" input: total including fee (recommended) or notional with the fee on top.
-3. Buy fee in cost basis: yes (recommended).
-4. Thresholds: refresh interval, aging threshold, max trade age, minimum order value (suggested above).
-5. Whether the fee is charged in USD (recommended, simplest) or in the coin (Binance style, more confusing).
+## Decisions Needed Before Requirements Approval
 
-## Sources
+1. Can a free feed legally support this public multi-user app at the requested
+   freshness and coverage? If not, ask the owner which constraint changes; do
+   not quietly choose fifteen-minute data or pay for access.
+2. Approve an exact quote-age/reference-price contract after provider research.
+3. Choose simulated stock fee/spread settings; do not inherit crypto defaults
+   by accident.
+4. Approve minimal monitored corporate-action quarantine/reconciliation, or
+   scope automated supported actions. Who performs monitoring and correction?
+5. Accept price-return-only without dividend credits, or include ordinary cash
+   dividends with entitlement/payment accounting now?
+6. Accept immediate simulated sale-proceeds availability while deferring real
+   settlement restrictions?
 
-- Training-data knowledge of Investopedia Stock Simulator, Binance spot and demo trading, eToro virtual portfolio, Wall Street Survivor, and Coinbase and Robinhood cost-basis display conventions. MEDIUM-LOW confidence, not re-verified online this session.
-- Weighted-average cost accounting and the realized/unrealized split are standard accounting conventions. MEDIUM-HIGH confidence.
-- Exchange minimum-notional and lot-size behavior (Binance exchange filters `MIN_NOTIONAL` and `LOT_SIZE`). MEDIUM confidence, and the exact values should be checked if per-coin rules are ever added.
-- Project constraints: `/home/Birja/.planning/PROJECT.md` and `/home/Birja/CLAUDE.md`.
+## Confidence and Gaps
+
+Exchange session/calendar, broker fractional-share variability, split/basis and
+dividend mechanics above are HIGH confidence primary-source findings. Proposed
+simulator boundaries and prioritization are MEDIUM confidence product judgments
+subject to owner approval. Free quote entitlements, commercial/public display
+permissions, halt-feed reuse and complete corporate-action data are open
+feasibility checks, not verified capabilities. Sources were accessed 2026-11-10;
+exchange calendars, listing metadata and feed terms require rechecking before
+release. No dependencies were installed and no private services were queried.

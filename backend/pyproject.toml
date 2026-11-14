@@ -1,6 +1,6 @@
 [project]
 name = "birja-backend"
-version = "0.4.0"
+version = "0.5.0"
 description = "Birja backend"
 requires-python = ">=3.14,<3.15"
 dependencies = [
@@ -14,6 +14,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.55,<2.1",
     "uvicorn[standard]==0.54.0",
     "httpx==0.28.1",
+    "exchange-calendars==4.13.2",
 ]
 
 [tool.uv]

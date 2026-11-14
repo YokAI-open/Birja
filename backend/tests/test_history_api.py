@@ -81,3 +81,34 @@ async def test_history_valid_bounds(auth_client, outbox, limit):
         "items": [],
         "next_cursor": None,
     }
+
+
+async def test_legacy_and_mixed_history_cursor_namespaces_stay_separate(
+    auth_client, outbox, engine
+):
+    from app.services.event_history import EventHistoryCursor
+    from app.services.event_history import encode_cursor as mixed_cursor
+
+    email = unique_email()
+    await sign_in(auth_client, outbox, email)
+    async with engine.connect() as conn:
+        uid = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
+    tid = await put_fill(engine, uid, high=True)
+    old = encode_cursor(HistoryCursor(created_at=STAMP, id=tid))
+    mixed = mixed_cursor(EventHistoryCursor(STAMP, 4, tid))
+    legacy = await auth_client.get("/api/v1/trades")
+    assert legacy.status_code == 200
+    assert legacy.json()["items"][0]["id"] == str(tid)
+    assert legacy.json()["items"][0]["total"] == "-100.00000000"
+    assert (await auth_client.get("/api/v1/trades", params={"cursor": old})).json() == {
+        "items": [],
+        "next_cursor": None,
+    }
+    assert (await auth_client.get("/api/v1/history", params={"cursor": mixed})).json() == {
+        "items": [],
+        "next_cursor": None,
+    }
+    for path, wrong in (("/api/v1/trades", mixed), ("/api/v1/history", old)):
+        response = await auth_client.get(path, params={"cursor": wrong})
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_cursor"

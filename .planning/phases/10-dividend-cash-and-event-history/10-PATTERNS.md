@@ -1,0 +1,38 @@
+# Phase 10 implementation pattern map
+
+**Inspected:**2026-11-12. These are local analogues and proposed changes, not implemented files. No dependency additions. [VERIFIED:current tree]
+
+| New/changed responsibility | Closest actual analogue | Required adaptation |
+|---|---|---|
+| Pure payout/correction rules (`services/dividend_rules.py`) | `services/stock_trade_math.py`, `corporate_action_rules.py` | Exact Decimal/HALF_EVEN cents, target-minus-cumulative-applied, strict ranges, no caller float/date authority |
+| Immutable payment/target/adjustment/held models (`models/dividend.py`) | `models/corporate_action.py` StockDividendEntitlement; `models/stock_execution.py` StockFillFacts | Stable event/user anchor; revision+entitlement composite FKs, immutable saved metadata, unique applied lineage, held→applied separate append-only link |
+| Successor schema0014 | `alembic/versions/0011_stock_action_accounting.py`, `0013_stock_execution.py` | Additive schema, reviewed autogenerate plus explicit constraints/triggers/functions/grants, safe downgrade refusal for nonempty financial rows; concurrent indexes for existing tables only |
+| Narrow payout SQL boundary | `0013_stock_execution.py` final execution guard; `0012_stock_action_resolution.py` authority verification | New definer boundary must be explicit: fixed path/schema SQL, derive owner/amount internally, scheduler EXECUTE only/no direct Account.cash UPDATE, PUBLIC revoked; exact ACL/owner/function fingerprint in recovery |
+| Payment transaction service (`services/dividends.py`) | `services/stock_trading.py` execute; `corporate_actions.py` derive_dividend_entitlements; `stock_ownership.py` acquire_stock_gate | Gate→Account lock; no provider I/O; use retained latest eligible snapshot; preserve sold-after-cutoff rights; final advancing authority check after all waits; replay immutable record |
+| Historical corrections | `corporate_actions.py` immutable superseding entitlement versions | Original unchanged; verified rounded total target minus applied sum; uncertain/negative unaffordable held delta0; distinct eventual applied record and zero-target checkpoint |
+| Due-work cycle (`tasks/dividends.py`) | `tasks/stock_actions.py`, `tasks/stock_scheduler.py`, existing scheduler entry point | Independent bounded durable keyset loop, per-owner transactions, no queue/Celery, no new provider calls or production enablement |
+| Mixed History schemas | `schemas/history.py`, `schemas/stock_trades.py` | New discriminated union with event-specific exact string fields; identities include kind; separate recorded/economic/payable/cutoff fields; held means no cash changed |
+| Mixed History SQL (`services/event_history.py`) | `services/history.py` list_history/cursor decoder | UNION ALL real source tables with user predicate per branch; `(recorded_at,kind_rank,source_id)` complete DESC seek; stock metadata from saved facts; per-owner split movement; no ledger backfill |
+| Mixed History endpoint | `api/v1/history.py`; router registration in existing API assembly | Add `/api/v1/history`, CurrentUser+DbDep, no-store, bounded cursor/limit; preserve `/trades` v1 unchanged |
+| Browser parser (`api/eventHistory.ts`) | `api/history.ts`, `api/stockTrades.ts`, `api/portfolio.ts` | Strict tagged exact wire guards, zero-vs-signed applied money, date-only validity, IDs/cursor bounds; no arbitrary server HTML |
+| Infinite event hook (`hooks/useEventHistory.ts`) | `hooks/useHistory.ts` plus Phase9 `usePortfolio`/stock auth isolation | Owner/session keyed cache, abort/drop late previous-session data; no duplicate append; loaded events survive append error; no optimistic cash |
+| History UI | `pages/HistoryPage.tsx`, `pages/PortfolioPage.tsx`, UI-SPEC/design-system | Reuse responsive table/cards, focus/live-region Load more and error recovery; trade/dividend/split/correction labels and linked original details; held status readable without colour alone |
+| Portfolio once-only cash | `services/portfolio.py`, `portfolio_math.py`, `hooks/usePortfolio.ts` | Normally no arithmetic change: cash comes once from Account.cash; add regression proving dividend inclusion and original baseline unchanged |
+| Entitlement predecessor tests | `tests/test_corporate_actions.py`, `test_stock_ownership.py`, `stock_trade_fixtures.py` | Include entitlements created before0014, sold-after cutoff and split denomination boundary; never seed current holdings as eligibility substitute |
+| Payment/concurrency tests | `tests/test_stock_trading_concurrency.py`, `test_stock_trading_waits.py`, `test_stock_trading_schema.py` | Actual concurrent connections and account waits; stock/crypto spend against credits/debits, authority expiry/revision after wait, rollback and direct SQL denials |
+| Browser proof | `frontend/e2e/portfolio-history.spec.ts`, `stocks.spec.ts`, `deploy/tests/run-stock-browser.py`, `stock-execution-fixture.py` | Real SQL/services/auth for credit→spend/linked adjustment/held no-cash/mixed paging; external economic source fixtures only; no canned financial success response |
+| Exact recovery columns/identities | `deploy/backup-snapshot.py` contract_columns/identity_tables/manifest_sql/schema_guard_sql | Add0014 dispatch without changing historical0007–0013 contracts; all new rows, sequences, lineage constraints and financial authority exact |
+| Restored financial authority | `deploy/verify-restore.py` canonical and quarantined runtime probes | Verify new function owner/body/path/ACL before authority restoration; quarantined clone app/scheduler financial calls denied until approved gate; replay cannot repeat income/correction |
+| Role/TLS bootstrap parity | `deploy/db/bootstrap-roles.sql`, `configure-db.sh`, `tests/test-db-operations.sh`, existing ops-fixtures | Fresh0014 and upgraded0013→0014 under real restricted migrator; no bootstrap grant repair after migration; scheduler direct cash denied even though payout function succeeds |
+| Retained archive/security | `deploy/recovery-bundle.sh`, `verify-restore.py` CORE; `scan-images.py`, `test-image-contracts.py` | Same exact archive producer/consumer/data/schema proof, local encryption only; full image gates with no exemption; no installed-tool/prod/B2 change |
+| CI critical coverage | `.github/workflows/ci.yml`, `backend/tests/test_critical_coverage_config.py`, CLAUDE command | Add all new financial/history privacy modules to actual100% list and regression contract; preserve full frontend/audit/browser/recovery jobs |
+
+All paths above were located through rg and relevant implementations read during research. Proposed paths may be frozen differently in10-CONTRACTS, but responsibility/privilege boundaries must survive renaming. [VERIFIED:session code inspection; DESIGN RECOMMENDATION]
+
+## Reuse constraints
+
+1. Existing corporate action state and entitlement lineage are authoritative; no second quote/action/provider adapter or second USD account. [VERIFIED:Phase8/9 contracts]
+2. Legacy `/trades` and v1 cursor remain compatible; mixed History receives its own typed endpoint/version. [DESIGN RECOMMENDATION:current API contract]
+3. New payout authority is a deliberate security addition. Existing invoker final guards alone do not give scheduler cash permission; broad UPDATE accounts is not an acceptable shortcut. [VERIFIED:0011 grants; DESIGN RECOMMENDATION]
+4. Recovery/TLS compatibility for0014 precedes its runtime consumers; Phase11 final mixed-asset acceptance remains a separate later owner. [VERIFIED:ROADMAP; current exact revision dispatcher]
+5. Research/UI/planning files are local only. Provider, account, production timer/tooling, deployment and publication permissions remain unchanged. [VERIFIED:STATE.md]

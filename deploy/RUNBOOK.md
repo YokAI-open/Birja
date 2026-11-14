@@ -416,7 +416,11 @@ capacity, custody and maintenance approval still require separate preflight.
 
 ### PostgreSQL and Redis clone compatibility
 
-The reviewed PostgreSQL18.6 image uses glibc2.44 and postgres UID/GID70;
+The current source pins PostgreSQL18.7 with glibc2.44 and postgres UID/GID70;
+the deployed/recovery release may retain its separately approved18.6 pin.
+Changing this source pin does not upgrade a running service or installed archive.
+The backup guard permits only reviewed18.6/18.7 dump clients so a protected
+pre-upgrade backup can run before the old source is stopped; restore stays pinned18.7;
 the old Debian image used glibc2.41 and UID/GID999. PGDATA is explicitly
 `/var/lib/postgresql/18/docker`, with the volume still mounted at
 `/var/lib/postgresql`. A matching major version does not establish physical
@@ -564,6 +568,52 @@ rewrite trades to recover. These instructions authorize no production action.
 - Checkout, releases and history: `rm -rf /srv/birja /var/www/birja /var/lib/birja`.
 - Prod stack: `docker compose -p birja-prod down` keeps the data; `down -v` destroys it.
 - TXT challenge records: delete the `_acme-challenge` records in the dashboard after issuance.
+
+## Stock discovery successor (local Phase7; not deployed)
+
+Stock execution remains disabled through Phase8. `STOCK_DATA_ENABLED=false`
+is the default. Crypto remains independently available. Selecting Alpaca IEX,
+having an API key, or passing synthetic tests establishes no provider permission.
+Keep stock collection/display disabled until product-specific access, audience,
+account/server/feed scope, collection/display/derived/retention rights, attribution,
+quota and expiry evidence have been reviewed and explicitly admitted. Never use
+the scheduler or app role to import evidence. Follow the protected migrator-only
+packet in `deploy/STOCK-DATA-ADMISSION.md`;
+review its actual path and procedure before any separately approved operation.
+
+Revocation/expiry must fail closed immediately on the next current decision;
+old cached values cannot renew rights. Import/revoke evidence only through the
+migrator under a separately approved maintenance procedure, increment generation,
+and verify current API/browser refusal after the change. Do not log evidence,
+credentials, terms documents or raw provider payloads. Collection remains bounded
+by the verified quota; no retry or UI action can bypass denied permission.
+
+Calendar authority belongs only to `stock_data_admissions`: current official
+XNYS/XNAS sources/version, bounded45-day-past/90-day-future coverage, dated review
+with at most24-hour validity, and verified closure/shortened-session overrides.
+Renew review from official evidence before expiry and replace generation when
+authority changes. Scheduler-written `stock_sessions` contain derived bounds and
+the matching generation only; refreshing them never renews review. Missing,
+expired, mismatched or unsupported evidence means session unavailable. A market
+being open does not establish halt/action clearance or enable a stock fill.
+
+Successor schema0009/0010 preserves physical coin IDs and original financial rows.
+The reviewed successor recovery tools dispatch manifest/schema SQL by actual
+revision; legacy0007/0008 retained archives remain byte-compatible but cannot
+validate or restore the successor schema. Preserve those immutable archives.
+Package/review/install a separately approved successor archive and prove exact
+encrypted restore, identity advancement and restricted verified-TLS role parity
+before any approved successor production migration. Never repair admission during
+restore or silently run bootstrap grants after an upgrade. Local synthetic
+`test-db-operations.sh --roles` and `--all` exercise both populated0008 migration
+without grant repair and fresh bootstrap, including real persisted calendar
+evaluation through restricted TLS roles. They authorize no live operation.
+
+Production tooling installation, custody refresh, data activation and application
+rollout each require the corresponding reviewed scope and approval. Phase7 local
+proofs and provider acceptance do not deploy a release, modify a timer or touch
+production data. See `07-LOCAL-PROOF.md` for exact local source/lock/image evidence
+and `07-ACTIVATION.md` for remaining rights/access and owner UI gates.
 
 ## Out of scope here
 
