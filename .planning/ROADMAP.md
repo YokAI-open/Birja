@@ -55,7 +55,37 @@ financial ownership boundary; they are not separate database/API/UI layers.
   3. The user reads only the chosen portfolio's mixed paginated History and original-event details; identities, references and cursors cannot retrieve another portfolio's financial records.
   4. OTP sign-in, session refresh and sign-out work independently of zero, one or many financial portfolios in isolated fixtures; legacy financial requests cannot bypass explicit targeting or choose an ambiguous portfolio.
   5. The same investing journeys work on fresh and populated upgraded databases through restricted verified-TLS roles, with original financial payloads, immutable evidence and matching ownership constraints preserved; ordinary roles cannot gain broader mutation rights.
-**Plans**: TBD
+**Plans**: 28 plans (56 tasks, 18 dependency waves; planning checks pending independent review)
+
+Plans:
+- [ ] 12-01-PLAN.md — Ownership proof oracles and fixture contracts
+- [ ] 12-02-PLAN.md — Financial root and core row ownership models
+- [ ] 12-03-PLAN.md — Stock and dividend ownership lineage models
+- [ ] 12-04-PLAN.md — Finite immutable legacy association migrations
+- [ ] 12-05-PLAN.md — Versioned root-aware stock SQL authority
+- [ ] 12-06-PLAN.md — Versioned root-aware dividend SQL authority
+- [ ] 12-07-PLAN.md — Final schema closure and explicit revision admission
+- [ ] 12-08-PLAN.md — Owned-active resolver and identity-only account services
+- [ ] 12-09-PLAN.md — Versioned identity HTTP and legacy OTP refusal
+- [ ] 12-10-PLAN.md — Explicit crypto execution and retry ownership
+- [ ] 12-11-PLAN.md — Explicit stock execution and gated retry ownership
+- [ ] 12-12-PLAN.md — Root-specific stock journals and terminal split reconstruction
+- [ ] 12-13-PLAN.md — Portfolio entitlement derivation and dividend worker safety
+- [ ] 12-14-PLAN.md — Scoped valuation and private mixed History
+- [ ] 12-15-PLAN.md — Metadata discovery and final scoped route wiring
+- [ ] 12-16-PLAN.md — Restricted bootstrap and resumable migration-to-final path
+- [ ] 12-17-PLAN.md — Exact portfolio recovery producer and consumer contracts
+- [ ] 12-18-PLAN.md — Current and retained isolated recovery lanes
+- [ ] 12-19-PLAN.md — Identity and explicit browser target discovery
+- [ ] 12-20-PLAN.md — Explicit scoped financial browser clients
+- [ ] 12-21-PLAN.md — Trade hook cache and unknown-attempt isolation
+- [ ] 12-22-PLAN.md — Valuation and History hook isolation
+- [ ] 12-23-PLAN.md — Scoped navigation and accessible target boundary
+- [ ] 12-24-PLAN.md — Trade surfaces and original-target receipts
+- [ ] 12-25-PLAN.md — Scoped holdings and mixed History surfaces
+- [ ] 12-26-PLAN.md — Browser proof harness and CI security/recovery graph
+- [ ] 12-27-PLAN.md — Full isolated source-bound security and recovery qualification
+- [ ] 12-28-PLAN.md — Owner acceptance of changed surfaces and native browser zoom
 **UI hint**: yes
 
 **Delivery boundary**: This is a runnable preservation slice across UI, API,
@@ -171,7 +201,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 0/TBD | Not started | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 0/28 | Planned; checker pending | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

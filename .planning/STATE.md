@@ -19,13 +19,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 discussion/planning. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 plan set written; independent checker pending. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
 Plan: — (no executable phase plans)
-Status: Phase 12 research and UI contract complete; pattern mapping and planning next
+Status: Phase 12 research, approved UI contract, patterns and 28 plans complete; 56 tasks across 18 dependency waves await independent checking. No execution started.
 Last activity: 2026-11-14 — Added optional descriptions to the approved roadmap; all 28 requirements mapped exactly once
 
 Progress: 0/4 phases complete; 0 executable plans; 0% implementation.

@@ -1,107 +1,110 @@
 ---
 phase: 12
 slug: preserve-existing-investing-under-portfolio-ownership
-status: draft
+status: planning
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-11-14
 ---
 
-# Phase 12 — Validation Strategy
+# Phase12 Validation Strategy
 
-Planning contract only. No implementation tests or runtime campaigns were run
-to create this document. Synchronize the per-task map with the generated plans
-before independent plan checking; missing tests must have earlier Wave 0 owners.
+28 plans,56 tasks,18 waves. Independent checker pending. All commands below are planned execution, not passed evidence. No runtime/provider/production/install work occurred in planning. ASVS level1, high block; preserve80% overall and100% critical branch coverage, strict dependency audits and all five actual image scans.
 
-## Test Infrastructure
+## Sampling and Infrastructure
 
-| Property | Value |
-|---|---|
-| Framework | Existing pytest 9.1.1/asyncio/coverage, Vitest and Playwright |
-| Configuration | backend/pyproject.toml; backend/tests/conftest.py; frontend/package.json; existing browser/ops harnesses |
-| Existing focused baseline | `cd backend && uv run pytest tests/test_accounts.py tests/test_stock_trading_service.py tests/test_event_history.py -q` |
-| Frontend baseline | `cd frontend && npm run test -- --coverage` |
-| Full backend gate | `cd backend && uv run pytest --cov=app --cov-branch --cov-fail-under=80`, then the exact critical 100% command in CLAUDE.md, extended to new critical modules |
-| Browser gate | `python3 deploy/tests/run-stock-browser.py` after extending its synthetic owned stack for explicit portfolio targets |
-| Operations starting points | `python3 deploy/tests/test-stock-recovery-contracts.py`; `python3 deploy/tests/test-ci-ops.py`; guarded real-PostgreSQL/restricted-TLS/recovery lanes |
-| Runtime | Not measured by planning; focused feedback target 120 seconds, with longer complete security/recovery gates explicitly scheduled |
+Existing locked pytest with real isolated PostgreSQL roles/TLS, Vitest, Playwright and retained ops runners. Run focused task command after each implementation, then family regression before plan close. Focused target120s is unmeasured. Full coverage, builds/scans and serial real cold recovery may exceed target and are explicit exceptions.12-27 performs full source-bound qualification; drift invalidates it.
 
-Use only owned disposable PostgreSQL/Redis/ops stacks. Existing test isolation
-guards remain mandatory. No provider, production, dev financial data, installed
-host tooling, private .env or credentials may be used. No dependency change is
-required by this contract.
+## Exact Per-Task Verification Map
 
-## Sampling Rate
+T-12-NN-01/02/03 identify each plan's owner/disclosure, integrity/privilege and once-only/refusal risks; SC enforces no dependency change with final27 strict proof. Each plan contains concrete mitigation ownership and commands.
 
-- After each bounded task: run affected automated tests and static checks.
-- After each integrated wave: run its complete affected financial/auth/API/UI
-  domain plus relevant migration/authority contracts.
-- Before phase verification: full backend/frontend/browser gates, exact critical
-  coverage, strict dependency/image scans and fresh/upgraded restricted-TLS and
-  current/retained recovery/rollback or explicit refusal proofs must pass.
-- Do not run expensive full recovery campaigns after every metadata edit; bind
-  complete proof to the final reviewed source and retained archive, recording
-  any later source qualification explicitly.
-- No watch flags. No three consecutive tasks without automated feedback.
-- Focused feedback target: 120 seconds where practical, not a measured runtime
-  guarantee; complete migrations/recovery/image campaigns are necessary exceptions.
+| Task | Wave | Requirements | Threats | Automated command | Proof creation/dependency owner | Status |
+|---|---:|---|---|---|---|---|
+| 12-01-01 | 1 | PFUND-03, PFIN-03, PSAFE-03 | T-12-01-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_migrations.py --collect-only -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans none | Not executed |
+| 12-01-02 | 1 | PFUND-03, PFIN-03, PSAFE-03 | T-12-01-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_ownership.py tests/test_portfolio_authority.py --collect-only -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans none | Not executed |
+| 12-02-01 | 2 | PFUND-03, PSAFE-03 | T-12-02-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'root or metadata'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1 | Not executed |
+| 12-02-02 | 2 | PFUND-03, PSAFE-03 | T-12-02-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'holding or trade or retry'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1 | Not executed |
+| 12-03-01 | 3 | PFUND-03, PSAFE-03 | T-12-03-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'stock or closure or entitlement'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,2 | Not executed |
+| 12-03-02 | 3 | PFUND-03, PSAFE-03 | T-12-03-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_authority.py -q -k 'lineage or entitlement or payment'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,2 | Not executed |
+| 12-04-01 | 4 | PFUND-03, PSAFE-03 | T-12-04-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_migrations.py -q -k 'expansion or association_guard'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,3 | Not executed |
+| 12-04-02 | 4 | PFUND-03, PSAFE-03 | T-12-04-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_migrations.py -q -k 'backfill or preserved or resume or downgrade'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,3 | Not executed |
+| 12-05-01 | 5 | PFIN-02, PFIN-03, PSAFE-03 | T-12-05-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_stock_authority.py --collect-only -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 4 | Not executed |
+| 12-05-02 | 5 | PFIN-02, PFIN-03, PSAFE-03 | T-12-05-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_stock_authority.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 4 | Not executed |
+| 12-06-01 | 5 | PFUND-03, PSAFE-03 | T-12-06-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_dividend_authority.py --collect-only -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 4 | Not executed |
+| 12-06-02 | 5 | PFUND-03, PSAFE-03 | T-12-06-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_dividend_authority.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 4 | Not executed |
+| 12-07-01 | 6 | PFUND-03, PSAFE-02, PSAFE-03 | T-12-07-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_migrations.py -q -k 'final or inventory or immutability'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,4,5,6 | Not executed |
+| 12-07-02 | 6 | PFUND-03, PSAFE-02, PSAFE-03 | T-12-07-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_schema_admission.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,4,5,6 | Not executed |
+| 12-08-01 | 7 | PSAFE-02, PFIN-02, PFUND-03 | T-12-08-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'resolver or identity_contract or malformed'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,2,3,7 | Not executed |
+| 12-08-02 | 7 | PSAFE-02, PFIN-02, PFUND-03 | T-12-08-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_identity.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 1,2,3,7 | Not executed |
+| 12-09-01 | 8 | PSAFE-02, PCTX-01 | T-12-09-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_identity_api.py -q -k 'versioned or cookie or refresh'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8 | Not executed |
+| 12-09-02 | 8 | PSAFE-02, PCTX-01 | T-12-09-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_identity_api.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8 | Not executed |
+| 12-10-01 | 8 | PFIN-02, PFIN-03 | T-12-10-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_crypto.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8 | Not executed |
+| 12-10-02 | 8 | PFIN-02, PFIN-03 | T-12-10-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_crypto_api.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8 | Not executed |
+| 12-11-01 | 9 | PFIN-02, PFIN-03, PSAFE-03 | T-12-11-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_stock_trading.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8,10,12 | Not executed |
+| 12-11-02 | 9 | PFIN-02, PFIN-03, PSAFE-03 | T-12-11-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_stock_api.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 8,10,12 | Not executed |
+| 12-12-01 | 8 | PFUND-03, PFIN-02, PSAFE-03 | T-12-12-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_stock_ownership.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,8 | Not executed |
+| 12-12-02 | 8 | PFUND-03, PFIN-02, PSAFE-03 | T-12-12-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_splits.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,8 | Not executed |
+| 12-13-01 | 9 | PFUND-03, PSAFE-03 | T-12-13-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_entitlements.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 6,12 | Not executed |
+| 12-13-02 | 9 | PFUND-03, PSAFE-03 | T-12-13-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_dividends.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 6,12 | Not executed |
+| 12-14-01 | 10 | PVIEW-03, PCTX-01, PFUND-03 | T-12-14-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_valuation.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 10,11,13 | Not executed |
+| 12-14-02 | 10 | PVIEW-03, PCTX-01, PFUND-03 | T-12-14-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_scoped_history.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 10,11,13 | Not executed |
+| 12-15-01 | 11 | PSAFE-02, PVIEW-03, PFIN-02, PCTX-01 | T-12-15-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_routes.py -q -k 'metadata or history or valuation'` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,9,10,11,14 | Not executed |
+| 12-15-02 | 11 | PSAFE-02, PVIEW-03, PFIN-02, PCTX-01 | T-12-15-01/02/03/SC | `cd backend && uv run pytest tests/test_portfolio_routes.py tests/test_portfolio_identity_api.py tests/test_portfolio_crypto_api.py tests/test_portfolio_stock_api.py -q` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,9,10,11,14 | Not executed |
+| 12-16-01 | 10 | PSAFE-03, PFUND-03 | T-12-16-01/02/03/SC | `python3 deploy/tests/test-dev-bootstrap.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,13 | Not executed |
+| 12-16-02 | 10 | PSAFE-03, PFUND-03 | T-12-16-01/02/03/SC | `python3 deploy/tests/test-portfolio-migration-runner.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 7,13 | Not executed |
+| 12-17-01 | 12 | PFUND-03, PSAFE-03 | T-12-17-01/02/03/SC | `python3 deploy/tests/test-portfolio-recovery-contracts.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15,16 | Not executed |
+| 12-17-02 | 12 | PFUND-03, PSAFE-03 | T-12-17-01/02/03/SC | `python3 deploy/tests/test-portfolio-recovery-contracts.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15,16 | Not executed |
+| 12-18-01 | 13 | PFUND-03, PSAFE-03 | T-12-18-01/02/03/SC | `python3 deploy/tests/portfolio-execution-fixture.py --help` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 17 | Not executed |
+| 12-18-02 | 13 | PFUND-03, PSAFE-03 | T-12-18-01/02/03/SC | `python3 deploy/tests/test-ci-ops.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 17 | Not executed |
+| 12-19-01 | 12 | PSAFE-02, PCTX-01 | T-12-19-01/02/03/SC | `cd frontend && npm run test -- --run src/api/auth.test.ts` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15 | Not executed |
+| 12-19-02 | 12 | PSAFE-02, PCTX-01 | T-12-19-01/02/03/SC | `cd frontend && npm run test -- --run src/hooks/usePortfolioTarget.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15 | Not executed |
+| 12-20-01 | 13 | PFIN-02, PFIN-03, PVIEW-03 | T-12-20-01/02/03/SC | `cd frontend && npm run test -- --run src/api/portfolioTrades.test.ts` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15,19 | Not executed |
+| 12-20-02 | 13 | PFIN-02, PFIN-03, PVIEW-03 | T-12-20-01/02/03/SC | `cd frontend && npm run test -- --run src/api/portfolioReads.test.ts` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 15,19 | Not executed |
+| 12-21-01 | 14 | PFIN-02, PFIN-03 | T-12-21-01/02/03/SC | `cd frontend && npm run test -- --run src/hooks/portfolioCrypto.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 20 | Not executed |
+| 12-21-02 | 14 | PFIN-02, PFIN-03 | T-12-21-01/02/03/SC | `cd frontend && npm run test -- --run src/hooks/portfolioStock.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 20 | Not executed |
+| 12-22-01 | 14 | PVIEW-03, PCTX-01, PSAFE-02 | T-12-22-01/02/03/SC | `cd frontend && npm run test -- --run src/hooks/portfolioValuation.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 20 | Not executed |
+| 12-22-02 | 14 | PVIEW-03, PCTX-01, PSAFE-02 | T-12-22-01/02/03/SC | `cd frontend && npm run test -- --run src/hooks/portfolioHistory.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 20 | Not executed |
+| 12-23-01 | 14 | PCTX-01, PSAFE-02 | T-12-23-01/02/03/SC | `cd frontend && npm run test -- --run src/components/PortfolioTargetBoundary.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 19,20 | Not executed |
+| 12-23-02 | 14 | PCTX-01, PSAFE-02 | T-12-23-01/02/03/SC | `cd frontend && npm run test -- --run src/App.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 19,20 | Not executed |
+| 12-24-01 | 15 | PCTX-01, PFIN-03 | T-12-24-01/02/03/SC | `cd frontend && npm run test -- --run src/pages/TradePage.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 21,23 | Not executed |
+| 12-24-02 | 15 | PCTX-01, PFIN-03 | T-12-24-01/02/03/SC | `cd frontend && npm run test -- --run src/pages/StockTradePage.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 21,23 | Not executed |
+| 12-25-01 | 15 | PCTX-01, PVIEW-03 | T-12-25-01/02/03/SC | `cd frontend && npm run test -- --run src/pages/PortfolioPage.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 22,23 | Not executed |
+| 12-25-02 | 15 | PCTX-01, PVIEW-03 | T-12-25-01/02/03/SC | `cd frontend && npm run test -- --run src/pages/HistoryPage.test.tsx` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 22,23 | Not executed |
+| 12-26-01 | 16 | PFUND-03, PFIN-02, PFIN-03, PCTX-01, PVIEW-03, PSAFE-02, PSAFE-03 | T-12-26-01/02/03/SC | `python3 deploy/tests/test-portfolio-browser-contracts.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 18,24,25 | Not executed |
+| 12-26-02 | 16 | PFUND-03, PFIN-02, PFIN-03, PCTX-01, PVIEW-03, PSAFE-02, PSAFE-03 | T-12-26-01/02/03/SC | `python3 deploy/tests/test-ci-ops.py && python3 deploy/tests/test-image-contracts.py` | First missing proof created by this task before consumer edits; shared fixtures01; prior plans 18,24,25 | Not executed |
+| 12-27-01 | 17 | PFUND-03, PFIN-02, PFIN-03, PCTX-01, PVIEW-03, PSAFE-02, PSAFE-03 | T-12-27-01/02/03/SC | `python3 deploy/tests/run-portfolio-validation.py --suite all-security` | Runner26; actual evidence this task | Not executed |
+| 12-27-02 | 17 | PFUND-03, PFIN-02, PFIN-03, PCTX-01, PVIEW-03, PSAFE-02, PSAFE-03 | T-12-27-01/02/03/SC | `python3 deploy/tests/run-portfolio-validation.py --suite recovery --archive /tmp/birja-phase12-proof/recovery.tar.gz` | Runner26; actual evidence this task | Not executed |
+| 12-28-01 | 18 | PCTX-01, PVIEW-03, PSAFE-02 | T-12-28-01/02/03/SC | `python3 deploy/tests/test-portfolio-browser-contracts.py` | Runner26; actual evidence this task | Blocking owner review pending |
+| 12-28-02 | 18 | PCTX-01, PVIEW-03, PSAFE-02 | T-12-28-01/02/03/SC | `python3 deploy/tests/test-portfolio-browser-contracts.py` | Runner26; actual evidence this task | Blocking owner review pending |
 
-## Per-Task Verification Map
+## Wave0 and Missing Tests
 
-Initial requirement-level map; planner must replace TBD task/plan/wave fields
-with actual generated IDs, commands and threat references before checking.
+12-01 creates shared financial/economic-byte oracles and migration/ownership/authority test matrix.12-05-01 and06-01 create direct-SQL authority tests before SQL assets;07-02 creates schema-admission tests.08–15 create targeted identity/service/API/history tests before implementation within each task.16-02 creates migration-runner contracts;17-01 creates exact producer/consumer recovery contracts;18-01 creates mixed-root ops fixture before27 actual cold run.19–25 create named browser/client/hook/UI tests first within their task;26 creates browser journeys/runner contracts and full validation runner before27 consumes them. Every exact new test path is listed in its owning plan. Shared test edits depend on first owner. No skipped/always-green stubs; independent expected economics and denied SQL required. Collection-only precursor tasks must record expected feature failures and cannot claim feature completion.
 
-| Requirement | Required assertion | Existing baseline | Missing focused proof / earlier owner required | Status |
-|---|---|---|---|---|
-| PFUND-03 | Exact populated 0014→final preservation, no grant/reset; bounded association and all original economics/keys/causes unchanged | accounts and dividend/stock migration tests | backend/tests/test_portfolio_migrations.py | Pending; Wave 0 |
-| PFIN-02 | Explicit owned active target, unchanged crypto/stock rules, post-lock recheck, same-user sibling isolation | trading and stock trading wait/concurrency tests | backend/tests/test_portfolio_ownership.py | Pending; Wave 0 |
-| PFIN-03 | Original active-root receipt and user-global key preserved; changed root conflicts without fill or leakage | stock trading concurrency and retry tests | portfolio ownership/retry extensions | Pending; Wave 0 |
-| PCTX-01 | Matching visible name/target on tickets/previews/receipts/holdings/History; stale response cannot retarget | adjacent API/hooks/screens and browser suites | frontend/e2e/portfolio-ownership.spec.ts plus targeted hook tests | Pending; Wave 0 |
-| PVIEW-03 | Every History kind/original/union arm/cursor bound to exact root and deterministic tie-breaker | event_history, event_history_cursor and history_api tests | backend/tests/test_portfolio_scoped_history.py | Pending; Wave 0 |
-| PSAFE-02 | Identity-only auth with zero/one/many roots, no regrant/recreation, legacy refusal before OTP consumption | auth verify/session/account tests | explicit identity and financial route tests | Pending; Wave 0 |
-| PSAFE-03 | Restricted roles/columns/definers/FKs, no residual migrator exception, intermediate refusal and final exact recovery/TLS | authority/schema and ops contracts | backend/tests/test_portfolio_authority.py; deploy/tests/test-portfolio-recovery-contracts.py | Pending; Wave 0 |
+## Requirement Proof Matrix
 
-## Wave 0 Requirements
+| Requirement | Focused proof | Independent full proof |
+|---|---|---|
+| PFUND-03 |01–07 preserved actual economics;08 no regrant;12–14 journal/effects/baseline |17–18 exact inventories;27 one-archive cold recovery |
+| PFIN-02 |08 resolver;10–13 active writers/locks;15 refusal |21/24 intent;26 browser;27 real SQL races |
+| PFIN-03 |10–11 global key+root+payload and original active replay |21/24 unknown attempts;26–27 |
+| PCTX-01 |19/23–25 explicit named financial surfaces |26 synthetic packet;28 owner UI/native zoom |
+| PVIEW-03 |14 union/hydration/original/cursor scope |20/22/25 stale pages/details;26–28 |
+| PSAFE-02 |08–09 zero/one/many and before-OTP refusal;15 unscoped gate |19/23/26 browser;27 complete regressions |
+| PSAFE-03 |03–07 compound lineage/finite closure;05–06 SQL;16 restricted roles |17–18 exact inventory;27 verified TLS/source-bound cold proof |
 
-- Assign each missing proof above to an actual earlier test/fixture task; naming
-  a nonexistent file is not passing verification.
-- Seed original non-$10k cash/baselines, original fill JSON/keys, legacy split
-  digests, same-time History and entitlement/correction lineage.
-- Include one owner with two active portfolios holding the same asset, a foreign
-  owner, zero portfolios and a closed stock+crypto portfolio. Closure is fixture
-  setup here, not a public deletion feature.
-- Add migration-only stage refusal and final runnable authority/grant/recovery
-  inventories with real app/scheduler/migrator roles and verified TLS.
-- Extend browser identity/auth fixtures and exact portfolio routes consistently.
-- Framework installation: none; preserve lockfiles and runtime pins.
+## Manual Execution Checkpoints
 
-## Threat and Regression Obligations
+12-28-01 blocks on owner acceptance of changed named tickets/confirmations/receipts/holdings/mixed History/original details/unavailable states after automated evidence.12-28-02 independently blocks on actual desktop browser Zoom menu200%, readable/reachable controls and no obscuring overlap/horizontal page overflow. Emulation and silence cannot satisfy either.
 
-Every PLAN.md requires its own threat model and mapped automated mitigations.
-Include: BOLA/cross-root causes, wrong-root retry replay, association bypass,
-legacy ambiguous targeting, closed-root worker mutations, stale browser state,
-unsafe schema/restore/rollback admission, extra grants and widened role access.
-Do not count a grep-only check as financial or concurrency proof.
+## Sign-Off and Scope
 
-## Manual-Only Verifications
+- [x] All56 task IDs mapped to exact plan/wave/requirement/threat/command.
+- [x] Missing test creation owners and earlier runner dependencies specified.
+- [x] Full strict audits/five images and serial cold-recovery proof scheduled.
+- [ ] Independent checker approval.
+- [ ] Actual Wave0 execution complete.
+- [ ] Focused latency measured; actual automated and owner proofs passed.
 
-| Behavior | Requirement | Why manual | Test instructions |
-|---|---|---|---|
-| New portfolio-context UI acceptance | PCTX-01 | Owner acceptance of changed screens | Review synthetic screenshots/pages for label clarity and unavailable-target states; no account data or deployment |
-| Genuine browser native 200% zoom | PCTX-01 | Emulated viewport/reflow is not native zoom evidence | Open synthetic review pages in desktop browser, select native 200%, verify readable/reachable controls and no obscuring overlap or page overflow |
-
-Automate keyboard/focus, responsive reflow, late-response handling, private access
-and target isolation as well. Manual acceptance never substitutes for those tests.
-
-## Validation Sign-Off
-
-- [ ] Exact per-task/plan/wave/threat map synchronized with all generated plans.
-- [ ] Every task has automated verification or a concrete earlier Wave 0 owner.
-- [ ] No three consecutive tasks lack automated feedback.
-- [ ] All missing files are marked and mapped to creation tasks, not assumed present.
-- [ ] No watch flags, fake passing reports, provider calls or production state.
-- [ ] Focused latency targets and necessary long campaign exceptions are explicit.
-- [ ] Independent plan checking approves sampling/coverage; only then set nyquist_compliant.
-
-**Approval:** Pending planner synchronization and independent plan check.
-**Execution:** Pending; wave_0_complete remains false until implemented evidence exists.
+Keep both compliance/execution flags false pending corresponding independent review/execution. Phase7 six live IDs remain deferred with stock admissions gated off; no provider,production,publishing or package changes. Phase13 owns create/name/rename/optional empty description/overview;Phase14 public deletion. Terminal root/no-regrant prerequisites are included here.
