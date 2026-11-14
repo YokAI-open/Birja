@@ -210,8 +210,8 @@ requirements/audit when the owner selects further work.
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
-| Closev1.1with six accepted live gaps | Owner requested release/finish anyway; preserve truthful history and disabled admissions | Accepted deferred2026-11-14 |
 |----------|-----------|---------|
+| Close v1.1 with six accepted live gaps | Owner requested release/finish anyway; keep truthful history and gated admissions | Accepted deferred, 2026-11-14 |
 | Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | ✓ Good — prices and trading shipped in Phases 3/4 |
 | Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | ✓ Good — Phase 3 live scheduler verified |
 | Market orders only | Delivers the core value without a background order matcher | ✓ Good — Phase 4 buy/sell flow verified |
