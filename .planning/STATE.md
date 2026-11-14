@@ -25,7 +25,7 @@ Current focus: Phase 12 discussion/planning. v1.2 setup is complete: all 28 requ
 
 Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
 Plan: — (no executable phase plans)
-Status: Researching Phase 12 and preparing its UI contract; no executable plans yet
+Status: Phase 12 research and UI contract complete; pattern mapping and planning next
 Last activity: 2026-11-14 — Added optional descriptions to the approved roadmap; all 28 requirements mapped exactly once
 
 Progress: 0/4 phases complete; 0 executable plans; 0% implementation.
@@ -104,8 +104,11 @@ The owner invoked `$gsd-plan-phase 12` and approved research, a UI contract
 from existing design, then planning/checking. Phase directory:
 phases/12-preserve-existing-investing-under-portfolio-ownership/.
 12-CONTEXT.md compiles existing approved decisions (not a new discuss session).
-Next: technical research, validation strategy, UI contract/check, pattern map,
-executable plans and independent plan verification. No implementation yet. Local planning commits
+12-RESEARCH.md and draft 12-VALIDATION.md are committed. 12-UI-SPEC.md passed
+independent six-dimension review with no findings; future implemented UI and
+native 200% zoom still need owner acceptance.
+Next: pattern map, executable plans, synchronized validation and independent
+plan verification. No implementation yet. Local planning commits
 are prepared on feature/milestone-v1.2. The owner selected “Keep local for now”;
 retain that publication preference for this amendment.
 New funding policy and terminal freeze scope remain in PROJECT.md.
