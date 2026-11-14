@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: phase_complete
-stopped_at: PR 31 all six CI checks green at ed37d69; separate merge approval pending; Phase 7 live deferred
-last_updated: "2026-11-14T11:38:59.546824+00:00"
-last_activity: 2026-11-14 -- PR 31 CI passed; debug resolved, no merge
+stopped_at: PR31 merged into develop at78de5bd; Phase7 live acceptance deferred
+last_updated: "2026-11-14T11:46:00.469100+00:00"
+last_activity: 2026-11-14 -- Approved PR31 merge complete; no release or deployment
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,17 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** PR31 green and ready for separate merge approval; Phase7 live acceptance deferred
+**Current focus:** PR31 merged into develop; deferred Phase7 live-provider acceptance is next
 
 ## Current Position
 
 Phase: 11 — complete
 Plan: 4/4 complete
-Status: Phase11 complete; PR31 all six CI checks green; awaiting merge approval
-Last activity: 2026-11-14 -- PR31 CI passed at ed37d69
+Status: Phase11 complete; PR31 merged into develop; Phase7 live acceptance deferred
+Last activity: 2026-11-14 -- PR31 merged into develop at78de5bd
 Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
+
+2026-11-14 owner explicitly approved PR31 merge. MERGED into develop using
+merge commit78de5bdc213a978810377caa34139a98951e5518. Parents independently
+verified: prior develop7d81010df3491eb8304a575d95827b877bc96e43 and exact
+six-check-green PRheaded37d69e89d544e03e5b1c5f7c0817a35b1a7799.
+GitHub PRstate MERGED; remote/localdevelop points to78de5bd. Merged remote
+featurebranch removed; local featurebranch retained only to preserve unpublished
+CI/merge receipts (upstream unset). No source/receipt commit was forced away.
+Next: resume deferredPhase7live-provider acceptance when owner chooses. SAFE-01
+and its otherPhase7requirements remain pending. No release tag, main merge,
+provideractivation, production deployment or milestone archival occurred.
+This local receipt is not pushed directly into develop. Earlier CI/publication
+records below remain historical evidence, not a current merge-approval request.
 
 2026-11-14 PR31 hostedCI GREEN at exact published head
 ed37d69e89d544e03e5b1c5f7c0817a35b1a7799. Run43588776865 all6checks SUCCESS:
@@ -44,7 +57,7 @@ New hosted proof is distinct from earlier qualified Phase11local evidence.
 Debug resolved: .planning/debug/resolved/pr31-ci-failures.md; rawreceipt/log
 hashes there. PRdescription updated. Receiptcommit stays local to preserve the
 exact green PRhead; no source change or automatic second CI run is needed.
-Next: separate owner approval to merge PR31. Phase7live/SAFE-01 and activation,
+At CI closeout, merge approval was pending. Phase7live/SAFE-01 and activation,
 release/production/milestone archival remain deferred; nothing deployed.
 
 Historical phase/publication evidence follows.

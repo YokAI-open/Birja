@@ -1,4 +1,17 @@
-# PR31 publication receipt
+# PR31 merge receipt
+
+Owner approved merge after all six checks passed at exact headed37d69.
+PR31 MERGED into develop on2026-11-14:
+https://github.com/YokAI-open/Birja/pull/31
+Merge commit78de5bdc213a978810377caa34139a98951e5518, with independently
+verified parents7d81010df3491eb8304a575d95827b877bc96e43 and
+ed37d69e89d544e03e5b1c5f7c0817a35b1a7799. Remote/localdevelop refreshed.
+Merged remotefeaturebranch deleted; local receipts preserved on local branch,
+upstream unset. No release/main merge/provideractivation/deployment/archival.
+This receipt is local and is not pushed directly into protecteddevelop.
+
+## Historical green-CI publication receipt
+
 
 Published through ed37d69e89d544e03e5b1c5f7c0817a35b1a7799 under explicit
 owner “Publish and finish CI” authorization. PR#31 is OPEN/MERGEABLE into develop;
