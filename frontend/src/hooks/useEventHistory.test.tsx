@@ -227,10 +227,13 @@ it("retains the whole accepted page chain if a later refresh page is malformed",
   await act(async () => {
     await result.current.fetchNextPage();
   });
+  await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
   await act(async () => {
-    await result.current.refetch();
+    const refreshed = await result.current.refetch();
+    expect(refreshed.isRefetchError).toBe(true);
   });
-  expect(result.current.isRefetchError).toBe(true);
+  await waitFor(() => expect(result.current.isRefetchError).toBe(true));
+  expect(fetch).toHaveBeenCalledTimes(4);
   expect(result.current.data?.pages.flatMap((body) => body.items.map((event) => event.id))).toEqual(
     ["dividend:3", "dividend:2"],
   );

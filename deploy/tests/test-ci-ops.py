@@ -30,6 +30,13 @@ def jobs():
 
 def image_policy(image, aggregate):
     """Validate strict required image wiring; also used against mutations."""
+    checkout = re.search(
+        r"(?m)^      - uses: actions/checkout@[^\n]+\n"
+        r"        with:\n          fetch-depth: 0$", image
+    )
+    contracts = image.find("python3 deploy/tests/test-ci-ops.py")
+    if checkout is None or contracts < 0 or checkout.start() > contracts:
+        raise ValueError("image fixture contracts require full Git history first")
     for text in [
         "target: test-builder",
         "target: runtime",
@@ -468,6 +475,8 @@ class CI(unittest.TestCase):
         j = jobs()
         image_policy(j["image"], j["ci-pass"])
         for old, new in [
+            ("fetch-depth: 0", "fetch-depth: 1"),
+            ("        with:\n          fetch-depth: 0\n", ""),
             ("python3 deploy/scan-images.py", "true"),
             ("--node", "--omitted"),
             ("image-reports", "other"),
@@ -478,6 +487,12 @@ class CI(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 image_policy(j["image"].replace(old, new), j["ci-pass"])
+        checkout = re.search(
+            r"(?m)^      - uses: actions/checkout@[^\n]+\n"
+            r"        with:\n          fetch-depth: 0\n", j["image"]
+        )[0]
+        with self.assertRaises(ValueError):
+            image_policy(j["image"].replace(checkout, "") + checkout, j["ci-pass"])
         with self.assertRaises(ValueError):
             image_policy(j["image"], j["ci-pass"].replace(", image", ""))
 
