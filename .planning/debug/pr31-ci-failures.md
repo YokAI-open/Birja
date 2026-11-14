@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: awaiting_human_verify
 trigger: "continue"
 created: 2026-11-14
 updated: 2026-11-14
@@ -9,17 +9,17 @@ updated: 2026-11-14
 
 ## Current Focus
 
-hypothesis: The image contract still includes the old OTEL record; cold CI verifies but never imports/binds the recovery archive before its first Compose use.
-next_action: Await explicit owner approval for exact dnspython2.9.2 prospective lock/install; resume only that approved delta and affected checks. Unaffected repairs are committed locally as d855a0f; no push.
+hypothesis: dnspython2.9.0 accepts out-of-range WKS service65536; the exact approved2.9.2 bounds it. Existing image/ops fixes preserve their original security contracts.
+next_action: Present complete local CI repairs and draft PR follow-up for separate publication approval; after approved push, check hosted required CI in the actual workflow. Do not archive as resolved before end-to-end confirmation.
 reasoning_checkpoint:
-  hypothesis: CI exports and verifies the registry image but never binds the alias that the first fresh-cluster test uses with pull_policy never; local prior recovery extraction leaves that alias warm.
+  hypothesis: Unchecked WKS service numbers in dnspython2.9.0 cause the advisory; exact2.9.2 rejects numbers above65535 and oversized bitmaps, with only the owner-approved package record changing.
   confirming_evidence:
-    - check-recovery-image.py verifies_saved_image without image load/bind; CI invokes the fresh-cluster test before serial bundle extraction.
-    - Hosted four subtests fail at Compose up before restore; exact required alias is distinct from registry reference.
-    - Historical e728855 full package comparison shows only approved calendar additions and OTEL change; local13test image RED exactly matches hosted digest mismatch.
-  falsification_test: A missing-alias startup succeeds, or importing/binding the same authenticated export does not permit unchanged guarded startup.
-  fix_rationale: Initialize the authenticated image alias at the existing CI prerequisite; isolate the exact approved OTEL record while retaining historical all-other-entry identity.
-  blind_spots: Original-source cold-alias RED and repaired guarded startup GREEN are complete; all24actual PostgreSQL contracts pass. Exact DNS lock/install approval and affected checks remain pending, and fresh hosted CI is not yet verified.
+    - Official reviewed GHSA-vvf4-9x63-8xvv identifies versions below2.9.2; hosted unrestricted audit flags the exact2.9.0 record.
+    - Exact upstream WKS bounds test fails on cached2.9.0 and passes on installed2.9.2 with finite65536 input.
+    - Full parsed lock and installed inventories change only dnspython; canonical image APK/Python inventory parity confirms the same sole delta.
+  falsification_test: The exact upstream WKS bounds regression still fails on2.9.2, or full lock/native inventory/audit reports an unapproved delta or remaining advisory.
+  fix_rationale: Apply the exact reviewed2.9.2 distribution and authenticate its complete record separately in image/legacy contracts, preserving all other historical records.
+  blind_spots: All local affected gates and independent delta reviews pass; hosted CI remains unverified until separately approved publication and actual hosted execution.
 
 ## Symptoms
 
@@ -34,6 +34,29 @@ reproduction: Inspect /tmp/birja-pr31-failed-ci.log and reproduce affected comma
 User requested continuing after the CI failure summary: investigate, make local fixes and affected verification. Existing exact dependency approvals do not approve a different package; prepare concrete review before requesting installation approval. No gate waiver, private credentials, provider/production changes, merge or deployment. New push approval remains separate. Preserve unrelated .claude/ and shared-tree work; do not switch branches.
 
 ## Evidence
+
+- timestamp: 2026-11-14
+  checked: Final affected backend, critical coverage, rebuilt native images, canonical builder smoke, five strict scans, reviews and owned cleanup.
+  found:2557backend pass366.25s/99.87%;47critical4565statements/1462branches100%;builder5pass2.38s. ExactAPK/Python inventories differ onlyDNSpatch; nonroot networknone WKS/email/calendar/dividend imports pass. All5actual strict scans0HIGH/CRITICAL includingunfixed. Independent code/security delta0findings,6/6threatsclosed. Owned birja-test/birja-ops-test containers/networks/volumes allzero.
+  implication: Complete affected local repair is verified, code committed as a0feb5c; publication/hostedCI confirmation remains separate. Final21log/source/image/command/cleanup receipt /tmp/pr31-dns-receipt.json SHA7574eef7b45f92d85cc023235afd5d9bcdce034cf8a87ba3dfcf0613714d180b.
+
+- timestamp: 2026-11-14
+  checked: Exact reviewed lock application, locked uv sync and installed inventory; canonical pip-audit.
+  found: Lock SHA3eded7f21be30568f5d4fae129f38a11e19484035f60f1477a3f9b2bf30fd2d4 applied. Exactly one uninstall/install dnspython2.9.0→2.9.2; every other installed version unchanged. Unrestricted audit reports No known vulnerabilities found.
+  implication: Original dependency audit failure has a verified exact local repair without additional package drift.
+- timestamp: 2026-11-14
+  checked: Exact upstream2.9.2 test_wks_bounds using prior cached2.9.0 then installed2.9.2, finite65536 input only.
+  found: Prior2.9.0 fails SyntaxError not raised;2.9.2 same test passes. Upstream rdata/tokenizer/resolver211passed,31network/optional skips,71subtests in0.82s. Logs /tmp/pr31-dns-wks-red.log,/tmp/pr31-dns-wks-green.log,/tmp/pr31-dns-upstream.log.
+  implication: Advisory mechanism is directly reproduced and fixed without unbounded resource input or network calls.
+- timestamp: 2026-11-14
+  checked: Exact DNS image/legacy contract boundaries before and after scoped exceptions.
+  found: Pre-exception image15test and retained-installer contracts reject the approved DNS change; exact complete DNS entry plus historical remainder permit it. Image15,CI16,selected7 and actual retained-installer selftest pass; DNS version/artifact and unrelated changes still reject.
+  implication: Only independently approved full package records depart from historical inventory; all eight calendar artifacts remain authenticated.
+
+- timestamp: 2026-11-14
+  checked: Parent relayed explicit owner decision Approve patch and continue locally; exact prospective lock and complete record comparison revalidated.
+  found: Owner approves only dnspython2.9.0→2.9.2, exact wheel af15f7d385a6ae2fb35a796fde2138004c8c42c7389090e2addc83e3b3340fd8 and lock3eded7f21be30568f5d4fae129f38a11e19484035f60f1477a3f9b2bf30fd2d4, local install/rebuild/affected checks. Only that package record differs; no added/removed packages.
+  implication: Exact approved local repair may proceed; publication/production remain unauthorized.
 
 - timestamp: 2026-11-14
   checked: Official dnspython advisory, artifacts, provenance and temporary uv resolution
@@ -71,10 +94,10 @@ None yet.
 ## Resolution
 
 root_cause: Exact pre-regrouping inventory omitted the separately approved OTEL repair; CI verified a pulled recovery image without importing/binding the fixed alias required before the first fresh-cluster Compose startup. Independently dnspython2.9.0 is affected by CVE-2026-128089.
-fix: Exact full-record OTEL exception preserves historical other distributions; preflight imports only authenticated export and binds approved config/platform identity, refusing wrong preexisting alias. DNS replacement pending owner approval.
-verification: Original image RED reproduced;15image/16CI contracts and original-helper actual cold-alias RED/GREEN pass. Actual24PostgreSQL contracts pass122.519s with cleanup verified. DNS audit still pending exact patch approval; hosted CI remains unverified.
-files_changed: [deploy/tests/test-image-contracts.py, deploy/tests/check-recovery-image.py, deploy/tests/test-ci-ops.py]
-commit: d855a0f (reviewed unaffected image/ops fixes, local only)
+fix: Owner-approved exact dnspython2.9.2 lock/install; exact full-record OTEL/DNS exceptions preserve historical other distributions/calendar artifacts. Preflight imports only authenticated export and binds approved config/platform identity, refusing wrong preexisting alias.
+verification: Original cold-alias/image RED/GREEN,24actualPG,15image/16CI/7selected/legacy contracts pass. Advisory upstreamRED/GREEN and211upstream/71subtests pass;2557backend99.87%,47critical100%,builder5smoke,unrestricted audit,five strict scans allpass with exact inventory parity and ownedcleanup. Independent code/security0findings; hostedCI remains unverified. Source-qualified historical recovery remains historical.
+files_changed: [backend/uv.lock, deploy/tests/test-image-contracts.py, deploy/tests/check-recovery-image.py, deploy/tests/test-ci-ops.py, deploy/tests/test-rollback-db-security.sh]
+commit: d855a0f and a0feb5c (reviewed local code repairs; no push)
 
 ## Specialist Review
 
@@ -84,4 +107,5 @@ affected code/security reviews are complete with no active findings, as recorded
 
 Independent code review: pr31-CODE-REVIEW.md, no active findings. Independent
 security review: pr31-SECURITY-REVIEW.md,6/6closed, no active findings. Both
-reviewed the exact three changed source paths; dependency installation is pending.
+reviewed the original three source paths and the exact subsequent DNS lock/image/
+legacy-contract delta. Owner-approved installation and all affected checks pass.

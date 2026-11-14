@@ -52,3 +52,49 @@ that dependency fixed, claim hosted CI success, or authorize publication. Exact
 DNS installation/lock changes remain approval-pending and outside these hashes.
 Publishing attestation crypto verification and production/provider acceptance
 are not established by this review.
+
+## Approved DNS delta security review
+
+After the parent relayed explicit owner approval, independently reviewed the
+three-file DNS delta against `0dd227e`. This section supersedes the earlier
+approval-pending scope statements for the exact DNS repair only. The original
+helper/cold-start review remains attributed to its original hashes.
+
+All six assigned DNS-delta threats have disposition **mitigate** and are
+**CLOSED**; zero BLOCKERs, WARNINGs or unregistered flags.
+
+| Threat | Actual verification |
+|---|---|
+| D1 exact approved resolution/install | Independently parsed complete before/after lock: identical top-level metadata, identical package-name sets, exactly one changed record (`dnspython`). Current lock equals approved SHA256 `3eded7f21be30568f5d4fae129f38a11e19484035f60f1477a3f9b2bf30fd2d4`. Downloaded wheel equals approved SHA256 `af15f7d385a6ae2fb35a796fde2138004c8c42c7389090e2addc83e3b3340fd8`. Compared165 installed wheel files byte-for-byte with this wheel: zero mismatches; installer-generated RECORD excluded. `/tmp/pr31-dns-sync.log` records exactly one uninstall/install,2.9.0→2.9.2. |
+| D2 preserve historical other records/calendar | Independently recomputed `e728855` records excluding root, OTEL and DNS: SHA256 `e7415d7142069e6bca45afd4d37cd758a1d7c83ddd401a678b1b054c9b7b9509`, matching `test-image-contracts.py`. Exact eight-calendar full-record hash remains unchanged. Full DNS new-record hash independently equals `4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79`; its version is exactly2.9.2. Mutation checks reject changed DNS version and wheel hash, OTEL drift and unrelated FastAPI artifact changes. |
+| D3 exact legacy boundary | `test-rollback-db-security.sh:89` authenticates complete old DNS2.9.0 record hash `94eaf4580a2e9ddcebeb20c972343bd5ba85647b9d292423921c9652fc3eac21` and exact new record above; preserves prior exact OTEL/calendar exceptions and direct equality for every remaining record. No general old/new version range. Actual self-test rejects DNS version/artifact mutations, unrelated package drift and OTEL/calendar mutations. |
+| D4 preserve audit/image/recovery gates | Delta does not touch workflow, scanner, audit arguments, Dockerfiles or recovery dispatch/gates. `/tmp/pr31-dns-audit.log` states unrestricted audit found no known vulnerabilities; reviewed installed-content equality separately. Audit/image qualification is distinct from source review; full image builds/scans remain investigator-owned running evidence and are not promoted to passed here. |
+| D5 retain CORE/financial/schema/auth | Diff names against0dd227e contain only lock, the image contract, legacy contract and debug/code-review artifacts. No retained CORE/producer/restore/authority, application financial/authentication, Alembic or schema change. Legacy delta only extends exact artifact comparison and negative controls. |
+| D6 disclose provenance and scope | Exact approval is recorded in debug Evidence and matches the applied lock/wheel. Dependency review retains original prospective review and accurately states publishing attestations were parsed, without claiming independent Sigstore trust-root/log cryptographic verification. No permission for push/merge/production/provider follows from this local approval. |
+
+Independent bounded checks:
+
+- `python3 deploy/tests/test-image-contracts.py`:15 passed,0.702s.
+- `bash deploy/tests/test-rollback-db-security.sh --self-test-retained-install`:
+  passed; offline synthetic installed-launcher behavior and exact artifact
+  mutation controls execute without Docker.
+- Independently parsed full locks, recomputed historical/old/new DNS digests,
+  authenticated exact wheel bytes and compared165 installed files.
+- Read `/tmp/pr31-dns-upstream.log`:211passed/31skipped/71subtests; this is
+  reviewed investigator evidence, not a second execution by this reviewer.
+- Read `/tmp/pr31-dns-wks-red.log` and `pr31-dns-wks-green.log`: official
+  `test_wks_bounds` fails against old2.9.0 because an out-of-range service fails
+  to raise `SyntaxError`, then passes against installed2.9.2 in0.10s. The
+  bounded65536 probe supplies actual advisory-specific RED/GREEN evidence.
+- No Docker workload, installation, network operation, commit or source edit
+  was performed by this reviewer.
+
+| DNS delta reviewed source | SHA256 |
+|---|---|
+| backend/uv.lock | 3eded7f21be30568f5d4fae129f38a11e19484035f60f1477a3f9b2bf30fd2d4 |
+| deploy/tests/test-image-contracts.py | b7bef3ec796930a939d92c4d36601a8ad5463a50e68fd5e5cc2ad7e3920f3a68 |
+| deploy/tests/test-rollback-db-security.sh | 7d506a4973016c874fd706ff9e119902b68f6bfd9b00782ea1309924631893e3 |
+
+This verdict covers the exact source/artifact delta. Backend coverage and fresh
+image qualification remain separate actual gates. Hosted CI success,
+publication and production acceptance are not claimed.

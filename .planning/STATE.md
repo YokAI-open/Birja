@@ -813,12 +813,16 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Stopped at: Phase 11 complete; independent verification passed3/3.
 Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md
-Next: Repair PR#31 hosted CI failures via .planning/debug/pr31-ci-failures.md.
-Local approved OTEL inventory and cold recovery fixes pass 15 image, 16 CI and
-24 real PostgreSQL contracts; exact dnspython2.9.2 review is prepared, with owner
-installation approval pending. Independent code/security reviews report no active
-findings; fresh hosted CI remains pending. Publication and merge require separate
-owner approval. Historical Phase11 proof remains qualified.
+Next: Obtain publication approval for locally verified PR#31 CI repairs;
+session .planning/debug/pr31-ci-failures.md and pr31-LOCAL-PROOF.md retain evidence.
+Owner approved exact dnspython2.9.2; lock/installed/native-image inventories prove
+only that DNSdelta. Upstream211/71subtests plus finite advisoryRED/GREEN,2557backend
+99.87%, all47critical100%, builder5smoke, unrestricted audit and five strict scans
+pass. Exact image15/CI16/selected7/legacy contracts pass; original cold-start and
+24realPG proof remain reviewed with unchanged CORE/application/schema bytes.
+Independent code/security delta reviews have0findings; ownedresources are empty.
+Fresh hosted CI remains pending; no push/PRwrite/merge/deployment. Historical
+Phase11 proof remains qualified; no duplicate complete serial campaign is claimed.
 Review deferredPhase7live acceptance when owner chooses; production remains separate.
 CompletedPhase11:4plans/8tasks,63/64trackedplans,4/5phases. No outstandinglocalhuman checks.
 Current finalreceipt/archive/source qualifications are in11-03/04SUMMARY and11-LOCAL-PROOF.

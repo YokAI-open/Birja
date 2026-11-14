@@ -1,6 +1,8 @@
 # PR31 exact dnspython repair review
 
-Status: ready for owner review; no project lock change or package installation.
+Status: owner explicitly approved the exact patch and local continuation on
+2026-11-14. The exact reviewed lock was applied and locked uv sync changed only
+dnspython2.9.0→2.9.2; all other installed package names/versions match.
 
 The [official advisory](https://github.com/rthalley/dnspython/security/advisories/GHSA-vvf4-9x63-8xvv)
 identifies CVE-2026-128089, High/CVSS3.1 7.5, affecting versions below2.9.2.
@@ -43,7 +45,7 @@ entry, zero additions/removals, unchanged project manifest and other entries.
 - Public review artifacts, command output, full comparison, provenance and receipt:
   `/tmp/birja-pr31-package-review/` (prospective lock under `prospective/uv.lock`).
 
-Requested approval is limited to applying that exact prospective lock, installing
+The received approval is limited to applying that exact prospective lock, installing
 the exact wheel locally via locked uv, rebuilding affected local images and
 running affected audit/security/tests. No other package, provider, production,
 installed host tool, publication, push or merge is included. The unrestricted

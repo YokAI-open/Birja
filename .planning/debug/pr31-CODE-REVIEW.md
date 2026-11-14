@@ -2,11 +2,13 @@
 phase: pr31-ci-failures
 reviewed: 2026-11-14
 depth: standard
-files_reviewed: 3
+files_reviewed: 5
 files_reviewed_list:
   - deploy/tests/check-recovery-image.py
   - deploy/tests/test-image-contracts.py
   - deploy/tests/test-ci-ops.py
+  - backend/uv.lock
+  - deploy/tests/test-rollback-db-security.sh
 findings:
   critical: 0
   warning: 0
@@ -63,3 +65,50 @@ Reviewed file SHA256 values:
 The pending dnspython2.9.2 lock/install/exception is outside this reviewed byte
 scope. A subsequent DNS exception or lock change requires a delta review.
 This report does not claim hosted CI success or authorize publication.
+
+## Approved DNS delta review
+
+Independently reviewed `backend/uv.lock`, `deploy/tests/test-image-contracts.py`
+and `deploy/tests/test-rollback-db-security.sh` against `0dd227e`, after the parent
+relayed owner approval of the exact DNS patch. No actionable BLOCKER or WARNING
+found. This section supersedes the earlier exclusion of the pending DNS delta;
+the earlier three-file review remains attributed to its original hashes.
+
+Parsed full before/after lock data independently: zero package additions or
+removals; exactly the complete dnspython record changes. All top-level lock
+metadata and every other package record remain equal. The lock matches the
+approved SHA256 and its wheel matches the exact approved artifact SHA256
+`af15f7d385a6ae2fb35a796fde2138004c8c42c7389090e2addc83e3b3340fd8`.
+
+Independently computed the historical `e728855` inventory with only DNS and OTEL
+removed: `e7415d7142069e6bca45afd4d37cd758a1d7c83ddd401a678b1b054c9b7b9509`.
+This equals the revised image assertion; the eight calendar records remain
+separately authenticated by their unchanged exact hash. Full DNS record hashes
+independently match old `94eaf4580a2e9ddcebeb20c972343bd5ba85647b9d292423921c9652fc3eac21`
+and new `4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79`.
+Legacy compatibility authenticates both records, preserves exact OTEL/calendar
+exceptions and compares all remaining records directly. No broad refresh or
+version range was introduced.
+
+Independent checks:
+
+- Image contracts: 15 passed, 0.627s, including DNS version/artifact mutation
+  rejection alongside existing OTEL and unrelated-artifact controls.
+- `bash deploy/tests/test-rollback-db-security.sh --self-test-retained-install`:
+  passed; actual positive full-record comparison and DNS/OTEL/calendar/unrelated
+  mutation rejections run before isolated synthetic installer/checkout checks.
+- Shell syntax and `git diff --check`: passed.
+- An initial abbreviated `--self-test` invocation was rejected as ambiguous by
+  argparse; it exercised no integration workload. The explicit command above
+  succeeded. No Docker, installation or network action was performed by reviewer.
+
+Reviewed DNS-delta file SHA256 values:
+
+| File | SHA256 |
+|---|---|
+| backend/uv.lock | 3eded7f21be30568f5d4fae129f38a11e19484035f60f1477a3f9b2bf30fd2d4 |
+| deploy/tests/test-image-contracts.py | b7bef3ec796930a939d92c4d36601a8ad5463a50e68fd5e5cc2ad7e3920f3a68 |
+| deploy/tests/test-rollback-db-security.sh | 7d506a4973016c874fd706ff9e119902b68f6bfd9b00782ea1309924631893e3 |
+
+This bounded source review does not replace application/audit/image execution
+qualification and does not claim hosted CI success or publication authorization.
