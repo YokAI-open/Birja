@@ -1,3 +1,19 @@
+# PR31 publication receipt
+
+Published through ed37d69e89d544e03e5b1c5f7c0817a35b1a7799 under explicit
+owner “Publish and finish CI” authorization. PR#31 is OPEN/MERGEABLE into develop;
+all six required hosted jobs passed in run43588776865 on2026-11-14.
+https://github.com/YokAI-open/Birja/pull/31
+https://github.com/YokAI-open/Birja/actions/runs/43588776865
+
+The PRdescription records repairs, exact tested head and green hosted result.
+Fresh complete serial recovery passed at this head; earlier local qualifications
+remain historical. See resolved/pr31-ci-failures.md for receipt/log/archive hashes.
+No merge, provider activation or deployment. This receipt is committed locally
+without advancing the tested PRhead or triggering redundant CI.
+
+## Historical publication preparation
+
 # PR31 publication preparation
 
 All three hosted failure causes have local reviewed fixes on

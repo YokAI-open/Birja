@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: phase_complete
-stopped_at: Phase 11 complete; PR 31 open into develop; CI pending; Phase 7 live deferred
-last_updated: "2026-11-13T20:32:11.520738+00:00"
-last_activity: 2026-11-13
+stopped_at: PR 31 all six CI checks green at ed37d69; separate merge approval pending; Phase 7 live deferred
+last_updated: "2026-11-14T11:38:59.546824+00:00"
+last_activity: 2026-11-14 -- PR 31 CI passed; debug resolved, no merge
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,17 +21,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase 11 complete; Phase 7 live acceptance remains deferred
+**Current focus:** PR31 green and ready for separate merge approval; Phase7 live acceptance deferred
 
 ## Current Position
 
 Phase: 11 — complete
 Plan: 4/4 complete
-Status: Phase 11 complete; PR #31 open into develop; Phase 7 live acceptance deferred
-Last activity: 2026-11-13
+Status: Phase11 complete; PR31 all six CI checks green; awaiting merge approval
+Last activity: 2026-11-14 -- PR31 CI passed at ed37d69
 Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
+
+2026-11-14 PR31 hostedCI GREEN at exact published head
+ed37d69e89d544e03e5b1c5f7c0817a35b1a7799. Run43588776865 all6checks SUCCESS:
+backend/frontend/image/e2e/ops/ci-pass. PR OPEN/MERGEABLE into develop; no merge.
+Reviewed CI repairs and owner-approved DNS2.9.2 patch published under explicit
+“Publish and finish CI” authorization. Fresh complete serial same-archive
+hosted recovery/TLS/rollback passes, including0014cutover/refusal/recovery.
+HostedarchiveSHA c8b68277411803f7bce7b2e35df127690e3f7919bd6deb243dba01dfd080cfa8.
+New hosted proof is distinct from earlier qualified Phase11local evidence.
+Debug resolved: .planning/debug/resolved/pr31-ci-failures.md; rawreceipt/log
+hashes there. PRdescription updated. Receiptcommit stays local to preserve the
+exact green PRhead; no source change or automatic second CI run is needed.
+Next: separate owner approval to merge PR31. Phase7live/SAFE-01 and activation,
+release/production/milestone archival remain deferred; nothing deployed.
+
+Historical phase/publication evidence follows.
 
 Publication2026-11-13: owner explicitly approved “push and open pr”. Branch
 feature/v1.1-stock-planning published; PR#31 into develop is open:
@@ -52,7 +68,7 @@ OpenTelemetry1.45.1→1.45.2 patch and absentattestation are documented.
 Qualified samearchive proof: five actualstagesatfb926d8, legacy0008at22c44d6,
 fresh completecurrent0014ata7f965f. Exactlythreeharnessfiles differ; retained
 11CORE/unit bytes,archive,application/authority/build/runtime/images unchanged.
-No freshcompleteCIblock atfinalsource or hostedCIpass is claimed. All sixowned
+At Phase11 localcloseout no freshcompleteCIblock/hostedCIpass was claimed; All sixowned
 projects empty. Current0014 exactfinancial/schema/identity/fullruntime snapshot
 preservation, replaytwice/42501/refusal/tested-source recovery all verified.
 Receipt /tmp/birja-phase11-gates/final-receipt.json SHA256
