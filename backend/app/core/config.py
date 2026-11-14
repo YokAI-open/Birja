@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
@@ -10,7 +11,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.db.connection import database_ssl_context, validate_database_url
 
 
-class Settings(BaseSettings):
+class _StockSettings(BaseSettings):
+    """Shared nonsecret stock bounds; these settings confer no product rights."""
+
+    stock_data_enabled: bool = False
+    stock_feed: Literal["iex"] = "iex"
+    stock_poll_interval_seconds: int = Field(default=60, ge=60, le=120)
+    stock_request_timeout_seconds: int = Field(default=5, ge=1, le=10)
+    stock_max_retries: int = Field(default=1, ge=0, le=2)
+    stock_cycle_budget_seconds: int = Field(default=15, ge=1, le=20)
+    stock_max_response_bytes: int = Field(default=262144, ge=4096, le=1048576)
+    stock_data_account: str = Field(default="birja", min_length=1, max_length=128)
+    stock_data_server: str = Field(default="birja", min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _check_stock_budget(self) -> _StockSettings:
+        if (
+            self.stock_request_timeout_seconds * (self.stock_max_retries + 1)
+            > self.stock_cycle_budget_seconds
+        ):
+            raise ValueError("stock request/retry budget exceeds stock cycle budget")
+        if not self.stock_data_account.strip() or not self.stock_data_server.strip():
+            raise ValueError("stock account/server scope must be nonblank")
+        return self
+
+
+class Settings(_StockSettings):
     # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
     model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
@@ -199,7 +225,7 @@ def get_settings() -> Settings:
     return Settings()
 
 
-class SchedulerSettings(BaseSettings):
+class SchedulerSettings(_StockSettings):
     """Settings for the price scheduler container only (least privilege).
 
     The scheduler parses a third-party API, so it gets no token, OTP or email secrets:
@@ -219,6 +245,52 @@ class SchedulerSettings(BaseSettings):
     price_max_move: Decimal = Decimal("0.25")
     price_confirm_tolerance: Decimal = Decimal("0.05")
     price_confirm_polls: int = 3
+
+    # Provider credentials belong only in the dedicated scheduler environment.
+    alpaca_api_key: SecretStr | None = Field(default=None, repr=False)
+    alpaca_secret_key: SecretStr | None = Field(default=None, repr=False)
+
+    # Internal safety caps, never a provider entitlement or service guarantee.
+    stock_actions_enabled: bool = False
+    stock_actions_poll_interval_seconds: int = Field(default=60, ge=60, le=120)
+    stock_actions_health_max_age_seconds: int = Field(default=120, ge=1, le=120)
+    stock_actions_max_attempts: int = Field(default=8, ge=1, le=8)
+    stock_actions_cycle_budget_seconds: int = Field(default=30, ge=1, le=30)
+    stock_actions_max_response_bytes: int = Field(default=262144, ge=1, le=262144)
+    stock_actions_segment_days: int = Field(default=31, ge=1, le=366)
+    stock_actions_future_days: int = Field(default=90, ge=90, le=90)
+    stock_actions_coverage_start: datetime | None = None
+    stock_account_requests_per_minute: int = Field(default=20, ge=1, le=200)
+
+    @field_validator("stock_actions_coverage_start", mode="before")
+    @classmethod
+    def _empty_action_baseline(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def _check_action_policy(self) -> SchedulerSettings:
+        baseline = self.stock_actions_coverage_start
+        if baseline is not None and (
+            baseline.tzinfo is None or baseline.utcoffset() != UTC.utcoffset(baseline)
+        ):
+            raise ValueError("action coverage start must be UTC")
+        if self.stock_actions_enabled and baseline is None:
+            raise ValueError("enabled action scheduler requires reviewed coverage start")
+        return self
+
+    @field_validator("alpaca_api_key", "alpaca_secret_key", mode="before")
+    @classmethod
+    def _empty_provider_secret(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def _check_stock_credentials(self) -> SchedulerSettings:
+        if (self.stock_data_enabled or self.stock_actions_enabled) and any(
+            value is None or not value.get_secret_value().strip()
+            for value in (self.alpaca_api_key, self.alpaca_secret_key)
+        ):
+            raise ValueError("enabled stock scheduler requires both provider credentials")
+        return self
 
     @field_validator("database_url")
     @classmethod

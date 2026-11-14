@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    UniqueConstraint,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,13 +28,21 @@ class Coin(Base):
         CheckConstraint("length(symbol) BETWEEN 1 AND 10", name="symbol_length"),
         CheckConstraint("length(name) BETWEEN 1 AND 64", name="name_length"),
         CheckConstraint("length(kraken_pair) BETWEEN 1 AND 32", name="kraken_pair_length"),
+        CheckConstraint("asset_class IN ('crypto', 'stock')", name="asset_class_known"),
+        CheckConstraint(
+            "(asset_class = 'crypto' AND kraken_pair IS NOT NULL) OR "
+            "(asset_class = 'stock' AND kraken_pair IS NULL)",
+            name="asset_kraken_mapping",
+        ),
+        UniqueConstraint("asset_class", "symbol", name="uq_coins_asset_class_symbol"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    symbol: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    symbol: Mapped[str] = mapped_column(Text, nullable=False)
+    asset_class: Mapped[str] = mapped_column(Text, nullable=False, server_default="crypto")
     name: Mapped[str] = mapped_column(Text, nullable=False)
     # Both the Ticker request pair and the key in Kraken's response.
-    kraken_pair: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    kraken_pair: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
 

@@ -45,7 +45,7 @@ async def list_prices(
     result = await db.execute(
         select(Coin.symbol, Coin.name, Price.mid, Price.as_of)
         .join(Price, Price.coin_id == Coin.id)
-        .where(Coin.is_active)
+        .where(Coin.is_active, Coin.asset_class == "crypto")
         .order_by(Coin.sort_order, Coin.id)
     )
     rows: list[PriceRow] = []
@@ -77,7 +77,7 @@ async def load_active_coins(db: AsyncSession) -> list[CoinState]:
     result = await db.execute(
         select(Coin.id, Coin.symbol, Coin.kraken_pair, Price.mid)
         .outerjoin(Price, Price.coin_id == Coin.id)
-        .where(Coin.is_active)
+        .where(Coin.is_active, Coin.asset_class == "crypto")
         .order_by(Coin.sort_order, Coin.id)
     )
     return [CoinState(cid, symbol, pair, mid) for cid, symbol, pair, mid in result]
@@ -95,6 +95,18 @@ async def upsert_prices(db: AsyncSession, rows: Sequence[AcceptedPrice], source:
 
     The caller commits. Returns the number of rows inserted or updated.
     """
+    if not rows:
+        return 0
+    crypto_ids = set(
+        (
+            await db.execute(
+                select(Coin.id).where(
+                    Coin.asset_class == "crypto", Coin.id.in_([r.coin_id for r in rows])
+                )
+            )
+        ).scalars()
+    )
+    rows = [r for r in rows if r.coin_id in crypto_ids]
     if not rows:
         return 0
     stmt = insert(Price).values(

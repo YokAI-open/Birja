@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Stdlib structural/behavioral CI contracts; no YAML package dependency."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -10,6 +11,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +30,13 @@ def jobs():
 
 def image_policy(image, aggregate):
     """Validate strict required image wiring; also used against mutations."""
+    checkout = re.search(
+        r"(?m)^      - uses: actions/checkout@[^\n]+\n"
+        r"        with:\n          fetch-depth: 0$", image
+    )
+    contracts = image.find("python3 deploy/tests/test-ci-ops.py")
+    if checkout is None or contracts < 0 or checkout.start() > contracts:
+        raise ValueError("image fixture contracts require full Git history first")
     for text in [
         "target: test-builder",
         "target: runtime",
@@ -64,7 +73,270 @@ def image_policy(image, aggregate):
         raise ValueError("image is required")
 
 
+def recovery_policy(ops):
+    required = [
+        'archive = Path("/tmp/birja-backup-test-ci-final/recovery.tar")',
+        "ops.r.bundle_package(archive)", "ops.image_transition()",
+        "ops.roundtrip(archive)", "ops.roles()",
+        "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
+        '"--recovery-bundle", str(archive)], check=True)',
+        "assert ops.r.digest(archive) == expected",
+        "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
+        "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
+    ]
+    for text in required:
+        if text not in ops:
+            raise ValueError("missing retained recovery policy: " + text)
+    stages = required[1:7]
+    if [ops.index(text) for text in stages] != sorted(ops.index(text) for text in stages):
+        raise ValueError("recovery stages reordered")
+    if ops.count("unchanged()") != 7:
+        raise ValueError("every recovery stage must preserve archive and source identity")
+    for command in ("bash deploy/tests/test-deploy-compatibility.sh",
+                    "python3 deploy/tests/test-selected-cutover-contracts.py"):
+        if command not in ops:
+            raise ValueError("missing selected compatibility contract: " + command)
+
+
+def postgres_stack_policy(ops):
+    """Execute the actual CI try/finally with command effects replaced."""
+    marker = "- name: Real PostgreSQL recovery contracts with owned stack"
+    if ops.count(marker) != 1:
+        raise ValueError("missing owned PostgreSQL contract step")
+    step = ops.split(marker, 1)[1].split("\n      - name:", 1)[0]
+    if ops.index(marker) < ops.index("bash deploy/tests/test-db-config.sh"):
+        raise ValueError("PostgreSQL contracts precede prior stack cleanup")
+    lines = step.splitlines()
+    start = lines.index("          python3 - <<'PY'") + 1
+    end = lines.index("          PY", start)
+    tree = ast.parse(textwrap.dedent("\n".join(lines[start:end])))
+    body = [node for node in tree.body if not isinstance(node, ast.Import)]
+    code = compile(ast.fix_missing_locations(ast.Module(body=body, type_ignores=[])),
+                   "<actual-postgres-stack-step>", "exec")
+    stack = ["docker", "compose", "-f", "docker-compose.test.yml"]
+    expected = [stack + ["up", "-d", "--wait"],
+                ["sudo", "--", "python3", "deploy/tests/test-stock-recovery-contracts.py", "--postgres"],
+                stack + ["down", "-v"]]
+    for failed in (None, 0, 1, 2):
+        calls = []
+        failure = RuntimeError("synthetic command failure")
+        def run(argv, *, check):
+            if check is not True or argv not in expected:
+                raise ValueError("changed PostgreSQL command or failure policy")
+            calls.append(argv)
+            if failed is not None and argv == expected[failed]:
+                raise failure
+        try:
+            exec(code, {"subprocess": SimpleNamespace(run=run)})
+        except RuntimeError as error:
+            if error is not failure or failed is None:
+                raise ValueError("unexpected PostgreSQL failure") from error
+        else:
+            if failed is not None:
+                raise ValueError("swallowed PostgreSQL setup/test/cleanup failure")
+        if calls != ([expected[0], expected[2]] if failed == 0 else expected):
+            raise ValueError("PostgreSQL setup/order/cleanup missing")
+
+
+def selected_policy(rollback):
+    """Execute actual default dispatch with effect fakes, including each failure."""
+    body = rollback.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    tree = ast.parse(body)
+    dispatch = tree.body[-1]
+    if not isinstance(dispatch, ast.If) or not isinstance(dispatch.orelse[0], ast.If):
+        raise ValueError("missing runner dispatch")
+    code = compile(ast.fix_missing_locations(ast.Module(
+        body=dispatch.orelse[0].orelse, type_ignores=[])), "<actual-rollback-dispatch>", "exec")
+    expected = ["self-test", "rollback", "legacy0008", "current0014"]
+    archive = object()  # identity, not just equal path spelling
+    for failed in [None, *expected]:
+        calls = []
+        failure = RuntimeError("synthetic stage failure")
+
+        def stage(name, argument=archive):
+            if argument is not archive:
+                raise ValueError("selected archive replaced")
+            calls.append(name)
+            if name == failed:
+                raise failure
+
+        selected = SimpleNamespace(
+            integration=lambda arg: stage("legacy0008", arg),
+            integration_current0014=lambda arg: stage("current0014", arg))
+        fake_import = SimpleNamespace(util=SimpleNamespace(
+            spec_from_file_location=lambda *args: SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module: None)),
+            module_from_spec=lambda spec: selected))
+        scope = dict(ROOT=ROOT, importlib=fake_import,
+                     args=SimpleNamespace(recovery_bundle=archive),
+                     orchestration_self_test=lambda: stage("self-test"),
+                     integration=lambda arg: stage("rollback", arg))
+        try:
+            exec(code, scope)
+        except RuntimeError as exc:
+            if exc is not failure:
+                raise
+            wanted = expected[:expected.index(failed) + 1]
+        else:
+            if failed is not None:
+                raise ValueError("runner swallowed stage failure: " + failed)
+            wanted = expected
+        if calls != wanted:
+            raise ValueError("selected stages omitted or reordered")
+
+
+def dev_authority_policy(ops, compose_files):
+    if "python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07" not in ops:
+        raise ValueError("missing actual ordinary dev financial gate")
+    for source in compose_files:
+        sequence = ["python -m app.db.dev_bootstrap &&", "alembic upgrade head &&",
+                    "python -m app.db.dev_bootstrap --after-migrations &&", "exec uvicorn"]
+        if any(part not in source for part in sequence):
+            raise ValueError("missing dev owner authority stage")
+        if [source.index(part) for part in sequence] != sorted(source.index(part) for part in sequence):
+            raise ValueError("dev owner authority stages reordered")
+
+
+def required_gate_policy(j):
+    # Reuse the independent fixed inventory without importing pytest/DB code.
+    tree = ast.parse((ROOT / "backend/tests/test_critical_coverage_config.py").read_text())
+    modules = ast.literal_eval(next(node.value for node in tree.body
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and
+            t.id == "CRITICAL_MODULES" for t in node.targets)))
+    required = {
+        "backend": ["pytest --cov=app --cov-branch --cov-fail-under=80",
+                    "coverage report --include=" + ",".join(modules) + " --fail-under=100",
+                    "uv run pip-audit"],
+        "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+        "ci-pass": ["needs: [backend, frontend, image, e2e, ops]", "if: always()",
+                    *["contains(needs.*.result, '" + result + "')"
+                      for result in ("failure", "cancelled", "skipped")], "exit 1"],
+    }
+    for job, tokens in required.items():
+        if any(token not in j[job] for token in tokens):
+            raise ValueError("required coverage/security/aggregate gate removed: " + job)
+    image_policy(j["image"], j["ci-pass"])
+
+
 class CI(unittest.TestCase):
+    def test_actual_postgres_stack_order_and_failure_cleanup(self):
+        ops = jobs()["ops"]
+        postgres_stack_policy(ops)
+        up = 'subprocess.run(stack + ["up", "-d", "--wait"], check=True)'
+        contracts = 'subprocess.run(["sudo", "--", "python3", "deploy/tests/test-stock-recovery-contracts.py", "--postgres"], check=True)'
+        mutations = [
+            ops.replace('subprocess.run(stack + ["up", "-d", "--wait"], check=True)', 'pass'),
+            ops.replace('subprocess.run(stack + ["down", "-v"], check=True)', 'pass'),
+            ops.replace('          finally:', '          except Exception:'),
+            ops.replace('"deploy/tests/test-stock-recovery-contracts.py", "--postgres"', '"deploy/tests/test-stock-recovery-contracts.py", "--offline"'),
+            ops.replace('docker-compose.test.yml', 'docker-compose.yml'),
+            ops.replace('check=True', 'check=False'),
+            ops.replace(up, '__swap__').replace(contracts, up).replace('__swap__', contracts),
+            ops.replace(contracts, 'try:\n                  '+contracts+
+                        '\n              except RuntimeError:\n                  pass'),
+        ]
+        for mutated in mutations:
+            with self.assertRaises((ValueError, SyntaxError)):
+                postgres_stack_policy(mutated)
+
+    def test_mandatory_coverage_audits_and_aggregate_reject_omission_mutations(self):
+        j = jobs()
+        required_gate_policy(j)
+        mutations = {
+            "backend": ["--cov-branch", "--cov-fail-under=80", "--fail-under=100",
+                        "uv run pip-audit", *re.findall(r"app/[\w/]+\.py", j["backend"])],
+            "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+            "ci-pass": ["backend, ", "frontend, ", "image, ", "e2e, ", ", ops",
+                        "if: always()", "'failure'", "'cancelled'", "'skipped'", "exit 1"],
+        }
+        for job, tokens in mutations.items():
+            for token in tokens:
+                with self.subTest(job=job, omitted=token), self.assertRaises(ValueError):
+                    required_gate_policy({**j, job: j[job].replace(token, "omitted")})
+
+    def test_selected_runner_requires_both_same_archive_serial_fail_closed_lanes(self):
+        runner = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
+        selected_policy(runner)
+        legacy = "selected.integration(args.recovery_bundle)"
+        current = "selected.integration_current0014(args.recovery_bundle)"
+        mutations = [runner.replace(call, "pass") for call in (legacy, current)]
+        mutations += [runner.replace(call, call.replace("args.recovery_bundle", "None"))
+                      for call in (legacy, current)]
+        mutations.append(runner.replace(legacy + "\n    " + current,
+                                        current + "\n    " + legacy))
+        for call in (legacy, current):
+            mutations.append(runner.replace(call, "try:\n        " + call +
+                                            "\n    except RuntimeError:\n        pass"))
+        for index, mutation in enumerate(mutations):
+            with self.subTest(mutation=index), self.assertRaises(ValueError):
+                selected_policy(mutation)
+
+    def test_actual_ordinary_dev_financial_gate_and_postmigration_order_are_required(self):
+        ops = jobs()["ops"]
+        sources = [(ROOT / name).read_text() for name in ("docker-compose.yml", "docker-compose.override.yml")]
+        dev_authority_policy(ops, sources)
+        with self.assertRaises(ValueError):
+            dev_authority_policy(ops.replace("python3 deploy/tests/test-dev-bootstrap.py", "omitted"), sources)
+        for index in range(2):
+            changed = sources.copy()
+            changed[index] = changed[index].replace("python -m app.db.dev_bootstrap --after-migrations &&", "")
+            with self.assertRaises(ValueError):
+                dev_authority_policy(ops, changed)
+
+    def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
+        ops = jobs()["ops"]
+        recovery_policy(ops)
+        body = ops.split("sudo -- python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        compile(textwrap.dedent(body), ".github/workflows/ci.yml:serial-recovery", "exec")
+        for old in [
+            "ops.r.bundle_package(archive)", "ops.image_transition()", "ops.roundtrip(archive)",
+            "ops.roles()", "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
+            '"--recovery-bundle", str(archive)], check=True)',
+            "assert ops.r.digest(archive) == expected",
+            "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
+            "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
+            "bash deploy/tests/test-deploy-compatibility.sh",
+            "python3 deploy/tests/test-selected-cutover-contracts.py",
+        ]:
+            with self.assertRaises(ValueError):
+                recovery_policy(ops.replace(old, "omitted_stage"))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("ops.roles()", "ops.roundtrip(archive)", 1))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("unchanged()", "omitted()", 1))
+    def test_dividend_authority_history_and_schedulers_are_required(self):
+        backend = jobs()["backend"]
+        for module in [
+            "services/dividend_rules", "services/dividends", "services/event_history",
+            "schemas/event_history", "api/v1/event_history", "tasks/dividends",
+            "tasks/scheduler", "db/dev_bootstrap",
+        ]:
+            self.assertIn("app/" + module + ".py", backend)
+        self.assertIn("--cov-branch", backend)
+        self.assertIn('"deploy/tests/test-stock-recovery-contracts.py", "--postgres"', jobs()["ops"])
+        fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
+        for proof in [
+            "actual_restored_dividend_saved_replay=true financial_quarantine=true",
+            "actual_restored_current_stock_history_0014=true original_receipt_unchanged=true financial_quarantine=true",
+            "assert b'runtime_current_mixed_history=true revision0014=true' in current_runtime",
+            "actual_dividend_sql_verified_tls=true", "dividend_authority",
+            "tls(fresh_bootstrap=True)",
+        ]:
+            self.assertIn(proof, fixture)
+        dividend = (ROOT / "deploy/tests/dividend-execution-fixture.py").read_text()
+        self.assertIn("record_stock_dividend_hold", dividend)
+
+    def test_stock_safety_and_real_tls_evaluator_are_required(self):
+        j = jobs()
+        for module in ["stock_admission", "stock_quote_rules", "stock_quotes", "stock_sessions", "stocks"]:
+            self.assertIn("app/services/" + module + ".py", j["backend"])
+        self.assertIn("app/api/v1/stocks.py", j["backend"])
+        fixture = (ROOT / "deploy/tests/ops-fixtures.py").read_text()
+        self.assertIn("from app.services.stock_sessions import", fixture)
+        self.assertIn("await calendar_consumer_contract(app,scheduler,migrator)", fixture)
+        self.assertIn("tls(fresh_bootstrap=True)", fixture)
+        self.assertIn("calendar_runtime_tls_consumer=true", fixture)
+        self.assertNotIn("evaluator_proof=plan08_13", fixture)
+
     def test_ops_pins_compose_with_explicit_retained_dockerfile_consent(self):
         ops = jobs()["ops"]
         self.assertIn("compose_version=5.7.0-1~ubuntu.24.04~noble", ops)
@@ -128,6 +400,7 @@ class CI(unittest.TestCase):
                     return_value=(b"index", b"manifest"),
                 ) as manifests,
                 patch.object(preflight.r, "verify_saved_image") as verify,
+                patch.object(preflight.r, "bind_recovery_image") as bind,
             ):
                 if not store:
                     with self.assertRaises(ValueError):
@@ -135,10 +408,11 @@ class CI(unittest.TestCase):
                     save.assert_not_called()
                     manifests.assert_not_called()
                     verify.assert_not_called()
+                    bind.assert_not_called()
                 else:
                     preflight.main()
                     self.assertEqual(
-                        save.call_args.args[0],
+                        save.call_args_list[0].args[0],
                         [
                             "/usr/bin/docker",
                             "image",
@@ -149,6 +423,8 @@ class CI(unittest.TestCase):
                         ],
                     )
                     self.assertEqual(verify.call_args.args[1:], (b"index", b"manifest"))
+                    self.assertEqual(save.call_args_list[-1].args[0], ["/usr/bin/docker", "image", "load"])
+                    bind.assert_called_once_with()
 
     def test_ops_prepares_default_socket_docker_platform_api_before_fixtures(self):
         ops = jobs()["ops"]
@@ -199,6 +475,8 @@ class CI(unittest.TestCase):
         j = jobs()
         image_policy(j["image"], j["ci-pass"])
         for old, new in [
+            ("fetch-depth: 0", "fetch-depth: 1"),
+            ("        with:\n          fetch-depth: 0\n", ""),
             ("python3 deploy/scan-images.py", "true"),
             ("--node", "--omitted"),
             ("image-reports", "other"),
@@ -209,6 +487,12 @@ class CI(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 image_policy(j["image"].replace(old, new), j["ci-pass"])
+        checkout = re.search(
+            r"(?m)^      - uses: actions/checkout@[^\n]+\n"
+            r"        with:\n          fetch-depth: 0\n", j["image"]
+        )[0]
+        with self.assertRaises(ValueError):
+            image_policy(j["image"].replace(checkout, "") + checkout, j["ci-pass"])
         with self.assertRaises(ValueError):
             image_policy(j["image"], j["ci-pass"].replace(", image", ""))
 
@@ -230,21 +514,18 @@ class CI(unittest.TestCase):
         ops = jobs().get("ops", "")
         rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
         self.assertIn("selected.integration(args.recovery_bundle)", rollback)
+        selected_policy(rollback)
         self.assertIn("sudo -- python3 deploy/tests/test-deploy-prerequisites.py", ops)
         self.assertIn("sudo -- python3 deploy/tests/test-datastore-bindings.py", ops)
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
-        for arguments in [
-            "test-db-operations.sh --image-transition",
-            "test-db-operations.sh --all",
-            "test-rollback-db-security.sh",
-        ]:
-            self.assertIn("sudo -- bash deploy/tests/" + arguments, ops)
+        self.assertIn("sudo -- python3 - <<'PY'", ops)
+        recovery_policy(ops)
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
             self.assertNotIn(forbidden, ops)
-        self.assertIn("timeout-minutes: 30", ops)
+        self.assertIn("timeout-minutes: 45", ops)
         self.assertNotIn("secrets.", ops)
         self.assertIn("fetch-depth: 0", ops)
         self.assertIn("CF8F18F2844575973F79D4E191A6868BD3F7A907", ops)
@@ -261,8 +542,6 @@ class CI(unittest.TestCase):
             "test-restore-safety.sh",
             "test-db-config.sh",
             "test-deploy-prerequisites.py",
-            "test-db-operations.sh --all",
-            "test-db-operations.sh --image-transition",
             "test-rollback-db-security.sh",
             "test-reexec.sh",
             "test-rollback-target.sh",
@@ -272,7 +551,7 @@ class CI(unittest.TestCase):
         ]:
             self.assertIn(producer, ops)
         self.assertLess(
-            ops.index("test-db-operations.sh --all"),
+            ops.index("ops.roundtrip(archive)"),
             ops.index("test-rollback-db-security.sh"),
         )
         cleanup = ops.split("- name: Clean fixed synthetic projects")[-1]
@@ -301,7 +580,13 @@ class CI(unittest.TestCase):
             self.assertIn(text, j["frontend"])
         self.assertIn("PRICE_SOURCE=fake", j["e2e"])
         self.assertIn("EMAIL_BACKEND=console", j["e2e"])
-        self.assertRegex(j["e2e"], r"(?m)^        run: npx playwright test$")
+        self.assertRegex(j["e2e"], r"(?m)^        run: python3 deploy/tests/run-stock-browser.py$")
+        browser = (ROOT / "deploy/tests/run-stock-browser.py").read_text()
+        for token in ('"frontend/node_modules/.bin/playwright"', '"test"', '"--workers=1"', '"--retries=0"', 'default="all"', 'COMPOSE_DISABLE_ENV_FILE'):
+            self.assertIn(token, browser)
+        self.assertIn('default="all"', browser)
+        self.assertIn('len(args.grep) > 256', browser)
+        self.assertRegex(j["e2e"], r"(?m)^        run: python3 deploy/tests/run-stock-browser.py$")
         self.assertIn("target: test-builder", j["image"])
         self.assertIn("target: runtime", j["image"])
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])

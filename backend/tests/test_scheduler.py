@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -29,6 +30,76 @@ from app.tasks.scheduler import LOCK_KEY, CycleResult, build_source, run_cycle
 
 FIXTURE = Path(__file__).parent / "fixtures" / "kraken_ticker_ok.json"
 NOW = datetime(2026, 10, 28, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "quotes,actions_enabled,raises",
+    [
+        (False, False, False),
+        (False, True, False),
+        (True, False, False),
+        (True, True, False),
+        (True, True, True),
+    ],
+)
+async def test_independent_stock_loops(monkeypatch, quotes, actions_enabled, raises):
+    settings = SchedulerSettings(
+        env="test",
+        database_url="postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
+        redis_url="redis://:test@127.0.0.1:56379/0",
+        stock_actions_enabled=actions_enabled,
+        stock_data_enabled=quotes,
+        stock_actions_coverage_start=datetime(2026, 11, 1, tzinfo=UTC),
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
+    seen = []
+    stop = asyncio.Event()
+
+    async def run_loop(*, cycle, interval, stop):
+        result = await cycle()
+        seen.append(result.accepted)
+        if len(seen) == 1 + int(quotes) + 2 * int(actions_enabled):
+            stop.set()
+
+    async def crypto(**kwargs):
+        return CycleResult("ok", accepted=15)
+
+    async def actions(**kwargs):
+        assert kwargs["http"].trust_env is False
+        assert kwargs["http"].headers["APCA-API-KEY-ID"] == "synthetic-key"
+        if raises:
+            raise ValueError("private-provider-payload")
+        return CycleResult("ok", accepted=20)
+
+    async def quote_cycle(**kwargs):
+        assert kwargs["http"].headers["APCA-API-KEY-ID"] == "synthetic-key"
+        if raises:
+            raise ValueError("private-provider-payload")
+        return CycleResult("ok", accepted=30)
+
+    async def dividend_cycle(**kwargs):
+        assert "http" not in kwargs and "redis" not in kwargs
+        if raises:
+            raise ValueError("private-dividend-payload")
+        return CycleResult("ok", accepted=40)
+
+    from app.tasks import dividends, stock_actions, stock_scheduler
+
+    monkeypatch.setattr(stock_actions, "run_stock_action_cycle", actions)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", quote_cycle)
+    monkeypatch.setattr(dividends, "run_dividend_cycle", dividend_cycle)
+    monkeypatch.setattr(scheduler, "run", run_loop)
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    await scheduler.amain(stop)
+    expected = (
+        [15]
+        + ([0 if raises else 20] if actions_enabled else [])
+        + ([0 if raises else 40] if actions_enabled else [])
+        + ([0 if raises else 30] if quotes else [])
+    )
+    assert sorted(seen) == sorted(expected)
 
 
 def _body() -> dict[str, Any]:

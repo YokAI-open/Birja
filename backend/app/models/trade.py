@@ -46,6 +46,7 @@ class Trade(Base):
     __tablename__ = "trades"
     # Equality on user first, then the history seek/order boundary.
     __table_args__ = (
+        UniqueConstraint("id", "coin_id", "user_id", name="uq_trades_id_coin_user"),
         Index("ix_trades_user_created_id", "user_id", "created_at", "id"),
         UniqueConstraint("user_id", "idempotency_key", name="uq_trades_user_idempotency_key"),
         CheckConstraint("side IN ('buy', 'sell')", name="side_known"),

@@ -31,7 +31,9 @@ NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 
 async def _coins(engine: AsyncEngine) -> list[Coin]:
     async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        result = await session.scalars(select(Coin).order_by(Coin.sort_order, Coin.id))
+        result = await session.scalars(
+            select(Coin).where(Coin.asset_class == "crypto").order_by(Coin.sort_order, Coin.id)
+        )
         return list(result)
 
 

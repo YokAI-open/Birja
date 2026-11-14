@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 """Deterministic real-PostgreSQL proofs, including a split-reader negative control."""
 
 import asyncio
@@ -11,7 +12,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.models.trade import Holding
 from app.models.user import Account
 from app.services.portfolio import get_portfolio
+from tests.dividend_fixtures import dividend_case, hold, process, revise  # noqa: F401
 from tests.helpers import put_holding, put_price, set_cash
+from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 
 OLD = (D("9000"), D("1"), D("1000"), D("10000"))
 NEW = (D("8000"), D("2"), D("2000"), D("10000"))
@@ -125,3 +128,94 @@ async def test_commit_between_input_reads_exposes_split_reader(
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_different_commits(
+    stock_trade_case, settings, engine, clean_prices, monkeypatch
+):
+    from uuid import uuid4
+
+    from app.services import stock_trading, trading
+    from tests.test_stock_trading_service import trade_order
+
+    factory, cid, uid, now = stock_trade_case
+    await put_price(engine, "BTC", "100", now)
+    async with factory() as db:
+        await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await trading.execute(
+            db,
+            user_id=uid,
+            order=trading.Order("BTC", "buy", "usd", D(100)),
+            expected_mid=D(100),
+            idempotency_key=uuid4(),
+            settings=settings,
+        )
+    async with factory() as reader:
+        original = reader.execute
+        statements = []
+
+        async def read_then_fill(statement, *args, **kwargs):
+            result = await original(statement, *args, **kwargs)
+            statements.append(str(statement))
+            if len(statements) == 1:
+                async with factory() as writer:
+                    await stock_trading.execute(
+                        writer, user_id=uid, order=trade_order(quantity="1"), settings=settings
+                    )
+                await put_price(engine, "BTC", "200", now)
+            return result
+
+        monkeypatch.setattr(reader, "execute", read_then_fill)
+        before = await get_portfolio(reader, user_id=uid, settings=settings)
+        assert before.cash == 9696 and before.total_value == D("9997.50")
+        assert [h.symbol for h in before.holdings] == ["AAPL", "BTC"]
+        assert [h.quantity for h in before.holdings] == [D(2), D("0.99501246")]
+        assert [h.mid for h in before.holdings] == [D(101), D(100)]
+        assert before.class_values.stocks == 202 and before.class_values.crypto == D("99.50")
+        assert len(statements) == 2 and sum("FROM accounts" in sql for sql in statements) == 1
+    async with factory() as reader:
+        after = await get_portfolio(reader, user_id=uid, settings=settings)
+        assert after.cash == 9594 and after.total_value == D("10096.00")
+        assert after.holdings[0].quantity == 3 and after.holdings[1].mid == 200
+
+
+async def test_actual_dividend_cash_and_correction_enter_portfolio_once(dividend_case, settings):
+    from app.services.event_history import list_event_history
+
+    factory, ids = dividend_case
+
+    async def snapshot():
+        async with factory() as db:
+            return await get_portfolio(db, user_id=ids["user_id"], settings=settings)
+
+    before = await snapshot()
+    assert before.cash == D(100) and before.starting_cash == D(10000)
+    original = await process(factory, ids)
+    assert await process(factory, ids) == original
+    credited = await snapshot()
+    assert credited.cash == D(101) and credited.starting_cash == before.starting_cash
+    assert credited.class_values.cash == credited.cash
+    assert credited.known_value == before.known_value + D(1)
+    corrected = await revise(factory, ids, rate="0.75")
+    correction = await process(factory, corrected)
+    assert correction.outcome == "applied" and await process(factory, corrected) == correction
+    applied = await snapshot()
+    assert applied.cash == D("101.50") and applied.starting_cash == before.starting_cash
+    assert applied.known_value == applied.cash + sum(
+        (h.current_value for h in applied.holdings if h.current_value is not None), D(0)
+    )
+    uncertain = await revise(factory, corrected, classification="uncertain", eligible=False)
+    held = await hold(factory, original.payment_id, uncertain["revision_fingerprint"])
+    assert await hold(factory, original.payment_id, uncertain["revision_fingerprint"]) == held
+    after = await snapshot()
+    assert after.cash == applied.cash and after.starting_cash == before.starting_cash
+    assert after.class_values.cash == D("101.50")
+    async with factory() as db:
+        history = await list_event_history(db, user_id=ids["user_id"])
+    assert [item.kind for item in history.items] == [
+        "dividend_correction",
+        "dividend_correction",
+        "dividend",
+    ]
+    assert sum((D(item.cash_delta) for item in history.items), D(0)) == D("1.50")
+    assert after.cash == before.cash + D("1.50")

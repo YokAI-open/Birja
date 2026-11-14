@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
+import { StockSection } from "@/components/StockSection";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { formatAge, freshnessStatus } from "@/lib/age";
@@ -81,7 +82,7 @@ function MarketsPage() {
               return (
                 <tr key={item.symbol} className="h-[52px] border-b border-border hover:bg-accent">
                   <td>
-                    <span className="block font-semibold">{item.symbol}</span>
+                    <span className="block font-medium">{item.symbol}</span>
                     <span className="block text-[13px] leading-[18px] text-muted-foreground">
                       {item.name}
                     </span>
@@ -110,25 +111,33 @@ function MarketsPage() {
   }
 
   return (
-    <div className="mx-auto my-8 flex max-w-3xl flex-col gap-6">
+    <div className="mx-auto my-8 flex min-w-0 max-w-6xl flex-col gap-6">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
           Markets
         </h1>
-        {maxAge !== null && (
-          <p className="text-[13px] leading-[18px] text-muted-foreground">
-            Oldest price {formatAge(maxAge)}
+      </div>
+      <section aria-labelledby="crypto-heading" className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
+          <h2 id="crypto-heading" className="font-medium">
+            Crypto
+          </h2>
+          {maxAge !== null && (
+            <p className="text-[13px] leading-[18px] text-muted-foreground">
+              Oldest crypto price {formatAge(maxAge)}
+            </p>
+          )}
+        </div>
+        {isError && data && (
+          <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
+            Couldn&apos;t refresh prices. Showing the last update.
           </p>
         )}
-      </div>
-      {isError && data && (
-        <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
-          Couldn&apos;t refresh prices. Showing the last update.
-        </p>
-      )}
-      <Card>
-        <CardContent>{body}</CardContent>
-      </Card>
+        <Card>
+          <CardContent>{body}</CardContent>
+        </Card>
+      </section>
+      <StockSection />
     </div>
   );
 }

@@ -1,279 +1,165 @@
-# Architecture Patterns
+# Architecture Research: Birja v1.1 US Stock Trading
 
-**Domain:** Crypto paper-trading web app (virtual USD, real prices, market orders only)
-**Researched:** 2026-10-20
-**Confidence:** MEDIUM-HIGH. The patterns come from standard ledger/brokerage design and the fixed rules in CLAUDE.md. I did not verify provider-specific details (see Gaps).
+**Domain:** Adding twenty curated US equities to an existing virtual-money crypto simulator
+**Researched:** 2026-11-10
+**Confidence:** HIGH for existing integration points and financial invariants; MEDIUM for proposed schema boundaries; provider, rights and corporate-action decisions remain gates.
 
-## Recommended Architecture
+## Recommendation
 
-A modular monolith with one extra process. This fits tens of users and the MVP-first rule.
+Extend the existing FastAPI monolith, shared USD account, holdings and immutable trade records. Keep one dedicated scheduler container with independent bounded crypto and stock refresh work. Do not introduce a brokerage integration, matching engine, Celery, message bus or second cash ledger.
 
-```
-Browser (React/Vite, TanStack Query)
-   |  HTTPS, cookies (access JWT, refresh, CSRF)
-   v
-[nginx]  (added in deploy slice; Vite dev server / direct in dev)
-   |
-   v
-[backend: FastAPI, N uvicorn workers]  -- never schedules jobs
-   |-- api/v1 routers (thin)
-   |-- services: auth, prices, trading, portfolio
-   |       |
-   |       +--> Postgres (source of truth)
-   |       +--> Redis (OTP HMAC, rate limits, price cache, locks)
-   |
-[scheduler: ONE container]  -- price refresh job every ~60s
-   |-- httpx --> market-data provider (free tier)
-   |-- writes: Postgres (latest_prices upsert) then Redis (cache set)
+Stock trading is conditional on an explicitly selected and permitted feed. Listing on NYSE/Nasdaq and a quote originating on those venues are different concepts. An IEX-only quote for a Nasdaq-listed company must never be described as a consolidated market quote. Alpaca documents this difference and exposes explicit feed selection; this is an architectural example, **not a selected or approved provider**. See [Alpaca market-data FAQ](https://docs.alpaca.markets/us/docs/market-data-faq) and [latest-quotes reference](https://docs.alpaca.markets/us/reference/stocklatestquotes-1).
 
-[email]: Resend via background send (console backend in dev)
+```text
+React markets / trade ticket / combined portfolio / stored history
+                         |
+                  FastAPI services
+               /                    \
+ instrument + quote reads       shared trading executor
+                                account lock → policy → holding lock
+               \                    /
+          PostgreSQL: durable assets, quotes, accounts, holdings, fills
+                         ^
+            one scheduler process, bounded tasks
+                 /                  \
+        existing Kraken         stock provider + session/status sources
+
+Redis: existing auth/rate-limit state and scheduler lease; no unique money state
 ```
 
-MVP process count: `backend`, `scheduler`, `postgres`, `redis` (plus `frontend` in dev). nginx joins at deploy. No RabbitMQ.
+## Existing System Evidence
 
-**Scheduler choice (opinionated):** use a single dedicated scheduler process (APScheduler `AsyncIOScheduler`, or a plain `asyncio` loop) for the price refresh. It reuses the async engine, `httpx.AsyncClient` and `redis.asyncio`. Celery would need a sync engine, a worker, and beat for one periodic job. CLAUDE.md allows "a single scheduler process for a few periodic jobs". Adopt Celery only when email sending or snapshot jobs make a queue worthwhile.
+| Existing boundary | Current behavior | Consequence for stocks |
+|---|---|---|
+| `backend/app/models/price.py` | `Coin` maps to `coins`; globally unique symbol and required unique `kraken_pair`. `Price` is keyed by `coin_id`, stores `mid`, `as_of`, and source limited to `kraken`/`fake`. | Stock rows cannot simply be seeded. Identity, nullable provider-specific fields, source checks and provenance need forward migrations. |
+| `backend/app/models/trade.py` | Holdings have `(user_id, coin_id)` uniqueness and fee-inclusive cost basis; fills append price/time/cash/quantity/idempotency data. | Reuse these tables and identities rather than parallel stock holdings/trades. Preserve existing IDs, FKs and historical fills. |
+| `backend/app/services/trading.py` | Account row lock before holding lock; replay precedes price checks; preview/fill use shared pure math; execute reloads current price. | A stock buy must serialize against a simultaneous crypto buy through the same account row. Replay must remain valid after market close. |
+| `backend/app/services/trade_math.py` | Exact Decimal math; crypto dollar buys intentionally floor quantity to eight decimals; partial sells update stored basis. | Quantity policy belongs before shared planning: integral stock orders must never flow through fractional dollar-buy math. |
+| `backend/app/tasks/scheduler.py` | One loop, HTTP call outside DB transaction, Redis token lease, bounded cycle, per-coin validation. Kraken ticker has no event timestamp, so current `as_of` is arrival time. | Preserve crypto behavior; stocks need actual source time, independent source failures and timing budgets. Do not copy the Kraken timestamp convention into equities. |
+| `backend/app/services/prices.py` | Upsert only if incoming `as_of` moves forward; missing/invalid quotes leave last good price. | Retain monotonic event-time updates and last-good valuation, with independently expiring stock execution eligibility. |
+| `backend/app/services/portfolio.py`, `portfolio_math.py` | One account/positive-holdings/asset/price outer join; inactive holdings remain visible; missing prices invalidate totals. | Extend the same statement and valuation math across asset classes. Session closure must not remove stock holdings or zero their values. |
+| `backend/app/services/history.py` | User-scoped `(created_at, id)` descending keyset pagination over one fills table. | One chronological crypto/stock history remains simple; no UNION of separately numbered fills. |
+| `frontend/src/api/{prices,trades,portfolio,history}.ts`, hooks and pages | Runtime response guards, symbol-only identity, TanStack Query keys and shared invalidation. | Add instrument identity/type throughout query keys and guards, not just stock labels on a market page. |
 
-**OTP email sending:** the "send from a background job" rule is satisfied cheaply with FastAPI `BackgroundTasks` (in-process, after the response). This has no queue and no new service. It is fire-and-forget and loses the email if the process dies, which is acceptable because the user can request a new code. Upgrade to Celery only if delivery guarantees are needed. The 200 "code sent" response must not depend on whether the email was sent, to avoid enumeration timing leaks.
+## Instrument Identity and Safe Generalization
 
-### Component Boundaries
+**Recommended smallest expansion:** introduce an instrument vocabulary in code while retaining the existing physical `coins` table and `coin_id` FK columns during v1.1. Those are storage compatibility names, not public stock terminology. A broad table/column rename adds release and recovery risk without user value. Retain `Coin` compatibility where needed while services move toward `Instrument` concepts.
 
-| Component | Responsibility | Talks To |
-|-----------|---------------|----------|
-| `api/v1/*` routers | Parse input, call ONE service method, map domain errors to HTTP | services only |
-| `core/` | Settings, `DbDep`/`CurrentUserDep`/`CsrfDep` aliases, security (JWT, HMAC, CSRF), error types | all layers |
-| `services/auth` | OTP issue/verify, session + refresh rotation, user get-or-create | Postgres, Redis, email sender |
-| `services/prices` | Provider client, upsert latest prices, cache read (cache-aside, DB fallback), freshness check | Postgres, Redis, provider |
-| `services/trading` | Quote and execute (transaction, locks, rounding) | Postgres, `services/prices` (read only) |
-| `services/portfolio` | Valuation of cash + holdings at latest prices, P/L | Postgres, `services/prices` |
-| `services/email` | Interface with Resend and console implementations | Resend API |
-| `scheduler` (`tasks/`) | Calls `prices.refresh_all()` on an interval, with lock | `services/prices` |
-| Frontend `api/` + `hooks/` | Typed fetch wrapper (credentials, CSRF header, Decimal strings), TanStack Query hooks | backend only |
-| Frontend `pages/` | Routed screens | hooks |
+Add asset class (`crypto`/`stock`), quote currency (`USD` for this milestone), listing exchange/calendar metadata for stocks, quantity step and a provider symbol mapping. Current crypto IDs remain exactly the same; add stock IDs from the same identity sequence. `kraken_pair` becomes nullable only for stock rows, with type-aware checks preserving required valid Kraken mapping for crypto. Avoid a general provider registry until more than the two concrete adapters require it; one explicit stock mapping is enough.
 
-Rules: the scheduler and the web app share `services/prices` code but run in different processes (the `backend/` layer is one codebase and two entrypoints). Trading never calls the provider. It reads only the latest price already stored, so a trade never depends on provider uptime.
+Symbol is a display label and provider lookup value, not the global identity. Relax global symbol uniqueness through an explicit migration and enforce an unambiguous curated identity such as `(asset_class, symbol)` for this milestone, with listing venue stored separately. Provider symbols may contain punctuation; do not extend the existing alphanumeric regex into a universal stock identifier. Stable numeric asset ID is the durable identity, including across ticker changes. No automatic delete/reinsert on a rename or delisting.
 
-## Data Model
+**Compatibility contract:** preserve existing symbol-only requests as crypto requests. Add an explicit mutually exclusive asset-ID selector for generalized requests, or an equivalently explicit stock route; never reinterpret a legacy symbol as a stock because it matches first. Keep legacy `/api/v1/prices` crypto-default behavior while adding an explicit asset filter/catalog path for the updated UI. Old `/holdings/{symbol}` crypto lookups keep their meaning. Add asset ID/class to generalized price, quote, fill, portfolio and history responses without removing existing fields. Update strict schemas, response guards and request `extra="forbid"` contracts together.
 
-All money and quantity columns: `NUMERIC(20,8)`. PKs: `bigint GENERATED ALWAYS AS IDENTITY`. All timestamps `timestamptz` (UTC). Every column `NOT NULL` unless noted.
+On the frontend, scope new quote/holding keys by asset ID and order inputs, not symbol alone. Update `useTrade` invalidation for the new catalog/quote/holding keys while continuing to invalidate shared `me`, portfolio and history. Keep TanStack Query; do not fetch a provider from the browser or expose its credentials.
 
-### users
-- `id`, `email text UNIQUE` (store lowercased/normalised; CHECK `email = lower(email)`), `created_at`.
+## Quote and Market-State Contracts
 
-### accounts (cash balance, 1:1 with user)
-- `id`, `user_id UNIQUE FK`, `cash NUMERIC(20,8) CHECK (cash >= 0)`, `starting_cash NUMERIC(20,8)` (10000; stored for the P/L baseline, so a config change never rewrites history), `created_at`.
-- Created in the same transaction as the user (the $10k grant happens once, because user creation is guarded by the UNIQUE email constraint).
-- Could be merged into `users`; keep it separate only if you expect multiple accounts or currencies later. For the MVP, **merging `cash` and `starting_cash` onto `users` is the smaller schema**. Recommendation: separate `accounts` is still cheap, and gives one lock target distinct from the identity row. Pick `accounts` and lock it.
+Normalize a stock observation at the provider boundary into a small typed record:
 
-### assets (curated list)
-- `id`, `symbol text UNIQUE` (e.g. `BTC`), `name text`, `provider_id text` (the provider's coin id), `quantity_decimals smallint` (quantity precision, e.g. 8), `is_active boolean`.
-- Seeded by a data migration (separate from the schema migration). Adding a coin = new migration or seed script, never a user action.
+| Field group | Required meaning |
+|---|---|
+| Identity | Stable asset ID plus explicitly configured provider symbol. |
+| Price | Positive finite Decimal; bid/ask mid only if the feed supplies a valid usable pair. A last trade is labelled `last_trade`, not called a mid; a bar close is not silently substituted for either. |
+| Time | Source/event timestamp, local fetched/received timestamp and applicable session date. Freshness uses event time; excessively future timestamps are rejected rather than clamped fresh. |
+| Provenance | Provider, explicit feed and venue coverage, price kind, currency, raw/adjusted semantics. Immutable fills preserve the provenance actually used. |
+| Status | Session/calendar authority and validity; instrument halt/availability status with its own observed time and validity. Unknown or expired status does not mean open. |
 
-### latest_prices (one row per asset, upserted)
-- `asset_id PK/FK`, `price NUMERIC(20,8) CHECK (price > 0)` (mid), `as_of timestamptz` (**the provider's observation timestamp if given, else fetch time**), `fetched_at timestamptz`, `source text`.
-- Upsert by `INSERT ... ON CONFLICT (asset_id) DO UPDATE`. Guard against out-of-order writes with `WHERE excluded.as_of > latest_prices.as_of`.
-- No price history table in v1 (the value-over-time chart is v2). The trade record preserves the price used, which is all v1 needs.
+If the selected provider only supplies last-trade prices, owner acceptance of that reference-price semantics must precede changes to the existing `mid` contract. If it supplies eligible bid/ask data, retain the familiar midpoint valuation and simulated spread/fee, subject to the separately approved stock cost policy. Explicitly reject unsupported feed fallback; never let a subscription-dependent API default choose execution coverage.
 
-### holdings (current position, derived-but-stored)
-- `id`, `account_id FK`, `asset_id FK`, `quantity NUMERIC(20,8) CHECK (quantity >= 0)`, `cost_basis NUMERIC(20,8) CHECK (cost_basis >= 0)` (total USD spent on the remaining quantity, including fees), `updated_at`. `UNIQUE (account_id, asset_id)`.
-- **Store total cost, not average cost.** Average = `cost_basis / quantity`, computed when displayed. Storing the average introduces rounding drift on every buy.
-- On buy: `quantity += q`, `cost_basis += notional + fee`. On sell: reduce cost basis proportionally: `cost_basis -= cost_basis * (q_sold / quantity_before)`, rounded once with `ROUND_HALF_EVEN`. When the quantity reaches 0, set `cost_basis = 0` (CHECK enforces consistency: `quantity = 0 -> cost_basis = 0`). This is the average-cost method, which is simple and standard. FIFO lots are out of scope.
-- Decision to settle at requirements time: whether the fee counts into the cost basis (recommended: yes for buys, so P/L shows the true cost). Realised P/L on sells is stored on the trade row (below).
-- The unique constraint `(account_id, asset_id)` doubles as the index for lookups.
+Store latest good prices in PostgreSQL. Do not overwrite a good quote with zero, malformed data or old timestamps. Repeatedly receiving yesterday's quote does not renew its event timestamp or execution validity. Persist enough latest status/calendar metadata to make execution independent of Redis survival. The exact representation (bounded session rows and per-asset status columns/table) should follow the chosen provider; avoid storing an unbounded market-data history.
 
-### trades (immutable ledger)
-- `id`, `account_id FK`, `asset_id FK`, `side` (CHECK in `('buy','sell')`), `quantity NUMERIC(20,8) CHECK (>0)`, `mid_price`, `executed_price` (mid with spread applied), `spread_rate`, `fee_rate`, `notional` (`quantity * executed_price`, rounded), `fee`, `price_as_of timestamptz` (the timestamp of the mid used), `cash_delta` (signed: negative for buy = notional + fee, positive for sell = notional - fee), `realized_pnl NUMERIC(20,8) NULL` (sells only), `created_at`.
-- Index `(account_id, created_at DESC, id DESC)` for the keyset-paginated history. Add an index on `asset_id` only if a query needs it.
-- Insert-only. No UPDATE or DELETE path exists in code (and optionally a trigger or a revoked privilege on the app role).
-- Storing rates and `mid_price` alongside the results makes every trade auditable without joining config history.
+**Calendar is not status.** NYSE documents regular hours and specific holidays/early closes; Nasdaq separately documents instrument trading halts. Model the regular interval in `America/New_York`, derive UTC boundaries for each date, and use an open-inclusive/close-exclusive predicate. Do not hardcode a fixed UTC offset or Monday–Friday rule. A calendar library or provider schedule still needs a documented validity horizon and exceptional-closure update policy. See [NYSE calendar](https://www.nyse.com/trade/hours-calendars) and [Nasdaq halt codes](https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes).
 
-### Auth tables
-- `refresh_tokens`: `id`, `user_id FK`, `family_id` (uuid or bigint, groups a rotation chain), `token_hash text UNIQUE` (SHA-256 of the opaque token; a fast hash is fine for a 256-bit random value), `expires_at`, `used_at NULL`, `revoked_at NULL`, `created_at`. Index on `user_id` (revoke all) and `family_id`.
-- OTP lives only in Redis (not in Postgres), per CLAUDE.md.
+If a reliable timely halt/status signal is unavailable within the approved free data arrangement, do not claim faithful halt enforcement. This is a feasibility/scope decision to surface before enabling stock orders, not an excuse to infer tradability from a recent quote.
 
-### Ledger vs stored balances: the trade-off
+## Execution Flow and Concurrency
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Pure ledger (derive cash and holdings by summing trades) | Cannot drift; perfect audit | Every read aggregates; no cheap row to lock; `CHECK (cash >= 0)` impossible; concurrency control is hard |
-| Balances only | Fast, lockable, CHECKable | No audit trail; bugs are unrecoverable |
-| **Both: ledger + materialised balances updated in the same transaction (recommended)** | Row locks and CHECK constraints protect invariants; ledger allows verification | Two sources must agree, so test it |
+Reuse one transaction and deterministic lock order:
 
-Recommendation: balances are authoritative for enforcement (`accounts.cash`, `holdings.quantity`), and the trades ledger is the audit trail. Add a **reconciliation test** (and optionally a small admin check script) asserting for every account: `starting_cash + SUM(cash_delta) == cash` and `SUM(signed qty) == holdings.quantity`. This gives the ledger's integrity benefit without the aggregate-on-read cost, and it directly serves "correct to the cent".
+1. Authenticate and validate the explicit instrument selector and exact Decimal input.
+2. Lock the user's existing account row `FOR UPDATE`.
+3. Find a user-scoped idempotency replay before evaluating today's session, price, inactive status or halt. Compare stable asset identity plus side/input/value, and return the original stored fill on a matching replay. Reusing a key across crypto and stock must conflict.
+4. Load authoritative instrument, quote and bounded market status. For stocks, require approved feed, recent source timestamp, current regular session, known nonhalted status and allowed whole-share order type.
+5. Lock the holding and construct the pure trade plan, with exact shared cash/fee/cost-basis math.
+6. **Resample current time and re-evaluate stock eligibility after all awaited lock acquisition**, including holding/status locks. Refuse a request that waited past close, quote expiry or status validity. The existing crypto check is already after account lock; do not introduce a stock-only pre-lock check.
+7. Verify the current quote against the preview. Retain `expected_mid` behavior for crypto. Stock preview comparison must also bind feed/price kind/session or a deterministic quote version so unchanged numeric price cannot conceal a source/policy change.
+8. Write cash, holding, basis and immutable fill/provenance atomically, then commit. Any refusal rolls back everything.
 
-## Data Flow
+Avoid provider network calls while holding financial DB locks. The scheduler persists bounded state before execution. Where status updates race with fills, serialize the relevant status row/version in a documented common lock order and recheck after waits. This yields an atomic decision against the latest ingested state; periodic ingestion cannot promise zero-latency awareness of external halts. Document the actual bounded status delay.
 
-### Price ingestion (scheduler -> provider -> Postgres + Redis)
+Whole-share buys and sells use quantity input only and require `quantity == quantity.to_integral_value()` with positive value; reject fractions rather than rounding them. Preserve fractional crypto, exact-eight-decimal storage and minimum/whole-position rules. For a DB-level integral-stock invariant, use a denormalized checked asset class on holdings/fills tied to the catalog through a composite FK, then a conditional integral-quantity CHECK. A PostgreSQL row CHECK cannot safely enforce a rule by looking up another table. Resolve reverse-split residual policy before assuming every future stock holding must remain integral.
 
-```
-scheduler tick (every 60s)
-  1. acquire Redis lock  sim:lock:price-refresh  (SET NX PX ttl > job duration; token; release via Lua in finally)
-  2. ONE batched provider call for all active assets (e.g. a "markets"/"simple price" endpoint with comma-separated ids). Never one call per coin.
-  3. validate: price present, > 0, Decimal parsed from string (never float), plausible vs previous (reject jumps > configured % as bad data, log)
-  4. Postgres: upsert latest_prices (single statement/transaction)   <- source of truth FIRST
-  5. Redis: SET sim:price:<SYMBOL> {price, as_of} EX ~180            <- cache SECOND
-  6. on provider failure: log, back off (exponential + jitter, max retries, respect Retry-After / 429), keep old rows (they simply go stale)
-```
+Keep simulated execution language. This is not routing an actual exchange market order and does not model order-book liquidity, partial fills, margin or settlement. Reuse current immediate simulated cash availability unless the owner explicitly adds settlement as scope.
 
-Readers (cache-aside): `GET /prices` and the quote path read Redis (`MGET`), and on a miss or Redis outage fall back to Postgres `latest_prices`, optionally repopulating Redis. A cold cache never fails a request. Because the scheduler refreshes all hot keys before TTL expiry (refresh-ahead), a stampede lock on read is unnecessary here: the DB fallback is a single cheap row-per-asset query, so skip read-side locking in the MVP.
+## Combined Valuation, History and Corporate Actions
 
-**Staleness / max age:**
-- Config `PRICE_MAX_AGE_SECONDS` (suggest 180s = 3 refresh cycles, which tolerates one or two missed cycles) and `PRICE_REFRESH_SECONDS` (60).
-- Age is computed server-side as `now() - as_of` where `as_of` is the price's own timestamp. Do not use `fetched_at` if the provider reports a staler observation time.
-- Every price API payload carries `as_of` plus a server-computed `age_seconds` and an `is_stale` flag. The UI shows "as of 12:03 UTC (45s ago)" and disables the trade button when stale.
-- **The authoritative check is inside the execution transaction**, against the price row read there. The client-side flag is only UX. Refusal returns a clear error (e.g. `409`/`422` with code `PRICE_STALE`).
-- The Postgres row is the one used for execution, not Redis. This keeps the recorded `price_as_of` exactly what was read and removes cache inconsistency from the money path. (Redis is for browse/quote speed only.)
+Keep one account and one portfolio statement. Show stock values using the latest appropriate regular-session observation while closed, labelled with its actual timestamp and reference kind. A retained quote is not automatically an official closing-auction price. Closed session, quote recency, valuation availability and tradability are separate states; a normal weekend must not look like all stock data failed, and must never enable stock orders. Missing prices still make totals incomplete; do not count unpriced stock as zero or omit an inactive held stock.
 
-### Trade execution (quote then execute)
+Preserve fee-inclusive cost basis and average-cost sell accounting. Existing fills remain immutable facts; do not retroactively rewrite purchase prices on a split to make today's holdings reconcile. `history.py` currently joins current catalog names/symbols; if historical ticker labels are required for stocks, snapshot them on new fills. Do not backfill invented historical symbols for old rows.
 
-Two endpoints:
+**Owner decision still required before stock enablement:** split/reverse-split, dividend and delisting treatment. A split changes share count and reference price; ignoring the count while accepting the new quote creates fictitious P/L. The SEC explains the stock-count effect in its [stock-split glossary](https://www.investor.gov/introduction-investing/investing-basics/glossary/stock-split).
 
-1. `POST /api/v1/quotes` (or `GET /quote?symbol&side&amount|quantity`) reads only, **no DB writes and no CSRF need if GET**. It returns: `mid`, `executed_price` (spread applied), `quantity`, `notional`, `fee`, `total` (cash required or received), `as_of`, `age_seconds`, `expires_at`, plus a feasibility flag (insufficient cash or holdings). It uses the same pure pricing function as execution, so preview and result cannot disagree.
-2. `POST /api/v1/trades` (CSRF required) takes `{symbol, side, quantity | amount, quote_price_as_of?}` and executes. The client does not send a price. The server uses the latest price. Optionally the client sends the `as_of` of the quote it displayed, and the server rejects with `409 PRICE_CHANGED` if the latest price differs, so the user confirms what they saw. For a 60s-refresh app this is a nice-to-have. Recommended for correctness-to-the-cent. A simple alternative is to execute at the latest price and show the real result. Decide in the trading phase.
+Two viable bounded policy branches, neither assumed approved:
 
-Execution inside one transaction (service owns it):
+- **Explicit limited simulator:** owner accepts no simulated dividends/total-return claim; affected instruments are frozen before a corporate action until an audited resolution. This requires a reliable detection/review path; simply declaring corporate actions out of scope does not protect existing holders.
+- **Minimal supported action handling:** an immutable action identifier plus account-scoped idempotent adjustment record updates quantity/cost basis under the same account lock, preserving existing fills. Split total basis remains unchanged; reverse-split fractions need an explicit residual/cash-in-lieu decision. Dividend crediting requires an explicit entitlement-date/amount policy and durable cash adjustment record. A first implementation need not become a general accounting engine.
 
-```
-BEGIN
-  1. SELECT accounts WHERE user_id=:u FOR UPDATE            (serialises this user's trades)
-  2. SELECT holdings WHERE (account, asset) FOR UPDATE      (may not exist on first buy; INSERT ... ON CONFLICT DO NOTHING first, then lock)
-  3. SELECT latest_prices WHERE asset_id=:a                 (read; check as_of age <= max, else abort PRICE_STALE)
-  4. compute via pure function (Decimal, no float):
-       buy : exec = mid*(1+spread) ; sell: exec = mid*(1-spread)
-       by amount: quantity = quantize(amount / exec, asset qty decimals, ROUND_DOWN-or-HALF_EVEN*)
-       notional = quantize(quantity*exec, 8, HALF_EVEN) ; fee = quantize(notional*fee_rate, 8, HALF_EVEN)
-       buy  : cash_delta = -(notional+fee) ; sell : cash_delta = +(notional-fee)
-  5. validate: buy needs cash >= notional+fee ; sell needs holding.quantity >= quantity ; quantity > 0 ; min notional
-  6. UPDATE accounts.cash ; UPSERT holdings (qty, cost_basis) ; INSERT trades row (all recorded fields)
-COMMIT   (CHECK constraints are the backstop; map IntegrityError to a domain error)
-```
+Do not use adjusted historical bars for execution while leaving holdings unchanged. Feed adjustment semantics, action scheduling and the quantity CHECK must agree. If neither safe policy is available, keep stocks disabled and preserve crypto operation.
 
-*Rounding rules (define once, in one module, 100% tested):* quantize at fixed points only: quantity (when derived from a dollar amount), notional, fee, cost-basis reduction. Never round intermediate results. Execution price is stored at full computed precision up to 8 dp (quantize once, store, and compute notional from the **stored** executed price so the ledger is internally reproducible). For amount-based orders, rounding the derived quantity *down* (so the user never spends more than the amount entered) is the friendlier convention; this is a decision to make explicitly and document. Keep `ROUND_HALF_EVEN` for the money fields as CLAUDE.md requires.
+## Scheduler, Quota and Failure Isolation
 
-Locking order is always accounts -> holdings, which prevents deadlocks. Locking the account row first serialises all of one user's trades, which is simple and enough at this scale. Idempotency: accept an optional `Idempotency-Key` header, with a `UNIQUE (account_id, idempotency_key)` column on trades, so a double-click or retry cannot double-trade. Cheap, and directly protects "correct to the cent". Recommended in the trading phase (small), not a v2 item.
+Retain a single scheduler process and current lifespan-managed HTTP/DB/Redis clients. Add stock polling/status refresh as separate bounded work so provider 429s, entitlement errors or a closed stock session do not consume the full crypto cycle timeout. Existing `CYCLE_TIMEOUT_S`, `SOURCE_TIMEOUT_S` and Redis lease assumptions cannot simply be stretched by appending another slow request. Keep per-source budgets, bounded backoff and explicit cancellation, with any concurrency bounded inside the one process.
 
-### Auth flow components
+Refresh stocks in approved batched calls during relevant sessions, with minimal bounded calendar/status maintenance outside sessions. Do not poll once per browser, per API worker, or per holding. Preserve per-asset missing-data isolation and monotonic upserts. Repeated observations of the same event are not independent confirmation of a price spike; adapt current crypto spike confirmation carefully. Split-related jumps must not be mechanically accepted after a few polls.
 
-```
-POST /auth/request-code {email}
-  rate limit per email + per IP (Redis INCR+EXPIRE pipeline)
-  code = secrets 6-digit ; store HMAC-SHA256(server_secret, email|code) at sim:otp:<email-hash> TTL 10m, attempts=0 (replaces any old code)
-  email via BackgroundTasks -> Resend (console in dev)
-  ALWAYS return identical 200 body/timing
-POST /auth/verify-code {email, code}
-  rate limit ; hmac.compare_digest ; attempts++ ; >=5 wrong -> delete ; success -> delete (single use)
-  get-or-create user (+account with $10k in same txn; UNIQUE email, catch IntegrityError on race)
-  issue: access JWT (15m, PyJWT) cookie HttpOnly/Secure/SameSite=Strict ;
-         refresh opaque token (30d) cookie, Path=/api/v1/auth/refresh, hash in Postgres ;
-         CSRF token cookie (JS-readable) for double-submit
-POST /auth/refresh   rotate: mark used, issue new in same family ; reuse of a used token -> revoke family
-POST /auth/logout    delete refresh row, clear cookies
-GET  /auth/me        CurrentUserDep (401 if unauthenticated)
-```
+For tens of friends, provider quota and rights are the first constraint, not PostgreSQL capacity. Measure actual API credits per batched call, not just HTTP request count. Keep latest observations only; no new chart snapshots or tick archive in this milestone.
 
-Components: `OtpStore` (Redis), `RateLimiter` (Redis fixed window), `EmailSender` (interface: Console, Resend), `TokenService` (JWT + refresh rotation), `CsrfDep` (applied to all state-changing routes), `CurrentUserDep`. Note: the CSRF cookie must be readable by JS while the auth cookies are not. The SPA wrapper copies the cookie into an `X-CSRF-Token` header. `SameSite=Strict` cookies and a frontend served same-origin (via the Vite proxy in dev, nginx in prod) avoid CORS entirely, so do that instead of configuring cross-origin CORS.
+## Migration, Privilege and Recovery Integration
 
-### Portfolio valuation
+All changes are new migrations after `0008`; never edit shipped migrations. Expand with crypto-safe defaults, backfill existing rows while preserving every ID and value, then enforce constraints after validation. Use an explicit downgrade or explain why existing stock fills make a downgrade unsafe. Do not delete new financial records to force a downgrade. Prove old crypto API/money results remain equivalent on a seeded `0008` upgrade.
 
-`GET /portfolio` reads: the account, all holdings joined to `latest_prices` (one query, plus the asset), and computes server-side (Decimal): per holding `market_value = quantity * mid`, `avg_cost = cost_basis/quantity`, `unrealized_pnl = market_value - cost_basis`, pnl %; totals: `holdings_value`, `total_value = cash + holdings_value`, `total_pnl = total_value - starting_cash`. Valuation uses **mid** (not the sell price) and the UI should label this. Decide that explicitly: a mid valuation makes P/L right after a buy show the loss of spread + fee only if valuation is at the bid. Recommended: value at **mid** for simplicity; note that this shows a small initial gain relative to the true liquidation value. Alternatively value at the sell price (mid*(1-spread)) so "what it's worth now" equals what you would get. Given the core value "see what it's worth now", valuing at the sell-side price (liquidation value) is the more honest choice, and is a one-line config. Flag for requirements decision. Include the oldest `as_of` among the used prices in the response.
+This repository has **schema-specific operational contracts**:
 
-Compute on read; no snapshots in v1.
+- `deploy/db/bootstrap-roles.sql` currently admits only revisions `0007`/`0008`, enumerates tables, grants app append-only access to fills and scheduler write access to prices, and intentionally grants no automatic privileges to new tables. New catalog/status tables, sequences and migrations need explicit least-privilege decisions. Do not solve deployment with superuser runtime access or blanket grants.
+- `deploy/backup-manifest.sql` hashes explicit old table columns and a fixed table list. `deploy/backup-snapshot.py` validates that exact set. A dump may contain a new table while the old integrity proof omits it; update versioned manifest/validation and restore assertions deliberately.
+- Recovery and deploy tooling is retained and authenticated separately from the app checkout. Plan reviewed successor artifacts and compatibility with older retained backups; changing the repository script alone does not update an installed timer. Do not mutate production recovery material during research or routine development.
+- Provider secrets stay server-side and out of fixtures, logs and chat. A live stock release must include required new configuration in encrypted recovery custody, while keeping old restore instructions usable.
 
-## Frontend Pages
+These are part of a stock schema release, not optional future hardening. They do not authorize live operations. Isolated real-PostgreSQL/Redis tests, migration/role tests, restore rehearsals and fresh strict image/security gates remain required at their normal workflow steps.
 
-| Route | Purpose | Data |
-|-------|---------|------|
-| `/login` | Email entry, then code entry (one page, two steps) | `request-code`, `verify-code` |
-| `/` or `/markets` | Coin list: price, "as of" with age, stale badge, Trade button | `GET /prices` (poll about 30-60s via `refetchInterval`) |
-| `/trade/:symbol` (or modal on markets) | Buy/sell form: by amount or quantity, live quote preview with spread + fee + total, confirm | `GET /quote`, `POST /trades` |
-| `/portfolio` | Cash, holdings with avg cost and P/L, total value, total P/L | `GET /portfolio` |
-| `/history` | Trades table, keyset "load more" (`useInfiniteQuery`) | `GET /trades?cursor=` |
+## Suggested Build Order: Runnable User Slices
 
-Plus an app shell with auth guard (`/auth/me`), a 401-triggered silent refresh in the fetch wrapper (single in-flight refresh, then retry once), and an error/stale banner. Money values arrive as strings and are formatted only for display. Do the arithmetic for previews on the server, not in JS floats (use the quote endpoint, debounced). Invalidate `portfolio`, `trades` and `prices` queries after a successful trade.
+| Candidate phase | Runnable result | Mandatory dependency / proof |
+|---|---|---|
+| **7 — Stock data feasibility and truthful market view** | Existing crypto works; approved curated stocks appear with real source age, feed attribution and closed/unknown states; stock trading remains disabled until eligibility is proven. | First gate: free quota, user display rights, actual recency, feed coverage, status/calendar and chosen corporate-action policy. Stop and ask scope questions if no viable provider; do not promise a provider first and discover licensing at rollout. Catalog/provenance schema includes recovery compatibility work. |
+| **8 — Whole-share stock trade end to end** | Preview/buy/sell a stock during the regular session using shared USD; resulting holdings/history appear in existing combined screens. | Stock/crypto concurrent overspend, replay after close, holding-lock expiry, early close/DST/holiday, unknown/halt and feed-change tests. Integrality enforced at service/DB boundaries. Basic combined portfolio/history is part of this slice, not deferred until after live stock fills. |
+| **9 — Multi-asset acceptance and release** | Complete combined filters/labels and offline/closed experience, corporate-action policy proofs, tested upgrade/recovery, owner acceptance and separately authorized release. | Mixed portfolio math, unchanged immutable fills, price age versus closure, failed-provider isolation, restricted roles, `0008` upgrade and isolated exact restore. No premature production enablement. |
 
-## Patterns to Follow
+Phase names/counts are recommendations for the roadmapper, not approved plans. If corporate actions require a supported adjustment workflow, include it before enabling long-lived stock holdings rather than burying it after release.
 
-### Pattern 1: Pure pricing/rounding module
-**What:** One `services/trading/pricing.py` of pure `Decimal` functions (quote, fee, cost basis) used by both quote and execute.
-**When:** Always. It is the 100%-coverage critical path and is unit-testable without a DB.
+## Planner Pitfalls to Carry Forward
 
-### Pattern 2: Postgres-first, cache-second writes
-**What:** The scheduler writes Postgres and then Redis. Money paths read Postgres only.
-**When:** All price data.
+- Refreshing old data each minute does not satisfy recent prices.
+- A listing venue, a single-venue data feed and a consolidated feed are distinct.
+- A calendar-open result alone cannot rule out a halt or stale status.
+- Checking session before locks permits fills after closing time.
+- Rechecking today's session before idempotency breaks legitimate replays.
+- Separate stock accounts/executors can defeat cross-asset cash serialization.
+- Global symbol-only identity corrupts cache keys and ambiguous order selection.
+- Dollar-input crypto math silently creates fractional stock fills.
+- Accepting post-split prices without position treatment invents investment losses.
+- Hiding closed/inactive stocks or rounding missing prices to zero falsifies portfolio totals.
+- New schema that passes superuser tests can still fail live restricted roles or invalidate backup integrity assumptions.
 
-### Pattern 3: Lock the account row, then work
-**What:** `SELECT ... FOR UPDATE` on the account first in every trade. Constraints are the backstop.
-**Example:**
-```python
-async with session.begin():
-    acct = (await session.execute(
-        select(Account).where(Account.user_id == uid).with_for_update())).scalar_one()
-    ...
-```
+## Sources and Confidence
 
-### Pattern 4: Same-origin deployment
-**What:** The SPA and the API share an origin (Vite proxy in dev, nginx in prod). **Why:** it makes SameSite=Strict cookies and CSRF simple and removes CORS.
+Existing behavior is verified directly in the repository paths above (HIGH). Proposed integration structure is an engineering recommendation (MEDIUM), not a claim that it is implemented. Official pages checked on 2026-11-10; rolling documentation does not establish Birja's account-specific entitlements or display rights.
 
-## Anti-Patterns to Avoid
+- [NYSE hours/calendar](https://www.nyse.com/trade/hours-calendars): HIGH for current published session/holiday examples; future exceptional closures require maintained data.
+- [Nasdaq trading-halt codes](https://www.nasdaqtrader.com/Trader.aspx?id=TradeHaltCodes): HIGH for distinct halt/resumption states; not proof of an approved machine-readable source or rights.
+- [Alpaca market-data FAQ](https://docs.alpaca.markets/us/docs/market-data-faq): HIGH for provider-documented feed distinctions and latest-data semantics; no provider selected.
+- [Alpaca latest quotes](https://docs.alpaca.markets/us/reference/stocklatestquotes-1): HIGH for batch quote endpoint, bid/ask data and explicit feed choices.
+- [SEC stock-split glossary](https://www.investor.gov/introduction-investing/investing-basics/glossary/stock-split): HIGH for split effect; simulator action policy remains undecided.
 
-### Anti-Pattern 1: Client-supplied price
-**Why bad:** It lets users trade at any price. **Instead:** the server picks the price. The client may only send the `as_of` it saw, for a conflict check.
-
-### Anti-Pattern 2: Trading reads the Redis cache
-**Why bad:** Cache can be stale or evicted; the recorded timestamp may not match. **Instead:** read `latest_prices` in the transaction.
-
-### Anti-Pattern 3: Storing average cost
-**Why bad:** Rounding drift. **Instead:** store total cost basis and derive the average.
-
-### Anti-Pattern 4: Scheduler inside web workers
-**Why bad:** Runs once per worker (CLAUDE.md). **Instead:** the dedicated scheduler container, plus the Redis lock as a safety net.
-
-### Anti-Pattern 5: Float anywhere in the money path
-Including provider JSON: parse with `json.loads(..., parse_float=Decimal)` or `httpx` text -> `Decimal(str)`.
-
-### Anti-Pattern 6: Check-then-insert for first holding or user
-**Instead:** `INSERT ... ON CONFLICT DO NOTHING`, or catch `IntegrityError`.
-
-## Scalability Considerations
-
-| Concern | 10s of users (target) | 10K users | 1M users |
-|---------|-----------------------|-----------|----------|
-| Trade contention | Per-account lock; trivial | Same; locks are per user, not global | Same |
-| Price reads | Redis MGET, DB fallback | Same | Replicas, CDN-cached /prices |
-| Price refresh | One batched call/min | Same | Same, plus a streaming feed |
-| History | Keyset index on `(account_id, created_at, id)` | Same | Partition trades |
-| Portfolio valuation | Compute on read | Same | Snapshot table (also enables the v2 chart) |
-
-Out of scope per CLAUDE.md: sharding, replicas now.
-
-## Suggested Build Order (vertical slices)
-
-Each slice ends runnable and tested. CI starts in slice 1. The stack grows only when needed.
-
-| # | Slice | Delivers (runnable end to end) | Depends on | Adds to stack (why now) |
-|---|-------|--------------------------------|------------|--------------------------|
-| 1 | **Skeleton + CI** | `docker compose up` gives FastAPI `/health` (checks DB + Redis), a React page that calls it via TanStack Query, the Alembic baseline, `docker-compose.test.yml`, GitHub Actions (ruff, mypy, pytest cov, eslint, vitest), `develop` branch exists. Node upgrade + Tailwind + shadcn + design system (`MASTER.md`) here (first frontend phase). | none | Postgres, Redis, backend, frontend. First tests, so CI now. |
-| 2 | **Auth (OTP + session)** | Enter an email, get a code (console log in dev), land logged in, `/me`, refresh, logout; account row with $10k created on first login; protected app shell. Resend adapter behind the interface (enable on deploy at the latest). | 1 | `users`, `accounts`, `refresh_tokens`; Redis OTP/rate limit; CSRF; BackgroundTasks email. 100% coverage here. |
-| 3 | **Prices** | `assets` seeded; the scheduler container fetches the provider every minute, upserts `latest_prices`, and fills the cache. Markets page shows the coin list with "as of" and a stale badge. | 1 (2 only for page auth; backend ingestion is independent and could be built in parallel) | `scheduler` container, `httpx`, `respx` tests, Redis lock, backoff. |
-| 4 | **Trading** | The quote preview (spread + fee shown), the confirm, the transaction. Cash and holdings change, trade rows are written, stale prices refused, the first minimal "result" feedback. The pure pricing module and concurrency tests (two parallel buys cannot overspend). | 2 (account), 3 (prices) | `holdings`, `trades`, constraints, idempotency key. Highest-risk slice: put the most review and 100% coverage here. |
-| 5 | **Portfolio + history** | Cash, holdings with average cost and P/L, totals vs $10k; the keyset-paginated trade history page. Also the reconciliation test. | 4 | No new tables. Pure read side, so it is low risk. |
-| 6 | **Deploy** | nginx (TLS, headers, static, rate limits), prod compose, domain, Resend live, docs disabled in prod, secrets, backups of Postgres, Playwright happy-path e2e in CI, the friends sign up. | 1-5 | nginx, Resend creds, prod env. |
-
-**Ordering rationale:**
-- Auth before trading because trades need an authenticated account to own cash. Prices before trading because a trade needs a price row.
-- Slices 2 and 3 are independent of each other, so they can be reordered or overlapped. Recommended: auth first because the account row is the trade's lock target and auth has the most security surface to get right early. If the provider choice is uncertain, a prices spike first de-risks the free-tier question.
-- Portfolio comes after trading, because holdings only exist once trades do. Splitting "trading" and "portfolio" keeps each slice small, but trade execution needs some visible feedback (the result response and a toast), so slice 4 should show the resulting balance without waiting for slice 5.
-- Deploy last, but write the nginx and prod-compose files knowing the same-origin assumption from slice 1. Consider a throwaway early deploy smoke test to catch Secure-cookie and TLS surprises, because `Secure` cookies do not work over plain HTTP outside localhost.
-
-**v2 candidates to push back on in v1 scope:** value-over-time chart and snapshot job, Celery/RabbitMQ, price history table, FIFO lots, realized-P/L reporting views, admin UI, WebSocket prices, multiple providers/failover. (Keep `realized_pnl` on the trade row only if the history UI shows it. Otherwise defer the column, because adding a nullable column later is cheap.)
-
-## Gaps
-
-- The market-data provider is not chosen here (see STACK.md): confirm its batch endpoint, rate limits, whether it reports a per-price observation timestamp, and its attribution terms. This determines the `as_of` semantics.
-- Valuation basis (mid or liquidation price) and amount-to-quantity rounding direction need explicit product decisions.
-- Python 3.14 compatibility of `asyncpg`, `uvloop` and `pydantic-core` wheels was not verified in this pass.
-
-## Sources
-
-- /home/Birja/CLAUDE.md (fixed rules: layering, transactions, Redis, auth). HIGH.
-- /home/Birja/.planning/PROJECT.md (requirements and scope). HIGH.
-- Design patterns (ledger plus materialised balances, average-cost basis, idempotency keys, row-lock serialisation): established brokerage and accounting practice from training knowledge, not re-verified online. MEDIUM.
+No library addition/version is recommended here; this architecture reuses the locked stack. No private provider API, production database, service or tests were accessed for this research.

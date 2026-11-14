@@ -10,6 +10,7 @@ import { useMe } from "@/hooks/useMe";
 import AccountPage from "@/pages/AccountPage";
 import HealthPage from "@/pages/HealthPage";
 import SignInPage from "@/pages/SignInPage";
+import StockTradePage from "@/pages/StockTradePage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
 import HistoryPage from "@/pages/HistoryPage";
@@ -124,6 +125,7 @@ function SignedIn({ me }: { me: Me }) {
               </>
             }
           />
+          <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
           <Route path="trade/:symbol" element={<TradePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

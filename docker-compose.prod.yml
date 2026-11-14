@@ -25,7 +25,7 @@ services:
   postgres:
     # Run the entrypoint as70: existing UID999 data must fail, never auto-chown.
     user: "70:70"
-    image: cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4
+    image: cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
     logging: *logging
@@ -98,6 +98,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set in /etc/birja/prod.env}
       RESEND_API_KEY: ${RESEND_API_KEY:?set in /etc/birja/prod.env}
       EMAIL_FROM: ${EMAIL_FROM:?set in /etc/birja/prod.env}
+      STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_FEED: ${STOCK_FEED:-iex}
+      STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
+      STOCK_DATA_SERVER: ${STOCK_DATA_SERVER:-birja}
     volumes:
       - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
     depends_on:
@@ -149,6 +153,27 @@ services:
       DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       PRICE_SOURCE: "kraken"
+      STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
+      STOCK_FEED: ${STOCK_FEED:-iex}
+      STOCK_DATA_ACCOUNT: ${STOCK_DATA_ACCOUNT:-birja}
+      STOCK_DATA_SERVER: ${STOCK_DATA_SERVER:-birja}
+      STOCK_POLL_INTERVAL_SECONDS: ${STOCK_POLL_INTERVAL_SECONDS:-60}
+      STOCK_REQUEST_TIMEOUT_SECONDS: ${STOCK_REQUEST_TIMEOUT_SECONDS:-5}
+      STOCK_MAX_RETRIES: ${STOCK_MAX_RETRIES:-1}
+      STOCK_CYCLE_BUDGET_SECONDS: ${STOCK_CYCLE_BUDGET_SECONDS:-15}
+      STOCK_MAX_RESPONSE_BYTES: ${STOCK_MAX_RESPONSE_BYTES:-262144}
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}
+      STOCK_ACTIONS_ENABLED: ${STOCK_ACTIONS_ENABLED:-false}
+      STOCK_ACTIONS_POLL_INTERVAL_SECONDS: ${STOCK_ACTIONS_POLL_INTERVAL_SECONDS:-60}
+      STOCK_ACTIONS_HEALTH_MAX_AGE_SECONDS: ${STOCK_ACTIONS_HEALTH_MAX_AGE_SECONDS:-120}
+      STOCK_ACTIONS_MAX_ATTEMPTS: ${STOCK_ACTIONS_MAX_ATTEMPTS:-8}
+      STOCK_ACTIONS_CYCLE_BUDGET_SECONDS: ${STOCK_ACTIONS_CYCLE_BUDGET_SECONDS:-30}
+      STOCK_ACTIONS_MAX_RESPONSE_BYTES: ${STOCK_ACTIONS_MAX_RESPONSE_BYTES:-262144}
+      STOCK_ACTIONS_SEGMENT_DAYS: ${STOCK_ACTIONS_SEGMENT_DAYS:-31}
+      STOCK_ACTIONS_FUTURE_DAYS: ${STOCK_ACTIONS_FUTURE_DAYS:-90}
+      STOCK_ACTIONS_COVERAGE_START: ${STOCK_ACTIONS_COVERAGE_START:-}
+      STOCK_ACCOUNT_REQUESTS_PER_MINUTE: ${STOCK_ACCOUNT_REQUESTS_PER_MINUTE:-20}
     volumes:
       - /etc/birja/db-tls/ca.crt:/run/birja/db-ca.crt:ro
     depends_on:

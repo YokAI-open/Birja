@@ -98,7 +98,7 @@ def main():
     compose = source.parent / ("docker-compose.ops-test.yml" if synthetic else "docker-compose.prod.yml")
     require(compose.is_file() and not compose.is_symlink())
     if synthetic:
-        require(hashlib.sha256(compose.read_bytes()).hexdigest() == "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c")
+        require(hashlib.sha256(compose.read_bytes()).hexdigest() == "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91")
     env_file = "/dev/null" if synthetic else "/etc/birja/prod.env"
     dc = ["/usr/bin/docker", "compose", "--env-file", env_file, "-p", c["project"], "-f", str(compose)]
     lock = root / "operation.lock" if synthetic else Path("/var/lock/birja-deploy.lock")
@@ -120,6 +120,10 @@ def main():
                                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
         require(probe.returncode == 0 and probe.stdout == b"collation_ok\n")
         prefix = "".join("\\set " + k + " '" + v + "'\n" for k, v in values.items())
+        # The revision-selected bootstrap validates exact0014 definer/helper
+        # bodies, owners, paths and ACLs before any role/table privilege change.
+        # Inspection executes that same read-only identity preflight; it cannot
+        # silently repair a substituted financial function.
         sql = prefix + (source / "db/bootstrap-roles.sql").read_text()
         result = subprocess.run(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1", "-U", c["bootstrap"], "-d", c["db_name"]],
                                 input=sql.encode(), capture_output=True, timeout=150, check=False,

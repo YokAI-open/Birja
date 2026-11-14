@@ -2,6 +2,7 @@
 """Image identity and offline recovery contracts at actual command boundaries."""
 
 import datetime
+import copy
 import hashlib
 import importlib.util
 import io
@@ -25,7 +26,7 @@ spec = importlib.util.spec_from_file_location(
 )
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
-PG = "cgr.dev/chainguard/postgres@sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4"
+PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
 REDIS = "cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48"
 NODE = "cgr.dev/chainguard/wolfi-base@sha256:24f549a7fcace88e69b9557941168c74645688ecc4acf7fb6d734a6b74e9019d"
 WOLFI = "cgr.dev/chainguard/wolfi-base@sha256:24f549a7fcace88e69b9557941168c74645688ecc4acf7fb6d734a6b74e9019d"
@@ -36,6 +37,53 @@ def sha(data):
 
 
 class Identity(unittest.TestCase):
+    def test_ci_recovery_preparation_requires_verification_before_import_and_binding(self):
+        spec = importlib.util.spec_from_file_location("check_recovery", ROOT / "deploy/tests/check-recovery-image.py")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        for failure in (None, "archive", "alias"):
+            with self.subTest(failure=failure):
+                events = []
+                def command(argv, **kwargs):
+                    if "load" in argv:
+                        events.append("load")
+                    return subprocess.CompletedProcess(argv, 0)
+                def verify(*args):
+                    events.append("verify")
+                    if failure == "archive":
+                        raise ValueError("unverified archive")
+                def alias():
+                    events.append("alias")
+                    if failure == "alias":
+                        raise ValueError("wrong image identity")
+                with patch.object(helper.r, "call", return_value=b'[["driver-type","io.containerd.snapshotter.v1"]]'), patch.object(helper.r, "registry_manifests", return_value=(b"index", b"manifest")), patch.object(helper.r, "verify_saved_image", side_effect=verify), patch.object(helper.r, "loaded_recovery_image", side_effect=alias), patch.object(helper.r, "bind_recovery_image", side_effect=lambda: events.append("bind")), patch.object(helper.subprocess, "run", side_effect=command):
+                    if failure:
+                        with self.assertRaises(ValueError):
+                            helper.main()
+                        self.assertNotIn("load", events)
+                        self.assertNotIn("bind", events)
+                    else:
+                        helper.main()
+                        self.assertEqual(events, ["verify", "alias", "load", "bind"])
+
+    def test_exact_inventory_rejects_unapproved_versions_and_artifact_changes(self):
+        parse = tomllib.loads
+        for target, field in (("opentelemetry-api", "version"), ("opentelemetry-api", "artifact"), ("dnspython", "version"), ("dnspython", "artifact"), ("fastapi", "artifact")):
+            with self.subTest(target=target, field=field):
+                def changed(source):
+                    value = parse(source)
+                    if "package" in value:
+                        value = copy.deepcopy(value)
+                        record = next(p for p in value["package"] if p["name"] == target)
+                        if field == "version":
+                            record["version"] = "999.0"
+                        else:
+                            record["wheels"][0]["hash"] = "sha256:" + "0" * 64
+                    return value
+                with patch.object(tomllib, "loads", side_effect=changed):
+                    with self.assertRaises(AssertionError):
+                        self.test_signed_exact_packages_and_complete_group_boundaries()
+
     def test_anonymous_registry_fixed_origin_and_bounded_graph(self):
         config = json.dumps({"os": "linux", "architecture": "amd64"}).encode()
         manifest = json.dumps({"config": {"digest": sha(config), "size": len(config)}}).encode()
@@ -373,7 +421,9 @@ class Identity(unittest.TestCase):
         frontend = (ROOT / "frontend/Dockerfile").read_text()
         self.assertIn("python-3.14=3.14.10_git20261104-r0", backend)
         self.assertIn("python-3.14-base=3.14.10_git20261104-r0", backend)
-        self.assertIn("nodejs-24=24.22.2-r2", frontend)
+        self.assertIn("nodejs-24=24.22.3-r0", frontend)
+        for pin in ("icu79-data-full=79.1-r1", "libicu79=79.1-r1", "libstdc++=16.2.0-r2"):
+            self.assertIn(pin, frontend)
         self.assertIn("ghcr.io/astral-sh/uv:0.13.5", backend)
         for source in [backend, frontend]:
             self.assertIn("apk add --no-cache", source)
@@ -393,10 +443,23 @@ class Identity(unittest.TestCase):
         }
         # Canonical pre-regrouping inventory from e728855, including artifacts.
         # A digest keeps this contract usable in shallow CI checkouts.
+        approved = {"exchange-calendars": "4.13.2", "numpy": "2.5.4", "pandas": "3.1.1", "pyluach": "2.3.0", "toolz": "1.2.0", "tzdata": "2026.6", "korean-lunar-calendar": "0.4.0", "python-dateutil": "4.0.0"}
+        self.assertEqual({name: distributions[name]["version"] for name in approved}, approved)
+        additions = {name: distributions.pop(name) for name in approved}
+        # Exact reviewed wheels/sdist/source metadata, not just name/version.
+        self.assertEqual(hashlib.sha256(json.dumps(additions, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7")
+        # Independently approved exact repairs: Phase11 OTEL and PR31 DNS.
+        # Authenticate complete records; retain e728855's other records unchanged.
+        otel = distributions.pop("opentelemetry-api")
+        self.assertEqual(otel["version"], "1.45.2")
+        self.assertEqual(hashlib.sha256(json.dumps(otel, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c")
+        dns = distributions.pop("dnspython")
+        self.assertEqual(dns["version"], "2.9.2")
+        self.assertEqual(hashlib.sha256(json.dumps(dns, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79")
         encoded = json.dumps(distributions, sort_keys=True, separators=(",", ":"))
         self.assertEqual(
             hashlib.sha256(encoded.encode()).hexdigest(),
-            "c1aed6af821462b2d8734a0a02dae4bf71f21028b3ba125be631256474a1f9ba",
+            "e7415d7142069e6bca45afd4d37cd758a1d7c83ddd401a678b1b054c9b7b9509",
         )
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):
