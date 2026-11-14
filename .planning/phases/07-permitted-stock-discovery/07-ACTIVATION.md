@@ -2,16 +2,28 @@
 phase: 07-permitted-stock-discovery
 plan: "14"
 checkpoint: 07-14-02
-status: one-shot-running-waiting-for-regular-session
+status: prior-one-shot-unverified-replacement-needed
 prepared: 2026-11-10
 preparation_updated: 2026-11-11
 tasks_completed: 1
 live_activation: disabled
-private_requests_made: 0
+private_requests_made: unknown-no-result-receipt
 owner_ui_acceptance: accepted-2026-11-11
 ---
 
 # Stock discovery activation review and continuation handoff
+
+## Current verification update — 2026-11-14
+
+The November11running/waiting descriptions below are historical preparation,
+not current process status. Same-host checks now found no known runner PID/path;
+claim remains, log is empty, resultreceipt absent. Actual outcome/requestcount is
+unknown; the earlier zero-request claim applied only at preparation. Frozen
+helper bytes match, but later stock_admission.py changes invalidate the old
+source pin; original window is expired. No rerun, credential read or private API
+call was made by this verification. Current status is07-VERIFICATION.md;
+replacement proposal is07-LIVE-VERIFICATION-PROPOSAL.md. Owner-attested approval
+and UI acceptance remain recorded; no duplicate paperwork/UI request.
 
 Plans 01–13 are locally complete. This is the prepared first checkpoint of
 Plan 14, not completed external acceptance. On 2026-11-11 the owner reported

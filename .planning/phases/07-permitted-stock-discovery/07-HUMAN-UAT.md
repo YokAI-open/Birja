@@ -7,6 +7,8 @@ prepared: 2026-11-11
 
 # Phase 7 acceptance record
 
+Current2026-11-14: UI acceptance retained. Old one-shot is no longer active and has no result receipt; live outcome is unverified. See07-VERIFICATION.md and replacement proposal. Original scheduled-wait descriptions below are historical, not current promises.
+
 The owner requested continuing independent preparation and checking the live
 measurement later. On 2026-11-11 the owner explicitly stated “i accept ui”.
 UI acceptance is recorded; live measurement acceptance remains pending. This

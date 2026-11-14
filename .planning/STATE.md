@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: phase_complete
-stopped_at: PR31 merged into develop at78de5bd; Phase7 live acceptance deferred
-last_updated: "2026-11-14T11:46:00.469100+00:00"
-last_activity: 2026-11-14 -- Approved PR31 merge complete; no release or deployment
+stopped_at: Phase7 verification partial; replacement regular-session live campaign requires approval
+last_updated: "2026-11-14T11:54:46.438915+00:00"
+last_activity: 2026-11-14 -- Phase7 verification partial; live campaign unverified
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** PR31 merged into develop; deferred Phase7 live-provider acceptance is next
+**Current focus:** Phase7 verification partial; replacement live measurement proposal prepared
 
 ## Current Position
 
@@ -32,6 +32,19 @@ Last activity: 2026-11-14 -- PR31 merged into develop at78de5bd
 Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
+
+2026-11-14 Phase7verification performed. 07-VERIFICATION.md human_needed and
+07-UAT partial: local catalogue/UI/compatibility evidence retained; actual
+provider identity/freshness remains unresolved. Old November11one-shot has no
+same-host process or resultreceipt, onlyclaim/emptylog; outcome/requestcount
+unknown. Existinghelpertests63pass/2stale-sourcehashrefusals; no privatecalls,
+credentialread, sourceguardbypass or new schedule. Nextscheduledregularopening
+MondayNovember16at17:30Moscow; freshcalendar/source review required atcampaign.
+Concrete maximum30read-onlyattempt/900s replacement proposal saved in
+07-LIVE-VERIFICATION-PROPOSAL.md; oldapprovalwasfixedone-shot, no repeat allowed.
+OwnerUI and attestedproviderapproval retained; no duplicate genericrequests.
+Phase7sixrequirements/Plan14 staypending; milestone notcomplete. No live/prod
+activation or automatic futurewaiter. Prior merge/CIrecords below arehistorical.
 
 2026-11-14 owner explicitly approved PR31 merge. MERGED into develop using
 merge commit78de5bdc213a978810377caa34139a98951e5518. Parents independently
