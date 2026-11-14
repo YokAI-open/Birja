@@ -7,8 +7,9 @@
 
 ## Current State
 
-Software v0.5.0 is prepared locally on release-0.5.0. Release CI/publication/main
-merge are pending; production remains v0.4.0. Stock activation stays gated.
+Software [v0.5.0](https://github.com/YokAI-open/Birja/releases/tag/v0.5.0)
+is published at main c2c7af1 after all six release checks passed. The approved
+develop back-merge is pending; production remains v0.4.0. Stock activation stays gated.
 Closure does not establish provider rights or live suitability. No next milestone
 is selected; subsequent phase numbering starts at 12.
 

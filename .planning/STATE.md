@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: milestone_closed_with_accepted_gaps
-stopped_at: v1.1 archived with six deferred live requirements; software0.5.0release prepared, publication pending
-last_updated: "2026-11-14T12:11:23.182006+00:00"
-last_activity: 2026-11-14 -- Owner requested release and milestone close anyway
+stopped_at: software v0.5.0 published; v1.1 archived with six deferred live requirements; back-merge pending
+last_updated: "2026-11-14T12:51:56.326135+00:00"
+last_activity: 2026-11-14 -- Published approved v0.5.0 and planning v1.1 tags after six green release checks
 progress:
   total_phases: 5
   completed_phases: 4
@@ -24,13 +24,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: prepare software v0.5.0; planning v1.1 is closed with accepted gaps.
+Current focus: finish the approved develop back-merge; software v0.5.0 is published and planning v1.1 is closed with accepted gaps.
 
 ## Current Position
 
 Milestone: v1.1 closed administratively; 4/5 phases actually verified.
 Plans: 63 completed and one deferred; tasks: 130 completed and two deferred.
-Status: release-0.5.0 prepared locally; publication and rollout pending.
+Status: v0.5.0 published at main c2c7af1; develop back-merge pending. No production rollout is authorized.
 
 ## Accepted Closeout and Release Boundary
 
@@ -41,8 +41,10 @@ Phase 7 verification remains human_needed; Plan 14 has no fabricated completion
 summary. The audit remains gaps_found. No activation flag changed.
 Software v0.5.0 and planning milestone v1.1 are distinct. Production remains v0.4.0.
 
-Release preparation is authorized. Publication, protected main merge, release
-tag/GitHub publication and back-merge follow the project approval gates.
+The owner approved the complete publication/back-merge workflow. PR #32 merged
+with a merge commit after all six checks passed. Main c2c7af1 has the exact
+candidate tree; software v0.5.0 and planning v1.1 tags are pushed, and the GitHub
+release is published. The approved develop back-merge remains pending.
 No production service, configuration, installed tool or provider action is included.
 
 ## Deferred Items
@@ -84,6 +86,7 @@ See phases/07-permitted-stock-discovery/07-LIVE-VERIFICATION-PROPOSAL.md.
 
 ## Session Continuity
 
-Finish release validation/review and present the publication package.
+Finish the approved develop back-merge after its required CI passes.
+Publication evidence: milestones/v1.1-RELEASE-RECEIPT.md.
 Do not activate live stocks, relabel deferred requirements, force-push or delete
 unrelated .claude/ work. No next milestone or Phase 12 is selected.
