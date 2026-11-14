@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: phase_complete
-stopped_at: Phase7 verification partial; replacement regular-session live campaign requires approval
-last_updated: "2026-11-14T11:54:46.438915+00:00"
-last_activity: 2026-11-14 -- Phase7 verification partial; live campaign unverified
+stopped_at: Phase7 replacement manual campaign approved for Nov16; awaiting regular session and fresh checks
+last_updated: "2026-11-14T11:56:33.132949+00:00"
+last_activity: 2026-11-14 -- Monday manual Phase7 campaign approved; no schedule or provider calls
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-13)
 
 **Core value:** Making a trade at a real, recent market price and seeing its current worth, correct to the cent.
-**Current focus:** Phase7 verification partial; replacement live measurement proposal prepared
+**Current focus:** Phase7 replacement manual campaign approved for Nov16 regular session; live proof pending
 
 ## Current Position
 
@@ -32,6 +32,16 @@ Last activity: 2026-11-14 -- PR31 merged into develop at78de5bd
 Progress: [██████████] 98% (63/64 tracked plans complete; Phase 11 4/4, Phase 7 live plan pending)
 
 ## Completion and next action
+
+2026-11-14 owner approved “Approve Monday’s manual campaign (Recommended)”.
+One manual Phase7replacement campaign during MondayNovember16regular session,
+opens17:30Moscow, maximum20referenceGETs+10IEXquote batches/30attempts/900s.
+Freshpubliccalendar/source review and affected helper checks required before
+privatecalls. No automaticbackgroundwaiter/schedule or ongoingactivation.
+Return during that session: “continue Phase 7 live verification”. Do not request
+this same scope approval again; materially changed scope remains separate.
+No calls/results yet; Phase7/Plan14/sixrequirements staypending. No production,
+push/merge/provideragreement/payment authority from this approval.
 
 2026-11-14 Phase7verification performed. 07-VERIFICATION.md human_needed and
 07-UAT partial: local catalogue/UI/compatibility evidence retained; actual

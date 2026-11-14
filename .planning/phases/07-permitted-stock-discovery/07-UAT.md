@@ -26,7 +26,7 @@ basis: Existing actual Phase7 compatibility and current full hosted recovery/TLS
 expected: The bounded approved real campaign reports all20mappings and actual source ages/missing/stale cases, with required admission scope satisfied.
 result: blocked
 blocked_by: third-party
-reason: Previous November11one-shot has no result receipt and expired source/window; Saturday is closed. A fresh approved source-bound regular-session campaign is needed.
+reason: Previous November11one-shot has no result receipt and expired source/window; Saturday is closed. Replacement manual campaign approved2026-11-14 for MondayNovember16; fresh source/calendar checks and actual regular-session measurement remain required. No automatic run scheduled.
 
 ## Summary
 

@@ -1,7 +1,9 @@
 # Phase 7 replacement live-verification proposal
 
-Prepared2026-11-14; not authorized or scheduled by this proposal. No credentials
-read, provider call, admission import, production change or background waiter.
+Prepared2026-11-14; explicitly approved by owner on2026-11-14:
+“Approve Monday’s manual campaign (Recommended)”. This is authorization, not
+a scheduled or launched process. No credentials read, provider call, admission
+import, production change or background waiter.
 Owner-attested approval already recorded on2026-11-11 is retained; no repeat
 paperwork or generic UI acceptance is requested. This is a new timing/request
 budget approval because the old authorization allowed one fixed November11 run
@@ -74,7 +76,8 @@ schedule evidence, not a future emergency-closure guarantee or granted API right
 
 ## Resumption
 
-After explicit replacement approval, return during that session with
+Replacement approval is now recorded. Return during Monday2026-11-16
+regular session (17:30–00:00Moscow, closeNovember17) with
 “continue Phase 7 live verification”. Recheck calendar, source and the approved
 budget before requests. No automatic future execution is promised by saving this
 packet or accepting its scope.

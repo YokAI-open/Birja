@@ -61,8 +61,9 @@ stock execution does not establish live provider activation.
 
 ## Required continuation
 
-1. Explicit replacement campaign timing/budget approval, because the old exact
-   one-shot prohibited another campaign. Concrete proposal:07-LIVE-VERIFICATION-PROPOSAL.md.
+1. Replacement campaign timing/budget approved2026-11-14: “Approve Monday’s
+   manual campaign (Recommended)”. Scope:07-LIVE-VERIFICATION-PROPOSAL.md.
+   No process scheduled/launched; original oldclaim/run remains preserved.
 2. Refresh current source/affected checks/review and public calendar evidence
    within24hours of the actual regular-session campaign. No new package needed.
 3. Perform the approved bounded actual reference/quotes measurement and preserve

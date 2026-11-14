@@ -15,6 +15,13 @@ owner_ui_acceptance: accepted-2026-11-11
 
 ## Current verification update — 2026-11-14
 
+Owner subsequently approved: “Approve Monday’s manual campaign (Recommended)”.
+This authorizes one replacement manual measurement during November16regular
+session, maximum30privateGETattempts/900seconds after freshsource/calendarreview.
+No automatic background waiter, service/timer, activation, deployment, push or
+merge. Return at/after17:30Moscow within that session to resume. No result exists
+yet; acceptedscope is in07-LIVE-VERIFICATION-PROPOSAL.md.
+
 The November11running/waiting descriptions below are historical preparation,
 not current process status. Same-host checks now found no known runner PID/path;
 claim remains, log is empty, resultreceipt absent. Actual outcome/requestcount is
