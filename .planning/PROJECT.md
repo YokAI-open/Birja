@@ -136,7 +136,8 @@ scans0HIGH/CRITICAL pass. See11-VERIFICATION and11-03/04SUMMARY. Phase7live
 acceptance remains unverified. The owner2026-11-14 accepted closure/archive of
 v1.1 with those six requirement gaps. Software v0.5.0 was published after all six
 PR #32 checks passed; main c2c7af1 has the exact tested candidate tree. The
-approved develop back-merge is pending. No live activation or production change
+approved develop back-merge and test-only main CI correction are merged after
+six green jobs each; final main/develop trees match. No live activation or production change
 has occurred. See the v1.1 release receipt and archived
 v1.1ROADMAP/REQUIREMENTS/MILESTONE-AUDIT and integration audit.
 

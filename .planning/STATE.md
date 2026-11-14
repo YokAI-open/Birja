@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: US Stock Trading
 status: milestone_closed_with_accepted_gaps
-stopped_at: software v0.5.0 published; v1.1 archived with six deferred live requirements; back-merge pending
-last_updated: "2026-11-14T12:51:56.326135+00:00"
-last_activity: 2026-11-14 -- Published approved v0.5.0 and planning v1.1 tags after six green release checks
+stopped_at: approved v0.5.0 release workflow complete; v1.1 closed with six deferred live requirements
+last_updated: "2026-11-14T13:38:17.188044+00:00"
+last_activity: 2026-11-14 -- Published release/tags; merged corrective main PR34 and develop back-merge PR33 after six green checks each
 progress:
   total_phases: 5
   completed_phases: 4
@@ -24,13 +24,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: finish the approved develop back-merge; software v0.5.0 is published and planning v1.1 is closed with accepted gaps.
+Current focus: no active milestone; software v0.5.0 publication and develop back-merge are complete. Planning v1.1 is closed with accepted gaps.
 
 ## Current Position
 
 Milestone: v1.1 closed administratively; 4/5 phases actually verified.
 Plans: 63 completed and one deferred; tasks: 130 completed and two deferred.
-Status: v0.5.0 published at main c2c7af1; develop back-merge pending. No production rollout is authorized.
+Status: v0.5.0 published at c2c7af1. Final main e061815 and develop26d2011 have identical trees after the test-only CI correction. No production rollout is authorized.
 
 ## Accepted Closeout and Release Boundary
 
@@ -44,7 +44,9 @@ Software v0.5.0 and planning milestone v1.1 are distinct. Production remains v0.
 The owner approved the complete publication/back-merge workflow. PR #32 merged
 with a merge commit after all six checks passed. Main c2c7af1 has the exact
 candidate tree; software v0.5.0 and planning v1.1 tags are pushed, and the GitHub
-release is published. The approved develop back-merge remains pending.
+release is published. Corrective main PR34 and develop back-merge PR33 merged
+after all six jobs passed on each run. Main e061815 and develop26d2011 have
+identical trees. The software/planning tags were not moved.
 No production service, configuration, installed tool or provider action is included.
 
 ## Deferred Items
@@ -86,7 +88,10 @@ See phases/07-permitted-stock-discovery/07-LIVE-VERIFICATION-PROPOSAL.md.
 
 ## Session Continuity
 
-Finish the approved develop back-merge after its required CI passes.
+The approved release workflow is complete; no further release PR is pending.
+The final planning receipt is retained in a local documentation commit so the
+tested/merged PR heads remain stable. Routine post-merge push CI runs separately;
+the full required pre-merge runs passed. No new product milestone is selected.
 Publication evidence: milestones/v1.1-RELEASE-RECEIPT.md.
 Do not activate live stocks, relabel deferred requirements, force-push or delete
 unrelated .claude/ work. No next milestone or Phase 12 is selected.

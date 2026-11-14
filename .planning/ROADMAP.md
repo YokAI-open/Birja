@@ -8,8 +8,9 @@
 ## Current State
 
 Software [v0.5.0](https://github.com/YokAI-open/Birja/releases/tag/v0.5.0)
-is published at main c2c7af1 after all six release checks passed. The approved
-develop back-merge is pending; production remains v0.4.0. Stock activation stays gated.
+is published at main c2c7af1 after all six release checks passed. Corrective
+main PR34 and develop back-merge PR33 are merged after six green jobs each;
+their final trees match. Production remains v0.4.0. Stock activation stays gated.
 Closure does not establish provider rights or live suitability. No next milestone
 is selected; subsequent phase numbering starts at 12.
 
