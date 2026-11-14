@@ -107,8 +107,10 @@ phases/12-preserve-existing-investing-under-portfolio-ownership/.
 12-RESEARCH.md and draft 12-VALIDATION.md are committed. 12-UI-SPEC.md passed
 independent six-dimension review with no findings; future implemented UI and
 native 200% zoom still need owner acceptance.
-Next: pattern map, executable plans, synchronized validation and independent
-plan verification. No implementation yet. Local planning commits
+28 plans/56 tasks across 18 waves are written at d3614a6. Independent check1
+found 5 blockers and 3 warnings; see 12-PLAN-CHECK-01.md.
+Next: bounded planner revision 1, then an independent recheck. Keep
+nyquist_compliant false until actual plan approval; no implementation yet. Local planning commits
 are prepared on feature/milestone-v1.2. The owner selected “Keep local for now”;
 retain that publication preference for this amendment.
 New funding policy and terminal freeze scope remain in PROJECT.md.
