@@ -4,7 +4,7 @@
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
 - [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [ ] **v1.2 Multiple Strategy Portfolios** — 27 requirements and four-phase roadmap approved 2026-11-14; ready for Phase 12 discussion/planning.
+- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements and four-phase roadmap approved 2026-11-14; ready for Phase 12 discussion/planning.
 
 ## Current State
 
@@ -15,7 +15,9 @@ their final trees match. Last confirmed production remains v0.4.0/schema0008.
 Stock activation stays gated; source publication does not establish live rights,
 suitability or acceptance. No production inspection or change is part of this roadmap.
 
-The owner approved all 27 [v1.2 requirements](REQUIREMENTS.md) on 2026-11-14.
+The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
+subsequently added optional descriptions (PMGT-06), bringing the total to 28
+on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
 at Phase 12. No phase has executable plans or implementation yet.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
@@ -75,9 +77,9 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
 
 **Goal**: Users can create, name, fund, open, trade and compare separate strategies without sharing capital, positions, financial effects or browser state.
 **Depends on**: Phase 12
-**Requirements**: PMGT-01, PMGT-02, PFUND-01, PFUND-02, PFIN-01, PFIN-04, PCTX-02, PVIEW-01, PVIEW-02, PSAFE-07
+**Requirements**: PMGT-01, PMGT-02, PMGT-06, PFUND-01, PFUND-02, PFIN-01, PFIN-04, PCTX-02, PVIEW-01, PVIEW-02, PSAFE-07
 **Success Criteria** (what must be TRUE):
-  1. A user can create and rename up to ten active portfolios with approved name validation and owner-local case-insensitive active-name uniqueness; each genuinely new portfolio, including a new user's “My portfolio,” receives its own $10,000 stored baseline and starting cash once.
+  1. A user can create and rename up to ten active portfolios with approved name validation and owner-local case-insensitive active-name uniqueness, and add, view, edit or clear an optional plain-text description (empty is valid); each genuinely new portfolio, including a new user's “My portfolio,” receives its own $10,000 stored baseline and starting cash once.
   2. Uncertain creation retries, refreshes, sign-ins and renames never repeat a grant or create a second strategy; a retry for a deleted creation identity cannot recreate it, while a genuinely new identity may use a freed slot and name.
   3. Two portfolios of the same user can hold and trade the same crypto or stock with independent cash, quantities and basis; dividend eligibility, credits and corrections follow only each active portfolio's own historical ownership and apply once.
   4. The user compares active strategies in a stable overview showing name, cash, exact total or known value and dollar/percentage return against each stored baseline; detail and overview agree on timestamps and incompleteness, without a pooled wealth total or making other strategies unavailable.
@@ -87,7 +89,8 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
 
 **Delivery boundary**: Enable additional funded creation only after Phase 12's
 financial authority is qualified. Deliver the entire create/open/invest/overview
-journey, including validated renaming and private portfolio-specific links.
+journey, including validated renaming, optional descriptions that can be left empty or
+cleared, and private portfolio-specific links.
 Creation tests may use retained closed fixtures to prove slot and retry behavior
 before public deletion is available. Phase 14 then verifies the same contracts
 through actual deletion and stale-tab journeys.
@@ -133,7 +136,7 @@ deletion/purge of retained evidence is included.
   1. An exact encrypted restore preserves active and frozen deleted portfolio identities, owners, closure state, baselines, cash, holdings, financial lineage and sequences, including migrated original data, same-symbol strategies and users with zero active portfolios; deleted portfolios do not reappear in normal screens.
   2. After restore, retried creation, fills and financial events cannot repeat a starting grant, trade or payment, cross a portfolio boundary or resume economic activity in a frozen portfolio.
   3. The operator can exercise the documented migration and supported rollback/refusal contract; incompatible older schemas or application versions refuse safely without merging strategies, reassigning money or discarding financial evidence.
-  4. Full real isolated PostgreSQL concurrency/accounting and protected browser journeys verify create, rename, compare, switch, trade, History, delete and zero-active behavior, with original-data preservation, private access, human UI acceptance and the required coverage/security/image gates satisfied.
+  4. Full real isolated PostgreSQL concurrency/accounting and protected browser journeys verify create, rename, edit/clear optional descriptions, compare, switch, trade, History, delete and zero-active behavior, with original-data preservation, private access, human UI acceptance and the required coverage/security/image gates satisfied.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -146,19 +149,19 @@ retains its separate review/approval gate.
 
 ## Requirement Coverage
 
-Each of the 27 approved requirements has exactly one primary phase owner in the
+Each of the 28 approved requirements has exactly one primary phase owner in the
 detail sections and in [REQUIREMENTS.md](REQUIREMENTS.md). Cross-phase obligations
 above preserve integrated behavior without duplicating primary ownership.
 
 | Primary phase | Requirements owned | Success criteria |
 |---|---|---|
 | 12 | 7 | 5 |
-| 13 | 10 | 5 |
+| 13 | 11 | 5 |
 | 14 | 7 | 5 |
 | 15 | 3 | 4 |
-| **Total** | **27/27** | **19** |
+| **Total** | **28/28** | **19** |
 
-No requirement is complete by mapping it. All 27 remain unchecked and pending;
+No requirement is complete by mapping it. All 28 remain unchecked and pending;
 the phase structure itself is approved on 2026-11-14; no implementation is complete.
 
 ## Progress
@@ -185,7 +188,7 @@ The durable [carryover register](DEFERRED.md) stays separate from v1.2 scope.
 - W09 metadata discipline and the previously accepted v1.0 W01–W08/four validation-record gaps remain in the [v1.1 audit](milestones/v1.1-MILESTONE-AUDIT.md) and [v1.0 audit](milestones/v1.0-MILESTONE-AUDIT.md).
 
 Phase 07–11 directories, historical research and original manual-campaign links
-remain in place. These six carried outcomes are not included in v1.2's 27
+remain in place. These six carried outcomes are not included in v1.2's 28
 requirements and are not silently completed or reassigned. Local portfolio
 acceptance never authorizes live provider calls or stock activation.
 

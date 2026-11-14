@@ -57,7 +57,7 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-- [ ] Create and name up to ten active strategy portfolios per user, each with its own $10,000 initial virtual cash.
+- [ ] Create and name up to ten active strategy portfolios per user, each with its own $10,000 initial virtual cash and an optional editable description that can be empty.
 - [ ] Keep cash, holdings, trades, History, dividends, splits and performance scoped to the selected portfolio.
 - [ ] Compare portfolio cash, total value and return in an overview, then open one portfolio to trade.
 - [ ] Delete any owned portfolio after explicit confirmation, including portfolios with holdings and the last portfolio; retain financial records outside normal portfolio screens.
@@ -212,7 +212,7 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 private portfolios while preserving existing accounts and financial records.
 
 **Confirmed target features (2026-11-14):**
-- Up to ten active named portfolios per user, each granted $10,000 virtual cash once.
+- Up to ten active named portfolios per user, each granted $10,000 virtual cash once; users can add, view, edit or clear an optional plain-text description, including leaving it empty.
 - Crypto and stock capabilities within each portfolio, retaining all existing stock activation prerequisites.
 - Independent cash, holdings, trading, History and performance; an overview shows cash, total value and return.
 - Open a chosen portfolio to trade; delete any owned portfolio after confirmation, including holdings or the last portfolio.
@@ -221,12 +221,14 @@ private portfolios while preserving existing accounts and financial records.
 
 **Research:** Completed in [research/v1.2/SUMMARY.md](research/v1.2/SUMMARY.md); no new dependencies recommended. The owner explicitly confirmed freeze at deletion after research surfaced its accounting consequences.
 
-**Requirements:** All 27 requirements approved on 2026-11-14, including rename,
+**Requirements:** 28 requirements approved on 2026-11-14, including the owner's
+optional-description amendment (PMGT-06, Phase 13), rename,
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Planning:** Research, all 27 requirements and the four-phase roadmap were
-approved on 2026-11-14. Milestone setup is complete. Start Phase 12 discussion
+**Planning:** Research, the original 27 requirements and the four-phase roadmap were
+approved on 2026-11-14; the owner subsequently added optional descriptions
+within Phase 13, bringing the total to 28. Milestone setup is complete. Start Phase 12 discussion
 or planning next, then proceed through Phases 13–15 under the established workflows. Scope confirmation does not approve implementation, new
 packages, provider operations, publication or production changes. No historical
 performance chart is included. Keep Phase 7 deferred outcomes visible and

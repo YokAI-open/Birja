@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** All 27 requirements and four-phase roadmap approved (2026-11-14); implementation not started
+**Status:** 28 requirements and four-phase roadmap approved, including the owner's optional-description amendment (2026-11-14); implementation not started
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
@@ -13,6 +13,8 @@ confirmed deletion even with holdings or the last portfolio. The owner also
 confirmed that deletion ends the experiment and freezes it. The naming,
 renaming and first-portfolio defaults below were approved as part of the full
 27-requirement draft on 2026-11-14.
+The owner subsequently added optional portfolio descriptions, bringing the
+approved total to 28 without changing the four-phase structure.
 
 ### Portfolio management
 
@@ -21,6 +23,7 @@ renaming and first-portfolio defaults below were approved as part of the full
 - [ ] **PMGT-03**: User can delete any owned portfolio, including one with holdings, only after a confirmation identifies the portfolio and explains the effect; cancellation changes nothing and repeated deletion cannot affect another portfolio.
 - [ ] **PMGT-04**: Deletion freezes that portfolio's committed cash, holdings and financial History, stops future dividend/split/correction effects on it, and preserves its financial records outside normal screens without creating liquidation trades or moving funds elsewhere.
 - [ ] **PMGT-05**: User can delete their last portfolio and remain signed in with an empty overview and Create portfolio action; subsequent reads, refreshes and sign-ins do not silently create or fund another portfolio.
+- [ ] **PMGT-06**: User can add, view, edit and clear an optional plain-text description for an active owned portfolio; an empty description is valid, existing/initial portfolios start with an empty description, and description changes do not change finances or History.
 
 ### Starting funds and preservation
 
@@ -124,7 +127,7 @@ milestone planning has not inspected or changed it.
 ## Traceability
 
 Requirements and four-phase roadmap approved on 2026-11-14.
-Numbering continues at Phase 12. Each of these 27 requirements has exactly one
+Numbering continues at Phase 12. Each of these 28 requirements has exactly one
 approved primary phase owner; cross-phase obligations remain explicit in the
 roadmap. No mapping is an implementation or completion claim.
 
@@ -135,6 +138,7 @@ roadmap. No mapping is an implementation or completion claim.
 | PMGT-03 | Phase 14 | Pending |
 | PMGT-04 | Phase 14 | Pending |
 | PMGT-05 | Phase 14 | Pending |
+| PMGT-06 | Phase 13 | Pending |
 | PFUND-01 | Phase 13 | Pending |
 | PFUND-02 | Phase 13 | Pending |
 | PFUND-03 | Phase 12 | Pending |
@@ -158,7 +162,7 @@ roadmap. No mapping is an implementation or completion claim.
 | PSAFE-06 | Phase 15 | Pending |
 | PSAFE-07 | Phase 13 | Pending |
 
-**Coverage:** 27/27 approved requirements mapped exactly once to approved Phases
+**Coverage:** 28/28 approved requirements mapped exactly once to approved Phases
 12–15; zero orphaned or duplicate primary owners. All remain unchecked/pending.
 Six carried Phase 7 requirements remain separately deferred, not completion claims.
 
@@ -171,10 +175,13 @@ Six carried Phase 7 requirements remain separately deferred, not completion clai
   holdings/last portfolio, simple cash/value/return overview, and freeze at deletion.
 - Name/rename validation, distinct active names and first-portfolio onboarding
   defaults were explicitly approved with the full requirements draft on 2026-11-14.
+- Owner subsequently requested portfolio naming and optional descriptions on
+  2026-11-14. Naming remains covered by PMGT-02; PMGT-06 adds editable/clearable
+  descriptions to Phase 13, with empty descriptions explicitly allowed.
 - No requirement is completed by drafting this document. Requirements approval
   does not authorize implementation, dependency changes, pushing, provider
   operations, protected merges or deployment.
 
 ---
 *Last updated: 2026-11-14 after research synthesis and confirmed deletion policy;
-all 27 requirements and the four-phase roadmap approved; implementation not started.*
+all 28 requirements and the four-phase roadmap approved, including optional descriptions; implementation not started.*
