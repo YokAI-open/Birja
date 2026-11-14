@@ -3,6 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
 import MarketsPage from "./MarketsPage";
 
+vi.mock("@/hooks/useStocks", () => ({
+  useStocks: () => ({
+    data: undefined,
+    isPending: true,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -209,7 +219,7 @@ describe("MarketsPage", () => {
       expect(await screen.findByText("Live · 42s ago")).toBeVisible();
       expect(screen.getByText("Delayed · 2m ago")).toBeVisible();
       expect(screen.getByText("Stale · 7m ago")).toBeVisible();
-      expect(screen.getByText("Oldest price 7m ago")).toBeVisible();
+      expect(screen.getByText("Oldest crypto price 7m ago")).toBeVisible();
     });
 
     it("ticks ages and recomputes status from API thresholds", async () => {

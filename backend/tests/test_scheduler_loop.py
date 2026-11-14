@@ -241,3 +241,171 @@ async def test_python_m_entrypoint_logs_cycles_to_stderr(
     text = "".join(lines)
     assert "INFO app.tasks.scheduler: price scheduler started source=fake" in text
     assert "INFO app.tasks.scheduler: price cycle: status=ok accepted=15" in text
+
+
+async def test_enabled_amain_runs_independent_stock_loop_and_private_http(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.tasks import stock_scheduler
+
+    monkeypatch.setenv("PRICE_SOURCE", "fake")
+    monkeypatch.setenv("STOCK_DATA_ENABLED", "true")
+    monkeypatch.setenv("ALPACA_API_KEY", "synthetic-private-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "synthetic-private-secret")
+    get_scheduler_settings.cache_clear()
+    stop = asyncio.Event()
+    stock_started = asyncio.Event()
+    crypto_calls = []
+    stock_cancelled = asyncio.Event()
+    clients = []
+
+    async def crypto(**kw: Any) -> CycleResult:
+        assert not kw["source"].__dict__.get("headers")
+        crypto_calls.append(asyncio.get_running_loop().time())
+        if len(crypto_calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def hanging_stock(**kw: Any) -> CycleResult:
+        clients.append(kw["http"])
+        assert kw["http"].headers["APCA-API-KEY-ID"] == "synthetic-private-key"
+        assert kw["http"].headers["APCA-API-SECRET-KEY"] == "synthetic-private-secret"
+        stock_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stock_cancelled.set()
+        return CycleResult("ok")
+
+    real_run = scheduler.run
+
+    async def accelerated_run(**kw: Any) -> None:
+        await real_run(**{**kw, "interval": 0.04, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", hanging_stock)
+    monkeypatch.setattr(scheduler, "run", accelerated_run)
+    try:
+        async with asyncio.timeout(2):
+            await scheduler.amain(stop)
+    finally:
+        get_scheduler_settings.cache_clear()
+    assert stock_started.is_set()
+    assert stock_cancelled.is_set()
+    assert clients[0].is_closed
+    assert len(crypto_calls) == 3
+    assert 0.06 <= crypto_calls[-1] - crypto_calls[0] < 1
+    assert (tmp_path / "hb").exists()
+
+
+async def test_stock_exception_does_not_kill_crypto_loop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.tasks import stock_scheduler
+
+    monkeypatch.setenv("PRICE_SOURCE", "fake")
+    monkeypatch.setenv("STOCK_DATA_ENABLED", "true")
+    monkeypatch.setenv("ALPACA_API_KEY", "synthetic-key")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "synthetic-secret")
+    get_scheduler_settings.cache_clear()
+    stop = asyncio.Event()
+    calls = []
+
+    async def crypto(**kw: Any) -> CycleResult:
+        calls.append(1)
+        if len(calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def broken(**kw: Any) -> CycleResult:
+        raise RuntimeError("synthetic")
+
+    real_run = scheduler.run
+
+    async def accelerated_run(**kw: Any) -> None:
+        await real_run(**{**kw, "interval": 0.04, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_scheduler, "run_stock_cycle", broken)
+    monkeypatch.setattr(scheduler, "run", accelerated_run)
+    try:
+        async with asyncio.timeout(2):
+            await scheduler.amain(stop)
+    finally:
+        get_scheduler_settings.cache_clear()
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None:
+    content = (BACKEND_DIR.parent / filename).read_text()
+    # Service-local indentation avoids a new YAML dependency for this contract.
+    import re
+
+    services = re.split(r"(?m)^  ([a-z][a-z_]*):\s*$", content)
+    found = {}
+    for i in range(1, len(services), 2):
+        found[services[i]] = services[i + 1]
+    stock = found["scheduler"]
+    assert "STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}" in stock
+    assert "ALPACA_API_KEY: ${ALPACA_API_KEY:-}" in stock
+    assert "ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}" in stock
+    for name, value in found.items():
+        if name != "scheduler":
+            assert "ALPACA_" not in value
+    assert "VITE_ALPACA" not in content
+
+
+@pytest.mark.parametrize("failure", [False, True])
+async def test_dividend_loop_is_independent_and_awaits_cancellation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: bool
+) -> None:
+    from app.core.config import SchedulerSettings
+    from app.tasks import dividends, stock_actions
+
+    settings = SchedulerSettings(
+        env="test",
+        price_source="fake",
+        database_url="postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
+        redis_url="redis://:test@127.0.0.1:56379/0",
+        stock_actions_enabled=True,
+        stock_actions_coverage_start="2026-11-01T00:00:00Z",
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
+    started, cleaned, stop = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    calls = []
+
+    async def crypto(**kwargs: Any) -> CycleResult:
+        calls.append(1)
+        if len(calls) == 3:
+            stop.set()
+        return CycleResult("ok")
+
+    async def actions(**kwargs: Any) -> CycleResult:
+        return CycleResult("ok")
+
+    async def dividend(**kwargs: Any) -> CycleResult:
+        assert "http" not in kwargs and "redis" not in kwargs
+        started.set()
+        try:
+            if failure:
+                raise RuntimeError("private-synthetic-payload")
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+        return CycleResult("ok")
+
+    real_run = scheduler.run
+
+    async def accelerated(**kwargs: Any) -> None:
+        await real_run(**{**kwargs, "interval": 0.02, "heartbeat": tmp_path / "hb"})
+
+    monkeypatch.setattr(scheduler, "run_cycle", crypto)
+    monkeypatch.setattr(stock_actions, "run_stock_action_cycle", actions)
+    monkeypatch.setattr(dividends, "run_dividend_cycle", dividend)
+    monkeypatch.setattr(scheduler, "run", accelerated)
+    async with asyncio.timeout(2):
+        await scheduler.amain(stop)
+    assert started.is_set() and cleaned.is_set() and len(calls) == 3

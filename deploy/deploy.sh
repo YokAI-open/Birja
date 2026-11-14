@@ -77,6 +77,24 @@ supported_ref() {
   case "$1" in main|v0.3.1|"${BIRJA_TESTED_SOURCE:-unsupported}") return 0 ;; *) return 1 ;; esac
 }
 
+application_schema_incompatible() {
+  echo 'application_schema_incompatible=true' >&2
+  return 1
+}
+
+admit_application_source() {
+  # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
+  # pinned by the retained manifest. A mutable ref name proves neither.
+  [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  case "${ADMITTED_REVISION:-}" in
+    0007|0008|0009|0010|0011|0012|0013) return 0 ;;
+    0014)
+      [[ "${BIRJA_TESTED_SOURCE:-}" =~ ^[0-9a-f]{40}$ ]] &&
+        [ "$1" = "$BIRJA_TESTED_SOURCE" ] && return 0 ;;
+  esac
+  application_schema_incompatible
+}
+
 checkout_source() {
   # The installer owns this launcher outside the sparse application source.
   # Git still detects an existing excluded tracked path as a local change.
@@ -396,22 +414,24 @@ prune_releases() {
 }
 
 do_deploy() {
-  install -d -m 755 "$STATE_DIR"
-  date -u +%Y-%m-%dT%H:%M:%SZ > "$PENDING_MARK"
   local sha
   if [ "${BIRJA_DEPLOY_REEXEC:-}" = 1 ] && [ -n "${BIRJA_DEPLOY_SHA:-}" ]; then
     # re-exec'd by the previous script: same commit, no second fetch
     STEP="git rev-parse"
     sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "$BIRJA_DEPLOY_SHA^{commit}") \
-      || { echo "cannot resolve '$BIRJA_DEPLOY_SHA'" >&2; exit 1; }
+      || { application_schema_incompatible; return 1; }
   else
     STEP="git fetch"
     git -C "$APP_DIR" fetch --prune --tags origin
     if sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "origin/$REF^{commit}"); then :
     elif sha=$(git -C "$APP_DIR" rev-parse --verify --quiet "$REF^{commit}"); then :
-    else echo "cannot resolve ref '$REF'" >&2; exit 1
+    else application_schema_incompatible; return 1
     fi
   fi
+  STEP="application schema compatibility"
+  admit_application_source "$sha" || return 1
+  install -d -m 755 "$STATE_DIR"
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$PENDING_MARK"
   STEP="git checkout"
   checkout_source "$sha"
   maybe_reexec "$sha"
@@ -469,6 +489,8 @@ do_rollback() {
   fi
   sha=${target%% *}
   rel=${target#* }
+  STEP="rollback application schema compatibility"
+  admit_application_source "$sha" || return 1
   # Rollback logs store immutable SHAs. Accept only the tested release or the
   # retained bundle's tested current source, never arbitrary historical refs.
   local old_sha

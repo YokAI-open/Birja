@@ -3,8 +3,54 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import SchedulerSettings, Settings
 from tests.test_db_connection import create_test_ca
+
+
+def action_settings(**changes):
+    return SchedulerSettings(
+        env="test",
+        database_url="postgresql+asyncpg://u:pw@h/db",
+        redis_url="redis://:pw@h:6379/0",
+        **changes,
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"stock_actions_enabled": True},
+        {"stock_actions_enabled": True, "stock_actions_coverage_start": "2026-11-01T00:00:00Z"},
+        {"stock_actions_coverage_start": "2026-11-01T00:00:00"},
+        {"stock_actions_coverage_start": "2026-11-01T00:00:00+03:00"},
+        {"stock_actions_poll_interval_seconds": 59},
+        {"stock_actions_health_max_age_seconds": 121},
+        {"stock_actions_max_attempts": 9},
+        {"stock_actions_cycle_budget_seconds": 31},
+        {"stock_actions_max_response_bytes": 262145},
+        {"stock_actions_segment_days": 0},
+        {"stock_actions_future_days": 89},
+        {"stock_account_requests_per_minute": 201},
+    ],
+)
+def test_action_settings_reject_missing_scope_and_unbounded_policy(changes):
+    with pytest.raises(ValidationError):
+        action_settings(**changes)
+
+
+def test_action_settings_default_off_scheduler_only_and_secret_free():
+    settings = action_settings(stock_actions_coverage_start="")
+    assert not settings.stock_actions_enabled
+    assert settings.stock_actions_coverage_start is None
+    assert "stock_actions_enabled" not in Settings.model_fields
+    settings = action_settings(
+        stock_actions_enabled=True,
+        stock_actions_coverage_start="2026-11-01T00:00:00Z",
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    assert "synthetic-key" not in repr(settings)
+
 
 VALID_SECRET = "x" * 40
 JWT = "j" * 40

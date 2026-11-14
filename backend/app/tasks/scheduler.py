@@ -284,6 +284,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         socket_timeout=2,
     )
     http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+    stock_http: httpx.AsyncClient | None = None
+    action_http: httpx.AsyncClient | None = None
     try:
         source = build_source(settings, http)
         candidates: dict[int, Candidate] = {}
@@ -302,12 +304,82 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                 candidates=candidates,
             )
 
-        await run(
-            cycle=cycle,
-            interval=settings.price_poll_interval_seconds,
-            stop=stop,
-        )
+        loops: list[tuple[Callable[[], Awaitable[CycleResult]], float]] = [
+            (cycle, settings.price_poll_interval_seconds)
+        ]
+        if settings.stock_data_enabled:
+            from app.tasks.stock_scheduler import run_stock_cycle
+
+            # Keep credentials out of the crypto client, API and browser.
+            key, secret = settings.alpaca_api_key, settings.alpaca_secret_key
+            assert key is not None and secret is not None  # noqa: S101 - settings validates
+            stock_http = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.stock_request_timeout_seconds),
+                headers={
+                    "APCA-API-KEY-ID": key.get_secret_value(),
+                    "APCA-API-SECRET-KEY": secret.get_secret_value(),
+                },
+            )
+
+            async def stock_cycle() -> CycleResult:
+                assert stock_http is not None  # noqa: S101 - created before loop
+                try:
+                    return await run_stock_cycle(
+                        sessionmaker=sessionmaker, redis=redis, http=stock_http, settings=settings
+                    )
+                except Exception as exc:
+                    # Isolate even unexpected stock defects; never log private
+                    # provider request/response/evidence values.
+                    logger.warning("stock loop failed: %s", type(exc).__name__)
+                    return CycleResult("source_error")
+
+            loops.append((stock_cycle, settings.stock_poll_interval_seconds))
+        if settings.stock_actions_enabled:
+            from app.tasks.dividends import DividendCursor, run_dividend_cycle
+            from app.tasks.stock_actions import run_stock_action_cycle
+
+            key, secret = settings.alpaca_api_key, settings.alpaca_secret_key
+            assert key is not None and secret is not None  # noqa: S101 - settings validates
+            action_http = httpx.AsyncClient(
+                trust_env=False,
+                timeout=httpx.Timeout(5.0),
+                headers={
+                    "APCA-API-KEY-ID": key.get_secret_value(),
+                    "APCA-API-SECRET-KEY": secret.get_secret_value(),
+                },
+            )
+
+            async def action_cycle() -> CycleResult:
+                assert action_http is not None  # noqa: S101 - created before loop
+                try:
+                    return await run_stock_action_cycle(
+                        sessionmaker=sessionmaker, redis=redis, http=action_http, settings=settings
+                    )
+                except Exception as exc:
+                    logger.warning("action loop failed: %s", type(exc).__name__)
+                    return CycleResult("source_error")
+
+            loops.append((action_cycle, settings.stock_actions_poll_interval_seconds))
+            dividend_cursor = DividendCursor()
+
+            async def dividend_cycle() -> CycleResult:
+                try:
+                    return await run_dividend_cycle(
+                        sessionmaker=sessionmaker, settings=settings, cursor=dividend_cursor
+                    )
+                except Exception as exc:
+                    logger.warning("dividend loop failed: %s", type(exc).__name__)
+                    return CycleResult("source_error")
+
+            loops.append((dividend_cycle, settings.stock_actions_poll_interval_seconds))
+        async with asyncio.TaskGroup() as group:
+            for callback, interval in loops:
+                group.create_task(run(cycle=callback, interval=interval, stop=stop))
     finally:
+        if action_http is not None:
+            await action_http.aclose()
+        if stock_http is not None:
+            await stock_http.aclose()
         await http.aclose()
         await redis.aclose()
         await engine.dispose()

@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 exec python3 - "$ROOT" "$@" <<'PY'
 import argparse
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -69,7 +70,50 @@ asyncio.run(main())
 '''
 
 
+def approved_runtime_artifacts(old_lock, current_lock):
+    def artifacts(lock):
+        return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
+    approved = {'exchange-calendars':'4.13.2','numpy':'2.5.4','pandas':'3.1.1','pyluach':'2.3.0','toolz':'1.2.0','tzdata':'2026.6','korean-lunar-calendar':'0.4.0','python-dateutil':'4.0.0'}
+    original, current = artifacts(old_lock), artifacts(current_lock)
+    additions = {name:current.pop(name) for name in approved}
+    assert {name:p['version'] for name,p in additions.items()} == approved
+    fingerprint=lambda value:hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    assert fingerprint(additions) == 'e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7'
+    before, after = original.pop('opentelemetry-api'), current.pop('opentelemetry-api')
+    # Exact owner-approved patch only; no ranges, substitutions or other drift.
+    assert before['version']=='1.45.1' and after['version']=='1.45.2'
+    assert before['dependencies']==after['dependencies']
+    assert fingerprint(before)=='14df8ffb9308919c95c868cab20e0bb9ac56f34a01a9f712955d15ea734642f1'
+    assert fingerprint(after)=='430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c'
+    before, after = original.pop('dnspython'), current.pop('dnspython')
+    # PR31 exact owner-approved advisory repair; authenticate both full records.
+    assert before['version']=='2.9.0' and after['version']=='2.9.2'
+    assert fingerprint(before)=='94eaf4580a2e9ddcebeb20c972343bd5ba85647b9d292423921c9652fc3eac21'
+    assert fingerprint(after)=='4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79'
+    assert original == current
+
+
 def orchestration_self_test():
+    historical=tomllib.loads(f.source_git('show','v0.3.1:backend/uv.lock').decode())
+    current_lock=tomllib.loads((ROOT/'backend/uv.lock').read_text())
+    approved_runtime_artifacts(historical,current_lock)
+    # Exercise actual positive contract and independent unapproved mutations
+    # before the real runner can spend time building the legacy image.
+    for package, field, value in [('opentelemetry-api','version','1.45.3'),
+                                  ('opentelemetry-api','dependencies',[]),
+                                  ('dnspython','version','2.9.3'),
+                                  ('typing-extensions','version','0.0.0')]:
+        damaged=copy.deepcopy(current_lock)
+        next(p for p in damaged['package'] if p['name']==package)[field]=value
+        try: approved_runtime_artifacts(historical,damaged)
+        except AssertionError: pass
+        else: raise AssertionError('unapproved package drift accepted')
+    for package in ('opentelemetry-api','dnspython','exchange-calendars'):
+        damaged=copy.deepcopy(current_lock)
+        next(p for p in damaged['package'] if p['name']==package)['wheels'][0]['hash']='sha256:'+'0'*64
+        try: approved_runtime_artifacts(historical,damaged)
+        except AssertionError: pass
+        else: raise AssertionError('unapproved artifact drift accepted')
     # Exercise the actual installer and repeated launchers in a private fake
     # host. Only fixed production path literals are relocated; no host checkout
     # config, services, credentials or security decisions are substituted.
@@ -81,7 +125,8 @@ def orchestration_self_test():
         replacements = {'/srv/birja':str(app), '/var/lib/birja/ops':str(root/'ops'),
                         '/usr/local/sbin/birja-deploy':str(root/'bin/birja-deploy'),
                         '/var/lock/birja-deploy.lock':str(root/'operation.lock'),
-                        '/var/www/birja':str(root/'web'), '/var/lib/birja':str(root/'state')}
+                        '/var/www/birja':str(root/'web'), '/var/lib/birja':str(root/'state'),
+                        '/etc/birja':str(root/'etc')}
         def relocated(text):
             for a,b in replacements.items(): text = text.replace(a,b)
             return text
@@ -152,42 +197,62 @@ def orchestration_self_test():
         legacy.chmod(0o500)
         run(['bash','-c','. "$1"; checkout_source main','_',str(release/'deploy/deploy.sh')],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
         assert legacy.read_bytes() == saved and git('rev-parse','HEAD') == old
-        # Real checkout remains safe, but an offline service mock must fail
-        # the selected-runtime guard before static swap or successful record.
+        # Real checkout remains safe. Without authenticated schema admission,
+        # an offline service mock must fail before any checkout or mutation.
         checkout(current)
         state=root/'state'
         web=root/'web'; (web/'releases/old').mkdir(parents=True)
         (web/'releases/new').mkdir()
         log=state/'deploys.log'
         log.write_text('t '+old+' '+str(web/'releases/old')+' v0.3.1\nt '+current+' '+str(web/'releases/new')+' main\n')
+        pending=state/'deploy.pending'
+        calls=state/'offline-mutation-calls'
+        def snapshot():
+            return (git('rev-parse','HEAD'), legacy.read_bytes(), log.read_bytes(),
+                    pending.read_bytes() if pending.exists() else None,
+                    os.readlink(web/'current') if (web/'current').is_symlink() else None)
+        before=snapshot()
         script='''set -Eeuo pipefail
 . "$1"
 exec 9>"$LOCK"
 flock -n 9
 BIRJA_TESTED_SOURCE=$2
-dc() { if [ "$1" = config ]; then printf 'backend\\nscheduler\\n'; fi; }
-health_check() { :; }
+dc() { printf '%s\\n' "$*" >> "$STATE_DIR/offline-mutation-calls"; if [ "$1" = config ]; then printf 'backend\\nscheduler\\n'; fi; }
+health_check() { printf 'health\\n' >> "$STATE_DIR/offline-mutation-calls"; }
 do_rollback
 [ ! -e "$PENDING_MARK" ]
 [ "$(live_sha "$DEPLOY_LOG")" = "$3" ]
 [ "$(readlink -f "$WEB_ROOT/current")" = "$WEB_ROOT/releases/old" ]
 '''
-        # An offline service mock cannot satisfy the real selected identity
-        # guard. Preserve that rejection; real success is exercised below.
-        run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        # Reject the intended missing-admission condition, not an arbitrary
+        # later failure. Real legacy/current selected success is tested below.
+        result=run(['bash','-c',script,'_',str(release/'deploy/deploy.sh'),current,old],env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        assert b'application_schema_incompatible=true' in result.stderr
+        assert snapshot() == before and git('rev-parse','HEAD') == current
+        assert not calls.exists()
+        # Keep the original admitted legacy rollback path as a separate case:
+        # its offline mocks reach checkout but cannot satisfy real selected
+        # datastore identity. The missing synthetic binding file must refuse.
+        admitted=script.replace('BIRJA_TESTED_SOURCE=$2',
+            'BIRJA_TESTED_SOURCE=$2\nADMITTED_REVISION=0008')
+        result=run(['bash','-c',admitted,'_',str(release/'deploy/deploy.sh'),current,old],
+            env={**r.ENV,'BIRJA_RETAINED_DIR':str(release)},ok=False)
+        assert b'datastore_bindings_failed=true' in result.stderr
         assert git('rev-parse','HEAD') == old
+        assert snapshot()[1:] == before[1:]
+        assert calls.read_text().splitlines() == ['config --services', 'build backend scheduler', 'up -d --wait --remove-orphans backend scheduler']
         assert b'Usage:' in run([str(legacy),'--help']).stdout
         assert git('status','--porcelain') in ['', 'M deploy/deploy.sh']
         assert all(r.digest(p)==sha for p,sha in retained.items())
-        print('retained_installer_real_git_checkout=true offline_rollback_mock_identity_rejected=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
+        print('retained_installer_real_git_checkout=true offline_rollback_missing_admission_rejected=true missing_admission_mutation_calls=0 offline_rollback_mock_identity_rejected=true admitted_checkout_old=true repeated_legacy_entrypoints=true immutable_routing=true checkout_failure_restored=true changed_launcher_unheld_lock_rejected=true',flush=True)
 
 
 def integration(archive_arg):
     started = time.monotonic()
     # This exact locally available ref is required; never fetch or change host HEAD.
     old_sha = f.source_git('rev-parse', '--verify', 'v0.3.1^{commit}').decode().strip()
-    current_sha = f.source_git('rev-parse', 'HEAD').decode().strip()
-    original_head = current_sha
+    current_sha = f.source_git('rev-parse', '--verify', 'v0.4.0^{commit}').decode().strip()
+    original_head = f.source_git('rev-parse', 'HEAD').decode().strip()
     dc0 = r.compose()
     with f.installed_recovery(archive_arg) as session:
         root = session.root
@@ -197,17 +262,21 @@ def integration(archive_arg):
             assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
         old_lock = tomllib.loads((old / 'backend/uv.lock').read_text())
         current_lock = tomllib.loads((ROOT / 'backend/uv.lock').read_text())
-        def artifacts(lock):
-            return {p['name']:p for p in lock['package'] if p['name'] != 'birja-backend'}
-        assert artifacts(old_lock) == artifacts(current_lock)
+        approved_runtime_artifacts(old_lock,current_lock)
         old_project = tomllib.loads((old / 'backend/pyproject.toml').read_text())
         current_project = tomllib.loads((ROOT / 'backend/pyproject.toml').read_text())
-        assert old_project['project']['dependencies'] == current_project['project']['dependencies']
+        assert sorted(old_project['project']['dependencies'] + ['exchange-calendars==4.13.2']) == sorted(current_project['project']['dependencies'])
         assert sorted(d for d in old_project['dependency-groups']['dev'] if not d.startswith('pip-audit')) == sorted(current_project['dependency-groups']['dev'])
         # Actual old source and lock, production-only deps, reviewed build file.
         run(['/usr/bin/docker', 'build', '--pull=false', '--target', 'runtime', '-f', str(ROOT / 'backend/Dockerfile'), '-t', 'birja-rollback-test:v0.3.1', str(old / 'backend')])
         for name in ['backend/uv.lock', 'backend/pyproject.toml']:
             assert (old / name).read_bytes() == f.source_git('show', old_sha + ':' + name)
+        # This is the legacy0008 rollback lane. Actual successor0010 services
+        # and recovery are independently exercised by test-db-operations --all.
+        legacy = root/'legacy-current'
+        legacy.mkdir(mode=0o700)
+        with tarfile.open(fileobj=io.BytesIO(f.source_git('archive','v0.4.0','backend/app','backend/alembic'))) as archive:
+            archive.extractall(legacy,filter='data')
         env = {**r.ENV, 'POSTGRES_USER': r.BOOT, 'POSTGRES_PASSWORD': 'synthetic-ops-only',
                'POSTGRES_DB': 'birja_source_test', 'REDIS_PASSWORD': 'synthetic-redis-only',
                'OTP_HMAC_SECRET': 'synthetic-only-otp-secret-00000000000000',
@@ -298,7 +367,7 @@ def integration(archive_arg):
                     s['image'] = 'birja-rollback-test:v0.3.1' if name != 'migrate' else 'birja-backend-test:phase05-07'
                     s['volumes'] = [str(root/'db-tls/ca.crt')+':/run/birja/db-ca.crt:ro']
                     if name == 'migrate':
-                        s['volumes'] += [str(ROOT/'backend/app')+':/app/app:ro',str(ROOT/'backend/alembic')+':/app/alembic:ro']
+                        s['volumes'] += [str(legacy/'backend/app')+':/app/app:ro',str(legacy/'backend/alembic')+':/app/alembic:ro']
                     else: s['command'] = ['sleep','infinity']
                 fixture['services'][name] = s
             file = root/'rollback-compose.json'
@@ -330,7 +399,7 @@ def integration(archive_arg):
             for service,key in [('backend','APP'),('scheduler','SCHEDULER')]:
                 s=fixture['services'][service]
                 s['image']='birja-backend-test:phase05-07'
-                s['volumes'] += [str(ROOT/'backend/app')+':/app/app:ro']
+                s['volumes'] += [str(legacy/'backend/app')+':/app/app:ro']
                 s['environment']['DATABASE_URL']=env[key+'_DATABASE_URL']
             file.write_text(json.dumps(fixture))
             current_probe=PROBE.replace('e=create_async_engine(s.database_url)',
@@ -366,7 +435,7 @@ def integration(archive_arg):
             print('old_image_services_tls=true bad_ca_hostname_plaintext_rejected=true', flush=True)
             f.recovery_roundtrip(session, source_revision='0008', source_release=old_sha)
             assert f.source_git('rev-parse','HEAD').decode().strip() == original_head
-            print('old_image_rollback_same_installed_recovery=true revision_0008_preserved=true', flush=True)
+            print('old_image_rollback_same_installed_recovery=true revision_0008_preserved=true legacy_runtime_scope=v0.4.0_to_v0.3.1 successor0010_proof=separate_all_lane', flush=True)
             print('rollback_integration_seconds=%.3f' % (time.monotonic()-started), flush=True)
         finally:
             run(dc0+['down','-v','--remove-orphans'])
@@ -393,4 +462,5 @@ else:
     selected = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(selected)
     selected.integration(args.recovery_bundle)
+    selected.integration_current0014(args.recovery_bundle)
 PY

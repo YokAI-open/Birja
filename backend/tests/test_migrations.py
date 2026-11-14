@@ -10,13 +10,49 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 import app.models  # noqa: F401
 from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+EXPECTED_HEAD = "0014"
+
+
+async def ensure_dividend_test_owner() -> None:
+    """Only guarded disposable DB administration, no production provisioning."""
+    import os
+
+    from tests.guard import ensure_test_stack
+
+    url = os.environ["DATABASE_URL"]
+    ensure_test_stack(url, os.environ["REDIS_URL"])
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as conn:
+            assert (
+                await conn.execute(
+                    text(
+                        "SELECT current_database()='birja_test' AND current_user='birja_test' "
+                        "AND rolsuper FROM pg_roles WHERE rolname=current_user"
+                    )
+                )
+            ).scalar_one()
+            await conn.execute(
+                text("""DO $test$ BEGIN
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
+                CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator' AND
+                (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                 OR rolreplication OR rolbypassrls)) THEN
+                RAISE EXCEPTION 'unsafe disposable migration owner'; END IF;
+            END $test$""")
+            )
+    finally:
+        await engine.dispose()
 
 
 def _config() -> Config:
@@ -37,18 +73,18 @@ async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0008"]
+    assert await _versions(engine) == [EXPECTED_HEAD]
 
     await asyncio.to_thread(command.downgrade, cfg, "base")
     assert await _versions(engine) == []
 
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == ["0008"]
+    assert await _versions(engine) == [EXPECTED_HEAD]
 
 
 def test_baseline_is_head() -> None:
     script = ScriptDirectory.from_config(_config())
-    assert script.get_heads() == ["0008"]
+    assert script.get_heads() == [EXPECTED_HEAD]
 
 
 async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
@@ -66,11 +102,17 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
                 "SELECT * FROM trades ORDER BY id",
             ):
                 rows.append((await conn.execute(text(query))).all())
+            # Compare the original financial rules. Successor0011 adds a
+            # composite causal key and0013 adds a stock-only constraint trigger.
+            # Their separate successor tests verify both; retain the original
+            # crypto financial CHECK/FK comparison at the history-index boundary.
             constraints = (
                 await conn.execute(
                     text("""SELECT conrelid::regclass::text, conname,
                 pg_get_constraintdef(oid) FROM pg_constraint
                 WHERE conrelid IN ('accounts'::regclass, 'holdings'::regclass, 'trades'::regclass)
+                  AND conname <> 'uq_trades_id_coin_user'
+                  AND NOT (contype='t' AND conname='stock_fill_integrity')
                 ORDER BY conrelid, conname""")
                 )
             ).all()
@@ -134,7 +176,7 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
             ).scalar_one() is None
         assert await snapshot() == before
         await asyncio.to_thread(command.upgrade, cfg, "head")
-        assert await _versions(engine) == ["0008"]
+        assert await _versions(engine) == [EXPECTED_HEAD]
         assert await snapshot() == before
     finally:
         await asyncio.to_thread(command.upgrade, cfg, "head")

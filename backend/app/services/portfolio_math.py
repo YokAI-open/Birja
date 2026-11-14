@@ -1,9 +1,10 @@
 """Pure mid-price valuation. Only response boundaries are rounded."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -15,15 +16,33 @@ class PositionInput:
     cost_basis: Decimal
     mid: Decimal | None
     as_of: datetime | None
+    asset_class: Literal["crypto", "stock"] = field(default="crypto", kw_only=True)
+    coin_id: str = field(default="0", kw_only=True)
+    provider_asset_id: str | None = field(default=None, kw_only=True)
+    units_safe: bool = field(default=True, kw_only=True)
 
 
 @dataclass(frozen=True)
 class PositionValue(PositionInput):
-    average_cost: Decimal
+    average_cost: Decimal | None
     current_value: Decimal | None
     unrealized_pl: Decimal | None
     unrealized_pl_percent: Decimal | None
     allocation_percent: Decimal | None
+
+
+@dataclass(frozen=True)
+class ClassValues:
+    cash: Decimal
+    stocks: Decimal | None
+    crypto: Decimal | None
+
+
+@dataclass(frozen=True)
+class ClassAllocation:
+    cash: Decimal | None
+    stocks: Decimal | None
+    crypto: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -36,6 +55,10 @@ class PortfolioValue:
     cash_allocation_percent: Decimal | None
     valuation_complete: bool
     holdings: tuple[PositionValue, ...]
+    known_value: Decimal
+    unvalued_holding_count: int
+    class_values: ClassValues
+    class_allocation_percent: ClassAllocation
 
 
 def _round(value: Decimal, places: str = "0.01") -> Decimal:
@@ -52,13 +75,19 @@ def calculate_portfolio(
     retain their independent value. Zero denominators have no defined percentage.
     """
     with localcontext() as ctx:
-        ctx.prec = 50
-        held = [p for p in positions if p.quantity > 0]
+        ctx.prec = 64
+        held = sorted(
+            (
+                p if p.units_safe else replace(p, mid=None, as_of=None)
+                for p in positions
+                if p.quantity > 0
+            ),
+            key=lambda p: (p.symbol, int(p.coin_id)),
+        )
         raw_values = [p.quantity * p.mid if p.mid is not None else None for p in held]
         complete = all(value is not None for value in raw_values)
-        total = (
-            cash + sum((v for v in raw_values if v is not None), Decimal(0)) if complete else None
-        )
+        known = cash + sum((v for v in raw_values if v is not None), Decimal(0))
+        total = known if complete else None
         pl = total - starting_cash if total is not None else None
 
         def allocation(value: Decimal | None) -> Decimal | None:
@@ -69,14 +98,10 @@ def calculate_portfolio(
             unrealized = raw - p.cost_basis if raw is not None else None
             holdings.append(
                 PositionValue(
-                    symbol=p.symbol,
-                    name=p.name,
-                    is_active=p.is_active,
-                    quantity=p.quantity,
-                    cost_basis=_round(p.cost_basis),
-                    mid=p.mid,
-                    as_of=p.as_of,
-                    average_cost=_round(p.cost_basis / p.quantity, "0.00000001"),
+                    **{**asdict(p), "cost_basis": _round(p.cost_basis)},
+                    average_cost=_round(p.cost_basis / p.quantity, "0.00000001")
+                    if p.units_safe
+                    else None,
                     current_value=_round(raw) if raw is not None else None,
                     unrealized_pl=_round(unrealized) if unrealized is not None else None,
                     unrealized_pl_percent=(
@@ -87,6 +112,16 @@ def calculate_portfolio(
                     allocation_percent=allocation(raw),
                 )
             )
+
+        def class_value(asset: str) -> Decimal | None:
+            values = [v for p, v in zip(held, raw_values, strict=True) if p.asset_class == asset]
+            return (
+                sum((v for v in values if v is not None), Decimal(0))
+                if all(v is not None for v in values)
+                else None
+            )
+
+        stocks, crypto = class_value("stock"), class_value("crypto")
         return PortfolioValue(
             cash=_round(cash),
             starting_cash=_round(starting_cash),
@@ -98,4 +133,14 @@ def calculate_portfolio(
             cash_allocation_percent=allocation(cash),
             valuation_complete=complete,
             holdings=tuple(holdings),
+            known_value=_round(known),
+            unvalued_holding_count=sum(v is None for v in raw_values),
+            class_values=ClassValues(
+                _round(cash),
+                _round(stocks) if stocks is not None else None,
+                _round(crypto) if crypto is not None else None,
+            ),
+            class_allocation_percent=ClassAllocation(
+                allocation(cash), allocation(stocks), allocation(crypto)
+            ),
         )

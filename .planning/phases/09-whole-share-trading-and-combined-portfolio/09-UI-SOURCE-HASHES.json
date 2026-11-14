@@ -1,0 +1,30 @@
+{
+  "commit": "969c3011ea246527143d4959e602fd27201ada29",
+  "sha256": {
+    "frontend/src/pages/StockTradePage.tsx": "7553ddf9c111de625b9b4a6f45b2f2c4dbad5c84ab37001c834f5382254e1a4f",
+    "frontend/src/components/StockTradeReceipt.tsx": "aa4a675ed8642976d77d538399bfb4f572eac4068ad9d40eb470b011454f6841",
+    "frontend/src/hooks/useStockTrade.ts": "dd201fe9ed933db392ae5420888aecc324d74309b208c790e3be184a2bcf8874",
+    "frontend/src/api/stockTrades.ts": "471ac6ea31f8a976940384d33df2afb2f44c801782271c7f85ec97bb1d081c06",
+    "frontend/src/hooks/usePortfolio.ts": "28077161bf5959cda75f63b59762d5181a005ad99f60ad9ddf31a97bf8bedd14",
+    "frontend/src/api/portfolio.ts": "dc7af4822c227cc27c38c6ee51d4b3baff02f339b3cf8829085761fb0c3e47cf",
+    "frontend/src/pages/PortfolioPage.tsx": "aaeabd961d862da38208aadf0eea18735e16ed460d75cfc8a372f697f404e98b",
+    "frontend/src/components/PortfolioHoldings.tsx": "e6e63f954d5382b6a1eaf221b8ded34a23445804eb5142cec6526aedbc662698",
+    "frontend/src/components/PortfolioAllocation.tsx": "997171b51f04adf4c3248557108d68050254237307a0b1b7d435512635a5c789",
+    "frontend/e2e/stock-trades.spec.ts": "ea77c58da013755696666cffb3387d8d65d9b092097971771d0c48ff00bf16bc",
+    "frontend/e2e/stock-trade-fixture.py": "36eeca01ca876d810a649ef087e582ea65061f093b1b725d2a283ce1d3de0e0a",
+    "frontend/src/index.css": "582470185ed6c1657d8bc07da205da816349f51c3433c78185fa69e1a41692bc",
+    "frontend/src/App.tsx": "f2615ad572d1ac303e0abed40fe1bb2a193b14739cef5e12c75646cc90d11e7d",
+    "frontend/src/components/StockSection.tsx": "52d6cae2f2493c5439143461870470ba3e103b6abac7be57f248a3577270647e",
+    "frontend/src/components/StockAttribution.tsx": "6f81e3937eaf842c93ee4f4cb7721ca9808ff4ccd57c66cad17bbdda2cb55d5d",
+    "frontend/src/lib/financialDisplay.ts": "f155dc35bbfd88d80120654c194af5a0211fbc30b7e3e70cd8c2fd8fb75c7266",
+    "frontend/src/lib/money.ts": "8137b61398b255bb2a658a282c8b17e0bf27f6284b43b07d207d535cd7ae7e9a"
+  },
+  "screenshots_manifest": "/tmp/birja-phase09-ui-review/MANIFEST.json",
+  "offline_snapshots": [
+    "combined-portfolio-review.html",
+    "incomplete-portfolio-review.html",
+    "stock-preview-review.html",
+    "stock-receipt-review.html",
+    "stock-reprice-review.html"
+  ]
+}

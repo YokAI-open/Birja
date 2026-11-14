@@ -51,6 +51,10 @@ async def test_portfolio_is_private_plain_and_read_only(auth_client, outbox, eng
         "fresh_seconds",
         "stale_seconds",
         "holdings",
+        "known_value",
+        "unvalued_holding_count",
+        "class_values",
+        "class_allocation_percent",
     }
     assert body["cash"] == "9999.00"
     assert body["starting_cash"] == "10000.00"
@@ -72,6 +76,10 @@ async def test_portfolio_is_private_plain_and_read_only(auth_client, outbox, eng
         "as_of",
         "age_seconds",
         "status",
+        "asset_class",
+        "coin_id",
+        "provider_asset_id",
+        "stock_mark",
     }
     for key in ("quantity", "cost_basis", "average_cost"):
         assert isinstance(h[key], str) and re.fullmatch(r"\d+(\.\d+)?", h[key])

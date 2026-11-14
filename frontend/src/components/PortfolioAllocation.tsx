@@ -8,12 +8,9 @@ function validAllocation(value: string | null): value is string {
 
 export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
   const rows = [
-    { key: "cash", label: "Cash", percent: portfolio.cash_allocation_percent },
-    ...portfolio.holdings.map((holding) => ({
-      key: `holding:${holding.symbol}`,
-      label: `${holding.symbol} · ${holding.name}`,
-      percent: holding.allocation_percent,
-    })),
+    { key: "cash", label: "Cash", percent: portfolio.class_allocation_percent.cash },
+    { key: "stocks", label: "Stocks", percent: portfolio.class_allocation_percent.stocks },
+    { key: "crypto", label: "Crypto", percent: portfolio.class_allocation_percent.crypto },
   ];
   return (
     <section aria-label="Portfolio allocation" className="flex min-w-0 flex-col gap-3">
@@ -25,9 +22,12 @@ export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
         outcome(portfolio.total_value) === "zero" && (
           <p>Allocation is unavailable while total portfolio value is zero.</p>
         )}
+      {!portfolio.valuation_complete && (
+        <p>Allocation is unavailable until every holding can be valued.</p>
+      )}
       <ul aria-label="Allocation" className="flex flex-col gap-3">
         {rows.map(({ key, label, percent }) => {
-          const valid = validAllocation(percent);
+          const valid = portfolio.valuation_complete && validAllocation(percent);
           return (
             <li key={key} className="flex min-w-0 flex-col gap-1">
               <div className="flex flex-wrap items-baseline justify-between gap-2">

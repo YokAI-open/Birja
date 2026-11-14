@@ -37,3 +37,34 @@ SELECT json_build_object(
    'fractional_cents',(SELECT count(*) FROM accounts WHERE cash<>round(cash,2)),
    'negative_holdings',(SELECT count(*) FROM holdings WHERE quantity<0 OR cost_basis<0)
  ));
+
+/* STOCK_COINS
+ SELECT 'coins', id, json_build_array(id,symbol,name,kraken_pair,sort_order,is_active,asset_class)::text FROM coins
+STOCK_COINS */
+/* STOCK_ROWS
+ UNION ALL SELECT 'stock_instruments', coin_id, json_build_array(coin_id,provider_asset_id,to_char(provider_verified_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),listing_exchange,currency,security_type,source,source_ref)::text FROM stock_instruments
+ UNION ALL SELECT 'stock_quotes', coin_id, json_build_array(coin_id,bid::text,ask::text,mid::text,source,feed,to_char(event_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),to_char(collected_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),session_date::text,admission_generation)::text FROM stock_quotes
+ UNION ALL SELECT 'stock_sessions', id, json_build_array(id,exchange,session_date::text,to_char(opens_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),to_char(closes_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),coverage_start::text,coverage_end::text,calendar_admission_generation)::text FROM stock_sessions
+ UNION ALL SELECT 'stock_data_admissions', id, json_build_array(id,product,state,generation,to_char(reviewed_at,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),to_char(valid_from,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),to_char(valid_until,'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),evidence_ref,terms_version,collection_allowed,display_allowed,derived_allowed,retention_allowed,scope,quota,allowed_fields,attribution,calendar)::text FROM stock_data_admissions
+STOCK_ROWS */
+/* STOCK_INVALID
+SELECT
+ (SELECT count(*) FROM coins WHERE asset_class NOT IN ('crypto','stock') OR (asset_class='crypto' AND kraken_pair IS NULL) OR (asset_class='stock' AND kraken_pair IS NOT NULL))
+ + (SELECT count(*) FROM stock_instruments s JOIN coins c ON c.id=s.coin_id WHERE c.asset_class<>'stock' OR currency<>'USD' OR security_type<>'common_stock' OR listing_exchange NOT IN ('NYSE','NASDAQ') OR source NOT IN ('sec','alpaca') OR length(source_ref) NOT BETWEEN 1 AND 2048 OR (provider_verified_at IS NOT NULL AND provider_asset_id IS NULL))
+ + (SELECT count(*) FROM stock_quotes WHERE NOT (bid>0 AND bid<'Infinity'::numeric AND ask>0 AND ask<'Infinity'::numeric AND mid>0 AND mid<'Infinity'::numeric) OR bid>ask OR mid <> trunc((bid+ask)/2,8)+CASE WHEN mod((bid+ask)*50000000,1)=0.5 AND mod(trunc((bid+ask)*50000000),2)=1 THEN 0.00000001 ELSE 0 END OR source<>'alpaca' OR feed<>'iex' OR event_at>collected_at OR admission_generation<=0)
+ + (SELECT count(*) FROM stock_sessions WHERE exchange NOT IN ('NYSE','NASDAQ') OR calendar_admission_generation<=0 OR NOT (coverage_start<=session_date AND session_date<=coverage_end AND coverage_end-coverage_start<=135) OR NOT ((opens_at IS NULL AND closes_at IS NULL) OR (opens_at IS NOT NULL AND closes_at IS NOT NULL AND opens_at<closes_at AND closes_at-opens_at<=interval '1 day')))
+ + (SELECT count(*) FROM stock_data_admissions WHERE product NOT IN ('reference','quotes','actions','status','calendar') OR state NOT IN ('denied','approved','revoked') OR generation<=0 OR (valid_from IS NOT NULL AND valid_until IS NOT NULL AND valid_from>=valid_until) OR (state='approved' AND (reviewed_at IS NULL OR valid_from IS NULL OR valid_until IS NULL OR evidence_ref IS NULL OR terms_version IS NULL)) OR jsonb_typeof(scope)<>'object' OR octet_length(scope::text)>16384 OR jsonb_typeof(quota)<>'object' OR octet_length(quota::text)>4096 OR jsonb_typeof(allowed_fields)<>'array' OR octet_length(allowed_fields::text)>4096 OR jsonb_typeof(calendar)<>'object' OR octet_length(calendar::text)>32768 OR (product<>'calendar' AND calendar<>'{}'::jsonb))
+STOCK_INVALID */
+-- Revision0011 is assembled by backup-snapshot.manifest_sql using its explicit
+-- reviewed accounting columns, exact catalogue fingerprint and identity states.
+-- Keep the legacy query and STOCK_* fragments byte-compatible for0007–0010.
+
+-- Revision0012 additionally inventories the independently pinned scoped function,
+-- Revision0013 adds exact immutable fill/status rows, invoker function bodies,
+-- owners, search paths, ACLs and enabled trigger definitions, pinned independently.
+-- actual owner/EXECUTE ACL and operator boundaries in backup-snapshot.py.
+-- Revision0014 adds immutable dividend originals/decisions, every next identity,
+-- exact lineage/held-status schema, and independently pinned full declarations
+-- for both definers and their private authority/immutability helpers. Restored
+-- clones authenticate these identities before fixed grants and withhold payout
+-- EXECUTE from both runtime roles; raw legacy SQL remains byte-compatible.

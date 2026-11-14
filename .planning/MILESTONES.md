@@ -39,7 +39,7 @@ No finding is silently marked resolved.
 **Archives:** [roadmap](milestones/v1.0-ROADMAP.md),
 [requirements](milestones/v1.0-REQUIREMENTS.md),
 [integration review](milestones/v1.0-INTEGRATION-AUDIT.md).
-All phase directories and UI artifacts remain in place as execution history.
+All v1 phase directories and UI artifacts are preserved in `milestones/v1.0-phases/`.
 
 **What's next:** No new product scope selected. Continue daily backup freshness
 and certificate-expiry checks; use `$gsd-new-milestone` when ready.

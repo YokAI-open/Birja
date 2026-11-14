@@ -356,6 +356,26 @@ class Evidence(unittest.TestCase):
             "archive_sha256": hashlib.sha256(b"PGDMPtest").hexdigest(),
             "release": "1" * 40,
             "revision": "0007",
+            # Same synthetic legacy shape as test-backup.sh, derived from the
+            # real producer's revision contract. Restore validates it normally.
+            "tables": {
+                table: {"count": 0, "sha256": hashlib.sha256(b"").hexdigest()}
+                for table in b.contract_columns("0007")
+            },
+            "schema": {
+                "identities": [
+                    [table, column, "a" if column == "id" else "",
+                     "bigint" if column == "id" else "text"]
+                    for table, columns in b.contract_columns("0007").items()
+                    for column in sorted(columns)
+                ],
+                "indexes": [],
+                "constraints": [],
+            },
+            "financial": {
+                **dict.fromkeys(("negative_cash", "fractional_cents", "negative_holdings"), 0),
+                **dict.fromkeys(("cash", "starting_cash", "quantity", "cost_basis", "fees", "cash_delta"), "0"),
+            },
         }
         self.c = {
             "_synthetic": True,
@@ -390,6 +410,22 @@ class Evidence(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_restore_requires_the_real_complete_manifest_contract(self):
+        b.validate_manifest(self.manifest)
+        for mutation in ("missing_table", "missing_column", "negative_cash"):
+            saved = json.loads(json.dumps(self.manifest))
+            try:
+                if mutation == "missing_table":
+                    self.manifest["tables"].pop("accounts")
+                elif mutation == "missing_column":
+                    self.manifest["schema"]["identities"].pop()
+                else:
+                    self.manifest["financial"]["negative_cash"] = 1
+                with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                    self.run_restore()
+            finally:
+                self.manifest = saved
 
     def remote(self, job, *args, **kwargs):
         self.remote_calls.append(args[0])

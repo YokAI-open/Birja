@@ -22,16 +22,16 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
-COMPOSE_SHA = "6e3a5c1b02d07c785cc69327c0656424af307da7719ed51781ab0d6c5fe3bc9c"
+COMPOSE_SHA = "634eabc7c1c3e4235a2d506e7ac1b8417b5cffcca0203df6f4f578f0420ddc91"
 BOOT = "birja_ops_bootstrap"
 CLONE = "birja_restore_test"
 RESTIC_SHA = "20d4142678d0d95ec11a4759def1b73fd9190abc9ca19e4b62d067c0b387e639"
 # Config identity is distinct from registry and engine identities. Docker's
 # classic store exposes the config ID; containerd exposes the manifest ID.
-IMAGE_ID = "sha256:91c89cf7f1f18cc4d96fcb5b9e2438108569c1dfcd5aa7286f9cad7d75742ed4"
-INDEX_DIGEST = "sha256:f131db66371391e404c80cef7dd40f31b1b54eb264a6cb032925d9a3859f93f4"
+IMAGE_ID = "sha256:4ee05252904571f8901ceb47916108d7da51fc6ecc3edbfa4a161b8b9225051e"
+INDEX_DIGEST = "sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
 PLATFORM_DIGEST = (
-    "sha256:4401cf2919e749cd77b634a72e4a677c1a1afc12baddb21faf28df326162472e"
+    "sha256:42c334e9e4d30cf6f99ac6bbc411910d020b02dfb693604887e9cdc9188e3a48"
 )
 REGISTRY_REF = "cgr.dev/chainguard/postgres@" + INDEX_DIGEST
 RECOVERY_IMAGE = "birja-recovery-postgres:verified-" + IMAGE_ID[7:]
@@ -406,6 +406,7 @@ def bundle_verify(archive, sha, required_profile=None):
         require(set(expected) == names - {"SHA256SUMS"})
         for name, h in expected.items():
             require(hashlib.file_digest(t.extractfile(name), "sha256").hexdigest() == h)
+        verify_contract_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
         require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
         require(all(expected["provenance/" + n] == h for n, h in PROVENANCE.items()))
@@ -431,6 +432,20 @@ def bundle_verify(archive, sha, required_profile=None):
             )
     runtime()
     return inventory
+
+
+CONTRACT_PAYLOAD = [
+    "deploy/backup-manifest.sql", "deploy/backup-snapshot.py", "deploy/verify-restore.py"
+]
+
+
+def verify_contract_inventory(inventory, expected):
+    """Old immutable artifacts remain readable; successor metadata is exact."""
+    if "schema_contract" in inventory:
+        require(inventory["schema_contract"] == {
+            "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+            "payload_sha256": {name: expected[name] for name in CONTRACT_PAYLOAD},
+        })
 
 
 def bundle_package(output, units=False):
@@ -497,6 +512,10 @@ def bundle_package(output, units=False):
             "platform_manifest_digest": PLATFORM_DIGEST,
             "restic_sha256": RESTIC_SHA,
             "runtime": versions,
+            "schema_contract": {
+                "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+                "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
+            },
         }
         (stage / "INVENTORY.json").write_text(json.dumps(inventory, sort_keys=True))
         files.append("INVENTORY.json")
@@ -739,18 +758,40 @@ def check_running(dc):
     require(network["Internal"] is True)
 
 
+def recovery_contract():
+    spec = importlib.util.spec_from_file_location("recovery_contract", HERE / "backup-snapshot.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def canonical(dc, db=CLONE):
+    contract = recovery_contract()
+    revision = sql(dc, "SELECT version_num FROM alembic_version ORDER BY version_num;", db).decode().strip()
     return json.loads(
         sql(
             dc,
-            "SET TIME ZONE 'UTC';\n" + (HERE / "backup-manifest.sql").read_text(),
+            "SET TIME ZONE 'UTC';\n" + contract.schema_guard_sql(revision) + contract.manifest_sql(revision),
             db,
         )
     )
 
 
-def verify(dc, manifest):
+def verify(dc, manifest, *, quarantined=True):
+    contract = recovery_contract()
+    contract.validate_manifest(manifest)
     actual = canonical(dc)
+    contract.validate_manifest(actual,quarantined=quarantined and manifest['revision']=='0014')
+    if manifest['revision'] in ('0012','0013','0014'):
+        require(actual['resolution_authority'] == manifest['resolution_authority'])
+    if manifest['revision'] in ('0013','0014'):
+        require(actual['execution_authority'] == manifest['execution_authority'])
+    if manifest['revision']=='0014':
+        expected=json.loads(json.dumps(manifest['dividend_authority']))
+        if quarantined:
+            for function in expected['functions']:
+                function['acl']=[]
+        require(actual['dividend_authority']==expected)
     require(
         all(
             actual[k] == manifest[k]
@@ -769,7 +810,10 @@ def verify(dc, manifest):
         dc,
         "SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f' AND convalidated;",
     ).strip()
-    require(constraints == b"8")
+    stock = manifest["revision"] in ("0009", "0010", "0011", "0012", "0013", "0014")
+    require(constraints == (b"55" if manifest['revision']=='0014' else b"43" if manifest['revision']=='0013' else b"40" if manifest["revision"] in ('0011','0012') else b"10" if stock else b"8"))
+    if manifest["revision"] in ('0011','0012','0013','0014'):
+        require(actual["identity_state"] == manifest["identity_state"])
     require(
         sql(
             dc,
@@ -794,24 +838,149 @@ def verify(dc, manifest):
     )
     # Check identity progression without consuming sequence values. MVCC sequence
     # state need not equal the source; every future generated id must be safe.
-    for table in [
-        "users",
-        "accounts",
-        "auth_sessions",
-        "refresh_tokens",
-        "coins",
-        "holdings",
-        "trades",
-    ]:
+    identities = contract.identity_tables(manifest["revision"])
+    for table in identities:
         sequence = f"{table}_id_seq"
         require(
             sql(
                 dc,
-                f"SELECT (CASE WHEN is_called THEN last_value+1 ELSE last_value END) > coalesce((SELECT max(id) FROM {table}),0) FROM {sequence};",
+                f"SELECT pg_get_serial_sequence('public.{table}','id')='public.{sequence}' "
+                f"AND (CASE WHEN is_called THEN last_value+1 ELSE last_value END) "
+                f"> coalesce((SELECT max(id) FROM {table}),0) FROM {sequence};",
             ).strip()
             == b"t"
         )
     print("equality=true invariants=true identities=true")
+
+
+def restore_resolution_authority(dc, revision='0012'):
+    """Restore ONLY the reviewed0012 allowlist, while the clone is quarantined.
+
+    pg_restore --no-owner/--no-acl remains necessary for restricted clone
+    ownership. It cannot be used to infer that SECURITY DEFINER authority was
+    restored. Authenticate the exact reviewed function before the fixed grants.
+    No manifest SQL or source role name is executed.
+    """
+    contract = recovery_contract()
+    definition = json.loads(sql(dc, "SELECT to_json(pg_get_functiondef('" + contract.RESOLUTION_SIGNATURE + "'::regprocedure))"))
+    require(hashlib.sha256(definition.encode()).hexdigest() == contract.RESOLUTION_FUNCTION_SHA256)
+    require(sql(dc,"SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='" + contract.RESOLUTION_SIGNATURE + "'::regprocedure").strip() == b'birja_migrator')
+    # A fresh recovery server has no operator role. Only the existing trusted
+    # bootstrap connection may preprovision this fixed role; the clone owner
+    # remains restricted. Existing unsafe attributes/memberships are refused.
+    sql(dc,"""DO $$ BEGIN
+      IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
+        CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+          NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      END IF;
+      IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator' AND
+          (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+           OR rolreplication OR rolbypassrls)) OR
+        EXISTS(SELECT FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles
+           WHERE rolname='birja_action_operator')) OR
+        EXISTS(SELECT FROM pg_roles r WHERE r.rolname IN
+          ('birja_app','birja_scheduler','birja_migrator') AND
+          pg_has_role(r.oid,'birja_action_operator','MEMBER')) THEN
+        RAISE EXCEPTION 'unsafe restored operator boundary';
+      END IF;
+    END $$;""", "birja_ops_test")
+    sql(dc,"REVOKE ALL ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " FROM PUBLIC;\n"
+        "GRANT EXECUTE ON FUNCTION " + contract.RESOLUTION_SIGNATURE + " TO birja_action_operator;\n"
+        "GRANT USAGE ON SCHEMA public TO birja_action_operator;\n"
+        "GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;\n"
+        "GRANT SELECT ON " + ','.join('public.'+table for table in sorted([*contract.ACTION_COLUMNS,*contract.STOCK_COLUMNS])) + " TO birja_action_operator;")
+    authority=json.loads(sql(dc,"SELECT " + contract.resolution_authority_sql()))
+    contract.validate_resolution_authority(authority, revision)
+
+
+def restore_execution_authority(dc, revision='0013'):
+    """Reconstruct only fixed reviewed ACLs inside the quarantined clone.
+
+    Never execute definitions or grants supplied by the manifest. Authenticate
+    both independently pinned bodies and owners before adding fixed grants.
+    Runtime roles are NOLOGIN here; the clone has no application connection.
+    """
+    contract = recovery_contract()
+    for name, signature in (
+        ('check_stock_fill_integrity','public.check_stock_fill_integrity()'),
+        ('assert_stock_execution_current','public.assert_stock_execution_current(bigint,bigint,jsonb)'),
+    ):
+        definition = json.loads(sql(dc,"SELECT to_json(pg_get_functiondef('"+signature+"'::regprocedure))"))
+        require(hashlib.sha256(definition.encode()).hexdigest() == contract.EXECUTION_FUNCTIONS[name])
+        require(sql(dc,"SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='"+signature+"'::regprocedure").strip()==b'birja_migrator')
+    sql(dc,"""DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+          RAISE EXCEPTION 'unsafe restored runtime role'; END IF;
+      END LOOP; END $$;""",'birja_ops_test')
+    sql(dc,"""REVOKE ALL ON FUNCTION public.check_stock_fill_integrity() FROM PUBLIC;
+      REVOKE ALL ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb) FROM PUBLIC;
+      REVOKE ALL ON stock_fill_facts,stock_status_evidence FROM PUBLIC;
+      GRANT SELECT,INSERT ON stock_fill_facts TO birja_app;
+      GRANT SELECT ON stock_status_evidence TO birja_app;
+      GRANT SELECT,INSERT,UPDATE ON stock_status_evidence TO birja_scheduler;
+      GRANT EXECUTE ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb) TO birja_app;""")
+    authority=json.loads(sql(dc,'SELECT '+contract.execution_authority_sql()))
+    contract.validate_execution_authority(authority, revision)
+
+
+def dividend_pregrant_structure(dc):
+    """Read only pinned0014 structure before any role/grant reconstruction.
+
+    A genuinely fresh cluster has no resolution operator yet. Its name-based
+    privilege lookups cannot run at this boundary. Replace only that exact
+    trusted fragment, fail closed on dispatch drift, and expose no partial
+    authority object to callers. Full canonical verification remains mandatory
+    after all independently authenticated reconstruction helpers complete.
+    """
+    contract=recovery_contract()
+    query=contract.manifest_sql('0014')
+    resolution=contract.resolution_authority_sql()
+    require(query.count(resolution)==1)
+    query=query.replace(resolution,'NULL',1)
+    actual=json.loads(sql(dc,"SET TIME ZONE 'UTC';\n"+
+        contract.schema_guard_sql('0014')+query))
+    return {'schema':actual['schema'],
+        'triggers':actual['execution_authority']['triggers']}
+
+
+def restore_dividend_authority(dc):
+    """Authenticate no-ACL restore before changes; NEVER enable payout calls.
+
+    The source manifest is validated separately before pg_restore. Because
+    --no-acl deliberately omits its ACLs, only the known default PUBLIC EXECUTE
+    state is accepted here. Unexpected grants cannot be repaired into validity.
+    All four complete declarations and independently pinned bodies precede any
+    clone role/grant reconstruction. The clone remains disconnected from apps.
+    """
+    contract=recovery_contract()
+    authority=json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql()))
+    contract.validate_dividend_functions(authority['functions'],acl_mode='no_acl')
+    contract.validate_dividend_role_boundary(authority,allow_missing_runtime=True)
+    require(authority['owners']==[[name,'birja_migrator'] for name in sorted(
+        [*contract.DIVIDEND_COLUMNS,*[t+'_id_seq' for t in contract.DIVIDEND_COLUMNS]])])
+    actual=dividend_pregrant_structure(dc)
+    require(hashlib.sha256(json.dumps(actual['schema'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_SCHEMA_SHA256)
+    require(hashlib.sha256(json.dumps(actual['triggers'],sort_keys=True,separators=(',',':')).encode()).hexdigest()==contract.DIVIDEND_TRIGGERS_SHA256)
+    sql(dc,"""DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+          RAISE EXCEPTION 'unsafe restored runtime role'; END IF;
+      END LOOP; END $$;""",'birja_ops_test')
+    for signature,*_ in contract.DIVIDEND_FUNCTIONS.values():
+        sql(dc,'REVOKE ALL ON FUNCTION '+signature+' FROM PUBLIC,birja_app,birja_scheduler;')
+    sql(dc,"""REVOKE ALL ON stock_dividend_payments,stock_dividend_decisions FROM PUBLIC,birja_app,birja_scheduler;
+      GRANT SELECT ON stock_dividend_payments,stock_dividend_decisions TO birja_app,birja_scheduler;
+      REVOKE ALL ON SEQUENCE stock_dividend_payments_id_seq,stock_dividend_decisions_id_seq FROM PUBLIC,birja_app,birja_scheduler;""")
+    contract.validate_dividend_authority(json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql())),quarantined=True)
 
 
 @contextlib.contextmanager
@@ -829,13 +998,13 @@ def restored(dc, dump):
         )
         sql(
             dc,
-            "DO $$BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN CREATE ROLE birja_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; END IF; END$$;",
+            "DO $$BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN CREATE ROLE birja_migrator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END$$;",
             "birja_ops_test",
         )
         require(
             sql(
                 dc,
-                "SELECT NOT (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_migrator';",
+                "SELECT NOT (rolsuper OR rolinherit OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) FROM pg_roles WHERE rolname='birja_migrator';",
                 "birja_ops_test",
             ).strip()
             == b"t"
@@ -846,6 +1015,9 @@ def restored(dc, dump):
             "birja_ops_test",
         )
         created = True
+        # A fresh clone has no application access while ACLs are intentionally
+        # omitted by pg_restore and its0012 authority is independently checked.
+        sql(dc, f"REVOKE CONNECT ON DATABASE {CLONE} FROM PUBLIC;", "birja_ops_test")
         call(
             dc
             + [
@@ -865,6 +1037,13 @@ def restored(dc, dump):
             ],
             dump,
         )
+        revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
+        if revision == b'0014':
+            restore_dividend_authority(dc)
+        if revision in (b'0012',b'0013',b'0014'):
+            if revision in (b'0013',b'0014'):
+                restore_execution_authority(dc, revision.decode())
+            restore_resolution_authority(dc, revision.decode())
         yield
     finally:
         if created:
@@ -956,6 +1135,7 @@ def restore(args):
                         and p.stat().st_size <= c["max_stage_bytes"]
                     )
                 manifest = json.loads((target / "manifest.json").read_text())
+                recovery_contract().validate_manifest(manifest)
                 require(digest(target / "database.dump") == manifest["archive_sha256"])
                 with restored(dc, (target / "database.dump").read_bytes()):
                     verify(dc, manifest)
