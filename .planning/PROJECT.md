@@ -216,11 +216,17 @@ private portfolios while preserving existing accounts and financial records.
 - Crypto and stock capabilities within each portfolio, retaining all existing stock activation prerequisites.
 - Independent cash, holdings, trading, History and performance; an overview shows cash, total value and return.
 - Open a chosen portfolio to trade; delete any owned portfolio after confirmation, including holdings or the last portfolio.
-- Deletion removes the portfolio from normal screens while retained financial records remain outside those screens; zero active portfolios has a create action.
+- Deletion ends the experiment: freeze its cash, holdings and financial history at the committed closure boundary; stop future dividends/splits/corrections, without fabricated liquidation or cash transfers. Retained records remain outside normal screens; zero active portfolios has a create action.
 - Existing cash/holdings/history migrate into the user's first portfolio without another grant or reset.
 
-**Planning:** Start at Phase 12, research first, then obtain requirements and
-roadmap approval. Scope confirmation does not approve implementation, new
+**Research:** Completed in [research/v1.2/SUMMARY.md](research/v1.2/SUMMARY.md); no new dependencies recommended. The owner explicitly confirmed freeze at deletion after research surfaced its accounting consequences.
+
+**Requirements:** All 27 requirements approved on 2026-11-14, including rename,
+unique case-insensitive active names, initial “My portfolio” onboarding, and
+freeze-at-deletion treatment of unpaid/future effects.
+
+**Planning:** Start at Phase 12. Research and requirements approval are complete;
+create the proposed roadmap and obtain its approval. Scope confirmation does not approve implementation, new
 packages, provider operations, publication or production changes. No historical
 performance chart is included. Keep Phase 7 deferred outcomes visible and
 unchecked; do not repeat its bounded live campaign as part of this workflow.

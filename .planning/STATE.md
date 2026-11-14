@@ -25,7 +25,7 @@ Current focus: research and define v1.2 Multiple Strategy Portfolios, starting a
 
 Phase: Not started (defining requirements)
 Plan: —
-Status: Researching confirmed scope before requirements
+Status: 27 requirements approved; creating proposed roadmap
 Last activity: 2026-11-14 — Milestone v1.2 started
 
 ## Accepted Closeout and Release Boundary
@@ -89,7 +89,10 @@ See phases/07-permitted-stock-discovery/07-LIVE-VERIFICATION-PROPOSAL.md.
 
 The owner confirmed v1.2 Multiple Strategy Portfolios and research first.
 Research output: research/v1.2/; the earlier research remains unchanged.
-Next: research, full requirements approval, proposed roadmap approval; start
+Research committed at 52c59f1; freeze-at-deletion policy is confirmed.
+REQUIREMENTS.md contains 27 requirements explicitly approved by the owner on
+2026-11-14, including name/rename and first-portfolio defaults.
+Next: create and check the proposed roadmap, obtain roadmap approval; start
 new phases at 12. New funding policy and deletion scope are in PROJECT.md.
 Keep Phase 07–11 files and original manual-campaign links in place. The SDK's
 latest-completed-milestone result still names v1.0 because v1.1 closed with gaps;
