@@ -5,7 +5,9 @@ import copy
 import contextlib
 import importlib.util
 import io
+import subprocess
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -20,6 +22,50 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_private_clone_main_tracks_current_for_every_source_checkout(self):
+        # Execute the actual fixture's branch preparation with real Git, so a
+        # main push and detached PR checkout exercise the same contract.
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_integration')
+        session = next(n for n in function.body if isinstance(n, ast.With))
+        index = next(i for i, node in enumerate(session.body)
+                     if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'current' for target in node.targets))
+        setup = compile(ast.fix_missing_locations(ast.Module(body=session.body[index:index + 2], type_ignores=[])), '<actual-private-branch>', 'exec')
+        for checkout in ('main', 'feature', 'detached'):
+            with self.subTest(checkout=checkout), tempfile.TemporaryDirectory(prefix='birja-backup-test-git-') as directory:
+                root = Path(directory)
+                source, app, origin = root / 'source', root / 'app', root / 'origin'
+                def git_at(path, *args):
+                    return subprocess.check_output(['git', '-C', str(path), *args], stderr=subprocess.STDOUT, env=selected.r.ENV, text=True, timeout=30).strip()
+                source.mkdir()
+                git_at(source, 'init', '-b', 'main')
+                for key, value in (('user.email', 'synthetic@example.invalid'), ('user.name', 'Synthetic')):
+                    git_at(source, 'config', key, value)
+                (source / 'fixture').write_text('original\n')
+                git_at(source, 'add', 'fixture')
+                git_at(source, 'commit', '-m', 'Original source')
+                original = git_at(source, 'rev-parse', 'HEAD')
+                if checkout == 'feature':
+                    git_at(source, 'checkout', '-b', 'release-synthetic')
+                elif checkout == 'detached':
+                    git_at(source, 'checkout', '--detach')
+                git_at(root, 'clone', '--no-hardlinks', str(source), str(app))
+                for key, value in (('user.email', 'synthetic@example.invalid'), ('user.name', 'Synthetic')):
+                    git_at(app, 'config', key, value)
+                (app / 'fixture').write_text('relocated synthetic host\n')
+                git_at(app, 'commit', '-am', 'Relocate synthetic fixture')
+                expected = git_at(app, 'rev-parse', 'HEAD')
+                self.assertNotEqual(expected, original)
+                scope = {'git': lambda *args: git_at(app, *args)}
+                exec(setup, scope)
+                self.assertEqual(scope['current'], expected)
+                self.assertEqual(git_at(app, 'rev-parse', 'main'), expected)
+                self.assertEqual(git_at(app, 'rev-parse', 'HEAD'), expected)
+                git_at(root, 'clone', '--bare', str(app), str(origin))
+                self.assertEqual(git_at(origin, 'rev-parse', 'main'), expected)
+                self.assertEqual(git_at(source, 'rev-parse', 'main'), original)
+                self.assertEqual(git_at(source, 'rev-parse', 'HEAD'), original)
+
     def test_runtime_cli_order_is_irrelevant_but_every_field_and_row_is_preserved(self):
         import json
         rows = [{'ID': 'one', 'ContainerName': 'backend', 'Tag': 'current',

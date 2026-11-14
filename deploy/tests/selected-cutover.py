@@ -416,7 +416,7 @@ def _integration(archive=None, *, current0014):
         )
         git("commit", "-m", "Relocate fixed synthetic host and origin endpoints")
         current = git("rev-parse", "HEAD")
-        git("branch", "main", current)
+        git("checkout", "-B", "main", current)
         call(["git", "clone", "--bare", str(app), str(root / "origin")])
         git("remote", "set-url", "origin", str(root / "origin"))
         for role, char in (("app", "a"), ("scheduler", "b"), ("migrator", "c")):
