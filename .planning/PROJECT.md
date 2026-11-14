@@ -57,8 +57,19 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-- [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Accepted deferred v1.1 Phase 7 live acceptance (STOCK-01/02/03, DATA-01, MKT-01, SAFE-01); live activation and production rollout stay separately gated.
+- [ ] Create and name up to ten active strategy portfolios per user, each with its own $10,000 initial virtual cash.
+- [ ] Keep cash, holdings, trades, History, dividends, splits and performance scoped to the selected portfolio.
+- [ ] Compare portfolio cash, total value and return in an overview, then open one portfolio to trade.
+- [ ] Delete any owned portfolio after explicit confirmation, including portfolios with holdings and the last portfolio; retain financial records outside normal portfolio screens.
+- [ ] Preserve each existing user's actual balances, holdings and immutable history in their first portfolio.
+
+### Carried Deferred Work
+
+Phase 7 requirements STOCK-01/02/03, DATA-01, MKT-01 and SAFE-01 remain
+unchecked and unverified from v1.1. They stay tracked separately in
+[DEFERRED.md](DEFERRED.md) and the v1.1 archive, outside v1.2's committed
+feature scope. Live stock activation and production rollout remain separately
+gated. The bounded approved manual campaign is preserved at its original path.
 
 ### Out of Scope
 
@@ -66,8 +77,8 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - Portfolio value-over-time chart: v2. It needs a snapshot job and stored history.
 - Limit/stop orders: v2+. They need a background matcher. Market orders cover the core loop.
 - Short selling, leverage, margin: not planned. Too complex for a learning tool aimed at beginners.
-- Leaderboard and social features: v2+. v1 is solo; each user sees only their own portfolio.
-- Portfolio reset: deliberately excluded. Mistakes stay, like real investing.
+- Leaderboard and social features: deferred. Portfolios remain private to their owner.
+- Resetting an existing portfolio or transferring cash between portfolios: outside v1.2. The owner approved independently funded new portfolios and deletion/recreation for strategy experiments; each portfolio still receives its own starting grant only once.
 - Streaming tick-by-tick prices (websockets): not planned for v1. Prices about 1 minute old are enough and work on free data tiers.
 - Real money, deposits, brokerage integration: never. This is a simulator.
 - Full order-book execution and real order routing: excluded. Stock fills use eligible IEX bid/ask quotes; crypto retains its configured simulated spread.
@@ -195,12 +206,29 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 
 </details>
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Multiple Strategy Portfolios
 
-No next milestone is selected. Accepted live-activation gaps remain follow-up,
-not automatically approved new feature scope. The existing November16manual
-measurement approval remains bounded/no automatic process. Use archivedv1.1
-requirements/audit when the owner selects further work.
+**Goal:** Let users try independent investing strategies with separately funded,
+private portfolios while preserving existing accounts and financial records.
+
+**Confirmed target features (2026-11-14):**
+- Up to ten active named portfolios per user, each granted $10,000 virtual cash once.
+- Crypto and stock capabilities within each portfolio, retaining all existing stock activation prerequisites.
+- Independent cash, holdings, trading, History and performance; an overview shows cash, total value and return.
+- Open a chosen portfolio to trade; delete any owned portfolio after confirmation, including holdings or the last portfolio.
+- Deletion removes the portfolio from normal screens while retained financial records remain outside those screens; zero active portfolios has a create action.
+- Existing cash/holdings/history migrate into the user's first portfolio without another grant or reset.
+
+**Planning:** Start at Phase 12, research first, then obtain requirements and
+roadmap approval. Scope confirmation does not approve implementation, new
+packages, provider operations, publication or production changes. No historical
+performance chart is included. Keep Phase 7 deferred outcomes visible and
+unchecked; do not repeat its bounded live campaign as part of this workflow.
+
+**Funding policy change:** The owner explicitly replaces the single-portfolio
+funding limit with independent per-portfolio starting grants. Creating a new
+strategy after deletion is allowed. No existing portfolio is reset, and virtual
+funds are isolated rather than transferable across portfolios.
 
 ## Constraints
 
@@ -214,6 +242,8 @@ requirements/audit when the owner selects further work.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Independently funded, deletable strategy portfolios | Owner wants users to try separate strategies; up to ten active, $10,000 each, zero active allowed | Approved v1.2 scope, 2026-11-14 |
+| Carry Phase 7 live requirements separately | Preserve unmet outcomes without blocking unrelated local work or enabling stocks | Deferred/unverified, see DEFERRED.md |
 | Close v1.1 with six accepted live gaps | Owner requested release/finish anyway; keep truthful history and gated admissions | Accepted deferred, 2026-11-14 |
 | Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | ✓ Good — prices and trading shipped in Phases 3/4 |
 | Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | ✓ Good — Phase 3 live scheduler verified |
@@ -252,4 +282,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after approved v0.5.0 publication; v1.1 closed with known gaps, production unchanged.*
+*Last updated: 2026-11-14 after owner-confirmed v1.2 scope and research-first decision; production unchanged.*
