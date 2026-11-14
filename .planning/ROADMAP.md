@@ -201,7 +201,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 0/28 | Revision1 complete; independent recheck pending | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 0/28 | Revision2 complete; fresh independent recheck pending | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

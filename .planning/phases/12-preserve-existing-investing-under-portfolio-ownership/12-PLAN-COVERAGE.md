@@ -1,6 +1,6 @@
 # Phase12 Multi-Source Coverage and Reachability Audit
 
-Planning only:28 plans,56 tasks,18 waves. Revision1 completed; independent recheck pending. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
+Planning only:28 plans,56 tasks,18 waves. Revision2 completed; fresh independent recheck pending. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
 
 ## Goal and Requirements
 
@@ -40,14 +40,14 @@ CONTEXT uses named bullets, not numbered D-IDs. Preserve the actual decisions wi
 |---|---|---|
 | Responsibility map:SQL relational authority; services explicit owned transaction; browser untrusted |03–08/10–15/19–25 | COVERED |
 | accounts.id root; compound owner/cause tuples; global instrument evidence |02–03/05–07/12–14 | COVERED |
-| Actual-migrator-only finite NULL association; every other column unchanged |04-01/02;01 authored cases;07 actual final SQL | COVERED |
+| Actual-migrator-only finite NULL association; guarded authenticated prerequisite; other columns unchanged |01-01 conftest/test_migrations/test_stock_migrations login helper;04 positive session_user, ordinary/SET ROLE refusal/resume;07 fresh/populated final SQL | COVERED |
 | Final0017 closes bypass, required tuples, no broad ordinary grants |07/16 | COVERED |
 | Intermediate0015/16 explicitly migration-only runtime/bootstrap/backup/restore |07/16/17/27 | COVERED |
 | Resumable migrator-to-final path avoids intermediate bootstrap deadlock |16-02/27 | COVERED |
 | Immutable static versioned SQL companions, old migrations unchanged |05/06 loaded07;17 exact inventories | COVERED |
 | Old binary/unsafe downgrade refuses before writes |04/07/16/18/27 | COVERED |
 | Every writer including raw VERIFIED/ANCHORS,entitlement supersession,correction/payment |10–13 plus05/06 SQL | COVERED |
-| Global journal ordering; versioned old split digest interpretation; closed terminal unit epochs |03/12 | COVERED |
+| Global applications without root association; owned movements/once-only keys; persisted nullable SMALLINT NULL-v1/2-new; terminal epochs |01/04 real two-user legacy split;03 model;05/07 guard/SQL;12 reader/writer sibling split;16–18 shape/hash/restored interpretation;27 cold proof | COVERED |
 | Identity-only real v2 API; legacy verify before OTP consumption |08–09/15/19 | COVERED |
 | Global retry-key uniqueness plus root/payload; active original replay before market gate |10–11/21/24 | COVERED |
 | Root/version cursor and all union/hydration/original references |14/20/22/25 | COVERED |
@@ -56,7 +56,7 @@ CONTEXT uses named bullets, not numbered D-IDs. Preserve the actual decisions wi
 | Exact current/retained schema/function/role inventories; one source/archive serial proof |16–18/26–27 | COVERED |
 | Independent fixture oracles and all existing regressions |01/05/06/domain tests and27 | COVERED |
 
-Engineering refinement:portfolio_stock_closures records owned root+coin closed_at,closing_sequence,unit_epoch. Migration-authority synthetic fixtures seed it; generic runtime roles cannot mutate lifecycle. Closed-root reconstruction uses its own cutoff while active siblings advance global epochs. Public closure transaction belongs Phase14. New split digest interpretation is versioned; old saved bytes unchanged.
+Engineering refinement:StockSplitApplication stays global without user/root columns, unique economic_event_id; only movements gain root association and unique(application_id,portfolio_id), retaining global application/coin/unit cause FK. Nullable SMALLINT owner_digest_version has no default: existingNULL=v1, new explicit2 enforced by immutable final insertion guard. Legacy global IDs/digest bytes never change.01/04 real two-user split and12 later same-user sibling split qualify mixed reload and17/18/27 recovery. portfolio_stock_closures records owned root+coin closed_at,closing_sequence,unit_epoch. Migration-authority synthetic fixtures seed it; generic runtime roles cannot mutate lifecycle. Closed-root reconstruction uses its own cutoff while active siblings advance global epochs. Public closure transaction belongs Phase14. New split digest interpretation is versioned; old saved bytes unchanged.
 
 ## UI Contract
 
@@ -84,3 +84,5 @@ Revision1 resolution is recorded in12-PLAN-REVISION-01.md; added source/schema/i
 
 Static SDK/schema/task/DAG/reference checks establish plan shape only. Real Wave0,SQL/TLS/cold recovery,strict audits/five image scans and owner changed-UI/native zoom remain unperformed. Independent checker follows. Nothing marks Phase12 executed or runtime verified.
 
+
+Revision2 resolves C02 across truths/acceptance/done/success with07 owning actual SQL proof; C06 global applications/owned movements; C07 model→0015→0017 guard→writer/reader→ACL/hash/recovery persisted marker; C08 guarded real-login pytest lane before04 replacing conflicting NOLOGIN prerequisite without weakening session_user. See12-PLAN-REVISION-02.md. No runtime results claimed.

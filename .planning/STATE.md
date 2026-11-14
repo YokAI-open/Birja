@@ -19,13 +19,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 independent recheck found four blockers; bounded revision2 is next. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 bounded revision2 addresses all four recheck findings; fresh independent recheck is next. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
 Plan: — (no executable phase plans)
-Status: Phase 12 revision1 reduced findings from eight to four blockers. See 12-PLAN-CHECK-02.md; revision2 and independent recheck required. No execution started.
+Status: Phase 12 revision2 addresses four blockers from12-PLAN-CHECK-02.md. See12-PLAN-REVISION-02.md; fresh independent recheck required. All28 plans remain unapproved for execution; no execution started.
 Last activity: 2026-11-14 — Added optional descriptions to the approved roadmap; all 28 requirements mapped exactly once
 
 Progress: 0/4 phases complete; 0 executable plans; 0% implementation.
@@ -112,7 +112,10 @@ found 5 blockers and 3 warnings; see 12-PLAN-CHECK-01.md.
 Revision1 addresses all eight findings; see12-PLAN-REVISION-01.md. All28
 installed-SDK schema/structure/typed-object checks and graph/ownership/56-task
 validation mapping checks pass. Recheck1 found four blockers (down from eight); see 12-PLAN-CHECK-02.md.
-Next: bounded revision2 and independent recheck. Keep
+Revision2 resolves precursor completion wording, global split/movement ownership,
+persisted NULL-v1/explicit2 digest marker and guarded authenticated pytest migration
+prerequisites; see12-PLAN-REVISION-02.md. Counts remain28 plans/56 tasks/18 waves.
+Next: fresh independent recheck. Keep
 nyquist_compliant false until actual plan approval; no implementation yet. Local planning commits
 are prepared on feature/milestone-v1.2. The owner selected “Keep local for now”;
 retain that publication preference for this amendment.

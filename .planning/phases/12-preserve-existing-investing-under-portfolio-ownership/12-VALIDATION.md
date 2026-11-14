@@ -9,7 +9,7 @@ created: 2026-11-14
 
 # Phase12 Validation Strategy
 
-28 plans,56 tasks,18 waves. Revision1 addresses check1's eight findings; independent recheck pending. All commands below are planned execution, not passed evidence. No runtime/provider/production/install work occurred in planning. ASVS level1, high block; preserve80% overall and100% critical branch coverage, strict dependency audits and all five actual image scans.
+28 plans,56 tasks,18 waves. Revision2 addresses recheck1's four blockers; fresh independent recheck pending. All commands below are planned execution, not passed evidence. No runtime/provider/production/install work occurred in planning. ASVS level1, high block; preserve80% overall and100% critical branch coverage, strict dependency audits and all five actual image scans.
 
 ## Sampling and Infrastructure
 
@@ -21,7 +21,7 @@ T-12-NN-01 and02 map the actual control/negative proof to task01 and02 respectiv
 
 | Task | Wave | Requirements | Threats | Automated command | Proof creation/dependency owner | Status |
 |---|---:|---|---|---|---|---|
-| 12-01-01 | 1 | PFUND-03, PFIN-03, PSAFE-03 | T-12-01-01; T-12-01-SC (accept) | `cd backend && uv run pytest tests/test_portfolio_migrations.py --collect-only -q` | This task creates independent proof fixtures; prior none | Not executed |
+| 12-01-01 | 1 | PFUND-03, PFIN-03, PSAFE-03 | T-12-01-01; T-12-01-SC (accept) | `cd backend && uv run pytest tests/test_portfolio_migrations.py -q -k 'migrator_connection' && uv run pytest tests/test_portfolio_migrations.py --collect-only -q` | This task creates independent proof fixtures; prior none | Not executed |
 | 12-01-02 | 1 | PFUND-03, PFIN-03, PSAFE-03 | T-12-01-02; T-12-01-SC (accept) | `cd backend && uv run pytest tests/test_portfolio_ownership.py tests/test_portfolio_authority.py --collect-only -q` | This task creates independent proof fixtures; prior none | Not executed |
 | 12-02-01 | 2 | PFUND-03, PSAFE-03 | T-12-02-01; T-12-02-SC (accept) | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'model_metadata'` | Task creates named missing tests before consumer; shared fixture01; prior 12-01 | Not executed |
 | 12-02-02 | 2 | PFUND-03, PSAFE-03 | T-12-02-02; T-12-02-SC (accept) | `cd backend && uv run pytest tests/test_portfolio_ownership.py -q -k 'model_metadata'` | Task creates named missing tests before consumer; shared fixture01; prior 12-01 | Not executed |
@@ -80,7 +80,7 @@ T-12-NN-01 and02 map the actual control/negative proof to task01 and02 respectiv
 
 ## Wave0 and Missing Tests
 
-12-01 creates shared financial/economic-byte oracles and migration/ownership/authority test matrix.12-05-01 and06-01 create direct-SQL authority tests before SQL assets;07-02 creates schema-admission tests.08–15 create targeted identity/service/API/history tests before implementation within each task.16-02 creates migration-runner contracts;17-01 creates exact producer/consumer recovery contracts;18-01 creates current0017 mixed-root fixture plus behavioral command/oracle contract tests;18-02 creates authenticated retained-source lock/dispatcher and runs actual isolated0017 smoke.27 owns the full encrypted same-archive cold restore.02/03 metadata cases and05/06 static SQL cases do not require final database constraints;07-01 is their concrete first SQL-green owner after actual Alembic0017.19–25 create named browser/client/hook/UI tests first within their task;26 creates browser journeys/runner contracts and full validation runner before27 consumes them. Every exact new test path is listed in its owning plan. Shared test edits depend on first owner. No skipped/always-green stubs; independent expected economics and denied SQL required. Collection-only precursor tasks must record expected feature failures and cannot claim feature completion.
+12-01 creates shared financial/economic-byte oracles and genuine two-user legacy global split, and reconciles conftest/test_migrations/test_stock_migrations to guarded restricted LOGIN migrator with child-only authenticated Alembic helper. Actual session_user/role/guard/unchanged parent tests pass there on existing0014;04 proves association/refusal/resume;07 proves fresh/populated0017 startup.12-05-01 and06-01 create direct-SQL authority tests before SQL assets;07-02 creates schema-admission tests.08–15 create targeted identity/service/API/history tests before implementation within each task.16-02 creates migration-runner contracts;17-01 creates exact producer/consumer recovery contracts;18-01 creates current0017 mixed-root fixture plus behavioral command/oracle contract tests;18-02 creates authenticated retained-source lock/dispatcher and runs actual isolated0017 smoke.27 owns the full encrypted same-archive cold restore.02/03 metadata cases and05/06 static SQL cases do not require final database constraints;07-01 is their concrete first SQL-green owner after actual Alembic0017.19–25 create named browser/client/hook/UI tests first within their task;26 creates browser journeys/runner contracts and full validation runner before27 consumes them. Every exact new test path is listed in its owning plan. Shared test edits depend on first owner. No skipped/always-green stubs; independent expected economics and denied SQL required. Collection-only precursor tasks must record expected feature failures and cannot claim feature completion.
 
 ## Requirement Proof Matrix
 
@@ -92,7 +92,7 @@ T-12-NN-01 and02 map the actual control/negative proof to task01 and02 respectiv
 | PCTX-01 |19/23–25 explicit named financial surfaces |26 synthetic packet;28 owner UI/native zoom |
 | PVIEW-03 |14 union/hydration/original/cursor scope |20/22/25 stale pages/details;26–28 |
 | PSAFE-02 |08–09 zero/one/many and before-OTP refusal;15 unscoped gate |19/23/26 browser;27 complete regressions |
-| PSAFE-03 |03–07 compound lineage/finite closure;05–06 SQL;16 restricted roles |17–18 exact inventory;27 verified TLS/source-bound cold proof |
+| PSAFE-03 |01 authenticated prerequisite;03–07 owned lineage/global split immutable marker;05–06 static assets/SQL collection,07 actual authority/freeze;16 restricted roles |17–18 exact inventory;27 verified TLS/source-bound cold proof |
 
 ## Manual Execution Checkpoints
 
@@ -108,3 +108,9 @@ T-12-NN-01 and02 map the actual control/negative proof to task01 and02 respectiv
 - [ ] Focused latency measured; actual automated and owner proofs passed.
 
 Keep both compliance/execution flags false pending corresponding independent review/execution. Phase7 six live IDs remain deferred with stock admissions gated off; no provider,production,publishing or package changes. Phase13 owns create/name/rename/optional empty description/overview;Phase14 public deletion. Terminal root/no-regrant prerequisites are included here.
+
+## Revision2 Contract Proof Owners
+
+05/06 completion means static asset-contract PASS plus final_sql collection only. Actual restricted-role economic/forgery/freeze success belongs07-01 after real0017; no duplicate DDL/create_all/skipped proof.01-01 owns guarded authenticated pytest prerequisite and positive session_user before04, whose SQL proves actual association/ordinary and SET ROLE refusal/resume;07 owns fresh/populated final startup.
+
+Global applications never gain root/user columns or association updates.01/04 preserve real two-user legacy split;03 declares nullable SMALLINT marker and owned movement keys;05 defines final insertion guard;07 qualifies shape/ACL/SQL negatives.12 reads persisted NULL-v1/explicit2, writes one global application for same-user siblings and proves mixed reload/freeze.16 inventories authority;17 hashes/projects/restores exact shape/default/check/trigger/ACL/NULL-or2;18 runs oracle mutations and isolated smoke;27 proves cold-restored interpretation on the same archive. All runtime obligations remain unexecuted.
