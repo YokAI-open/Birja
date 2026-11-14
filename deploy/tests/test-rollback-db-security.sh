@@ -85,6 +85,11 @@ def approved_runtime_artifacts(old_lock, current_lock):
     assert before['dependencies']==after['dependencies']
     assert fingerprint(before)=='14df8ffb9308919c95c868cab20e0bb9ac56f34a01a9f712955d15ea734642f1'
     assert fingerprint(after)=='430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c'
+    before, after = original.pop('dnspython'), current.pop('dnspython')
+    # PR31 exact owner-approved advisory repair; authenticate both full records.
+    assert before['version']=='2.9.0' and after['version']=='2.9.2'
+    assert fingerprint(before)=='94eaf4580a2e9ddcebeb20c972343bd5ba85647b9d292423921c9652fc3eac21'
+    assert fingerprint(after)=='4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79'
     assert original == current
 
 
@@ -96,13 +101,14 @@ def orchestration_self_test():
     # before the real runner can spend time building the legacy image.
     for package, field, value in [('opentelemetry-api','version','1.45.3'),
                                   ('opentelemetry-api','dependencies',[]),
+                                  ('dnspython','version','2.9.3'),
                                   ('typing-extensions','version','0.0.0')]:
         damaged=copy.deepcopy(current_lock)
         next(p for p in damaged['package'] if p['name']==package)[field]=value
         try: approved_runtime_artifacts(historical,damaged)
         except AssertionError: pass
         else: raise AssertionError('unapproved package drift accepted')
-    for package in ('opentelemetry-api','exchange-calendars'):
+    for package in ('opentelemetry-api','dnspython','exchange-calendars'):
         damaged=copy.deepcopy(current_lock)
         next(p for p in damaged['package'] if p['name']==package)['wheels'][0]['hash']='sha256:'+'0'*64
         try: approved_runtime_artifacts(historical,damaged)

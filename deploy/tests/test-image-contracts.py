@@ -68,7 +68,7 @@ class Identity(unittest.TestCase):
 
     def test_exact_inventory_rejects_unapproved_versions_and_artifact_changes(self):
         parse = tomllib.loads
-        for target, field in (("opentelemetry-api", "version"), ("opentelemetry-api", "artifact"), ("dnspython", "version"), ("fastapi", "artifact")):
+        for target, field in (("opentelemetry-api", "version"), ("opentelemetry-api", "artifact"), ("dnspython", "version"), ("dnspython", "artifact"), ("fastapi", "artifact")):
             with self.subTest(target=target, field=field):
                 def changed(source):
                     value = parse(source)
@@ -448,16 +448,18 @@ class Identity(unittest.TestCase):
         additions = {name: distributions.pop(name) for name in approved}
         # Exact reviewed wheels/sdist/source metadata, not just name/version.
         self.assertEqual(hashlib.sha256(json.dumps(additions, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "e46b91fbe9b2d6fc9de6f974163816c14714b70b47b7751cd5bbf8bb24fadbd7")
-        # Phase11's separately owner-approved exact OTEL1.45.2 repair is the
-        # sole changed predecessor entry (11-DEPENDENCY-REVIEW.md). Authenticate
-        # its complete record, then retain e728855's other records unchanged.
+        # Independently approved exact repairs: Phase11 OTEL and PR31 DNS.
+        # Authenticate complete records; retain e728855's other records unchanged.
         otel = distributions.pop("opentelemetry-api")
         self.assertEqual(otel["version"], "1.45.2")
         self.assertEqual(hashlib.sha256(json.dumps(otel, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "430ea33d87934b313fdff4a8ab39650757a7748c55f21d738f3a09d63b2b9c2c")
+        dns = distributions.pop("dnspython")
+        self.assertEqual(dns["version"], "2.9.2")
+        self.assertEqual(hashlib.sha256(json.dumps(dns, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), "4ad11523a6d2c2d0989a1eb5dd28d6edfa8c86170728ffc04ca47e1b173d3f79")
         encoded = json.dumps(distributions, sort_keys=True, separators=(",", ":"))
         self.assertEqual(
             hashlib.sha256(encoded.encode()).hexdigest(),
-            "8b0f58d9199b3dad2d27d9b398d33cc578b8a819307a3838dfc1cb32934991f1",
+            "e7415d7142069e6bca45afd4d37cd758a1d7c83ddd401a678b1b054c9b7b9509",
         )
 
     def test_complete_npm_distribution_and_retained_production_consumer(self):
