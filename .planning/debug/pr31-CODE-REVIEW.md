@@ -2,13 +2,15 @@
 phase: pr31-ci-failures
 reviewed: 2026-11-14
 depth: standard
-files_reviewed: 5
+files_reviewed: 7
 files_reviewed_list:
   - deploy/tests/check-recovery-image.py
   - deploy/tests/test-image-contracts.py
   - deploy/tests/test-ci-ops.py
   - backend/uv.lock
   - deploy/tests/test-rollback-db-security.sh
+  - .github/workflows/ci.yml
+  - frontend/src/hooks/useEventHistory.test.tsx
 findings:
   critical: 0
   warning: 0
@@ -112,3 +114,67 @@ Reviewed DNS-delta file SHA256 values:
 
 This bounded source review does not replace application/audit/image execution
 qualification and does not claim hosted CI success or publication authorization.
+
+## Full-history checkout delta review
+
+Independently reviewed `.github/workflows/ci.yml` and
+`deploy/tests/test-ci-ops.py` against `ade062b`. No actionable BLOCKER or WARNING
+found. The workflow delta adds only `fetch-depth: 0` to image-job checkout, before
+the actual offline contracts. Build targets, immutable images, five-image scan,
+failure handling, smoke checks, evidence upload, cleanup and required aggregate
+are unchanged.
+
+Traced the actual fixture import: `FixtureGitIsolation` imports selected-cutover,
+which imports ops-fixtures; its historical seed calls `git archive v0.3.1` at
+module load. Read `/tmp/pr31-shallow-repro.log`: one owned depth-one/no-tags clone
+lacks that object and the unchanged actual fixture fails at this archive call;
+fetching full history and tags into the same clone makes that fixture pass.
+This is causal executable evidence beyond the new workflow text assertion. The
+reviewer inspected the retained reproduction and independently executed the
+actual fixture within the complete CI-contract suite, without repeating the clone.
+
+Independent bounded checks:
+
+- `python3 deploy/tests/test-ci-ops.py`: 16 passed, 0.477s, including actual
+  generated-launcher isolation and depth-one/missing-history/late-checkout
+  mutations.
+- Loaded the new policy and supplied the original `ade062b` image-job text:
+  rejected with `image fixture contracts require full Git history first`.
+- `python3 deploy/tests/test-image-contracts.py`: 15 passed, 0.670s.
+- `git diff --check`: passed.
+
+Reviewed checkout-delta SHA256 values:
+
+| File | SHA256 |
+|---|---|
+| .github/workflows/ci.yml | a02b0ce7fef757afd362bafad9e78b3d691513a32bd15f8c0ebedcf53294172a |
+| deploy/tests/test-ci-ops.py | 978fea16619806d7effcb10a8319b83402e8621589497ce7b0a942c6d60c4cb2 |
+
+No Docker/backend/image build or package installation was performed in this
+review. Frontend test changes are outside this delta. Hosted success remains a
+separate observation after publication.
+
+## Frontend test synchronization delta review
+
+Independently reviewed only `frontend/src/hooks/useEventHistory.test.tsx` against
+`ade062b`, using the unchanged hook and installed query notification scheduler as
+context. No actionable BLOCKER or WARNING found. Reviewed SHA256:
+`0b908857522f6a82cfefafa4593e4a536ae3e25e2698faa7bb8eafa3684bd4a5`.
+
+The added waits synchronize two observable states: the accepted two-page chain
+before refresh, and React's refetch-error subscriber state after the failed
+refresh. Installed TanStack `notifyManager` schedules/batches notifications via
+`systemSetTimeoutZero`; resolving `refetch()` alone need not synchronously render
+the subscriber. The test now separately requires the settled refetch result to
+report an error, then awaits that same error in the hook. It retains the literal
+whole-chain `["dividend:3", "dividend:2"]` oracle and adds exactly four History
+HTTP calls, so a partial refreshed `["dividend:4"]`, lost accepted page or skipped
+second refresh request still fails. No timeout expansion, retry, production hook,
+money expectation, owner-isolation or privacy check changes were introduced.
+
+Read `/tmp/pr31-frontend-repeat-red.log`, which reproduces the original immediate
+subscriber assertion failure in the unchanged 20-run file. Independently ran
+`CI=true npm run test -- src/hooks/useEventHistory.test.tsx -t 'retains the whole accepted page chain if a later refresh page is malformed'`:
+one target passed, twenty unrelated tests filtered out, 1.50s. This bounded target
+run is distinct from the executor's full/repeated suites. `git diff --check`
+passed. Direct scoped diff confirms no change to the hook or History API source.

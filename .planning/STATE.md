@@ -813,7 +813,14 @@ nightly upload and separately exact-restored retained snapshot remain distinct.
 
 Stopped at: Phase 11 complete; independent verification passed3/3.
 Resume file: .planning/phases/11-mixed-asset-recovery-and-acceptance/11-VERIFICATION.md
-Next: Obtain publication approval for locally verified PR#31 CI repairs;
+Next: Root publishes the independently reviewed workflow/test follow-up and checks
+every required hosted PR#31 job. Owner approved publication through ade062b and
+further reviewed/tested CI workflow/test/planning repairs; no merge or production.
+Run43588078025 exposed image depth-one checkout missing historicalv0.3.1 and a
+History-test observer timing failure. Actual owned shallow-clone RED/GREEN and
+15image/16CI checks prove full-history prerequisite; original History failure
+reproduces in20whole-file repetitions, repaired repetitions and697frontend tests
+pass17.36s/98.37%statements/94.82%branches. Only workflow/test bytes change.
 session .planning/debug/pr31-ci-failures.md and pr31-LOCAL-PROOF.md retain evidence.
 Owner approved exact dnspython2.9.2; lock/installed/native-image inventories prove
 only that DNSdelta. Upstream211/71subtests plus finite advisoryRED/GREEN,2557backend
@@ -821,7 +828,8 @@ only that DNSdelta. Upstream211/71subtests plus finite advisoryRED/GREEN,2557bac
 pass. Exact image15/CI16/selected7/legacy contracts pass; original cold-start and
 24realPG proof remain reviewed with unchanged CORE/application/schema bytes.
 Independent code/security delta reviews have0findings; ownedresources are empty.
-Fresh hosted CI remains pending; no push/PRwrite/merge/deployment. Historical
+Initial five CI repair commits are published and PR description refreshed;
+fresh all-job hosted CI success remains pending. No merge/deployment. Historical
 Phase11 proof remains qualified; no duplicate complete serial campaign is claimed.
 Review deferredPhase7live acceptance when owner chooses; production remains separate.
 CompletedPhase11:4plans/8tasks,63/64trackedplans,4/5phases. No outstandinglocalhuman checks.

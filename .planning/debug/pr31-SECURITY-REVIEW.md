@@ -98,3 +98,63 @@ Independent bounded checks:
 This verdict covers the exact source/artifact delta. Backend coverage and fresh
 image qualification remain separate actual gates. Hosted CI success,
 publication and production acceptance are not claimed.
+
+## Image checkout-history security delta
+
+Independently reviewed `.github/workflows/ci.yml` and
+`deploy/tests/test-ci-ops.py` against `ade062b`. All four scoped threats below
+have disposition **mitigate** and are **CLOSED**, with zero BLOCKERs, WARNINGs
+or unregistered flags. This review is limited to these two exact files; any
+parallel frontend test changes are outside its scope.
+
+| Threat | Actual verification |
+|---|---|
+| C1 retain real Git-isolation proof | Workflow image checkout now requests `fetch-depth: 0` before contracts. The actual `FixtureGitIsolation.test_generated_launcher_git_ignores_denied_host_config` remains unchanged: denied host Git config fails, generated launcher's actual environment block reads only fixture-local config, hidden `.git` fails, and production source is asserted not to contain `GIT_CONFIG_NOSYSTEM`. No skip, fixture mock or weakened assertion is introduced. Independently executed the16test CI suite including this fixture. |
+| C2 reject missing/late history prerequisite | `image_policy` now requires the full-history checkout before the actual CI-contract command. Mutation controls reject depth1, removed `with`/history configuration and checkout moved after contracts. Independently invoked revised policy against the complete original `ade062b` workflow: rejected with `image fixture contracts require full Git history first`. |
+| C3 preserve gates and credentials/ref trust | The only workflow delta is two configuration lines under image job's unchanged `actions/checkout@v7`. No action version, token permissions, credential persistence, checkout repository/ref, event type, build input, audit/strict including-unfixed five-image scan, failure propagation or aggregate requirement changes. Full-history fetching makes the already referenced historical source available; it does not add a new source or bypass the existing source/identity guards. Existing ops checkout already uses full history. |
+| C4 preserve runtime/CORE and bounded evidence | Neither reviewed file changes product/runtime/financial/auth/schema/retained CORE. Reviewed `/tmp/pr31-shallow-repro.log`: owned local depth1/no-tags clone lacks `v0.3.1`, and unchanged actual fixture fails importing `git archive v0.3.1`; fetching history/tags into that same clone makes the identical fixture pass. It still proves denied-host-config and missing-repository failures. This is reviewed raw evidence, not an independently repeated clone; no Docker, package install, network or production operation was performed by this reviewer. |
+
+Independent checks:16CI tests passed0.531s;15image tests passed0.665s;
+original-workflow negative rejected; `git diff --check` passed.
+
+| Reviewed checkout delta source | SHA256 |
+|---|---|
+| .github/workflows/ci.yml | a02b0ce7fef757afd362bafad9e78b3d691513a32bd15f8c0ebedcf53294172a |
+| deploy/tests/test-ci-ops.py | 978fea16619806d7effcb10a8319b83402e8621589497ce7b0a942c6d60c4cb2 |
+
+Fresh hosted CI outcome remains separate. This review authorizes no publication,
+merge, production or provider action and does not broaden the earlier exact
+dependency approval.
+
+## History refresh-test synchronization security delta
+
+Read the additional test-only diff in
+`frontend/src/hooks/useEventHistory.test.tsx`; no implementation change was
+made. Two scoped threats, disposition **mitigate**, are **CLOSED** with zero
+BLOCKERs, WARNINGs or unregistered flags:
+
+- **F1 preserve privacy/error/data assertions:** the test waits for the two
+  accepted pages before starting refetch, asserts the settled query result is a
+  refetch error, awaits the observer's matching error state, and requires
+  exactly four History HTTP calls. The literal retained chain
+  `["dividend:3", "dividend:2"]` assertion is unchanged, rejecting replacement
+  by the refreshed partial chain. Auth-owner/epoch isolation,401 handling,
+  other malformed/append tests and exact monetary fixtures remain unchanged.
+  Read the unchanged hook to confirm its owner/epoch/query identity checks and
+  refusal of malformed data remain intact; no production source is edited.
+- **F2 preserve failure visibility and timing bounds:** only observer
+  synchronization uses existing default `waitFor`; no arbitrary sleep, timeout
+  increase, retry, skip, catch-and-ignore or permitted failure is introduced.
+  The extra direct settled-result assertion prevents waiting alone from
+  masking a successful refresh. Reviewed `/tmp/pr31-frontend-repeat-red.log`:
+  full-file repeats19/retry0 reproduces the original false observer error flag
+  after promise settlement. The fix addresses asynchronous notification, not
+  the protected error/data contract. Repeated GREEN evidence is recorded in
+  `/tmp/pr31-frontend-repeat-green.log`; full frontend verification remains
+  separately owned by the investigator.
+
+Frontend test SHA256:
+`0b908857522f6a82cfefafa4593e4a536ae3e25e2698faa7bb8eafa3684bd4a5`.
+The final three-file security delta scope consists of this test plus checkout
+workflow `a02b0ce7…172a` and CI test `978fea16…4cb2` above. No competing
+frontend suite, Docker, install or publication action was run by this reviewer.

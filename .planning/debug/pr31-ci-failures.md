@@ -9,17 +9,17 @@ updated: 2026-11-14
 
 ## Current Focus
 
-hypothesis: dnspython2.9.0 accepts out-of-range WKS service65536; the exact approved2.9.2 bounds it. Existing image/ops fixes preserve their original security contracts.
-next_action: Present complete local CI repairs and draft PR follow-up for separate publication approval; after approved push, check hosted required CI in the actual workflow. Do not archive as resolved before end-to-end confirmation.
+hypothesis: Image checkout lacks required historical source; the separate frontend refresh test observes React before TanStack Query's scheduled subscriber notification.
+next_action: Root publishes the reviewed checkout/History-test fixes, then observes every required job in the new hosted run; no new runtime/backend/recovery campaign is needed for these three workflow/test-only files.
 reasoning_checkpoint:
-  hypothesis: Unchecked WKS service numbers in dnspython2.9.0 cause the advisory; exact2.9.2 rejects numbers above65535 and oversized bitmaps, with only the owner-approved package record changing.
+  hypothesis: The History refresh promise resolves before TanStack Query's default setTimeout subscriber batch commits the error result to React, making the immediate observer assertion flaky.
   confirming_evidence:
-    - Official reviewed GHSA-vvf4-9x63-8xvv identifies versions below2.9.2; hosted unrestricted audit flags the exact2.9.0 record.
-    - Exact upstream WKS bounds test fails on cached2.9.0 and passes on installed2.9.2 with finite65536 input.
-    - Full parsed lock and installed inventories change only dnspython; canonical image APK/Python inventory parity confirms the same sole delta.
-  falsification_test: The exact upstream WKS bounds regression still fails on2.9.2, or full lock/native inventory/audit reports an unapproved delta or remaining advisory.
-  fix_rationale: Apply the exact reviewed2.9.2 distribution and authenticate its complete record separately in image/legacy contracts, preserving all other historical records.
-  blind_spots: All local affected gates and independent delta reviews pass; hosted CI remains unverified until separately approved publication and actual hosted execution.
+    - Hosted run43588078025 frontend fails only the immediate isRefetchError assertion;696other tests pass.
+    - Unchanged CI=true whole hook file repeated20times reproduces the exact assertion failure in27.21s;20other tests pass.
+    - Installed TanStack notifyManager batches subscriber callbacks through defaultScheduler=systemSetTimeoutZero; adjacent append-error tests already wait for observer state.
+  falsification_test: Settled refetch result is not an error, or the observer never reaches the expected error with both previously accepted pages intact.
+  fix_rationale: Wait for the accepted two-page precondition and observable error notification, while asserting the settled refetch error and unchanged full accepted chain; no application change.
+  blind_spots: Same twenty repetitions and all697frontend tests now pass; fresh hosted workflow still needs actual confirmation.
 
 ## Symptoms
 
@@ -31,9 +31,29 @@ reproduction: Inspect /tmp/birja-pr31-failed-ci.log and reproduce affected comma
 
 ## Scope and authorization
 
+Owner subsequently approved publishing the five reviewed commits through ade062b,
+refreshing PR31 and finishing CI, including further independently reviewed/tested
+workflow/test/planning fixes on the feature branch. Root performs publication;
+this debugger does not push or edit the PR. New dependencies/application/runtime/
+retained recovery tools, merge and production remain outside this follow-up.
+
 User requested continuing after the CI failure summary: investigate, make local fixes and affected verification. Existing exact dependency approvals do not approve a different package; prepare concrete review before requesting installation approval. No gate waiver, private credentials, provider/production changes, merge or deployment. New push approval remains separate. Preserve unrelated .claude/ and shared-tree work; do not switch branches.
 
 ## Evidence
+
+- timestamp: 2026-11-14
+  checked: Same CI=true hook file --repeats=19 --retry=0 after test-only observer synchronization, then full frontend coverage.
+  found: All21hook tests pass every repetition in29.96s; full36files/697tests pass17.36s,98.37%statements/94.82%branches/98.95%functions/99.1%lines. Scoped ESLint/Prettier and whitespace pass. Logs /tmp/pr31-frontend-repeat-green.log and /tmp/pr31-frontend-coverage-green.log. Exact accepted-chain/error assertions remain, with additional settled-error/four-request assertions.
+  implication: Locally verified test-only timing repair; no hook/application/runtime change or weakening of the original History contract. Independent affected code/security reviews have zero findings, including allthree exact source hashes. Code committed08c92e6 for root publication.
+
+- timestamp: 2026-11-14
+  checked: Hosted image job132426760647 in run43588078025, then owned depth-one/no-tags local clone and identical fixture after full-history fetch.
+  found: Hosted image15pass; CI fixture import fails archiving absentv0.3.1. Local git archive reports not a valid object name, exact fixture fails recovery guard; git fetch --unshallow --tags permits the unchanged fixture. Log /tmp/pr31-shallow-repro.log. New full-history policy fails before workflow repair; image fetch-depth0 plus missing/shallow/late-checkout negative controls gives15image/16CI pass.
+  implication: Complete history is a prerequisite before image job's source-dependent isolation contracts; generated-launcher proof and runtime/CORE remain unchanged.
+- timestamp: 2026-11-14
+  checked: Hosted frontend failure and unchanged CI=true hook file with --repeats=19 --retry=0.
+  found: Same immediate isRefetchError false assertion reproduced in27.21s;20other hook tests pass. Installed TanStack notifyManager subscriber notifications use systemSetTimeoutZero, so awaiting the query promise alone does not await its React observer batch. Log /tmp/pr31-frontend-repeat-red.log.
+  implication: Synchronize this test with the accepted two-page precondition and observable error, retaining exact accepted-history assertions and testing settled refetch error plus allfourHTTPcalls.
 
 - timestamp: 2026-11-14
   checked: Final affected backend, critical coverage, rebuilt native images, canonical builder smoke, five strict scans, reviews and owned cleanup.
@@ -93,11 +113,11 @@ None yet.
 
 ## Resolution
 
-root_cause: Exact pre-regrouping inventory omitted the separately approved OTEL repair; CI verified a pulled recovery image without importing/binding the fixed alias required before the first fresh-cluster Compose startup. Independently dnspython2.9.0 is affected by CVE-2026-128089.
-fix: Owner-approved exact dnspython2.9.2 lock/install; exact full-record OTEL/DNS exceptions preserve historical other distributions/calendar artifacts. Preflight imports only authenticated export and binds approved config/platform identity, refusing wrong preexisting alias.
-verification: Original cold-alias/image RED/GREEN,24actualPG,15image/16CI/7selected/legacy contracts pass. Advisory upstreamRED/GREEN and211upstream/71subtests pass;2557backend99.87%,47critical100%,builder5smoke,unrestricted audit,five strict scans allpass with exact inventory parity and ownedcleanup. Independent code/security0findings; hostedCI remains unverified. Source-qualified historical recovery remains historical.
-files_changed: [backend/uv.lock, deploy/tests/test-image-contracts.py, deploy/tests/check-recovery-image.py, deploy/tests/test-ci-ops.py, deploy/tests/test-rollback-db-security.sh]
-commit: d855a0f and a0feb5c (reviewed local code repairs; no push)
+root_cause: Original stale OTEL inventory, missing authenticated recovery alias and vulnerable dnspython are fixed; subsequent hosted run43588078025 exposes image checkout missing historicalv0.3.1 and an immediate React-observer assertion before TanStack's scheduled notification.
+fix: Preserve exact approved DNS/OTEL records and authenticated cold image startup; add full-history image checkout before real fixture contracts and synchronize only the History test with accepted pages/error notification, retaining all original data/error assertions.
+verification: Prior exact dependency/backend/image/PG qualification remains source-bound and historical. Follow-up actual shallow-clone fixture RED/GREEN,15image/16CI and missing/shallow/late-checkout negatives pass; frontend exact failure reproduced with20whole-file repetitions, repaired repetitions and697tests/coverage pass. Hosted all-job success remains pending root publication/execution; no duplicate runtime/CORE campaign claimed.
+files_changed: [backend/uv.lock, deploy/tests/test-image-contracts.py, deploy/tests/check-recovery-image.py, deploy/tests/test-ci-ops.py, deploy/tests/test-rollback-db-security.sh, .github/workflows/ci.yml, frontend/src/hooks/useEventHistory.test.tsx]
+commit: d855a0f and a0feb5c published;08c92e6 reviewed/tested workflow/test follow-up prepared for root publication.
 
 ## Specialist Review
 
