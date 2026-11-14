@@ -1,3 +1,32 @@
+# PR31 merge receipt
+
+Owner approved merge after all six checks passed at exact headed37d69.
+PR31 MERGED into develop on2026-11-14:
+https://github.com/YokAI-open/Birja/pull/31
+Merge commit78de5bdc213a978810377caa34139a98951e5518, with independently
+verified parents7d81010df3491eb8304a575d95827b877bc96e43 and
+ed37d69e89d544e03e5b1c5f7c0817a35b1a7799. Remote/localdevelop refreshed.
+Merged remotefeaturebranch deleted; local receipts preserved on local branch,
+upstream unset. No release/main merge/provideractivation/deployment/archival.
+This receipt is local and is not pushed directly into protecteddevelop.
+
+## Historical green-CI publication receipt
+
+
+Published through ed37d69e89d544e03e5b1c5f7c0817a35b1a7799 under explicit
+owner “Publish and finish CI” authorization. PR#31 is OPEN/MERGEABLE into develop;
+all six required hosted jobs passed in run43588776865 on2026-11-14.
+https://github.com/YokAI-open/Birja/pull/31
+https://github.com/YokAI-open/Birja/actions/runs/43588776865
+
+The PRdescription records repairs, exact tested head and green hosted result.
+Fresh complete serial recovery passed at this head; earlier local qualifications
+remain historical. See resolved/pr31-ci-failures.md for receipt/log/archive hashes.
+No merge, provider activation or deployment. This receipt is committed locally
+without advancing the tested PRhead or triggering redundant CI.
+
+## Historical publication preparation
+
 # PR31 publication preparation
 
 All three hosted failure causes have local reviewed fixes on

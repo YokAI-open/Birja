@@ -73,3 +73,41 @@ Only one milestone is complete; no cross-milestone trend is established yet.
 | Milestone | Phases | Plans | Accepted execution evidence |
 |---|---|---|---|
 | v1.0 MVP | 7 | 69 | Backend 616; frontend 264; browser/ops/image CI; live owner acceptance and exact recovery |
+
+## Milestone: v1.1 — US Stock Trading
+
+**Closed:**2026-11-14 with accepted live gaps.5trackedphases/4verified,
+64trackedplans/63completed,132tasks/130completed. No full live success claimed.
+
+### What Was Built
+
+Curated IEX discovery, shared-cash whole-share execution, combined portfolio,
+ordinary corporate-action accounting, mixed History and exact0014recovery.
+
+### What Worked
+
+Real isolated financial/lock-wait/replay tests, independent scoped reviews and
+strict actual-image/audit gates caught unsafe assumptions. HostedCI ultimately
+passed all6jobs ated37d69 with fresh samearchive recovery/TLS/rollback.
+
+### What Was Inefficient
+
+Warm local Git/image state hid shallow-checkout and missing-image-alias CI
+prerequisites. Overlapping Docker network work caused browser failures; rawCLI
+JSON ordering caused a false preservation failure. The long-lived temporary
+one-shot produced no durable result receipt; live outcome remains unknown.
+
+### Patterns Established and Key Lessons
+
+- Test cold history/image prerequisites and isolate shared Docker resources.
+- Await actual Query/React notifications; preserve full economic assertions.
+- Compare every structured runtime field, normalizing only ordering and retaining raw failure snapshots.
+- Preserve exact approved package-record exceptions and all other artifact identities.
+- Keep source-qualified historical proof separate from fresh complete hosted proof.
+- Archive accepted external gaps honestly; never replace live observations with fixtures or silence guards.
+- Standardize future requirement completion metadata; do not rewrite old evidence to satisfy parsers.
+
+### Cost Observations
+
+No reliable token/model cost total is available; none is invented. Expensive
+campaigns should follow stable source and small failure-focused diagnostics.

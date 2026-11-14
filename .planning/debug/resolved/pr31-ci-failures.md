@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "continue"
 created: 2026-11-14
 updated: 2026-11-14
@@ -9,8 +9,8 @@ updated: 2026-11-14
 
 ## Current Focus
 
-hypothesis: Image checkout lacks required historical source; the separate frontend refresh test observes React before TanStack Query's scheduled subscriber notification.
-next_action: Root publishes the reviewed checkout/History-test fixes, then observes every required job in the new hosted run; no new runtime/backend/recovery campaign is needed for these three workflow/test-only files.
+hypothesis: All five observed CI causes are resolved and hosted run43588776865 passed at ed37d69.
+next_action: None for this debug session; PR31 awaits separate merge approval. Phase7 live acceptance remains deferred.
 reasoning_checkpoint:
   hypothesis: The History refresh promise resolves before TanStack Query's default setTimeout subscriber batch commits the error result to React, making the immediate observer assertion flaky.
   confirming_evidence:
@@ -19,7 +19,7 @@ reasoning_checkpoint:
     - Installed TanStack notifyManager batches subscriber callbacks through defaultScheduler=systemSetTimeoutZero; adjacent append-error tests already wait for observer state.
   falsification_test: Settled refetch result is not an error, or the observer never reaches the expected error with both previously accepted pages intact.
   fix_rationale: Wait for the accepted two-page precondition and observable error notification, while asserting the settled refetch error and unchanged full accepted chain; no application change.
-  blind_spots: Same twenty repetitions and all697frontend tests now pass; fresh hosted workflow still needs actual confirmation.
+  blind_spots: Same twenty repetitions and all697frontend tests now pass; fresh hosted workflow now passed all six jobs at ed37d69 (run43588776865).
 
 ## Symptoms
 
@@ -129,3 +129,23 @@ Independent code review: pr31-CODE-REVIEW.md, no active findings. Independent
 security review: pr31-SECURITY-REVIEW.md,6/6closed, no active findings. Both
 reviewed the original three source paths and the exact subsequent DNS lock/image/
 legacy-contract delta. Owner-approved installation and all affected checks pass.
+
+## Final hosted verification — 2026-11-14
+
+Resolved: all six required checks SUCCESS at exact published head
+ed37d69e89d544e03e5b1c5f7c0817a35b1a7799, run43588776865:
+https://github.com/YokAI-open/Birja/actions/runs/43588776865
+Backend/frontend/image/e2e/ops/ci-pass all completed successfully. Ops includes
+fresh complete same-archive serial recovery, roles, bothTLS paths, legacy0008
+and current0014 cutover, intended old-source refusal, tested-source failed-attempt
+recovery and cleanup. Final actual marker same_archive_final_ci=true, archiveSHA
+c8b68277411803f7bce7b2e35df127690e3f7919bd6deb243dba01dfd080cfa8.
+This is new hosted evidence; earlier Phase11 qualified local proofs remain historical.
+
+Local receipt /tmp/birja-pr31-ci-ed37-success.json SHA256
+2b2e9ad0a354def709337ac5f28814eb97e983b4dfed9feaac0b56daa6797a8b.
+Hosted ops log /tmp/birja-pr31-ops-ed37-success.log SHA256
+eb06b79e7a64f43b38216eaf176a2c3e1e91cd31ccefbfd7adb3ba104a42a69e.
+PR31 OPEN/MERGEABLE, description refreshed, no merge/deployment/provider action.
+The receipt is recorded locally without pushing another documentation commit
+onto the tested PR head. No pending human debug verification remains.
