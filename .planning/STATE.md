@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-status: planning
-last_updated: "2026-11-14T15:19:37.426268+00:00"
-last_activity: 2026-11-14 -- Added owner-requested optional portfolio descriptions to Phase 13
+status: ready_to_execute
+last_updated: "2026-11-14T17:08:04.688Z"
+last_activity: 2026-11-14 -- Phase 12 planning complete
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 28
   completed_plans: 0
   percent: 0
 ---
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 bounded revision2 addresses all four recheck findings; fresh independent recheck is next. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 planning approved after independent verification (zero blockers/warnings); ready to execute its 28 plans. No implementation has started. All 28 v1.2 requirements and Phases 12–15 remain approved; published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
-Plan: — (no executable phase plans)
-Status: Phase 12 revision2 addresses four blockers from12-PLAN-CHECK-02.md. See12-PLAN-REVISION-02.md; fresh independent recheck required. All28 plans remain unapproved for execution; no execution started.
-Last activity: 2026-11-14 — Added optional descriptions to the approved roadmap; all 28 requirements mapped exactly once
+Plan: 0/28 complete; next 12-01-PLAN.md
+Status: Ready to execute
+Last activity: 2026-11-14 -- Phase 12 planning complete
 
-Progress: 0/4 phases complete; 0 executable plans; 0% implementation.
+Progress: 0/4 phases complete; 0/28 plans executed; 0% implementation.
 
 ## Accepted Closeout and Release Boundary
 
@@ -115,10 +115,14 @@ validation mapping checks pass. Recheck1 found four blockers (down from eight); 
 Revision2 resolves precursor completion wording, global split/movement ownership,
 persisted NULL-v1/explicit2 digest marker and guarded authenticated pytest migration
 prerequisites; see12-PLAN-REVISION-02.md. Counts remain28 plans/56 tasks/18 waves.
-Next: fresh independent recheck. Keep
-nyquist_compliant false until actual plan approval; no implementation yet. Local planning commits
-are prepared on feature/milestone-v1.2. The owner selected “Keep local for now”;
-retain that publication preference for this amendment.
+Final independent recheck passed at ce1c75b with zero blockers/warnings;
+see12-PLAN-CHECK-03.md. Findings progressed8→4→0 without override.
+Planning Nyquist compliance is approved; Wave0 and all runtime/owner proofs
+remain unexecuted. Phase12 is ready for `$gsd-execute-phase 12`; this planning
+invocation does not start it. The SDK's generic executing frontmatter was
+normalized to ready_to_execute to avoid implying implementation.
+Local planning commits remain on feature/milestone-v1.2. The owner selected
+“Keep local for now”; retain that publication preference.
 New funding policy and terminal freeze scope remain in PROJECT.md.
 Keep Phase 07–11 files and original manual-campaign links in place. The SDK's
 latest-completed-milestone result still names v1.0 because v1.1 closed with gaps;

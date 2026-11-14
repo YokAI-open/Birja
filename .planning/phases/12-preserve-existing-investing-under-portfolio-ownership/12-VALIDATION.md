@@ -1,15 +1,15 @@
 ---
 phase: 12
 slug: preserve-existing-investing-under-portfolio-ownership
-status: planning
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-11-14
 ---
 
 # Phase12 Validation Strategy
 
-28 plans,56 tasks,18 waves. Revision2 addresses recheck1's four blockers; fresh independent recheck pending. All commands below are planned execution, not passed evidence. No runtime/provider/production/install work occurred in planning. ASVS level1, high block; preserve80% overall and100% critical branch coverage, strict dependency audits and all five actual image scans.
+28 plans,56 tasks,18 waves. Final independent planning verification passed with zero blockers/warnings; see12-PLAN-CHECK-03.md. All commands below are planned execution, not passed evidence. No runtime/provider/production/install work occurred in planning. ASVS level1, high block; preserve80% overall and100% critical branch coverage, strict dependency audits and all five actual image scans.
 
 ## Sampling and Infrastructure
 
@@ -103,11 +103,11 @@ T-12-NN-01 and02 map the actual control/negative proof to task01 and02 respectiv
 - [x] All56 task IDs mapped to exact plan/wave/requirement/threat/command.
 - [x] Missing test creation owners and earlier runner dependencies specified.
 - [x] Full strict audits/five images and serial cold-recovery proof scheduled.
-- [ ] Independent checker approval.
+- [x] Independent checker approval (12-PLAN-CHECK-03.md at ce1c75b).
 - [ ] Actual Wave0 execution complete.
 - [ ] Focused latency measured; actual automated and owner proofs passed.
 
-Keep both compliance/execution flags false pending corresponding independent review/execution. Phase7 six live IDs remain deferred with stock admissions gated off; no provider,production,publishing or package changes. Phase13 owns create/name/rename/optional empty description/overview;Phase14 public deletion. Terminal root/no-regrant prerequisites are included here.
+Planning compliance is approved; wave_0_complete remains false until actual execution. Phase7 six live IDs remain deferred with stock admissions gated off; no provider,production,publishing or package changes. Phase13 owns create/name/rename/optional empty description/overview;Phase14 public deletion. Terminal root/no-regrant prerequisites are included here.
 
 ## Revision2 Contract Proof Owners
 

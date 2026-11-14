@@ -1,6 +1,6 @@
 # Phase12 Multi-Source Coverage and Reachability Audit
 
-Planning only:28 plans,56 tasks,18 waves. Revision2 completed; fresh independent recheck pending. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
+Planning only:28 plans,56 tasks,18 waves. Final independent check passed with zero blockers/warnings at ce1c75b; see12-PLAN-CHECK-03.md. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
 
 ## Goal and Requirements
 
@@ -86,3 +86,17 @@ Static SDK/schema/task/DAG/reference checks establish plan shape only. Real Wave
 
 
 Revision2 resolves C02 across truths/acceptance/done/success with07 owning actual SQL proof; C06 global applications/owned movements; C07 model→0015→0017 guard→writer/reader→ACL/hash/recovery persisted marker; C08 guarded real-login pytest lane before04 replacing conflicting NOLOGIN prerequisite without weakening session_user. See12-PLAN-REVISION-02.md. No runtime results claimed.
+
+## Post-Planning Scoped Gap Report
+
+The installed legacy gap-analysis command scans all28 milestone requirements
+against this phase alone:7 covered and21 not covered. All seven covered IDs
+are exactly Phase12's approved primary requirements; the remaining21 map to
+Phases13–15, including PMGT-06 optional empty descriptions in13. No Phase12
+primary requirement is uncovered. This report measures planned coverage,
+not requirement completion.
+
+The SDK decision gate returned skipped, “no trackable decisions,” because
+12-CONTEXT.md uses named bullets rather than D-IDs. It is not automated proof
+of decision coverage. The Context Decisions table above and independent
+context-fidelity review provide that coverage without inventing identifiers.
