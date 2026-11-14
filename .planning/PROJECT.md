@@ -2,7 +2,11 @@
 
 ## What This Is
 
-A website where you practice investing with virtual money at real market prices. You start with $10,000 of virtual cash, buy and sell assets at live prices, and watch your portfolio's value and profit/loss move with the real market. The first audience is the author and a handful of friends. v1 covers crypto only. Stocks, gold, bonds and currencies come later.
+A virtual-money investing simulator. Deployed v0.4.0 offers crypto trading;
+prepared software v0.5.0 adds the locally verified twenty-stock US implementation,
+shared cash/portfolio, dividends/splits and mixed History. Live stock activation
+remains gated because accepted provider/live-verification gaps are unresolved.
+Planning milestone v1.1 is closed with known gaps, not fully live-validated.
 
 ## Core Value
 
@@ -54,8 +58,7 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 ### Active
 
 - [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Complete deferred Phase7 live data/provider acceptance; publication and
-  production rollout remain separately gated.
+- [ ] Accepted deferredv1.1Phase7live acceptance (STOCK-01/02/03,DATA-01,MKT-01,SAFE-01); publication and production rollout stay separately gated.
 
 ### Out of Scope
 
@@ -130,10 +133,15 @@ bytes; no fresh completeCIblock or hostedCIpass atfinalsource is claimed.
 The approved OpenTelemetry1.45.2 patch passes all affected gates; finalbackend
 2557/47critical100%,frontend697,browser49+existingCSPskip,PG24 andfive strict
 scans0HIGH/CRITICAL pass. See11-VERIFICATION and11-03/04SUMMARY. Phase7live
-acceptance remains pending, so v1.1 is not complete/archived. No live activation,
-publication or production change occurred.
+acceptance remains unverified. The owner2026-11-14 accepted closure/archive of
+v1.1with those six requirement gaps. Softwarev0.5.0 is prepared on release-0.5.0;
+no publication, live activation or production change has occurred. See archived
+v1.1ROADMAP/REQUIREMENTS/MILESTONE-AUDIT and integration audit.
 
-## Current Milestone: v1.1 US Stock Trading
+<details>
+<summary>Original v1.1 planning decisions, closed with accepted live gaps</summary>
+
+## Closed Milestone: v1.1 US Stock Trading — accepted live gaps
 
 **Goal:** Let users practise trading 20 curated US stocks alongside crypto,
 using the same virtual USD balance and combined portfolio.
@@ -182,6 +190,15 @@ approach and milestone v1.1 name on 2026-11-10. Start roadmap numbering at Phase
 Research then requirements and roadmap approval precede implementation. Existing
 v1 advisory debt remains separately recorded, not added to this scope by default.
 
+</details>
+
+## Next Milestone Goals
+
+No next milestone is selected. Accepted live-activation gaps remain follow-up,
+not automatically approved new feature scope. The existing November16manual
+measurement approval remains bounded/no automatic process. Use archivedv1.1
+requirements/audit when the owner selects further work.
+
 ## Constraints
 
 - **Tech stack**: FastAPI/Python 3.14, async SQLAlchemy 2.0 + asyncpg, Alembic, Postgres, Redis, React + Vite + TS, Tailwind + shadcn/ui, TanStack Query, Docker Compose. Defined in CLAUDE.md. Components are added when a step first needs them.
@@ -193,6 +210,7 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
+| Closev1.1with six accepted live gaps | Owner requested release/finish anyway; preserve truthful history and disabled admissions | Accepted deferred2026-11-14 |
 |----------|-----------|---------|
 | Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | ✓ Good — prices and trading shipped in Phases 3/4 |
 | Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | ✓ Good — Phase 3 live scheduler verified |
@@ -231,4 +249,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-13 after Phase11 independent local acceptance; Phase7 live evidence deferred*
+*Last updated:2026-11-14 after owner-approved v1.1close with known gaps; softwarev0.5.0prepared only*
