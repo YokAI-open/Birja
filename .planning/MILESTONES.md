@@ -6,7 +6,8 @@
 mixed-asset recovery, integrated with the existing crypto simulator. Live stock
 activation is withheld pending provider and live-data prerequisites.
 
-**Software:**v0.5.0 is prepared on release-0.5.0, not yet published/deployed.
+**Software:**[v0.5.0](https://github.com/YokAI-open/Birja/releases/tag/v0.5.0)
+is published at main c2c7af17e2cb225fe196c5dbf843a65022a69e37; no deployment occurred.
 Production remains v0.4.0. The v1.1 label is a planning milestone, not a software
 version or a claim that live stock trading is available.
 
@@ -36,6 +37,9 @@ bundles and eight isolated flows pass; two live connections/flows remain blocked
 W09metadata warning is manually reconciled; oldv1.0W01–W08 remain their existing
 follow-up debt. Open-artifact scan11 entries:8classification false positives and
 3references to the same realPhase7checkpoint, not11new product defects.
+
+**Publication evidence:**[release receipt](milestones/v1.1-RELEASE-RECEIPT.md).
+The approved develop back-merge is pending.
 
 **Archives:**[roadmap](milestones/v1.1-ROADMAP.md),
 [requirements](milestones/v1.1-REQUIREMENTS.md),

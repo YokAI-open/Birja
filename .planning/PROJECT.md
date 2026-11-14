@@ -3,7 +3,7 @@
 ## What This Is
 
 A virtual-money investing simulator. Deployed v0.4.0 offers crypto trading;
-prepared software v0.5.0 adds the locally verified twenty-stock US implementation,
+published software v0.5.0 adds the locally verified twenty-stock US implementation,
 shared cash/portfolio, dividends/splits and mixed History. Live stock activation
 remains gated because accepted provider/live-verification gaps are unresolved.
 Planning milestone v1.1 is closed with known gaps, not fully live-validated.
@@ -58,7 +58,7 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 ### Active
 
 - [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Accepted deferredv1.1Phase7live acceptance (STOCK-01/02/03,DATA-01,MKT-01,SAFE-01); publication and production rollout stay separately gated.
+- [ ] Accepted deferred v1.1 Phase 7 live acceptance (STOCK-01/02/03, DATA-01, MKT-01, SAFE-01); live activation and production rollout stay separately gated.
 
 ### Out of Scope
 
@@ -134,8 +134,10 @@ The approved OpenTelemetry1.45.2 patch passes all affected gates; finalbackend
 2557/47critical100%,frontend697,browser49+existingCSPskip,PG24 andfive strict
 scans0HIGH/CRITICAL pass. See11-VERIFICATION and11-03/04SUMMARY. Phase7live
 acceptance remains unverified. The owner2026-11-14 accepted closure/archive of
-v1.1with those six requirement gaps. Softwarev0.5.0 is prepared on release-0.5.0;
-no publication, live activation or production change has occurred. See archived
+v1.1 with those six requirement gaps. Software v0.5.0 was published after all six
+PR #32 checks passed; main c2c7af1 has the exact tested candidate tree. The
+approved develop back-merge is pending. No live activation or production change
+has occurred. See the v1.1 release receipt and archived
 v1.1ROADMAP/REQUIREMENTS/MILESTONE-AUDIT and integration audit.
 
 <details>
@@ -249,4 +251,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated:2026-11-14 after owner-approved v1.1close with known gaps; softwarev0.5.0prepared only*
+*Last updated: 2026-11-14 after approved v0.5.0 publication; v1.1 closed with known gaps, production unchanged.*
