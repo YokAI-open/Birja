@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** All 27 requirements approved (2026-11-14); proposed roadmap approval pending; no implementation authorized
+**Status:** All 27 requirements and four-phase roadmap approved (2026-11-14); implementation not started
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
@@ -10,7 +10,7 @@
 Confirmed scope: ten active portfolios per user, independent $10,000 starting
 cash per new portfolio, isolated strategy activity, a simple overview and
 confirmed deletion even with holdings or the last portfolio. The owner also
-confirmed that deletion ends the experiment and freezes it. Proposed naming,
+confirmed that deletion ends the experiment and freezes it. The naming,
 renaming and first-portfolio defaults below were approved as part of the full
 27-requirement draft on 2026-11-14.
 
@@ -123,42 +123,44 @@ milestone planning has not inspected or changed it.
 
 ## Traceability
 
-Requirements approved; proposed roadmap pending. Numbering continues at Phase
-12. Each of these 27 requirements will have exactly one primary phase owner;
-cross-phase integration obligations remain explicit in phase success criteria.
+Requirements and four-phase roadmap approved on 2026-11-14.
+Numbering continues at Phase 12. Each of these 27 requirements has exactly one
+approved primary phase owner; cross-phase obligations remain explicit in the
+roadmap. No mapping is an implementation or completion claim.
 
 | Requirement | Primary phase | Status |
 |---|---|---|
-| PMGT-01 | Pending roadmap | Pending |
-| PMGT-02 | Pending roadmap | Pending |
-| PMGT-03 | Pending roadmap | Pending |
-| PMGT-04 | Pending roadmap | Pending |
-| PMGT-05 | Pending roadmap | Pending |
-| PFUND-01 | Pending roadmap | Pending |
-| PFUND-02 | Pending roadmap | Pending |
-| PFUND-03 | Pending roadmap | Pending |
-| PFIN-01 | Pending roadmap | Pending |
-| PFIN-02 | Pending roadmap | Pending |
-| PFIN-03 | Pending roadmap | Pending |
-| PFIN-04 | Pending roadmap | Pending |
-| PFIN-05 | Pending roadmap | Pending |
-| PFIN-06 | Pending roadmap | Pending |
-| PCTX-01 | Pending roadmap | Pending |
-| PCTX-02 | Pending roadmap | Pending |
-| PCTX-03 | Pending roadmap | Pending |
-| PVIEW-01 | Pending roadmap | Pending |
-| PVIEW-02 | Pending roadmap | Pending |
-| PVIEW-03 | Pending roadmap | Pending |
-| PSAFE-01 | Pending roadmap | Pending |
-| PSAFE-02 | Pending roadmap | Pending |
-| PSAFE-03 | Pending roadmap | Pending |
-| PSAFE-04 | Pending roadmap | Pending |
-| PSAFE-05 | Pending roadmap | Pending |
-| PSAFE-06 | Pending roadmap | Pending |
-| PSAFE-07 | Pending roadmap | Pending |
+| PMGT-01 | Phase 13 | Pending |
+| PMGT-02 | Phase 13 | Pending |
+| PMGT-03 | Phase 14 | Pending |
+| PMGT-04 | Phase 14 | Pending |
+| PMGT-05 | Phase 14 | Pending |
+| PFUND-01 | Phase 13 | Pending |
+| PFUND-02 | Phase 13 | Pending |
+| PFUND-03 | Phase 12 | Pending |
+| PFIN-01 | Phase 13 | Pending |
+| PFIN-02 | Phase 12 | Pending |
+| PFIN-03 | Phase 12 | Pending |
+| PFIN-04 | Phase 13 | Pending |
+| PFIN-05 | Phase 14 | Pending |
+| PFIN-06 | Phase 14 | Pending |
+| PCTX-01 | Phase 12 | Pending |
+| PCTX-02 | Phase 13 | Pending |
+| PCTX-03 | Phase 14 | Pending |
+| PVIEW-01 | Phase 13 | Pending |
+| PVIEW-02 | Phase 13 | Pending |
+| PVIEW-03 | Phase 12 | Pending |
+| PSAFE-01 | Phase 14 | Pending |
+| PSAFE-02 | Phase 12 | Pending |
+| PSAFE-03 | Phase 12 | Pending |
+| PSAFE-04 | Phase 15 | Pending |
+| PSAFE-05 | Phase 15 | Pending |
+| PSAFE-06 | Phase 15 | Pending |
+| PSAFE-07 | Phase 13 | Pending |
 
-**Coverage:** 27 approved requirements; 0 mapped until roadmap creation. Six carried
-Phase 7 requirements remain separately deferred, not completion claims.
+**Coverage:** 27/27 approved requirements mapped exactly once to approved Phases
+12–15; zero orphaned or duplicate primary owners. All remain unchecked/pending.
+Six carried Phase 7 requirements remain separately deferred, not completion claims.
 
 ## Research and decision evidence
 
@@ -175,4 +177,4 @@ Phase 7 requirements remain separately deferred, not completion claims.
 
 ---
 *Last updated: 2026-11-14 after research synthesis and confirmed deletion policy;
-all 27 requirements approved; roadmap creation/approval remain pending.*
+all 27 requirements and the four-phase roadmap approved; implementation not started.*

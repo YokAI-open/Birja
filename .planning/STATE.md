@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: planning
-last_updated: "2026-11-14T13:59:55.242Z"
-last_activity: 2026-11-14
+last_updated: "2026-11-14T14:47:34.541884+00:00"
+last_activity: 2026-11-14 -- Owner approved v1.2 roadmap; milestone setup complete
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,14 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: research and define v1.2 Multiple Strategy Portfolios, starting at Phase 12. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 discussion/planning. v1.2 setup is complete: all 27 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: 27 requirements approved; creating proposed roadmap
-Last activity: 2026-11-14 — Milestone v1.2 started
+Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
+Plan: — (no executable phase plans)
+Status: Ready for Phase 12 discussion/planning; no executable plans yet
+Last activity: 2026-11-14 — Four-phase roadmap approved, with all 27 requirements mapped exactly once
+
+Progress: 0/4 phases complete; 0 executable plans; 0% implementation.
 
 ## Accepted Closeout and Release Boundary
 
@@ -92,8 +94,14 @@ Research output: research/v1.2/; the earlier research remains unchanged.
 Research committed at 52c59f1; freeze-at-deletion policy is confirmed.
 REQUIREMENTS.md contains 27 requirements explicitly approved by the owner on
 2026-11-14, including name/rename and first-portfolio defaults.
-Next: create and check the proposed roadmap, obtain roadmap approval; start
-new phases at 12. New funding policy and deletion scope are in PROJECT.md.
+ROADMAP.md maps all 27 requirements exactly once across Phases 12–15.
+The owner approved it on 2026-11-14. It has 19 observable success criteria and
+keeps tests, grants, exact recovery and stock activation guards mandatory in
+each relevant slice. Milestone setup is complete.
+Next: `$gsd-discuss-phase 12` or `$gsd-plan-phase 12`; no executable plans or
+implementation have been created by milestone setup. Local planning commits
+are prepared on feature/milestone-v1.2; push requires separate owner approval.
+New funding policy and terminal freeze scope remain in PROJECT.md.
 Keep Phase 07–11 files and original manual-campaign links in place. The SDK's
 latest-completed-milestone result still names v1.0 because v1.1 closed with gaps;
 do not clear phases or write their history into the v1.0 archive.

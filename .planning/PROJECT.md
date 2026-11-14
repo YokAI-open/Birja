@@ -225,8 +225,9 @@ private portfolios while preserving existing accounts and financial records.
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Planning:** Start at Phase 12. Research and requirements approval are complete;
-create the proposed roadmap and obtain its approval. Scope confirmation does not approve implementation, new
+**Planning:** Research, all 27 requirements and the four-phase roadmap were
+approved on 2026-11-14. Milestone setup is complete. Start Phase 12 discussion
+or planning next, then proceed through Phases 13–15 under the established workflows. Scope confirmation does not approve implementation, new
 packages, provider operations, publication or production changes. No historical
 performance chart is included. Keep Phase 7 deferred outcomes visible and
 unchecked; do not repeat its bounded live campaign as part of this workflow.
