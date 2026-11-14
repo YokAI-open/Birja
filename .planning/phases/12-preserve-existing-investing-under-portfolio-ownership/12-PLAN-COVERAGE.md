@@ -1,6 +1,6 @@
 # Phase12 Multi-Source Coverage and Reachability Audit
 
-Planning only:28 plans,56 tasks,18 waves. Independent checker pending. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
+Planning only:28 plans,56 tasks,18 waves. Revision1 completed; independent recheck pending. Seven primary requirements retain their approved mappings and all occur in nonempty plan frontmatter.
 
 ## Goal and Requirements
 
@@ -40,7 +40,7 @@ CONTEXT uses named bullets, not numbered D-IDs. Preserve the actual decisions wi
 |---|---|---|
 | Responsibility map:SQL relational authority; services explicit owned transaction; browser untrusted |03–08/10–15/19–25 | COVERED |
 | accounts.id root; compound owner/cause tuples; global instrument evidence |02–03/05–07/12–14 | COVERED |
-| Actual-migrator-only finite NULL association; every other column unchanged |04-01/02;01/05/06 negative SQL | COVERED |
+| Actual-migrator-only finite NULL association; every other column unchanged |04-01/02;01 authored cases;07 actual final SQL | COVERED |
 | Final0017 closes bypass, required tuples, no broad ordinary grants |07/16 | COVERED |
 | Intermediate0015/16 explicitly migration-only runtime/bootstrap/backup/restore |07/16/17/27 | COVERED |
 | Resumable migrator-to-final path avoids intermediate bootstrap deadlock |16-02/27 | COVERED |
@@ -79,6 +79,8 @@ Legacy root reaches named ownership by0015→0016→0017. New User creates sole 
 ## Exclusions and Unperformed Proofs
 
 Phase7 STOCK-01/02/03,DATA-01,MKT-01,SAFE-01 remain separately deferred/unverified and original manual campaign untouched; stock gates stay off. Phase13 create/name/rename/optional empty description/overview and ten-root funded controls,Phase14 delete/empty-management remain future features. No provider agreement/payment,production access/deployment,package change,push/merge or branch change.
+
+Revision1 resolution is recorded in12-PLAN-REVISION-01.md; added source/schema/image/proof matrix is owned18, real fixture mode/oracle negatives18-01 and actual isolated smoke18-02.02/03 metadata and05/06 static precursor checks defer real SQL negatives to07-01 after Alembic0017. Pre15 API checks compose the actual declared routers in isolated test apps;15-02 verifies production mounting. All new mechanisms remain required; no source item was removed.
 
 Static SDK/schema/task/DAG/reference checks establish plan shape only. Real Wave0,SQL/TLS/cold recovery,strict audits/five image scans and owner changed-UI/native zoom remain unperformed. Independent checker follows. Nothing marks Phase12 executed or runtime verified.
 

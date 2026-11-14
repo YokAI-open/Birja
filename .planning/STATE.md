@@ -19,13 +19,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 plan set written; independent checker pending. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 planner revision1 complete; independent recheck pending. v1.2 setup is complete: all 28 requirements and Phases 12–15 are approved. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
 Plan: — (no executable phase plans)
-Status: Phase 12 research, approved UI contract, patterns and 28 plans complete; 56 tasks across 18 dependency waves await independent checking. No execution started.
+Status: Phase 12 revision1 addresses all eight check1 findings; 28 plans/56 tasks/18 waves pass SDK typed/static checks and await independent recheck. No execution started.
 Last activity: 2026-11-14 — Added optional descriptions to the approved roadmap; all 28 requirements mapped exactly once
 
 Progress: 0/4 phases complete; 0 executable plans; 0% implementation.
@@ -109,7 +109,9 @@ independent six-dimension review with no findings; future implemented UI and
 native 200% zoom still need owner acceptance.
 28 plans/56 tasks across 18 waves are written at d3614a6. Independent check1
 found 5 blockers and 3 warnings; see 12-PLAN-CHECK-01.md.
-Next: bounded planner revision 1, then an independent recheck. Keep
+Revision1 addresses all eight findings; see12-PLAN-REVISION-01.md. All28
+installed-SDK schema/structure/typed-object checks and graph/ownership/56-task
+validation mapping checks pass. Next: fresh independent recheck. Keep
 nyquist_compliant false until actual plan approval; no implementation yet. Local planning commits
 are prepared on feature/milestone-v1.2. The owner selected “Keep local for now”;
 retain that publication preference for this amendment.
