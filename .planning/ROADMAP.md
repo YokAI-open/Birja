@@ -136,7 +136,7 @@ Plans:
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 12-24-PLAN.md — Trade surfaces and original-target receipts
+- [x] 12-24-PLAN.md — Trade surfaces and original-target receipts
 - [ ] 12-25-PLAN.md — Scoped holdings and mixed History surfaces
 
 **Wave 16** *(blocked on Wave 15 completion)*
@@ -272,7 +272,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 23/28 | Wave14 complete; next12-24 ticket/receipt integration | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 24/28 | Wave15 in progress; next12-25 holdings/History | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
