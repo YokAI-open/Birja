@@ -112,7 +112,11 @@ async function send(path: string, init: RequestInit): Promise<Response> {
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
   let response = await send(path, init);
   init.signal?.throwIfAborted();
-  if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
+  if (
+    response.status === 401 &&
+    !path.startsWith("/api/v1/auth/") &&
+    !path.startsWith("/api/v2/auth/")
+  ) {
     await refreshSession();
     init.signal?.throwIfAborted();
     response = await send(path, init);

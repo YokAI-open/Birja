@@ -6,8 +6,8 @@ import { apiFetch } from "@/api/client";
 import { useMe } from "./useMe";
 import { useLogout, useVerifyCode } from "./useAuthMutations";
 
-const a = { email: "a@example.test", cash_usd: "8123.45" };
-const b = { email: "b@example.test", cash_usd: "10000.00" };
+const a = { email: "a@example.test" };
+const b = { email: "b@example.test" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -34,13 +34,13 @@ it.each([
     vi.stubGlobal(
       "fetch",
       vi.fn((path: string, init: RequestInit) => {
-        if (path === "/api/v1/me") {
+        if (path === "/api/v2/me") {
           meSignal = init.signal as AbortSignal;
           return new Promise<Response>((resolve) => {
             releaseMe = resolve;
           });
         }
-        if (path === "/api/v1/auth/verify-code") return Promise.resolve(json(b));
+        if (path === "/api/v2/auth/verify-code") return Promise.resolve(json(b));
         if (path === "/api/v1/auth/logout")
           return Promise.resolve(new Response(null, { status: 204 }));
         signals.push(init.signal as AbortSignal);
@@ -119,6 +119,28 @@ it.each([
     expect(result.current.me.data).toEqual(action === "verify" ? b : null);
     expect(client.getQueryCache().getAll()).toEqual([meQuery]);
     unsubscribe();
+    unmount();
+    client.clear();
+  },
+);
+
+it.each([null, b])(
+  "drops private owner state immediately when identity changes to %j",
+  async (next) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["me"], a);
+    client.setQueryData(["portfolio", a.email, "1"], "private A");
+    client.setQueryData(["portfolios", a.email], [{ id: "1", name: "My portfolio" }]);
+    const { unmount } = renderHook(() => useMe(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    const identityQuery = client.getQueryCache().find({ queryKey: ["me"] });
+    act(() => client.setQueryData(["me"], next));
+    expect(client.getQueryData(["portfolio", a.email, "1"])).toBeUndefined();
+    expect(client.getQueryData(["portfolios", a.email])).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(identityQuery);
     unmount();
     client.clear();
   },
