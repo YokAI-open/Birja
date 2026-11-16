@@ -813,6 +813,7 @@ async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, 
 class EntitlementSnapshot:
     id: int
     event_id: int
+    portfolio_id: int
     user_id: int
     revision_id: int
     cutoff: datetime
@@ -837,7 +838,7 @@ async def latest_verified_entitlements(
     db: AsyncSession,
     event_id: int,
 ) -> tuple[EntitlementSnapshot, ...]:
-    """Latest per-owner snapshot only; a held replacement never exposes old eligibility."""
+    """Latest active-root snapshot; held replacements never expose old eligibility."""
     event = await db.get(StockActionEvent, event_id, populate_existing=True)
     if event is None:
         raise ActionHeld("unknown_event")
@@ -845,9 +846,14 @@ async def latest_verified_entitlements(
         (
             await db.execute(
                 select(StockDividendEntitlement)
-                .where(StockDividendEntitlement.event_id == event_id)
+                .join(
+                    Account,
+                    (Account.id == StockDividendEntitlement.portfolio_id)
+                    & (Account.user_id == StockDividendEntitlement.user_id),
+                )
+                .where(StockDividendEntitlement.event_id == event_id, Account.closed_at.is_(None))
                 .order_by(
-                    StockDividendEntitlement.user_id,
+                    StockDividendEntitlement.portfolio_id,
                     StockDividendEntitlement.version.desc(),
                     StockDividendEntitlement.id.desc(),
                 )
@@ -857,9 +863,9 @@ async def latest_verified_entitlements(
     seen = set()
     result = []
     for row in latest:
-        if row.user_id in seen:
+        if row.portfolio_id in seen:
             continue
-        seen.add(row.user_id)
+        seen.add(row.portfolio_id)
         if row.state == "eligible" and row.revision_id == event.current_revision_id:
             result.append(_snapshot(row))
     return tuple(result)
@@ -923,11 +929,26 @@ async def derive_dividend_entitlements(
         ).scalars()
     )
     holders = (
-        (await db.execute(select(Holding.user_id).where(Holding.coin_id == event.coin_id)))
+        (await db.execute(select(Holding.portfolio_id).where(Holding.coin_id == event.coin_id)))
         .scalars()
         .all()
     )
-    users = sorted({r.user_id for r in rows} | {r.user_id for r in prior} | set(holders))
+    candidates = {r.portfolio_id for r in rows} | {r.portfolio_id for r in prior} | set(holders)
+    # The instrument gate precedes root locks. The scheduler's private lock-only
+    # routine never grants cash UPDATE; INSERT guards recheck any sold-out root.
+    await db.execute(
+        text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": event.coin_id}
+    )
+    roots = list(
+        (
+            await db.execute(
+                select(Account)
+                .where(Account.id.in_(candidates), Account.closed_at.is_(None))
+                .order_by(Account.id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalars()
+    )
     applications = list(
         (
             await db.execute(
@@ -987,17 +1008,17 @@ async def derive_dividend_entitlements(
     quantities = {}
     if verified:
         try:
-            for uid in users:
-                quantities[uid] = await reconstruct_stock_quantity(
-                    db, uid, event.coin_id, cast(CutoffEvidence, cutoff), units
+            for root in roots:
+                quantities[root.id] = await reconstruct_stock_quantity(
+                    db, root.id, event.coin_id, cast(CutoffEvidence, cutoff), units
                 )
         except OwnershipHeld:
             quantities.clear()
             classification = "held"
     result = []
-    for uid in users:
-        previous = next((r for r in prior if r.user_id == uid), None)
-        quantity = quantities.get(uid)
+    for root in roots:
+        previous = next((r for r in prior if r.portfolio_id == root.id), None)
+        quantity = quantities.get(root.id)
         instant = cutoff.cutoff if cutoff else previous.cutoff if previous else revision.observed_at
         rule = cutoff.rule if cutoff else "unverified-no-eligibility"
         basis = "unit_epoch:" + str(units) if cutoff else "unverified"
@@ -1018,6 +1039,8 @@ async def derive_dividend_entitlements(
             continue
         fingerprint = _digest(
             [
+                root.id,
+                root.user_id,
                 revision.id,
                 instant.isoformat(),
                 rule,
@@ -1030,7 +1053,8 @@ async def derive_dividend_entitlements(
         )
         existing = StockDividendEntitlement(
             event_id=event_id,
-            user_id=uid,
+            portfolio_id=root.id,
+            user_id=root.user_id,
             revision_id=revision.id,
             cutoff=instant,
             cutoff_rule=rule,
