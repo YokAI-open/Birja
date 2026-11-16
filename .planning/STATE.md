@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-status: ready_to_execute
-last_updated: "2026-11-14T17:08:04.688Z"
-last_activity: 2026-11-14 -- Phase 12 planning complete
+status: executing
+last_updated: "2026-11-16T08:15:01.725Z"
+last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 4
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 planning approved after independent verification (zero blockers/warnings); ready to execute its 28 plans. No implementation has started. All 28 v1.2 requirements and Phases 12–15 remain approved; published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 execution is authorized locally. Plan01 test foundation is complete; next is12-02. Portfolio features remain unimplemented and all28 milestone requirements pending. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
-Phase: 12 — Preserve Existing Investing Under Portfolio Ownership (first of four milestone phases); not started
-Plan: 0/28 complete; next 12-01-PLAN.md
-Status: Ready to execute
-Last activity: 2026-11-14 -- Phase 12 planning complete
+Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
+Plan: 2 of 28
+Status: Executing Phase12; Plan01 complete, next12-02
+Last activity: 2026-11-16 — Committed authenticated migration lane and preservation/isolation test oracles
 
-Progress: 0/4 phases complete; 0/28 plans executed; 0% implementation.
+Progress: [░░░░░░░░░░] 4%
 
 ## Accepted Closeout and Release Boundary
 
@@ -117,10 +117,13 @@ persisted NULL-v1/explicit2 digest marker and guarded authenticated pytest migra
 prerequisites; see12-PLAN-REVISION-02.md. Counts remain28 plans/56 tasks/18 waves.
 Final independent recheck passed at ce1c75b with zero blockers/warnings;
 see12-PLAN-CHECK-03.md. Findings progressed8→4→0 without override.
-Planning Nyquist compliance is approved; Wave0 and all runtime/owner proofs
-remain unexecuted. Phase12 is ready for `$gsd-execute-phase 12`; this planning
-invocation does not start it. The SDK's generic executing frontmatter was
-normalized to ready_to_execute to avoid implying implementation.
+Planning Nyquist compliance is approved. On2026-11-16 the owner invoked
+`$gsd-execute-phase 12`, authorizing local implementation. Plan01 completed
+with14 passing connection/security checks,37 retained migration regressions,
+23 migration cases and13 ownership/authority cases collected. The explicit
+preservation RED probe fails at missing0015 as intended. Phasewide Wave0,
+final SQL, runtime/security/recovery and owner UI proofs remain pending.
+See12-01-SUMMARY.md; next12-02. No requirement is complete from collection.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
 New funding policy and terminal freeze scope remain in PROJECT.md.

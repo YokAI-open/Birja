@@ -62,7 +62,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — Ownership proof oracles and fixture contracts
+- [x] 12-01-PLAN.md — Ownership proof oracles and fixture contracts
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
