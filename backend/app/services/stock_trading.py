@@ -184,9 +184,12 @@ def _plan(
     )
 
 
-def _preview(loaded: LoadedExecution, plan: StockTradePlan) -> QuoteOut:
+def _preview(
+    loaded: LoadedExecution, plan: StockTradePlan, portfolio: OwnedActivePortfolio
+) -> QuoteOut:
     e, d, q = loaded.evidence, loaded.decision, loaded.evidence.quote
     return QuoteOut(
+        portfolio_id=str(portfolio.portfolio_id),
         coin_id=str(e.coin_id),
         provider_asset_id=e.provider_asset_id,
         symbol=loaded.symbol,
@@ -224,7 +227,7 @@ async def quote(
     cid = await _instrument(db, order.symbol)
     cash, held, basis = await _financial(db, portfolio, cid)
     loaded = await load_execution_evidence(db, cid, settings)
-    return _preview(loaded, _plan(loaded, order, cash, held, basis))
+    return _preview(loaded, _plan(loaded, order, cash, held, basis), portfolio)
 
 
 def _receipt(trade: Trade, facts: StockFillFacts, executed: datetime) -> FillOut:
@@ -244,6 +247,7 @@ def _receipt(trade: Trade, facts: StockFillFacts, executed: datetime) -> FillOut
         status_sequence=raw["status"]["sequence"],
     )
     return FillOut(
+        portfolio_id=str(trade.portfolio_id),
         trade_id=str(trade.id),
         executed_at=executed,
         coin_id=str(facts.coin_id),
@@ -390,7 +394,7 @@ async def _execute_once(
         loaded = await load_execution_evidence(db, cid, settings)
         plan = _plan(loaded, order, cash, held, basis)
         if plan.exec_price != order.expected_exec_price:
-            raise PriceChanged(_preview(loaded, plan), order.expected_exec_price)
+            raise PriceChanged(_preview(loaded, plan, portfolio), order.expected_exec_price)
         trade = Trade(
             user_id=portfolio.user_id,
             portfolio_id=portfolio.portfolio_id,
@@ -426,7 +430,9 @@ async def _execute_once(
         if current.evidence.quote != loaded.evidence.quote:
             replacement = _plan(current, order, cash, held, basis)
             if replacement.exec_price != order.expected_exec_price:
-                raise PriceChanged(_preview(current, replacement), order.expected_exec_price)
+                raise PriceChanged(
+                    _preview(current, replacement, portfolio), order.expected_exec_price
+                )
             # Already inserted immutable Trade metadata must not be rewritten.
             raise _QuoteRefreshed
         authority = json.loads(json.dumps(asdict(current.evidence), default=_encoded))
@@ -542,6 +548,7 @@ async def context(
             cost_basis=basis,
         )
     return ContextOut(
+        portfolio_id=str(portfolio.portfolio_id),
         coin_id=str(cid),
         provider_asset_id=e.provider_asset_id,
         symbol=loaded.symbol,

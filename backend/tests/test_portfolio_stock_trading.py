@@ -256,6 +256,37 @@ async def test_stock_crypto_race_shares_only_selected_cash(
     assert await snapshot(factory, sibling) == sibling_before
 
 
+@pytest.mark.parametrize("first_asset", ["stock", "crypto"])
+async def test_cross_asset_original_keys_conflict_in_both_directions(
+    stock_books, settings, engine, clean_prices, first_asset
+):
+    factory, _, (root, *_), now = stock_books
+    await put_price(engine, "BTC", "100", now)
+    key = uuid4()
+
+    async def crypto():
+        async with factory() as db:
+            return await trading.execute(
+                db,
+                portfolio=root,
+                order=trading.Order("BTC", "buy", "quantity", Decimal(1)),
+                expected_mid=Decimal(100),
+                idempotency_key=key,
+                settings=settings,
+            )
+
+    async def stock():
+        return await execute(factory, root, settings, order(idempotency_key=str(key)))
+
+    first, second = (stock, crypto) if first_asset == "stock" else (crypto, stock)
+    assert (await first())[1]
+    before = await snapshot(factory, root)
+    with pytest.raises(TradeRefused) as exc:
+        await second()
+    assert exc.value.code == "idempotency_conflict"
+    assert await snapshot(factory, root) == before
+
+
 @pytest.mark.parametrize("same_key", [False, True])
 async def test_parallel_stock_requests_one_effect_or_no_overspend(stock_books, settings, same_key):
     factory, _, (root, *_), _ = stock_books
