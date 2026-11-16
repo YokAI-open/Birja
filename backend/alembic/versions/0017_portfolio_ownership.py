@@ -129,6 +129,7 @@ def upgrade() -> None:
     ).scalar_one():
         raise RuntimeError("preprovision restricted runtime schema usage before finalization")
     # Explicit read inventory; mutation is restricted to existing domain paths.
+    op.execute("GRANT SELECT ON public.alembic_version TO birja_app,birja_scheduler")
     op.execute(
         "GRANT SELECT ON public.accounts,public.coins,public.prices,public.holdings,"
         "public.trades,public.stock_instruments,public.stock_quotes,public.stock_sessions,"

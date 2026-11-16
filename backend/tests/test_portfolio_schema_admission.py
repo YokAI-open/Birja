@@ -133,3 +133,17 @@ async def test_uninitialized_schema_refuses_instead_of_auto_migrating(portfolio_
         with pytest.raises(SchemaAdmissionError) as failure:
             await require_schema(conn)
         assert failure.value.reason == "schema_unavailable"
+
+
+@pytest.mark.parametrize("role", ["birja_app", "birja_scheduler"])
+async def test_restricted_runtime_role_can_read_schema_admission(engine, migrated, role):
+    from sqlalchemy import text
+
+    async with engine.connect() as conn, conn.begin():
+        await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed role matrix
+        assert await require_schema(conn) == "0017"
+        assert not (
+            await conn.execute(
+                text("SELECT has_table_privilege(current_user,'alembic_version','UPDATE')")
+            )
+        ).scalar_one()
