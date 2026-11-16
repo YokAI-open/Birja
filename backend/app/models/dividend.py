@@ -38,10 +38,18 @@ def money(column: str, *, signed: bool = False) -> CheckConstraint:
 class StockDividendPayment(Base):
     __tablename__ = "stock_dividend_payments"
     __table_args__ = (
-        UniqueConstraint("event_id", "user_id", name="uq_stock_dividend_payment_event_user"),
+        UniqueConstraint(
+            "event_id", "portfolio_id", name="uq_stock_dividend_payment_event_portfolio"
+        ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_dividend_payment_portfolio_owner",
+        ),
         UniqueConstraint(
             "id",
             "event_id",
+            "portfolio_id",
             "user_id",
             "coin_id",
             name="uq_stock_dividend_payment_owner_event_coin",
@@ -61,10 +69,18 @@ class StockDividendPayment(Base):
             name="fk_dividend_payment_revision_identity",
         ),
         ForeignKeyConstraint(
-            ["entitlement_id", "event_id", "user_id", "revision_id", "entitlement_fingerprint"],
+            [
+                "entitlement_id",
+                "event_id",
+                "portfolio_id",
+                "user_id",
+                "revision_id",
+                "entitlement_fingerprint",
+            ],
             [
                 "stock_dividend_entitlements.id",
                 "stock_dividend_entitlements.event_id",
+                "stock_dividend_entitlements.portfolio_id",
                 "stock_dividend_entitlements.user_id",
                 "stock_dividend_entitlements.revision_id",
                 "stock_dividend_entitlements.fingerprint",
@@ -87,8 +103,12 @@ class StockDividendPayment(Base):
         money("original_amount"),
         money("cash_after"),
         Index("ix_stock_dividend_payment_owner_recorded_id", "user_id", "recorded_at", "id"),
+        Index(
+            "ix_stock_dividend_payment_portfolio_recorded_id", "portfolio_id", "recorded_at", "id"
+        ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
     event_id: Mapped[int] = mapped_column(BigInteger)
     coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -116,13 +136,24 @@ class StockDividendDecision(Base):
     __tablename__ = "stock_dividend_decisions"
     __table_args__ = (
         UniqueConstraint(
-            "id", "payment_id", "user_id", "event_id", name="uq_stock_dividend_decision_lineage"
+            "id",
+            "payment_id",
+            "portfolio_id",
+            "user_id",
+            "event_id",
+            name="uq_stock_dividend_decision_lineage",
         ),
         ForeignKeyConstraint(
-            ["payment_id", "event_id", "user_id", "coin_id"],
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_dividend_decision_portfolio_owner",
+        ),
+        ForeignKeyConstraint(
+            ["payment_id", "event_id", "portfolio_id", "user_id", "coin_id"],
             [
                 "stock_dividend_payments.id",
                 "stock_dividend_payments.event_id",
+                "stock_dividend_payments.portfolio_id",
                 "stock_dividend_payments.user_id",
                 "stock_dividend_payments.coin_id",
             ],
@@ -138,10 +169,18 @@ class StockDividendDecision(Base):
             name="fk_dividend_decision_revision_identity",
         ),
         ForeignKeyConstraint(
-            ["entitlement_id", "event_id", "user_id", "revision_id", "entitlement_fingerprint"],
+            [
+                "entitlement_id",
+                "event_id",
+                "portfolio_id",
+                "user_id",
+                "revision_id",
+                "entitlement_fingerprint",
+            ],
             [
                 "stock_dividend_entitlements.id",
                 "stock_dividend_entitlements.event_id",
+                "stock_dividend_entitlements.portfolio_id",
                 "stock_dividend_entitlements.user_id",
                 "stock_dividend_entitlements.revision_id",
                 "stock_dividend_entitlements.fingerprint",
@@ -149,20 +188,22 @@ class StockDividendDecision(Base):
             name="fk_dividend_decision_entitlement_identity",
         ),
         ForeignKeyConstraint(
-            ["previous_decision_id", "payment_id", "user_id", "event_id"],
+            ["previous_decision_id", "payment_id", "portfolio_id", "user_id", "event_id"],
             [
                 "stock_dividend_decisions.id",
                 "stock_dividend_decisions.payment_id",
+                "stock_dividend_decisions.portfolio_id",
                 "stock_dividend_decisions.user_id",
                 "stock_dividend_decisions.event_id",
             ],
             name="fk_dividend_decision_previous_owner",
         ),
         ForeignKeyConstraint(
-            ["previous_application_id", "payment_id", "user_id", "event_id"],
+            ["previous_application_id", "payment_id", "portfolio_id", "user_id", "event_id"],
             [
                 "stock_dividend_decisions.id",
                 "stock_dividend_decisions.payment_id",
+                "stock_dividend_decisions.portfolio_id",
                 "stock_dividend_decisions.user_id",
                 "stock_dividend_decisions.event_id",
             ],
@@ -242,6 +283,9 @@ class StockDividendDecision(Base):
         money("applied_delta", signed=True),
         money("cash_after"),
         Index("ix_stock_dividend_decision_owner_recorded_id", "user_id", "recorded_at", "id"),
+        Index(
+            "ix_stock_dividend_decision_portfolio_recorded_id", "portfolio_id", "recorded_at", "id"
+        ),
         Index("ix_stock_dividend_decision_payment_id", "payment_id", "id"),
         Index("ix_stock_dividend_decision_event_id", "event_id"),
         Index("ix_stock_dividend_decision_revision_id", "revision_id"),
@@ -270,6 +314,7 @@ class StockDividendDecision(Base):
         ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
     payment_id: Mapped[int] = mapped_column(BigInteger)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     event_id: Mapped[int] = mapped_column(BigInteger)
