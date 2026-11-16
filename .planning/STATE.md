@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-24-PLAN.md; next12-25
-last_updated: "2026-11-16T14:50:59.620Z"
+stopped_at: Completed12-25-PLAN.md; next12-26
+last_updated: "2026-11-16T15:11:42.314Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 24
-  percent: 86
+  completed_plans: 25
+  percent: 89
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has24/28 plans complete locally. Crypto and stock tickets, confirmations and original receipts now carry verified portfolio context; crypto cash is scoped and unknown recovery stays frozen to the original attempt.47 page cases and the128-case combined regression pass. Next12-25/Wave15 holdings and History integration. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and owner UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has25/28 plans complete locally. Portfolio and History pages now carry verified named ownership, same-root holding/original links and scoped detail/focus lifetimes.51 assigned page cases and249 affected cases pass; warm-cache target readiness waits for committed activation. Next12-26/Wave16 browser and CI harness. All28 requirements remain unchecked;47 retained frontend fixture type errors, strict full-source/browser/security/recovery and owner gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 24/28 complete; next12-25 by dependency order
-Status: Wave15 in progress; trade surfaces complete, next holdings and History
+Plan: 25/28 complete; next12-26 by dependency order
+Status: Wave15 complete; next browser and CI harness
 Last activity: 2026-11-16
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 89%
 
 ## Accepted Closeout and Release Boundary
 
@@ -304,6 +304,17 @@ Full frontend typing still has50 errors across14 downstream25 page/retained27
 fixture files and no changed-file errors. Browser/reflow/native200% and owner
 acceptance remain26–28; see12-24-SUMMARY.md. Next12-25/Wave15; whole requirements
 and final integration gates remain pending.
+Plan25 now integrates named owned portfolio/holdings and mixed History/original
+detail views, preserving stored baselines and incomplete valuation semantics.
+26 Portfolio and25 History page cases pass; the final249-case page/detail/target/
+read-hook/App/trade regression passes. A warm-cache sibling navigation defect
+is fixed by publishing target readiness only after committed scope activation,
+without weakening owner/session/isCurrent checks. Original detail and focus
+lifetimes are root/session scoped; same-root metadata cannot steal heading focus.
+Changed files pass lint/format/type checks. Full frontend typing still has47
+errors across11 retained fixture files owned by27; no product source errors
+remain. Browser/strict source/image/recovery and owner UI/native200% gates remain
+26–28. See12-25-SUMMARY.md; next12-26/Wave16, all requirements still unchecked.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -336,9 +347,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P22 | 14 min | 2 tasks | 5 files |
 | Phase 12 P23 | 15 min | 2 tasks | 9 files |
 | Phase 12 P24 | 21 min | 2 tasks | 9 files |
+| Phase 12 P25 | 18 min | 2 tasks | 9 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T14:50:23.958Z
-Stopped at: Completed12-24-PLAN.md; next12-25
+Last session: 2026-11-16T15:11:41.966Z
+Stopped at: Completed12-25-PLAN.md; next12-26
 Resume file: None

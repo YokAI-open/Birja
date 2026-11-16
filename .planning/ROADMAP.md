@@ -19,7 +19,7 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; sixteen plans are complete locally.
+at Phase 12. Phase 12 has 28 approved plans; twenty-five plans are complete locally.
 Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
 and schema-admission checks. Plan08 adds explicit root/identity service contracts;
 Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
@@ -28,7 +28,9 @@ split effects with frozen siblings. Plans11/13/14 add scoped stock execution,
 dividend workers and private valuation/History. Plan16 qualifies restricted final
 bootstrap and authenticated fresh/retained/staged migration-to-final; production v2
 composition now passes259 affected API/auth/onboarding cases with explicit legacy
-finance refusal. Retained TLS/recovery and complete phase verification remain pending.
+finance refusal. Browser targets/hooks/navigation, trade surfaces and owned
+holdings/History pages now pass their focused gates; final source/UI/recovery
+qualification and owner acceptance remain pending.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -137,7 +139,7 @@ Plans:
 **Wave 15** *(blocked on Wave 14 completion)*
 
 - [x] 12-24-PLAN.md — Trade surfaces and original-target receipts
-- [ ] 12-25-PLAN.md — Scoped holdings and mixed History surfaces
+- [x] 12-25-PLAN.md — Scoped holdings and mixed History surfaces
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
@@ -272,7 +274,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 24/28 | Wave15 in progress; next12-25 holdings/History | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 25/28 | Wave15 complete; next12-26 browser/CI harness | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
