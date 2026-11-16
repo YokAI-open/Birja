@@ -63,43 +63,92 @@ packet sources, so the previous102-artifact/248-source review packet is now
 historical. Regenerate the complete actual-source packet at the final source
 with browser widths/reflow and actual image inspection before Plan28.
 
+## Completed backend repair segment
+
+- `f5bdeea` / owning12-12: current synthetic opening/fill/facts/movements and
+  reconstruction now carry the real fixture Account root. Sole-root resolution
+  asserts uniqueness; explicit sibling roots are ownership-checked, with a new
+  ambiguity/foreign-root regression. Synthetic new splits independently encode
+  canonical version2 root tuples instead of placeholder hashes; legacy NULL
+  applications/digest semantics remain untouched. Real prior regular sessions
+  and earlier openings replace weekend-dependent dividend setup. Current role
+  proofs use the exact final bootstrap instead of forbidden downgrades or
+  ad-hoc grants. Original economic, late/zero/sold-out ownership, rollback,
+  oversell and race assertions remain. All240 action/journal/calendar cases pass.
+- `e983aa8` / owning12-16: retained dev bootstrap mocks supply their explicit0014
+  revision read; CLI assertions include migrate=False. New dispatch assertions
+  keep0015/16 migration_only and0017 on its final authority path. All32 cases pass.
+- `c0aff80` / owning12-13: the current committed-client dividend repair removes obsolete CREATE/DROP
+  scheduler-role assumptions and uses the exact final bootstrap. Entitlements,
+  successor snapshots, payment/hold work, History and stock/crypto calls retain
+  actual portfolio roots. Root-owned INSERT waiters are observed and serialized;
+  mutable global revisions/pending split evidence invalidate stale work without
+  disabling guards around running services. Four new tests directly prove
+  immutable quantity/cutoff/units/sequence tamper refusal even for setup owner.
+
+All new trigger maintenance is exact-target, privileged-disposable-fixture
+setup/corruption/cleanup only. Original enabled state is required and restored
+in finally, then asserted. No production/runtime/migration/SQL-asset/grant body,
+dependency, test deselection, skip/xfail or coverage threshold changed.
+
+The strict serial combined action/journal/calendar/bootstrap/dividend/shared
+stock regression passes350 cases in64.63s. This precedes the four added direct
+immutability cases; the final affected dividend/shared-stock replay passes82
+cases in36.01s, including all four added refusals.
+Full backend Ruff check and format pass226 files. Logs:
+
+- `/tmp/phase12-27-stock-journal-final.log` —240pass/32.46s
+- `/tmp/phase12-27-dev-bootstrap-final.log` —32pass/1.85s
+- `/tmp/phase12-27-dividend-concurrency-second.log` —13pass
+- `/tmp/phase12-27-dividend-worker-third.log` —56pass/24.58s
+- `/tmp/phase12-27-stock-dividend-serial-final.log` —350pass/64.63s
+- `/tmp/phase12-27-dividend-final.log` —82pass/36.01s, final affected replay
+
+One prior combined attempt was inconclusive: the executor mistakenly launched
+the apparently pure bootstrap pytest concurrently. Its session-autouse
+ensure_dividend_test_owner issues ALTER TABLE OWNER over every disposable
+relation, causing a lock cycle with another test's fixture cleanup. Both
+processes exited; sanitized activity showed zero sessions; a guarded genuine
+schema reset and the serial350-case replay pass. **Never run a second pytest
+against this stack concurrently, even for apparently pure modules.** Another
+diagnostic wait run was interrupted after22 passes when a retained revision
+helper tried to append an owned entitlement while the test deliberately held
+its root; that fixture now changes only global revision evidence before lock
+release. All56 final wait/worker cases pass without guard bypass.
+
 ## Remaining backend work / next concrete step
 
-Full backend diagnostic invocation `uv run pytest -q --maxfail=20` now collects
-and reaches **415passed/20failed** in25.96s. The first failing group is retained
-`test_corporate_actions.py`; the root cause is legacy synthetic financial rows
-omitting required0017 `portfolio_id`, not failed execution guards. See private
-`/tmp/phase12-27-backend-second.log`; all20 names are in its final summary.
+Full unfiltered diagnostic `/tmp/phase12-27-backend-third.log` reaches548passes,
+3failures and37errors before its40-failure stop. Its three dev-bootstrap failures
+are now fixed above. Its first remaining family is the separate shared
+`tests/test_dividend_schema.py::dividend_case` and
+`tests/test_dividend_authority.py::authority_case`, **not** the repaired
+`tests/dividend_fixtures.py` independent committed-client fixture.
 
-Read `tests/stock_action_fixtures.py` first: `synthetic_opening` inserts a movement
-and Holding without the required root; `synthetic_fill` inserts Trade and
-StockFillFacts without it. These helpers are explicitly synthetic, use the
-isolated `new_user` fixture and current-head schema. Bind them to their actual
-fixture-owned original account (or add an explicit helper argument for sibling
-cases), never add a production default/fallback or relax schema constraints.
-Current test-only fixtures can obtain the root from the created Account; assert
-the intended sole/original test account rather than guessing arbitrary roots.
+Read `test_stock_action_migrations.py::ledger`: it creates only a User on current
+head. The dividend schema helper inserts rootless entitlements; authority_case
+then assumes app/scheduler roles are absent, creates old grants/accounts and
+updates financial evidence that is immutable at0017. Current behavioral proofs
+need actual owned roots, exact final bootstrap and original snapshot terms
+prepared before immutable insertion. Preserve their amount/rounding/causal/
+ACL/negative assertions; never relax final triggers to make old setup work.
+Existing current-root fixtures in test_portfolio_dividend_authority.py are a
+reference. The still-legacy test_dividend_payments/corrections/History callers
+also need explicit roots. Helpers that deliberately test old schemas must use
+their genuine retained source/model/API and actual specified revisions, rather
+than applying current0017 ORM/services to an old DB.
 
-Many direct `StockMovementInput` constructions in retained
-`test_stock_ownership.py` / `test_corporate_actions.py` also need explicit roots
-under owning12-12. Some retained journal callers now require portfolio identity
-instead of user identity. Preserve the actual historical split/economic/late
-buyer/zero-holder/rollback/oversell/race assertions. Scope all fixture Holding,
-Trade, facts and journal rows consistently; do not disable immutable/FK/authority
-guards around behavior-under-test.
+Further expected retained work:
 
-Further expected retained work already recorded by earlier plans:
-
-- current-versus-retained migration head/downgrade fixtures:0017 intentionally
+- Current-versus-retained migration head/downgrade fixtures:0017 intentionally
   refuses downgrade. Exact old-schema cases require genuine retained sources,
   explicit supported revisions and authenticated migration child identity.
-- `tests/dividend_fixtures.py` assumes obsolete role/signature/bootstrap and
-  user-only service calls; use existing current ownership/dividend fixture
-  patterns without broadening privileges.
-- retained History/service/API readers still need explicit roots and scopes;
-  only collection and standalone mixed cursor/wire tests were repaired here.
-- strict backend60-module100% branch /80% overall coverage remains pending,
-  including the new startup/role/TLS modules. No exclusion or gate change.
+- Remaining stock/trading/valuation/History/API fixture callers throughout the
+  unfiltered suite may still use user-only signatures. The repaired shared
+  stock_request helper validates an actual sole/explicit root in tests only;
+  production still requires OwnedActivePortfolio with no default/fallback.
+- Full backend60-module100% branch /80% overall coverage remains pending,
+  including new startup/role/TLS modules. No gate/exclusion change is allowed.
 
 ## Test stack ownership and cleanup
 
@@ -109,6 +158,11 @@ confirmed nobody else uses it. Read-only inspection verified exact own checkout
 Compose labels/config, pinned PG/Redis, loopback55432/56379 and **no persistent
 volumes**; these are the synthetic tmpfs containers created08:57:41 today.
 They were used only for diagnostics and **remain running** for the continuation.
+After the82-case final replay, the backend executor used the existing exact
+guarded reset and authentic migration lane to leave a clean genuine0017 schema;
+all noninternal triggers were checked enabled. No pytest/session or other
+subprocess remains active. The next executor may use this stack for diagnostics,
+but every DB-touching action must remain serial.
 Do not claim adoption as exclusive full-run proof. Before the final runner,
 clean only this verified synthetic stack using its exact Compose file, then
 let the runner create/clean its own stack. No dev/production resources touched.
