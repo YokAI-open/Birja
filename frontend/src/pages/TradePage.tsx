@@ -332,7 +332,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         Trade {symbol}
       </h1>
       <PortfolioContext name={target.name} />
-      <div className="grid min-w-0 gap-6 lg:grid-cols-12">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="min-w-0 lg:col-span-7">
           <CardContent className="flex flex-col gap-6">
             <div className="flex flex-col gap-1">
@@ -460,7 +460,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <Card
           role="region"
           aria-labelledby={summaryHeadingId}
-          className="lg:col-span-5 lg:self-start"
+          className="min-w-0 lg:col-span-5 lg:self-start"
         >
           <CardContent className="flex flex-col gap-4">{preview}</CardContent>
         </Card>

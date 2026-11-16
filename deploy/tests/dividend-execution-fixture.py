@@ -433,7 +433,7 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     sys.path.insert(0, "/app")
-    from app.services.corporate_actions import derive_dividend_entitlements
+    from app.services.corporate_actions import derive_dividend_entitlements, persistent_action_holds
     from app.tasks.dividends import run_dividend_cycle
 
     helper = runpy.run_path("/e2e/stock-trade-fixture.py", run_name="browser_evidence")
@@ -464,10 +464,15 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
     )
     restricted = create_async_engine(scheduler_url)
     try:
-        assert await owner.fetchval("SELECT current_database()") == "birja_e2e"
+        assert await owner.fetchval("SELECT current_database()") == "birja"
         uid = await owner.fetchval("SELECT id FROM users WHERE email=$1", email)
         if uid is None:
             raise ValueError("Browser owner must sign in through real OTP first")
+        roots = await owner.fetch('SELECT id FROM accounts WHERE user_id=$1 AND closed_at IS NULL', uid)
+        if len(roots) != 1:
+            raise ValueError('This retained browser scenario requires exactly one explicit active root')
+        pid = roots[0]['id']
+        await owner.execute("ALTER ROLE birja_scheduler LOGIN PASSWORD 'syntheticSchedulerE2E'")
         state = Path(f"/tmp/birja-phase10-dividend-{uid}.json")
         cid = await owner.fetchval("SELECT id FROM coins WHERE symbol=$1", symbol)
         # The approved definer's minimum owned-database rights; scheduler never
@@ -503,7 +508,7 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
             cutoff = max(bounds, key=lambda row: row.session_date)
             async with owner.transaction():
                 held = await owner.fetchval(
-                    "SELECT quantity FROM holdings WHERE user_id=$1 AND coin_id=$2", uid, cid
+                    "SELECT quantity FROM holdings WHERE portfolio_id=$1 AND coin_id=$2", pid, cid
                 )
                 if held is None:
                     # Explicit retained opening input, not a historical executed
@@ -513,17 +518,19 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
                         cid,
                     )
                     await owner.execute(
-                        "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) VALUES($1,$2,2,0)",
+                        "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis,portfolio_id) VALUES($1,$2,2,0,$3)",
                         uid,
                         cid,
+                        pid,
                     )
                     await owner.execute(
-                        "INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) VALUES($1,$2,$3,$4,$4,2,0,2,0,0,0,'opening',$5)",
+                        "INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key,portfolio_id) VALUES($1,$2,$3,$4,$4,2,0,2,0,0,0,'opening',$5,$6)",
                         cid,
                         uid,
                         seq,
                         cutoff.opens_at - timedelta(days=1),
                         f"phase10-browser-opening:{uid}",
+                        pid,
                     )
                 await owner.execute(
                     "UPDATE stock_action_state SET journal_start_at=least(journal_start_at,$2),complete_from=least(complete_from,$2),coverage_start=least(coverage_start,$2),covered_until=$3 WHERE coin_id=$1",
@@ -589,10 +596,22 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
                     if operation != "preanchor":
                         assert any(
                             row.user_id == uid
+                            and row.portfolio_id == pid
                             and row.state == "eligible"
                             and row.eligible_quantity == 2
                             for row in rows
-                        )
+                        ), {
+                            "synthetic_entitlements": [
+                                {"root": row.portfolio_id, "state": row.state,
+                                 "quantity": str(row.eligible_quantity)}
+                                for row in rows
+                            ],
+                            "health": await owner.fetchval(
+                                "SELECT health FROM stock_action_state WHERE coin_id=$1", cid
+                            ),
+                            "persistent_holds": await persistent_action_holds(db, cid),
+                            "event": eid,
+                        }
                 events.append(eid)
             state.write_text(json.dumps({"event": events[0], "events": events, "symbol": symbol}))
         elif operation == "split":
@@ -658,6 +677,9 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
                 uncertain=operation == "uncertain",
                 reconcile=operation == "reconcile",
             )
+            if operation == "reconcile":
+                async with async_sessionmaker(engine).begin() as db:
+                    assert not await persistent_action_holds(db, cid)
         if operation != "inspect":
             result = await run_dividend_cycle(
                 sessionmaker=async_sessionmaker(restricted, expire_on_commit=False),
