@@ -2,6 +2,9 @@
 
 import asyncio
 import os
+import subprocess
+import sys
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -15,6 +18,7 @@ from tests.portfolio_fixtures import (
     seed_legacy_books,
 )
 from tests.test_migrations import (
+    BACKEND_DIR,
     ensure_dividend_test_owner,
     run_test_migration,
     test_migration_url,
@@ -226,7 +230,20 @@ async def test_association_guard_only_authenticated_finite_unchanged_transition(
             assert (
                 await conn.execute(text("SELECT session_user"))
             ).scalar_one() == "birja_migrator"
-            for assignment in ("portfolio_id=:foreign", "portfolio_id=:p,user_id=:foreign"):
+            economic_column = {
+                "holdings": "quantity",
+                "trades": "cash_after",
+                "stock_fill_facts": "held_after",
+                "stock_ownership_movements": "after_quantity",
+                "stock_dividend_entitlements": "eligible_quantity",
+                "stock_dividend_payments": "original_amount",
+                "stock_dividend_decisions": "cash_after",
+            }[table]
+            for assignment in (
+                "portfolio_id=:foreign",
+                "portfolio_id=:p,user_id=:foreign",
+                f"portfolio_id=:p,{economic_column}={economic_column}+1",
+            ):
                 with pytest.raises(DBAPIError, match="immutable portfolio association"):
                     async with conn.begin_nested():
                         await conn.execute(
@@ -280,8 +297,35 @@ async def test_preserved_legacy_economics_without_new_grant(
 ):
     engine = portfolio_migration_db
     await migrate_to(legacy_revision)
-    # Upgrade the retained source to0014 before seeding stock accounting; the
-    # dedicated original-revision tests retain their own pre-stock populations.
+    # Put genuine original crypto economics on the selected retained revision
+    # before upgrading it. Stock accounting is additionally seeded at0014, the
+    # first supported source with the complete retained dividend shape.
+    async with engine.begin() as conn:
+        original_owner = (
+            await conn.execute(
+                text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                {"e": f"original-{uuid4()}@example.test"},
+            )
+        ).scalar_one()
+        await conn.execute(
+            text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,7456.78,15555.00)"),
+            {"u": original_owner},
+        )
+        await conn.execute(
+            text("""INSERT INTO holdings(user_id,coin_id,quantity,cost_basis)
+            SELECT :u,id,0.00045678,45.67 FROM coins WHERE symbol='BTC'"""),
+            {"u": original_owner},
+        )
+        await conn.execute(
+            text("""INSERT INTO trades
+            (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+             exec_price,fee,cash_delta,cash_after,idempotency_key)
+            SELECT :u,id,'buy','quantity',0.00045678,0.00045678,99900,
+             TIMESTAMPTZ '2026-10-01 12:00:00+00',100000,0,-45.67,7456.78,:key
+            FROM coins WHERE symbol='BTC'"""),
+            {"u": original_owner, "key": uuid4()},
+        )
+        original = await economic_snapshot(conn)
     await migrate_to("0014")
     async with engine.begin() as conn:
         books = await seed_legacy_books(conn)
@@ -292,7 +336,11 @@ async def test_preserved_legacy_economics_without_new_grant(
         assert await economic_snapshot(conn) == before
         assert (
             await conn.execute(
-                text("SELECT id,user_id,cash,starting_cash,name FROM accounts ORDER BY id")
+                text(
+                    "SELECT id,user_id,cash,starting_cash,name FROM accounts "
+                    "WHERE id IN (:a,:b) ORDER BY id"
+                ),
+                {"a": books.roots[0], "b": books.roots[1]},
             )
         ).all() == [
             (books.roots[i], books.owners[i], books.cash[i], books.baselines[i], "My portfolio")
@@ -322,6 +370,9 @@ async def test_preserved_legacy_economics_without_new_grant(
             )
         ).scalar_one()
         assert split is None
+        after = await economic_snapshot(conn)
+        for table, original_rows in original.items():
+            assert all(row in after[table] for row in original_rows)
 
 
 async def test_resume_refuses_forged_owner_and_preserves_committed_association(
@@ -369,3 +420,108 @@ async def test_resume_refuses_forged_owner_and_preserves_committed_association(
     await migrate_to("0016")
     async with engine.connect() as conn:
         assert await economic_snapshot(conn) == before
+
+
+@pytest.mark.parametrize("revision", ["0015", "0016"])
+async def test_downgrade_refuses_before_writes_and_preserves_stage(
+    portfolio_migration_db, revision
+):
+    engine = portfolio_migration_db
+    await migrate_to("0014")
+    async with engine.begin() as conn:
+        await seed_legacy_books(conn)
+        before = await economic_snapshot(conn)
+    await migrate_to(revision)
+    with pytest.raises(RuntimeError, match="downgrade refused"):
+        await migrate_to("0014", down=True)
+    async with engine.connect() as conn:
+        assert await economic_snapshot(conn) == before
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == revision
+
+
+async def test_backfill_missing_legacy_root_refuses_before_any_batch(portfolio_migration_db):
+    engine = portfolio_migration_db
+    await migrate_to("0014")
+    async with engine.begin() as conn:
+        await seed_legacy_books(conn)
+        await conn.execute(
+            text("""WITH orphan AS (
+            INSERT INTO users(email) VALUES ('no-root@example.test') RETURNING id)
+            INSERT INTO holdings(user_id,coin_id,quantity,cost_basis)
+            SELECT orphan.id,coins.id,1,1 FROM orphan,coins WHERE coins.symbol='BTC'""")
+        )
+        before = await economic_snapshot(conn)
+    await migrate_to("0015")
+    with pytest.raises(RuntimeError, match="missing, ambiguous or contradictory"):
+        await migrate_to("0016")
+    async with engine.connect() as conn:
+        assert await economic_snapshot(conn) == before
+        assert not (
+            await conn.execute(text("SELECT 1 FROM holdings WHERE portfolio_id IS NOT NULL"))
+        ).all()
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0015"
+
+
+async def test_backfill_actual_committed_batch_interruption_resumes(portfolio_migration_db):
+    engine = portfolio_migration_db
+    await migrate_to("0014")
+    async with engine.begin() as conn:
+        await seed_legacy_books(conn)
+        before = await economic_snapshot(conn)
+    await migrate_to("0015")
+    # Fault injection is confined to this private child interpreter: actual
+    # Alembic/autocommit SQL commits two one-row batches, then loses the caller.
+    # There is no runtime GUC, trigger bypass or test hook in the migration.
+    script = """
+import sys
+from alembic import command
+from alembic.config import Config
+from sqlalchemy.engine import Connection
+original = Connection.execute
+count = 0
+def interrupted(self, statement, parameters=None, *args, **kwargs):
+    global count
+    if str(statement).startswith('WITH batch AS'):
+        count += 1
+        if count == 3:
+            raise RuntimeError('injected committed-batch interruption')
+        parameters = {**(parameters or {}), 'batch': 1}
+    return original(self, statement, parameters, *args, **kwargs)
+Connection.execute = interrupted
+try:
+    command.upgrade(Config('alembic.ini'), '0016')
+except RuntimeError as error:
+    if str(error) != 'injected committed-batch interruption':
+        raise
+    print('committed-batch-interruption')
+    sys.exit(29)
+raise AssertionError('fault injection did not interrupt migration')
+"""
+    result = await asyncio.to_thread(
+        subprocess.run,  # noqa: S603 - fixed private interpreter, no shell
+        [sys.executable, "-c", script],
+        cwd=BACKEND_DIR,
+        env={**os.environ, "DATABASE_URL": test_migration_url(), "ENV": "test"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 29 and result.stdout.strip() == "committed-batch-interruption"
+    async with engine.connect() as conn:
+        assert await economic_snapshot(conn) == before
+        assert (
+            await conn.execute(text("SELECT count(*) FROM holdings WHERE portfolio_id IS NOT NULL"))
+        ).scalar_one() == 2
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0015"
+    await migrate_to("0016")
+    async with engine.connect() as conn:
+        assert await economic_snapshot(conn) == before
+        assert not (
+            await conn.execute(text("SELECT 1 FROM holdings WHERE portfolio_id IS NULL"))
+        ).all()
