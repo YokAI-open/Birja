@@ -32,7 +32,12 @@ from app.services.corporate_actions import (
 from app.services.stock_ownership import StockMovementInput, append_stock_movement
 from app.services.stock_sessions import build_sessions
 from tests.stock_action_fixtures import ownership as _ownership
-from tests.stock_action_fixtures import synthetic_fill, synthetic_opening
+from tests.stock_action_fixtures import (
+    synthetic_corruption,
+    synthetic_fill,
+    synthetic_opening,
+    synthetic_portfolio_id,
+)
 from tests.test_corporate_action_rules import dividend
 from tests.test_stock_admission import action_admitted
 from tests.test_stock_sessions import evidence as calendar_evidence
@@ -471,7 +476,15 @@ async def test_split_boundary_and_zero_owner_guards(actions, case):
         elif case == "late_after_ingest":
             await synthetic_opening(db, cid, uid, action.observed_at)
         elif case == "zero_holder":
-            db.add(Holding(coin_id=cid, user_id=uid, quantity=Decimal(0), cost_basis=Decimal(0)))
+            db.add(
+                Holding(
+                    coin_id=cid,
+                    user_id=uid,
+                    quantity=Decimal(0),
+                    cost_basis=Decimal(0),
+                    portfolio_id=await synthetic_portfolio_id(db, uid),
+                )
+            )
         result = await apply_due_actions(db, cid)
         assert len(result) == (1 if case == "zero_holder" else 0)
 
@@ -521,7 +534,15 @@ async def test_entitlement_uncertain_units_or_journal_hold(actions, case):
     )
     async with factory.begin() as db:
         if case == "unjournaled_owner":
-            db.add(Holding(coin_id=cid, user_id=uid, quantity=Decimal(2), cost_basis=Decimal(20)))
+            db.add(
+                Holding(
+                    coin_id=cid,
+                    user_id=uid,
+                    quantity=Decimal(2),
+                    cost_basis=Decimal(20),
+                    portfolio_id=await synthetic_portfolio_id(db, uid),
+                )
+            )
             await db.flush()
         elif case == "unapplied_split":
             cutoff = datetime.combine(action.ex_date, datetime.min.time(), UTC) + timedelta(
@@ -554,14 +575,14 @@ async def test_latest_verified_entitlements_selects_latest_per_owner(actions):
 )
 async def test_entitlement_verified_split_unit_order(actions, ordering, expected):
     factory, cid, uid, action, auth = actions
-    day = action.observed_at.date() - timedelta(days=1)
-    cutoff = datetime.combine(day, datetime.min.time(), UTC) + timedelta(hours=14, minutes=30)
+    session = previous_session(action.observed_at)
+    day, cutoff = session.session_date, session.opens_at
     split_cutoff = cutoff + timedelta(
         hours=-1 if ordering == "before" else 1 if ordering == "after" else 0
     )
     async with factory.begin() as db:
         db.add(StockDataAdmission(**asdict(calendar_evidence(action.observed_at))))
-        await synthetic_opening(db, cid, uid, action.observed_at - timedelta(days=3))
+        await synthetic_opening(db, cid, uid, min(cutoff, split_cutoff) - timedelta(hours=1))
         await persist_action_batch(db, batch(split_action(action, split_cutoff)), auth)
         assert len(await apply_due_actions(db, cid)) == 1
         same = ordering in ("pre", "post")
@@ -666,7 +687,13 @@ async def test_ingest_freeze_and_fill_share_actual_instrument_gate(actions, free
             await append_stock_movement(
                 db,
                 StockMovementInput(
-                    uid, cid, Decimal(2), Decimal(20), "fill:" + str(trade.id), trade_id=trade.id
+                    uid,
+                    cid,
+                    Decimal(2),
+                    Decimal(20),
+                    "fill:" + str(trade.id),
+                    trade_id=trade.id,
+                    portfolio_id=trade.portfolio_id,
                 ),
             )
 
@@ -698,6 +725,7 @@ async def test_ingest_freeze_and_fill_share_actual_instrument_gate(actions, free
                         Decimal(20),
                         "fill:" + str(trade.id),
                         trade_id=trade.id,
+                        portfolio_id=trade.portfolio_id,
                     ),
                 )
         except BaseException:
@@ -719,15 +747,28 @@ async def test_ingest_freeze_and_fill_share_actual_instrument_gate(actions, free
         assert quantities == ([] if freeze_first else [Decimal(2)])
 
 
+def previous_session(now):
+    """Use a real completed regular session, including Mondays and holidays."""
+    return max(
+        (
+            row
+            for row in build_sessions(now, calendar_evidence(now))
+            if row.exchange == "NASDAQ" and row.closes_at is not None and row.closes_at < now
+        ),
+        key=lambda row: row.session_date,
+    )
+
+
 async def prepare_dividend(actions, *, opening=True, **changes):
     factory, cid, uid, action, auth = actions
-    day = action.observed_at.date() - timedelta(days=1)
+    session = previous_session(action.observed_at)
+    day = session.session_date
     action = replace(action, ex_date=day, record_date=day, payable_date=day + timedelta(days=5))
     action = replace(action, **changes)
     async with factory.begin() as db:
         db.add(StockDataAdmission(**asdict(calendar_evidence(action.observed_at))))
         if opening:
-            await synthetic_opening(db, cid, uid, action.observed_at - timedelta(days=2))
+            await synthetic_opening(db, cid, uid, session.opens_at - timedelta(hours=1))
         event = (await persist_action_batch(db, batch(action), auth))[0]
     return event, action
 
@@ -747,6 +788,7 @@ async def test_entitlement_late_buyer_and_departed_seller(actions, side, expecte
                 Decimal(20 if side == "buy" else 0),
                 "fill:" + str(fill.id),
                 trade_id=fill.id,
+                portfolio_id=fill.portfolio_id,
             ),
         )
         results = await derive_dividend_entitlements(db, event.event_id)
@@ -810,13 +852,14 @@ async def test_entitlement_monitor_loss_recovery_loss_preserves_all_versions(act
 async def test_entitlement_historical_quantity_and_idempotent_snapshot(actions):
     factory, cid, uid, action, auth = actions
     now = action.observed_at
-    day = now.date() - timedelta(days=1)
+    session = previous_session(now)
+    day = session.session_date
     dividend_action = replace(
         action, ex_date=day, record_date=day, payable_date=now.date() + timedelta(days=2)
     )
     async with factory.begin() as db:
         db.add(StockDataAdmission(**asdict(calendar_evidence(now))))
-        await synthetic_opening(db, cid, uid, now - timedelta(days=2))
+        await synthetic_opening(db, cid, uid, session.opens_at - timedelta(hours=1))
         event = (await persist_action_batch(db, batch(dividend_action), auth))[0]
         entitlements = await derive_dividend_entitlements(db, event.event_id)
         assert len(entitlements) == 1
@@ -860,11 +903,14 @@ async def actions(ownership):
             await db.execute(
                 delete(StockActionObservation).where(StockActionObservation.event_id.in_(events))
             )
-            await db.execute(
-                delete(StockDividendEntitlement).where(
-                    StockDividendEntitlement.event_id.in_(events)
+            async with synthetic_corruption(
+                db, "stock_dividend_entitlements", trigger="portfolio_association_only"
+            ):
+                await db.execute(
+                    delete(StockDividendEntitlement).where(
+                        StockDividendEntitlement.event_id.in_(events)
+                    )
                 )
-            )
             await db.execute(
                 delete(StockDataAdmission).where(
                     StockDataAdmission.product.in_(["actions", "calendar"])
@@ -1213,8 +1259,7 @@ async def test_applied_split_cached_boundary_and_new_quote_project_current(actio
             future = observed + timedelta(seconds=30)
             from tests.stock_action_fixtures import synthetic_split
 
-            pending = await synthetic_split(db, cid, future, boundary=0, prior_epoch=1)
-            await db.delete(pending)
+            await synthetic_split(db, cid, future, boundary=0, prior_epoch=1, applied=False)
             state.unit_epoch = 1
             await db.flush()
             response = await list_stocks(db, settings, now=lambda: observed)

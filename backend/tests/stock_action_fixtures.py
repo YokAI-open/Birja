@@ -1,5 +1,7 @@
 """Explicit synthetic ownership seeds. Never imported by application code."""
 
+import hashlib
+import json
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from decimal import Decimal
@@ -20,6 +22,41 @@ from app.models.corporate_action import (
 from app.models.stock import StockInstrument
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding, Trade
+from app.models.user import Account
+
+
+async def synthetic_portfolio_id(db, user_id, portfolio_id=None):
+    """Resolve only the fixture's sole root, or validate its explicit sibling."""
+    roots = (await db.execute(select(Account).where(Account.user_id == user_id))).scalars().all()
+    if portfolio_id is None:
+        assert len(roots) == 1, "Multi-root fixtures must name their intended portfolio"
+        root = roots[0]
+    else:
+        root = next((root for root in roots if root.id == portfolio_id), None)
+        assert root is not None, "Explicit fixture root must belong to the intended owner"
+    assert root.closed_at is None, "Synthetic financial seeds require an active root"
+    return root.id
+
+
+@pytest_asyncio.fixture
+async def current_runtime_roles(engine, migrated):
+    """Install the exact final production contract on this guarded test DB."""
+    from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+
+    async with engine.begin() as conn:
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT current_database(),session_user FROM pg_roles "
+                    "WHERE rolname=session_user AND rolsuper"
+                )
+            )
+        ).one() == ("birja_test", "birja_test")
+        await conn.execute(text(PREFLIGHT_SQL))
+        for statement in GRANTS_SQL.split(";"):
+            if statement.strip():
+                await conn.execute(text(statement))
+    yield
 
 
 @asynccontextmanager
@@ -29,10 +66,16 @@ async def synthetic_corruption(db, table, *, trigger="stock_record_immutable"):
     Failed DDL/DML aborts its transaction, so rollback restores trigger state.
     Never call around production behavior or a restricted-role assertion.
     """
-    if table not in ("trades", "stock_fill_facts", "stock_ownership_movements") or trigger not in (
-        "stock_record_immutable",
-        "stock_fill_integrity",
-    ):
+    allowed_targets = {
+        ("trades", "stock_record_immutable"),
+        ("trades", "stock_fill_integrity"),
+        ("stock_fill_facts", "stock_record_immutable"),
+        ("stock_fill_facts", "stock_fill_integrity"),
+        ("stock_ownership_movements", "stock_record_immutable"),
+        ("stock_dividend_entitlements", "portfolio_association_only"),
+        ("stock_split_applications", "portfolio_record_immutable"),
+    }
+    if (table, trigger) not in allowed_targets:
         raise RuntimeError("Fixed corruption target required")
     allowed = (
         await db.execute(
@@ -42,6 +85,12 @@ async def synthetic_corruption(db, table, *, trigger="stock_record_immutable"):
     ).scalar_one()
     if not allowed:
         raise RuntimeError("Privileged isolated corruption setup only")
+    trigger_state = text(
+        "SELECT tgenabled::text FROM pg_trigger WHERE tgrelid=to_regclass(:table) "
+        "AND tgname=:trigger AND NOT tgisinternal"
+    )
+    target = {"table": "public." + table, "trigger": trigger}
+    assert (await db.execute(trigger_state, target)).scalar_one() == "O"
     await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     await db.execute(text(f"ALTER TABLE public.{table} DISABLE TRIGGER {trigger}"))
     try:
@@ -49,6 +98,7 @@ async def synthetic_corruption(db, table, *, trigger="stock_record_immutable"):
         await db.flush()
     finally:
         await db.execute(text(f"ALTER TABLE public.{table} ENABLE TRIGGER {trigger}"))
+        assert (await db.execute(trigger_state, target)).scalar_one() == "O"
 
 
 @pytest_asyncio.fixture
@@ -99,9 +149,12 @@ async def ownership(engine, migrated, new_user):
             await db.execute(
                 delete(StockOwnershipMovement).where(StockOwnershipMovement.coin_id == coin_id)
             )
-            await db.execute(
-                delete(StockSplitApplication).where(StockSplitApplication.coin_id == coin_id)
-            )
+            async with synthetic_corruption(
+                db, "stock_split_applications", trigger="portfolio_record_immutable"
+            ):
+                await db.execute(
+                    delete(StockSplitApplication).where(StockSplitApplication.coin_id == coin_id)
+                )
             events = select(StockActionEvent.id).where(StockActionEvent.coin_id == coin_id)
             await db.execute(
                 update(StockActionEvent)
@@ -124,10 +177,14 @@ async def ownership(engine, migrated, new_user):
                 )
 
 
-async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy", created_at=None):
+async def synthetic_fill(
+    db, coin_id, user_id, *, quantity=Decimal(2), side="buy", created_at=None, portfolio_id=None
+):
     """Fill-like caller only; no production cash service or stock execution."""
+    portfolio_id = await synthetic_portfolio_id(db, user_id, portfolio_id)
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
     trade = Trade(
+        portfolio_id=portfolio_id,
         coin_id=coin_id,
         user_id=user_id,
         side=side,
@@ -147,11 +204,14 @@ async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy
     await db.flush()
     held = (
         await db.execute(
-            select(Holding.quantity).where(Holding.coin_id == coin_id, Holding.user_id == user_id)
+            select(Holding.quantity).where(
+                Holding.coin_id == coin_id, Holding.portfolio_id == portfolio_id
+            )
         )
     ).scalar_one_or_none() or Decimal(0)
     db.add(
         StockFillFacts(
+            portfolio_id=portfolio_id,
             trade_id=trade.id,
             coin_id=coin_id,
             user_id=user_id,
@@ -181,10 +241,20 @@ async def synthetic_fill(db, coin_id, user_id, *, quantity=Decimal(2), side="buy
 
 
 async def synthetic_opening(
-    db, coin_id, user_id, at, *, quantity=Decimal(2), basis=Decimal(20), sequence=1
+    db,
+    coin_id,
+    user_id,
+    at,
+    *,
+    quantity=Decimal(2),
+    basis=Decimal(20),
+    sequence=1,
+    portfolio_id=None,
 ):
     """Test-only prehistory; deliberately unavailable from production services."""
+    portfolio_id = await synthetic_portfolio_id(db, user_id, portfolio_id)
     row = StockOwnershipMovement(
+        portfolio_id=portfolio_id,
         coin_id=coin_id,
         user_id=user_id,
         sequence=sequence,
@@ -197,16 +267,32 @@ async def synthetic_opening(
         after_basis=basis,
         unit_epoch=0,
         cause_kind="opening",
-        causal_key="synthetic-opening:" + str(user_id),
+        causal_key="synthetic-opening:" + str(portfolio_id),
     )
     db.add(row)
-    db.add(Holding(coin_id=coin_id, user_id=user_id, quantity=quantity, cost_basis=basis))
+    db.add(
+        Holding(
+            portfolio_id=portfolio_id,
+            coin_id=coin_id,
+            user_id=user_id,
+            quantity=quantity,
+            cost_basis=basis,
+        )
+    )
     await db.flush()
     return row
 
 
 async def synthetic_split(
-    db, coin_id, cutoff, *, boundary=1, prior_epoch=0, before_digest="b" * 64, after_digest="c" * 64
+    db,
+    coin_id,
+    cutoff,
+    *,
+    boundary=1,
+    prior_epoch=0,
+    before_digest=None,
+    after_digest=None,
+    applied=True,
 ):
     """Explicit matched event/revision/application; never false-causal shortcuts."""
     event = StockActionEvent(coin_id=coin_id, economic_key=str(uuid4()), first_observed_at=cutoff)
@@ -234,6 +320,57 @@ async def synthetic_split(
     db.add(revision)
     await db.flush()
     event.current_revision_id = revision.id
+    if not applied:
+        return revision
+    # Independent fixture encoding of the NEW root-aware digest; legacy stored
+    # NULL-marker tuples are never rewritten or interpreted by this helper.
+    rows = (
+        (
+            await db.execute(
+                select(StockOwnershipMovement)
+                .where(
+                    StockOwnershipMovement.coin_id == coin_id,
+                    StockOwnershipMovement.sequence <= boundary,
+                )
+                .order_by(StockOwnershipMovement.sequence)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    latest = {row.portfolio_id: row for row in rows}
+    before, after, sequence = [], [], boundary
+    for pid, row in sorted(latest.items()):
+        before.append(
+            (
+                pid,
+                row.user_id,
+                coin_id,
+                format(row.after_quantity, ".8f"),
+                format(row.after_basis, ".8f"),
+                row.sequence,
+                prior_epoch,
+            )
+        )
+        if row.after_quantity > 0:
+            sequence += 1
+        after.append(
+            (
+                pid,
+                row.user_id,
+                coin_id,
+                format(row.after_quantity * 2, ".8f"),
+                format(row.after_basis, ".8f"),
+                sequence if row.after_quantity > 0 else row.sequence,
+                prior_epoch + 1,
+            )
+        )
+
+    def digest(value):
+        return hashlib.sha256(
+            json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
     now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
     application = StockSplitApplication(
         coin_id=coin_id,
@@ -245,8 +382,8 @@ async def synthetic_split(
         prior_unit_epoch=prior_epoch,
         new_unit_epoch=prior_epoch + 1,
         sequence_boundary=boundary,
-        before_digest=before_digest,
-        after_digest=after_digest,
+        before_digest=before_digest if before_digest is not None else digest(before),
+        after_digest=after_digest if after_digest is not None else digest(after),
         owner_digest_version=2,
         processed_at=now,
     )
