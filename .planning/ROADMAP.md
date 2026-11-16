@@ -19,7 +19,8 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; no implementation has started.
+at Phase 12. Phase 12 has 28 approved plans; three foundation/model plans are
+complete locally and the coordinated runnable migration/services remain pending.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -70,7 +71,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 12-03-PLAN.md — Stock and dividend ownership lineage models
+- [x] 12-03-PLAN.md — Stock and dividend ownership lineage models
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -263,7 +264,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 2/28 | In progress; next12-03 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 3/28 | In progress; next12-04 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

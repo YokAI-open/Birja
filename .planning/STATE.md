@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-last_updated: "2026-11-16T08:21:31.949Z"
+last_updated: "2026-11-16T08:28:41.745Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 2
-  percent: 7
+  completed_plans: 3
+  percent: 11
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 execution is authorized locally. Plans01–02 complete the test foundation and core model metadata; next is12-03. Runnable portfolio migration/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 execution is authorized locally. Plans01–03 complete the test foundation and owned core/stock/dividend metadata; next is12-04. Runnable portfolio migration/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 3 of 28
-Status: Executing Phase12; Plans01–02 complete, next12-03
-Last activity: 2026-11-16 — Committed named owned-root/core financial metadata;8 metadata checks pass,21 ownership cases collect
+Plan: 4 of 28
+Status: Executing Phase12; Plans01–03 complete, next12-04
+Last activity: 2026-11-16 — Committed stock/dividend ownership metadata;21 metadata checks pass,44 ownership/authority cases collect
 
-Progress: [█░░░░░░░░░] 7%
+Progress: [█░░░░░░░░░] 11%
 
 ## Accepted Closeout and Release Boundary
 
@@ -123,7 +123,10 @@ with14 passing connection/security checks,37 retained migration regressions,
 23 migration cases and13 ownership/authority cases collected. The explicit
 preservation RED probe fails at missing0015 as intended. Phasewide Wave0,
 final SQL, runtime/security/recovery and owner UI proofs remain pending.
-See12-01-SUMMARY.md; next12-02. No requirement is complete from collection.
+See12-01/02/03-SUMMARY.md. Plans02/03 add core and stock/dividend lineage
+metadata, with21 focused metadata cases passing and44 ownership/authority
+cases collected. Next12-04 adds real expansion/association migrations.
+No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
 New funding policy and terminal freeze scope remain in PROJECT.md.
