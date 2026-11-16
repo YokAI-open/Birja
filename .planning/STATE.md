@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-21-PLAN.md; next12-22
-last_updated: "2026-11-16T13:55:42.880Z"
+stopped_at: Completed12-22-PLAN.md; next12-23
+last_updated: "2026-11-16T14:11:54.719Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 21
-  percent: 75
+  completed_plans: 22
+  percent: 79
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has21/28 plans complete locally. Crypto and stock hooks now isolate owner/root/session queries, hidden authority and frozen original attempts;29 assigned hook cases and160 combined transport/target/hook cases pass. Next12-22/Wave14 read-hook isolation. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has22/28 plans complete locally. Valuation and both History hooks now isolate owner/root/session projections, cursors, seen sets and embedded originals;38 assigned read-hook cases and198 combined client/target/trade/read-hook cases pass. Next12-23/Wave14 scoped navigation and target boundary. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 21/28 complete; next12-22 by dependency order
-Status: Wave14 in progress; trade-hook isolation complete, next read-hook isolation
+Plan: 22/28 complete; next12-23 by dependency order
+Status: Wave14 in progress; trade/read-hook isolation complete, next scoped navigation
 Last activity: 2026-11-16
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 79%
 
 ## Accepted Closeout and Release Boundary
 
@@ -271,6 +271,17 @@ source typing pass; full frontend typing still reports59 errors across17 later
 consumer/legacy-fixture files owned by22–25/27. See12-21-SUMMARY.md for exact
 target-first signatures, quoteKey contract and original crypto retry fields.
 Next12-22/Wave14; all requirements, full integration and owner UI remain pending.
+Plan22 now requires explicit targets for valuation and both History hooks, with
+owner/root/session query and hidden projection ownership, root-partitioned stock
+guards/seen sets, bound opaque continuations and embedded original details.
+Session notifications mask accepted data immediately without recapturing stale
+authority; unavailable targets expose no earlier finances, while same-root
+History append errors preserve accepted immutable pages for retry.14 valuation
+and24 History cases pass; the final combined transport/target/trade/read-hook
+run passes198 cases. Changed-file lint/format and source typing pass. Full
+frontend typing still reports61 errors across18 later page/retained-fixture files
+owned by23–25/27; no whole frontend readiness is claimed. See12-22-SUMMARY.md.
+Next12-23/Wave14; all whole requirements and owner UI gates remain pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -300,9 +311,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P20 | 12 min | 2 tasks | 7 files |
 | Phase 12 P18 | 19 min continuation | 2 tasks | 10 files |
 | Phase 12 P21 | 16 min | 2 tasks | 6 files |
+| Phase 12 P22 | 14 min | 2 tasks | 5 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T13:55:20.219Z
-Stopped at: Completed12-21-PLAN.md; next12-22
+Last session: 2026-11-16T14:11:25.500Z
+Stopped at: Completed12-22-PLAN.md; next12-23
 Resume file: None
