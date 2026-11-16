@@ -9,6 +9,7 @@ from sqlalchemy import (
     Identity,
     Numeric,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,6 +34,7 @@ class User(Base):
 class Account(Base):
     __tablename__ = "accounts"
     __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_accounts_id_user"),
         CheckConstraint("cash >= 0", name="cash_non_negative"),
         CheckConstraint("starting_cash >= 0", name="starting_cash_non_negative"),
         CheckConstraint("cash = round(cash, 2)", name="cash_cents"),
@@ -40,8 +42,10 @@ class Account(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=False, unique=True
+        BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
+    name: Mapped[str] = mapped_column(Text, nullable=False, server_default="My portfolio")
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cash: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     starting_cash: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

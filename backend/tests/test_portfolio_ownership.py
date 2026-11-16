@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.exc import IntegrityError
 
 from tests.portfolio_fixtures import (
@@ -14,6 +14,65 @@ from tests.portfolio_fixtures import (
 )
 
 __all__ = ["portfolio_world"]
+
+
+def test_model_metadata_root_retains_identity_economics_and_owned_candidate_key():
+    from sqlalchemy import BigInteger, DateTime, Numeric, Text
+
+    from app.models.user import Account
+
+    table = Account.__table__
+    assert isinstance(table.c.id.type, BigInteger)
+    assert table.c.id.primary_key and table.c.id.identity.always
+    assert isinstance(table.c.name.type, Text)
+    assert not table.c.name.nullable
+    assert table.c.name.server_default.arg == "My portfolio"
+    assert isinstance(table.c.closed_at.type, DateTime)
+    assert table.c.closed_at.type.timezone and table.c.closed_at.nullable
+    assert table.c.closed_at.default is None and table.c.closed_at.server_default is None
+    unique = {
+        tuple(c.name for c in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("id", "user_id") in unique
+    assert ("user_id",) not in unique
+    assert any(tuple(index.columns.keys()) == ("user_id",) for index in table.indexes)
+    assert "description" not in table.c
+    for column in (table.c.cash, table.c.starting_cash):
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable
+        assert column.default is None and column.server_default is None
+    assert table.c.created_at.type.timezone
+
+
+@pytest.mark.parametrize("cash", ["0.00", "8765.43", "999999999999.99"])
+def test_model_metadata_existing_cash_schema_serializes_exact_decimal_strings(cash):
+    import json
+
+    from app.schemas.auth import MeOut
+
+    payload = MeOut(email="synthetic@example.test", cash_usd=Decimal(cash))
+    assert json.loads(payload.model_dump_json())["cash_usd"] == cash
+
+
+async def test_final_sql_root_metadata_preserves_named_active_and_closed_roots(portfolio_world):
+    conn, world = portfolio_world
+    rows = (
+        await conn.execute(
+            text("SELECT id,name,closed_at,cash,starting_cash FROM accounts WHERE user_id=:u"),
+            {"u": world.owner},
+        )
+    ).all()
+    roots = {row.id: row for row in rows}
+    assert roots[world.first].name
+    assert roots[world.sibling].name
+    assert roots[world.first].closed_at is None
+    assert roots[world.sibling].closed_at is None
+    assert roots[world.closed].closed_at is not None
+    assert roots[world.first].cash == Decimal("1234.56")
+    assert roots[world.sibling].cash == Decimal("4321.09")
 
 
 async def test_final_sql_owner_counts_and_sibling_finances_are_independent(portfolio_world):
