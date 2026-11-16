@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-status: executing
+status: awaiting_decision
 stopped_at: Completed12-25-PLAN.md; next12-26
-last_updated: "2026-11-16T15:11:42.314Z"
-last_activity: 2026-11-16
+last_updated: "2026-11-16T15:43:41.135271+00:00"
+last_activity: 2026-11-16 -- Plan26 browser repair checkpoint; 25/28 plans complete
 progress:
   total_phases: 4
   completed_phases: 0
@@ -20,13 +20,13 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has25/28 plans complete locally. Portfolio and History pages now carry verified named ownership, same-root holding/original links and scoped detail/focus lifetimes.51 assigned page cases and249 affected cases pass; warm-cache target readiness waits for committed activation. Next12-26/Wave16 browser and CI harness. All28 requirements remain unchecked;47 retained frontend fixture type errors, strict full-source/browser/security/recovery and owner gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 remains25/28 plans complete. Plan26 task01 reached its repair checkpoint: five guard contracts pass but latest real browser run is5/10 (two sibling transitions and three repeated AMD dividend-fixture failures). Task02 has not started. Uncommitted task01 changes and exact evidence are preserved in12-26-CHECKPOINT.md; await targeted retry disposition. No final UI packet or whole-phase qualification is claimed. All28 requirements remain unchecked and Phase7 live work remains separately deferred.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 25/28 complete; next12-26 by dependency order
-Status: Wave15 complete; next browser and CI harness
+Plan: 25/28 complete;12-26 task01 incomplete, retry disposition required
+Status: Awaiting Plan26 repair checkpoint decision; no phase advancement
 Last activity: 2026-11-16
 
 Progress: [█████████░] 89%
@@ -354,3 +354,7 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 Last session: 2026-11-16T15:11:41.966Z
 Stopped at: Completed12-25-PLAN.md; next12-26
 Resume file: None
+
+## Plan26 Browser Repair Checkpoint
+
+2026-11-16: See phases/12-preserve-existing-investing-under-portfolio-ownership/12-26-CHECKPOINT.md. No26-SUMMARY exists and task01 code remains uncommitted. The 320px crypto grid repair is present but complete review captures fail at repeated dividend fixture eligibility. Two SPA sibling target transitions also fail; causes remain unverified. Task02 CI/validation graph is unstarted. Existing strict gates, native zoom and owner acceptance remain pending. The approved Plan18 targeted retry is resolved and does not imply Plan26 retry approval. Keep all work local.
