@@ -1,4 +1,5 @@
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
+import { isPortfolioId } from "./portfolios";
 
 export type Side = "buy" | "sell";
 
@@ -9,7 +10,16 @@ export type Order = {
   quantity?: string;
 };
 
+/** Saved by the caller before execution; a retry retains this original portfolio. */
+export type TradeAttempt = Readonly<{
+  portfolio_id: string;
+  order: Readonly<Order>;
+  expected_mid: string;
+  idempotency_key: string;
+}>;
+
 export type Quote = {
+  portfolio_id: string;
   symbol: string;
   side: Side;
   input_kind: "usd" | "quantity";
@@ -30,6 +40,7 @@ export type Quote = {
 };
 
 export type Fill = {
+  portfolio_id: string;
   trade_id: number;
   created_at: string;
   symbol: string;
@@ -47,6 +58,7 @@ export type Fill = {
 };
 
 export type Holding = {
+  portfolio_id: string;
   symbol: string;
   quantity: string;
 };
@@ -67,6 +79,7 @@ export function isQuote(value: unknown): value is Quote {
     return false;
   }
   return (
+    isPortfolioId(value.portfolio_id) &&
     isText(value.symbol) &&
     isSide(value.side) &&
     isKind(value.input_kind) &&
@@ -92,6 +105,7 @@ export function isFill(value: unknown): value is Fill {
     return false;
   }
   return (
+    isPortfolioId(value.portfolio_id) &&
     Number.isInteger(value.trade_id) &&
     isText(value.created_at) &&
     isText(value.symbol) &&
@@ -110,40 +124,126 @@ export function isFill(value: unknown): value is Fill {
 }
 
 export function isHolding(value: unknown): value is Holding {
-  return isRecord(value) && isText(value.symbol) && isUnsigned(value.quantity);
+  return (
+    isRecord(value) &&
+    isPortfolioId(value.portfolio_id) &&
+    isText(value.symbol) &&
+    isUnsigned(value.quantity)
+  );
 }
 
-export async function fetchQuote(order: Order, signal?: AbortSignal): Promise<Quote> {
-  const body = await apiFetch("/api/v1/trades/quote", {
+function path(portfolioId: string): string {
+  if (!isPortfolioId(portfolioId)) throw new Error("Invalid portfolio target");
+  return `/api/v2/portfolios/${encodeURIComponent(portfolioId)}`;
+}
+
+function validOrder(order: unknown): order is Order {
+  if (!isRecord(order) || !isText(order.symbol) || !isSide(order.side)) return false;
+  const input = order.amount_usd === undefined ? "quantity" : "amount_usd";
+  return (
+    Object.keys(order).length === 3 &&
+    ["symbol", "side", input].every((key) => Object.hasOwn(order, key)) &&
+    isUnsigned(order[input]) &&
+    /[1-9]/.test(order[input] as string)
+  );
+}
+
+function sameOrder(value: Quote | Fill, order: Order): boolean {
+  const kind = order.amount_usd === undefined ? "quantity" : "usd";
+  const input = order.amount_usd ?? order.quantity;
+  // Compare exact decimal strings without binary floating point or renewing a receipt.
+  const normalized = (text: string) => {
+    const [whole, fraction = ""] = text.split(".");
+    return `${whole.replace(/^0+(?=\d)/, "")}.${fraction.replace(/0+$/, "")}`;
+  };
+  return (
+    value.symbol === order.symbol &&
+    value.side === order.side &&
+    value.input_kind === kind &&
+    typeof input === "string" &&
+    normalized(value.input_value) === normalized(input)
+  );
+}
+
+export async function fetchQuote(
+  portfolioId: string,
+  order: Order,
+  signal?: AbortSignal,
+): Promise<Quote> {
+  signal?.throwIfAborted();
+  if (!validOrder(order)) throw new Error("Invalid trade order");
+  const body = await apiFetch(`${path(portfolioId)}/trades/quote`, {
     method: "POST",
     body: JSON.stringify(order),
     signal,
+    cache: "no-store",
   });
-  if (!isQuote(body)) {
+  if (!isQuote(body) || body.portfolio_id !== portfolioId || !sameOrder(body, order)) {
     throw new Error("Unexpected quote response");
   }
+  signal?.throwIfAborted();
   return body;
 }
 
 export async function executeTrade(
+  portfolioId: string,
   order: Order,
   expectedMid: string,
   idempotencyKey: string,
+  signal?: AbortSignal,
 ): Promise<Fill> {
-  const body = await apiFetch("/api/v1/trades", {
-    method: "POST",
-    body: JSON.stringify({ ...order, expected_mid: expectedMid, idempotency_key: idempotencyKey }),
-  });
-  if (!isFill(body)) {
+  signal?.throwIfAborted();
+  const endpoint = `${path(portfolioId)}/trades`;
+  if (
+    !validOrder(order) ||
+    !isUnsigned(expectedMid) ||
+    !/[1-9]/.test(expectedMid) ||
+    !isText(idempotencyKey)
+  )
+    throw new Error("Invalid trade attempt");
+  let body: unknown;
+  try {
+    body = await apiFetch(endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        ...order,
+        expected_mid: expectedMid,
+        idempotency_key: idempotencyKey,
+      }),
+      cache: "no-store",
+      signal,
+    });
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.code === "price_changed" &&
+      (!isQuote(error.detail?.quote) ||
+        error.detail.quote.portfolio_id !== portfolioId ||
+        !sameOrder(error.detail.quote, order))
+    )
+      throw new Error("Unexpected trade repricing response", { cause: error });
+    throw error;
+  }
+  if (!isFill(body) || body.portfolio_id !== portfolioId || !sameOrder(body, order)) {
     throw new Error("Unexpected trade response");
   }
+  signal?.throwIfAborted();
   return body;
 }
 
-export async function fetchHolding(symbol: string, signal?: AbortSignal): Promise<Holding> {
-  const body = await apiFetch(`/api/v1/holdings/${encodeURIComponent(symbol)}`, { signal });
-  if (!isHolding(body)) {
+export async function fetchHolding(
+  portfolioId: string,
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<Holding> {
+  signal?.throwIfAborted();
+  const body = await apiFetch(`${path(portfolioId)}/holdings/${encodeURIComponent(symbol)}`, {
+    signal,
+    cache: "no-store",
+  });
+  if (!isHolding(body) || body.portfolio_id !== portfolioId || body.symbol !== symbol) {
     throw new Error("Unexpected holding response");
   }
+  signal?.throwIfAborted();
   return body;
 }
