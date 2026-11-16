@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-last_updated: "2026-11-16T09:11:17.386Z"
+last_updated: "2026-11-16T09:40:51.589Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 6
-  percent: 21
+  completed_plans: 7
+  percent: 25
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–06 complete preservation fixtures/models, real staged0015/16 and static final stock/dividend authority. Next12-07; actual0017/SQL/services remain pending and all28 requirements unchecked. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–07 complete through actual0017 and restricted-role SQL/schema admission. Next12-08 owned-active resolver and identity-only services. All28 requirements remain unchecked; full services, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 7 of 28
-Status: Executing Phase12; Plans01–06 complete, next12-07
-Last activity: 2026-11-16 — Dividend SQL asset contracts4 pass,18 final_sql cases collected; next12-07
+Plan: 8 of 28
+Status: Executing Phase12; Plans01–07 complete, next12-08
+Last activity: 2026-11-16 — Actual0017:9 preservation/inventory,66 final SQL and22 schema-admission cases pass; next12-08
 
-Progress: [██░░░░░░░░] 21%
+Progress: [███░░░░░░░] 25%
 
 ## Accepted Closeout and Release Boundary
 
@@ -123,7 +123,7 @@ with14 passing connection/security checks,37 retained migration regressions,
 23 migration cases and13 ownership/authority cases collected. The explicit
 preservation RED probe originally failed at missing0015 as intended. Plan04
 now supplies real0015/16 and passing stage preservation proofs. Phasewide Wave0,
-final SQL, runtime/security/recovery and owner UI proofs remain pending.
+integrated services/security/recovery and owner UI proofs remain pending.
 See12-01/02/03-SUMMARY.md. Plans02/03 add core and stock/dividend lineage
 metadata, with21 focused metadata cases passing and44 ownership/authority
 cases collected. Plan04 adds real0015 expansion and bounded0016 association,
@@ -131,8 +131,13 @@ with22 combined SQL cases and8 strengthened historical-source cases passing;
 actual committed-batch interruption/resume and unsafe downgrade refusal pass.
 See12-04/05-SUMMARY.md. Plan05 adds immutable stock SQL,5 passing static
 contracts and30 collected final_sql cases. Plan06 adds the static dividend SQL,
-4 passing contracts and18 collected final_sql cases. Next12-07;0015/16 remain migration-only,
-with final0017/runtime/recovery admission and real authority proof still pending.
+4 passing contracts and18 collected final_sql cases. Plan07 now installs actual0017,
+with9 preservation/inventory,66 final SQL and22 schema-admission cases passing;
+exact final model/schema parity passes. All owned financial INSERTs serialize
+through the private root-lock trigger; immutable legacy bytes and global NULL
+digest markers remain preserved. See12-07-SUMMARY.md for exact new helper
+inventory and grants required by16/17. Next12-08;0015/16 remain migration-only.
+Service integration, verified TLS and exact recovery remain pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -142,3 +147,15 @@ latest-completed-milestone result still names v1.0 because v1.1 closed with gaps
 do not clear phases or write their history into the v1.0 archive.
 No implementation, provider operation, new package, push, merge or deployment
 is authorized by milestone planning. Preserve unrelated .claude/ work.
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Tasks | Files |
+|---|---|---|---|---|
+| 12 | 07 | 26 min | 2 | 7 |
+
+## Execution Session
+
+Last session: 2026-11-16
+Stopped at: Completed12-07-PLAN.md; next12-08. Phase execution continues locally.
+Resume file: None

@@ -20,7 +20,8 @@ subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
 at Phase 12. Phase 12 has 28 approved plans; four foundation/model/staged-migration plans are
-complete locally; final0017 authority and runnable services remain pending.
+complete locally. Plan07 installs actual0017 with passing restricted-role SQL,
+preservation/inventory and schema-admission checks; runnable services remain pending.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -84,7 +85,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 12-07-PLAN.md — Final schema closure and explicit revision admission
+- [x] 12-07-PLAN.md — Final schema closure and explicit revision admission
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -264,7 +265,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 6/28 | In progress; next12-07 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 7/28 | In progress; next12-08 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
