@@ -386,6 +386,9 @@ def bundle_verify(archive, sha, required_profile=None):
         )
         require(inventory["units"] == UNITS)
         allowed.update(inventory["units"])
+        if "retained_source_payloads" in inventory:
+            require(inventory["retained_source_payloads"] == RETAINED_SOURCE_PAYLOADS)
+            allowed.update(RETAINED_SOURCE_PAYLOADS)
         require(
             names == allowed
             and inventory["files"] == sorted(allowed - {"SHA256SUMS", "INVENTORY.json"})
@@ -406,6 +409,8 @@ def bundle_verify(archive, sha, required_profile=None):
         require(set(expected) == names - {"SHA256SUMS"})
         for name, h in expected.items():
             require(hashlib.file_digest(t.extractfile(name), "sha256").hexdigest() == h)
+        if "retained_source_payloads" in inventory:
+            require(all(expected[name] == value for name, value in RETAINED_SOURCE_PAYLOADS.items()))
         verify_contract_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
         require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
@@ -438,6 +443,14 @@ CONTRACT_PAYLOAD = [
     "deploy/backup-manifest.sql", "deploy/backup-snapshot.py", "deploy/verify-restore.py"
 ]
 
+# Complete immutable source payloads are separate from executable recovery CORE.
+# Old archives without this successor field retain their exact existing layout.
+RETAINED_SOURCE_PAYLOADS = {
+    "sources/retained.tar": "1f3a8539a796aa8fdedbc79153e449035f90a06d715c6b2e4c667caed019ae85",
+    "sources/legacy0008.tar": "09ab46937e7da0f8cf6760bd245dd960242c541f7e136b269b3fd7db98c92bdb",
+    "sources/legacy0007.tar": "f732a59390add4a7c5e538a5d04fde1b53ec6e026ee26f6a0da3e7ac00c6a312",
+}
+
 
 def verify_contract_inventory(inventory, expected):
     """Old immutable artifacts remain readable; successor metadata is exact."""
@@ -466,6 +479,19 @@ def bundle_package(output, units=False):
             dest = stage / name
             dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             shutil.copyfile(src, dest)
+        source_helper = HERE.parent / "deploy/tests/portfolio-sources.py"
+        source_payloads = {}
+        if source_helper.is_file():
+            source_spec = importlib.util.spec_from_file_location("retained_archive_sources", source_helper)
+            source_module = importlib.util.module_from_spec(source_spec)
+            source_spec.loader.exec_module(source_module)
+            source_payloads = source_module.archive_payloads()
+            require(set(source_payloads) == set(RETAINED_SOURCE_PAYLOADS))
+            for name, data in source_payloads.items():
+                require(hashlib.sha256(data).hexdigest() == RETAINED_SOURCE_PAYLOADS[name])
+                destination = stage / name
+                destination.parent.mkdir(mode=0o700, exist_ok=True)
+                destination.write_bytes(data)
         for directory in ["tools", "images", "provenance"]:
             (stage / directory).mkdir(mode=0o700)
         shutil.copyfile(tools / "restic", stage / "tools/restic")
@@ -517,6 +543,8 @@ def bundle_package(output, units=False):
                 "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
             },
         }
+        if source_payloads:
+            inventory["retained_source_payloads"] = RETAINED_SOURCE_PAYLOADS
         (stage / "INVENTORY.json").write_text(json.dumps(inventory, sort_keys=True))
         files.append("INVENTORY.json")
         (stage / "SHA256SUMS").write_text(

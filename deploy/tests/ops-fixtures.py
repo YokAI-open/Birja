@@ -353,6 +353,7 @@ def config(root, release):
 @contextlib.contextmanager
 def installed_recovery(archive_arg=None):
     """Install once; caller exclusively owns source server, seed and transitions."""
+    previous_archive = _SELECTED_ARCHIVE
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
         root = Path(tmp)
         root.chmod(0o700)
@@ -361,6 +362,7 @@ def installed_recovery(archive_arg=None):
             r.bundle_package(archive)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
         r.bundle_verify(archive, sha, required_profile="deploy-recovery-v2")
+        bind_source_archive(archive, sha)
         old = root / "old"
         old.mkdir(mode=0o700)
         app = old / "app"
@@ -445,6 +447,8 @@ def installed_recovery(archive_arg=None):
             assert all(
                 r.digest(path) == value for path, value in session.immutable.items()
             )
+            if archive_arg is None:
+                globals()['_SELECTED_ARCHIVE'] = previous_archive
 
 
 def recovery_roundtrip(session, *, source_revision, source_release, inherited=None):
@@ -520,28 +524,87 @@ def identity_state(dc, db):
     return {name: r.sql(dc, f"SELECT last_value,is_called FROM {name}_id_seq", db).strip() for name in names}
 
 
-def execution_program(*, seed, database=None):
-    spec = importlib.util.spec_from_file_location(
-        'execution_fixture', ROOT / 'deploy/tests/stock-execution-fixture.py')
+def portfolio_sources():
+    spec = importlib.util.spec_from_file_location('portfolio_sources', ROOT / 'deploy/tests/portfolio-sources.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.program(seed=seed, database=database)
+    return module
 
 
-def runtime_program(*, seed, database=None, expected=None):
-    spec = importlib.util.spec_from_file_location(
-        'runtime_fixture', ROOT / 'deploy/tests/stock-runtime-fixture.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.program(seed=seed, database=database, expected=expected)
+_RETAINED_RUNTIME = {}
+_RETAINED_DIRECTORY = {}
+_SELECTED_ARCHIVE = None
+_STANDALONE_ARCHIVE = None
 
 
-def dividend_program(*, mode, database=None, expected=None):
-    spec = importlib.util.spec_from_file_location(
-        'dividend_fixture', ROOT / 'deploy/tests/dividend-execution-fixture.py')
+def bind_source_archive(archive, sha):
+    """Only a verified selected recovery archive can provide retained bytes."""
+    global _SELECTED_ARCHIVE
+    sources = portfolio_sources()
+    sources.source_archive(archive=archive, archive_sha=sha)
+    _SELECTED_ARCHIVE = (Path(archive), sha)
+
+
+def selected_source_archive():
+    global _STANDALONE_ARCHIVE
+    if _SELECTED_ARCHIVE is None:
+        _STANDALONE_ARCHIVE = tempfile.TemporaryDirectory(prefix='birja-backup-test-source-')
+        archive = Path(_STANDALONE_ARCHIVE.name) / 'recovery.tar'
+        r.bundle_package(archive)
+        sha = r.private(str(archive)+'.sha256').read_text().strip()
+        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v2')
+        bind_source_archive(archive, sha)
+    archive, sha = _SELECTED_ARCHIVE
+    portfolio_sources().verify_archive_binding(archive, sha)
+    return archive, sha
+
+
+def retained_runtime(lane='retained'):
+    """One frozen complete retained context/image per owned campaign process."""
+    global _RETAINED_RUNTIME, _RETAINED_DIRECTORY
+    sources = portfolio_sources()
+    archive, sha = selected_source_archive()
+    key = (sha, lane)
+    if key not in _RETAINED_RUNTIME:
+        _RETAINED_DIRECTORY[key] = tempfile.TemporaryDirectory(prefix='birja-backup-test-retained-')
+        directory = Path(_RETAINED_DIRECTORY[key].name) / 'source'
+        binding = sources.build_retained_image(directory, archive=archive, archive_sha=sha, lane=lane)
+        _RETAINED_RUNTIME[key] = (directory, binding)
+    directory, binding = _RETAINED_RUNTIME[key]
+    sources.verify_source_tree(directory, sources.source_archive(lane, archive=archive, archive_sha=sha))
+    sources.verify_image(binding, json.loads(r.call(['docker','image','inspect',binding['id']])))
+    sources.record_image_binding(archive, lane, binding)
+    return directory, binding['id']
+
+
+def execution_program(*, seed, revision, database=None):
+    archive, sha = selected_source_archive()
+    return portfolio_sources().retained_program('execution', revision=revision, archive=archive, archive_sha=sha, seed=seed, database=database)
+
+
+def runtime_program(*, seed, revision, database=None, expected=None):
+    archive, sha = selected_source_archive()
+    return portfolio_sources().retained_program('runtime', revision=revision, archive=archive, archive_sha=sha, seed=seed, database=database, expected=expected)
+
+
+def dividend_program(*, mode, revision, database=None, expected=None):
+    archive, sha = selected_source_archive()
+    return portfolio_sources().retained_program('dividend', revision=revision, archive=archive, archive_sha=sha, mode=mode, database=database, expected=expected)
+
+
+def portfolio_program(*, mode, database=None, expected=None, revision='0017'):
+    portfolio_sources().qualified_revision(revision, 'portfolio')
+    spec = importlib.util.spec_from_file_location('portfolio_program', ROOT / 'deploy/tests/portfolio-execution-fixture.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.program(mode=mode, database=database, expected=expected)
+
+
+def portfolio_fixture_smoke():
+    spec = importlib.util.spec_from_file_location('portfolio_smoke', ROOT / 'deploy/tests/portfolio-smoke.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.run()
 
 
 def dividend_digest(output):
@@ -566,7 +629,7 @@ def successor_roundtrips(dc, session, unchanged):
     source_mounts = r.call(['/usr/bin/docker','inspect','--format','{{json .Mounts}}',source_container.decode()])
     for revision in ('0008','0009','0010','0011','0012','0013','0014'):
         if revision == '0014':
-            dividend_predecessor = dividend_digest(role_python(dividend_program(mode='prepare'),'birja_migrator'))
+            dividend_predecessor = dividend_digest(role_python(dividend_program(mode='prepare',revision='0013'),'birja_migrator'))
         if revision == '0012':
             # Explicit synthetic predecessor role provisioning. The source's
             # migration owner is real before0012; restore never invents it.
@@ -583,8 +646,8 @@ def successor_roundtrips(dc, session, unchanged):
                 '--apply','--approved-operation','populated-role-transition'])
         role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini')," + repr(revision) + ")", 'birja_migrator' if revision in ('0012','0013','0014') else r.BOOT)
         if revision == '0014':
-            assert dividend_digest(role_python(dividend_program(mode='snapshot'),'birja_migrator')) == dividend_predecessor
-            dividend_saved = dividend_digest(role_python(dividend_program(mode='exercise'),'birja_migrator'))
+            assert dividend_digest(role_python(dividend_program(mode='snapshot',revision='0014'),'birja_migrator')) == dividend_predecessor
+            dividend_saved = dividend_digest(role_python(dividend_program(mode='exercise',revision='0014'),'birja_migrator'))
         if revision == '0009':
             r.sql(dc, STOCK_RECOVERY_SEED, 'birja_source_test')
         if revision == '0010':
@@ -600,8 +663,8 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             role_sql(dc,"CREATE ROLE birja_operator_restore_fixture LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"+'a'*64+"'; GRANT birja_action_operator TO birja_operator_restore_fixture")
             request=json.loads(role_python(RESOLUTION_SCENARIO + RECOVERY_SEED_SCENARIO, 'birja_migrator'))
         if revision == '0013':
-            assert b'execution_receipt_exact=true' in role_python(execution_program(seed=True), 'birja_migrator')
-            runtime_digest=runtime_receipt_digest(role_python(runtime_program(seed=True), 'birja_migrator'))
+            assert b'execution_receipt_exact=true' in role_python(execution_program(seed=True,revision='0013'), 'birja_migrator')
+            runtime_digest=runtime_receipt_digest(role_python(runtime_program(seed=True,revision='0013'), 'birja_migrator'))
         before = r.canonical(dc, 'birja_source_test')
         if revision == '0010':
             assert before['tables']['stock_instruments']['count'] == 20
@@ -650,16 +713,16 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
                 execution_negative_controls(dc, manifest)
                 r.sql(dc, 'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator', 'birja_ops_test')
                 assert b'duplicate_fill_rejected=true' in role_python(
-                    execution_program(seed=False, database='birja_restore_test'), 'birja_migrator')
-                restored_runtime=role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest),'birja_migrator')
+                    execution_program(seed=False, database='birja_restore_test',revision='0013'), 'birja_migrator')
+                restored_runtime=role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest,revision='0013'),'birja_migrator')
                 assert runtime_receipt_digest(restored_runtime)==runtime_digest
                 assert b'restored_owner_reads_only=true' in restored_runtime
                 r.verify(dc,manifest)
                 print('actual_restored_stock_receipt_replay=true actual_mixed_portfolio=true quarantine_acl_unchanged=true exact_original_receipt_sha256='+runtime_digest,flush=True)
             if revision == '0014':
                 r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
-                assert dividend_digest(role_python(dividend_program(mode='verify',database='birja_restore_test',expected=dividend_saved),'birja_migrator')) == dividend_saved
-                current_runtime = role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest),'birja_migrator')
+                assert dividend_digest(role_python(dividend_program(mode='verify',database='birja_restore_test',expected=dividend_saved,revision='0014'),'birja_migrator')) == dividend_saved
+                current_runtime = role_python(runtime_program(seed=False,database='birja_restore_test',expected=runtime_digest,revision='0014'),'birja_migrator')
                 assert runtime_receipt_digest(current_runtime) == runtime_digest
                 assert b'runtime_current_mixed_history=true revision0014=true' in current_runtime
                 r.verify(dc,manifest)
@@ -1126,6 +1189,7 @@ asyncio.run(main())
 def role_python(code, role=r.BOOT):
     # Only synthetic credentials on the fixed internal network, no host ports.
     password = "synthetic-ops-only" if role == r.BOOT else "a" * 64
+    retained, image = retained_runtime()
     result = subprocess.run(
         [
             "/usr/bin/docker",
@@ -1150,10 +1214,10 @@ def role_python(code, role=r.BOOT):
             "PRICE_SOURCE=fake",
             "--entrypoint",
             "python",
-            *([] if code == SEED else ["-v", str(ROOT / "backend/app") + ":/app/app:ro"]),
+            "-v", str(retained / "backend/app") + ":/app/app:ro",
             "-v",
-            str(ROOT / "backend/alembic") + ":/app/alembic:ro",
-            "birja-backend-test:phase05-07",
+            str(retained / "backend/alembic") + ":/app/alembic:ro",
+            image,
             "-",
         ],
         input=code.encode(), capture_output=True, env=r.ENV, timeout=120,
@@ -1690,9 +1754,9 @@ def roles(red_probe=False):
             stock_role_contract(dc)
             upgraded_action_acl = action_role_contract(dc)
             upgraded_execution_acl = execution_role_contract(dc)
-            role_python(dividend_program(mode='prepare'), 'birja_migrator')
+            role_python(dividend_program(mode='prepare',revision='0014'), 'birja_migrator')
             upgraded_dividend_authority = role_manifest(dc)['dividend_authority']
-            upgraded_dividend = role_python(dividend_program(mode='exercise'), 'birja_migrator')
+            upgraded_dividend = role_python(dividend_program(mode='exercise',revision='0014'), 'birja_migrator')
             assert b'dividend_actual_sold_after_cutoff=true' in upgraded_dividend
             assert (
                 role_sql(
@@ -1807,8 +1871,8 @@ def roles(red_probe=False):
             assert action_role_contract(dc) == upgraded_action_acl
             assert execution_role_contract(dc) == upgraded_execution_acl
             assert role_manifest(dc)['dividend_authority'] == upgraded_dividend_authority
-            role_python(dividend_program(mode='prepare'),'birja_migrator')
-            assert b'dividend_actual_sold_after_cutoff=true' in role_python(dividend_program(mode='exercise'),'birja_migrator')
+            role_python(dividend_program(mode='prepare',revision='0014'),'birja_migrator')
+            assert b'dividend_actual_sold_after_cutoff=true' in role_python(dividend_program(mode='exercise',revision='0014'),'birja_migrator')
             print('accounting_acl_upgrade_fresh_parity=true operator_nologin=true immutable_audit_denied=true quantity_only_scheduler=true', flush=True)
             print(
                 f"roles_populated_transfer=true fresh_bootstrap_parity=true identity_dependencies=true concurrent_0008_valid=true runtime_services=true scheduler_upsert=true denied_operations={negatives}"
@@ -2325,6 +2389,7 @@ def tls(fresh_bootstrap=False):
     if not (ROOT / "deploy/provision-db-tls.sh").exists():
         return tls_red_probe()
     started = time.monotonic()
+    retained_source, retained_image = retained_runtime()
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
         root = Path(tmp)
         root.chmod(0o700)
@@ -2609,11 +2674,11 @@ def tls(fresh_bootstrap=False):
             elif name == "redis":
                 s["tmpfs"] = ["/data:size=16777216,uid=65532,gid=65532,mode=0750"]
             else:
-                s["image"] = "birja-backend-test:phase05-07"
+                s["image"] = retained_image
                 s["volumes"] = [
                     str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro",
-                    str(ROOT / "backend/app") + ":/app/app:ro",
-                    str(ROOT / "backend/alembic") + ":/app/alembic:ro",
+                    str(retained_source / "backend/app") + ":/app/app:ro",
+                    str(retained_source / "backend/alembic") + ":/app/alembic:ro",
                 ]
                 # Test app real services with production trust, never real email/market network.
                 if name != "migrate":
@@ -2633,6 +2698,10 @@ def tls(fresh_bootstrap=False):
         ]
 
         def client(service, code, overrides=(), ok=True):
+            # Reauthenticate the selected archive, complete source and content
+            # image before EVERY child, not only when Compose was generated.
+            _, checked_image = retained_runtime()
+            assert checked_image == retained_image
             if service == 'migrate':
                 # Preserve the real one-shot command's inert Settings fields
                 # when replacing only its entrypoint with the test probe.
@@ -2753,15 +2822,18 @@ def tls(fresh_bootstrap=False):
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
             print('calendar_runtime_tls_consumer=true lane=' + ('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'), flush=True)
-            execution_consumer=client('migrate',execution_program(seed=True))
+            declared = '0014' if fresh_bootstrap else '0013'
+            execution_consumer=client('migrate',execution_program(seed=True,revision=declared))
             assert b'guard_consumer=true verified_tls=true' in execution_consumer.stdout
             print('execution_verified_tls=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
-            actual_runtime=client('migrate',runtime_program(seed=True))
+            actual_runtime=client('migrate',runtime_program(seed=True,revision=declared))
             runtime_receipt_digest(actual_runtime.stdout)
             assert b'verified_tls=true' in actual_runtime.stdout
             print('actual_stock_services_verified_tls=true actual_split_cutoff=true crypto_cashreuse=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
-            client('migrate',dividend_program(mode='prepare'))
-            dividend_output = client('migrate',dividend_program(mode='exercise')).stdout
+            client('migrate',dividend_program(mode='prepare',revision=declared))
+            if declared == '0013':
+                client('migrate', "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0014')")
+            dividend_output = client('migrate',dividend_program(mode='exercise',revision='0014')).stdout
             assert b'dividend_actual_sold_after_cutoff=true' in dividend_output
             assert b'verified_tls=true' in dividend_output
             print('actual_dividend_sql_verified_tls=true actual_crypto_deficit_recovery=true cancelled_hold_reconciliation=true ledger_sha256='+dividend_digest(dividend_output)+' lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
@@ -2894,17 +2966,17 @@ def dividend_sql():
             role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")
             r.call(['bash',str(ROOT/'deploy/configure-db.sh'),'--synthetic',str(config),
                 '--apply','--approved-operation','populated-role-transition'])
-            predecessor = dividend_digest(role_python(dividend_program(mode='prepare'),'birja_migrator'))
+            predecessor = dividend_digest(role_python(dividend_program(mode='prepare',revision='0013'),'birja_migrator'))
             role_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'head')",'birja_migrator')
-            assert dividend_digest(role_python(dividend_program(mode='snapshot'),'birja_migrator')) == predecessor
-            expected = dividend_digest(role_python(dividend_program(mode='exercise'),'birja_migrator'))
+            assert dividend_digest(role_python(dividend_program(mode='snapshot',revision='0014'),'birja_migrator')) == predecessor
+            expected = dividend_digest(role_python(dividend_program(mode='exercise',revision='0014'),'birja_migrator'))
             manifest = r.canonical(dc,'birja_source_test')
             dump = r.call(dc+['exec','-T','postgres','pg_dump','-U',r.BOOT,'-d',
                 'birja_source_test','--format=custom','--no-owner','--no-acl'])
             with r.restored(dc,dump):
                 r.verify(dc,manifest)
                 r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
-                role_python(dividend_program(mode='verify',database='birja_restore_test',expected=expected),'birja_migrator')
+                role_python(dividend_program(mode='verify',database='birja_restore_test',expected=expected,revision='0014'),'birja_migrator')
                 r.verify(dc,manifest)
             print('dividend_source_sql_restore_quarantine=true ledger_sha256='+expected+' predecessor_entitlements_sha256='+predecessor)
             print(f'dividend_sql_seconds={time.monotonic()-started:.3f}')
@@ -2916,6 +2988,8 @@ if __name__ == "__main__":
     os.umask(0o077)
     if sys.argv[1:] == ["--smoke"]:
         smoke()
+    elif sys.argv[1:] == ["--portfolio-fixture-smoke"]:
+        portfolio_fixture_smoke()
     elif sys.argv[1:] == ["--self-test-recovery-bundle-inputs"]:
         input_self_test()
     elif sys.argv[1:] == ["--roles"]:

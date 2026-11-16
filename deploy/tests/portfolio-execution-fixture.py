@@ -140,7 +140,7 @@ async def project(db):
  return {'revision':'0017','books':[list(r) for r in books],'tables':tables,'sequences':sequences,'journal':[state.unit_epoch,len({r.portfolio_id for r in rows})]}
 
 async def event(db,cid,key,at,terms=None):
- e=(await db.execute(text("INSERT INTO stock_action_events(coin_id,economic_key,first_observed_at) VALUES (:c,:k,:n) RETURNING id"),{'c':cid,'k':key,'n':at})).scalar_one()
+ e=(await db.execute(text("INSERT INTO stock_action_events(coin_id,economic_key,first_observed_at) VALUES (:c,:k,:n) RETURNING id"),{'c':cid,'k':str(uuid.uuid5(uuid.NAMESPACE_URL,key)),'n':at})).scalar_one()
  s=(await db.execute(text("INSERT INTO stock_action_sources(event_id,provider,product,provider_event_id) VALUES (:e,'alpaca','actions',:k) RETURNING id"),{'e':e,'k':key})).scalar_one()
  r=(await db.execute(text("INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason,verified_cutoff) VALUES (:e,:s,1,:f,'snapshot',:n,1,CAST(:terms AS jsonb),'supported_forward_split','none',:cutoff) RETURNING id"),{'e':e,'s':s,'f':digest([key]),'n':at,'terms':json.dumps(terms or {}),'cutoff':at-timedelta(days=1)})).scalar_one()
  await db.execute(text('UPDATE stock_action_events SET current_revision_id=:r WHERE id=:e'),{'e':e,'r':r})
@@ -220,14 +220,14 @@ async def current(factory,settings,args):
   from app.services.dividends import process_dividend,record_dividend_hold
   async with factory.begin() as db:
    base=admission(now)
-   calendar=replace(base,product='calendar',scope={**base.scope,'feed':'iex'},allowed_fields=['exchange','session_date','opens_at','closes_at'],calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/synthetic-fixture','sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],'review_valid_until':(now+timedelta(hours=2)).isoformat(),'coverage_start':(now.date()-timedelta(days=45)).isoformat(),'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
-   reference=replace(base,product='reference',scope={**base.scope,'feed':'iex'},allowed_fields=['symbol','name','exchange','provider_asset_id'])
+   calendar=replace(base,product='calendar',scope={**base.scope,'feed':'iex'},quota={**base.quota,'retention_seconds':86400},allowed_fields=['exchange','session_date','opens_at','closes_at'],calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/synthetic-fixture','sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],'review_valid_until':(now+timedelta(hours=2)).isoformat(),'coverage_start':(now.date()-timedelta(days=45)).isoformat(),'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
+   reference=replace(base,product='reference',scope={**base.scope,'feed':'iex'},quota={**base.quota,'retention_seconds':86400},allowed_fields=['symbol','name','exchange','provider_asset_id'])
    db.add_all([StockDataAdmission(**asdict(item)) for item in (calendar,reference)])
    exchange=(await db.execute(text('SELECT listing_exchange FROM stock_instruments WHERE coin_id=:c'),{'c':cid})).scalar_one()
    session=max((s for s in build_sessions(now,calendar) if s.exchange==exchange and s.opens_at and s.opens_at<now),key=lambda s:s.opens_at)
    cutoff=session.opens_at
    await db.execute(text('INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation) VALUES (:e,:d,:o,:cl,:d,:d,1)'),{'e':exchange,'d':session.session_date,'o':cutoff,'cl':session.closes_at})
-   await db.execute(text('UPDATE stock_action_state SET coverage_start=:start,covered_until=:n WHERE coin_id=:c'),{'start':now-timedelta(days=15),'n':now,'c':cid})
+   await db.execute(text('UPDATE stock_action_state SET checked_at=:n,coverage_start=:start,covered_until=:n WHERE coin_id=:c'),{'start':now-timedelta(days=15),'n':now,'c':cid})
    event_id,revision_id=await event(db,cid,'ordinary-dividend-two-strategies',now)
    terms={'event_type':'cash_dividend','currency':'USD','subtype':'ordinary','foreign':False,'special':False,'due_bills':False,'identity_verified':True,'dates_verified':True,'cancelled':False,'identity_changed':False,'rate':'0.25','ex_date':str(cutoff.date()),'record_date':str(cutoff.date()),'payable_date':str(cutoff.date())}
    fp=digest(['ordinary-dividend-two-strategies'])
@@ -240,7 +240,23 @@ async def current(factory,settings,args):
   payments=[]
   for target in targets:
    async with async_sessionmaker(scheduler,expire_on_commit=False)() as db:
-    payments.append(await process_dividend(db,**target))
+    try:
+     payments.append(await process_dividend(db,**target))
+    except Exception as exc:
+     # Synthetic-only diagnostic: domain codes contain no retained owner data,
+     # DSN or credentials. Never weaken financial authority to make smoke pass.
+     code=getattr(exc,'code',type(exc).__name__)
+     if code=='authority_unavailable':
+      from sqlalchemy.exc import DBAPIError
+      try:
+       await db.execute(text('SELECT * FROM public.apply_stock_dividend(:event_id,:entitlement_id,:revision,:entitlement)'),{'event_id':target['event_id'],'entitlement_id':target['entitlement_id'],'revision':target['expected_revision_fingerprint'],'entitlement':target['expected_entitlement_fingerprint']})
+      except DBAPIError as error:
+       # Only known fixed database messages are exposed, never statement params.
+       message=str(error.orig).splitlines()[0]
+       fixed=message.split(': ',1)[-1]
+       if fixed.startswith('dividend '):code+=' / '+fixed
+       await db.rollback()
+     raise AssertionError('synthetic dividend refusal: '+code) from None
   async with factory.begin() as db:
    source_id=(await db.execute(text('SELECT source_id FROM stock_action_revisions WHERE id=:r'),{'r':revision_id})).scalar_one()
    heldfp=digest(['uncertain-correction'])

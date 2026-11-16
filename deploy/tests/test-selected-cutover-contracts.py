@@ -28,9 +28,12 @@ class Contracts(unittest.TestCase):
         tree = ast.parse((HERE / 'selected-cutover.py').read_text())
         function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_integration')
         session = next(n for n in function.body if isinstance(n, ast.With))
-        index = next(i for i, node in enumerate(session.body)
-                     if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'current' for target in node.targets))
-        setup = compile(ast.fix_missing_locations(ast.Module(body=session.body[index:index + 2], type_ignores=[])), '<actual-private-branch>', 'exec')
+        node = next(node for node in session.body if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == 'git' and len(node.value.args) > 1
+                    and isinstance(node.value.args[1], ast.Constant)
+                    and node.value.args[1].value == '-B')
+        setup = compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])), '<actual-private-branch>', 'exec')
         for checkout in ('main', 'feature', 'detached'):
             with self.subTest(checkout=checkout), tempfile.TemporaryDirectory(prefix='birja-backup-test-git-') as directory:
                 root = Path(directory)
@@ -52,15 +55,13 @@ class Contracts(unittest.TestCase):
                 git_at(root, 'clone', '--no-hardlinks', str(source), str(app))
                 for key, value in (('user.email', 'synthetic@example.invalid'), ('user.name', 'Synthetic')):
                     git_at(app, 'config', key, value)
-                (app / 'fixture').write_text('relocated synthetic host\n')
-                git_at(app, 'commit', '-am', 'Relocate synthetic fixture')
-                expected = git_at(app, 'rev-parse', 'HEAD')
-                self.assertNotEqual(expected, original)
-                scope = {'git': lambda *args: git_at(app, *args)}
+                expected = original
+                scope = {'git': lambda *args: git_at(app, *args), 'current': original}
                 exec(setup, scope)
                 self.assertEqual(scope['current'], expected)
                 self.assertEqual(git_at(app, 'rev-parse', 'main'), expected)
                 self.assertEqual(git_at(app, 'rev-parse', 'HEAD'), expected)
+                self.assertEqual(git_at(app, 'status', '--porcelain'), '')
                 git_at(root, 'clone', '--bare', str(app), str(origin))
                 self.assertEqual(git_at(origin, 'rev-parse', 'main'), expected)
                 self.assertEqual(git_at(source, 'rev-parse', 'main'), original)

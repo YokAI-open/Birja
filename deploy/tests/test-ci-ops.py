@@ -188,8 +188,7 @@ def dev_authority_policy(ops, compose_files):
     if "python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07" not in ops:
         raise ValueError("missing actual ordinary dev financial gate")
     for source in compose_files:
-        sequence = ["python -m app.db.dev_bootstrap &&", "alembic upgrade head &&",
-                    "python -m app.db.dev_bootstrap --after-migrations &&", "exec uvicorn"]
+        sequence = ["python -m app.db.dev_bootstrap --migrate &&", "exec uvicorn"]
         if any(part not in source for part in sequence):
             raise ValueError("missing dev owner authority stage")
         if [source.index(part) for part in sequence] != sorted(source.index(part) for part in sequence):
@@ -218,6 +217,122 @@ def required_gate_policy(j):
 
 
 class CI(unittest.TestCase):
+    def portfolio_sources(self):
+        spec = importlib.util.spec_from_file_location('source_binding_contract', ROOT / 'deploy/tests/portfolio-sources.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_exact_retained_source_matrix_before_import(self):
+        import copy
+        source = self.portfolio_sources()
+        source.validate_matrix()
+        for revision,kind in [('0013','execution'),('0013','runtime'),('0014','runtime'),('0014','dividend'),('0017','portfolio')]:
+            source.qualified_revision(revision,kind)
+        for revision,kind in [('0013','portfolio'),('0014','portfolio'),('0017','runtime'),('0013','dividend'),('head','runtime')]:
+            with self.assertRaises(ValueError):source.qualified_revision(revision,kind)
+        mutations=[]
+        for key in ('commit','app_tree','alembic_tree','archive_sha256'):
+            value=copy.deepcopy(source.MATRIX);value['retained'][key]='0'*40;mutations.append(value)
+        for path in source.MATRIX['retained']['files']:
+            value=copy.deepcopy(source.MATRIX);value['retained']['files'][path]='0'*40;mutations.append(value)
+        value=copy.deepcopy(source.MATRIX);del value['retained']['files']['backend/uv.lock'];mutations.append(value)
+        for lane in ('legacy0008','legacy0007'):
+            value=copy.deepcopy(source.MATRIX);value[lane]['commit']=source.FIXED_COMMIT;mutations.append(value)
+        for value in mutations:
+            with self.assertRaises(ValueError):source.validate_matrix(value)
+        with tempfile.TemporaryDirectory(prefix='birja-source-archive-') as tmp:
+            import io, tarfile, hashlib
+            archive=Path(tmp)/'recovery.tar'
+            with tarfile.open(archive,'w') as recovery:
+                for name,data in source.archive_payloads().items():
+                    info=tarfile.TarInfo(name);info.size=len(data)
+                    recovery.addfile(info,io.BytesIO(data))
+            sha=hashlib.sha256(archive.read_bytes()).hexdigest()
+            program=source.retained_program('runtime',revision='0013',archive=archive,archive_sha=sha,seed=True)
+            for bad in ('0'*64,None):
+                with self.assertRaises(ValueError):
+                    source.retained_program('runtime',revision='0013',archive=archive,archive_sha=bad,seed=True)
+            for missing in (True,False):
+                wrong=Path(tmp)/('missing.tar' if missing else 'modified.tar')
+                with tarfile.open(wrong,'w') as recovery:
+                    if not missing:
+                        data=b'wrong retained payload';info=tarfile.TarInfo('sources/retained.tar');info.size=len(data)
+                        recovery.addfile(info,io.BytesIO(data))
+                wrong_sha=hashlib.sha256(wrong.read_bytes()).hexdigest()
+                with self.assertRaises(ValueError):source.retained_program('runtime',revision='0013',archive=wrong,archive_sha=wrong_sha,seed=True)
+        self.assertLess(program.index('asyncio.run(declared_revision())'),program.index('sys.path.insert'))
+        self.assertIn(source.FIXED_COMMIT,program)
+        self.assertIn("EXPECTED_REVISION='0013'",program)
+        compile(program,'<exact-retained-program>','exec')
+
+    def test_image_config_roots_source_and_same_archive_substitution_refused(self):
+        import copy
+        source=self.portfolio_sources()
+        image=[{'Id':'sha256:'+'a'*64,'Config':{'Labels':{'org.opencontainers.image.revision':source.FIXED_COMMIT},'User':'app'},'RootFS':{'Layers':['sha256:'+'b'*64]}}]
+        binding=source.image_binding(image,source_commit=source.FIXED_COMMIT,app_tree=source.FIXED_APP,context_sha256=source.MATRIX['retained']['archive_sha256'])
+        self.assertEqual(source.verify_image(binding,image),image[0]['Id'])
+        for section,key,value in [('Config','User','root'),('RootFS','Layers',['sha256:'+'c'*64])]:
+            changed=copy.deepcopy(image);changed[0][section][key]=value
+            with self.assertRaises(ValueError):source.verify_image(binding,changed)
+        changed=copy.deepcopy(image);changed[0]['Id']='sha256:'+'d'*64
+        with self.assertRaises(ValueError):source.verify_image(binding,changed)
+        changed=copy.deepcopy(image);changed[0]['Config']['Labels']['org.opencontainers.image.revision']='0'*40
+        with self.assertRaises(ValueError):source.verify_image(binding,changed)
+        with tempfile.TemporaryDirectory(prefix='birja-source-binding-') as tmp:
+            path=Path(tmp)/'one.tar';path.write_bytes(b'one immutable archive')
+            digest=__import__('hashlib').sha256(path.read_bytes()).hexdigest()
+            source.verify_archive_binding(path,digest)
+            path.write_bytes(b'rebuilt archive')
+            with self.assertRaises(ValueError):source.verify_archive_binding(path,digest)
+            binding_archive=Path(tmp)/'selected.tar'
+            source.record_image_binding(binding_archive,'retained',binding)
+            source.record_image_binding(binding_archive,'retained',binding)
+            with self.assertRaises(ValueError):source.record_image_binding(binding_archive,'retained',{**binding,'id':'sha256:'+'d'*64})
+
+    def test_selected_tooling_checks_content_image_and_archive_before_use(self):
+        import copy, hashlib
+        selected_spec=importlib.util.spec_from_file_location('selected_source_contract', ROOT/'deploy/tests/selected-cutover.py')
+        selected=importlib.util.module_from_spec(selected_spec);selected_spec.loader.exec_module(selected)
+        source=self.portfolio_sources()
+        row={'Id':'sha256:'+'a'*64,'Config':{'Labels':{'org.opencontainers.image.revision':source.FIXED_COMMIT},'User':'app'},'RootFS':{'Layers':['sha256:'+'b'*64]}}
+        binding=source.image_binding([row],source_commit=source.FIXED_COMMIT,app_tree=source.FIXED_APP,context_sha256=source.MATRIX['retained']['archive_sha256'])
+        with tempfile.TemporaryDirectory(prefix='birja-selected-contract-') as tmp:
+            archive=Path(tmp)/'recovery.tar';archive.write_bytes(b'immutable selected archive')
+            sha=hashlib.sha256(archive.read_bytes()).hexdigest()
+            code=selected.qualified_image_program({source.FIXED_COMMIT:binding},archive=archive,archive_sha=sha,migrator_commit=source.FIXED_COMMIT)
+            def invoke(image,commit=source.FIXED_COMMIT):
+                import contextlib,io
+                result=io.StringIO()
+                with patch.object(sys,'argv',['qualified-images.py',commit]),patch.object(subprocess,'check_output',return_value=json.dumps([image]).encode()),contextlib.redirect_stdout(result):
+                    exec(compile(code,'<actual-private-image-binding>','exec'),{})
+                return result.getvalue().strip()
+            self.assertEqual(invoke(row),row['Id']+' '+row['Id'])
+            for field,key,value in [('Config','User','root'),('RootFS','Layers',[]),('Config','Labels',{})]:
+                changed=copy.deepcopy(row);changed[field][key]=value
+                with self.assertRaises((AssertionError,KeyError)):invoke(changed)
+            with self.assertRaises(KeyError):invoke(row,'0'*40)
+            archive.write_bytes(b'rebuilt archive')
+            with self.assertRaises(AssertionError):invoke(row)
+        text=(ROOT/'deploy/tests/selected-cutover.py').read_text()
+        self.assertNotIn('git("commit"',text)
+        self.assertNotIn('legacy_archive.extractall(app',text)
+        self.assertIn("git('checkout', '--detach', current)",text)
+        self.assertIn("source_binding.chmod(0o400)",text)
+
+    def test_complete_source_context_mutation_fails_before_child(self):
+        import io,tarfile
+        source=self.portfolio_sources();payload=source.source_archive()
+        with tempfile.TemporaryDirectory(prefix='birja-source-context-') as tmp:
+            root=Path(tmp)
+            with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+                archive.extractall(root,filter='data')
+            source.verify_source_tree(root,payload)
+            path=root/'backend/app/main.py';old=path.read_bytes();path.write_bytes(old+b'\n# substitution\n')
+            with self.assertRaises(ValueError):source.verify_source_tree(root,payload)
+            path.write_bytes(old);(root/'unreviewed.py').write_text('pass\n')
+            with self.assertRaises(ValueError):source.verify_source_tree(root,payload)
+
     def test_actual_postgres_stack_order_and_failure_cleanup(self):
         ops = jobs()["ops"]
         postgres_stack_policy(ops)
@@ -278,7 +393,7 @@ class CI(unittest.TestCase):
             dev_authority_policy(ops.replace("python3 deploy/tests/test-dev-bootstrap.py", "omitted"), sources)
         for index in range(2):
             changed = sources.copy()
-            changed[index] = changed[index].replace("python -m app.db.dev_bootstrap --after-migrations &&", "")
+            changed[index] = changed[index].replace("python -m app.db.dev_bootstrap --migrate &&", "")
             with self.assertRaises(ValueError):
                 dev_authority_policy(ops, changed)
 
