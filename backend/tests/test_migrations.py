@@ -54,6 +54,7 @@ MIGRATION_TABLES = frozenset(
         "stock_status_evidence",
         "stock_dividend_payments",
         "stock_dividend_decisions",
+        "portfolio_stock_closures",
     }
 )
 MIGRATION_FUNCTIONS = frozenset(
@@ -67,6 +68,7 @@ MIGRATION_FUNCTIONS = frozenset(
         "stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)",
         "apply_stock_dividend(bigint,bigint,text,text)",
         "record_stock_dividend_hold(bigint,text)",
+        "associate_legacy_portfolio_only()",
     }
 )
 _MIGRATOR_PASSWORD = secrets.token_hex(32)
