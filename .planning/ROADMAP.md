@@ -103,7 +103,7 @@ Plans:
 **Wave 9** *(blocked on Wave 8 completion)*
 
 - [x] 12-11-PLAN.md — Explicit stock execution and gated retry ownership
-- [ ] 12-13-PLAN.md — Portfolio entitlement derivation and dividend worker safety
+- [x] 12-13-PLAN.md — Portfolio entitlement derivation and dividend worker safety
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
@@ -268,7 +268,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 12/28 | In progress; next12-13 by wave order | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 13/28 | In progress; next12-14 by wave order | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
