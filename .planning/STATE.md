@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-last_updated: "2026-11-16T08:44:55.969Z"
+last_updated: "2026-11-16T08:59:14.895Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 4
-  percent: 14
+  completed_plans: 5
+  percent: 18
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 execution is authorized locally. Plans01–04 complete the test foundation, owned metadata and real staged0015/16 preservation migrations; next is12-05. Final0017 authority/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase12 Plans01–05 complete preservation fixtures/models, real staged0015/16 and static final stock authority. Next12-06; actual0017/SQL/services remain pending and all28 requirements unchecked. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 5 of 28
-Status: Executing Phase12; Plans01–04 complete, next12-05
-Last activity: 2026-11-16 — Staged migration proof passed22 cases plus8 strengthened retained-source cases; next12-05
+Plan: 6 of 28
+Status: Executing Phase12; Plans01–05 complete, next12-06
+Last activity: 2026-11-16 — Stock SQL asset contracts5 pass,30 final_sql cases collected; next12-06
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [██░░░░░░░░] 18%
 
 ## Accepted Closeout and Release Boundary
 
@@ -129,8 +129,9 @@ metadata, with21 focused metadata cases passing and44 ownership/authority
 cases collected. Plan04 adds real0015 expansion and bounded0016 association,
 with22 combined SQL cases and8 strengthened historical-source cases passing;
 actual committed-batch interruption/resume and unsafe downgrade refusal pass.
-See12-04-SUMMARY.md. Next12-05 defines final stock authority SQL;0015/16 are
-migration-only, with final0017/runtime/recovery admission still pending.
+See12-04/05-SUMMARY.md. Plan05 adds immutable stock SQL,5 passing static
+contracts and30 collected final_sql cases. Next12-06;0015/16 remain migration-only,
+with final0017/runtime/recovery admission and real authority proof still pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.

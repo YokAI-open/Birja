@@ -79,7 +79,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 12-05-PLAN.md — Versioned root-aware stock SQL authority
+- [x] 12-05-PLAN.md — Versioned root-aware stock SQL authority
 - [ ] 12-06-PLAN.md — Versioned root-aware dividend SQL authority
 
 **Wave 6** *(blocked on Wave 5 completion)*
@@ -264,7 +264,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 4/28 | In progress; next12-05 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 5/28 | In progress; next12-06 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
