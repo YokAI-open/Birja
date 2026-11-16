@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-20-PLAN.md; next12-18-02 targeted continuation
-last_updated: "2026-11-16T13:13:50.401Z"
+stopped_at: Completed12-18-PLAN.md; next12-21
+last_updated: "2026-11-16T13:35:07.629Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 19
-  percent: 68
+  completed_plans: 20
+  percent: 71
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has19/28 plans complete locally, including explicit financial browser transport in12-20. Its79-case trade/read transport gate passes. Plan18 Task02 remains incomplete with an actual TLS DividendRefused smoke failure and retained binding work; the owner approved targeted diagnosis/retry in the parent session. Resume12-18-02 before advancing beyond Wave13. All28 requirements remain unchecked; full integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has20/28 plans complete locally. Approved Plan18 continuation diagnosed missing synthetic action checked_at evidence; unchanged dividend authority now passes the real restricted-role TLS fixture. Exact archived source/image bindings and immutable selected refs are implemented;20 CI,8 selected,5 fixture and10 affected recovery contracts pass. Next12-21/Wave14. All28 requirements remain unchecked; full integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 19/28 complete; next12-18-02 continuation by dependency order
-Status: Executing Wave13; Plan20 complete, Plan18 checkpoint pending targeted continuation
+Plan: 20/28 complete; next12-21 by dependency order
+Status: Wave13 complete; next Wave14 browser isolation hooks
 Last activity: 2026-11-16
 
-Progress: [███████░░░] 68%
+Progress: [███████░░░] 71%
 
 ## Accepted Closeout and Release Boundary
 
@@ -244,12 +244,23 @@ and opaque trade2/mixed3 continuations must match the original root.38 trade and
 41 read cases pass; changed-file lint/format pass. Full frontend typing reports
 51 errors across17 later consumer/fixture files, none in this plan's changed
 client/newtest modules. Plans21–25/27 own those explicit-root adaptations.
-See12-20-SUMMARY.md for required signatures and original-attempt types. Plan18
-Task01 is committed but Task02 is incomplete with uncommitted deploy changes;
-12-18-CONTINUATION.md preserves the exact DividendRefused smoke failure and
-remaining source/archive/image bindings. The owner approved targeted diagnosis/
-retry; no Plan18 completion summary exists. Next12-18-02, not Wave14. This
-independent same-wave Plan20 preserved all paused18 files and unrelated.claude/.
+See12-20-SUMMARY.md for required signatures and original-attempt types. At Plan20
+closeout, Plan18 Task02 remained at the persisted DividendRefused checkpoint;
+the owner explicitly approved targeted diagnosis/retry. The independent same-wave
+Plan20 preserved all paused18 files and unrelated.claude/.
+Plan18 is now complete: its synthetic action observation had omitted checked_at,
+which unchanged SQL correctly refused. Supplying that fixture timestamp makes
+the actual0014→0017 restricted app/scheduler verified-TLS create/projection/verify/
+compare smoke pass with unchanged independent books and legacy NULL/new2 evidence.
+Twenty CI/source/image contracts,8 selected-cutover contracts,5 behavioral fixture
+contracts and10 affected recovery contracts pass. Retained complete payloads come
+from the selected immutable recovery archive; exact declared revisions precede
+imports, and source/image/Config/RootFS bindings are rechecked before children.
+Selected cutover uses complete immutable release refs and separately hashed
+relocated tooling, with no source overlay or synthetic commit. See12-18-SUMMARY.md.
+Its logical/smoke image proof is not the actual Dockerfile/strict scan or full
+encrypted/current+retained same-archive TLS/rollback campaign, still required27.
+Next12-21/Wave14; all requirements and owner UI gates remain pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -277,9 +288,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P17 | 16 min | 2 tasks | 7 files |
 | Phase 12 P19 | 12 min | 2 tasks | 8 files |
 | Phase 12 P20 | 12 min | 2 tasks | 7 files |
+| Phase 12 P18 | 19 min continuation | 2 tasks | 10 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T13:13:09.771Z
-Stopped at: Completed12-20-PLAN.md; next12-18-02 targeted continuation
-Resume file: phases/12-preserve-existing-investing-under-portfolio-ownership/12-18-CONTINUATION.md
+Last session: 2026-11-16T13:35:07.610Z
+Stopped at: Completed12-18-PLAN.md; next12-21
+Resume file: None

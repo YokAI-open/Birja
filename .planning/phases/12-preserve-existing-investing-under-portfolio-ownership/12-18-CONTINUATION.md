@@ -1,13 +1,20 @@
 ---
 phase: 12
 plan: "18"
-status: checkpoint
-completed_tasks: 1
-next_task: 12-18-02
+status: resolved
+completed_tasks: 2
+next_task: 12-21
 updated: 2026-11-16
 ---
 
 # Plan18 continuation — runtime smoke and retained binding incomplete
+
+**Historical checkpoint, resolved by approved continuation on2026-11-16.**
+Task02 is committed at a613193 and verified results at12-18-SUMMARY.md
+(ddcb166). The fixture omitted checked_at; adding synthetic observation evidence
+made unchanged SQL authority and the actual owned TLS smoke pass. Source/archive/
+image bindings and immutable selected refs are complete. The original checkpoint
+below is preserved as history, not current status; full serial recovery remains27.
 
 Do not mark18 complete or trust code presence as recovery proof. Task01 is
 committed; Task02 changes below are uncommitted and its real smoke fails.
