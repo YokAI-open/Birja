@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-22-PLAN.md; next12-23
-last_updated: "2026-11-16T14:11:54.719Z"
+stopped_at: Completed12-23-PLAN.md; next12-24
+last_updated: "2026-11-16T14:28:41.769Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 22
-  percent: 79
+  completed_plans: 23
+  percent: 82
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has22/28 plans complete locally. Valuation and both History hooks now isolate owner/root/session projections, cursors, seen sets and embedded originals;38 assigned read-hook cases and198 combined client/target/trade/read-hook cases pass. Next12-23/Wave14 scoped navigation and target boundary. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has23/28 plans complete locally. Scoped navigation and the owned-target boundary now hand verified Outlet context to financial routes; Account is identity-only.15 boundary and31 App cases pass, with75 combined shell/Markets/StockSection cases. Next12-24/Wave15 ticket and receipt integration. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 22/28 complete; next12-23 by dependency order
-Status: Wave14 in progress; trade/read-hook isolation complete, next scoped navigation
+Plan: 23/28 complete; next12-24 by dependency order
+Status: Wave14 complete; next Wave15 ticket and receipt integration
 Last activity: 2026-11-16
 
-Progress: [████████░░] 79%
+Progress: [████████░░] 82%
 
 ## Accepted Closeout and Release Boundary
 
@@ -282,6 +282,17 @@ run passes198 cases. Changed-file lint/format and source typing pass. Full
 frontend typing still reports61 errors across18 later page/retained-fixture files
 owned by23–25/27; no whole frontend readiness is claimed. See12-22-SUMMARY.md.
 Next12-23/Wave14; all whole requirements and owner UI gates remain pending.
+Plan23 now supplies the neutral wrapping Portfolio/name component, safe metadata
+boundary and actual explicit financial routes. Legacy entries replace-navigate
+only for a sole owned active root before financial child mount; zero/many and
+explicit unavailable targets do not select another root. Account is email/session
+only, and current-owner navigation keeps its verified root through public Markets
+and crypto/stock links.15 boundary and31 App cases pass;75 combined shell,
+boundary, Markets and StockSection cases pass. Financial child probes prove
+shell/target handoff, not yet-real24/25 page behavior. Scoped financial pages
+must read useOutletContext<PortfolioTarget>() and pass that captured target to
+hooks; see12-23-SUMMARY.md. Native200%/multi-width browser proof remains26–28.
+Next12-24/Wave15; all requirements and full integration/acceptance gates pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -312,9 +323,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P18 | 19 min continuation | 2 tasks | 10 files |
 | Phase 12 P21 | 16 min | 2 tasks | 6 files |
 | Phase 12 P22 | 14 min | 2 tasks | 5 files |
+| Phase 12 P23 | 15 min | 2 tasks | 9 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T14:11:25.500Z
-Stopped at: Completed12-22-PLAN.md; next12-23
+Last session: 2026-11-16T14:28:15.081Z
+Stopped at: Completed12-23-PLAN.md; next12-24
 Resume file: None
