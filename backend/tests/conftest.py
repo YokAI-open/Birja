@@ -81,12 +81,9 @@ def provision_test_migration_owner(dividend_owner_prerequisite: None) -> None:
 
 @pytest.fixture(scope="session")
 def migrated() -> None:
-    from pathlib import Path
+    from tests.test_migrations import run_test_migration
 
-    from alembic import command
-    from alembic.config import Config
-
-    command.upgrade(Config(str(Path(__file__).resolve().parent.parent / "alembic.ini")), "head")
+    run_test_migration("head")
 
 
 @pytest_asyncio.fixture(scope="session")

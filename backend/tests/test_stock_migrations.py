@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from tests.test_migrations import _config, _versions, ensure_dividend_test_owner
+from tests.test_migrations import _config, _versions, ensure_dividend_test_owner, run_test_migration
 
 STOCK_TABLES = {"stock_instruments", "stock_quotes", "stock_sessions", "stock_data_admissions"}
 
@@ -19,7 +19,7 @@ STOCK_TABLES = {"stock_instruments", "stock_quotes", "stock_sessions", "stock_da
 async def migrate(target: str, *, down: bool = False) -> None:
     if not down and target in ("head", "0014"):
         await ensure_dividend_test_owner()
-    await asyncio.to_thread(command.downgrade if down else command.upgrade, _config(), target)
+    await asyncio.to_thread(run_test_migration, target, down=down)
 
 
 async def test_head_has_separate_stock_storage(engine: AsyncEngine, migrated: None) -> None:
