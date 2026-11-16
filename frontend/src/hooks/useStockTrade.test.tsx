@@ -1,3 +1,4 @@
+import { portfolioTargetFixture } from "@/test/portfolioTargetFixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,17 +13,20 @@ function setup() {
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
   clients.push(client);
-  client.setQueryData(["me"], { email: "first@example.test", cash_usd: "10000" });
+  client.setQueryData(["me"], { email: "first@example.test" });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   return {
     client,
     wrapper,
-    ...renderHook(({ symbol }: { symbol: string }) => useStockTrade(symbol), {
-      wrapper,
-      initialProps: { symbol: "AAPL" },
-    }),
+    ...renderHook(
+      ({ symbol }: { symbol: string }) => useStockTrade(portfolioTargetFixture(client), symbol),
+      {
+        wrapper,
+        initialProps: { symbol: "AAPL" },
+      },
+    ),
   };
 }
 afterEach(() => {
@@ -43,7 +47,7 @@ it("keeps one frozen attempt after response loss and resolves it explicitly afte
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.endsWith("/me"))
-        return new Response(JSON.stringify({ email: "first@example.test", cash_usd: "9796" }));
+        return new Response(JSON.stringify({ email: "first@example.test" }));
       if (path.endsWith("/context")) return new Response(JSON.stringify(contextFixture()));
       if (path.endsWith("/quote")) return new Response(JSON.stringify(quoteFixture()));
       bodies.push(JSON.parse(init!.body as string));
@@ -70,7 +74,7 @@ it("keeps one frozen attempt after response loss and resolves it explicitly afte
   closed.buy_max_quantity = "0";
   closed.session.state = "closed";
   act(() =>
-    client.setQueryData(["stockContext", "first@example.test", "AAPL"], {
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], {
       ...closed,
       transport: {
         started_at: performance.now(),
@@ -108,7 +112,7 @@ function mockStockHttp(
       const path = String(input);
       calls.push({ path, body: init?.body ? JSON.parse(init.body as string) : null });
       if (path.endsWith("/me"))
-        return new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10000" }));
+        return new Response(JSON.stringify({ email: "first@example.test" }));
       if (path.endsWith("/context"))
         return options.context?.() ?? new Response(JSON.stringify(contextFixture()));
       if (path.endsWith("/quote"))
@@ -139,7 +143,7 @@ it("shortcuts edit whole drafts only and pending duplicate confirmation cannot p
   await waitFor(() => expect(result.current.context?.execution_enabled).toBe(true));
   act(() => result.current.buyMax());
   expect(result.current.quantity).toBe("98");
-  expect(calls.some((c) => c.path === "/api/v1/stock-trades")).toBe(false);
+  expect(calls.some((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
   await readyPreview(result);
   let pending!: Promise<void>;
   act(() => {
@@ -157,7 +161,7 @@ it("shortcuts edit whole drafts only and pending duplicate confirmation cannot p
   });
   expect(result.current.quantity).toBe("2");
   expect(result.current.side).toBe("buy");
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades")).toHaveLength(1);
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
   await act(async () => {
     finish(new Response(JSON.stringify(fillFixture())));
     await pending;
@@ -183,10 +187,12 @@ it("retains quantity but removes cached preview and estimates exactly at expiry"
   expect(result.current.canConfirm).toBe(false);
   expect(result.current.context?.quote).toBeNull();
   expect(
-    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test"])?.quote,
+    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test", "1", 0])
+      ?.quote,
   ).toBeNull();
   expect(
-    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "1", 0, "AAPL"])
+      ?.quote,
   ).toBeNull();
 });
 
@@ -207,7 +213,7 @@ it("known no-fill preserves draft and requires another server preview", async ()
   await act(async () => {
     await result.current.confirm();
   });
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades")).toHaveLength(1);
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
 });
 
 it("replacement server values need another explicit confirmation and do not autoaccept", async () => {
@@ -267,9 +273,10 @@ it("replacement server values need another explicit confirmation and do not auto
   expect(attempts).toBe(2);
   expect(result.current.phase).toBe("filled");
   expect(result.current.fill?.cash_after).toBe("9794");
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades")[1].body?.expected_exec_price).toBe(
-    "103",
-  );
+  expect(
+    calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")[1].body
+      ?.expected_exec_price,
+  ).toBe("103");
 });
 
 it("discards a committed late old-account reply and clears every private attempt on switch", async () => {
@@ -287,7 +294,7 @@ it("discards a committed late old-account reply and clears every private attempt
     pending = result.current.confirm();
   });
   await waitFor(() => expect(result.current.phase).toBe("submitting"));
-  act(() => client.setQueryData(["me"], { email: "second@example.test", cash_usd: "10000" }));
+  act(() => client.setQueryData(["me"], { email: "second@example.test" }));
   await waitFor(() => expect(result.current.phase).toBe("draft"));
   await act(async () => {
     finish(new Response(JSON.stringify(fillFixture())));
@@ -295,9 +302,10 @@ it("discards a committed late old-account reply and clears every private attempt
   });
   expect(result.current.fill).toBeNull();
   expect(result.current.quantity).toBe("");
-  expect(client.getQueryData(["stockTradeState", "first@example.test"])).toBeUndefined();
+  expect(client.getQueryData(["stockTradeState", "first@example.test", "1", 0])).toBeUndefined();
   expect(
-    client.getQueryData<{ fill: unknown }>(["stockTradeState", "second@example.test"])?.fill,
+    client.getQueryData<{ fill: unknown }>(["stockTradeState", "second@example.test", "1", 1])
+      ?.fill,
   ).toBeNull();
 });
 
@@ -326,7 +334,7 @@ it("route changes cannot abandon or edit an unresolved original order", async ()
     await result.current.confirm();
   });
   expect(result.current.phase).toBe("unknown");
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades")).toHaveLength(1);
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
 });
 
 it("newer safety epochs purge old previews and delayed lower epochs cannot restore the cache", async () => {
@@ -336,15 +344,19 @@ it("newer safety epochs purge old previews and delayed lower epochs cannot resto
   const newer = contextFixture();
   newer.observed_at = "2026-11-10T15:00:11Z";
   newer.authority!.safety_epoch = 3;
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed(newer)));
+  act(() =>
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed(newer)),
+  );
   expect(result.current.quote).toBeNull();
   expect(result.current.phase).toBe("draft");
   const older = contextFixture();
   older.observed_at = "2026-11-10T15:00:12Z";
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed(older)));
+  act(() =>
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed(older)),
+  );
   expect(result.current.context?.authority?.safety_epoch).toBe(3);
   expect(
-    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "1", 0, "AAPL"])
       ?.authority?.safety_epoch,
   ).toBe(3);
 });
@@ -383,20 +395,24 @@ it("closure interrupts preview but a new opening never submits or restores that 
   closed.buy_max_quantity = "0";
   closed.session.state = "closed";
   closed.observed_at = "2026-11-10T15:00:11Z";
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed(closed)));
+  act(() =>
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed(closed)),
+  );
   expect(result.current.phase).toBe("draft");
   expect(result.current.quantity).toBe("2");
   expect(result.current.interrupted).toBe(true);
   const reopened = contextFixture();
   reopened.observed_at = "2026-11-10T15:00:12Z";
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed(reopened)));
+  act(() =>
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed(reopened)),
+  );
   expect(result.current.context?.execution_enabled).toBe(true);
   expect(result.current.quote).toBeNull();
   expect(result.current.canConfirm).toBe(false);
   await act(async () => {
     await result.current.confirm();
   });
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades")).toHaveLength(0);
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(0);
   // A body observed before the closure cannot masquerade as the new preview.
   await act(async () => {
     await result.current.preview();
@@ -448,7 +464,7 @@ it("same-account logout/login invalidates a delayed response despite identical e
   await waitFor(() => expect(result.current.phase).toBe("submitting"));
   act(() => {
     client.setQueryData(["me"], null);
-    client.setQueryData(["me"], { email: "first@example.test", cash_usd: "10000" });
+    client.setQueryData(["me"], { email: "first@example.test" });
   });
   await act(async () => {
     finish(new Response(JSON.stringify(fillFixture())));
@@ -512,18 +528,19 @@ it("an unknown attempt survives unmount and remount without creating a new key",
   await act(async () => {
     await first.result.current.confirm();
   });
-  const body = calls.find((c) => c.path === "/api/v1/stock-trades")!.body;
+  const body = calls.find((c) => c.path === "/api/v2/portfolios/1/stock-trades")!.body;
   first.unmount();
-  const second = renderHook(() => useStockTrade("AAPL"), { wrapper: first.wrapper });
+  const second = renderHook(() => useStockTrade(portfolioTargetFixture(first.client), "AAPL"), {
+    wrapper: first.wrapper,
+  });
   expect(second.result.current.phase).toBe("unknown");
-  expect(second.result.current.attempt?.body).toEqual(body);
+  expect(second.result.current.attempt?.body).toEqual({ ...body, portfolio_id: "1" });
   await act(async () => {
     await second.result.current.checkResult();
   });
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades").map((c) => c.body)).toEqual([
-    body,
-    body,
-  ]);
+  expect(
+    calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades").map((c) => c.body),
+  ).toEqual([body, body]);
   second.unmount();
 });
 
@@ -563,10 +580,12 @@ it("the exact deadline timer purges query cache and preview without waiting for 
   expect(result.current.phase).toBe("draft");
   expect(result.current.quantity).toBe("2");
   expect(
-    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "1", 0, "AAPL"])
+      ?.quote,
   ).toBeNull();
   expect(
-    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test"])?.quote,
+    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test", "1", 0])
+      ?.quote,
   ).toBeNull();
 });
 
@@ -587,8 +606,11 @@ it("a replaced context query owner rejects a late preview even with matching epo
   });
   await waitFor(() => expect(result.current.phase).toBe("loading_preview"));
   act(() => {
-    client.removeQueries({ queryKey: ["stockContext", "first@example.test", "AAPL"], exact: true });
-    client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed());
+    client.removeQueries({
+      queryKey: ["stockContext", "first@example.test", "1", 0, "AAPL"],
+      exact: true,
+    });
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed());
   });
   await act(async () => {
     finish(new Response(JSON.stringify(quoteFixture())));
@@ -617,7 +639,8 @@ it("full quote RTT can exhaust eligibility before any preview enters cache", asy
   expect(result.current.phase).toBe("draft");
   expect(result.current.quote).toBeNull();
   expect(
-    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test"])?.quote,
+    client.getQueryData<{ quote: unknown }>(["stockTradeState", "first@example.test", "1", 0])
+      ?.quote,
   ).toBeNull();
 });
 
@@ -640,14 +663,17 @@ it("observing a different provider identity removes the previous executable prev
   await readyPreview(result);
   const changed = contextFixture();
   changed.provider_asset_id = "replacement-aapl";
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], timed(changed)));
+  act(() =>
+    client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], timed(changed)),
+  );
   expect(result.current.phase).toBe("draft");
   expect(result.current.context?.execution_enabled).toBe(false);
   expect(result.current.context?.quote).toBeNull();
   expect(result.current.quote).toBeNull();
   expect(result.current.quantity).toBe("2");
   expect(
-    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "1", 0, "AAPL"])
+      ?.quote,
   ).toBeNull();
 });
 it.each([
@@ -738,7 +764,8 @@ it("failed read-only context refresh retains no authority after a known restrict
   expect(result.current.canConfirm).toBe(false);
   expect(result.current.quote).toBeNull();
   expect(
-    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "AAPL"])?.quote,
+    client.getQueryData<TimedStockContext>(["stockContext", "first@example.test", "1", 0, "AAPL"])
+      ?.quote,
   ).toBeNull();
 });
 it("refused preview is recoverable without submitting an order", async () => {
@@ -754,7 +781,7 @@ it("refused preview is recoverable without submitting an order", async () => {
   });
   expect(result.current.phase).toBe("draft");
   expect(result.current.error).toBe("insufficient_cash");
-  expect(calls.some((c) => c.path === "/api/v1/stock-trades")).toBe(false);
+  expect(calls.some((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
 it("authentication failure during preview clears private context and draft", async () => {
   mockStockHttp({ quote: () => new Response("{}", { status: 401 }) });
@@ -766,7 +793,7 @@ it("authentication failure during preview clears private context and draft", asy
   });
   expect(result.current.quote).toBeNull();
   expect(result.current.quantity).toBe("");
-  expect(client.getQueryData(["stockTradeState", "first@example.test"])).toBeUndefined();
+  expect(client.getQueryData(["stockTradeState", "first@example.test", "1", 0])).toBeUndefined();
 });
 it("confirmed order authentication failure clears the owner attempt and never installs a receipt", async () => {
   mockStockHttp({ trade: () => new Response("{}", { status: 401 }) });
@@ -776,7 +803,7 @@ it("confirmed order authentication failure clears the owner attempt and never in
     await result.current.confirm();
   });
   expect(result.current.fill).toBeNull();
-  expect(client.getQueryData(["stockTradeState", "first@example.test"])).toBeUndefined();
+  expect(client.getQueryData(["stockTradeState", "first@example.test", "1", 0])).toBeUndefined();
 });
 it("Sell all only drafts the server whole holding and requires a preview", async () => {
   const c = contextFixture();
@@ -804,7 +831,7 @@ it("an expired quote is refused at confirm even before the display timer fires",
   });
   expect(result.current.phase).toBe("draft");
   expect(result.current.interrupted).toBe(true);
-  expect(calls.some((c) => c.path === "/api/v1/stock-trades")).toBe(false);
+  expect(calls.some((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
 it("a different immutable fill identity remains unknown instead of publishing a foreign receipt", async () => {
   const f = fillFixture();
@@ -868,7 +895,7 @@ it("late failed execution cannot write into a replacement account", async () => 
     pending = result.current.confirm();
   });
   await waitFor(() => expect(fail).toBeTypeOf("function"));
-  act(() => client.setQueryData(["me"], { email: "second@example.test", cash_usd: "10000" }));
+  act(() => client.setQueryData(["me"], { email: "second@example.test" }));
   await act(async () => {
     fail(new Error("lost"));
     await pending;
@@ -895,7 +922,7 @@ it("superseded context cannot publish even when cancellation is ineffective", as
   });
   const { result, client } = setup();
   await waitFor(() => expect(finish).toBeTypeOf("function"));
-  const key = ["stockContext", "first@example.test", "AAPL"];
+  const key = ["stockContext", "first@example.test", "1", 0, "AAPL"];
   act(() => {
     client.removeQueries({ queryKey: key, exact: true });
     client.setQueryData(
