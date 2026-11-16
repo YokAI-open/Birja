@@ -15,9 +15,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import dividends
-from tests.stock_action_fixtures import synthetic_opening
+from tests.stock_action_fixtures import (
+    install_current_runtime_roles,
+    synthetic_corruption,
+    synthetic_opening,
+    synthetic_portfolio_id,
+)
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
-from tests.test_dividend_authority import successor
 from tests.test_stock_action_migrations import event
 
 __all__ = ["ownership", "status_case", "stock_trade_case", "dividend_case"]
@@ -35,68 +39,12 @@ async def require_owned(db):
 @pytest_asyncio.fixture
 async def dividend_case(stock_trade_case, engine, request):
     factory, cid, uid, now = stock_trade_case
-    added = []
     async with engine.begin() as conn:
-        await require_owned(conn)
-        exists = await conn.scalar(
-            text("SELECT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler')")
-        )
-        assert not exists, "Fixture owns its temporary scheduler role"
-        await conn.execute(text("CREATE ROLE birja_scheduler NOLOGIN NOINHERIT"))
-        for role in ("birja_migrator", "birja_scheduler"):
-            if not await conn.scalar(
-                text("SELECT has_schema_privilege(:r,'public','USAGE')"), {"r": role}
-            ):
-                await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))
-                added.append(f"REVOKE USAGE ON SCHEMA public FROM {role}")
-        rights = [
-            (t, "SELECT")
-            for t in (
-                "stock_action_events",
-                "stock_action_revisions",
-                "stock_action_observations",
-                "stock_action_resolutions",
-                "stock_action_state",
-                "stock_instruments",
-                "coins",
-                "stock_data_admissions",
-                "stock_sessions",
-                "stock_ownership_movements",
-                "stock_split_applications",
-                "stock_dividend_entitlements",
-                "stock_dividend_payments",
-                "stock_dividend_decisions",
-                "accounts",
-            )
-        ]
-        rights += [(t, "INSERT") for t in ("stock_dividend_payments", "stock_dividend_decisions")]
-        for table, privilege in rights:
-            if not await conn.scalar(
-                text("SELECT has_table_privilege('birja_migrator',:t,:p)"),
-                {"t": table, "p": privilege},
-            ):
-                await conn.execute(text(f"GRANT {privilege} ON public.{table} TO birja_migrator"))
-                added.append(f"REVOKE {privilege} ON public.{table} FROM birja_migrator")
-        for seq in ("stock_dividend_payments_id_seq", "stock_dividend_decisions_id_seq"):
-            if not await conn.scalar(
-                text("SELECT has_sequence_privilege('birja_migrator',:s,'USAGE')"), {"s": seq}
-            ):
-                await conn.execute(text(f"GRANT USAGE ON SEQUENCE public.{seq} TO birja_migrator"))
-                added.append(f"REVOKE USAGE ON SEQUENCE public.{seq} FROM birja_migrator")
-        if not await conn.scalar(
-            text("SELECT has_column_privilege('birja_migrator','accounts','cash','UPDATE')")
-        ):
-            await conn.execute(text("GRANT UPDATE(cash) ON public.accounts TO birja_migrator"))
-            added.append("REVOKE UPDATE(cash) ON public.accounts FROM birja_migrator")
-        await conn.execute(
-            text(
-                "GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),"
-                "public.record_stock_dividend_hold(bigint,text) TO birja_scheduler"
-            )
-        )
+        await install_current_runtime_roles(conn)
     ids = None
     try:
         async with factory.begin() as db:
+            root = await synthetic_portfolio_id(db, uid)
             eid, _, rid = await event(db, cid)
             terms = {
                 "event_type": "cash_dividend",
@@ -139,14 +87,16 @@ async def dividend_case(stock_trade_case, engine, request):
             )
             ent = await db.scalar(
                 text(
-                    "INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,cutoff,"
+                    "INSERT INTO stock_dividend_entitlements"
+                    "(event_id,portfolio_id,user_id,revision_id,cutoff,"
                     "cutoff_rule,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,"
-                    "state,version,fingerprint) VALUES (:e,:u,:r,:cutoff,"
+                    "state,version,fingerprint) VALUES (:e,:p,:u,:r,:cutoff,"
                     "'exclusive-regular-session-open','unit_epoch:0',0,:seq,:q,'eligible',1,"
                     "repeat('b',64)) RETURNING id"
                 ),
                 {
                     "e": eid,
+                    "p": root,
                     "u": uid,
                     "r": rid,
                     "cutoff": cutoff,
@@ -166,6 +116,7 @@ async def dividend_case(stock_trade_case, engine, request):
                 "event_id": eid,
                 "coin_id": cid,
                 "user_id": uid,
+                "portfolio_id": root,
                 "revision_id": rid,
                 "revision_fingerprint": "a" * 64,
                 "entitlement_id": ent,
@@ -177,28 +128,22 @@ async def dividend_case(stock_trade_case, engine, request):
             await require_owned(db)
             await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
             for table in ("stock_dividend_decisions", "stock_dividend_payments"):
-                await db.execute(
-                    text(f"ALTER TABLE public.{table} DISABLE TRIGGER stock_dividend_immutable")
-                )
-                await db.execute(
-                    text(f"DELETE FROM public.{table} WHERE user_id=:u"),  # noqa: S608 - fixed tuple
-                    {"u": uid},
-                )
-                await db.execute(
-                    text(f"ALTER TABLE public.{table} ENABLE TRIGGER stock_dividend_immutable")
-                )
+                async with synthetic_corruption(db, table, trigger="stock_dividend_immutable"):
+                    await db.execute(
+                        text(f"DELETE FROM public.{table} WHERE user_id=:u"),  # noqa: S608 - fixed tuple
+                        {"u": uid},
+                    )
             if ids is not None:
                 await db.execute(
                     text("DELETE FROM stock_action_resolutions WHERE event_id=:event_id"), ids
                 )
-                await db.execute(
-                    text("DELETE FROM stock_dividend_entitlements WHERE event_id=:event_id"), ids
-                )
-        async with engine.begin() as conn:
-            for statement in reversed(added):
-                await conn.execute(text(statement))
-            await conn.execute(text("DROP OWNED BY birja_scheduler"))
-            await conn.execute(text("DROP ROLE birja_scheduler"))
+                async with synthetic_corruption(
+                    db, "stock_dividend_entitlements", trigger="portfolio_association_only"
+                ):
+                    await db.execute(
+                        text("DELETE FROM stock_dividend_entitlements WHERE event_id=:event_id"),
+                        ids,
+                    )
 
 
 @asynccontextmanager
@@ -225,6 +170,7 @@ async def process(factory, ids):
 def work(ids):
     return {
         "event_id": ids["event_id"],
+        "portfolio_id": ids["portfolio_id"],
         "entitlement_id": ids["entitlement_id"],
         "expected_revision_fingerprint": ids["revision_fingerprint"],
         "expected_entitlement_fingerprint": ids["entitlement_fingerprint"],
@@ -232,10 +178,60 @@ def work(ids):
 
 
 async def hold(factory, payment, fingerprint):
+    async with factory() as db:
+        root = (
+            await db.execute(
+                text("SELECT portfolio_id FROM stock_dividend_payments WHERE id=:p"), {"p": payment}
+            )
+        ).scalar_one()
     async with scheduler(factory) as db:
         return await dividends.record_dividend_hold(
-            db, payment_id=payment, expected_revision_fingerprint=fingerprint
+            db, portfolio_id=root, payment_id=payment, expected_revision_fingerprint=fingerprint
         )
+
+
+async def successor(conn, ids, *, rate="0.75", classification="supported_dividend", eligible=True):
+    """Append current-root synthetic evidence; accounting remains actual restricted SQL."""
+    fp = (
+        await conn.execute(text("SELECT encode(sha256(gen_random_uuid()::text::bytea),'hex')"))
+    ).scalar_one()
+    rid = (
+        await conn.execute(
+            text("""INSERT INTO stock_action_revisions(event_id,source_id,
+      ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,
+      classification,reason,verified_cutoff)
+      SELECT event_id,source_id,ordinal+1,:fp,'snapshot',clock_timestamp(),admission_generation,
+      jsonb_set(normalized_terms,'{rate}',to_jsonb(CAST(:rate AS text))),:classification,'fixture',
+      NULL FROM stock_action_revisions WHERE id=:revision_id RETURNING id"""),
+            {**ids, "fp": fp, "rate": rate, "classification": classification},
+        )
+    ).scalar_one()
+    await conn.execute(
+        text("UPDATE stock_action_events SET current_revision_id=:r WHERE id=:event_id"),
+        {**ids, "r": rid},
+    )
+    await conn.execute(
+        text("UPDATE stock_action_state SET epoch=epoch+1 WHERE coin_id=:coin_id"), ids
+    )
+    new = {**ids, "revision_id": rid, "revision_fingerprint": fp}
+    if eligible:
+        efp = (
+            await conn.execute(text("SELECT encode(sha256(gen_random_uuid()::text::bytea),'hex')"))
+        ).scalar_one()
+        eid = (
+            await conn.execute(
+                text("""INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,
+          revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,last_movement_sequence,
+          eligible_quantity,state,version,supersedes_id,fingerprint)
+          SELECT event_id,portfolio_id,user_id,:r,cutoff,cutoff_rule,units_basis,unit_epoch,
+          last_movement_sequence,
+          eligible_quantity,'eligible',version+1,id,:f FROM stock_dividend_entitlements
+          WHERE id=:entitlement_id RETURNING id"""),
+                {**ids, "r": rid, "f": efp},
+            )
+        ).scalar_one()
+        new.update(entitlement_id=eid, entitlement_fingerprint=efp)
+    return new
 
 
 async def revise(factory, ids, **changes):

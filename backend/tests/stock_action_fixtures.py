@@ -38,24 +38,28 @@ async def synthetic_portfolio_id(db, user_id, portfolio_id=None):
     return root.id
 
 
-@pytest_asyncio.fixture
-async def current_runtime_roles(engine, migrated):
+async def install_current_runtime_roles(conn):
     """Install the exact final production contract on this guarded test DB."""
     from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
 
-    async with engine.begin() as conn:
-        assert (
-            await conn.execute(
-                text(
-                    "SELECT current_database(),session_user FROM pg_roles "
-                    "WHERE rolname=session_user AND rolsuper"
-                )
+    assert (
+        await conn.execute(
+            text(
+                "SELECT current_database(),session_user FROM pg_roles "
+                "WHERE rolname=session_user AND rolsuper"
             )
-        ).one() == ("birja_test", "birja_test")
-        await conn.execute(text(PREFLIGHT_SQL))
-        for statement in GRANTS_SQL.split(";"):
-            if statement.strip():
-                await conn.execute(text(statement))
+        )
+    ).one() == ("birja_test", "birja_test")
+    await conn.execute(text(PREFLIGHT_SQL))
+    for statement in GRANTS_SQL.split(";"):
+        if statement.strip():
+            await conn.execute(text(statement))
+
+
+@pytest_asyncio.fixture
+async def current_runtime_roles(engine, migrated):
+    async with engine.begin() as conn:
+        await install_current_runtime_roles(conn)
     yield
 
 
@@ -73,6 +77,8 @@ async def synthetic_corruption(db, table, *, trigger="stock_record_immutable"):
         ("stock_fill_facts", "stock_fill_integrity"),
         ("stock_ownership_movements", "stock_record_immutable"),
         ("stock_dividend_entitlements", "portfolio_association_only"),
+        ("stock_dividend_payments", "stock_dividend_immutable"),
+        ("stock_dividend_decisions", "stock_dividend_immutable"),
         ("stock_split_applications", "portfolio_record_immutable"),
     }
     if (table, trigger) not in allowed_targets:

@@ -25,6 +25,7 @@ from tests.dividend_fixtures import (  # noqa: F401
     waiting,
     work,
 )
+from tests.stock_action_fixtures import synthetic_split
 
 __all__ = ["dividend_case"]
 
@@ -95,21 +96,35 @@ MUTATIONS = {
     "WHERE product='actions'",
     "retention": "UPDATE stock_data_admissions SET scope=scope-'backup_restore' "
     "WHERE product='reference'",
-    "cutoff": "UPDATE stock_dividend_entitlements SET cutoff=cutoff+interval '1 second' "
-    "WHERE event_id=:event_id",
-    "units": "UPDATE stock_dividend_entitlements SET units_basis='shares' WHERE event_id=:event_id",
+    # Durable entitlements are immutable now. Change external calendar terms
+    # and append a pending split instead of corrupting owned records in flight.
+    "cutoff": "UPDATE stock_action_revisions SET normalized_terms=jsonb_set("
+    "normalized_terms,'{ex_date}',to_jsonb(((normalized_terms->>'ex_date')::date+1)::text)) "
+    "WHERE id=:revision_id",
+    "units": None,
     "monitor": "UPDATE stock_action_state SET health='unknown' WHERE coin_id=:coin_id",
     "calendar": "UPDATE stock_data_admissions SET calendar=jsonb_set(calendar,'{version}',"
     "'\"changed-same-generation\"'::jsonb) WHERE product='calendar'",
 }
 
 
-async def mutate(factory, ids, mutation):
+async def mutate(factory, ids, mutation, waiter=None):
     if mutation == "revision":
-        await revise(factory, ids)
+        # A new external revision can arrive while a root is locked; its new
+        # owned entitlement must wait, and is not needed to invalidate old work.
+        await revise(factory, ids, eligible=False)
         return
     async with factory.begin() as db:
-        if mutation == "persistent_hold":
+        if waiter is not None:
+            waiter["pid"] = await db.scalar(text("SELECT pg_backend_pid()"))
+            waiter["ready"].set()
+        if mutation == "units":
+            cutoff = await db.scalar(
+                text("SELECT cutoff FROM stock_dividend_entitlements WHERE id=:entitlement_id"),
+                ids,
+            )
+            await synthetic_split(db, ids["coin_id"], cutoff, applied=False)
+        elif mutation == "persistent_hold":
             await db.execute(
                 text(
                     "INSERT INTO stock_action_observations(event_id,source_id,revision_id,"
@@ -123,10 +138,10 @@ async def mutate(factory, ids, mutation):
         elif mutation == "newer_entitlement":
             await db.execute(
                 text(
-                    "INSERT INTO stock_dividend_entitlements(event_id,user_id,"
+                    "INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,"
                     "revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,last_movement_sequence,"
                     "eligible_quantity,state,version,supersedes_id,fingerprint) SELECT event_id,"
-                    "user_id,revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,"
+                    "portfolio_id,user_id,revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,"
                     "last_movement_sequence,eligible_quantity,'held',version+1,id,repeat('c',64) "
                     "FROM stock_dividend_entitlements WHERE id=:entitlement_id"
                 ),
@@ -157,13 +172,22 @@ async def test_actual_wait_reloads_current_and_refuses_invalid_authority(
                 text("SELECT pg_advisory_xact_lock(101008,:u)"), {"u": ids["user_id"]}
             )
         task = asyncio.create_task(dividends.process_dividend(writer, **work(ids)))
+        superseder = None
         try:
             await waiting(factory, writer.info["pid"], task)
-            await mutate(factory, ids, mutation)
+            serialized = mutation == "newer_entitlement" and boundary != "gate"
+            if serialized:
+                # New owned effects serialize behind the exact same root.
+                # Observe the real INSERT waiter rather than bypassing its guard.
+                waiter = {"ready": asyncio.Event()}
+                superseder = asyncio.create_task(mutate(factory, ids, mutation, waiter))
+                await waiter["ready"].wait()
+                await waiting(factory, waiter["pid"], superseder)
+            else:
+                await mutate(factory, ids, mutation)
             await blocker.rollback()
-            accepts_current = boundary != "constraints" and mutation in (
-                "same_generation_hash",
-                "calendar",
+            accepts_current = serialized or (
+                boundary != "constraints" and mutation in ("same_generation_hash", "calendar")
             )
             if accepts_current:
                 assert (await asyncio.wait_for(task, 5)).outcome == "original"
@@ -171,12 +195,18 @@ async def test_actual_wait_reloads_current_and_refuses_invalid_authority(
                 with pytest.raises(dividends.DividendRefused) as failure:
                     await asyncio.wait_for(task, 5)
                 assert failure.value.code == "authority_unavailable"
+            if superseder is not None:
+                await asyncio.wait_for(superseder, 5)
             assert not writer.in_transaction()
         finally:
             await blocker.rollback()
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            if superseder is not None:
+                if not superseder.done():
+                    superseder.cancel()
+                await asyncio.gather(superseder, return_exceptions=True)
     after = await books(factory, ids["user_id"])
     if accepts_current:
         assert after[0] == 101 and len(after[1][0]) == 1 and not after[1][1]
@@ -243,6 +273,7 @@ async def test_no_cash_hold_revalidates_after_real_wait(dividend_case, boundary,
         task = asyncio.create_task(
             dividends.record_dividend_hold(
                 writer,
+                portfolio_id=ids["portfolio_id"],
                 payment_id=original.payment_id,
                 expected_revision_fingerprint=ids["revision_fingerprint"],
             )

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from app.services.accounts import get_or_create_user
 from app.services.corporate_actions import latest_verified_entitlements
 from app.services.event_history import list_event_history
+from app.services.portfolios import OwnedActivePortfolio
 from app.tasks import dividends
 from app.tasks.dividends import run_dividend_cycle
 from tests.dividend_fixtures import (  # noqa: F401
@@ -27,6 +28,7 @@ from tests.dividend_fixtures import (  # noqa: F401
     waiting,
 )
 from tests.helpers import unique_email
+from tests.stock_action_fixtures import synthetic_corruption, synthetic_portfolio_id
 
 __all__ = ["dividend_case"]
 
@@ -34,14 +36,7 @@ __all__ = ["dividend_case"]
 @pytest_asyncio.fixture
 async def worker(dividend_case):
     factory, _ = dividend_case
-    async with factory.begin() as db:
-        await db.execute(
-            text(
-                "GRANT SELECT ON stock_dividend_entitlements,stock_action_events,"
-                "stock_action_revisions,stock_dividend_payments,stock_action_state,"
-                "stock_action_observations TO birja_scheduler"
-            )
-        )
+    # dividend_case already installs the exact final restricted bootstrap.
     return lambda: scheduler(factory)
 
 
@@ -74,7 +69,9 @@ async def test_uncertain_paid_anchor_helper_empty_dedup_and_reconciliation(
     assert cash == 101 and rows[0] == original and len(rows[1]) == 1
     assert rows[1][0]["outcome"] == "held_uncertain"
     async with factory() as db:
-        page = await list_event_history(db, user_id=ids["user_id"])
+        page = await list_event_history(
+            db, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])
+        )
     assert page.items[0].kind == "dividend_correction"
     assert page.items[0].applied_delta == "0.00000000"
     assert page.items[0].desired_total is None
@@ -120,16 +117,18 @@ async def test_bounded_retained_keyset_reaches_later_owners_and_wraps(dividend_c
             for index in range(104):
                 uid, _ = await get_or_create_user(db, unique_email())
                 owners.append(uid)
+                root = await synthetic_portfolio_id(db, uid)
                 await db.execute(
                     text(
-                        "INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,"
+                        "INSERT INTO stock_dividend_entitlements"
+                        "(event_id,portfolio_id,user_id,revision_id,"
                         "cutoff,cutoff_rule,units_basis,unit_epoch,last_movement_sequence,"
-                        "eligible_quantity,state,version,fingerprint) SELECT event_id,:u,"
+                        "eligible_quantity,state,version,fingerprint) SELECT event_id,:p,:u,"
                         "revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,"
                         "last_movement_sequence,0,'eligible',1,:fp "
                         "FROM stock_dividend_entitlements WHERE id=:en"
                     ),
-                    {"u": uid, "en": ids["entitlement_id"], "fp": f"{index + 100:064x}"},
+                    {"u": uid, "p": root, "en": ids["entitlement_id"], "fp": f"{index + 100:064x}"},
                 )
         cursor = dividends.DividendCursor()
         counts = []
@@ -173,42 +172,16 @@ async def test_bounded_retained_keyset_reaches_later_owners_and_wraps(dividend_c
                 assert await db.scalar(
                     text("SELECT current_database()='birja_test' AND current_user='birja_test'")
                 )
-                await db.execute(
-                    text(
-                        "ALTER TABLE stock_dividend_decisions "
-                        "DISABLE TRIGGER stock_dividend_immutable"
-                    )
-                )
-                await db.execute(
-                    text("DELETE FROM stock_dividend_decisions WHERE user_id=ANY(:owners)"),
-                    {"owners": owners},
-                )
-                await db.execute(
-                    text(
-                        "ALTER TABLE stock_dividend_decisions "
-                        "ENABLE TRIGGER stock_dividend_immutable"
-                    )
-                )
-                await db.execute(
-                    text(
-                        "ALTER TABLE stock_dividend_payments "
-                        "DISABLE TRIGGER stock_dividend_immutable"
-                    )
-                )
-                await db.execute(
-                    text("DELETE FROM stock_dividend_payments WHERE user_id=ANY(:owners)"),
-                    {"owners": owners},
-                )
-                await db.execute(
-                    text(
-                        "ALTER TABLE stock_dividend_payments "
-                        "ENABLE TRIGGER stock_dividend_immutable"
-                    )
-                )
-                await db.execute(
-                    text("DELETE FROM stock_dividend_entitlements WHERE user_id=ANY(:owners)"),
-                    {"owners": owners},
-                )
+                for table, trigger in (
+                    ("stock_dividend_decisions", "stock_dividend_immutable"),
+                    ("stock_dividend_payments", "stock_dividend_immutable"),
+                    ("stock_dividend_entitlements", "portfolio_association_only"),
+                ):
+                    async with synthetic_corruption(db, table, trigger=trigger):
+                        await db.execute(
+                            text(f"DELETE FROM public.{table} WHERE user_id=ANY(:owners)"),  # noqa: S608 - fixed tuple
+                            {"owners": owners},
+                        )
                 await db.execute(
                     text("DELETE FROM accounts WHERE user_id=ANY(:owners)"), {"owners": owners}
                 )
