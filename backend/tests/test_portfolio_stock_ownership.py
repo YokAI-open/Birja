@@ -142,7 +142,17 @@ async def test_closed_root_without_terminal_record_is_corruption(journal_case):
         await assert_ownership_consistent(db, case["coin"])
 
 
-@pytest.mark.parametrize("damage", ["future_sequence", "wrong_epoch", "wrong_owner", "wrong_time"])
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "future_sequence",
+        "early_sequence",
+        "wrong_epoch",
+        "wrong_owner",
+        "wrong_time",
+        "future_time",
+    ],
+)
 async def test_contradictory_terminal_record_fails_closed(journal_case, damage):
     db, conn, case = journal_case
     await close_root(db, conn, case, case["first"])
@@ -167,14 +177,20 @@ async def test_contradictory_terminal_record_fails_closed(journal_case, damage):
     values = {c.name: getattr(closure, c.name) for c in PortfolioStockClosure.__table__.columns}
     if damage == "future_sequence":
         values["closing_sequence"] = 99
+    if damage == "early_sequence":
+        values["closing_sequence"] = 1
     if damage == "wrong_epoch":
         values["unit_epoch"] = 1
     if damage == "wrong_owner":
         values["user_id"] = case["foreign_owner"]
     if damage == "wrong_time":
         values["closed_at"] -= timedelta(days=10)
+    if damage == "future_time":
+        values["closed_at"] += timedelta(days=1)
     with pytest.raises(OwnershipHeld, match="invalid_closure"):
-        _check_closures(rows, [], roots, {closure.portfolio_id: SimpleNamespace(**values)})
+        _check_closures(
+            rows, [], roots, {closure.portfolio_id: SimpleNamespace(**values)}, case["now"]
+        )
 
 
 @pytest.mark.parametrize("version", [1, 3, -1])
@@ -215,7 +231,10 @@ async def test_canonical_v2_digest_uses_portfolio_identity_and_exact_strings(jou
     )
 
 
-async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(portfolio_migration_db):
+@pytest.mark.parametrize("later_split", [False, True])
+async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(
+    portfolio_migration_db, later_split
+):
     from uuid import uuid4
 
     from tests.test_stock_action_migrations import event
@@ -251,6 +270,12 @@ async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(portf
             {"c": cid, "start": now - timedelta(days=3)},
         )
         eid, _, rid = await event(conn, cid)
+        await conn.execute(
+            text("""UPDATE stock_action_revisions SET
+          classification='supported_forward_split',reason='none',verified_cutoff=:at
+          WHERE id=:r"""),
+            {"at": now - timedelta(days=1), "r": rid},
+        )
         before = ownership_digest([(u, "2.00000000", "20.00000000") for u in users])
         after = ownership_digest([(u, "4", "20.00000000") for u in users])
         aid = (
@@ -307,3 +332,107 @@ async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(portf
         assert app.owner_digest_version is None
         assert (app.id, app.economic_event_id, app.before_digest, app.after_digest) == original
         assert len(rows) == 4 and len({r.portfolio_id for r in rows}) == 2
+        if later_split:
+            await apply_later_mixed_split(db, cid, users, original)
+
+
+async def apply_later_mixed_split(db, cid, users, original):
+    """Real old/global event plus two new same-owner roots and frozen old owner."""
+    import asyncio
+    from dataclasses import asdict, replace
+    from uuid import uuid4
+
+    from app.models.price import Coin
+    from app.models.stock import StockDataAdmission, StockInstrument
+    from app.models.user import Account
+    from app.services import corporate_actions as actions
+    from tests.test_corporate_action_rules import dividend
+    from tests.test_corporate_actions import batch, split_action
+    from tests.test_stock_admission import action_admitted
+
+    now = (await db.execute(text("SELECT clock_timestamp()"))).scalar_one()
+    roots = list((await db.execute(select(Account).order_by(Account.id))).scalars())
+    first, closed = [next(r for r in roots if r.user_id == u) for u in users]
+    sibling = Account(
+        user_id=users[0], name="Later sibling", cash=Decimal(333), starting_cash=Decimal(1234)
+    )
+    db.add(sibling)
+    await db.flush()
+    await db.execute(
+        text("""INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis)
+      VALUES (:p,:u,:c,2,30)"""),
+        {"p": sibling.id, "u": users[0], "c": cid},
+    )
+    await db.execute(
+        text("""INSERT INTO stock_ownership_movements
+      (portfolio_id,user_id,coin_id,sequence,economic_at,recorded_at,quantity,before_quantity,
+       after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key)
+      VALUES (:p,:u,:c,5,:at,:at,2,0,2,0,30,1,'opening',:k)"""),
+        {
+            "p": sibling.id,
+            "u": users[0],
+            "c": cid,
+            "at": now - timedelta(hours=12),
+            "k": f"new:{sibling.id}",
+        },
+    )
+    conn = await db.connection()
+    first_id, sibling_id = first.id, sibling.id
+    await close_root(db, conn, {"owner": users[1], "coin": cid}, closed.id)
+    evidence = replace(
+        action_admitted(),
+        reviewed_at=now - timedelta(hours=1),
+        valid_from=now - timedelta(hours=2),
+        valid_until=now + timedelta(hours=2),
+    )
+    db.add(StockDataAdmission(**asdict(evidence)))
+    instrument = await db.get(StockInstrument, cid)
+    instrument.provider_asset_id = "synthetic-current-asset"
+    instrument.provider_verified_at = now - timedelta(days=1)
+    await db.execute(
+        text("""UPDATE stock_action_state SET health='current',
+      admission_generation=1,valid_until=:until,covered_until=:now WHERE coin_id=:c"""),
+        {"until": now + timedelta(hours=1), "now": now, "c": cid},
+    )
+    symbol = (await db.execute(select(Coin.symbol).where(Coin.id == cid))).scalar_one()
+    action = replace(
+        dividend(), coin_id=cid, symbol=symbol, provider_event_id=str(uuid4()), observed_at=now
+    )
+    await actions.persist_action_batch(
+        db, batch(split_action(action, now - timedelta(hours=1), new_rate=Decimal(2))), evidence
+    )
+    # This disposable migration fixture owns schema teardown, so it can publish
+    # the seed and exercise two genuinely independent scheduler transactions.
+    await db.commit()
+
+    async def processor():
+        async with AsyncSession(db.bind, expire_on_commit=False) as worker, worker.begin():
+            await worker.execute(text("SET LOCAL ROLE birja_scheduler"))
+            return await actions.apply_due_actions(worker, cid)
+
+    first_result, second_result = await asyncio.wait_for(
+        asyncio.gather(processor(), processor()), timeout=15
+    )
+    assert first_result == second_result
+    ids = first_result
+    assert len(ids) == 2
+    db.expire_all()
+    apps = list(
+        (
+            await db.execute(
+                select(StockSplitApplication).order_by(StockSplitApplication.new_unit_epoch)
+            )
+        ).scalars()
+    )
+    assert [a.owner_digest_version for a in apps] == [None, 2]
+    assert (
+        apps[0].id,
+        apps[0].economic_event_id,
+        apps[0].before_digest,
+        apps[0].after_digest,
+    ) == original
+    state, rows = await assert_ownership_consistent(db, cid)
+    assert state.unit_epoch == 2
+    effects = [r for r in rows if r.application_id == apps[1].id]
+    assert {r.portfolio_id for r in effects} == {first_id, sibling_id}
+    assert {r.after_quantity for r in effects} == {Decimal(8), Decimal(4)}

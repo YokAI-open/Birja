@@ -168,17 +168,19 @@ async def append_stock_movement(
     """
     _validate(movement)
     await acquire_stock_gate(db, movement.coin_id)
-    account = (
+    if movement.application_id is not None:
         await db.execute(
-            select(Account)
-            .where(
-                Account.id == movement.portfolio_id,
-                Account.user_id == movement.user_id,
-                Account.closed_at.is_(None),
-            )
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": movement.coin_id}
         )
+    root_query = select(Account).where(
+        Account.id == movement.portfolio_id,
+        Account.user_id == movement.user_id,
+        Account.closed_at.is_(None),
+    )
+    if movement.trade_id is not None:
+        root_query = root_query.with_for_update()
+    account = (
+        await db.execute(root_query.execution_options(populate_existing=True))
     ).scalar_one_or_none()
     if account is None:
         raise OwnershipHeld("portfolio_unavailable")
@@ -483,7 +485,7 @@ async def assert_ownership_consistent(
             )
         ).scalars()
     }
-    _check_closures(rows, applications, accounts, closures)
+    _check_closures(rows, applications, accounts, closures, await _clock(db))
     _check_units(rows, applications, state.unit_epoch, pending_application_id, closures)
     holdings = (await db.execute(select(Holding).where(Holding.coin_id == coin_id))).scalars().all()
     await _clock(db)
@@ -536,6 +538,7 @@ def _check_closures(
     applications: list[StockSplitApplication],
     accounts: dict[int, Account],
     closures: dict[int, PortfolioStockClosure],
+    checked_at: datetime | None = None,
 ) -> None:
     for row in rows:
         account = accounts.get(row.portfolio_id)
@@ -558,6 +561,10 @@ def _check_closures(
             or account.closed_at is None
             or account.closed_at != closure.closed_at
             or closure.closing_sequence > len(rows)
+            or closure.closing_sequence
+            != max((r.sequence for r in rows if r.recorded_at <= closure.closed_at), default=0)
+            or checked_at is not None
+            and closure.closed_at > checked_at
             or closure.unit_epoch != sum(a.processed_at <= closure.closed_at for a in applications)
             or any(
                 r.sequence <= closure.closing_sequence and r.recorded_at > closure.closed_at

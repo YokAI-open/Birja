@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     literal,
     select,
+    text,
     true,
     update,
 )
@@ -43,6 +44,7 @@ from app.models.corporate_action import (
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.trade import Holding
+from app.models.user import Account
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
     CutoffEvidence,
@@ -59,6 +61,8 @@ from app.services.stock_ownership import (
     acquire_stock_gate,
     append_stock_movement,
     assert_ownership_consistent,
+    ownership_digest,
+    portfolio_digest_rows,
     reconstruct_stock_quantity,
 )
 from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
@@ -563,17 +567,23 @@ async def apply_due_actions(
     evidence = await _authority(db, account=account, server=server)
     mapping = await _mapping(db, coin_id)
     state, rows = await assert_ownership_consistent(db, coin_id)
+    # Instrument gate precedes deterministic root locks and then holding locks.
+    # Re-read active state after waits; a frozen sibling remains in complete
+    # consistency validation but never receives a later split movement.
+    await db.execute(text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": coin_id})
     holders = list(
         (
             await db.execute(
                 select(Holding)
-                .where(Holding.coin_id == coin_id)
-                .order_by(Holding.user_id, Holding.id)
-                .with_for_update()
+                .join(Account, Account.id == Holding.portfolio_id)
+                .where(Holding.coin_id == coin_id, Account.closed_at.is_(None))
+                .order_by(Holding.portfolio_id, Holding.id)
+                .with_for_update(of=Holding)
                 .execution_options(populate_existing=True)
             )
         ).scalars()
     )
+    state, rows = await assert_ownership_consistent(db, coin_id)
     checked = await _clock(db)
     if (
         state.health != "current"
@@ -626,14 +636,40 @@ async def apply_due_actions(
         ):
             await _hold(db, state, checked)
             break
-        owners = [SplitOwner(h.user_id, h.quantity, h.cost_basis) for h in holders]
+        # Split arithmetic's identifier is opaque; pass roots, not repeated users.
+        owners = [SplitOwner(h.portfolio_id, h.quantity, h.cost_basis) for h in holders]
         plan = plan_forward_split(action, owners)
         if not plan.allowed:
             await _hold(db, state, checked)
             break
         await _authority(db, evidence, account=account, server=server)
-        before = [(h.user_id, str(h.quantity), str(h.cost_basis)) for h in holders]
-        after = [(h.user_id, str(h.quantity), str(h.total_basis)) for h in plan.owners]
+        active_roots = {h.portfolio_id for h in holders}
+        before = portfolio_digest_rows(
+            rows,
+            rows[-1].sequence if rows else 0,
+            coin_id,
+            state.unit_epoch,
+            {r.portfolio_id for r in rows} - active_roots,
+        )
+        adjusted_by_root = {h.user_id: h for h in plan.owners}
+        next_sequence = rows[-1].sequence if rows else 0
+        after = []
+        for pid, uid, cid, qty, basis, sequence, _ in before:
+            adjusted = adjusted_by_root[pid]
+            if Decimal(qty) > 0:
+                next_sequence += 1
+                sequence = next_sequence
+            after.append(
+                (
+                    pid,
+                    uid,
+                    cid,
+                    format(adjusted.quantity, ".8f"),
+                    basis,
+                    sequence,
+                    state.unit_epoch + 1,
+                )
+            )
         application = StockSplitApplication(
             coin_id=coin_id,
             economic_event_id=revision.event_id,
@@ -644,8 +680,9 @@ async def apply_due_actions(
             prior_unit_epoch=state.unit_epoch,
             new_unit_epoch=state.unit_epoch + 1,
             sequence_boundary=rows[-1].sequence if rows else 0,
-            before_digest=_digest(before),
-            after_digest=_digest(after),
+            before_digest=ownership_digest(before),
+            after_digest=ownership_digest(after),
+            owner_digest_version=2,
             processed_at=await _clock(db),
         )
         db.add(application)
@@ -664,6 +701,7 @@ async def apply_due_actions(
                         original.cost_basis,
                         "split:" + str(application.id),
                         application_id=application.id,
+                        portfolio_id=original.portfolio_id,
                     ),
                 )
         state, rows = await assert_ownership_consistent(db, coin_id)

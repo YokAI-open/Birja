@@ -140,13 +140,14 @@ async def test_final_inventory_matches_paired_constraints_and_private_helpers(
                     "p.proname,pg_get_userbyid(p.proowner),p.prosecdef,p.proconfig,"
                     "has_function_privilege('public',p.oid,'EXECUTE') FROM pg_proc p "
                     "WHERE p.oid IN (to_regprocedure('public.check_portfolio_financial_write()'),"
-                    "to_regprocedure('public.check_stock_split_digest_version()'))"
+                    "to_regprocedure('public.check_stock_split_digest_version()'),"
+                    "to_regprocedure('public.lock_stock_portfolio_roots(bigint)'))"
                 )
             )
         ).all()
-        assert len(rows) == 2
+        assert len(rows) == 3
         assert all(r[1] == "birja_migrator" for r in rows)
-        assert all(r[2] == (r[0] == "check_portfolio_financial_write") for r in rows)
+        assert all(r[2] == (r[0] != "check_stock_split_digest_version") for r in rows)
         assert all(r[3:] == (["search_path=pg_catalog, public, pg_temp"], False) for r in rows)
 
 

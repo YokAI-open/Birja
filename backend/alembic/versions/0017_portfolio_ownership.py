@@ -108,6 +108,25 @@ def upgrade() -> None:
       IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
     END $root$""")
     op.execute("REVOKE ALL ON FUNCTION public.check_portfolio_financial_write() FROM PUBLIC")
+    # Lock-only authority avoids granting scheduler UPDATE on account cash.
+    op.execute("""CREATE FUNCTION public.lock_stock_portfolio_roots(p_coin bigint)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path=pg_catalog,public,pg_temp AS $locks$
+    BEGIN
+      IF p_coin IS NULL OR p_coin<=0 OR NOT EXISTS(
+        SELECT FROM public.stock_instruments WHERE coin_id=p_coin) THEN
+        RAISE EXCEPTION 'invalid stock instrument' USING ERRCODE='22023'; END IF;
+      PERFORM pg_advisory_xact_lock(hashtextextended(
+        'birja.stock.instrument:' || p_coin::text,0));
+      PERFORM a.id FROM public.accounts a WHERE EXISTS(
+        SELECT FROM public.holdings h WHERE h.portfolio_id=a.id AND h.coin_id=p_coin)
+        ORDER BY a.id FOR UPDATE;
+    END $locks$""")
+    op.execute("ALTER FUNCTION public.lock_stock_portfolio_roots(bigint) OWNER TO birja_migrator")
+    op.execute("REVOKE ALL ON FUNCTION public.lock_stock_portfolio_roots(bigint) FROM PUBLIC")
+    op.execute(
+        "GRANT EXECUTE ON FUNCTION public.lock_stock_portfolio_roots(bigint) TO birja_scheduler"
+    )
     op.execute(
         "CREATE TRIGGER portfolio_root_immutable BEFORE UPDATE ON public.accounts "
         "FOR EACH ROW EXECUTE FUNCTION public.check_portfolio_financial_write()"

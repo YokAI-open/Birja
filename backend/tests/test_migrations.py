@@ -71,6 +71,7 @@ MIGRATION_FUNCTIONS = frozenset(
         "associate_legacy_portfolio_only()",
         "check_stock_split_digest_version()",
         "check_portfolio_financial_write()",
+        "lock_stock_portfolio_roots(bigint)",
     }
 )
 _MIGRATOR_PASSWORD = secrets.token_hex(32)
