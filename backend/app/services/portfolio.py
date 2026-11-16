@@ -1,9 +1,10 @@
-"""A read-only, user-scoped financial statement snapshot."""
+"""A read-only statement for one explicitly owned active portfolio."""
 
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from typing import Literal
 
+from fastapi import HTTPException
 from sqlalchemy import and_, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,7 @@ from app.services.portfolio_math import (
     PositionValue,
     calculate_portfolio,
 )
+from app.services.portfolios import OwnedActivePortfolio
 from app.services.prices import age_seconds, freshness
 from app.services.stock_eligibility import execution_snapshot_query, executions_from_snapshot
 from app.services.stock_valuation import StockMark, value_stock
@@ -35,6 +37,8 @@ class HoldingValue(PositionValue):
 
 @dataclass(frozen=True)
 class PortfolioSnapshot(PortfolioValue):
+    portfolio_id: str
+    name: str
     holdings: tuple[HoldingValue, ...]
     valued_at: datetime
     prices_as_of: datetime | None
@@ -43,7 +47,11 @@ class PortfolioSnapshot(PortfolioValue):
 
 
 async def get_portfolio(
-    db: AsyncSession, *, user_id: int, settings: Settings, now: datetime | None = None
+    db: AsyncSession,
+    *,
+    portfolio: OwnedActivePortfolio,
+    settings: Settings,
+    now: datetime | None = None,
 ) -> PortfolioSnapshot:
     # Scalar columns prevent identity-map reuse or lazy reads. The positive-quantity
     # predicate stays in ON so a cash-only account still produces one row.
@@ -53,6 +61,8 @@ async def get_portfolio(
     proof = (
         select(StockFillFacts.authority)
         .where(
+            StockFillFacts.portfolio_id == portfolio.portfolio_id,
+            StockFillFacts.user_id == portfolio.user_id,
             StockFillFacts.coin_id == Coin.id,
             StockFillFacts.authority["quote"]["admission_generation"]
             == func.to_jsonb(StockQuote.admission_generation),
@@ -64,6 +74,8 @@ async def get_portfolio(
     )
     result = await db.execute(
         select(
+            Account.id.label("portfolio_id"),
+            Account.name.label("portfolio_name"),
             Account.cash,
             Account.starting_cash,
             Coin.symbol,
@@ -80,19 +92,30 @@ async def get_portfolio(
             *authority.c,
         )
         .select_from(Account)
-        .outerjoin(Holding, and_(Holding.user_id == Account.user_id, Holding.quantity > 0))
+        .outerjoin(
+            Holding,
+            and_(
+                Holding.portfolio_id == Account.id,
+                Holding.user_id == Account.user_id,
+                Holding.quantity > 0,
+            ),
+        )
         .outerjoin(Coin, Coin.id == Holding.coin_id)
         .outerjoin(Price, and_(Price.coin_id == Coin.id, Coin.asset_class == "crypto"))
         .outerjoin(StockInstrument, StockInstrument.coin_id == Coin.id)
         .outerjoin(StockQuote, StockQuote.coin_id == Coin.id)
         .join(authority, true())
-        .where(Account.user_id == user_id)
+        .where(
+            Account.id == portfolio.portfolio_id,
+            Account.user_id == portfolio.user_id,
+            Account.closed_at.is_(None),
+        )
         .order_by(Coin.symbol, Coin.id)
     )
     valued_at = now or datetime.now(UTC)  # Sample after the awaited statement.
     rows = result.all()
     if not rows:
-        raise RuntimeError("Authenticated user has no account")
+        raise HTTPException(status_code=404, detail={"code": "portfolio_unavailable"})
     positions = []
     marks = {}
     stock_rows = [r for r in rows if r.asset_class == "stock"]
@@ -149,6 +172,8 @@ async def get_portfolio(
             )
         )
     return PortfolioSnapshot(
+        portfolio_id=str(rows[0].portfolio_id),
+        name=rows[0].portfolio_name,
         **{f.name: getattr(value, f.name) for f in fields(value) if f.name != "holdings"},
         holdings=tuple(holdings),
         valued_at=valued_at,
