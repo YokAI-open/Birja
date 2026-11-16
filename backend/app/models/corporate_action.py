@@ -17,6 +17,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Numeric,
+    SmallInteger,
     Text,
     UniqueConstraint,
     text,
@@ -261,6 +262,10 @@ class StockSplitApplication(Base):
             "before_digest ~ '^[0-9a-f]{64}$' AND after_digest ~ '^[0-9a-f]{64}$'",
             name="digests_sha256",
         ),
+        CheckConstraint(
+            "owner_digest_version IS NULL OR owner_digest_version=2",
+            name="owner_digest_version_known",
+        ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
@@ -276,6 +281,7 @@ class StockSplitApplication(Base):
     sequence_boundary: Mapped[int] = mapped_column(BigInteger)
     before_digest: Mapped[str] = mapped_column(Text)
     after_digest: Mapped[str] = mapped_column(Text)
+    owner_digest_version: Mapped[int | None] = mapped_column(SmallInteger)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -283,9 +289,14 @@ class StockOwnershipMovement(Base):
     __tablename__ = "stock_ownership_movements"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["trade_id", "coin_id", "user_id"],
-            ["trades.id", "trades.coin_id", "trades.user_id"],
+            ["trade_id", "portfolio_id", "coin_id", "user_id"],
+            ["trades.id", "trades.portfolio_id", "trades.coin_id", "trades.user_id"],
             name="fk_stock_ownership_trade_owner_coin",
+        ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_stock_ownership_portfolio_owner",
         ),
         ForeignKeyConstraint(
             ["application_id", "coin_id", "unit_epoch"],
@@ -297,9 +308,11 @@ class StockOwnershipMovement(Base):
             name="fk_stock_ownership_split_coin_units",
         ),
         UniqueConstraint("trade_id", name="uq_stock_ownership_trade"),
-        UniqueConstraint("application_id", "user_id", name="uq_stock_ownership_application_user"),
+        UniqueConstraint(
+            "application_id", "portfolio_id", name="uq_stock_ownership_application_portfolio"
+        ),
         UniqueConstraint("coin_id", "sequence", name="uq_stock_ownership_sequence"),
-        UniqueConstraint("coin_id", "causal_key", "user_id", name="uq_stock_ownership_cause"),
+        UniqueConstraint("coin_id", "causal_key", "portfolio_id", name="uq_stock_ownership_cause"),
         safe("sequence", positive=True),
         safe("unit_epoch"),
         bounded("causal_key", 256),
@@ -354,8 +367,11 @@ class StockOwnershipMovement(Base):
         ),
         Index("ix_stock_ownership_user_economic_id", "user_id", "economic_at", "id"),
         Index("ix_stock_ownership_user_recorded_id", "user_id", "recorded_at", "id"),
+        Index("ix_stock_ownership_portfolio_economic_id", "portfolio_id", "economic_at", "id"),
+        Index("ix_stock_ownership_portfolio_recorded_id", "portfolio_id", "recorded_at", "id"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
     coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     sequence: Mapped[int] = mapped_column(BigInteger)
@@ -378,21 +394,31 @@ class StockOwnershipMovement(Base):
 class StockDividendEntitlement(Base):
     __tablename__ = "stock_dividend_entitlements"
     __table_args__ = (
-        UniqueConstraint("id", "event_id", "user_id", name="uq_stock_entitlement_id_event_user"),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_stock_entitlement_portfolio_owner",
+        ),
+        UniqueConstraint(
+            "id", "event_id", "portfolio_id", "user_id", name="uq_stock_entitlement_id_event_user"
+        ),
         UniqueConstraint(
             "id",
             "event_id",
+            "portfolio_id",
             "user_id",
             "revision_id",
             "fingerprint",
             name="uq_stock_entitlement_dividend_identity",
         ),
-        Index("ix_stock_entitlement_current_work", "event_id", "user_id", "id"),
+        Index("ix_stock_entitlement_current_work", "event_id", "portfolio_id", "id"),
+        Index("ix_stock_entitlement_portfolio_id", "portfolio_id"),
         ForeignKeyConstraint(
-            ["supersedes_id", "event_id", "user_id"],
+            ["supersedes_id", "event_id", "portfolio_id", "user_id"],
             [
                 "stock_dividend_entitlements.id",
                 "stock_dividend_entitlements.event_id",
+                "stock_dividend_entitlements.portfolio_id",
                 "stock_dividend_entitlements.user_id",
             ],
             name="fk_stock_entitlement_supersedes_owner_event",
@@ -404,7 +430,7 @@ class StockDividendEntitlement(Base):
         ),
         UniqueConstraint(
             "event_id",
-            "user_id",
+            "portfolio_id",
             "revision_id",
             "fingerprint",
             name="uq_stock_entitlement_revision_fingerprint",
@@ -430,6 +456,7 @@ class StockDividendEntitlement(Base):
         ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
     event_id: Mapped[int] = mapped_column(ForeignKey("stock_action_events.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     revision_id: Mapped[int] = mapped_column(BigInteger)
@@ -445,6 +472,30 @@ class StockDividendEntitlement(Base):
         ForeignKey("stock_dividend_entitlements.id"), index=True
     )
     fingerprint: Mapped[str] = mapped_column(Text)
+
+
+class PortfolioStockClosure(Base):
+    """Immutable terminal journal boundary; ordinary runtime roles cannot write it."""
+
+    __tablename__ = "portfolio_stock_closures"
+    __table_args__ = (
+        UniqueConstraint("portfolio_id", "coin_id", name="uq_portfolio_stock_closure_root_coin"),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_portfolio_stock_closure_owner",
+        ),
+        Index("ix_portfolio_stock_closures_user_id", "user_id"),
+        safe("closing_sequence"),
+        safe("unit_epoch"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"), index=True)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closing_sequence: Mapped[int] = mapped_column(BigInteger)
+    unit_epoch: Mapped[int] = mapped_column(BigInteger)
 
 
 class StockActionResolution(Base):

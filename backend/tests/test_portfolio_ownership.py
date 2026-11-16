@@ -156,6 +156,174 @@ def test_model_metadata_trade_owned_cause_key_keeps_user_global_retry_and_fill_f
     }
 
 
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "StockFillFacts",
+        "StockOwnershipMovement",
+        "StockDividendEntitlement",
+        "PortfolioStockClosure",
+    ],
+)
+def test_model_metadata_stock_rows_pair_root_and_owner(model_name):
+    from sqlalchemy import BigInteger
+
+    from app.models.corporate_action import (
+        PortfolioStockClosure,
+        StockDividendEntitlement,
+        StockOwnershipMovement,
+    )
+    from app.models.stock_execution import StockFillFacts
+
+    table = {
+        model.__name__: model
+        for model in (
+            StockFillFacts,
+            StockOwnershipMovement,
+            StockDividendEntitlement,
+            PortfolioStockClosure,
+        )
+    }[model_name].__table__
+    assert isinstance(table.c.portfolio_id.type, BigInteger)
+    assert not table.c.portfolio_id.nullable
+    assert table.c.portfolio_id.default is None and table.c.portfolio_id.server_default is None
+    paired = [
+        fk
+        for fk in table.foreign_key_constraints
+        if tuple(fk.column_keys) == ("portfolio_id", "user_id")
+    ]
+    assert len(paired) == 1
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "accounts.id",
+        "accounts.user_id",
+    )
+    assert all(fk.ondelete is None and fk.onupdate is None for fk in table.foreign_key_constraints)
+
+
+@pytest.mark.parametrize("model_name", ["StockFillFacts", "StockOwnershipMovement"])
+def test_model_metadata_stock_trade_causes_include_same_portfolio(model_name):
+    from app.models.corporate_action import StockOwnershipMovement
+    from app.models.stock_execution import StockFillFacts
+
+    table = {model.__name__: model for model in (StockFillFacts, StockOwnershipMovement)}[
+        model_name
+    ].__table__
+    cause = [fk for fk in table.foreign_key_constraints if "trade_id" in fk.column_keys]
+    paired = [fk for fk in cause if len(fk.column_keys) > 1]
+    assert len(paired) == 1
+    assert tuple(paired[0].column_keys) == ("trade_id", "portfolio_id", "coin_id", "user_id")
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "trades.id",
+        "trades.portfolio_id",
+        "trades.coin_id",
+        "trades.user_id",
+    )
+
+
+def test_model_metadata_split_application_global_marker_and_owned_movements():
+    from sqlalchemy import CheckConstraint, SmallInteger
+
+    from app.models.corporate_action import StockOwnershipMovement, StockSplitApplication
+
+    application = StockSplitApplication.__table__
+    assert "portfolio_id" not in application.c and "user_id" not in application.c
+    assert isinstance(application.c.owner_digest_version.type, SmallInteger)
+    assert application.c.owner_digest_version.nullable
+    assert application.c.owner_digest_version.default is None
+    assert application.c.owner_digest_version.server_default is None
+    checks = {str(c.sqltext) for c in application.constraints if isinstance(c, CheckConstraint)}
+    assert "owner_digest_version IS NULL OR owner_digest_version=2" in checks
+    unique = {
+        tuple(c.columns.keys()) for c in application.constraints if isinstance(c, UniqueConstraint)
+    }
+    assert ("economic_event_id",) in unique
+    assert ("id", "coin_id", "new_unit_epoch") in unique
+    movement = StockOwnershipMovement.__table__
+    unique = {
+        tuple(c.columns.keys()) for c in movement.constraints if isinstance(c, UniqueConstraint)
+    }
+    assert ("application_id", "portfolio_id") in unique
+    assert ("application_id", "user_id") not in unique
+    assert ("coin_id", "sequence") in unique
+    assert ("coin_id", "causal_key", "portfolio_id") in unique
+    cause = next(
+        fk
+        for fk in movement.foreign_key_constraints
+        if tuple(fk.column_keys) == ("application_id", "coin_id", "unit_epoch")
+    )
+    assert tuple(e.target_fullname for e in cause.elements) == (
+        "stock_split_applications.id",
+        "stock_split_applications.coin_id",
+        "stock_split_applications.new_unit_epoch",
+    )
+
+
+def test_model_metadata_terminal_stock_boundary_does_not_partition_global_epochs():
+    from sqlalchemy import CheckConstraint
+
+    from app.models.corporate_action import PortfolioStockClosure, StockActionState
+
+    table = PortfolioStockClosure.__table__
+    assert set(table.c.keys()) == {
+        "id",
+        "portfolio_id",
+        "user_id",
+        "coin_id",
+        "closed_at",
+        "closing_sequence",
+        "unit_epoch",
+    }
+    assert table.c.id.identity.always and table.c.id.primary_key
+    assert not table.c.closed_at.nullable and table.c.closed_at.type.timezone
+    assert ("portfolio_id", "coin_id") in {
+        tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)
+    }
+    checks = {str(c.sqltext) for c in table.constraints if isinstance(c, CheckConstraint)}
+    assert "closing_sequence BETWEEN 0 AND 9007199254740991" in checks
+    assert "unit_epoch BETWEEN 0 AND 9007199254740991" in checks
+    assert "portfolio_id" not in StockActionState.__table__.c
+    assert tuple(StockActionState.__table__.primary_key.columns.keys()) == ("coin_id",)
+
+
+async def test_final_sql_terminal_stock_boundary_rejects_foreign_owner(portfolio_world):
+    conn, world = portfolio_world
+    stock = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO portfolio_stock_closures "
+                    "(portfolio_id,user_id,coin_id,closed_at,closing_sequence,unit_epoch) "
+                    "VALUES (:p,:u,:c,clock_timestamp(),0,0)"
+                ),
+                {"p": world.foreign, "u": world.owner, "c": stock},
+            )
+    assert err.value.orig.sqlstate == "23503"
+
+
+@pytest.mark.parametrize("marker", [None, 1, 3])
+async def test_final_sql_new_split_requires_explicit_supported_digest_marker(
+    portfolio_world, marker
+):
+    from tests.test_stock_action_migrations import event
+
+    conn, _ = portfolio_world
+    stock = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+    eid, _, rid = await event(conn, stock)
+    with pytest.raises(IntegrityError):
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO stock_split_applications "
+                    "(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,"
+                    "prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,"
+                    "processed_at,owner_digest_version) VALUES "
+                    "(:c,:e,:r,'2','1',now(),0,1,0,:d,:d,now(),:v)"
+                ),
+                {"c": stock, "e": eid, "r": rid, "d": "a" * 64, "v": marker},
+            )
+
+
 async def test_final_sql_same_root_coin_holding_is_unique(portfolio_world):
     conn, world = portfolio_world
     with pytest.raises(IntegrityError) as err:
