@@ -94,7 +94,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 12-09-PLAN.md — Versioned identity HTTP and legacy OTP refusal
+- [x] 12-09-PLAN.md — Versioned identity HTTP and legacy OTP refusal
 - [ ] 12-10-PLAN.md — Explicit crypto execution and retry ownership
 - [ ] 12-12-PLAN.md — Root-specific stock journals and terminal split reconstruction
 
@@ -266,7 +266,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 8/28 | In progress; next12-09 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 9/28 | In progress; next12-10 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-08-PLAN.md; next12-09. Phase execution continues locally.
-last_updated: "2026-11-16T09:49:38.842Z"
+stopped_at: Completed12-09-PLAN.md; next12-10. Phase execution continues locally.
+last_updated: "2026-11-16T09:57:52.512Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 8
-  percent: 29
+  completed_plans: 9
+  percent: 32
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–08 complete through actual0017 and explicit owned-active/identity-only service contracts. Next12-09 must integrate v2 identity HTTP and retire legacy cash-bearing identity calls. All28 requirements remain unchecked; integrated services, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–09 complete through actual0017 and versioned identity HTTP/legacy refusal. Next12-10 implements explicit crypto execution. All28 requirements remain unchecked; financial services, production v2 composition, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 9 of 28
-Status: Executing Phase12; Plans01–08 complete, next12-09
-Last activity: 2026-11-16 — Explicit resolver11 and identity/session12 cases pass; next12-09 HTTP integration
+Plan: 10 of 28
+Status: Executing Phase12; Plans01–09 complete, next12-10
+Last activity: 2026-11-16 — Versioned identity/refusal and retained auth/security regressions96 pass; next12-10
 
-Progress: [███░░░░░░░] 29%
+Progress: [███░░░░░░░] 32%
 
 ## Accepted Closeout and Release Boundary
 
@@ -141,10 +141,14 @@ inventory and grants required by16/17. Next12-08;0015/16 remain migration-only.
 Plan08 adds frozen explicit owned-active resolution, IdentityOut and ordered
 string-ID metadata, with11 resolver/contract/path cases and12 real identity/OTP/
 session/onboarding cases passing. Returning identities never create or regrant.
-Optional legacy HTTP regression run has16 expected MeOut/cash_usd response
-failures pending09's explicit v1 refusal/v2 identity routes; do not claim the
-full auth suite green. See12-08-SUMMARY.md. Next12-09; verified TLS, complete
-service integration and exact recovery remain pending.
+The historical Plan08 HTTP regression run had16 MeOut/cash_usd failures;
+Plan09 now resolves those compatibility consumers through actual v2 identity
+and pre-consumption v1 refusal. New11 HTTP cases and affected retained auth,
+OTP, session and rate-limit families total96 passing; two affected stored-funding
+checks also pass. Test-only actual-router composition is explicit;15 must move
+registration into production create_app and remove redundant test mounts.
+See12-09-SUMMARY.md. Next12-10; complete financial integration, verified TLS,
+coverage/security, exact recovery and owner UI remain pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -161,9 +165,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 |---|---|---|---|---|
 | 12 | 07 | 26 min | 2 | 7 |
 | 12 | 08 | 8 min | 2 | 8 |
+| 12 | 09 | 7 min | 2 | 13 |
 
 ## Execution Session
 
-Last session: 2026-11-16T09:49:18.631Z
-Stopped at: Completed12-08-PLAN.md; next12-09. Phase execution continues locally.
+Last session: 2026-11-16T09:57:52.489Z
+Stopped at: Completed12-09-PLAN.md; next12-10. Phase execution continues locally.
 Resume file: None
