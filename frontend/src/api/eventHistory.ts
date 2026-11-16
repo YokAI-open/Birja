@@ -1,4 +1,6 @@
 import { apiFetch } from "./client";
+import { isPortfolioId } from "./portfolios";
+import { isPortfolioHistoryCursor } from "./history";
 
 type EventBase<K extends string, A extends "crypto" | "stock"> = {
   kind: K;
@@ -273,27 +275,10 @@ function item(v: unknown): v is EventHistoryItem {
     cents(v.applied_delta, true) === 0n
   );
 }
-function cursorToken(v: unknown): v is string {
-  if (typeof v !== "string" || v.length > 512 || !/^[A-Za-z0-9_-]+$/.test(v)) return false;
-  try {
-    const raw = atob(v.replace(/-/g, "+").replace(/_/g, "/"));
-    if (btoa(raw).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_") !== v) return false;
-    const decoded: unknown = JSON.parse(raw);
-    return (
-      record(decoded) &&
-      exact(decoded, "v recorded_at kind_rank source_id") &&
-      JSON.stringify(decoded) === raw &&
-      decoded.v === 2 &&
-      timestamp(decoded.recorded_at) &&
-      /^.*\.\d{6}Z$/.test(decoded.recorded_at) &&
-      [1, 2, 3, 4].includes(decoded.kind_rank as number) &&
-      id(decoded.source_id)
-    );
-  } catch {
-    return false;
-  }
-}
-export function isEventHistoryPage(value: unknown): value is EventHistoryPage {
+export function isEventHistoryPage(
+  value: unknown,
+  portfolioId?: string,
+): value is EventHistoryPage {
   return (
     record(value) &&
     exact(value, "items next_cursor") &&
@@ -301,17 +286,20 @@ export function isEventHistoryPage(value: unknown): value is EventHistoryPage {
     value.items.length <= 100 &&
     value.items.every(item) &&
     new Set(value.items.map((v) => v.id)).size === value.items.length &&
-    (value.next_cursor === null || cursorToken(value.next_cursor))
+    (value.next_cursor === null ||
+      isPortfolioHistoryCursor(value.next_cursor, "mixed", portfolioId))
   );
 }
 
 export async function fetchEventHistory(
+  portfolioId: string,
   { cursor, limit }: { cursor?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<EventHistoryPage> {
   signal?.throwIfAborted();
+  if (!isPortfolioId(portfolioId)) throw new Error("Invalid portfolio target");
   if (
-    (cursor !== undefined && !cursorToken(cursor)) ||
+    (cursor !== undefined && !isPortfolioHistoryCursor(cursor, "mixed", portfolioId)) ||
     (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100))
   )
     throw new Error("Invalid event history request");
@@ -319,11 +307,14 @@ export async function fetchEventHistory(
   if (cursor !== undefined) params.set("cursor", cursor);
   if (limit !== undefined) params.set("limit", String(limit));
   const query = params.toString();
-  const body = await apiFetch(`/api/v1/history${query ? `?${query}` : ""}`, {
-    signal,
-    cache: "no-store",
-  });
-  if (!isEventHistoryPage(body) || body.items.length > (limit ?? 25))
+  const body = await apiFetch(
+    `/api/v2/portfolios/${encodeURIComponent(portfolioId)}/event-history${query ? `?${query}` : ""}`,
+    {
+      signal,
+      cache: "no-store",
+    },
+  );
+  if (!isEventHistoryPage(body, portfolioId) || body.items.length > (limit ?? 25))
     throw new Error("Unexpected event history response");
   signal?.throwIfAborted();
   return body;
