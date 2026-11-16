@@ -108,10 +108,10 @@ async def test_second_sign_in_keeps_cash(
         code = await request_and_get_code(auth_client, outbox, email)
         headers = await csrf_headers(auth_client)
         resp = await auth_client.post(
-            "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
+            "/api/v2/auth/verify-code", json={"email": email, "code": code}, headers=headers
         )
         assert resp.status_code == 200
-        assert Decimal(resp.json()["cash_usd"]) == Decimal("10000.00")
+        assert resp.json() == {"email": email}
     async with sessions() as db:
         n = (
             await db.execute(

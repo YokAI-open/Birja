@@ -59,9 +59,14 @@ async def redis_client(settings: Settings) -> AsyncIterator[Redis]:
 
 @pytest.fixture(scope="session")
 def app(settings: Settings) -> FastAPI:
+    from app.api.v2.router import api_router as identity_router
     from app.main import create_app
 
-    return create_app(settings)
+    composition = create_app(settings)
+    # Phase12 test-only composition of actual routers; Plan15 must move this
+    # registration into create_app and prove production route reachability.
+    composition.include_router(identity_router, prefix="/api/v2")
+    return composition
 
 
 @pytest.fixture(scope="session")

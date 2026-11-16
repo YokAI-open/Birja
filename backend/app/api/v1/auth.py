@@ -19,9 +19,9 @@ from app.core.security import (
     set_csrf_cookie,
     set_session_cookies,
 )
-from app.schemas.auth import CodeSentOut, MeOut, RequestCodeIn, VerifyCodeIn
+from app.schemas.auth import CodeSentOut, RequestCodeIn, VerifyCodeIn
 from app.services import auth as auth_service
-from app.services.auth import InvalidCode, InvalidSession
+from app.services.auth import InvalidSession
 from app.services.ratelimit import RateLimited
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -82,40 +82,18 @@ async def request_code(
 
 @router.post(
     "/verify-code",
-    status_code=200,
-    response_model=MeOut,
-    summary="Sign in with a code",
-    description="Verifies the emailed code. Every failure (wrong, reused, expired, "
-    "replaced, too many attempts) returns the same 400. The first success creates "
-    "the user and their $10,000.00 account.",
+    status_code=409,
+    summary="Refuse obsolete cash-bearing sign-in",
+    description="Use /api/v2/auth/verify-code. This legacy call never consumes a code "
+    "or creates a session.",
     dependencies=[Depends(verify_csrf)],
-    responses=_RATE_LIMITED_DOC,
 )
-async def verify_code(
-    body: VerifyCodeIn,
-    response: Response,
-    db: DbDep,
-    redis: RedisDep,
-    otp: OtpStoreDep,
-    settings: SettingsDep,
-    ip: ClientIpDep,
-) -> MeOut:
-    try:
-        me, issued = await auth_service.verify_code(
-            db, redis, otp, settings, body.email, body.code, ip
-        )
-    except RateLimited as exc:
-        raise _rate_limited(exc) from None
-    except InvalidCode:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "invalid_code",
-                "message": "That code is wrong or has expired. Check it or request a new code.",
-            },
-        ) from None
-    set_session_cookies(response, issued.access, issued.refresh, issued.csrf)
-    return me
+async def verify_code(body: VerifyCodeIn) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={"code": "api_version_required"},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post(

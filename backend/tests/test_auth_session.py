@@ -144,7 +144,7 @@ async def test_sign_in_sets_three_cookies_and_rotates_csrf(
     assert "max-age=2592000" in cookies["bj_refresh"]
     assert "httponly" not in cookies["bj_csrf"]
     assert auth_client.cookies["bj_csrf"] != before
-    assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}
+    assert resp.json() == {"email": email}
 
 
 async def test_session_and_refresh_rows_store_only_hash(
@@ -169,14 +169,14 @@ async def test_session_and_refresh_rows_store_only_hash(
     assert all(raw_refresh not in row[0] for row in dump)
 
 
-async def test_me_returns_user_and_cash(
+async def test_me_returns_identity_without_cash(
     auth_client: httpx.AsyncClient, outbox: OutboxSender
 ) -> None:
     email = unique_email()
     await sign_in(auth_client, outbox, email)
-    resp = await auth_client.get("/api/v1/me")
+    resp = await auth_client.get("/api/v2/me")
     assert resp.status_code == 200
-    assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}
+    assert resp.json() == {"email": email}
 
 
 def _assert_401(resp: httpx.Response) -> None:
@@ -185,12 +185,12 @@ def _assert_401(resp: httpx.Response) -> None:
 
 
 async def test_me_without_cookie_is_401(auth_client: httpx.AsyncClient) -> None:
-    _assert_401(await auth_client.get("/api/v1/me"))
+    _assert_401(await auth_client.get("/api/v2/me"))
 
 
 async def _me_with_token(client: httpx.AsyncClient, token: str) -> httpx.Response:
     client.cookies.clear()
-    return await client.get("/api/v1/me", headers={"Cookie": f"bj_access={token}"})
+    return await client.get("/api/v2/me", headers={"Cookie": f"bj_access={token}"})
 
 
 async def test_me_rejects_bad_tokens(
@@ -228,7 +228,7 @@ async def test_me_rejects_revoked_session(
             update(AuthSession).where(AuthSession.id == sid).values(revoked_at=datetime.now(UTC))
         )
         await db.commit()
-    _assert_401(await auth_client.get("/api/v1/me"))
+    _assert_401(await auth_client.get("/api/v2/me"))
 
 
 async def test_me_rejects_mixed_user_and_session(
@@ -301,7 +301,7 @@ async def test_refresh_rotates_tokens(
     assert "httponly" in cookies["bj_access"] and "httponly" in cookies["bj_refresh"]
     assert "path=/api/v1/auth/refresh" in cookies["bj_refresh"]
     assert _cookie(resp, "bj_refresh") != old_refresh
-    assert (await auth_client.get("/api/v1/me")).status_code == 200
+    assert (await auth_client.get("/api/v2/me")).status_code == 200
 
     sessions = async_sessionmaker(engine)
     async with sessions() as db:
@@ -506,7 +506,7 @@ async def test_sign_in_after_logout_keeps_cash_at_10000(
     headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
     assert (await auth_client.post("/api/v1/auth/logout", headers=headers)).status_code == 204
     resp = await sign_in(auth_client, outbox, email)
-    assert resp.json() == {"email": email, "cash_usd": "10000.00000000"}
+    assert resp.json() == {"email": email}
     async with engine.connect() as conn:
         n = (
             await conn.execute(
@@ -518,3 +518,14 @@ async def test_sign_in_after_logout_keeps_cash_at_10000(
             )
         ).scalar_one()
     assert n == 1
+    async with engine.connect() as conn:
+        cash, baseline = (
+            await conn.execute(
+                text(
+                    "SELECT a.cash,a.starting_cash FROM accounts a "
+                    "JOIN users u ON u.id=a.user_id WHERE u.email=:e"
+                ),
+                {"e": email},
+            )
+        ).one()
+    assert cash == baseline == 10000

@@ -40,7 +40,7 @@ async def sign_in(client: httpx.AsyncClient, outbox: OutboxSender, email: str) -
     code = await request_and_get_code(client, outbox, email)
     headers = {"X-CSRF-Token": client.cookies["bj_csrf"]}
     resp = await client.post(
-        "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
+        "/api/v2/auth/verify-code", json={"email": email, "code": code}, headers=headers
     )
     assert resp.status_code == 200
     return resp

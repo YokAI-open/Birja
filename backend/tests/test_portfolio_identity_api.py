@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.api.v2.router import api_router
 from app.core.config import Settings
 from app.main import create_app
+from app.models.auth import AuthSession
 from app.models.user import Account, User
 from tests.helpers import csrf_headers, request_and_get_code, unique_email
 
@@ -128,3 +129,64 @@ async def test_versioned_no_unauthenticated_identity(auth_client):
     response = await auth_client.get("/api/v2/me")
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "not_authenticated"
+
+
+async def test_legacy_refusal_leaves_valid_otp_and_database_untouched(
+    auth_client, outbox, running_app, engine, redis_client
+):
+    email = unique_email("legacy")
+    code = await request_and_get_code(auth_client, outbox, email)
+    otp_key = "sim:otp:" + running_app.state.otp_store.email_key(email)
+    before_otp = await redis_client.hgetall(otp_key)
+    payload = {"email": email, "code": code}
+    headers = {"X-CSRF-Token": auth_client.cookies["bj_csrf"]}
+    for _ in range(2):
+        refused = await auth_client.post("/api/v1/auth/verify-code", json=payload, headers=headers)
+        assert refused.status_code == 409
+        assert refused.json() == {"detail": {"code": "api_version_required"}}
+        assert refused.headers["cache-control"] == "no-store"
+        assert not refused.headers.get_list("set-cookie")
+        assert "bj_access" not in auth_client.cookies
+        assert "bj_refresh" not in auth_client.cookies
+        assert await redis_client.hgetall(otp_key) == before_otp
+    async with engine.connect() as conn:
+        assert (await conn.execute(select(User.id).where(User.email == email))).first() is None
+    accepted = await auth_client.post("/api/v2/auth/verify-code", json=payload, headers=headers)
+    assert accepted.status_code == 200 and accepted.json() == {"email": email}
+    reused = await auth_client.post(
+        "/api/v2/auth/verify-code",
+        json=payload,
+        headers={"X-CSRF-Token": auth_client.cookies["bj_csrf"]},
+    )
+    assert reused.status_code == 400 and reused.json()["detail"]["code"] == "invalid_code"
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(select(AuthSession.id).join(User).where(User.email == email))
+        ).all()
+    assert len(rows) == 1
+
+
+async def test_legacy_me_never_returns_or_selects_portfolio(auth_client, outbox, engine):
+    email = unique_email("legacy-me")
+    assert (await _verify(auth_client, outbox, email)).status_code == 200
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessions() as db:
+        uid = (await db.execute(select(User.id).where(User.email == email))).scalar_one()
+        db.add(Account(user_id=uid, name="Other", cash=Decimal("37"), starting_cash=Decimal("42")))
+        await db.commit()
+    refused = await auth_client.get("/api/v1/me")
+    assert refused.status_code == 409
+    assert refused.json() == {"detail": {"code": "api_version_required"}}
+    assert refused.headers["cache-control"] == "no-store"
+    assert not refused.headers.get_list("set-cookie")
+    assert (await auth_client.get("/api/v2/me")).json() == {"email": email}
+
+
+async def test_legacy_refusal_keeps_csrf_and_authentication_checks(auth_client):
+    missing = await auth_client.post(
+        "/api/v1/auth/verify-code", json={"email": unique_email(), "code": "123456"}
+    )
+    assert missing.status_code == 403 and missing.json()["detail"]["code"] == "csrf_failed"
+    unauthenticated = await auth_client.get("/api/v1/me")
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.json()["detail"]["code"] == "not_authenticated"
