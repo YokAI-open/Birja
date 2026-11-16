@@ -107,7 +107,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 12-14-PLAN.md — Scoped valuation and private mixed History
+- [x] 12-14-PLAN.md — Scoped valuation and private mixed History
 - [ ] 12-16-PLAN.md — Restricted bootstrap and resumable migration-to-final path
 
 **Wave 11** *(blocked on Wave 10 completion)*
@@ -268,7 +268,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 13/28 | In progress; next12-14 by wave order | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 14/28 | In progress; next12-16 by wave order | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
