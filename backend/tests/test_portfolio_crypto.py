@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.models.price import Price
@@ -280,3 +280,33 @@ async def test_price_change_is_read_only_and_quote_stays_in_original_root(crypto
         await fill(factory, root, settings, expected="99")
     assert exc.value.quote.portfolio_id == root.portfolio_id
     assert await snapshot(factory, root) == before
+
+
+async def test_restricted_application_role_can_create_only_target_holding(
+    crypto_books, settings, engine
+):
+    factory, (root, sibling, *_), _ = crypto_books
+    await put_price(engine, "ETH", "100", datetime.now(UTC))
+    before = await snapshot(factory, sibling)
+    async with factory() as db:
+        await db.execute(text("SET LOCAL ROLE birja_app"))
+        receipt, created = await trading.execute(
+            db,
+            portfolio=root,
+            order=trading.Order("ETH", "buy", "quantity", Decimal("1")),
+            expected_mid=Decimal("100"),
+            idempotency_key=uuid4(),
+            settings=settings,
+        )
+    assert created and receipt.cash_after == Decimal("899.50")
+    async with factory() as db:
+        await db.execute(text("SET LOCAL ROLE birja_app"))
+        assert await trading.holding_quantity(db, portfolio=root, symbol="ETH") == (
+            "ETH",
+            Decimal("1"),
+        )
+        assert await trading.holding_quantity(db, portfolio=sibling, symbol="ETH") == (
+            "ETH",
+            Decimal("0"),
+        )
+    assert await snapshot(factory, sibling) == before

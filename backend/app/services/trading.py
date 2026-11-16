@@ -3,7 +3,7 @@
 Both go through ``plan_trade`` so the preview and the fill can never disagree. ``execute`` runs
 in one transaction with a fixed lock order (account row, then holding row) and this check order:
 
-1. lock the account row FOR UPDATE (serialises every trade of one user),
+1. lock the explicit active account row FOR UPDATE (serialises one portfolio),
 2. idempotency replay lookup, before any price check (a replay must not depend on today's price),
 3. Live price only (D-03: the single ``freshness`` definition from Phase 3),
 4. lock the holding row FOR UPDATE, plan the trade,
