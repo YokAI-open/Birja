@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-12-PLAN.md; next12-11 by wave dependency. Phase continues locally.
-last_updated: "2026-11-16T10:30:28.370Z"
+stopped_at: Completed12-11-PLAN.md; next12-13 by wave dependency. Phase continues locally.
+last_updated: "2026-11-16T10:45:24.186Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 11
-  percent: 39
+  completed_plans: 12
+  percent: 43
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–10 and12 are complete through actual0017, versioned identity HTTP, explicit crypto and owned stock journals/splits. Next12-11 supplies stock execution by approved wave dependencies. All28 requirements remain unchecked; remaining financial services, production v2 composition, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–12 are complete through actual0017, versioned identity HTTP, explicit crypto/stock execution and owned stock journals/splits. Next12-13 supplies portfolio-derived entitlements and dividend workers. All28 requirements remain unchecked; financial read services, production v2 composition, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 11 of 28 by dependency order; 11 plans complete
-Status: Executing Phase12; Plans01–10 and12 complete, next12-11
-Last activity: 2026-11-16 — Owned journal/split29 pass; next12-11
+Plan: 13 of 28 by dependency order; 12 plans complete
+Status: Executing Phase12; Plans01–12 complete, next12-13
+Last activity: 2026-11-16 — Stock service25/API20 pass; next12-13
 
-Progress: [████░░░░░░] 39%
+Progress: [████░░░░░░] 43%
 
 ## Accepted Closeout and Release Boundary
 
@@ -167,6 +167,17 @@ lock_stock_portfolio_roots(bigint) in unmerged0017; exact owner/path/scheduler-o
 EXECUTE and no account UPDATE are tested. Plans16/17 must carry its body/ACL
 inventory;11 must supply StockMovementInput.portfolio_id and13 must reconstruct
 by portfolio rather than user. See12-12-SUMMARY.md. Next12-11 by wave order.
+Plan11 now supplies explicit-root stock context/quote/execute/replay and actual
+scoped stock HTTP with string portfolio IDs, paired fill/movement ownership and
+required original-root retry comparison for both stock and crypto consumers.
+25 real service and20 actual-router HTTP cases pass;24 crypto service and89
+unchanged stock arithmetic cases bring the focused run to158 passing. Actual
+birja_app fill, cross-asset spend/key races, close-while-waiting refusal and
+response-loss safe retry pass. See12-11-SUMMARY.md. Default followed-import
+mypy still reports3 retained v1 stock user_id calls;15 owns their deterministic
+unscoped refusal and production v2 registration. Explicit five-source typing
+passes with --follow-imports=silent; no full application type success claimed.
+Next12-13 by wave order. All requirements remain unchecked until final proof.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -186,9 +197,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | 12 | 09 | 7 min | 2 | 13 |
 | Phase 12 P10 | 10 min | 2 tasks | 6 files |
 | 12 | 12 | 20 min | 2 | 7 |
+| 12 | 11 | 13 min | 2 | 7 |
 
 ## Execution Session
 
-Last session: 2026-11-16T10:30:28.349Z
-Stopped at: Completed12-12-PLAN.md; next12-11 by wave dependency. Phase continues locally.
+Last session: 2026-11-16T10:45:24.163Z
+Stopped at: Completed12-11-PLAN.md; next12-13 by wave dependency. Phase continues locally.
 Resume file: None
