@@ -131,6 +131,17 @@ it.each([null, b])(
     client.setQueryData(["me"], a);
     client.setQueryData(["portfolio", a.email, "1"], "private A");
     client.setQueryData(["portfolios", a.email], [{ id: "1", name: "My portfolio" }]);
+    client.setQueryData(["prices"], { crypto: "global prices" });
+    const privateKeys = [
+      ["prices", a.email],
+      ["stocks", a.email],
+      ["stockContext", a.email, "1"],
+      ["cryptoTradeState", a.email, "1"],
+      ["stockTradeState", a.email, "1"],
+      ["eventHistory", a.email, "1"],
+      ["unknown", a.email],
+    ];
+    privateKeys.forEach((key) => client.setQueryData(key, "private A"));
     const { unmount } = renderHook(() => useMe(), {
       wrapper: ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -140,6 +151,8 @@ it.each([null, b])(
     act(() => client.setQueryData(["me"], next));
     expect(client.getQueryData(["portfolio", a.email, "1"])).toBeUndefined();
     expect(client.getQueryData(["portfolios", a.email])).toBeUndefined();
+    expect(client.getQueryData(["prices"])).toEqual({ crypto: "global prices" });
+    privateKeys.forEach((key) => expect(client.getQueryData(key)).toBeUndefined());
     expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(identityQuery);
     unmount();
     client.clear();

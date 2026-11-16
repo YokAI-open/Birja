@@ -17,8 +17,13 @@ function identityGuard(client: QueryClient): IdentityGuard {
     guard.email = email;
     guard.epoch++;
     // Removal cancels old in-flight private observers as well as cached data.
-    // Keep the identity query object attached during sign-out/account switches.
-    client.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
+    // Keep identity attached and the exact global, owner-independent crypto
+    // price cache. No other price-prefixed or financial query is shared.
+    client.removeQueries({
+      predicate: (query) =>
+        query.queryKey[0] !== "me" &&
+        !(query.queryKey.length === 1 && query.queryKey[0] === "prices"),
+    });
   });
   return guard;
 }
