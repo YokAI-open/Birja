@@ -19,7 +19,7 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; twenty-five plans are complete locally.
+at Phase 12. Phase 12 has 28 approved plans; twenty-six plans are complete locally.
 Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
 and schema-admission checks. Plan08 adds explicit root/identity service contracts;
 Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
@@ -143,7 +143,7 @@ Plans:
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
-- [ ] 12-26-PLAN.md — Browser proof harness and CI security/recovery graph
+- [x] 12-26-PLAN.md — Browser proof harness and CI security/recovery graph
 
 **Wave 17** *(blocked on Wave 16 completion)*
 
@@ -274,7 +274,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 25/28 | Wave15 complete; next12-26 browser/CI harness | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 26/28 | Wave16 complete; next12-27 full qualification | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
