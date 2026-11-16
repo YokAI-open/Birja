@@ -121,7 +121,7 @@ Plans:
 **Wave 12** *(blocked on Wave 11 completion)*
 
 - [x] 12-17-PLAN.md — Exact portfolio recovery producer and consumer contracts
-- [ ] 12-19-PLAN.md — Identity and explicit browser target discovery
+- [x] 12-19-PLAN.md — Identity and explicit browser target discovery
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
@@ -272,7 +272,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 17/28 | In progress; next12-19 by wave order | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 18/28 | In progress; next12-18 by wave order | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
