@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017")
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -378,6 +378,10 @@ def validate_resolution_authority(authority, revision='0012'):
 
 
 def identity_tables(revision):
+    if revision in ('0015', '0016'):
+        raise ValueError('migration_only')
+    if revision == '0017':
+        return sorted([*identity_tables('0014'), 'portfolio_stock_closures'])
     names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
     if revision in ("0009", "0010", "0011", "0012", "0013", "0014"):
         names += ["stock_sessions", "stock_data_admissions"]
@@ -410,6 +414,16 @@ def dump_identity_state(raw, revision="0011"):
 
 
 def contract_columns(revision):
+    if revision in ('0015', '0016'):
+        raise ValueError('migration_only')
+    if revision == '0017':
+        columns = contract_columns('0014')
+        columns['accounts'] |= {'name', 'closed_at'}
+        for table in PORTFOLIO_OWNED:
+            columns[table].add('portfolio_id')
+        columns['stock_split_applications'].add('owner_digest_version')
+        columns['portfolio_stock_closures'] = set('id portfolio_id user_id coin_id closed_at closing_sequence unit_epoch'.split())
+        return columns
     require(revision in SUPPORTED_REVISIONS)
     columns = dict(BASE_COLUMNS)
     if revision in ("0009", "0010", "0011", "0012", "0013", "0014"):
@@ -432,6 +446,8 @@ def manifest_sql(revision):
     All substitutions are fixed repository fragments, never operator input.
     """
     contract_columns(revision)
+    if revision == '0017':
+        return portfolio_manifest_sql()
     source = (HERE / "backup-manifest.sql").read_text()
     legacy = source.split("\n/* STOCK_COINS\n", 1)[0]
     if revision in ("0007", "0008"):
@@ -522,6 +538,8 @@ def schema_guard_sql(revision):
 def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
+    if manifest['revision'] == '0017':
+        validate_portfolio_manifest(manifest, quarantined=quarantined)
     if manifest['revision']=='0014':
         validate_dividend_authority(manifest.get('dividend_authority'),quarantined=quarantined)
     if manifest['revision'] in ('0012','0013','0014'):
@@ -679,6 +697,136 @@ def validate_manifest(manifest, *, quarantined=False):
                 "uq_stock_data_admissions_product",
             }
         )
+
+
+PORTFOLIO_OWNED = ('holdings', 'trades', 'stock_fill_facts',
+    'stock_ownership_movements', 'stock_dividend_entitlements',
+    'stock_dividend_payments', 'stock_dividend_decisions')
+# Independently pinned from actual migration0017 and the fixed bootstrap grant
+# contract. Neither the database under backup nor its manifest chooses these.
+PORTFOLIO_SCHEMA_SHA256 = 'a5426b54a96f536cdf6e76dd29b897a1b51b2d8ec681d36ddced25ce24b2467e'
+PORTFOLIO_AUTHORITY_SHA256 = 'dfbad9886f0426961b93391eeca78bce148202998bc1153b1932fc6012d3ba46'
+PORTFOLIO_QUARANTINED_SHA256 = '8165d7b045f7941137dc034f810344817a88c58308a0609117b6e149e51b19d3'
+PORTFOLIO_NO_ACL_SHA256 = 'bb026d36d4f80e7a70276dd6e59da3cbc639d5f266980a1925bcd32dbb08d2c5'
+
+
+# Frozen reviewed0017 bootstrap grants plus retained operator read boundary.
+PORTFOLIO_RESTORE_GRANTS = '\nGRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler;\nGRANT SELECT,INSERT ON public.users TO birja_app;\nGRANT SELECT,INSERT,UPDATE ON public.auth_sessions,public.refresh_tokens TO birja_app;\nGRANT SELECT ON public.coins,public.prices,public.trades,public.stock_instruments,\n public.stock_quotes,public.stock_sessions,public.stock_data_admissions,\n public.stock_action_events,public.stock_action_sources,public.stock_action_revisions,\n public.stock_action_observations,public.stock_action_state,public.stock_split_applications,\n public.stock_ownership_movements,public.stock_action_resolutions,public.stock_fill_facts,\n public.stock_status_evidence TO birja_app,birja_scheduler;\nGRANT INSERT ON public.trades,public.stock_fill_facts,public.stock_ownership_movements\n TO birja_app;\nGRANT SELECT,INSERT,UPDATE ON public.prices,public.stock_quotes,public.stock_sessions,\n public.stock_action_state,public.stock_status_evidence TO birja_scheduler;\nGRANT INSERT ON public.stock_action_events,public.stock_action_sources,\n public.stock_action_revisions,public.stock_action_observations,\n public.stock_split_applications,public.stock_ownership_movements,\n public.stock_dividend_entitlements TO birja_scheduler;\nGRANT UPDATE(current_revision_id) ON public.stock_action_events TO birja_scheduler;\nGRANT USAGE ON SEQUENCE public.users_id_seq,public.accounts_id_seq,\n public.auth_sessions_id_seq,public.refresh_tokens_id_seq,public.holdings_id_seq,\n public.trades_id_seq,public.stock_ownership_movements_id_seq TO birja_app;\nGRANT USAGE ON SEQUENCE public.stock_sessions_id_seq,public.stock_action_events_id_seq,\n public.stock_action_sources_id_seq,public.stock_action_revisions_id_seq,\n public.stock_action_observations_id_seq,public.stock_split_applications_id_seq,\n public.stock_ownership_movements_id_seq,public.stock_dividend_entitlements_id_seq\n TO birja_scheduler;\nREVOKE ALL ON public.stock_dividend_payments,public.stock_dividend_decisions\n FROM PUBLIC,birja_app,birja_scheduler;\nREVOKE ALL ON SEQUENCE public.stock_dividend_payments_id_seq,\n public.stock_dividend_decisions_id_seq FROM PUBLIC,birja_app,birja_scheduler;\nREVOKE ALL ON public.accounts,public.holdings,public.portfolio_stock_closures\n FROM PUBLIC,birja_app,birja_scheduler;\nREVOKE UPDATE(id,user_id,cash,starting_cash,created_at,name,closed_at)\n ON public.accounts FROM PUBLIC,birja_app,birja_scheduler;\nREVOKE UPDATE(id,user_id,coin_id,quantity,cost_basis,portfolio_id)\n ON public.holdings FROM PUBLIC,birja_app,birja_scheduler;\nGRANT SELECT,INSERT ON public.accounts,public.holdings TO birja_app;\nGRANT UPDATE(cash) ON public.accounts TO birja_app;\nGRANT UPDATE(quantity,cost_basis) ON public.holdings TO birja_app;\nGRANT SELECT ON public.accounts,public.holdings TO birja_scheduler;\nGRANT UPDATE(quantity) ON public.holdings TO birja_scheduler;\nGRANT SELECT ON public.portfolio_stock_closures,public.alembic_version,\n public.stock_dividend_entitlements,public.stock_dividend_payments,\n public.stock_dividend_decisions TO birja_app,birja_scheduler;\nGRANT SELECT ON public.trades TO birja_scheduler;\nREVOKE ALL ON FUNCTION public.check_portfolio_financial_write(),\n public.check_stock_split_digest_version(),public.lock_stock_portfolio_roots(bigint)\n FROM PUBLIC,birja_app,birja_scheduler;\nGRANT EXECUTE ON FUNCTION public.lock_stock_portfolio_roots(bigint) TO birja_scheduler;\nGRANT EXECUTE ON FUNCTION public.assert_stock_execution_current(bigint,bigint,jsonb)\n TO birja_app;\nREVOKE ALL ON FUNCTION public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb),\n public.reject_stock_dividend_mutation(),public.apply_stock_dividend(bigint,bigint,text,text),\n public.record_stock_dividend_hold(bigint,text) FROM PUBLIC,birja_app,birja_scheduler;\nGRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),\n public.record_stock_dividend_hold(bigint,text) TO birja_scheduler;\n\nGRANT USAGE ON SCHEMA public TO birja_action_operator;\nGRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;\nGRANT SELECT ON public.stock_action_events,public.stock_action_observations,public.stock_action_resolutions,public.stock_action_revisions,public.stock_action_sources,public.stock_action_state,public.stock_data_admissions,public.stock_dividend_entitlements,public.stock_instruments,public.stock_ownership_movements,public.stock_quotes,public.stock_sessions,public.stock_split_applications TO birja_action_operator;\nREVOKE ALL ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) FROM PUBLIC;\nGRANT EXECUTE ON FUNCTION public.apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) TO birja_action_operator;\n'
+
+def canonical_hash(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def portfolio_authority_sql():
+    """Complete public routine/trigger/role/ACL inventory, including overloads."""
+    return """json_build_object(
+      'functions',(SELECT json_agg(json_build_object('signature',p.oid::regprocedure::text,
+        'definition',pg_get_functiondef(p.oid),'owner',pg_get_userbyid(p.proowner),
+        'acl',(SELECT coalesce(json_agg(json_build_array(
+          CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END,
+          x.privilege_type,x.is_grantable) ORDER BY 1),'[]'::json)
+          FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x WHERE x.grantee<>p.proowner))
+        ORDER BY p.oid::regprocedure::text) FROM pg_proc p WHERE p.pronamespace='public'::regnamespace),
+      'triggers',(SELECT json_agg(json_build_array(c.relname,t.tgname,pg_get_triggerdef(t.oid),t.tgenabled)
+        ORDER BY c.relname,t.tgname) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+        WHERE c.relnamespace='public'::regnamespace AND NOT t.tgisinternal),
+      'owners',(SELECT json_agg(json_build_array(c.relname,pg_get_userbyid(c.relowner)) ORDER BY c.relname)
+        FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')),
+      'roles',(SELECT json_agg(json_build_array(rolname,rolinherit,rolsuper,rolcreatedb,
+        rolcreaterole,rolreplication,rolbypassrls) ORDER BY rolname) FROM pg_roles
+        WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')),
+      'memberships',(SELECT coalesce(json_agg(json_build_array(a.rolname,b.rolname,m.admin_option,m.inherit_option,m.set_option)
+        ORDER BY a.rolname,b.rolname),'[]'::json) FROM pg_auth_members m JOIN pg_roles a ON a.oid=m.roleid
+        JOIN pg_roles b ON b.oid=m.member WHERE a.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator','birja_action_operator') OR b.rolname IN
+        ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')),
+      'tables',(SELECT json_agg(json_build_array(r.rolname,c.relname,
+        has_table_privilege(r.oid,c.oid,'SELECT'),has_table_privilege(r.oid,c.oid,'INSERT'),
+        has_table_privilege(r.oid,c.oid,'UPDATE'),has_table_privilege(r.oid,c.oid,'DELETE'),
+        has_table_privilege(r.oid,c.oid,'TRUNCATE'),has_table_privilege(r.oid,c.oid,'REFERENCES'),
+        has_table_privilege(r.oid,c.oid,'TRIGGER'),has_table_privilege(r.oid,c.oid,'MAINTAIN')) ORDER BY r.rolname,c.relname)
+        FROM pg_roles r CROSS JOIN pg_class c WHERE r.rolname IN
+        ('birja_app','birja_scheduler','birja_action_operator') AND c.relnamespace='public'::regnamespace AND c.relkind='r'),
+      'columns',(SELECT json_agg(json_build_array(r.rolname,c.relname,a.attname,
+        has_column_privilege(r.oid,c.oid,a.attnum,'SELECT'),has_column_privilege(r.oid,c.oid,a.attnum,'INSERT'),
+        has_column_privilege(r.oid,c.oid,a.attnum,'UPDATE'),has_column_privilege(r.oid,c.oid,a.attnum,'REFERENCES'))
+        ORDER BY r.rolname,c.relname,a.attname) FROM pg_roles r CROSS JOIN pg_class c JOIN pg_attribute a
+        ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped WHERE r.rolname IN
+        ('birja_app','birja_scheduler','birja_action_operator') AND c.relnamespace='public'::regnamespace AND c.relkind='r'),
+      'sequences',(SELECT json_agg(json_build_array(r.rolname,c.relname,
+        has_sequence_privilege(r.oid,c.oid,'USAGE'),has_sequence_privilege(r.oid,c.oid,'SELECT'),
+        has_sequence_privilege(r.oid,c.oid,'UPDATE')) ORDER BY r.rolname,c.relname)
+        FROM pg_roles r CROSS JOIN pg_class c WHERE r.rolname IN
+        ('birja_app','birja_scheduler','birja_action_operator') AND c.relnamespace='public'::regnamespace AND c.relkind='S'),
+      'schema_create',(SELECT json_agg(json_build_array(r.rolname,has_schema_privilege(r.oid,'public','CREATE')) ORDER BY r.rolname)
+        FROM pg_roles r WHERE r.rolname IN ('birja_app','birja_scheduler','birja_action_operator')),
+      'unsafe_acl',(SELECT count(*) FROM (
+        SELECT c.relowner AS owner,x.* FROM pg_class c CROSS JOIN LATERAL
+          aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) x
+          WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')
+        UNION ALL SELECT c.relowner,x.* FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid
+          CROSS JOIN LATERAL aclexplode(a.attacl) x WHERE c.relnamespace='public'::regnamespace
+          AND a.attnum>0 AND NOT a.attisdropped
+        ) permission LEFT JOIN pg_roles r ON r.oid=permission.grantee
+        WHERE permission.grantee<>permission.owner AND NOT coalesce(r.rolsuper,false)
+          AND (permission.is_grantable OR permission.grantee=0 OR r.rolname NOT IN
+            ('birja_app','birja_scheduler','birja_action_operator'))))
+    """
+
+
+def portfolio_manifest_sql():
+    query = manifest_sql('0014')
+    for authority in (resolution_authority_sql(), execution_authority_sql(), dividend_authority_sql()):
+        require(query.count(authority) == 1)
+        query = query.replace(authority, 'NULL', 1)
+    additions = {table: 'portfolio_id::text' for table in PORTFOLIO_OWNED}
+    additions['accounts'] = "name,to_char(closed_at,'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
+    additions['stock_split_applications'] = 'owner_digest_version::text'
+    lines = query.splitlines()
+    for table, extra in additions.items():
+        matches = [i for i, line in enumerate(lines) if "SELECT '"+table+"'," in line and line.endswith(' FROM '+table)]
+        require(len(matches) == 1)
+        i = matches[0]
+        lines[i] = lines[i].replace(')::text FROM '+table, ','+extra+')::text FROM '+table)
+    query = '\n'.join(lines)
+    query = query.replace('\n), names(name) AS (',
+        "\n UNION ALL SELECT 'portfolio_stock_closures',id,json_build_array(id,portfolio_id,user_id,coin_id,"
+        "to_char(closed_at,'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),closing_sequence,unit_epoch)::text FROM portfolio_stock_closures\n), names(name) AS (")
+    query = query.replace("('stock_dividend_decisions')\n", "('stock_dividend_decisions'),('portfolio_stock_closures')\n")
+    query = query.replace(" 'schema',json_build_object(",
+        " 'portfolio_authority',"+portfolio_authority_sql()+",\n 'portfolio_state',json_build_object("
+        "'active',(SELECT count(*) FROM accounts WHERE closed_at IS NULL),"
+        "'closed',(SELECT count(*) FROM accounts WHERE closed_at IS NOT NULL),"
+        "'legacy_markers',(SELECT count(*) FROM stock_split_applications WHERE owner_digest_version IS NULL),"
+        "'v2_markers',(SELECT count(*) FROM stock_split_applications WHERE owner_digest_version=2),"
+        "'invalid',("+portfolio_invalid_sql()+")),\n 'schema',json_build_object(")
+    query = query.replace("SELECT 'users',last_value,is_called FROM users_id_seq",
+        "SELECT 'portfolio_stock_closures',last_value,is_called FROM portfolio_stock_closures_id_seq UNION ALL SELECT 'users',last_value,is_called FROM users_id_seq")
+    return query
+
+
+def portfolio_invalid_sql():
+    checks = ["(SELECT count(*) FROM "+table+" r LEFT JOIN accounts a ON a.id=r.portfolio_id AND a.user_id=r.user_id WHERE a.id IS NULL)"
+              for table in PORTFOLIO_OWNED]
+    checks += ["(SELECT count(*) FROM portfolio_stock_closures c LEFT JOIN accounts a ON a.id=c.portfolio_id AND a.user_id=c.user_id WHERE a.id IS NULL OR a.closed_at IS DISTINCT FROM c.closed_at)",
+        "(SELECT count(*) FROM stock_split_applications WHERE owner_digest_version IS NOT NULL AND owner_digest_version<>2)"]
+    return '+'.join(checks)
+
+
+def validate_portfolio_manifest(manifest, *, quarantined=False):
+    require(canonical_hash(manifest['schema']) == PORTFOLIO_SCHEMA_SHA256)
+    require(canonical_hash(manifest['portfolio_authority']) ==
+            (PORTFOLIO_QUARANTINED_SHA256 if quarantined else PORTFOLIO_AUTHORITY_SHA256))
+    state = manifest['portfolio_state']
+    require(set(state) == {'active','closed','legacy_markers','v2_markers','invalid'})
+    require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
+    require(state['active']+state['closed'] == manifest['tables']['accounts']['count'])
+    require(state['legacy_markers']+state['v2_markers'] == manifest['tables']['stock_split_applications']['count'])
+    require(manifest['stock_invalid'] == 0)
+    states = manifest['identity_state']
+    require(isinstance(states,list) and [row[0] for row in states] == identity_tables('0017'))
+    for _,value,called in states:
+        require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
 
 
 def strict_json(data):
@@ -1381,7 +1529,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012", "0013", "0014"):
+            if revision in ("0011", "0012", "0013", "0014", "0017"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)

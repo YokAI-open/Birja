@@ -68,3 +68,7 @@ STOCK_INVALID */
 -- for both definers and their private authority/immutability helpers. Restored
 -- clones authenticate these identities before fixed grants and withhold payout
 -- EXECUTE from both runtime roles; raw legacy SQL remains byte-compatible.
+-- Revision0017 is assembled only by the fixed portfolio_manifest_sql selector.
+-- It appends every owned root, terminal journal boundary and nullable global
+-- digest marker to the immutable projections, and adds complete fixed routine,
+-- trigger, role/ACL and sequence inventories.0015/16 are migration_only.
