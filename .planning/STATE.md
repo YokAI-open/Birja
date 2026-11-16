@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-last_updated: "2026-11-16T08:15:01.725Z"
+last_updated: "2026-11-16T08:21:31.949Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 1
-  percent: 4
+  completed_plans: 2
+  percent: 7
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 execution is authorized locally. Plan01 test foundation is complete; next is12-02. Portfolio features remain unimplemented and all28 milestone requirements pending. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 execution is authorized locally. Plans01–02 complete the test foundation and core model metadata; next is12-03. Runnable portfolio migration/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 2 of 28
-Status: Executing Phase12; Plan01 complete, next12-02
-Last activity: 2026-11-16 — Committed authenticated migration lane and preservation/isolation test oracles
+Plan: 3 of 28
+Status: Executing Phase12; Plans01–02 complete, next12-03
+Last activity: 2026-11-16 — Committed named owned-root/core financial metadata;8 metadata checks pass,21 ownership cases collect
 
-Progress: [░░░░░░░░░░] 4%
+Progress: [█░░░░░░░░░] 7%
 
 ## Accepted Closeout and Release Boundary
 
