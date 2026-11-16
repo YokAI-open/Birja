@@ -51,6 +51,19 @@ CRITICAL_MODULES = (
     "app/tasks/dividends.py",
     "app/tasks/scheduler.py",
     "app/db/dev_bootstrap.py",
+    "app/db/portfolio_bootstrap.py",
+    "app/db/portfolio_migrate.py",
+    "app/services/portfolios.py",
+    "app/api/v2/me.py",
+    "app/api/v2/auth.py",
+    "app/api/v2/portfolios.py",
+    "app/api/v2/trades.py",
+    "app/api/v2/stock_trades.py",
+    "app/api/v2/history.py",
+    "app/schemas/portfolios.py",
+    "app/db/schema_contract.py",
+    "app/api/v2/router.py",
+    "app/api/v1/legacy_finance.py",
 )
 
 

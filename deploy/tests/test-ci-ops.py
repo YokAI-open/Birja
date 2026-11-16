@@ -73,29 +73,34 @@ def image_policy(image, aggregate):
         raise ValueError("image is required")
 
 
-def recovery_policy(ops):
-    required = [
-        'archive = Path("/tmp/birja-backup-test-ci-final/recovery.tar")',
-        "ops.r.bundle_package(archive)", "ops.image_transition()",
-        "ops.roundtrip(archive)", "ops.roles()",
-        "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
-        '"--recovery-bundle", str(archive)], check=True)',
-        "assert ops.r.digest(archive) == expected",
-        "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
-        "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
-    ]
-    for text in required:
-        if text not in ops:
-            raise ValueError("missing retained recovery policy: " + text)
-    stages = required[1:7]
-    if [ops.index(text) for text in stages] != sorted(ops.index(text) for text in stages):
-        raise ValueError("recovery stages reordered")
-    if ops.count("unchanged()") != 7:
-        raise ValueError("every recovery stage must preserve archive and source identity")
+def recovery_policy(ops, runner_source=None):
+    command = "run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery"
+    if ops.count(command) != 1:
+        raise ValueError("missing exact serial runner")
+    source = runner_source if runner_source is not None else (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
+    tree = ast.parse(source)
+    constants = {node.targets[0].id: node.value for node in tree.body
+                 if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)}
+    expected = ("image-transition", "retained-roundtrip", "current0017-cold", "roles",
+                "tls-upgraded", "tls-fresh", "selected-rollback")
+    if ast.literal_eval(constants["STAGES"]) != expected:
+        raise ValueError("missing or reordered serial stage")
+    for required in (
+        "ops.r.bundle_package(ARCHIVE)", "ops.r.bundle_verify(ARCHIVE, expected",
+        "ops.bind_source_archive(ARCHIVE, expected)", "ops.roundtrip(ARCHIVE)",
+        "cold=True", "ops.roles", "fresh_bootstrap=True", "--recovery-bundle",
+        "authenticate(ops, ARCHIVE, expected, source, image_records)", "verify_archive_binding(archive, expected)",
+        "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
+        "source != {name: ops.r.digest(ROOT / name) for name in source}",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V1", "RETAINED_SOURCE_PAYLOADS",
+        "Path(\"/tmp/birja-phase12-proof/recovery.tar.gz\")",
+    ):
+        if required not in source:
+            raise ValueError("missing source-frozen graph: " + required)
     for command in ("bash deploy/tests/test-deploy-compatibility.sh",
                     "python3 deploy/tests/test-selected-cutover-contracts.py"):
         if command not in ops:
-            raise ValueError("missing selected compatibility contract: " + command)
+            raise ValueError("missing selected compatibility contract")
 
 
 def postgres_stack_policy(ops):
@@ -400,24 +405,24 @@ class CI(unittest.TestCase):
     def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
         ops = jobs()["ops"]
         recovery_policy(ops)
-        body = ops.split("sudo -- python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
-        compile(textwrap.dedent(body), ".github/workflows/ci.yml:serial-recovery", "exec")
-        for old in [
-            "ops.r.bundle_package(archive)", "ops.image_transition()", "ops.roundtrip(archive)",
-            "ops.roles()", "assert ops.tls() == ops.tls(fresh_bootstrap=True)",
-            '"--recovery-bundle", str(archive)], check=True)',
-            "assert ops.r.digest(archive) == expected",
-            "assert retained.extractfile(name).read() == (ROOT / name).read_bytes()",
-            "assert source == {name: ops.r.digest(ROOT / name) for name in source}",
-            "bash deploy/tests/test-deploy-compatibility.sh",
-            "python3 deploy/tests/test-selected-cutover-contracts.py",
-        ]:
+        source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
+        for old in (
+            "ops.r.bundle_package(ARCHIVE)", "ops.roundtrip(ARCHIVE)",
+            "cold=True", "fresh_bootstrap=True", "--recovery-bundle",
+            "verify_archive_binding(archive, expected)", "verify_image(binding, inspect)",
+            "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
+            "source != {name: ops.r.digest(ROOT / name) for name in source}",
+        ):
+            with self.assertRaises((ValueError, SyntaxError)):
+                recovery_policy(ops, source.replace(old, "omitted_stage"))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("--suite recovery", "--suite all-security"))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops, source.replace("\"roles\", \"tls-upgraded\"", "\"tls-upgraded\", \"roles\"", 1))
+        for old in ("bash deploy/tests/test-deploy-compatibility.sh", "python3 deploy/tests/test-selected-cutover-contracts.py"):
             with self.assertRaises(ValueError):
                 recovery_policy(ops.replace(old, "omitted_stage"))
-        with self.assertRaises(ValueError):
-            recovery_policy(ops.replace("ops.roles()", "ops.roundtrip(archive)", 1))
-        with self.assertRaises(ValueError):
-            recovery_policy(ops.replace("unchanged()", "omitted()", 1))
+
     def test_dividend_authority_history_and_schedulers_are_required(self):
         backend = jobs()["backend"]
         for module in [
@@ -635,7 +640,7 @@ class CI(unittest.TestCase):
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
-        self.assertIn("sudo -- python3 - <<'PY'", ops)
+        self.assertIn("run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery", ops)
         recovery_policy(ops)
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
@@ -657,7 +662,6 @@ class CI(unittest.TestCase):
             "test-restore-safety.sh",
             "test-db-config.sh",
             "test-deploy-prerequisites.py",
-            "test-rollback-db-security.sh",
             "test-reexec.sh",
             "test-rollback-target.sh",
             "test-app-services.sh",
@@ -666,8 +670,8 @@ class CI(unittest.TestCase):
         ]:
             self.assertIn(producer, ops)
         self.assertLess(
-            ops.index("ops.roundtrip(archive)"),
-            ops.index("test-rollback-db-security.sh"),
+            ops.index("- name: Ordinary dev financial authority"),
+            ops.index("--suite recovery"),
         )
         cleanup = ops.split("- name: Clean fixed synthetic projects")[-1]
         self.assertIn("if: always()", cleanup)
@@ -705,6 +709,223 @@ class CI(unittest.TestCase):
         self.assertIn("target: test-builder", j["image"])
         self.assertIn("target: runtime", j["image"])
         self.assertIn("pytest tests/test_smoke.py -q", j["image"])
+
+
+class PortfolioValidation(unittest.TestCase):
+    def runner(self):
+        spec = importlib.util.spec_from_file_location("validation", ROOT / "deploy/tests/run-portfolio-validation.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_actual_dry_run_binds_exact_ci_coverage_and_commands(self):
+        runner = self.runner()
+        result = subprocess.check_output([sys.executable, str(ROOT / "deploy/tests/run-portfolio-validation.py"),
+                                          "--suite", "all-security", "--dry-run"])
+        commands = json.loads(result)
+        self.assertEqual(commands, [[directory, argv] for directory, argv in runner.security_commands()])
+        ci = jobs()
+        backend = [argv for directory, argv in commands if directory == "backend"]
+        frontend = [argv for directory, argv in commands if directory == "frontend"]
+        self.assertEqual(backend[:4], [
+            ["uv", "run", "ruff", "check", "."], ["uv", "run", "ruff", "format", "--check", "."],
+            ["uv", "run", "mypy", "app"], ["uv", "run", "pytest", "--cov=app", "--cov-branch", "--cov-fail-under=80"]])
+        import shlex
+        for argv in backend:
+            self.assertIn("run: " + shlex.join(argv), ci["backend"])
+        self.assertEqual(frontend, [shlex.split(c) for c in (
+            "npm run lint", "npm run typecheck", "npx prettier --check .", "npm run test -- --coverage",
+            "npm run build", "npm audit --audit-level=high")])
+        for argv in frontend:
+            self.assertIn("run: " + shlex.join(argv), ci["frontend"])
+        self.assertEqual(commands[12], [".", ["python3", "deploy/tests/run-stock-browser.py"]])
+        self.assertEqual([argv[argv.index("--target") + 1] for _, argv in commands if argv[:2] == ["docker", "build"]],
+                         ["test-builder", "runtime", "toolchain"])
+        scan = commands[-1][1]
+        self.assertEqual(scan[0:4], ["python3", "deploy/scan-images.py", "--output", "image-reports"])
+        self.assertEqual(scan[4::2], ["--runtime", "--builder", "--postgres", "--redis", "--node"])
+        self.assertEqual(len(backend[4][4].split(",")), 60)
+        recovery = json.loads(subprocess.check_output([sys.executable, str(ROOT / "deploy/tests/run-portfolio-validation.py"),
+            "--suite", "recovery", "--dry-run"]))
+        self.assertEqual(recovery, {"archive": "/tmp/birja-phase12-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
+
+    def test_security_failures_propagate_and_owned_stack_always_cleans(self):
+        runner = self.runner()
+        commands = runner.security_commands()
+        expected = [runner.STACK + ["ps", "-q"], runner.STACK + ["up", "-d", "--wait"],
+                    *[argv for _, argv in commands]]
+        for failed in range(2, len(expected)):
+            calls = []
+            def run(argv, **kwargs):
+                self.assertTrue(kwargs["check"])
+                self.assertEqual(kwargs["env"]["PRICE_SOURCE"], "fake")
+                self.assertNotIn("ALPACA_API_KEY", kwargs["env"])
+                calls.append(argv)
+                if argv == expected[failed]:
+                    raise subprocess.CalledProcessError(1, argv)
+                return SimpleNamespace(stdout=b"sha256:" + b"a" * 64 if "inspect" in argv else b"")
+            # The scan argv is resolved to immutable IDs, so fail its real form.
+            if failed == len(expected) - 1:
+                expected[failed] = commands[-1][1].copy()
+                for flag in ("--runtime", "--builder", "--node"):
+                    expected[failed][expected[failed].index(flag) + 1] = "sha256:" + "a" * 64
+            with self.assertRaises(subprocess.CalledProcessError):
+                runner.execute_security(run=run)
+            self.assertEqual(calls[-1], runner.STACK + ["down", "-v"])
+        calls = []
+        def preexisting(argv, **kwargs):
+            calls.append(argv)
+            return SimpleNamespace(stdout=b"someone-elses-container")
+        with self.assertRaises(ValueError):
+            runner.execute_security(run=preexisting)
+        self.assertEqual(calls, [runner.STACK + ["ps", "-q"]])
+
+    def test_recovery_order_guards_and_every_failure_propagates(self):
+        runner = self.runner()
+        for failed in (None, *runner.STAGES):
+            events = []
+            def operation(name):
+                def call():
+                    events.append(name)
+                    if name == failed:
+                        raise RuntimeError(name)
+                    return "fixed-authority" if name.startswith("tls-") else None
+                return call
+            def guard():
+                events.append("authenticate")
+            ops = {name: operation(name) for name in runner.STAGES}
+            if failed:
+                with self.assertRaisesRegex(RuntimeError, failed):
+                    runner.execute_stages(ops, guard)
+            else:
+                runner.execute_stages(ops, guard)
+            count = runner.STAGES.index(failed) + 1 if failed else len(runner.STAGES)
+            wanted = ["authenticate"]
+            for name in runner.STAGES[:count]:
+                wanted.append(name)
+                if name != failed:
+                    wanted.append("authenticate")
+            self.assertEqual(events, wanted)
+        with self.assertRaisesRegex(ValueError, "authority differs"):
+            runner.execute_stages({name: (lambda name=name: name) for name in runner.STAGES}, lambda: None)
+
+    def test_source_drift_stops_before_next_stage(self):
+        runner = self.runner()
+        events = []
+        def guard():
+            if events:
+                raise ValueError("source/archive/image drift")
+        with self.assertRaisesRegex(ValueError, "drift"):
+            runner.execute_stages({name: (lambda name=name: events.append(name)) for name in runner.STAGES}, guard)
+        self.assertEqual(events, [runner.STAGES[0]])
+
+    def test_actual_authentication_rejects_archive_source_payload_and_image_mutations(self):
+        import hashlib
+        import io
+        import tarfile
+        runner = self.runner()
+        sources = CI().portfolio_sources()
+        r = runner.load("portfolio-smoke").load_recovery()
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-auth-") as directory:
+            root = Path(directory)
+            root.chmod(0o700)
+            (root / "current.py").write_bytes(b"current-app")
+            archive = root / "recovery.tar"
+            inspect = [{"Id": "sha256:" + "a" * 64, "Config": {"Labels": {"org.opencontainers.image.revision": "b" * 40}},
+                        "RootFS": {"Type": "layers", "Layers": ["sha256:" + "c" * 64]}}]
+            binding = sources.image_binding(inspect, source_commit="b" * 40, app_tree="d" * 40, context_sha256="e" * 64)
+            (root / "current-image-binding.json").write_text(json.dumps(binding))
+            (root / "current-image-binding.json").chmod(0o400)
+            for mutation in (None, "outer", "source", "packaged", "retained", "inventory", "image"):
+                (root / "current.py").write_bytes(b"current-app")
+                content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
+                           "sources/retained.tar": b"changed" if mutation == "retained" else b"fixed-retained",
+                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 2 if mutation == "inventory" else 1}}).encode()}
+                with tarfile.open(archive, "w") as tar:
+                    for name, data in content.items():
+                        info = tarfile.TarInfo(name)
+                        info.size = len(data)
+                        tar.addfile(info, io.BytesIO(data))
+                expected = r.digest(archive)
+                source = {"current.py": r.digest(root / "current.py")}
+                if mutation == "outer":
+                    expected = "0" * 64
+                if mutation == "source":
+                    (root / "current.py").write_bytes(b"changed")
+                actual_image = inspect if mutation != "image" else [{**inspect[0], "RootFS": {"Type": "layers", "Layers": []}}]
+                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V1=[],
+                    RETAINED_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
+                    digest=r.digest, sha_bytes=r.sha_bytes, private=r.private, call=lambda argv: json.dumps(actual_image))
+                ops = SimpleNamespace(r=fake_r, portfolio_sources=lambda: sources)
+                with patch.object(runner, "ROOT", root), patch.object(sources, "validate_matrix"):
+                    if mutation:
+                        with self.assertRaises(ValueError, msg=mutation):
+                            runner.authenticate(ops, archive, expected, source)
+                    else:
+                        known = {}
+                        runner.authenticate(ops, archive, expected, source, known)
+                        record = root / "current-image-binding.json"
+                        original = record.read_bytes()
+                        record.chmod(0o600)
+                        record.write_text(json.dumps({**binding, "context_sha256": "f" * 64}))
+                        with self.assertRaisesRegex(ValueError, "disappeared/changed"):
+                            runner.authenticate(ops, archive, expected, source, known)
+                        record.unlink()
+                        with self.assertRaisesRegex(ValueError, "disappeared/changed"):
+                            runner.authenticate(ops, archive, expected, source, known)
+                        record.write_bytes(original)
+                        record.chmod(0o400)
+
+    def test_synthetic_environment_discards_private_provider_and_compose_inputs(self):
+        runner = self.runner()
+        with patch.dict("os.environ", {"ALPACA_API_KEY": "private", "AWS_SECRET_ACCESS_KEY": "private",
+             "DATABASE_URL": "production", "COMPOSE_FILE": "production", "DOCKER_HOST": "remote"}):
+            env = runner.environment()
+        for key in ("ALPACA_API_KEY", "AWS_SECRET_ACCESS_KEY", "COMPOSE_FILE", "DOCKER_HOST"):
+            self.assertNotIn(key, env)
+        self.assertIn("@127.0.0.1:55432/birja_test", env["DATABASE_URL"])
+        self.assertEqual(env["COMPOSE_DISABLE_ENV_FILE"], "1")
+
+    def test_successor_inventory_is_exact_and_legacy_absence_compatible(self):
+        r = self.runner().load("portfolio-smoke").load_recovery()
+        hashes = {name: r.digest(ROOT / name) for name in r.PORTFOLIO_PAYLOAD_V1}
+        r.verify_portfolio_inventory({}, {})
+        valid = {"portfolio_payload": {"version": 1, "sha256": hashes}}
+        r.verify_portfolio_inventory(valid, hashes)
+        import copy
+        for mutate in (lambda x: x["portfolio_payload"].update(version=2),
+                       lambda x: x["portfolio_payload"]["sha256"].pop(next(iter(hashes))),
+                       lambda x: x["portfolio_payload"]["sha256"].update({"unexpected": "a" * 64}),
+                       lambda x: x["portfolio_payload"]["sha256"].update({next(iter(hashes)): "a" * 64})):
+            changed = copy.deepcopy(valid)
+            mutate(changed)
+            with self.assertRaises(ValueError):
+                r.verify_portfolio_inventory(changed, hashes)
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-path-") as directory:
+            root = Path(directory)
+            root.chmod(0o700)
+            self.assertEqual(r.synthetic_path(root / "new", False), root / "new")
+            root.chmod(0o755)
+            with self.assertRaises(ValueError):
+                r.synthetic_path(root / "new", False)
+        for name in ("/tmp/birja-phase12-proof/other.tar", "/tmp/birja-phase12-proof-extra/recovery.tar.gz"):
+            with self.assertRaises(ValueError):
+                r.synthetic_path(name, False)
+
+    def test_old_released_schema_inventory_and_current_successor_remain_distinct(self):
+        r = self.runner().load("portfolio-smoke").load_recovery()
+        hashes = {name: "a" * 64 for name in r.CONTRACT_PAYLOAD}
+        legacy = ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
+        old = {"schema_contract": {"revisions": legacy, "payload_sha256": hashes}}
+        r.verify_contract_inventory(old, hashes)
+        current = {"schema_contract": {"revisions": legacy + ["0017"], "payload_sha256": hashes},
+                   "portfolio_payload": {"version": 1}}
+        r.verify_contract_inventory(current, hashes)
+        for changed in ({**old, "portfolio_payload": {"version": 1}},
+                        {"schema_contract": {"revisions": legacy + ["0015"], "payload_sha256": hashes}},
+                        {"schema_contract": {"revisions": legacy[:-1], "payload_sha256": hashes}}):
+            with self.assertRaises(ValueError):
+                r.verify_contract_inventory(changed, hashes)
 
 
 class FixtureGitIsolation(unittest.TestCase):

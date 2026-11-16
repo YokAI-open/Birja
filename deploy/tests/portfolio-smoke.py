@@ -22,8 +22,12 @@ def load(name):
     return module
 
 
-def run():
+def run(*, archive=None, archive_sha=None, cold=False):
     fixture, sources = load("portfolio-execution-fixture"), load("portfolio-sources")
+    if cold:
+        if archive is None:
+            raise ValueError("cold lane requires selected recovery archive")
+        sources.verify_archive_binding(archive, archive_sha)
     env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}
     env["COMPOSE_DISABLE_ENV_FILE"] = "1"
 
@@ -39,7 +43,7 @@ def run():
             raise ValueError("refuse preexisting owned fixture resources")
     commit = sources.git("rev-parse", "HEAD").decode().strip()
     app_tree = sources.git("rev-parse", "HEAD:backend/app").decode().strip()
-    if sources.git("diff", "--name-only", "HEAD", "--", "backend").strip():
+    if sources.git("diff", "--name-only", "HEAD", "--", "backend/app", "backend/alembic", "backend/Dockerfile", "backend/uv.lock", "backend/pyproject.toml").strip():
         raise ValueError("current source must be frozen before image build")
     context = hashlib.sha256(sources.git("archive", "HEAD", "backend")).hexdigest()
     tag = "birja-portfolio-fixture:" + context[:20]
@@ -74,6 +78,8 @@ def run():
             raise AssertionError("frozen no-install smoke image failed: " + result.stderr.decode()[-1200:])
     inspect = json.loads(call(["docker", "image", "inspect", tag]))
     binding = sources.image_binding(inspect, source_commit=commit, app_tree=app_tree, context_sha256=context)
+    if archive is not None:
+        sources.record_image_binding(archive, "current0017", binding)
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-portfolio-") as tmp:
         root = Path(tmp)
         root.chmod(0o700)
@@ -102,6 +108,12 @@ def run():
                             "interval": "2s", "timeout": "3s", "retries": 30}}},
             "networks": {"isolated": {"internal": True}}}))
         dc = ["docker", "compose", "--env-file", "/dev/null", "-p", PROJECT, "-f", str(compose)]
+        clone_project = PROJECT + "-cold"
+        clone_dc = ["docker", "compose", "--env-file", "/dev/null", "-p", clone_project, "-f", str(compose)]
+        for kind in ("container", "network", "volume"):
+            if call(["docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + clone_project]).strip():
+                raise ValueError("refuse preexisting cold resources")
+        client_network = PROJECT + "_isolated"
         passwords = {"app": "a" * 64, "scheduler": "b" * 64, "migrator": "c" * 64}
         try:
             call(dc + ["up", "-d", "--wait"], timeout=120)
@@ -122,9 +134,11 @@ def run():
 
             def transport(code):
                 sources.verify_image(binding, json.loads(call(["docker", "image", "inspect", binding["id"]])))
-                if sources.git("diff", "--name-only", "HEAD", "--", "backend").strip():
+                if sources.git("diff", "--name-only", "HEAD", "--", "backend/app", "backend/alembic", "backend/Dockerfile", "backend/uv.lock", "backend/pyproject.toml").strip():
                     raise ValueError("current source drift")
-                argv = ["docker", "run", "--rm", "-i", "--network", PROJECT + "_isolated",
+                if archive is not None:
+                    sources.verify_archive_binding(archive, archive_sha)
+                argv = ["docker", "run", "--rm", "-i", "--network", client_network,
                         "-v", str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro"]
                 for key, value in client_env.items():
                     argv += ["-e", key + "=" + value]
@@ -138,15 +152,76 @@ def run():
             fixture.main(["create"], transport=transport)
             expected = root / "immutable-before.json"
             digest = fixture.main(["projection", "--snapshot", str(expected)], transport=transport)
+            expected.chmod(0o400)
             fixture.main(["verify"], transport=transport)
             fixture.main(["compare", "--snapshot", str(expected), "--expected-sha256", digest], transport=transport)
+            if cold:
+                # One immutable pre-backup oracle, one encrypted repository,
+                # and a genuinely new server after the source is destroyed.
+                import shutil
+                r = load_recovery()
+                manifest = r.canonical(dc, "birja_source_test")
+                r.recovery_contract().validate_manifest(manifest)
+                stage = root / "backup-input"
+                stage.mkdir(mode=0o700)
+                dump = call(dc + ["exec", "-T", "postgres", "pg_dump", "-U", "birja_migrator",
+                    "-d", "birja_source_test", "--format=custom", "--no-owner", "--no-acl"])
+                (stage / "database.dump").write_bytes(dump)
+                (stage / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+                shutil.copyfile(archive, stage / "recovery.tar")
+                password = root / "restic-password"
+                password.write_text(os.urandom(32).hex())
+                password.chmod(0o600)
+                restic = Path("/tmp/birja-test-tools/restic-0.19.1/restic")
+                if r.digest(restic) != r.RESTIC_SHA:
+                    raise ValueError("unverified local restic")
+                restic_args = [str(restic), "--repo", str(root / "repository"),
+                               "--password-file", str(password), "--no-cache"]
+                call(restic_args + ["init"])
+                # Relative paths are fixed: no host/private path may enter backup.
+                result = subprocess.run(restic_args + ["backup", "--json", "."], cwd=stage,
+                    env=env, capture_output=True, check=True, timeout=180)
+                rows = [json.loads(line) for line in result.stdout.splitlines()]
+                ids = [row["snapshot_id"] for row in rows if row.get("message_type") == "summary"]
+                if len(ids) != 1 or not re.fullmatch("[0-9a-f]{64}", ids[0]):
+                    raise ValueError("missing exact encrypted snapshot")
+                hashes = {p.name: r.digest(p) for p in stage.iterdir()}
+                shutil.rmtree(stage)
+                call(dc + ["down", "-v", "--remove-orphans"])
+                call(restic_args + ["check", "--read-data"])
+                recovered = root / "cold-restored"
+                call(restic_args + ["restore", ids[0], "--target", str(recovered), "--verify"])
+                if {p.name: r.digest(p) for p in recovered.iterdir()} != hashes:
+                    raise ValueError("encrypted cold payload changed")
+                sources.verify_archive_binding(recovered / "recovery.tar", archive_sha)
+                call(clone_dc + ["up", "-d", "--wait"])
+                r.sql(clone_dc, "CREATE DATABASE birja_ops_test;", "birja_source_test")
+                with r.restored(clone_dc, (recovered / "database.dump").read_bytes()):
+                    r.verify(clone_dc, json.loads((recovered / "manifest.json").read_text()))
+                    # Only the authenticated migration reader receives a login;
+                    # application/scheduler/definer ACLs remain quarantined.
+                    r.sql(clone_dc, "ALTER ROLE birja_migrator LOGIN PASSWORD '" + passwords["migrator"] + "';",
+                          "birja_ops_test")
+                    client_network = clone_project + "_isolated"
+                    fixture.main(["compare", "--database", "birja_restore_test", "--snapshot", str(expected),
+                        "--expected-sha256", digest], transport=transport)
+                print("actual_current0017_encrypted_cold_restore=true source_destroyed=true immutable_before_oracle=true quarantine=true", flush=True)
             assert json.loads(immutable.read_text()) == binding
             print("actual_current0017_portfolio_tls_restricted_roles=true immutable_snapshot_compare=true", flush=True)
         finally:
             call(dc + ["down", "-v", "--remove-orphans"], timeout=120)
+            call(clone_dc + ["down", "-v", "--remove-orphans"], timeout=120)
             for kind in ("container", "network", "volume"):
-                if call(["docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + PROJECT]).strip():
-                    raise AssertionError("owned portfolio resources leaked")
+                for project in (PROJECT, clone_project):
+                    if call(["docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + project]).strip():
+                        raise AssertionError("owned portfolio resources leaked")
+
+
+def load_recovery():
+    spec = importlib.util.spec_from_file_location("portfolio_cold_recovery", ROOT / "deploy/verify-restore.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 if __name__ == "__main__":

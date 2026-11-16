@@ -48,6 +48,25 @@ CORE = [
     "docker-compose.ops-test.yml",
 ]
 UNITS = ["deploy/systemd/birja-backup.service", "deploy/systemd/birja-backup.timer"]
+# Versioned, exact successor payload. Absence preserves old archive semantics.
+PORTFOLIO_PAYLOAD_V1 = [
+    "backend/alembic/versions/0015_portfolio_expansion.py",
+    "backend/alembic/versions/0016_portfolio_association.py",
+    "backend/alembic/versions/0017_portfolio_ownership.py",
+    "backend/alembic/sql/0017_dividend_portfolio.sql",
+    "backend/alembic/sql/0017_stock_portfolio.sql",
+    "backend/app/db/portfolio_bootstrap.py",
+    "backend/app/db/portfolio_migrate.py",
+    "backend/app/db/dev_bootstrap.py",
+    "deploy/tests/portfolio-execution-fixture.py",
+    "deploy/tests/portfolio-smoke.py",
+    "deploy/tests/portfolio-sources.py",
+    "deploy/tests/portfolio-retained-sources.json",
+    "deploy/tests/run-portfolio-validation.py",
+    "deploy/tests/ops-fixtures.py",
+    "deploy/tests/selected-cutover.py",
+    "deploy/tests/test-rollback-db-security.sh",
+]
 PROVENANCE = {
     "SHA256SUMS": "fb520966ee01d2a3d4219c66762c66efa56300833b6f639f36082b7462f91cb8",
     "SHA256SUMS.asc": "649f3a48d322c3d7a457ef58e2dc4c5094b1f823192cdbac3f092ea23e194d9a",
@@ -82,7 +101,8 @@ def synthetic_path(path, exists=True):
     require(
         len(p.parts) >= 4
         and p.parts[1] == "tmp"
-        and p.parts[2].startswith("birja-backup-test-")
+        and (p.parts[2].startswith("birja-backup-test-")
+             or p == Path("/tmp/birja-phase12-proof/recovery.tar.gz"))
     )
     private(Path(*p.parts[:3]), True)
     for component in [p, *list(p.parents)[:-1]]:
@@ -389,6 +409,10 @@ def bundle_verify(archive, sha, required_profile=None):
         if "retained_source_payloads" in inventory:
             require(inventory["retained_source_payloads"] == RETAINED_SOURCE_PAYLOADS)
             allowed.update(RETAINED_SOURCE_PAYLOADS)
+        if "portfolio_payload" in inventory:
+            require(inventory["portfolio_payload"].get("version") == 1)
+            require(set(inventory["portfolio_payload"]["sha256"]) == set(PORTFOLIO_PAYLOAD_V1))
+            allowed.update(PORTFOLIO_PAYLOAD_V1)
         require(
             names == allowed
             and inventory["files"] == sorted(allowed - {"SHA256SUMS", "INVENTORY.json"})
@@ -412,6 +436,7 @@ def bundle_verify(archive, sha, required_profile=None):
         if "retained_source_payloads" in inventory:
             require(all(expected[name] == value for name, value in RETAINED_SOURCE_PAYLOADS.items()))
         verify_contract_inventory(inventory, expected)
+        verify_portfolio_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
         require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
         require(all(expected["provenance/" + n] == h for n, h in PROVENANCE.items()))
@@ -455,10 +480,23 @@ RETAINED_SOURCE_PAYLOADS = {
 def verify_contract_inventory(inventory, expected):
     """Old immutable artifacts remain readable; successor metadata is exact."""
     if "schema_contract" in inventory:
+        revisions = inventory["schema_contract"].get("revisions")
+        # Exact released v0.5.0 inventory; no prefix/range/latest acceptance.
+        legacy = ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
+        require(revisions in (legacy, list(recovery_contract().SUPPORTED_REVISIONS)))
+        if "portfolio_payload" in inventory:
+            require(revisions == list(recovery_contract().SUPPORTED_REVISIONS))
         require(inventory["schema_contract"] == {
-            "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+            "revisions": revisions,
             "payload_sha256": {name: expected[name] for name in CONTRACT_PAYLOAD},
         })
+
+
+def verify_portfolio_inventory(inventory, expected):
+    """An absent field is legacy; a present field has no permissive fallback."""
+    if "portfolio_payload" in inventory:
+        require(inventory["portfolio_payload"] == {"version": 1, "sha256":
+            {name: expected[name] for name in PORTFOLIO_PAYLOAD_V1}})
 
 
 def bundle_package(output, units=False):
@@ -472,7 +510,7 @@ def bundle_package(output, units=False):
     index_bytes, manifest_bytes = registry_manifests()
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
-        files = CORE + UNITS
+        files = CORE + UNITS + PORTFOLIO_PAYLOAD_V1
         for name in files:
             src = HERE.parent / name
             require(src.is_file() and not src.is_symlink())
@@ -529,6 +567,8 @@ def bundle_package(output, units=False):
         )
         inventory = {
             "format": 1,
+            "portfolio_payload": {"version": 1, "sha256":
+                {name: digest(stage / name) for name in PORTFOLIO_PAYLOAD_V1}},
             "recovery_profile": "deploy-recovery-v2",
             "files": files,
             "units": UNITS,
@@ -551,7 +591,7 @@ def bundle_package(output, units=False):
             "".join(digest(stage / n) + "  " + n + "\n" for n in sorted(files))
         )
         files.append("SHA256SUMS")
-        with tarfile.open(output, "w", format=tarfile.USTAR_FORMAT) as t:
+        with tarfile.open(output, "x", format=tarfile.USTAR_FORMAT) as t:
             for name in sorted(files):
                 p = stage / name
                 info = tarfile.TarInfo(name)
