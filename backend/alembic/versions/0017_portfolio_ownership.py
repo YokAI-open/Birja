@@ -179,6 +179,58 @@ def _statements(source: str) -> list[str]:
     return result
 
 
+def _index(table: str, name: str, columns: tuple[str, ...], *, unique: bool = False) -> None:
+    """Prepare only fixed owned indexes, recover invalid concurrent remnants."""
+    bind = op.get_bind()
+    existing = (
+        bind.execute(
+            sa.text("""SELECT c.relkind::text,
+        pg_get_userbyid(c.relowner)=current_user AS owned,
+        i.indrelid=to_regclass(:table) AS correct_table,
+        i.indisvalid,i.indisready,i.indislive,pg_get_indexdef(c.oid) AS definition,
+        EXISTS(SELECT FROM pg_constraint WHERE conindid=c.oid) AS attached
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        LEFT JOIN pg_index i ON i.indexrelid=c.oid
+        WHERE n.nspname='public' AND c.relname=:name"""),
+            {"table": "public." + table, "name": name},
+        )
+        .mappings()
+        .one_or_none()
+    )
+    expected = (
+        f"CREATE {'UNIQUE ' if unique else ''}INDEX {name} ON public.{table} "
+        f"USING btree ({', '.join(columns)})"
+    )
+    previous = (
+        "CREATE INDEX ix_stock_entitlement_current_work ON "
+        "public.stock_dividend_entitlements USING btree (event_id, user_id, id)"
+    )
+    if existing is not None:
+        definitions = {expected}
+        if name == "ix_stock_entitlement_current_work":
+            definitions.add(previous)
+        if (
+            existing["relkind"] != "i"
+            or not existing["owned"]
+            or not existing["correct_table"]
+            or not existing["indislive"]
+            or existing["attached"]
+            or existing["definition"] not in definitions
+        ):
+            raise RuntimeError("incompatible preexisting portfolio index")
+        if existing["indisvalid"] and existing["indisready"] and existing["definition"] == expected:
+            return
+    with op.get_context().autocommit_block():
+        if existing is not None:
+            op.drop_index(name, table_name=table, postgresql_concurrently=True)
+        op.create_index(name, table, list(columns), unique=unique, postgresql_concurrently=True)
+
+
+def _unique(table: str, name: str, columns: tuple[str, ...]) -> None:
+    _index(table, name, columns, unique=True)
+    op.execute(f"ALTER TABLE public.{table} ADD CONSTRAINT {name} UNIQUE USING INDEX {name}")
+
+
 def _constraints() -> None:
     """Fixed final constraint definitions, never imported from application models."""
     # Drop causal FKs before replacing their referenced candidate keys.
@@ -274,59 +326,56 @@ def _constraints() -> None:
     )
     op.execute("ALTER TABLE public.holdings DROP CONSTRAINT IF EXISTS uq_holdings_user_coin")
     op.execute(
-        "ALTER TABLE public.stock_ownership_movements DROP CONSTRAINT "
+        "ALTER TABLE public.stock_ownership_movements DROP CONSTRAINT IF EXISTS "
         "uq_stock_ownership_application_user"
     )
     op.execute(
         "ALTER TABLE public.stock_dividend_payments DROP CONSTRAINT IF EXISTS "
         "uq_stock_dividend_payment_event_user"
     )
-    op.execute(
-        "ALTER TABLE holdings ADD CONSTRAINT uq_holdings_portfolio_coin UNIQUE "
-        "(portfolio_id, coin_id)"
+    _unique("holdings", "uq_holdings_portfolio_coin", ("portfolio_id", "coin_id"))
+    _unique(
+        "trades", "uq_trades_id_portfolio_coin_user", ("id", "portfolio_id", "coin_id", "user_id")
     )
-    op.execute(
-        "ALTER TABLE trades ADD CONSTRAINT uq_trades_id_portfolio_coin_user "
-        "UNIQUE (id, portfolio_id, coin_id, user_id)"
+    _unique(
+        "stock_ownership_movements",
+        "uq_stock_ownership_application_portfolio",
+        ("application_id", "portfolio_id"),
     )
-    op.execute(
-        "ALTER TABLE stock_ownership_movements ADD CONSTRAINT "
-        "uq_stock_ownership_application_portfolio UNIQUE (application_id, "
-        "portfolio_id)"
+    _unique(
+        "stock_ownership_movements",
+        "uq_stock_ownership_cause",
+        ("coin_id", "causal_key", "portfolio_id"),
     )
-    op.execute(
-        "ALTER TABLE stock_ownership_movements ADD CONSTRAINT "
-        "uq_stock_ownership_cause UNIQUE (coin_id, causal_key, portfolio_id)"
+    _unique(
+        "stock_dividend_entitlements",
+        "uq_stock_entitlement_id_event_user",
+        ("id", "event_id", "portfolio_id", "user_id"),
     )
-    op.execute(
-        "ALTER TABLE stock_dividend_entitlements ADD CONSTRAINT "
-        "uq_stock_entitlement_id_event_user UNIQUE (id, event_id, portfolio_id, "
-        "user_id)"
+    _unique(
+        "stock_dividend_entitlements",
+        "uq_stock_entitlement_dividend_identity",
+        ("id", "event_id", "portfolio_id", "user_id", "revision_id", "fingerprint"),
     )
-    op.execute(
-        "ALTER TABLE stock_dividend_entitlements ADD CONSTRAINT "
-        "uq_stock_entitlement_dividend_identity UNIQUE (id, event_id, "
-        "portfolio_id, user_id, revision_id, fingerprint)"
+    _unique(
+        "stock_dividend_entitlements",
+        "uq_stock_entitlement_revision_fingerprint",
+        ("event_id", "portfolio_id", "revision_id", "fingerprint"),
     )
-    op.execute(
-        "ALTER TABLE stock_dividend_entitlements ADD CONSTRAINT "
-        "uq_stock_entitlement_revision_fingerprint UNIQUE (event_id, "
-        "portfolio_id, revision_id, fingerprint)"
+    _unique(
+        "stock_dividend_payments",
+        "uq_stock_dividend_payment_event_portfolio",
+        ("event_id", "portfolio_id"),
     )
-    op.execute(
-        "ALTER TABLE stock_dividend_payments ADD CONSTRAINT "
-        "uq_stock_dividend_payment_event_portfolio UNIQUE (event_id, "
-        "portfolio_id)"
+    _unique(
+        "stock_dividend_payments",
+        "uq_stock_dividend_payment_owner_event_coin",
+        ("id", "event_id", "portfolio_id", "user_id", "coin_id"),
     )
-    op.execute(
-        "ALTER TABLE stock_dividend_payments ADD CONSTRAINT "
-        "uq_stock_dividend_payment_owner_event_coin UNIQUE (id, event_id, "
-        "portfolio_id, user_id, coin_id)"
-    )
-    op.execute(
-        "ALTER TABLE stock_dividend_decisions ADD CONSTRAINT "
-        "uq_stock_dividend_decision_lineage UNIQUE (id, payment_id, "
-        "portfolio_id, user_id, event_id)"
+    _unique(
+        "stock_dividend_decisions",
+        "uq_stock_dividend_decision_lineage",
+        ("id", "payment_id", "portfolio_id", "user_id", "event_id"),
     )
     op.execute(
         "ALTER TABLE holdings ADD CONSTRAINT fk_holdings_portfolio_owner FOREIGN "
@@ -411,41 +460,35 @@ def _constraints() -> None:
         "event_id) REFERENCES stock_dividend_decisions (id, payment_id, "
         "portfolio_id, user_id, event_id)"
     )
-    op.execute("DROP INDEX IF EXISTS public.ix_trades_portfolio_created_id")
-    op.execute(
-        "CREATE INDEX ix_trades_portfolio_created_id ON trades (portfolio_id, created_at, id)"
+    _index("accounts", "ix_accounts_user_id", ("user_id",))
+    _index("holdings", "ix_holdings_user_id", ("user_id",))
+    _index("trades", "ix_trades_portfolio_created_id", ("portfolio_id", "created_at", "id"))
+    _index("stock_fill_facts", "ix_stock_fill_facts_portfolio_id", ("portfolio_id",))
+    _index(
+        "stock_ownership_movements",
+        "ix_stock_ownership_portfolio_economic_id",
+        ("portfolio_id", "economic_at", "id"),
     )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_fill_facts_portfolio_id")
-    op.execute("CREATE INDEX ix_stock_fill_facts_portfolio_id ON stock_fill_facts (portfolio_id)")
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_ownership_portfolio_economic_id")
-    op.execute(
-        "CREATE INDEX ix_stock_ownership_portfolio_economic_id ON "
-        "stock_ownership_movements (portfolio_id, economic_at, id)"
+    _index(
+        "stock_ownership_movements",
+        "ix_stock_ownership_portfolio_recorded_id",
+        ("portfolio_id", "recorded_at", "id"),
     )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_ownership_portfolio_recorded_id")
-    op.execute(
-        "CREATE INDEX ix_stock_ownership_portfolio_recorded_id ON "
-        "stock_ownership_movements (portfolio_id, recorded_at, id)"
+    _index(
+        "stock_dividend_entitlements",
+        "ix_stock_entitlement_current_work",
+        ("event_id", "portfolio_id", "id"),
     )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_entitlement_current_work")
-    op.execute(
-        "CREATE INDEX ix_stock_entitlement_current_work ON "
-        "stock_dividend_entitlements (event_id, portfolio_id, id)"
+    _index("stock_dividend_entitlements", "ix_stock_entitlement_portfolio_id", ("portfolio_id",))
+    _index(
+        "stock_dividend_payments",
+        "ix_stock_dividend_payment_portfolio_recorded_id",
+        ("portfolio_id", "recorded_at", "id"),
     )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_entitlement_portfolio_id")
-    op.execute(
-        "CREATE INDEX ix_stock_entitlement_portfolio_id ON "
-        "stock_dividend_entitlements (portfolio_id)"
-    )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_dividend_payment_portfolio_recorded_id")
-    op.execute(
-        "CREATE INDEX ix_stock_dividend_payment_portfolio_recorded_id ON "
-        "stock_dividend_payments (portfolio_id, recorded_at, id)"
-    )
-    op.execute("DROP INDEX IF EXISTS public.ix_stock_dividend_decision_portfolio_recorded_id")
-    op.execute(
-        "CREATE INDEX ix_stock_dividend_decision_portfolio_recorded_id ON "
-        "stock_dividend_decisions (portfolio_id, recorded_at, id)"
+    _index(
+        "stock_dividend_decisions",
+        "ix_stock_dividend_decision_portfolio_recorded_id",
+        ("portfolio_id", "recorded_at", "id"),
     )
 
 
