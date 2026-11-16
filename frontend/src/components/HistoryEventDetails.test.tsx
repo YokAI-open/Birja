@@ -4,6 +4,15 @@ import userEvent from "@testing-library/user-event";
 import { renderWithClient } from "@/test/render";
 import type { EventDividend, EventDividendCorrection } from "@/api/eventHistory";
 import { HistoryEventCash, HistoryEventDetails, HistoryEventTitle } from "./HistoryEventDetails";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+
+const target: PortfolioTarget = Object.freeze({
+  owner: "history@example.test",
+  portfolioId: "1",
+  name: "My portfolio",
+  epoch: Object.freeze({ owner: "history@example.test", portfolioId: "1", session: 0 }),
+  isCurrent: () => true,
+});
 
 const original: EventDividend = {
   kind: "dividend",
@@ -43,7 +52,7 @@ const held: EventDividendCorrection = {
   original,
 };
 it("shows an uncertain correction without inventing a cash credit or revised terms", () => {
-  renderWithClient(<HistoryEventDetails item={held} />);
+  renderWithClient(<HistoryEventDetails item={held} target={target} />);
   expect(
     screen.getByText("The corrected dividend terms need verification. No cash changed."),
   ).toBeVisible();
@@ -53,7 +62,7 @@ it("shows an uncertain correction without inventing a cash credit or revised ter
 
 it("opens the immutable offpage original, focuses its heading and returns to its initiating control", async () => {
   const user = userEvent.setup();
-  const { rerender } = render(<HistoryEventDetails item={held} />);
+  const { rerender } = render(<HistoryEventDetails item={held} target={target} />);
   const view = screen.getByRole("button", { name: "View original dividend" });
   await user.click(view);
   const heading = screen.getByRole("heading", { name: "Original dividend · AAPL · Apple" });
@@ -63,7 +72,8 @@ it("opens the immutable offpage original, focuses its heading and returns to its
   expect(screen.getByText("2026-11-12")).toBeVisible();
   const back = screen.getByRole("button", { name: "Back to correction" });
   back.focus();
-  rerender(<HistoryEventDetails item={{ ...held }} />);
+  // A same-root metadata refresh must not refocus over the current control.
+  rerender(<HistoryEventDetails item={{ ...held }} target={{ ...target }} />);
   expect(back).toHaveFocus();
   await user.click(back);
   expect(view).toHaveFocus();
@@ -73,10 +83,10 @@ it("opens the immutable offpage original, focuses its heading and returns to its
 it("focuses an already loaded original using its stable identity without opening a duplicate", async () => {
   const { user } = renderWithClient(
     <>
-      <div id={`history-${original.id}`} tabIndex={-1}>
+      <div id={`history-1-0-${original.id}`} tabIndex={-1}>
         Loaded original
       </div>
-      <HistoryEventDetails item={held} />
+      <HistoryEventDetails item={held} target={target} />
     </>,
   );
   await user.click(screen.getByRole("button", { name: "View original dividend" }));
@@ -97,7 +107,7 @@ it("separates a held debit proposal from applied zero and never offers a financi
     <>
       <HistoryEventTitle item={item} />
       <HistoryEventCash item={item} />
-      <HistoryEventDetails item={item} />
+      <HistoryEventDetails item={item} target={target} />
     </>,
   );
   expect(screen.getByText("Dividend correction held")).toBeVisible();
@@ -128,7 +138,7 @@ it.each(["-0.50", "0.50", "0.00"])(
       <>
         <HistoryEventTitle item={item} />
         <HistoryEventCash item={item} />
-        <HistoryEventDetails item={item} />
+        <HistoryEventDetails item={item} target={target} />
       </>,
     );
     expect(
@@ -147,7 +157,7 @@ it("preserves exact tiny rates, calendar dates, UTC instants and escaped names",
   const { container } = renderWithClient(
     <>
       <span>{item.name}</span>
-      <HistoryEventDetails item={item} />
+      <HistoryEventDetails item={item} target={target} />
     </>,
   );
   expect(screen.getByText(item.name)).toBeVisible();
@@ -179,7 +189,7 @@ it("renders saved split shares and conserved basis as a noncash event", () => {
   renderWithClient(
     <>
       <HistoryEventTitle item={item} />
-      <HistoryEventDetails item={item} />
+      <HistoryEventDetails item={item} target={target} />
     </>,
   );
   expect(screen.getByText("Forward split")).toBeVisible();
@@ -212,7 +222,7 @@ it.each(["stock", "crypto"] as const)(
       <>
         <HistoryEventTitle item={item} />
         <HistoryEventCash item={item} />
-        <HistoryEventDetails item={item} />
+        <HistoryEventDetails item={item} target={target} />
       </>,
     );
     expect(screen.getByText("Sell")).toBeVisible();

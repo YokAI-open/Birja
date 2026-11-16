@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchPortfolios, isPortfolioId, type PortfolioSummary } from "@/api/portfolios";
@@ -68,15 +68,40 @@ export function usePortfolioTarget(
   const valid = explicit ? isPortfolioId(routePortfolioId) : legacyEntry;
   const key = useMemo(() => ["portfolios", owner] as const, [owner]);
   const scope = useMemo(
-    () => Object.freeze({ owner, routePortfolioId, legacyEntry, session }),
+    () =>
+      Object.freeze({
+        owner,
+        routePortfolioId,
+        legacyEntry,
+        session,
+        listeners: new Set<() => void>(),
+      }),
     [owner, routePortfolioId, legacyEntry, session],
   );
   useLayoutEffect(() => {
     activeScopes.add(scope);
+    scope.listeners.forEach((notify) => notify());
     return () => {
       activeScopes.delete(scope);
+      scope.listeners.forEach((notify) => notify());
     };
   }, [scope]);
+  // Cached metadata may resolve during the route-change render. Financial
+  // children must mount only after this scope's committed activation, or their
+  // initial query is disabled with no later notification to enable it.
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      scope.listeners.add(notify);
+      return () => {
+        scope.listeners.delete(notify);
+      };
+    },
+    [scope],
+  );
+  const activated = useSyncExternalStore(
+    subscribe,
+    useCallback(() => activeScopes.has(scope), [scope]),
+  );
   const current = () =>
     activeScopes.has(scope) && who(client) === owner && session === guard.session;
 
@@ -146,7 +171,7 @@ export function usePortfolioTarget(
   else if (owner === null || who(client) !== owner) status = "signed_out";
   else if (!valid) status = "required";
   else if (metadata.isError) status = "error";
-  else if (metadata.isPending) status = "loading";
+  else if (metadata.isPending || !activated) status = "loading";
   else if (explicit) status = target ? "ready" : "unavailable";
   else if (metadata.data?.length === 0) status = "empty";
   else if (metadata.data?.length === 1) {

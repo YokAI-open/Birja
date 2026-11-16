@@ -1,6 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, screen, within } from "@testing-library/react";
-import { renderWithClient } from "@/test/render";
+import { renderWithClient as renderClient } from "@/test/render";
+import type { ReactElement } from "react";
+import { Link, Route, Routes } from "react-router";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import type { PortfolioSummary } from "@/api/portfolios";
 import HistoryPage from "./HistoryPage";
 import type {
   EventDividend,
@@ -30,7 +34,8 @@ const item: EventTrade = {
 const cursor = (id = item.id) =>
   btoa(
     JSON.stringify({
-      v: 2,
+      v: 3,
+      portfolio_id: "1",
       recorded_at: item.recorded_at,
       kind_rank: 4,
       source_id: id.split(":")[1],
@@ -39,13 +44,29 @@ const cursor = (id = item.id) =>
     .replace(/=/g, "")
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
-function historyFetch(fetch: typeof globalThis.fetch) {
-  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
-    String(input) === "/api/v1/me"
-      ? Promise.resolve(
-          new Response(JSON.stringify({ email: "history@example.test", cash_usd: "10000.00" })),
-        )
-      : fetch(input, init),
+function historyFetch(
+  fetch: typeof globalThis.fetch,
+  metadata: PortfolioSummary[] = [{ id: "1", name: "My portfolio" }],
+) {
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/v2/me")
+      return Promise.resolve(new Response(JSON.stringify({ email: "history@example.test" })));
+    if (String(input) === "/api/v2/portfolios")
+      return Promise.resolve(new Response(JSON.stringify(metadata)));
+    return fetch(input, init);
+  });
+}
+function renderWithClient(ui: ReactElement, route = "/portfolios/1/history") {
+  return renderClient(
+    <>
+      <Link to="/portfolios/2/history">Open sibling</Link>
+      <Routes>
+        <Route path="/portfolios/:portfolioId/history" element={<PortfolioTargetBoundary />}>
+          <Route index element={ui} />
+        </Route>
+      </Routes>
+    </>,
+    { route },
   );
 }
 const ok = (items: EventHistoryItem[] = [item], next_cursor: string | null = null) =>
@@ -63,10 +84,10 @@ it("renders the mixed Account activity heading", async () => {
   expect(await screen.findByRole("heading", { name: "Account activity" })).toBeVisible();
 });
 afterEach(() => vi.unstubAllGlobals());
-it("reserves the initial loading region", () => {
+it("reserves the initial loading region", async () => {
   historyFetch(() => new Promise(() => {}));
   renderWithClient(<HistoryPage />);
-  expect(screen.getByRole("status", { name: "Loading history" })).toHaveAttribute(
+  expect(await screen.findByRole("status", { name: "Loading history" })).toHaveAttribute(
     "aria-busy",
     "true",
   );
@@ -289,11 +310,11 @@ it("appends three ordered pages once, retries the same cursor and transfers fina
     expect.stringContaining("Third"),
   ]);
   expect(fetch.mock.calls.map((args) => String(args[0]))).toEqual([
-    "/api/v1/history",
-    `/api/v1/history?cursor=${cursor()}`,
-    `/api/v1/history?cursor=${cursor()}`,
-    `/api/v1/history?cursor=${cursor()}`,
-    `/api/v1/history?cursor=${cursor("trade:9007199254740992")}`,
+    "/api/v2/portfolios/1/event-history",
+    `/api/v2/portfolios/1/event-history?cursor=${cursor()}`,
+    `/api/v2/portfolios/1/event-history?cursor=${cursor()}`,
+    `/api/v2/portfolios/1/event-history?cursor=${cursor()}`,
+    `/api/v2/portfolios/1/event-history?cursor=${cursor("trade:9007199254740992")}`,
   ]);
 });
 
@@ -466,10 +487,10 @@ it("renders all mixed kinds in server order with the five approved columns and l
   ).toEqual(["Recorded", "Event", "Asset", "Details", "Cash change"]);
   const rows = within(table).getAllByRole("row").slice(1);
   expect(rows.map((row) => row.id)).toEqual([
-    `history-desktop-${crypto.id}`,
-    `history-desktop-${dividend.id}`,
-    `history-desktop-${split.id}`,
-    `history-desktop-${held.id}`,
+    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${crypto.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${dividend.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${split.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${held.id}$`)),
   ]);
   expect(table).toHaveTextContent("USD 0.00000001 per share");
   expect(table).toHaveTextContent("Held when recorded");
@@ -505,4 +526,162 @@ it("removes offpage original details immediately on logout", async () => {
   expect(screen.queryByRole("table")).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: /^Original dividend/ })).not.toBeInTheDocument();
   expect(screen.queryByText(dividend.payment_reference)).not.toBeInTheDocument();
+});
+
+it("shows the full escaped portfolio context on History and original details", async () => {
+  const name = ("<strong>Strategy</strong> " + "Long name ".repeat(4)).slice(0, 60).trim();
+  historyFetch(() => ok([held]), [{ id: "1", name }]);
+  const { user } = renderWithClient(<HistoryPage />);
+  const table = await screen.findByRole("table");
+  expect(screen.getByText(name)).toHaveClass("[overflow-wrap:anywhere]");
+  expect(document.querySelector("strong")).toBeNull();
+  expect(
+    screen.getByText(
+      "Cash change is the amount actually added to or taken from this portfolio's USD balance.",
+    ),
+  ).toBeVisible();
+  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  const region = screen.getByRole("region", { name: /^Original dividend/ });
+  expect(within(region).getByText(name)).toHaveClass("min-w-0", "[overflow-wrap:anywhere]");
+  expect(region.querySelector("strong")).toBeNull();
+});
+
+it("resets original detail state for a sibling sharing the same global event and reference IDs", async () => {
+  const original = {
+    ...dividend,
+    eligible_quantity: "50000000",
+    credited_amount: "0.50",
+    cash_delta: "0.50",
+  };
+  const sibling = { ...held, cumulative_applied_before: "0.50", original };
+  const fetch = vi.fn((input: RequestInfo | URL) =>
+    String(input).includes("/2/") ? ok([sibling]) : ok([held]),
+  );
+  historyFetch(fetch, [
+    { id: "1", name: "My portfolio" },
+    { id: "2", name: "Sibling" },
+  ]);
+  const { user } = renderWithClient(<HistoryPage />);
+  await user.click(
+    within(await screen.findByRole("table")).getByRole("button", {
+      name: "View original dividend",
+    }),
+  );
+  const oldHeading = screen.getByRole("heading", { name: /^Original dividend/ });
+  expect(oldHeading).toHaveFocus();
+  await user.click(screen.getByRole("link", { name: "Open sibling" }));
+  const table = await screen.findByRole("table");
+  expect(screen.queryByRole("heading", { name: /^Original dividend/ })).toBeNull();
+  expect(oldHeading).not.toBeInTheDocument();
+  expect(screen.getAllByText("Sibling")).toHaveLength(1);
+  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  const originalRegion = screen.getByRole("region", { name: /^Original dividend/ });
+  expect(originalRegion).toHaveTextContent("+$0.50");
+  expect(originalRegion).not.toHaveTextContent("+$1.00");
+  expect(within(originalRegion).getByText("Sibling")).toBeVisible();
+  expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+    "/api/v2/portfolios/1/event-history",
+    "/api/v2/portfolios/2/event-history",
+  ]);
+});
+
+it("discards an old-root append and its focus/announcement after switching roots", async () => {
+  let finish!: (response: Response) => void;
+  historyFetch(
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/2/")) return ok([{ ...item, name: "Sibling fill", cash_delta: "-25.00" }]);
+      if (url.includes("?cursor="))
+        return new Promise<Response>((resolve) => {
+          finish = resolve;
+        });
+      return ok([item], cursor());
+    }),
+    [
+      { id: "1", name: "My portfolio" },
+      { id: "2", name: "Sibling" },
+    ],
+  );
+  const { user } = renderWithClient(<HistoryPage />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  await user.click(screen.getByRole("link", { name: "Open sibling" }));
+  expect(await screen.findByRole("table")).toHaveTextContent("Sibling fill");
+  await act(async () => finish(await ok([{ ...item, id: "trade:2", name: "Old root append" }])));
+  expect(screen.getByRole("table")).not.toHaveTextContent("Old root append");
+  expect(screen.getByRole("status")).toHaveTextContent("1 events shown.");
+  expect(screen.queryByText(/more events loaded/)).toBeNull();
+  expect(screen.getByRole("link", { name: "Open sibling" })).toHaveFocus();
+});
+
+function RemoveRoot() {
+  const client = useQueryClient();
+  return (
+    <button onClick={() => client.setQueryData(["portfolios", "history@example.test"], [])}>
+      Test root unavailable
+    </button>
+  );
+}
+it("removes open originals and pending page data immediately when root authority is lost", async () => {
+  let finish!: (response: Response) => void;
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(() => ok([held]))
+    .mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+  historyFetch(fetch);
+  const { user } = renderWithClient(
+    <>
+      <HistoryPage />
+      <RemoveRoot />
+    </>,
+  );
+  await user.click(
+    within(await screen.findByRole("table")).getByRole("button", {
+      name: "View original dividend",
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  await user.click(screen.getByRole("button", { name: "Test root unavailable" }));
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  await act(async () => finish(await ok([held])));
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("heading", { name: /^Original dividend/ })).toBeNull();
+  expect(screen.queryByText(dividend.payment_reference)).toBeNull();
+});
+
+it.each([2, 3])(
+  "rejects a version%s crossed-root cursor without displaying its page",
+  async (version) => {
+    const crossed = btoa(
+      JSON.stringify({
+        v: version,
+        portfolio_id: "2",
+        recorded_at: item.recorded_at,
+        kind_rank: 4,
+        source_id: "1",
+      }),
+    )
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
+    historyFetch(() =>
+      Promise.resolve(new Response(JSON.stringify({ items: [item], next_cursor: crossed }))),
+    );
+    renderWithClient(<HistoryPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't load your history right now");
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText("No activity yet")).toBeNull();
+  },
+);
+
+it("never fetches another portfolio when the explicit target is unavailable", async () => {
+  const fetch = vi.fn();
+  historyFetch(fetch);
+  renderWithClient(<HistoryPage />, "/portfolios/2/history");
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(fetch).not.toHaveBeenCalled();
 });

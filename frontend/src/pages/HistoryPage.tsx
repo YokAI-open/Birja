@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EventHistoryItem } from "@/api/eventHistory";
 import {
@@ -11,8 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { eventHistorySession, useEventHistory } from "@/hooks/useEventHistory";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioContext } from "@/components/PortfolioContext";
 
-function fields(item: EventHistoryItem, prefix: string) {
+function fields(item: EventHistoryItem, prefix: string, target: PortfolioTarget) {
   return [
     ["Recorded", <HistoryEventTime value={item.recorded_at} />],
     ["Event", <HistoryEventTitle item={item} />],
@@ -25,12 +27,22 @@ function fields(item: EventHistoryItem, prefix: string) {
         <span className="font-medium">{item.symbol}</span> · {item.name}
       </span>,
     ],
-    ["Details", <HistoryEventDetails item={item} anchorPrefix={prefix} />],
+    ["Details", <HistoryEventDetails item={item} target={target} anchorPrefix={prefix} />],
     ["Cash change", <HistoryEventCash item={item} />],
   ] as const;
 }
 
 export default function HistoryPage() {
+  const target = useOutletContext<PortfolioTarget>();
+  return (
+    <OwnedHistory
+      key={JSON.stringify([target.owner, target.portfolioId, target.epoch.session])}
+      target={target}
+    />
+  );
+}
+
+function OwnedHistory({ target }: { target: PortfolioTarget }) {
   const client = useQueryClient();
   const {
     data,
@@ -43,7 +55,8 @@ export default function HistoryPage() {
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useEventHistory();
+  } = useEventHistory(target);
+  const prefix = `history-${target.portfolioId}-${target.epoch.session}-`;
   const items = data?.pages.flatMap((page) => page.items);
   const appendButton = useRef<HTMLButtonElement | null>(null);
   const refreshButton = useRef<HTMLButtonElement | null>(null);
@@ -72,19 +85,20 @@ export default function HistoryPage() {
     if (
       current.email === intent.session.email &&
       current.epoch === intent.session.epoch &&
+      target.isCurrent() &&
       button === intent.button &&
       (document.activeElement === document.body || document.activeElement === button)
     )
       button.focus({ preventScroll: true });
     focusEnd.current = null;
-  }, [client, isFetching, hasNextPage]);
+  }, [client, isFetching, hasNextPage, target]);
 
   function refresh() {
-    if (!isFetching) void refetch({ cancelRefetch: false });
+    if (target.isCurrent() && !isFetching) void refetch({ cancelRefetch: false });
   }
 
   async function loadMore() {
-    if (isFetching || !hasNextPage) return;
+    if (!target.isCurrent() || isFetching || !hasNextPage) return;
     const session = eventHistorySession(client);
     const button = appendButton.current;
     // Native disabled controls can blur in Chromium before their final unmount.
@@ -94,7 +108,8 @@ export default function HistoryPage() {
     const previousCount = items?.length ?? 0;
     const result = await fetchNextPage({ cancelRefetch: false });
     const current = eventHistorySession(client);
-    if (current.email !== session.email || current.epoch !== session.epoch) return;
+    if (!target.isCurrent() || current.email !== session.email || current.epoch !== session.epoch)
+      return;
     if (!result.isError) {
       const count =
         result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ?? previousCount;
@@ -120,6 +135,7 @@ export default function HistoryPage() {
           {isFetching && !isFetchingNextPage ? "Refreshing history…" : "Refresh history"}
         </Button>
       </div>
+      <PortfolioContext name={target.name} />
       {isPending ? (
         <Card role="status" aria-label="Loading history" aria-busy="true">
           <CardContent>
@@ -163,7 +179,8 @@ export default function HistoryPage() {
                 Newest recorded first. Times are shown in your local timezone.
               </p>
               <p className="text-muted-foreground">
-                Cash change is the amount actually added to or taken from your shared USD balance.
+                Cash change is the amount actually added to or taken from this portfolio&apos;s USD
+                balance.
               </p>
               {items.length === 0 ? (
                 <div className="flex flex-col items-start gap-4">
@@ -194,7 +211,7 @@ export default function HistoryPage() {
                       </colgroup>
                       <thead>
                         <tr>
-                          {fields(items[0]!, "history-desktop-").map(([label], index) => (
+                          {fields(items[0]!, `${prefix}desktop-`, target).map(([label], index) => (
                             <th
                               key={label}
                               scope="col"
@@ -209,23 +226,24 @@ export default function HistoryPage() {
                         {items.map((item) => (
                           <tr
                             key={item.id}
-                            id={`history-desktop-${item.id}`}
+                            id={`${prefix}desktop-${item.id}`}
                             tabIndex={-1}
                             className="h-[52px] scroll-mb-24 border-t border-border align-top wrap-anywhere hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
                           >
-                            {fields(item, "history-desktop-").map(([label, value], index) =>
-                              index === 2 ? (
-                                <th key={label} scope="row" className="min-w-0 p-4 font-normal">
-                                  {value}
-                                </th>
-                              ) : (
-                                <td
-                                  key={label}
-                                  className={`min-w-0 p-4 tabular-nums ${index === 4 ? "text-right" : ""}`}
-                                >
-                                  {value}
-                                </td>
-                              ),
+                            {fields(item, `${prefix}desktop-`, target).map(
+                              ([label, value], index) =>
+                                index === 2 ? (
+                                  <th key={label} scope="row" className="min-w-0 p-4 font-normal">
+                                    {value}
+                                  </th>
+                                ) : (
+                                  <td
+                                    key={label}
+                                    className={`min-w-0 p-4 tabular-nums ${index === 4 ? "text-right" : ""}`}
+                                  >
+                                    {value}
+                                  </td>
+                                ),
                             )}
                           </tr>
                         ))}
@@ -236,12 +254,12 @@ export default function HistoryPage() {
                     {items.map((item) => (
                       <li
                         key={item.id}
-                        id={`history-mobile-${item.id}`}
+                        id={`${prefix}mobile-${item.id}`}
                         tabIndex={-1}
                         className="scroll-mb-24 border-t border-border py-4 focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         <dl className="flex flex-col gap-4">
-                          {fields(item, "history-mobile-").map(([label, value]) => (
+                          {fields(item, `${prefix}mobile-`, target).map(([label, value]) => (
                             <div key={label} className="flex min-w-0 flex-col items-start gap-2">
                               <dt className="text-muted-foreground">{label}</dt>
                               <dd className="w-full min-w-0 wrap-anywhere tabular-nums">{value}</dd>
@@ -287,6 +305,7 @@ export default function HistoryPage() {
                     if (
                       current.email === intent.session.email &&
                       current.epoch === intent.session.epoch &&
+                      target.isCurrent() &&
                       (document.activeElement === document.body ||
                         document.activeElement === intent.button)
                     )
