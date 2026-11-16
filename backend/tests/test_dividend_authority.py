@@ -4,6 +4,8 @@ import json
 from dataclasses import asdict, replace
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -11,12 +13,39 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from tests.test_dividend_rules import TARGET_VECTORS
-from tests.test_dividend_schema import dividend_case, migration
+from tests.test_dividend_schema import dividend_case
 from tests.test_stock_action_migrations import ledger
 from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_sessions import evidence
 
 __all__ = ["ledger", "dividend_case"]
+
+
+def migration():
+    """Current behavioral proofs authenticate the exact final source asset.
+
+    The retained0014 migration has its own explicit old-schema lane.
+    """
+    import re
+
+    source = (Path(__file__).parents[1] / "alembic/sql/0017_dividend_portfolio.sql").read_text()
+
+    def body(name):
+        match = re.search(
+            rf"CREATE OR REPLACE FUNCTION public\.{name}\(.*?END \$[a-z]+\$;", source, re.S
+        )
+        assert match is not None
+        return match.group()
+
+    return SimpleNamespace(
+        APPLY_SIGNATURE="public.apply_stock_dividend(bigint,bigint,text,text)",
+        HOLD_SIGNATURE="public.record_stock_dividend_hold(bigint,text)",
+        AUTHORITY_SIGNATURE="public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)",
+        APPLY=body("apply_stock_dividend"),
+        HOLD=body("record_stock_dividend_hold"),
+        AUTHORITY=body("stock_dividend_authority"),
+        IMMUTABILITY=body("reject_stock_dividend_mutation"),
+    )
 
 
 async def test_scheduler_boundary_requires_narrow_authority(engine, migrated):
@@ -102,37 +131,10 @@ async def test_acl_bootstrap_accepts_exact_current_authority(engine, migrated):
 
 @pytest_asyncio.fixture
 async def authority_case(dividend_case, request):
+    from tests.stock_action_fixtures import install_current_runtime_roles
+
     conn, ids = dividend_case
-    await conn.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
-    for role in ("birja_app", "birja_scheduler"):
-        await conn.execute(text(f"CREATE ROLE {role} NOLOGIN NOINHERIT"))
-    await conn.execute(
-        text("GRANT USAGE ON SCHEMA public TO birja_migrator,birja_scheduler,birja_app")
-    )
-    await conn.execute(
-        text("""GRANT SELECT ON stock_action_events,stock_action_revisions,
-      stock_action_observations,stock_action_resolutions,stock_action_state,stock_instruments,
-      coins,stock_data_admissions,stock_sessions,stock_ownership_movements,stock_split_applications,
-      stock_dividend_entitlements,stock_dividend_payments,
-      stock_dividend_decisions,accounts TO birja_migrator""")
-    )
-    await conn.execute(
-        text("GRANT INSERT ON stock_dividend_payments,stock_dividend_decisions TO birja_migrator")
-    )
-    await conn.execute(
-        text(
-            "GRANT USAGE ON SEQUENCE stock_dividend_payments_id_seq,"
-            "stock_dividend_decisions_id_seq TO birja_migrator"
-        )
-    )
-    await conn.execute(text("GRANT UPDATE(cash) ON accounts TO birja_migrator"))
-    await conn.execute(
-        text(
-            "GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),"
-            "public.record_stock_dividend_hold(bigint,text) TO birja_scheduler"
-        )
-    )
-    await conn.execute(text(migration().GRANTS))
+    await install_current_runtime_roles(conn)
     now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
     params = getattr(getattr(request.node, "callspec", None), "params", {})
     quantity = Decimal(params.get("quantity", 2))
@@ -167,9 +169,6 @@ async def authority_case(dividend_case, request):
             values,
         )
     await conn.execute(
-        text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:user_id,100,10000)"), ids
-    )
-    await conn.execute(
         text("""INSERT INTO stock_action_state(coin_id,admission_generation,
       health,checked_at,valid_until,journal_start_at,complete_from,coverage_start,covered_until)
       VALUES (:coin_id,4,'current',clock_timestamp()-interval '1 hour',
@@ -178,6 +177,11 @@ async def authority_case(dividend_case, request):
       clock_timestamp()-interval '10 days',clock_timestamp())"""),
         ids,
     )
+    cutoff = (
+        await conn.execute(
+            text("SELECT cutoff FROM stock_dividend_entitlements WHERE id=:entitlement_id"), ids
+        )
+    ).scalar_one()
     terms = {
         "event_type": "cash_dividend",
         "currency": "USD",
@@ -190,29 +194,23 @@ async def authority_case(dividend_case, request):
         "cancelled": False,
         "identity_changed": False,
         "rate": "0.5",
-        "ex_date": str(now.date() - timedelta(days=3)),
-        "record_date": str(now.date() - timedelta(days=2)),
+        "ex_date": str(cutoff.date()),
+        "record_date": str(cutoff.date() + timedelta(days=1)),
         "payable_date": str(now.date() - timedelta(days=1)),
     }
     await conn.execute(
         text("""UPDATE stock_action_revisions SET classification='supported_dividend',
       normalized_terms=CAST(:terms AS jsonb),admission_generation=4,
-      verified_cutoff=clock_timestamp()-interval '3 days' WHERE id=:revision_id"""),
+      verified_cutoff=(SELECT cutoff FROM stock_dividend_entitlements WHERE id=:entitlement_id)
+      WHERE id=:revision_id"""),
         {**ids, "terms": json.dumps(terms)},
-    )
-    await conn.execute(
-        text("""UPDATE stock_dividend_entitlements SET
-      cutoff=(SELECT verified_cutoff FROM stock_action_revisions WHERE id=:revision_id),
-      cutoff_rule='exclusive-regular-session-open',units_basis='unit_epoch:0',
-      eligible_quantity=:quantity,last_movement_sequence=:sequence WHERE id=:entitlement_id"""),
-        {**ids, "quantity": quantity, "sequence": 1 if quantity else 0},
     )
     if quantity:
         await conn.execute(
-            text("""INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,
+            text("""INSERT INTO stock_ownership_movements(portfolio_id,coin_id,user_id,sequence,
           economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,
           unit_epoch,cause_kind,causal_key)
-          SELECT :coin_id,:user_id,1,cutoff-interval '1 day',clock_timestamp(),
+          SELECT :portfolio_id,:coin_id,:user_id,1,cutoff-interval '1 day',clock_timestamp(),
           :quantity,0,:quantity,0,0,0,'opening','synthetic-dividend-opening'
           FROM stock_dividend_entitlements WHERE id=:entitlement_id"""),
             {**ids, "quantity": quantity},
@@ -312,12 +310,6 @@ async def test_half_even_sql_matches_literal_python_vectors(
     await conn.execute(text("UPDATE accounts SET cash=0 WHERE user_id=:user_id"), ids)
     await conn.execute(
         text(
-            "UPDATE stock_dividend_entitlements SET eligible_quantity=:q WHERE id=:entitlement_id"
-        ),
-        {**ids, "q": quantity},
-    )
-    await conn.execute(
-        text(
             "UPDATE stock_action_revisions SET normalized_terms=jsonb_set("
             "normalized_terms,'{rate}',to_jsonb(CAST(:r AS text))) WHERE id=:revision_id"
         ),
@@ -390,10 +382,10 @@ async def successor(conn, ids, *, rate="0.75", classification="supported_dividen
         ).scalar_one()
         eid = (
             await conn.execute(
-                text("""INSERT INTO stock_dividend_entitlements(event_id,user_id,
+                text("""INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,
           revision_id,cutoff,cutoff_rule,units_basis,unit_epoch,last_movement_sequence,
           eligible_quantity,state,version,supersedes_id,fingerprint)
-          SELECT event_id,user_id,:r,cutoff,cutoff_rule,units_basis,unit_epoch,
+          SELECT event_id,portfolio_id,user_id,:r,cutoff,cutoff_rule,units_basis,unit_epoch,
           last_movement_sequence,
           eligible_quantity,'eligible',version+1,id,:f FROM stock_dividend_entitlements
           WHERE id=:entitlement_id RETURNING id"""),
@@ -533,9 +525,16 @@ async def test_scheduler_boundary_no_anchor_or_healthy_target_cannot_hold(author
 )
 async def test_scheduler_boundary_unverified_retained_work_refuses_no_cash(authority_case, sql):
     conn, ids = authority_case
-    await conn.execute(text(sql))
-    with pytest.raises(DBAPIError):
-        await apply(conn, ids)
+    if sql.startswith("UPDATE stock_dividend_entitlements"):
+        # Final0017 prevents this invalid evidence from existing at all,
+        # including for the privileged setup owner; no guard is suspended.
+        with pytest.raises(DBAPIError, match="immutable dividend accounting"):
+            async with conn.begin_nested():
+                await conn.execute(text(sql))
+    else:
+        await conn.execute(text(sql))
+        with pytest.raises(DBAPIError):
+            await apply(conn, ids)
     assert (
         await conn.execute(text("SELECT cash FROM accounts WHERE user_id=:user_id"), ids)
     ).scalar_one() == Decimal(100)
@@ -564,8 +563,8 @@ async def test_scheduler_boundary_actual_producer_snapshot_without_split_cutoff(
     )
     await conn.execute(
         text(
-            "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) "
-            "VALUES (:user_id,:coin_id,2,0)"
+            "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+            "VALUES (:portfolio_id,:user_id,:coin_id,2,0)"
         ),
         ids,
     )
@@ -619,7 +618,7 @@ async def test_acl_direct_write_and_private_helper_denials(authority_case, role)
     async with conn.begin_nested():
         await conn.execute(text(f"SET LOCAL ROLE {role}"))
         for statement in (
-            "UPDATE public.accounts SET cash=999999",
+            "UPDATE public.accounts SET user_id=user_id",
             "INSERT INTO public.stock_dividend_payments(event_id) VALUES (1)",
             "INSERT INTO public.stock_dividend_decisions(payment_id) VALUES (1)",
             "UPDATE public.stock_dividend_payments SET original_amount=0",
@@ -637,6 +636,11 @@ async def test_acl_direct_write_and_private_helper_denials(authority_case, role)
                 async with conn.begin_nested():
                     await conn.execute(text(statement))
             assert error.value.orig.sqlstate == "42501", statement
+        if role == "birja_scheduler":
+            with pytest.raises(DBAPIError) as error:
+                async with conn.begin_nested():
+                    await conn.execute(text("UPDATE public.accounts SET cash=999999"))
+            assert error.value.orig.sqlstate == "42501"
         if role == "birja_app":
             for statement in (
                 "SELECT public.apply_stock_dividend(1,1,'a','b')",
@@ -693,14 +697,10 @@ async def test_acl_function_identity_exact_and_public_cannot_execute(authority_c
 
 
 async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority_case):
-    import asyncio
-    from pathlib import Path
-
     conn, _ = authority_case
-    source = await asyncio.to_thread(
-        lambda: (Path(__file__).resolve().parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
-    )
-    guard = source[source.index("DO $dividend_identity$") : source.index("\\if :apply")]
+    from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+
+    guard = PREFLIGHT_SQL
     await conn.execute(text(guard))
     for statement in (
         "ALTER FUNCTION public.apply_stock_dividend(bigint,bigint,text,text) SECURITY INVOKER",
@@ -709,9 +709,7 @@ async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority
         "SET search_path=public,pg_temp",
         "ALTER FUNCTION public.record_stock_dividend_hold(bigint,text) OWNER TO birja_test",
         "ALTER FUNCTION public.record_stock_dividend_hold(bigint,text) STABLE",
-        migration()
-        .HOLD.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION")
-        .replace("status:='epoch:'", "status:='forged:'"),
+        migration().HOLD.replace("status:='epoch:'", "status:='forged:'"),
     ):
         async with conn.begin_nested() as outer:
             await conn.execute(text(statement))
@@ -757,9 +755,9 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
             text("UPDATE stock_sessions SET opens_at=:o,closes_at=:c"),
             {"o": base.opens_at, "c": base.closes_at},
         )
-        await conn.execute(
-            text("UPDATE stock_dividend_entitlements SET cutoff=:o"), {"o": base.opens_at}
-        )
+        assert (
+            await conn.execute(text("SELECT cutoff FROM stock_dividend_entitlements"))
+        ).scalar_one() == base.opens_at
     if change == "coverage":
         now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
         cal["coverage_start"] = str(now.date())
@@ -834,9 +832,6 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
 
 @pytest.mark.parametrize("declaration", ["type", "name", "mode"])
 async def test_identity_preflight_refuses_altered_out_declaration(authority_case, declaration):
-    import asyncio
-    from pathlib import Path
-
     conn, _ = authority_case
     definition = migration().APPLY
     if declaration == "type":
@@ -878,10 +873,9 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
             "TO birja_scheduler"
         )
     )
-    source = await asyncio.to_thread(
-        lambda: (Path(__file__).resolve().parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
-    )
-    guard = source[source.index("DO $dividend_identity$") : source.index("\\if :apply")]
+    from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+
+    guard = PREFLIGHT_SQL
     with pytest.raises(DBAPIError, match="authority mismatch"):
         async with conn.begin_nested():
             await conn.execute(text(guard))

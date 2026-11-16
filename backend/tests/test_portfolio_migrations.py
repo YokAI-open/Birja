@@ -151,7 +151,10 @@ async def test_final_inventory_matches_paired_constraints_and_private_helpers(
         assert all(r[3:] == (["search_path=pg_catalog, public, pg_temp"], False) for r in rows)
 
 
-async def test_migrator_connection_authenticates_without_mutating_parent(engine, settings):
+async def test_migrator_connection_authenticates_without_mutating_parent(
+    portfolio_migration_db, settings
+):
+    engine = portfolio_migration_db
     before_env = os.environ["DATABASE_URL"]
     await asyncio.to_thread(run_test_migration, "0014")
     child = create_async_engine(test_migration_url())
@@ -194,7 +197,10 @@ async def test_migrator_connection_set_role_does_not_authenticate(engine):
         )
 
 
-async def test_migrator_connection_legacy_oracle_has_two_users_one_global_split(engine):
+async def test_migrator_connection_legacy_oracle_has_two_users_one_global_split(
+    portfolio_migration_db,
+):
+    engine = portfolio_migration_db
     await asyncio.to_thread(run_test_migration, "0014")
     async with engine.connect() as conn:
         tx = await conn.begin()

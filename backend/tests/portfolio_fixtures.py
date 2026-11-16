@@ -105,7 +105,6 @@ def legacy_digest(rows: list[list[object]]) -> str:
 
 async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
     """Two actual users, unequal original books and ONE global two-owner split."""
-    from tests.test_dividend_schema import decision, payment
     from tests.test_stock_action_migrations import event, movement
     from tests.test_stock_execution_migrations import insert_trade
 
@@ -214,8 +213,38 @@ async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
                 "entitlement_id": en,
                 "entitlement_fingerprint": "b" * 64,
             }
-            pid = await payment(conn, terms)
-            await decision(conn, terms, pid)
+            # Exact retained0014 columns, independent of current0017 ORM/root
+            # helpers. This lane intentionally seeds before portfolio expansion.
+            assert (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar_one() == "0014"
+            pid = (
+                await conn.execute(
+                    text("""INSERT INTO stock_dividend_payments
+                    (event_id,coin_id,user_id,revision_id,revision_fingerprint,entitlement_id,
+                     entitlement_fingerprint,symbol,company_name,cutoff,cutoff_rule,units_basis,
+                     unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date,
+                     original_amount,recorded_at,cash_after)
+                    VALUES (:event_id,:coin_id,:user_id,:revision_id,:revision_fingerprint,
+                     :entitlement_id,:entitlement_fingerprint,'AAPL','Saved Apple',now(),
+                     'exclusive','shares',0,2,.5,'2026-11-01','2026-11-02','2026-11-10',
+                     1,now(),10001) RETURNING id"""),
+                    terms,
+                )
+            ).scalar_one()
+            await conn.execute(
+                text("""INSERT INTO stock_dividend_decisions
+                (payment_id,event_id,coin_id,user_id,revision_id,revision_fingerprint,
+                 entitlement_id,entitlement_fingerprint,desired_total,cumulative_applied_before,
+                 proposed_delta,applied_delta,outcome,reason,status_identity,recorded_at,cash_after,
+                 symbol,company_name,cutoff,cutoff_rule,units_basis,unit_epoch,eligible_quantity,
+                 rate,ex_date,record_date,payable_date)
+                VALUES (:p,:event_id,:coin_id,:user_id,:revision_id,:revision_fingerprint,
+                 :entitlement_id,:entitlement_fingerprint,.5,1,-.5,0,'held_unaffordable',
+                 'insufficient_cash','epoch:1:insufficient_cash',now(),.2,'AAPL','Saved Apple',
+                 now(),'exclusive','shares',0,2,.25,'2026-11-01','2026-11-02','2026-11-10')"""),
+                {**terms, "p": pid},
+            )
     await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     return LegacyBooks(tuple(owners), tuple(roots), crypto, stock, tuple(trade_ids), sid)
 

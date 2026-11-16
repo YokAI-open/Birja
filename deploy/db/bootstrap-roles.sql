@@ -153,6 +153,21 @@ BEGIN
    OR actual.proisstrict OR actual.proleakproof OR actual.pronargdefaults<>0
    OR actual.prosupport<>0
    OR actual.provariadic<>0
+   OR actual.proallargtypes IS DISTINCT FROM (CASE actual.proname
+     WHEN 'apply_stock_dividend' THEN ARRAY[20,20,25,25,20,20,25]::oid[]
+     WHEN 'record_stock_dividend_hold' THEN ARRAY[20,25,20,20,25]::oid[] ELSE NULL END)
+   OR actual.proargmodes IS DISTINCT FROM (CASE actual.proname
+     WHEN 'apply_stock_dividend' THEN ARRAY['i','i','i','i','t','t','t']::"char"[]
+     WHEN 'record_stock_dividend_hold' THEN ARRAY['i','i','t','t','t']::"char"[] ELSE NULL END)
+   OR actual.proargnames IS DISTINCT FROM (CASE actual.proname
+     WHEN 'apply_stock_dividend' THEN ARRAY['p_event','p_entitlement','p_revision',
+       'p_fingerprint','payment_id','decision_id','outcome']
+     WHEN 'record_stock_dividend_hold' THEN ARRAY['p_payment','p_revision',
+       'payment_id','decision_id','outcome']
+     WHEN 'stock_dividend_authority' THEN ARRAY['p_event','p_entitlement','p_revision',
+       'p_fingerprint','p_verified','p_expected']
+     WHEN 'assert_stock_execution_current' THEN ARRAY['p_trade','p_user','p_expected']
+     WHEN 'lock_stock_portfolio_roots' THEN ARRAY['p_coin'] ELSE NULL END)
    OR actual.proretset<>(actual.proname IN ('apply_stock_dividend','record_stock_dividend_hold'))
    OR actual.prorettype<>(CASE
      WHEN actual.proname IN ('apply_stock_dividend','record_stock_dividend_hold')
