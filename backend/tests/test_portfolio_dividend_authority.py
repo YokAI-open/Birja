@@ -4,7 +4,9 @@ The final_sql cases require real Alembic0017. Before Plan07 only collection
 and static asset contracts run; no test fabricates or installs a final schema.
 """
 
+import ast
 import json
+import re
 from dataclasses import asdict, replace
 from datetime import timedelta
 from decimal import Decimal
@@ -482,3 +484,203 @@ async def test_final_sql_dividend_causal_row_rewrites_are_refused(dividend_portf
                 ),
                 {"d": changed["decision_id"]},
             )
+
+
+@pytest.mark.parametrize("forgery", ["sibling", "foreign", "owner"])
+async def test_final_sql_dividend_payment_tuple_cannot_pair_foreign_entitlement(
+    dividend_portfolio_case, forgery
+):
+    conn, targets = dividend_portfolio_case
+    original = await apply(conn, targets[0])
+    with pytest.raises(DBAPIError) as error:
+        async with conn.begin_nested():
+            # Actual migration owner can INSERT, so this proves causal SQL
+            # constraints rather than merely scheduler's lack of DML grants.
+            await conn.execute(text("SET LOCAL ROLE birja_migrator"))
+            await conn.execute(
+                text("""INSERT INTO stock_dividend_payments(event_id,coin_id,portfolio_id,
+                user_id,revision_id,revision_fingerprint,entitlement_id,entitlement_fingerprint,
+                symbol,company_name,cutoff,cutoff_rule,units_basis,unit_epoch,eligible_quantity,
+                rate,ex_date,record_date,payable_date,original_amount,recorded_at,cash_after)
+                SELECT event_id,coin_id,:p,:u,revision_id,revision_fingerprint,entitlement_id,
+                entitlement_fingerprint,symbol,company_name,cutoff,cutoff_rule,units_basis,
+                unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date,
+                original_amount,recorded_at,cash_after
+                FROM stock_dividend_payments WHERE id=:id"""),
+                {
+                    "p": targets[1 if forgery == "sibling" else 2]["portfolio_id"],
+                    "u": targets[0 if forgery != "foreign" else 2]["user_id"],
+                    "id": original["payment_id"],
+                },
+            )
+            await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    assert error.value.orig.sqlstate == "23503"
+    assert await balances(conn, targets) == [Decimal(101), Decimal(100), Decimal(100)]
+
+
+async def test_final_sql_dividend_exact_routine_security_and_guarded_database(
+    dividend_portfolio_case,
+):
+    conn, _ = dividend_portfolio_case
+    rows = (
+        await conn.execute(
+            text("""SELECT p.oid::regprocedure::text,p.prosecdef,
+        r.rolname,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='public'
+        AND p.proname IN ('stock_dividend_authority','apply_stock_dividend',
+        'record_stock_dividend_hold','reject_stock_dividend_mutation')""")
+        )
+    ).all()
+    assert {r[0].replace(" ", "") for r in rows} == SIGNATURES
+    for signature, definer, owner, config in rows:
+        assert owner == "birja_migrator"
+        assert definer == signature.startswith(
+            ("apply_stock_dividend(", "record_stock_dividend_hold(")
+        )
+        assert "search_path=pg_catalog, public, pg_temp" in config
+    # Local pytest transport is guarded in conftest; verified-TLS ops proofs
+    # run independently in16/18/27, not fabricated by this local SQL fixture.
+    assert (await conn.execute(text("SELECT current_database()"))).scalar_one() == "birja_test"
+
+
+def sql_function(sql, name):
+    match = re.search(rf"CREATE OR REPLACE FUNCTION public\.{name}\(.*?END \$[a-z]+\$;", sql, re.S)
+    assert match is not None, name
+    return match.group()
+
+
+def test_asset_contract_exact_retained_signatures_security_and_private_inventory():
+    sql = ASSET.read_text()
+    assert re.findall(r"CREATE OR REPLACE FUNCTION public\.(\w+)\(", sql) == [
+        "reject_stock_dividend_mutation",
+        "stock_dividend_authority",
+        "apply_stock_dividend",
+        "record_stock_dividend_hold",
+    ]
+    assert "p_event bigint,p_entitlement bigint,p_revision text,p_fingerprint text," in sql
+    assert "p_verified boolean,p_expected jsonb)" in sql
+    assert "record_stock_dividend_hold(p_payment bigint,p_revision text)" in sql
+    for name in ("apply_stock_dividend", "record_stock_dividend_hold"):
+        body = sql_function(sql, name)
+        assert "RETURNS TABLE(payment_id bigint,decision_id bigint,outcome text)" in body
+        assert "SECURITY DEFINER" in body
+    for name in ("reject_stock_dividend_mutation", "stock_dividend_authority"):
+        assert "SECURITY INVOKER" in sql_function(sql, name)
+    for signature in SIGNATURES:
+        assert f"REVOKE ALL ON FUNCTION public.{signature} FROM PUBLIC;" in sql
+        assert f"ALTER FUNCTION public.{signature} OWNER TO birja_migrator;" in sql
+    for name in (
+        "reject_stock_dividend_mutation",
+        "stock_dividend_authority",
+        "apply_stock_dividend",
+        "record_stock_dividend_hold",
+    ):
+        assert "SET search_path=pg_catalog,public,pg_temp" in sql_function(sql, name)
+    assert re.findall(r"GRANT EXECUTE ON FUNCTION (.*?) TO (\w+);", sql, re.S) == [
+        (
+            "public.apply_stock_dividend(bigint,bigint,text,text),\n "
+            "public.record_stock_dividend_hold(bigint,text)",
+            "birja_scheduler",
+        )
+    ]
+    assert "GRANT UPDATE" not in sql
+    assert "GRANT INSERT" not in sql
+    assert "REVOKE UPDATE(cash) ON public.accounts FROM birja_scheduler;" in sql
+    assert "public.stock_dividend_decisions_id_seq FROM birja_app,birja_scheduler;" in sql
+
+
+def test_asset_contract_preserves_0014_independent_economics_and_refusal_outcomes():
+    sql = ASSET.read_text()
+    tree = ast.parse((ASSET.parent.parent / "versions/0014_dividend_accounting.py").read_text())
+    old = {
+        n.targets[0].id: ast.literal_eval(n.value)
+        for n in tree.body
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+    }
+    for key, name in (
+        ("AUTHORITY", "stock_dividend_authority"),
+        ("APPLY", "apply_stock_dividend"),
+        ("HOLD", "record_stock_dividend_hold"),
+        ("IMMUTABILITY", "reject_stock_dividend_mutation"),
+    ):
+        body = sql_function(sql, name)
+        messages = re.findall(r"RAISE EXCEPTION '([^']+)'", old[key])
+        assert messages and all(f"RAISE EXCEPTION '{message}'" in body for message in messages)
+    body = sql_function(sql, "apply_stock_dividend")
+    for expression in (
+        "raw:=en.eligible_quantity*(terms->>'rate')::numeric",
+        "raw*100-cents=0.5 AND mod(cents,2)=1",
+        "delta:=desired-cumulative",
+        "WHEN cash+delta<0 THEN 'held_unaffordable'",
+        "ELSE 'applied' END",
+        "applied:=CASE WHEN result_outcome='applied' THEN delta ELSE 0 END",
+        "SET CONSTRAINTS ALL IMMEDIATE",
+        "ON CONFLICT DO NOTHING",
+    ):
+        assert expression in body
+    authority = sql_function(sql, "stock_dividend_authority")
+    for expression in (
+        "r.entitlement).eligible_quantity=r.historical_quantity",
+        "r.entitlement).last_movement_sequence=r.historical_sequence",
+        "NOT r.unresolved_split",
+        "NOT r.held",
+        "OR r.newer",
+        "r.revision).classification='supported_dividend'",
+        "terms->>'currency'='USD'",
+        "terms->>'subtype'='ordinary'",
+        "r.action).complete_from<=(r.entitlement).cutoff",
+        "r.action).covered_until>=(r.entitlement).cutoff",
+        "dividend hold needs uncertainty",
+        "backup_restore",
+        "durable_accounting",
+        "retention_mode",
+        "dividend cutoff calendar changed",
+    ):
+        assert expression in authority
+
+
+def test_asset_contract_entitlement_derived_active_root_and_same_root_correction_chain():
+    sql = ASSET.read_text()
+    authority = sql_function(sql, "stock_dividend_authority")
+    for expression in (
+        "ac.id=en.portfolio_id AND ac.user_id=en.user_id",
+        "r.portfolio_id IS NULL OR r.portfolio_closed_at IS NOT NULL",
+        "m.portfolio_id=en.portfolio_id AND m.user_id=en.user_id",
+        "newer.portfolio_id=en.portfolio_id",
+        "result IS DISTINCT FROM p_expected",
+    ):
+        assert expression in authority
+    body = sql_function(sql, "apply_stock_dividend")
+    assert "en0.user_id,en0.portfolio_id INTO cid,uid,pid" in body
+    assert body.index("pg_advisory_xact_lock") < body.index("FOR UPDATE")
+    assert "ac.id=pid AND ac.user_id=uid AND ac.closed_at IS NULL FOR UPDATE" in body
+    assert body.index("dividend portfolio unavailable") < body.index("original.id IS NOT NULL")
+    assert "p.event_id=p_event AND p.portfolio_id=pid AND p.user_id=uid" in body
+    assert body.count("WHERE id=pid AND user_id=uid AND closed_at IS NULL") == 2
+    assert "WHERE user_id=uid;" not in body
+    assert "d.portfolio_id=pid AND d.user_id=uid" in body
+    assert "VALUES(original.id,pid,uid,p_event" in body
+    hold_body = sql_function(sql, "record_stock_dividend_hold")
+    assert hold_body.index("pg_advisory_xact_lock") < hold_body.index("FOR UPDATE")
+    assert "ac.id=original.portfolio_id AND ac.user_id=original.user_id" in hold_body
+    assert "e.portfolio_id=original.portfolio_id" in hold_body
+    assert "d.portfolio_id=original.portfolio_id" in hold_body
+    assert "VALUES(original.id,original.portfolio_id,original.user_id" in hold_body
+    assert hold_body.index("dividend portfolio unavailable") < hold_body.index("IF did IS NULL")
+    assert "d.portfolio_id=NEW.portfolio_id" in sql_function(sql, "reject_stock_dividend_mutation")
+
+
+def test_asset_contract_final_validation_is_last_business_statement():
+    sql = ASSET.read_text()
+    for name in ("apply_stock_dividend", "record_stock_dividend_hold"):
+        body = sql_function(sql, name)
+        before, after = body.rsplit("final_authority:=public.stock_dividend_authority(", 1)
+        assert "SET CONSTRAINTS ALL IMMEDIATE;" in before
+        assert not re.search(r"\b(?:FROM|JOIN) public\.", after)
+        assert not re.search(r"\b(?:UPDATE|INSERT|DELETE|PERFORM|FOR UPDATE)\b", after)
+        assert after.count("RETURN QUERY SELECT") == 1
+    authority = sql_function(sql, "stock_dividend_authority")
+    before, after = authority.split("n:=clock_timestamp();")
+    assert "INTO r FROM public.stock_action_events" in before
+    assert not re.search(r"\b(?:FROM|JOIN) public\.", after)
+    assert not re.search(r"\b(?:UPDATE|INSERT|DELETE|PERFORM|FOR UPDATE)\b", authority)
