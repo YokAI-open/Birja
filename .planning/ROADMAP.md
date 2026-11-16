@@ -130,7 +130,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 12-21-PLAN.md — Trade hook cache and unknown-attempt isolation
+- [x] 12-21-PLAN.md — Trade hook cache and unknown-attempt isolation
 - [ ] 12-22-PLAN.md — Valuation and History hook isolation
 - [ ] 12-23-PLAN.md — Scoped navigation and accessible target boundary
 
@@ -272,7 +272,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 20/28 | Wave13 complete; next12-21 browser isolation | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 21/28 | Wave14 in progress; next12-22 read isolation | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-18-PLAN.md; next12-21
-last_updated: "2026-11-16T13:35:07.629Z"
+stopped_at: Completed12-21-PLAN.md; next12-22
+last_updated: "2026-11-16T13:55:42.880Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 20
-  percent: 71
+  completed_plans: 21
+  percent: 75
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has20/28 plans complete locally. Approved Plan18 continuation diagnosed missing synthetic action checked_at evidence; unchanged dividend authority now passes the real restricted-role TLS fixture. Exact archived source/image bindings and immutable selected refs are implemented;20 CI,8 selected,5 fixture and10 affected recovery contracts pass. Next12-21/Wave14. All28 requirements remain unchecked; full integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has21/28 plans complete locally. Crypto and stock hooks now isolate owner/root/session queries, hidden authority and frozen original attempts;29 assigned hook cases and160 combined transport/target/hook cases pass. Next12-22/Wave14 read-hook isolation. All28 requirements remain unchecked; full frontend integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 20/28 complete; next12-21 by dependency order
-Status: Wave13 complete; next Wave14 browser isolation hooks
+Plan: 21/28 complete; next12-22 by dependency order
+Status: Wave14 in progress; trade-hook isolation complete, next read-hook isolation
 Last activity: 2026-11-16
 
-Progress: [███████░░░] 71%
+Progress: [████████░░] 75%
 
 ## Accepted Closeout and Release Boundary
 
@@ -260,7 +260,17 @@ Selected cutover uses complete immutable release refs and separately hashed
 relocated tooling, with no source overlay or synthetic commit. See12-18-SUMMARY.md.
 Its logical/smoke image proof is not the actual Dockerfile/strict scan or full
 encrypted/current+retained same-archive TLS/rollback campaign, still required27.
-Next12-21/Wave14; all requirements and owner UI gates remain pending.
+At Plan18 closeout, next was12-21/Wave14; all requirements and owner UI gates remain pending.
+Plan21 now partitions crypto previews/holdings and stock context/state/hidden
+authority by owner, portfolio and lifecycle. Frozen unknown originals cannot be
+reset or retargeted; stale callbacks/receipts are suppressed after target loss,
+while matching active-root recovery survives market closure. Server-unavailable
+responses revoke authority until fresh metadata.16 crypto and13 stock cases pass;
+the combined client/target/hook run passes160 cases. Changed-file lint/format and
+source typing pass; full frontend typing still reports59 errors across17 later
+consumer/legacy-fixture files owned by22–25/27. See12-21-SUMMARY.md for exact
+target-first signatures, quoteKey contract and original crypto retry fields.
+Next12-22/Wave14; all requirements, full integration and owner UI remain pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -289,9 +299,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P19 | 12 min | 2 tasks | 8 files |
 | Phase 12 P20 | 12 min | 2 tasks | 7 files |
 | Phase 12 P18 | 19 min continuation | 2 tasks | 10 files |
+| Phase 12 P21 | 16 min | 2 tasks | 6 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T13:35:07.610Z
-Stopped at: Completed12-18-PLAN.md; next12-21
+Last session: 2026-11-16T13:55:20.219Z
+Stopped at: Completed12-21-PLAN.md; next12-22
 Resume file: None
