@@ -57,6 +57,142 @@ def test_model_metadata_existing_cash_schema_serializes_exact_decimal_strings(ca
     assert json.loads(payload.model_dump_json())["cash_usd"] == cash
 
 
+@pytest.mark.parametrize("model_name", ["Holding", "Trade"])
+def test_model_metadata_financial_rows_require_paired_owned_root_without_cascade(model_name):
+    from sqlalchemy import BigInteger
+
+    from app.models.trade import Holding, Trade
+
+    table = {"Holding": Holding, "Trade": Trade}[model_name].__table__
+    assert isinstance(table.c.portfolio_id.type, BigInteger)
+    assert not table.c.portfolio_id.nullable
+    assert table.c.portfolio_id.default is None
+    assert table.c.portfolio_id.server_default is None
+    paired = [
+        fk
+        for fk in table.foreign_key_constraints
+        if tuple(fk.column_keys) == ("portfolio_id", "user_id")
+    ]
+    assert len(paired) == 1
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "accounts.id",
+        "accounts.user_id",
+    )
+    assert all(fk.ondelete is None and fk.onupdate is None for fk in table.foreign_key_constraints)
+    assert any(tuple(idx.columns.keys())[0] == "user_id" for idx in table.indexes) or any(
+        tuple(c.columns.keys())[0] == "user_id"
+        for c in table.constraints
+        if isinstance(c, UniqueConstraint)
+    )
+
+
+def test_model_metadata_holdings_unique_per_root_and_preserve_exact_basis():
+    from sqlalchemy import Numeric
+
+    from app.models.trade import Holding
+
+    table = Holding.__table__
+    unique = {tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)}
+    assert ("portfolio_id", "coin_id") in unique
+    assert ("user_id", "coin_id") not in unique
+    for column in (table.c.quantity, table.c.cost_basis):
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable
+    checks = {c.name for c in table.constraints}
+    assert {
+        "ck_holdings_quantity_non_negative",
+        "ck_holdings_cost_basis_non_negative",
+        "ck_holdings_cost_basis_cents",
+        "ck_holdings_empty_has_no_cost",
+    } <= checks
+
+
+def test_model_metadata_trade_owned_cause_key_keeps_user_global_retry_and_fill_fields():
+    from sqlalchemy import Numeric
+
+    from app.models.trade import Trade
+
+    table = Trade.__table__
+    unique = {tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)}
+    assert ("id", "portfolio_id", "coin_id", "user_id") in unique
+    assert ("user_id", "idempotency_key") in unique
+    assert ("portfolio_id", "idempotency_key") not in unique
+    assert ("portfolio_id", "created_at", "id") in {
+        tuple(idx.columns.keys()) for idx in table.indexes
+    }
+    for name in (
+        "input_value",
+        "quantity",
+        "mid_price",
+        "exec_price",
+        "fee",
+        "cash_delta",
+        "cash_after",
+    ):
+        column = table.c[name]
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable and column.default is None and column.server_default is None
+    for name in ("price_as_of", "created_at"):
+        assert table.c[name].type.timezone
+    assert set(table.c.keys()) == {
+        "id",
+        "portfolio_id",
+        "user_id",
+        "coin_id",
+        "side",
+        "input_kind",
+        "input_value",
+        "quantity",
+        "mid_price",
+        "price_as_of",
+        "exec_price",
+        "fee",
+        "cash_delta",
+        "cash_after",
+        "idempotency_key",
+        "created_at",
+    }
+
+
+async def test_final_sql_same_root_coin_holding_is_unique(portfolio_world):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings (portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,1,1)"
+                ),
+                {"p": world.first, "u": world.owner, "c": world.crypto},
+            )
+    assert err.value.orig.sqlstate == "23505"
+
+
+async def test_final_sql_foreign_owner_tuple_cannot_link_trade(portfolio_world):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await seed_owned_crypto_trade(conn, world, world.foreign)
+    assert err.value.orig.sqlstate == "23503"
+
+
+@pytest.mark.parametrize("target", [None, 9223372036854775807])
+async def test_final_sql_missing_or_unknown_root_cannot_link_holding(portfolio_world, target):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings (portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,1,1)"
+                ),
+                {"p": target, "u": world.owner, "c": world.crypto},
+            )
+    assert err.value.orig.sqlstate == ("23502" if target is None else "23503")
+
+
 async def test_final_sql_root_metadata_preserves_named_active_and_closed_roots(portfolio_world):
     conn, world = portfolio_world
     rows = (
