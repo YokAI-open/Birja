@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-16-PLAN.md; next12-15 by wave dependency. Phase continues locally.
-last_updated: "2026-11-16T11:43:01.116Z"
+stopped_at: Completed12-15-PLAN.md; next12-17 by wave dependency. Phase continues locally.
+last_updated: "2026-11-16T12:04:36.279Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 15
-  percent: 54
+  completed_plans: 16
+  percent: 57
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–14 and16 are complete locally. Exact0017 bootstrap/grants and authenticated fresh/retained/staged migration-to-final proofs pass; next12-15 wires production v2 routes and unscoped refusal. All28 requirements remain unchecked; retained TLS/recovery, integrated security/browser and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–16 are complete locally. Actual production v2 routing, explicit legacy financial refusal and259 affected API/auth/onboarding cases pass; full backend typing passes101 files. Next12-17 begins exact recovery contract work. All28 requirements remain unchecked; retained TLS/recovery, integrated security/browser and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 16 of 28 by dependency order; 15 plans complete, next12-15
-Status: Executing Phase12; Plans01–14/16 complete, next12-15 by wave order
+Plan: 17 of 28 by dependency order; 16 plans complete, next12-17
+Status: Executing Phase12; Plans01–16 complete, next12-17 by wave order
 Last activity: 2026-11-16
 
-Progress: [█████░░░░░] 54%
+Progress: [██████░░░░] 57%
 
 ## Accepted Closeout and Release Boundary
 
@@ -205,6 +205,16 @@ See12-16-SUMMARY.md for the two new DB modules, Compose startup wiring and exact
 private helper inventories that17/18 must retain. Only owned local source-mounted
 cached-image proofs ran; actual retained TLS/cold/rebuilt-image qualification remains
 18/27. Next12-15 by wave order; all28 requirements remain unchecked.
+Plan15 now mounts actual production v2 identity/metadata/crypto/stock/read routers,
+removes all temporary test registrations and centralizes authenticated/CSRF legacy
+finance refusal before services.53 new read/refusal/inventory cases and earlier
+identity/crypto/stock API families run against real create_app; final259 affected
+API/auth/onboarding tests pass. Whole-backend mypy101 files and changed lint/format
+pass. Exact baselines, private correction originals, root-bound cursors, safe
+retries and old auth lifecycle paths remain verified. See12-15-SUMMARY.md.
+Old mixed-History API static cursors/retained dividend fixture need27 adaptation;
+new private-original HTTP proof passes without weakening guards.26 must follow
+live v2/legacy-refusal critical modules. Next12-17; requirements remain unchecked.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -228,9 +238,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | 12 | 13 | 12 min | 2 | 5 |
 | Phase 12 P14 | 12 min | 2 tasks | 6 files |
 | Phase 12 P16 | 28 min | 2 tasks | 10 files |
+| Phase 12 P15 | 20 min | 2 tasks | 25 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T11:42:53.309Z
-Stopped at: Completed12-16-PLAN.md; next12-15 by wave dependency. Phase continues locally.
+Last session: 2026-11-16T12:04:36.257Z
+Stopped at: Completed12-15-PLAN.md; next12-17 by wave dependency. Phase continues locally.
 Resume file: None
