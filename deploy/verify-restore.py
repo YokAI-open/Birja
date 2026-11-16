@@ -781,6 +781,16 @@ def verify(dc, manifest, *, quarantined=True):
     contract = recovery_contract()
     contract.validate_manifest(manifest)
     actual = canonical(dc)
+    if manifest['revision'] == '0017':
+        contract.validate_manifest(actual, quarantined=quarantined)
+        for key in ('tables','financial','revision','schema','portfolio_state','identity_state'):
+            require(actual[key] == manifest[key])
+        for table in contract.identity_tables('0017'):
+            # Fixed identifiers only; never execute a manifest-provided name.
+            require(sql(dc, "SELECT last_value + CASE WHEN is_called THEN 1 ELSE 0 END > "
+                "(SELECT coalesce(max(id),0) FROM public."+table+") FROM public."+table+"_id_seq;").strip() == b't')
+        print('equality=true invariants=true identities=true')
+        return
     contract.validate_manifest(actual,quarantined=quarantined and manifest['revision']=='0014')
     if manifest['revision'] in ('0012','0013','0014'):
         require(actual['resolution_authority'] == manifest['resolution_authority'])
@@ -983,6 +993,48 @@ def restore_dividend_authority(dc):
     contract.validate_dividend_authority(json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql())),quarantined=True)
 
 
+def restore_portfolio_authority(dc):
+    """Authenticate a no-owner/no-ACL isolated0017 clone before fixed grants.
+
+    No function body, role, grant or identifier is selected by an archive. The
+    clone has no public CONNECT. Fresh fixed NOLOGIN roles are preprovisioned
+    only by the trusted ops connection; unsafe existing attributes/memberships
+    are refused, never repaired. Economic definer EXECUTE stays quarantined.
+    """
+    contract = recovery_contract()
+    sql(dc, """DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler','birja_action_operator'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls))
+        OR EXISTS(SELECT FROM pg_auth_members m JOIN pg_roles a ON a.oid=m.roleid
+          JOIN pg_roles b ON b.oid=m.member WHERE a.rolname=n OR b.rolname=n)
+        THEN RAISE EXCEPTION 'unsafe restored portfolio role'; END IF;
+      END LOOP; END $$;""", 'birja_ops_test')
+    actual = canonical(dc)
+    require(contract.canonical_hash(actual['schema']) == contract.PORTFOLIO_SCHEMA_SHA256)
+    require(contract.canonical_hash(actual['portfolio_authority']) == contract.PORTFOLIO_NO_ACL_SHA256)
+    # Validate the data/identity shape without disguising the no-ACL boundary
+    # as an admitted source. Full quarantined admission runs after fixed grants.
+    authority = actual['portfolio_authority']
+    source_functions = {row['signature']: row for row in authority['functions']}
+    require(len(source_functions) == 10)
+    for signature in source_functions:
+        # Hash authentication above establishes these fixed catalogue names.
+        require(signature in contract.PORTFOLIO_SIGNATURES)
+    revokes = ''.join('REVOKE ALL ON FUNCTION public.'+signature+
+        ' FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;\n'
+        for signature in sorted(contract.PORTFOLIO_SIGNATURES))
+    sql(dc, revokes + contract.PORTFOLIO_RESTORE_GRANTS + """
+      REVOKE ALL ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),
+        public.record_stock_dividend_hold(bigint,text),public.lock_stock_portfolio_roots(bigint)
+        FROM birja_scheduler;
+    """)
+    contract.validate_manifest(canonical(dc), quarantined=True)
+
+
 @contextlib.contextmanager
 def restored(dc, dump):
     created = False
@@ -1038,7 +1090,9 @@ def restored(dc, dump):
             dump,
         )
         revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
-        if revision == b'0014':
+        if revision == b'0017':
+            restore_portfolio_authority(dc)
+        elif revision == b'0014':
             restore_dividend_authority(dc)
         if revision in (b'0012',b'0013',b'0014'):
             if revision in (b'0013',b'0014'):
