@@ -79,7 +79,7 @@ async def test_mixed_history_valid_limits(auth_client, outbox, limit):
         "<private-provider-data>",
         "a" * 512,
         "a" * 513,
-        legacy_cursor(HistoryCursor(created_at=STAMP, id=1)),
+        legacy_cursor(HistoryCursor(created_at=STAMP, id=1, portfolio_id=1)),
     ],
 )
 async def test_mixed_history_cursor_fixed_error(auth_client, outbox, cursor):
@@ -180,7 +180,9 @@ async def test_mixed_history_actual_paid_held_owner_lineage_and_no_mutation(
     )
     assert len(own.json()["items"]) == 2
     await sign_in(auth_client, outbox, unique_email())
-    forged = encode_cursor(EventHistoryCursor(datetime.now(UTC), 4, 9223372036854775807))
+    forged = encode_cursor(
+        EventHistoryCursor(datetime.now(UTC), 4, 9223372036854775807, portfolio_id=1)
+    )
     for params in (
         {"user_id": ids["user_id"], "decision_id": decision.decision_id},
         {"cursor": forged, "payment_id": paid.payment_id},
