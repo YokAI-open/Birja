@@ -9,6 +9,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.v1.router import api_router
+from app.api.v2.router import api_router as portfolio_api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.connection import database_connect_args
@@ -97,4 +98,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_exception_handler(RedisError, redis_unavailable)  # type: ignore[arg-type]
     app.include_router(api_router, prefix="/api/v1")
+    app.include_router(portfolio_api_router, prefix="/api/v2")
     return app

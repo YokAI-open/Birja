@@ -9,7 +9,6 @@ import pytest
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api.v2.router import api_router as identity_router
 from app.core.config import Settings
 from app.main import create_app
 from app.services.ratelimit import RateLimited, enforce, hit, ip_bucket
@@ -85,7 +84,6 @@ def test_ip_bucket_groups_ipv6_by_64(host: str, bucket: str) -> None:
 async def _custom_app(**limits: int) -> AsyncIterator[tuple[FastAPI, OutboxSender]]:
     settings = Settings().model_copy(update=limits)
     app = create_app(settings)
-    app.include_router(identity_router, prefix="/api/v2")
     async with app.router.lifespan_context(app):
         outbox = OutboxSender()
         app.state.email_sender = outbox

@@ -1,26 +1,15 @@
-"""Actual identity routers in an isolated composition; production mounting is Plan15."""
+"""Identity HTTP against the actual production router composition."""
 
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.api.v2.router import api_router
-from app.core.config import Settings
-from app.main import create_app
 from app.models.auth import AuthSession
 from app.models.user import Account, User
 from tests.helpers import csrf_headers, request_and_get_code, unique_email
-
-
-@pytest.fixture(scope="session")
-def app(settings: Settings) -> FastAPI:
-    composition = create_app(settings)
-    composition.include_router(api_router, prefix="/api/v2")
-    return composition
 
 
 async def _verify(client, outbox, email):

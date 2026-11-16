@@ -1,4 +1,4 @@
-"""Actual crypto routers in isolated composition; production registration is15."""
+"""Crypto HTTP against the actual production router composition."""
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -6,13 +6,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
 from sqlalchemy import select, update
 
-from app.api.v2.router import api_router as identity_router
-from app.api.v2.trades import router as crypto_router
-from app.core.config import Settings
-from app.main import create_app
 from app.models.price import Price
 from app.models.trade import Trade
 from app.models.user import Account, User
@@ -21,14 +16,6 @@ from tests.helpers import sign_in
 from tests.test_portfolio_crypto import crypto_books
 
 __all__ = ["crypto_books"]
-
-
-@pytest.fixture(scope="session")
-def app(settings: Settings) -> FastAPI:
-    composition = create_app(settings)
-    composition.include_router(identity_router, prefix="/api/v2")
-    composition.include_router(crypto_router, prefix="/api/v2")
-    return composition
 
 
 @pytest_asyncio.fixture

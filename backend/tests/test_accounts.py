@@ -81,14 +81,35 @@ async def test_negative_cash_rejected(sessions: async_sessionmaker) -> None:  # 
             await db.flush()
 
 
-async def test_second_account_rejected(sessions: async_sessionmaker) -> None:  # type: ignore[type-arg]
+async def test_seeded_sibling_does_not_repeat_the_initial_grant(
+    sessions: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    email = unique_email()
     async with sessions() as db:
-        uid, _ = await get_or_create_user(db, unique_email())
+        uid, _ = await get_or_create_user(db, email)
         await db.commit()
     async with sessions() as db:
-        db.add(Account(user_id=uid, cash=Decimal("1"), starting_cash=Decimal("1")))
-        with pytest.raises(IntegrityError):
-            await db.flush()
+        # Actual0017 permits owned sibling roots. This isolated seed is not
+        # a public creation endpoint or an additional onboarding grant.
+        db.add(
+            Account(
+                user_id=uid, name="Seeded strategy", cash=Decimal("1"), starting_cash=Decimal("1")
+            )
+        )
+        await db.commit()
+    async with sessions() as db:
+        same_uid, created = await get_or_create_user(db, email)
+        await db.commit()
+        roots = (
+            (await db.execute(select(Account).where(Account.user_id == uid).order_by(Account.id)))
+            .scalars()
+            .all()
+        )
+    assert same_uid == uid and created is False
+    assert [(a.cash, a.starting_cash) for a in roots] == [
+        (STARTING_CASH, STARTING_CASH),
+        (Decimal("1"), Decimal("1")),
+    ]
 
 
 async def test_uppercase_email_rejected(sessions: async_sessionmaker) -> None:  # type: ignore[type-arg]

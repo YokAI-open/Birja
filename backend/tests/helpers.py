@@ -46,6 +46,23 @@ async def sign_in(client: httpx.AsyncClient, outbox: OutboxSender, email: str) -
     return resp
 
 
+async def selected_portfolio_path(client: httpx.AsyncClient, suffix: str = "") -> str:
+    """Explicitly select the single initial test strategy through real metadata.
+
+    Retained single-strategy API tests use this at their call sites; this is not
+    a transport rewrite or an application fallback. Multi-strategy tests always
+    supply their own captured root. Signed-out negatives use a fixed guessed ID.
+    """
+    response = await client.get("/api/v2/portfolios")
+    if response.status_code == 401:
+        pid = "1"
+    else:
+        assert response.status_code == 200 and len(response.json()) == 1
+        pid = response.json()[0]["id"]
+        assert isinstance(pid, str)
+    return f"/api/v2/portfolios/{pid}{suffix}"
+
+
 async def coin_id(engine: AsyncEngine, symbol: str) -> int:
     async with engine.connect() as conn:
         return (await conn.execute(select(Coin.id).where(Coin.symbol == symbol))).scalar_one()
@@ -74,11 +91,15 @@ async def put_holding(
 ) -> None:
     cid = await coin_id(engine, symbol)
     async with engine.begin() as conn:
+        portfolio_id = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         await conn.execute(
             delete(Holding).where(Holding.user_id == user_id, Holding.coin_id == cid)
         )
         await conn.execute(
             pg_insert(Holding).values(
+                portfolio_id=portfolio_id,
                 user_id=user_id,
                 coin_id=cid,
                 quantity=Decimal(quantity),

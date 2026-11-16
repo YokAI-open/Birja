@@ -1,4 +1,4 @@
-"""Actual scoped stock routers, real sessions/DB; production composition is Plan15."""
+"""Stock HTTP against the actual production router composition."""
 
 from datetime import timedelta
 from decimal import Decimal
@@ -6,13 +6,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
 from sqlalchemy import select, update
 
-from app.api.v2.router import api_router as identity_router
-from app.api.v2.stock_trades import router as stock_router
-from app.core.config import Settings
-from app.main import create_app
 from app.models.stock import StockDataAdmission, StockQuote
 from app.models.trade import Trade
 from app.models.user import User
@@ -27,15 +22,6 @@ from tests.test_portfolio_stock_trading import (
 )
 
 __all__ = ["ownership", "status_case", "stock_books", "stock_trade_case"]
-
-
-@pytest.fixture(scope="session")
-def app(settings: Settings) -> FastAPI:
-    composition = create_app(settings)
-    # Actual router objects and final prefixes; production registration belongs15.
-    composition.include_router(identity_router, prefix="/api/v2")
-    composition.include_router(stock_router, prefix="/api/v2")
-    return composition
 
 
 @pytest_asyncio.fixture

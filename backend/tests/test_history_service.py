@@ -5,10 +5,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import event, text, update
+from sqlalchemy import event, select, text, update
 
 from app.models.price import Coin
 from app.models.trade import Trade
+from app.models.user import Account
 from app.services.history import (
     HistoryCursor,
     InvalidCursor,
@@ -120,14 +121,17 @@ async def put_fill(engine, uid, *, stamp=STAMP, side="buy", total="-100.00", hig
         created_at=stamp,
     )
     async with engine.begin() as conn:
+        values["portfolio_id"] = (
+            await conn.execute(select(Account.id).where(Account.user_id == uid))
+        ).scalar_one()
         if high:
             # Fixed SQL and bound fixture values, only on the guarded isolated test DB.
             result = await conn.execute(
                 text("""INSERT INTO trades
-                (id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+                (id,portfolio_id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
                  exec_price,fee,cash_delta,cash_after,idempotency_key,created_at)
                 OVERRIDING SYSTEM VALUE VALUES
-                (:high_id,:user_id,:coin_id,:side,:input_kind,:input_value,:quantity,
+                (:high_id,:portfolio_id,:user_id,:coin_id,:side,:input_kind,:input_value,:quantity,
                  :mid_price,:price_as_of,:exec_price,:fee,:cash_delta,:cash_after,:idempotency_key,:created_at)
                 RETURNING id"""),
                 {**values, "high_id": 9007199254740993 + uid},

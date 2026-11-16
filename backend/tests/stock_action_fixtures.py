@@ -205,7 +205,9 @@ async def synthetic_opening(
     return row
 
 
-async def synthetic_split(db, coin_id, cutoff, *, boundary=1, prior_epoch=0):
+async def synthetic_split(
+    db, coin_id, cutoff, *, boundary=1, prior_epoch=0, before_digest="b" * 64, after_digest="c" * 64
+):
     """Explicit matched event/revision/application; never false-causal shortcuts."""
     event = StockActionEvent(coin_id=coin_id, economic_key=str(uuid4()), first_observed_at=cutoff)
     db.add(event)
@@ -243,8 +245,9 @@ async def synthetic_split(db, coin_id, cutoff, *, boundary=1, prior_epoch=0):
         prior_unit_epoch=prior_epoch,
         new_unit_epoch=prior_epoch + 1,
         sequence_boundary=boundary,
-        before_digest="b" * 64,
-        after_digest="c" * 64,
+        before_digest=before_digest,
+        after_digest=after_digest,
+        owner_digest_version=2,
         processed_at=now,
     )
     db.add(application)
