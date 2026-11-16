@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useOutletContext, useParams } from "react-router";
+import { PortfolioContext } from "@/components/PortfolioContext";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { useStockTrade } from "@/hooks/useStockTrade";
 import { isStockOrder, type StockRefusal } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
@@ -31,14 +33,16 @@ const reasons: Record<StockRefusal, string> = {
   numeric_range: "This quantity is too large. Enter a smaller whole number.",
   insufficient_cash: "Not enough cash for this order. Review your quantity and try again.",
   insufficient_holding: "Not enough shares for this sale. Review your quantity and try again.",
-  idempotency_conflict: "This order conflicts with an earlier attempt. Get a fresh preview.",
+  idempotency_conflict:
+    "This order reference belongs to a different portfolio or request. Return to the original portfolio to check it.",
 };
-function Ticket({ symbol }: { symbol: string }) {
-  const t = useStockTrade(symbol),
+function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string }) {
+  const t = useStockTrade(target, symbol),
     c = t.context,
     id = useId(),
     input = useRef<HTMLInputElement>(null);
   const [retrying, setRetrying] = useState(false);
+  const [originalName, setOriginalName] = useState(target.name);
   const oldPhase = useRef(t.phase);
   useEffect(() => {
     if (oldPhase.current === "filled" && t.phase === "draft") input.current?.focus();
@@ -75,11 +79,13 @@ function Ticket({ symbol }: { symbol: string }) {
     (t.side === "buy"
       ? /^0(?:\.0+)?$/.test(c.buy_max_quantity)
       : /^0(?:\.0+)?$/.test(c.held_quantity));
+  if (!target.isCurrent()) return null;
   return (
     <div className="my-8 flex min-w-0 flex-col gap-4 text-[15px] leading-[22px]">
       <h1 className="text-[32px] leading-9 font-medium wrap-anywhere md:text-[40px] md:leading-[44px]">
         Trade {t.symbol}
       </h1>
+      <PortfolioContext name={target.name} />
       <p
         role="status"
         aria-live="polite"
@@ -166,6 +172,7 @@ function Ticket({ symbol }: { symbol: string }) {
               className="flex min-w-0 flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
+                setOriginalName(target.name);
                 void t.preview();
               }}
             >
@@ -256,10 +263,16 @@ function Ticket({ symbol }: { symbol: string }) {
         <Card className="min-w-0 lg:col-span-5">
           <CardContent>
             {t.fill ? (
-              <StockTradeReceipt fill={t.fill} onTradeAgain={t.tradeAgain} />
+              <StockTradeReceipt
+                fill={t.fill}
+                target={target}
+                portfolioName={originalName}
+                onTradeAgain={t.tradeAgain}
+              />
             ) : (
               <>
                 <h2 className="text-[24px] leading-7 font-medium">Trade preview</h2>
+                <PortfolioContext name={t.quote || t.attempt ? originalName : target.name} />
                 {t.phase === "loading_preview" && (
                   <div
                     aria-busy="true"
@@ -353,6 +366,7 @@ function Ticket({ symbol }: { symbol: string }) {
 }
 export default function StockTradePage() {
   const symbol = useParams().symbol ?? "";
+  const target = useOutletContext<PortfolioTarget>();
   if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol))
     return (
       <div className="my-8">
@@ -360,5 +374,11 @@ export default function StockTradePage() {
         <Link to="/">Back to Markets</Link>
       </div>
     );
-  return <Ticket symbol={symbol} />;
+  return (
+    <Ticket
+      key={`${target.owner}:${target.portfolioId}:${target.epoch.session}:${symbol}`}
+      target={target}
+      symbol={symbol}
+    />
+  );
 }

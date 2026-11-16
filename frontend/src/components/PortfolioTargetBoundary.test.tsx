@@ -196,3 +196,62 @@ it("masks prior finances immediately when the signed-in owner changes", async ()
   });
   expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
 });
+
+it.each(["cryptoTradeState", "stockTradeState"])(
+  "shows only an unresolved boolean for unavailable original %s",
+  async (prefix) => {
+    vi.stubGlobal("fetch", () => Promise.resolve(json([])));
+    const { client } = setup();
+    client.setQueryDefaults([prefix], { gcTime: Infinity });
+    act(() =>
+      client.setQueryData([prefix, owner, "1", 0, "BTC"], {
+        phase: "unknown",
+        attempt: { private_amount: "8123.45" },
+      }),
+    );
+    const notice = await screen.findByText(
+      "An earlier order's result is unconfirmed for this unavailable portfolio. It won't be retried in another portfolio.",
+    );
+    expect(notice).toBeVisible();
+    expect(screen.queryByText(/8123.45/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Confirm|Check order/ })).toBeNull();
+    act(() => client.setQueryData(["me"], null));
+    await waitFor(() => expect(screen.queryByText(/An earlier order's result/)).toBeNull());
+  },
+);
+it("does not disclose a sibling, foreign-owner or prior-session unresolved attempt", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(json([])));
+  const { client } = setup();
+  act(() => {
+    client.setQueryData(["cryptoTradeState", owner, "2", 0, "BTC"], {
+      phase: "unknown",
+      attempt: {},
+    });
+    client.setQueryData(["stockTradeState", "other@example.test", "1", 0], {
+      phase: "unknown",
+      attempt: {},
+    });
+    client.setQueryData(["cryptoTradeState", owner, "1", -1, "BTC"], {
+      phase: "unknown",
+      attempt: {},
+    });
+  });
+  await screen.findByRole("heading", { name: "Portfolio unavailable" });
+  expect(screen.queryByText(/An earlier order's result/)).toBeNull();
+});
+
+it("immediately removes an original unknown notice when the authenticated owner changes", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(json([])));
+  const { client } = setup();
+  client.setQueryDefaults(["cryptoTradeState"], { gcTime: Infinity });
+  act(() =>
+    client.setQueryData(["cryptoTradeState", owner, "1", 0, "BTC"], {
+      phase: "unknown",
+      attempt: {},
+    }),
+  );
+  await screen.findByText(/An earlier order's result is unconfirmed/);
+  act(() => client.setQueryData(["me"], { email: "new-owner@example.test" }));
+  await waitFor(() => expect(screen.queryByText(/An earlier order's result/)).toBeNull());
+  expect(screen.queryByRole("button", { name: /Confirm|Check order/ })).toBeNull();
+});

@@ -1,8 +1,10 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolioTarget, type PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { eventHistorySession } from "@/hooks/useEventHistory";
 
 /** No financial child mounts until explicit owned-active metadata resolves. */
 export function PortfolioTargetBoundary({
@@ -14,6 +16,31 @@ export function PortfolioTargetBoundary({
 }) {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const result = usePortfolioTarget(portfolioId, { legacyEntry: !!legacyDestination });
+  const client = useQueryClient();
+  // Read only the existence of this session's original unresolved attempt.
+  // Unavailable targets never regain financial authority through this notice.
+  eventHistorySession(client);
+  const subscribe = useCallback(
+    (notify: () => void) => client.getQueryCache().subscribe(notify),
+    [client],
+  );
+  const unconfirmed = useSyncExternalStore(subscribe, () => {
+    const session = eventHistorySession(client);
+    if (!session.email || !portfolioId || result.status !== "unavailable") return false;
+    return ["cryptoTradeState", "stockTradeState"].some((prefix) =>
+      client
+        .getQueryCache()
+        .findAll({ queryKey: [prefix, session.email, portfolioId] })
+        .some((query) => {
+          const state = query.state.data as { phase?: string; attempt?: unknown } | undefined;
+          return (
+            query.queryKey[3] === session.epoch &&
+            !!state?.attempt &&
+            (state.phase === "unknown" || state.phase === "submitting")
+          );
+        }),
+    );
+  });
   const heading = useRef<HTMLHeadingElement>(null);
   const entered = useRef(false);
   useEffect(() => {
@@ -78,6 +105,12 @@ export function PortfolioTargetBoundary({
           >
             {message}
           </p>
+          {unconfirmed && (
+            <p>
+              An earlier order&apos;s result is unconfirmed for this unavailable portfolio. It
+              won&apos;t be retried in another portfolio.
+            </p>
+          )}
           {result.status === "error" ? (
             <Button variant="secondary" onClick={() => void result.refetch().catch(() => {})}>
               Try again

@@ -92,16 +92,20 @@ function segment(selected: boolean) {
 function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string }) {
   const summaryHeadingId = useId();
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  const focusedReceipt = useRef<number | null>(null);
   const queryClient = useQueryClient();
 
   const prices = usePrices();
   const portfolio = usePortfolio(target);
   const holding = useHolding(target, symbol);
   const trade = useTrade(target, symbol);
-  const attemptName = useRef(target.name);
+  const [attemptName, setAttemptName] = useState(target.name);
   const now = useNow(1000);
   useEffect(() => {
-    if (trade.data && target.isCurrent()) resultHeading.current?.focus({ preventScroll: true });
+    if (trade.data && target.isCurrent() && focusedReceipt.current !== trade.data.trade_id) {
+      focusedReceipt.current = trade.data.trade_id;
+      resultHeading.current?.focus({ preventScroll: true });
+    }
   }, [trade.data, target]);
 
   const [side, setSide] = useState<Side>("buy");
@@ -173,7 +177,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       return;
     }
     if (!order || !quote || !settled || !live || refused) return;
-    attemptName.current = target.name;
+    setAttemptName(target.name);
     keyRef.current ??= crypto.randomUUID();
     trade.mutate(
       { order, expectedMid: quote.mid, idempotencyKey: keyRef.current },
@@ -247,7 +251,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         >
           Order filled
         </h2>
-        <PortfolioContext name={attemptName.current} />
+        <PortfolioContext name={attemptName} />
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -293,7 +297,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
           Preview
         </h2>
-        <PortfolioContext name={trade.attempt ? attemptName.current : target.name} />
+        <PortfolioContext name={trade.attempt ? attemptName : target.name} />
         {trade.outcomeUnknown && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             We couldn't confirm the result. Check this order before placing another.
@@ -323,142 +327,144 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   }
 
   return (
-    <div className="mx-auto my-8 grid min-w-0 max-w-5xl gap-6 lg:grid-cols-12">
-      <Card className="lg:col-span-7">
-        <CardContent className="flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-              Trade {symbol}
-            </h1>
-            <PortfolioContext name={target.name} />
-            {coin ? (
-              <>
-                <p className="text-muted-foreground">{coin.name}</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-[32px] leading-9 font-semibold tabular-nums">
-                    {formatUnitPrice(coin.price)}
-                  </span>
-                  {status && <FreshnessBadge status={status} ageSeconds={age} />}
-                </div>
-              </>
-            ) : (
-              <span className="h-9 w-1/2 rounded-control bg-muted" />
-            )}
-          </div>
-
-          {status !== null && !live && (
-            <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
-              {STALE_MESSAGE}
-            </p>
-          )}
-
-          <form onSubmit={confirm} className="flex flex-col gap-4" id="trade-form" noValidate>
-            <div
-              role="radiogroup"
-              aria-label="Side"
-              className="flex gap-1 rounded-pill bg-muted p-1"
-            >
-              {(["buy", "sell"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={side === value}
-                  disabled={locked}
-                  className={segment(side === value)}
-                  onClick={() => {
-                    setSide(value);
-                    edited();
-                  }}
-                >
-                  {value === "buy" ? "Buy" : "Sell"}
-                </button>
-              ))}
+    <div className="mx-auto my-8 flex min-w-0 max-w-5xl flex-col gap-4 text-[15px] leading-[22px]">
+      <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
+        Trade {symbol}
+      </h1>
+      <PortfolioContext name={target.name} />
+      <div className="grid min-w-0 gap-6 lg:grid-cols-12">
+        <Card className="min-w-0 lg:col-span-7">
+          <CardContent className="flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              {coin ? (
+                <>
+                  <p className="text-muted-foreground">{coin.name}</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-[32px] leading-9 font-semibold tabular-nums">
+                      {formatUnitPrice(coin.price)}
+                    </span>
+                    {status && <FreshnessBadge status={status} ageSeconds={age} />}
+                  </div>
+                </>
+              ) : (
+                <span className="h-9 w-1/2 rounded-control bg-muted" />
+              )}
             </div>
 
-            {side === "buy" && (
-              <div className="flex gap-2">
-                {(
-                  [
-                    ["usd", "Amount (USD)"],
-                    ["quantity", "Quantity"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Button
+            {status !== null && !live && (
+              <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
+                {STALE_MESSAGE}
+              </p>
+            )}
+
+            <form onSubmit={confirm} className="flex flex-col gap-4" id="trade-form" noValidate>
+              <div
+                role="radiogroup"
+                aria-label="Side"
+                className="flex gap-1 rounded-pill bg-muted p-1"
+              >
+                {(["buy", "sell"] as const).map((value) => (
+                  <button
                     key={value}
                     type="button"
-                    size="sm"
-                    variant={buyKind === value ? "default" : "secondary"}
-                    aria-pressed={buyKind === value}
+                    role="radio"
+                    aria-checked={side === value}
                     disabled={locked}
+                    className={segment(side === value)}
                     onClick={() => {
-                      setBuyKind(value);
+                      setSide(value);
                       edited();
                     }}
                   >
-                    {label}
-                  </Button>
+                    {value === "buy" ? "Buy" : "Sell"}
+                  </button>
                 ))}
               </div>
-            )}
 
-            <div className="flex flex-col gap-2">
-              <label htmlFor="trade-input" className="text-[13px] leading-[18px] font-medium">
-                {inputLabel}
-              </label>
-              <div className="relative">
-                <Input
-                  id="trade-input"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  className="pr-16 text-right tabular-nums"
-                  value={input}
-                  disabled={locked}
-                  aria-invalid={fieldError !== null}
-                  aria-describedby={fieldError ? "trade-input-error" : undefined}
-                  onChange={(event) => {
-                    setInput(event.target.value);
-                    edited();
-                  }}
-                />
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground"
-                >
-                  {unit}
-                </span>
+              {side === "buy" && (
+                <div className="flex gap-2">
+                  {(
+                    [
+                      ["usd", "Amount (USD)"],
+                      ["quantity", "Quantity"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant={buyKind === value ? "default" : "secondary"}
+                      aria-pressed={buyKind === value}
+                      disabled={locked}
+                      onClick={() => {
+                        setBuyKind(value);
+                        edited();
+                      }}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="trade-input" className="text-[13px] leading-[18px] font-medium">
+                  {inputLabel}
+                </label>
+                <div className="relative">
+                  <Input
+                    id="trade-input"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="pr-16 text-right tabular-nums"
+                    value={input}
+                    disabled={locked}
+                    aria-invalid={fieldError !== null}
+                    aria-describedby={fieldError ? "trade-input-error" : undefined}
+                    onChange={(event) => {
+                      setInput(event.target.value);
+                      edited();
+                    }}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-muted-foreground"
+                  >
+                    {unit}
+                  </span>
+                </div>
+                {fieldError && (
+                  <p
+                    id="trade-input-error"
+                    className="flex items-center gap-1.5 text-[13px] leading-[18px] text-loss-text"
+                  >
+                    <TriangleAlert aria-hidden="true" className="size-4" />
+                    {fieldError}
+                  </p>
+                )}
+                {side === "sell" && held !== undefined && (
+                  <p className="text-[13px] leading-[18px] text-muted-foreground">
+                    You hold {formatQuantity(held)} {symbol}
+                  </p>
+                )}
+                {side === "buy" && portfolio.data && (
+                  <p className="text-[13px] leading-[18px] text-muted-foreground">
+                    Cash available {formatUsd(portfolio.data.cash)}
+                  </p>
+                )}
               </div>
-              {fieldError && (
-                <p
-                  id="trade-input-error"
-                  className="flex items-center gap-1.5 text-[13px] leading-[18px] text-loss-text"
-                >
-                  <TriangleAlert aria-hidden="true" className="size-4" />
-                  {fieldError}
-                </p>
-              )}
-              {side === "sell" && held !== undefined && (
-                <p className="text-[13px] leading-[18px] text-muted-foreground">
-                  You hold {formatQuantity(held)} {symbol}
-                </p>
-              )}
-              {side === "buy" && portfolio.data && (
-                <p className="text-[13px] leading-[18px] text-muted-foreground">
-                  Cash available {formatUsd(portfolio.data.cash)}
-                </p>
-              )}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
 
-      <Card
-        role="region"
-        aria-labelledby={summaryHeadingId}
-        className="lg:col-span-5 lg:self-start"
-      >
-        <CardContent className="flex flex-col gap-4">{preview}</CardContent>
-      </Card>
+        <Card
+          role="region"
+          aria-labelledby={summaryHeadingId}
+          className="lg:col-span-5 lg:self-start"
+        >
+          <CardContent className="flex flex-col gap-4">{preview}</CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
