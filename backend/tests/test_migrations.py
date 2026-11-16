@@ -5,9 +5,11 @@ import os
 import secrets
 import subprocess
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
@@ -23,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0014"
+EXPECTED_HEAD = "0017"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -265,11 +267,26 @@ async def _versions(engine: AsyncEngine) -> list[str]:
         return []
 
 
-async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
+@pytest_asyncio.fixture
+async def retained_migration_db(engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
+    # Import at fixture execution to avoid a cycle with the shared authentic
+    # migration/bootstrap helpers used by the independent portfolio oracle.
+    from tests.portfolio_fixtures import reset_disposable_schema
+
+    await reset_disposable_schema(engine)
+    try:
+        yield engine
+    finally:
+        await reset_disposable_schema(engine)
+        await asyncio.to_thread(run_test_migration, "head")
+
+
+async def test_retained_empty_roundtrip_and_final_upgrade(retained_migration_db) -> None:
+    engine = retained_migration_db
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
-    await asyncio.to_thread(run_test_migration, "head")
-    assert await _versions(engine) == [EXPECTED_HEAD]
+    await asyncio.to_thread(run_test_migration, "0014")
+    assert await _versions(engine) == ["0014"]
 
     await asyncio.to_thread(run_test_migration, "base", down=True)
     assert await _versions(engine) == []
@@ -283,9 +300,9 @@ def test_baseline_is_head() -> None:
     assert script.get_heads() == [EXPECTED_HEAD]
 
 
-async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
-    await asyncio.to_thread(run_test_migration, "head")
-    await asyncio.to_thread(run_test_migration, "0007", down=True)
+async def test_populated_history_index_roundtrip(retained_migration_db) -> None:
+    engine = retained_migration_db
+    await asyncio.to_thread(run_test_migration, "0007")
 
     async def snapshot():
         async with engine.connect() as conn:
@@ -370,11 +387,14 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
                 await conn.execute(text("SELECT to_regclass('ix_trades_user_created_id')"))
             ).scalar_one() is None
         assert await snapshot() == before
-        await asyncio.to_thread(run_test_migration, "head")
-        assert await _versions(engine) == [EXPECTED_HEAD]
+        # This exact retained crypto/index proof has no portfolio columns.
+        # Final ownership preservation is independently proven by the genuine
+        # populated0014→0017 oracle, not by erasing successor metadata here.
+        await asyncio.to_thread(run_test_migration, "0014")
+        assert await _versions(engine) == ["0014"]
         assert await snapshot() == before
     finally:
-        await asyncio.to_thread(run_test_migration, "head")
+        await asyncio.to_thread(run_test_migration, "0014")
 
 
 def test_history_index_offline_transactions() -> None:
@@ -396,9 +416,9 @@ def test_history_index_offline_transactions() -> None:
     assert sql.index("COMMIT;") < sql.index("DROP INDEX CONCURRENTLY") < sql.rindex("BEGIN;")
 
 
-async def test_earlier_revision_commits_before_later_guard_failure(engine: AsyncEngine) -> None:
-    await asyncio.to_thread(run_test_migration, "head")
-    await asyncio.to_thread(run_test_migration, "0005", down=True)
+async def test_earlier_revision_commits_before_later_guard_failure(retained_migration_db) -> None:
+    engine = retained_migration_db
+    await asyncio.to_thread(run_test_migration, "0005")
     try:
         async with engine.begin() as conn:
             uid = (
@@ -426,10 +446,10 @@ async def test_earlier_revision_commits_before_later_guard_failure(engine: Async
         await asyncio.to_thread(run_test_migration, "head")
 
 
-async def test_cents_migration_refuses_sub_cent_cash(engine: AsyncEngine) -> None:
+async def test_cents_migration_refuses_sub_cent_cash(retained_migration_db) -> None:
+    engine = retained_migration_db
     email = unique_email("subcent")
-    await asyncio.to_thread(run_test_migration, "head")
-    await asyncio.to_thread(run_test_migration, "0006", down=True)
+    await asyncio.to_thread(run_test_migration, "0006")
     try:
         async with engine.begin() as conn:
             user_id = (
