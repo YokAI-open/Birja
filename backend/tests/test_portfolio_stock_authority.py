@@ -346,8 +346,9 @@ async def test_final_sql_stock_facts_and_payload_bytes_immutable(stock_authority
         )
     ).scalar_one()
     column = "id" if table == "trades" else "trade_id"
+    field = "cash_after" if table == "trades" else column
     sql = (
-        f"UPDATE public.{table} SET {column}={column} WHERE {column}=:t"  # noqa: S608 - fixed inventory
+        f"UPDATE public.{table} SET {field}={field} WHERE {column}=:t"  # noqa: S608 - fixed inventory
         if verb == "UPDATE"
         else f"DELETE FROM public.{table} WHERE {column}=:t"  # noqa: S608 - fixed inventory
     )  # noqa: S608 - fixed parametrized inventory

@@ -69,6 +69,8 @@ MIGRATION_FUNCTIONS = frozenset(
         "apply_stock_dividend(bigint,bigint,text,text)",
         "record_stock_dividend_hold(bigint,text)",
         "associate_legacy_portfolio_only()",
+        "check_stock_split_digest_version()",
+        "check_portfolio_financial_write()",
     }
 )
 _MIGRATOR_PASSWORD = secrets.token_hex(32)
@@ -183,6 +185,18 @@ async def ensure_dividend_test_owner() -> None:
                 CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
                   NOCREATEROLE NOREPLICATION NOBYPASSRLS;
               END IF;
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_app') THEN
+                CREATE ROLE birja_app NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
+                CREATE ROLE birja_scheduler NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF EXISTS(SELECT FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
+                AND (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                  OR rolreplication OR rolbypassrls)) THEN
+                RAISE EXCEPTION 'unsafe disposable runtime role'; END IF;
             END $test$""")
             )
             # Validate every object before any ownership transfer. Index ownership follows tables.
@@ -214,6 +228,7 @@ async def ensure_dividend_test_owner() -> None:
                 }:
                     raise RuntimeError("unexpected disposable migration function inventory")
             await conn.execute(text("GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator"))
+            await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler"))
             # Password is generated as hex and never emitted or persisted outside the disposable DB.
             await conn.execute(
                 text(

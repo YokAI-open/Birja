@@ -27,6 +27,129 @@ from tests.test_migrations import (
 __all__ = ["portfolio_migration_db"]
 
 
+@pytest.mark.parametrize("source", [f"{n:04}" for n in range(7, 15)])
+async def test_final_preserves_retained_origins_and_closes_association(
+    portfolio_migration_db, source
+):
+    engine = portfolio_migration_db
+    await migrate_to(source)
+    async with engine.begin() as conn:
+        uid = (
+            await conn.execute(
+                text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                {"e": f"final-{uuid4()}@example.test"},
+            )
+        ).scalar_one()
+        await conn.execute(
+            text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,123.45,7777)"),
+            {"u": uid},
+        )
+    await migrate_to("0014")
+    async with engine.begin() as conn:
+        books = await seed_legacy_books(conn)
+        before = await economic_snapshot(conn)
+    await migrate_to("0017")
+    async with engine.connect() as conn:
+        assert await economic_snapshot(conn) == before
+        assert (
+            await conn.execute(
+                text("SELECT owner_digest_version FROM stock_split_applications WHERE id=:i"),
+                {"i": books.split_id},
+            )
+        ).scalar_one() is None
+        assert (
+            await conn.execute(
+                text("SELECT to_regprocedure('public.associate_legacy_portfolio_only()')")
+            )
+        ).scalar_one() is None
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM information_schema.columns WHERE "
+                    "table_schema='public' AND column_name='portfolio_id' AND table_name IN "
+                    "('holdings','trades','stock_fill_facts','stock_ownership_movements',"
+                    "'stock_dividend_entitlements','stock_dividend_payments',"
+                    "'stock_dividend_decisions') AND is_nullable='NO'"
+                )
+            )
+        ).scalar_one() == 7
+        assert not (
+            await conn.execute(
+                text(
+                    "SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND "
+                    "tgfoid::regprocedure::text LIKE 'associate_legacy%'"
+                )
+            )
+        ).all()
+    migrator = create_async_engine(test_migration_url())
+    try:
+        async with migrator.connect() as conn, conn.begin():
+            for query in (
+                "UPDATE trades SET portfolio_id=portfolio_id",
+                "UPDATE stock_fill_facts SET portfolio_id=NULL",
+                "UPDATE stock_ownership_movements SET portfolio_id=portfolio_id",
+                "UPDATE stock_dividend_entitlements SET eligible_quantity=eligible_quantity",
+                "UPDATE stock_dividend_payments SET original_amount=original_amount",
+                "DELETE FROM stock_dividend_decisions",
+                "UPDATE stock_split_applications SET owner_digest_version=2",
+            ):
+                with pytest.raises(DBAPIError):
+                    async with conn.begin_nested():
+                        await conn.execute(text(query))
+    finally:
+        await migrator.dispose()
+
+
+async def test_final_inventory_matches_paired_constraints_and_private_helpers(
+    portfolio_migration_db,
+):
+    engine = portfolio_migration_db
+    await migrate_to("0017")
+    async with engine.connect() as conn:
+        assert (await conn.execute(text("SELECT session_user"))).scalar_one() == "birja_test"
+        names = set(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint WHERE "
+                        "connamespace='public'::regnamespace"
+                    )
+                )
+            ).scalars()
+        )
+        assert {
+            "uq_accounts_id_user",
+            "fk_holdings_portfolio_owner",
+            "fk_trades_portfolio_owner",
+            "fk_stock_fill_trade_owner_coin",
+            "fk_stock_ownership_trade_owner_coin",
+            "uq_stock_ownership_application_portfolio",
+            "fk_dividend_decision_entitlement_identity",
+            "fk_dividend_decision_previous_owner",
+            "fk_dividend_decision_application_owner",
+        } <= names
+        assert {
+            "uq_accounts_user_id",
+            "uq_stock_ownership_application_user",
+            "uq_stock_dividend_payment_event_user",
+        }.isdisjoint(names)
+        rows = (
+            await conn.execute(
+                text(
+                    "SELECT "
+                    "p.proname,pg_get_userbyid(p.proowner),p.prosecdef,p.proconfig,"
+                    "has_function_privilege('public',p.oid,'EXECUTE') FROM pg_proc p "
+                    "WHERE p.oid IN (to_regprocedure('public.check_portfolio_financial_write()'),"
+                    "to_regprocedure('public.check_stock_split_digest_version()'))"
+                )
+            )
+        ).all()
+        assert len(rows) == 2
+        assert all(r[1] == "birja_migrator" for r in rows)
+        assert all(r[2] == (r[0] == "check_portfolio_financial_write") for r in rows)
+        assert all(r[3:] == (["search_path=pg_catalog, public, pg_temp"], False) for r in rows)
+
+
 async def test_migrator_connection_authenticates_without_mutating_parent(engine, settings):
     before_env = os.environ["DATABASE_URL"]
     await asyncio.to_thread(run_test_migration, "0014")
