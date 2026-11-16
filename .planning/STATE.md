@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-15-PLAN.md; next12-17 by wave dependency. Phase continues locally.
-last_updated: "2026-11-16T12:04:36.279Z"
+stopped_at: Completed12-17-PLAN.md; next12-19 by wave dependency. Phase continues locally.
+last_updated: "2026-11-16T12:21:56.728Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 16
-  percent: 57
+  completed_plans: 17
+  percent: 61
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–16 are complete locally. Actual production v2 routing, explicit legacy financial refusal and259 affected API/auth/onboarding cases pass; full backend typing passes101 files. Next12-17 begins exact recovery contract work. All28 requirements remain unchecked; retained TLS/recovery, integrated security/browser and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–17 are complete locally. Exact0017 recovery producer/consumer contracts and actual mixed NULL/2 logical clone/reader proof pass;10 new contracts and16 retained offline contracts pass. Next12-19 begins browser identity/explicit target discovery. All28 requirements remain unchecked; encrypted same-archive TLS/image recovery, integrated security/browser and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 17 of 28 by dependency order; 16 plans complete, next12-17
-Status: Executing Phase12; Plans01–16 complete, next12-17 by wave order
+Plan: 18 of 28 by dependency order; 17 plans complete, next12-19
+Status: Executing Phase12; Plans01–17 complete, next12-19 by wave order
 Last activity: 2026-11-16
 
-Progress: [██████░░░░] 57%
+Progress: [██████░░░░] 61%
 
 ## Accepted Closeout and Release Boundary
 
@@ -215,6 +215,17 @@ retries and old auth lifecycle paths remain verified. See12-15-SUMMARY.md.
 Old mixed-History API static cursors/retained dividend fixture need27 adaptation;
 new private-original HTTP proof passes without weakening guards.26 must follow
 live v2/legacy-refusal critical modules. Next12-17; requirements remain unchecked.
+Plan17 now admits exact0017 recovery through independently pinned27-table,
+65-FK,20-identity and10-routine catalogue/role/ACL fingerprints. All owned and
+terminal records plus global NULL/2 markers are projected without rewriting
+old economic bytes;0015/16 explicitly refuse as migration_only. Ten new offline
+contracts and16 retained offline contracts pass. Actual synthetic mixed-version
+logical dump/restore, sequence/economic equality, restricted marker refusals and
+reloaded journal interpretation pass. Cold no-ACL recovery must revoke the fixed
+authenticated10 signatures before grant reconstruction, preserving quarantine
+for payout/hold/root-lock calls. See12-17-SUMMARY.md. Plans18/27 still own encrypted
+same-archive source/image/TLS and full integration qualification; no cloud or
+production operation ran. Next12-19 by wave order; all requirements stay unchecked.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -239,9 +250,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P14 | 12 min | 2 tasks | 6 files |
 | Phase 12 P16 | 28 min | 2 tasks | 10 files |
 | Phase 12 P15 | 20 min | 2 tasks | 25 files |
+| Phase 12 P17 | 16 min | 2 tasks | 7 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T12:04:36.257Z
-Stopped at: Completed12-15-PLAN.md; next12-17 by wave dependency. Phase continues locally.
+Last session: 2026-11-16T12:21:46.163Z
+Stopped at: Completed12-17-PLAN.md; next12-19 by wave dependency. Phase continues locally.
 Resume file: None
