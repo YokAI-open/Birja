@@ -463,9 +463,8 @@ async def test_original_retry_lookup_keeps_active_root_when_sibling_is_closed(po
 
 @pytest.mark.parametrize("target", ["foreign", "closed", "unknown"])
 async def test_resolver_refuses_unavailable_targets_without_retargeting(portfolio_world, target):
-    from app.services.portfolios import resolve_owned_active_portfolio
-
     from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
 
     conn, world = portfolio_world
     root = {"foreign": world.foreign, "closed": world.closed, "unknown": 9223372036854775807}[
@@ -475,15 +474,83 @@ async def test_resolver_refuses_unavailable_targets_without_retargeting(portfoli
         with pytest.raises(HTTPException) as err:
             await resolve_owned_active_portfolio(db, User(id=world.owner), root)
     assert err.value.status_code == 404
-    assert err.value.detail["code"] == "portfolio_unavailable"
+    assert err.value.detail == {"code": "portfolio_unavailable"}
 
 
 async def test_resolver_returns_only_explicit_owned_active_root(portfolio_world):
-    from app.services.portfolios import resolve_owned_active_portfolio
-
     from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
 
     conn, world = portfolio_world
     async with portfolio_session(conn) as db:
         resolved = await resolve_owned_active_portfolio(db, User(id=world.owner), world.sibling)
         assert (resolved.portfolio_id, resolved.user_id) == (world.sibling, world.owner)
+
+
+async def test_identity_contract_metadata_is_ordered_private_and_string_serialized(portfolio_world):
+    import json
+
+    from app.models.user import User
+    from app.schemas.auth import IdentityOut
+    from app.services.portfolios import list_active_portfolios
+
+    conn, world = portfolio_world
+    async with portfolio_session(conn) as db:
+        rows = await list_active_portfolios(db, User(id=world.owner))
+        assert [r.id for r in rows] == sorted([world.first, world.sibling])
+        assert [json.loads(r.model_dump_json()) for r in rows] == [
+            {"id": str(world.first), "name": "Strategy A"},
+            {"id": str(world.sibling), "name": "Strategy B"},
+        ]
+        assert await list_active_portfolios(db, User(id=world.empty_owner)) == []
+    assert IdentityOut(email="owner@example.test").model_dump() == {"email": "owner@example.test"}
+    assert set(IdentityOut.model_fields) == {"email"}
+
+
+async def test_resolver_value_is_frozen_and_does_not_change_root_economics(portfolio_world):
+    from dataclasses import FrozenInstanceError
+
+    from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
+
+    conn, world = portfolio_world
+    before = (
+        await conn.execute(text("SELECT id,cash,starting_cash FROM accounts ORDER BY id"))
+    ).all()
+    async with portfolio_session(conn) as db:
+        root = await resolve_owned_active_portfolio(db, User(id=world.owner), world.first)
+        with pytest.raises(FrozenInstanceError):
+            root.portfolio_id = world.sibling
+    after = (
+        await conn.execute(text("SELECT id,cash,starting_cash FROM accounts ORDER BY id"))
+    ).all()
+    assert before == after
+
+
+@pytest.mark.parametrize("target", ["0", "-1", "abc", "1.5", "9223372036854775808"])
+async def test_malformed_target_fails_path_validation(portfolio_world, target):
+    import httpx
+    from fastapi import FastAPI
+
+    from app.core.deps import OwnedActivePortfolioDep, get_current_user, get_db
+    from app.models.user import User
+
+    conn, world = portfolio_world
+    app = FastAPI()
+
+    @app.get("/portfolios/{portfolio_id}")
+    async def probe(root: OwnedActivePortfolioDep):
+        return {"portfolio_id": str(root.portfolio_id)}
+
+    async def db_override():
+        async with portfolio_session(conn) as db:
+            yield db
+
+    app.dependency_overrides[get_db] = db_override
+    app.dependency_overrides[get_current_user] = lambda: User(id=world.owner)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://test"
+    ) as c:
+        response = await c.get(f"/portfolios/{target}")
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["path", "portfolio_id"]
