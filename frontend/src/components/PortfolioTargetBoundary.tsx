@@ -1,0 +1,96 @@
+import { useEffect, useRef, type ReactNode } from "react";
+import { Link, Navigate, Outlet, useParams } from "react-router";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { usePortfolioTarget, type PortfolioTarget } from "@/hooks/usePortfolioTarget";
+
+/** No financial child mounts until explicit owned-active metadata resolves. */
+export function PortfolioTargetBoundary({
+  children,
+  legacyDestination,
+}: {
+  children?: (target: PortfolioTarget) => ReactNode;
+  legacyDestination?: (portfolioId: string) => string;
+}) {
+  const { portfolioId } = useParams<{ portfolioId: string }>();
+  const result = usePortfolioTarget(portfolioId, { legacyEntry: !!legacyDestination });
+  const heading = useRef<HTMLHeadingElement>(null);
+  const entered = useRef(false);
+  useEffect(() => {
+    if (entered.current || result.status === "loading" || result.status === "redirect") return;
+    entered.current = true;
+    // Initial refusal replaces the page. Background failures announce without
+    // stealing focus from a user who was already interacting with that page.
+    if (result.status !== "ready") heading.current?.focus();
+  }, [result.status]);
+
+  if (result.status === "ready" && result.target)
+    return children ? children(result.target) : <Outlet context={result.target} />;
+  if (result.status === "signed_out") return null;
+  if (result.status === "redirect" && result.redirectPortfolioId && legacyDestination)
+    return <Navigate replace to={legacyDestination(result.redirectPortfolioId)} />;
+  if (result.status === "loading" || result.status === "redirect")
+    return (
+      <Card
+        className="mx-auto my-8 min-w-0 max-w-xl"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading portfolio"
+      >
+        <CardContent className="flex min-w-0 flex-col gap-4">
+          <p>Loading portfolio</p>
+          <div aria-hidden="true" className="h-6 w-1/3 rounded-control bg-muted" />
+          <div aria-hidden="true" className="h-12 w-full rounded-control bg-muted" />
+        </CardContent>
+      </Card>
+    );
+
+  const title =
+    result.status === "empty"
+      ? "No portfolio available"
+      : result.status === "required" || result.status === "ambiguous"
+        ? "Portfolio required"
+        : "Portfolio unavailable";
+  const message =
+    result.status === "empty"
+      ? "You're signed in, but no portfolio is available. You can still browse Markets or sign out."
+      : result.status === "ambiguous"
+        ? "Open a portfolio-specific link to continue. No portfolio was selected."
+        : result.status === "required"
+          ? "Open a portfolio-specific link to continue."
+          : result.status === "error"
+            ? "Can't load this portfolio right now. Try again."
+            : "This portfolio is unavailable. Return to Markets to continue.";
+  return (
+    <section className="mx-auto my-8 flex min-w-0 max-w-xl flex-col gap-4" aria-live="polite">
+      <h1
+        ref={heading}
+        tabIndex={-1}
+        className="break-words text-[32px] leading-9 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-[40px] md:leading-[44px]"
+      >
+        {title}
+      </h1>
+      <Card>
+        <CardContent className="flex min-w-0 flex-col items-start gap-4">
+          <p
+            role={result.status === "error" ? "alert" : undefined}
+            className="break-words [overflow-wrap:anywhere]"
+          >
+            {message}
+          </p>
+          {result.status === "error" ? (
+            <Button variant="secondary" onClick={() => void result.refetch().catch(() => {})}>
+              Try again
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link to="/">
+                {result.status === "empty" ? "Browse markets" : "Return to Markets"}
+              </Link>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
