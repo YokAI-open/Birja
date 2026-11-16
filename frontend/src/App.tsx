@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChartNoAxesCombined, Wallet, History } from "lucide-react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router";
+import { NavLink, Navigate, Route, Routes, useLocation, useParams, matchPath } from "react-router";
 import type { Me } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,8 @@ import StockTradePage from "@/pages/StockTradePage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
 import HistoryPage from "@/pages/HistoryPage";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -48,7 +50,7 @@ function AuthSwitch() {
       </Card>
     );
   }
-  return data === null ? <SignInPage /> : <SignedIn me={data} />;
+  return data === null ? <SignInPage /> : <SignedIn key={data.email} me={data} />;
 }
 
 const navItem = ({ isActive }: { isActive: boolean }) =>
@@ -59,8 +61,28 @@ const navItem = ({ isActive }: { isActive: boolean }) =>
       : "text-muted-foreground hover:bg-muted",
   );
 
+function LegacyTrade({ stock = false }: { stock?: boolean }) {
+  const { symbol } = useParams<{ symbol: string }>();
+  return (
+    <PortfolioTargetBoundary
+      legacyDestination={(id) =>
+        `/portfolios/${id}/trade/${stock ? "stocks/" : ""}${encodeURIComponent(symbol ?? "")}`
+      }
+    />
+  );
+}
+
 function SignedIn({ me }: { me: Me }) {
   const { pathname } = useLocation();
+  // This memory belongs to this mounted signed-in identity only. Explicit
+  // routes take priority, including their refusal; never fall back from one.
+  const [openedId, setOpenedId] = useState<string>();
+  const explicitId = matchPath("/portfolios/:portfolioId/*", pathname)?.params.portfolioId;
+  const navigation = usePortfolioTarget(explicitId ?? openedId);
+  const target = navigation.status === "ready" ? navigation.target : null;
+  if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
+  const portfolioPath = target ? `/portfolios/${target.portfolioId}` : "/portfolio";
+  const historyPath = target ? `/portfolios/${target.portfolioId}/history` : "/history";
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = content.current!;
@@ -95,11 +117,11 @@ function SignedIn({ me }: { me: Me }) {
             <ChartNoAxesCombined aria-hidden="true" className="size-5 md:hidden" />
             Markets
           </NavLink>
-          <NavLink to="/portfolio" className={navItem}>
+          <NavLink to={portfolioPath} end className={navItem}>
             <Wallet aria-hidden="true" className="size-5 md:hidden" />
             Portfolio
           </NavLink>
-          <NavLink to="/history" className={navItem}>
+          <NavLink to={historyPath} className={navItem}>
             <History aria-hidden="true" className="size-5 md:hidden" />
             History
           </NavLink>
@@ -110,9 +132,24 @@ function SignedIn({ me }: { me: Me }) {
       </div>
       <div ref={content}>
         <Routes>
-          <Route index element={<MarketsPage />} />
-          <Route path="portfolio" element={<PortfolioPage />} />
-          <Route path="history" element={<HistoryPage />} />
+          <Route index element={<MarketsPage portfolioId={target?.portfolioId} />} />
+          <Route path="portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+            <Route index element={<PortfolioPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
+            <Route path="trade/:symbol" element={<TradePage />} />
+          </Route>
+          <Route path="portfolios" element={<PortfolioTargetBoundary />} />
+          <Route
+            path="portfolio"
+            element={<PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}`} />}
+          />
+          <Route
+            path="history"
+            element={
+              <PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}/history`} />
+            }
+          />
           <Route
             path="account"
             element={
@@ -125,8 +162,8 @@ function SignedIn({ me }: { me: Me }) {
               </>
             }
           />
-          <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
-          <Route path="trade/:symbol" element={<TradePage />} />
+          <Route path="trade/stocks/:symbol" element={<LegacyTrade stock />} />
+          <Route path="trade/:symbol" element={<LegacyTrade />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

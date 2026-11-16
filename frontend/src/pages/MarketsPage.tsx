@@ -8,7 +8,7 @@ import { usePrices } from "@/hooks/usePrices";
 import { formatAge, freshnessStatus } from "@/lib/age";
 import { formatUnitPrice } from "@/lib/money";
 
-function MarketsPage() {
+function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const { data, isPending, isError, refetch, dataUpdatedAt } = usePrices();
   const now = useNow(1000);
   // Server age plus local elapsed time since the response; never browser clock vs as_of.
@@ -96,7 +96,10 @@ function MarketsPage() {
                   </td>
                   <td className="pl-4 text-right">
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/trade/${item.symbol}`} aria-label={`Trade ${item.symbol}`}>
+                      <Link
+                        to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/${encodeURIComponent(item.symbol)}`}
+                        aria-label={`Trade ${item.symbol}`}
+                      >
                         Trade
                       </Link>
                     </Button>
@@ -137,7 +140,7 @@ function MarketsPage() {
           <CardContent>{body}</CardContent>
         </Card>
       </section>
-      <StockSection />
+      <StockSection portfolioId={portfolioId} />
     </div>
   );
 }
