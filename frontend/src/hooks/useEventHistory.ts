@@ -2,16 +2,17 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchEventHistory } from "@/api/eventHistory";
-import { useMe } from "./useMe";
+import type { PortfolioTarget } from "./usePortfolioTarget";
+import { financialScope, revokePortfolioTarget } from "./useQuote";
 
-type Guard = { email: string | null; epoch: number; seen: Set<string> };
+type Guard = { email: string | null; epoch: number; seen: Map<string, Set<string>> };
 const guards = new WeakMap<QueryClient, Guard>();
 const who = (client: QueryClient) =>
   client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
 function guardFor(client: QueryClient) {
   let guard = guards.get(client);
   if (guard) return guard;
-  guard = { email: who(client), epoch: 0, seen: new Set() };
+  guard = { email: who(client), epoch: 0, seen: new Map() };
   guards.set(client, guard);
   const current = guard;
   client.getQueryCache().subscribe(() => {
@@ -21,7 +22,10 @@ function guardFor(client: QueryClient) {
     current.email = email;
     current.epoch++;
     current.seen.clear();
-    if (old !== null) client.removeQueries({ queryKey: ["eventHistory", old] });
+    if (old !== null) {
+      client.removeQueries({ queryKey: ["eventHistory", old] });
+      client.removeQueries({ queryKey: ["history", old] });
+    }
   });
   return guard;
 }
@@ -32,30 +36,36 @@ export function eventHistorySession(client: QueryClient) {
   return { email, epoch };
 }
 
-export function useEventHistory() {
+export function useEventHistory(target: PortfolioTarget | null) {
   const client = useQueryClient();
-  useMe();
   const guard = guardFor(client);
   const subscribe = useCallback(
     (notify: () => void) => client.getQueryCache().subscribe(notify),
     [client],
   );
   const epoch = useSyncExternalStore(subscribe, () => guard.epoch);
-  const email = who(client);
-  const key = useMemo(() => ["eventHistory", email, epoch] as const, [email, epoch]);
+  const scope = useMemo(() => financialScope(client, target), [client, target]);
+  const email = scope.owner,
+    portfolioId = scope.portfolioId;
+  const seenKey = JSON.stringify([email, portfolioId, epoch]);
+  const key = useMemo(
+    () => ["eventHistory", email, portfolioId, epoch] as const,
+    [email, portfolioId, epoch],
+  );
   const query = useInfiniteQuery({
     queryKey: key,
-    enabled: email !== null,
+    enabled: scope.current(),
     retry: false,
     gcTime: 0,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ signal, pageParam }) => {
+      if (target === null || !scope.current()) throw new Error("Portfolio target changed");
       const owner = client.getQueryCache().find({ queryKey: key, exact: true });
       try {
-        const page = await fetchEventHistory({ cursor: pageParam }, signal);
+        const page = await fetchEventHistory(target.portfolioId, { cursor: pageParam }, signal);
         signal.throwIfAborted();
         if (
-          who(client) !== email ||
+          !scope.current() ||
           guard.epoch !== epoch ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
         )
@@ -63,7 +73,15 @@ export function useEventHistory() {
         return page;
       } catch (error) {
         if (
-          who(client) === email &&
+          scope.current() &&
+          error instanceof ApiError &&
+          error.code === "portfolio_unavailable"
+        ) {
+          guard.seen.delete(seenKey);
+          revokePortfolioTarget(client, target);
+        }
+        if (
+          scope.current() &&
           guard.epoch === epoch &&
           error instanceof ApiError &&
           error.status === 401
@@ -78,26 +96,33 @@ export function useEventHistory() {
     refetchOnWindowFocus: true,
   });
   useEffect(() => {
-    if (email === null || who(client) !== email || guard.epoch !== epoch || !query.data) return;
+    if (!scope.current() || guard.epoch !== epoch || !query.data) return;
+    const seen = guard.seen.get(seenKey) ?? new Set<string>();
+    guard.seen.set(seenKey, seen);
     const ids = query.data.pages.flatMap((page) => page.items.map((item) => item.id));
-    if (ids.every((id) => guard.seen.has(id))) return;
-    ids.forEach((id) => guard.seen.add(id));
+    if (ids.every((id) => seen.has(id))) return;
+    ids.forEach((id) => seen.add(id));
     const views = [
-      { queryKey: ["me"], exact: true },
-      { queryKey: ["portfolio", email] },
-      { queryKey: ["stockContext", email] },
+      { queryKey: ["portfolio", email, portfolioId] },
+      { queryKey: ["stockContext", email, portfolioId] },
     ];
     void (async () => {
       // Drop pending pre-event views before requesting authoritative replacements.
       await Promise.all(views.map((view) => client.cancelQueries(view)));
-      if (who(client) !== email || guard.epoch !== epoch) return;
+      if (!scope.current() || guard.epoch !== epoch) return;
       await Promise.all(views.map((view) => client.invalidateQueries(view)));
     })();
-  }, [client, email, epoch, guard, query.data]);
+  }, [client, email, portfolioId, epoch, guard, query.data, scope, seenKey]);
   return {
     ...query,
-    data: email !== null && who(client) === email && guard.epoch === epoch ? query.data : undefined,
+    data: scope.current() && guard.epoch === epoch ? query.data : undefined,
+    refetch: (options?: Parameters<typeof query.refetch>[0]) =>
+      scope.current()
+        ? query.refetch(options)
+        : Promise.reject(new Error("Portfolio target changed")),
     fetchNextPage: (options?: Parameters<typeof query.fetchNextPage>[0]) =>
-      query.fetchNextPage({ ...options, cancelRefetch: false }),
+      scope.current()
+        ? query.fetchNextPage({ ...options, cancelRefetch: false })
+        : Promise.reject(new Error("Portfolio target changed")),
   };
 }

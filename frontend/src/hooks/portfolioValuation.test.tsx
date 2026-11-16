@@ -143,7 +143,12 @@ it.each([null, bob, alice])(
       late.resolve(json(portfolio()));
     });
     expect(hook.result.current.data).toBeUndefined();
-    expect(client.getQueryCache().findAll({ queryKey: ["portfolio", alice] })).toHaveLength(0);
+    expect(
+      client
+        .getQueryCache()
+        .findAll({ queryKey: ["portfolio", alice] })
+        .every((query) => query.state.data === undefined),
+    ).toBe(true);
   },
 );
 it("hides a retained projection and revokes only the unavailable root after server refusal", async () => {
@@ -330,5 +335,17 @@ it("retains stock expiry reductions and never exposes a crossed-root cache value
   expect(result.current.data?.total_value).toBeNull();
   expect(result.current.data?.cash).toBe("9796.00");
   act(() => client.setQueryData(["portfolio", alice, "1", 0], portfolio("2")));
+  expect(result.current.data).toBeUndefined();
+});
+it("immediately masks accepted valuations on owner changes without waiting for parent routing", async () => {
+  const { client, wrapper, target } = setup(),
+    t = target();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve(json(portfolio()))),
+  );
+  const { result } = renderHook(() => usePortfolio(t.value), { wrapper });
+  await waitFor(() => expect(result.current.data?.cash).toBe("9796.00"));
+  act(() => client.setQueryData(["me"], { email: bob }));
   expect(result.current.data).toBeUndefined();
 });

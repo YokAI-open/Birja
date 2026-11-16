@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchPortfolio, type Portfolio, type PortfolioHolding } from "@/api/portfolio";
@@ -6,6 +6,7 @@ import { stockInstant, type TimedStocks } from "@/api/stocks";
 import type { AuthorityIdentity, TimedStockContext } from "@/api/stockTrades";
 import type { PortfolioTarget } from "./usePortfolioTarget";
 import { financialScope, revokePortfolioTarget } from "./useQuote";
+import { eventHistorySession } from "./useEventHistory";
 
 type TimedPortfolio = Portfolio & {
   transport: { received_at: number; round_trip_ms: number };
@@ -273,6 +274,11 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
 }
 export function usePortfolio(target: PortfolioTarget | null) {
   const client = useQueryClient();
+  const subscribe = useCallback(
+    (notify: () => void) => client.getQueryCache().subscribe(notify),
+    [client],
+  );
+  useSyncExternalStore(subscribe, () => eventHistorySession(client).epoch);
   const scope = useMemo(() => financialScope(client, target), [client, target]);
   const email = scope.owner,
     portfolioId = scope.portfolioId,
