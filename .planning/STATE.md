@@ -83,8 +83,11 @@ keeping existing receipt and approved manual-measurement paths intact.
 The owner approved one manual campaign during Monday, November 16's regular
 session, at or after 17:30 Moscow: at most 20 reference GETs and 10 IEX quote
 batches, 30 private attempts and 900 seconds. Fresh calendar/source/helper review
-is required first. No automatic waiter or repeating schedule exists. It remains
-an optional follow-up under its existing scope, not a release/archive blocker.
+was required first. That one-shot authorization was consumed on November16;
+results are in phases/07-permitted-stock-discovery/07-LIVE-20261116-REVIEW.md.
+All six whole requirements remain pending and stock admissions remain OFF.
+No rerun, automatic waiter, repeating schedule or fallback is authorized.
+The deferred live follow-up is not a release/archive blocker.
 The old November 11 run has no receipt; its outcome/request count is unknown.
 See phases/07-permitted-stock-discovery/07-LIVE-VERIFICATION-PROPOSAL.md.
 
