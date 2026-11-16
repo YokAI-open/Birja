@@ -17,7 +17,7 @@ from app.core.security import (
     new_refresh_token,
 )
 from app.models.auth import AuthSession, RefreshToken
-from app.schemas.auth import MeOut
+from app.schemas.auth import IdentityOut
 from app.services import accounts
 from app.services.otp import OtpStore
 from app.services.ratelimit import RateLimited, enforce, ip_bucket
@@ -95,7 +95,7 @@ async def verify_code(
     email: str,
     code: str,
     ip: str,
-) -> tuple[MeOut, IssuedSession]:
+) -> tuple[IdentityOut, IssuedSession]:
     # IP first: attempts the per-IP limit refuses never touch per-email state.
     await enforce(
         redis,
