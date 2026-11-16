@@ -4,7 +4,7 @@
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
 - [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements and four-phase roadmap approved 2026-11-14; Phase 12 planned and ready to execute.
+- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements and four-phase roadmap approved 2026-11-14; Phase 12 execution in progress locally.
 
 ## Current State
 
@@ -19,8 +19,8 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; three foundation/model plans are
-complete locally and the coordinated runnable migration/services remain pending.
+at Phase 12. Phase 12 has 28 approved plans; four foundation/model/staged-migration plans are
+complete locally; final0017 authority and runnable services remain pending.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -75,7 +75,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 12-04-PLAN.md — Finite immutable legacy association migrations
+- [x] 12-04-PLAN.md — Finite immutable legacy association migrations
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -264,7 +264,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 3/28 | In progress; next12-04 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 4/28 | In progress; next12-05 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-last_updated: "2026-11-16T08:28:41.745Z"
+last_updated: "2026-11-16T08:44:55.969Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 3
-  percent: 11
+  completed_plans: 4
+  percent: 14
 ---
 
 # Project State
@@ -19,16 +19,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 12 execution is authorized locally. Plans01–03 complete the test foundation and owned core/stock/dividend metadata; next is12-04. Runnable portfolio migration/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
+Current focus: Phase 12 execution is authorized locally. Plans01–04 complete the test foundation, owned metadata and real staged0015/16 preservation migrations; next is12-05. Final0017 authority/services remain pending and all28 milestone requirements unchecked. Published v0.5.0 and the v1.1 accepted-gap archive remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 4 of 28
-Status: Executing Phase12; Plans01–03 complete, next12-04
-Last activity: 2026-11-16 — Committed stock/dividend ownership metadata;21 metadata checks pass,44 ownership/authority cases collect
+Plan: 5 of 28
+Status: Executing Phase12; Plans01–04 complete, next12-05
+Last activity: 2026-11-16 — Staged migration proof passed22 cases plus8 strengthened retained-source cases; next12-05
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [█░░░░░░░░░] 14%
 
 ## Accepted Closeout and Release Boundary
 
@@ -121,11 +121,16 @@ Planning Nyquist compliance is approved. On2026-11-16 the owner invoked
 `$gsd-execute-phase 12`, authorizing local implementation. Plan01 completed
 with14 passing connection/security checks,37 retained migration regressions,
 23 migration cases and13 ownership/authority cases collected. The explicit
-preservation RED probe fails at missing0015 as intended. Phasewide Wave0,
+preservation RED probe originally failed at missing0015 as intended. Plan04
+now supplies real0015/16 and passing stage preservation proofs. Phasewide Wave0,
 final SQL, runtime/security/recovery and owner UI proofs remain pending.
 See12-01/02/03-SUMMARY.md. Plans02/03 add core and stock/dividend lineage
 metadata, with21 focused metadata cases passing and44 ownership/authority
-cases collected. Next12-04 adds real expansion/association migrations.
+cases collected. Plan04 adds real0015 expansion and bounded0016 association,
+with22 combined SQL cases and8 strengthened historical-source cases passing;
+actual committed-batch interruption/resume and unsafe downgrade refusal pass.
+See12-04-SUMMARY.md. Next12-05 defines final stock authority SQL;0015/16 are
+migration-only, with final0017/runtime/recovery admission still pending.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
