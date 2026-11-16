@@ -22,6 +22,7 @@ describe("stock money and immutable receipt boundary", () => {
 
 const order = { symbol: "AAPL", side: "buy", quantity: "2" } as const;
 const attempt = {
+  portfolio_id: "1",
   ...order,
   expected_exec_price: "102",
   idempotency_key: "00000000-0000-0000-0000-000000000001",
@@ -194,13 +195,18 @@ it("fetches all routes through the common client with exact unchanged economic b
     );
   });
   vi.stubGlobal("fetch", fetcher);
-  const context = await fetchStockContext("AAPL");
-  const quote = await fetchStockQuote(order);
-  const fill = await executeStockTrade(attempt);
+  const context = await fetchStockContext("1", "AAPL");
+  const quote = await fetchStockQuote("1", order);
+  const fill = await executeStockTrade("1", attempt);
   expect(context.transport.round_trip_ms).toBeGreaterThanOrEqual(0);
   expect(quote.transport.received_at).toBeGreaterThanOrEqual(quote.transport.started_at);
   expect(fill.trade_id).toBe("9007199254740993");
-  expect(JSON.parse((fetcher.mock.calls[2][1] as RequestInit).body as string)).toEqual(attempt);
+  expect(JSON.parse((fetcher.mock.calls[2][1] as RequestInit).body as string)).toEqual(
+    (({ portfolio_id, ...body }) => {
+      void portfolio_id;
+      return body;
+    })(attempt),
+  );
 });
 it.each(["partial", "foreign-order", "network", "unknown-code", "malformed-reprice"])(
   "treats ambiguous execute %s as UNKNOWN, without keys or raw messages",
@@ -225,7 +231,7 @@ it.each(["partial", "foreign-order", "network", "unknown-code", "malformed-repri
         );
       }),
     );
-    await expect(executeStockTrade(attempt)).rejects.toMatchObject({
+    await expect(executeStockTrade("1", attempt)).rejects.toMatchObject({
       kind: "unknown",
       message: "Stock order result is unconfirmed.",
     });
@@ -240,7 +246,7 @@ it("recognizes only validated definitive refusals and replacement previews", asy
         new Response(JSON.stringify({ detail: { code: "insufficient_cash" } }), { status: 422 }),
     ),
   );
-  await expect(executeStockTrade(attempt)).rejects.toMatchObject({
+  await expect(executeStockTrade("1", attempt)).rejects.toMatchObject({
     kind: "refused",
     code: "insufficient_cash",
   });
@@ -249,7 +255,7 @@ it("recognizes only validated definitive refusals and replacement previews", asy
     vi.fn(async () => new Response(JSON.stringify({ detail: changed() }), { status: 409 })),
   );
   const prior = { ...attempt, expected_exec_price: "101" };
-  await expect(executeStockTrade(prior)).rejects.toMatchObject({
+  await expect(executeStockTrade("1", prior)).rejects.toMatchObject({
     kind: "reprice",
     replacement: { quote: { exec_price: "102.00000000" } },
   });
@@ -282,7 +288,7 @@ it("counts authentication refresh, retry and body parsing in the full RTT", asyn
       return response;
     }),
   );
-  const value = await fetchStockQuote(order);
+  const value = await fetchStockQuote("1", order);
   expect(value.transport).toEqual({ started_at: 0, received_at: 40, round_trip_ms: 40 });
   expect(requests).toBe(2);
 });
@@ -292,18 +298,20 @@ it("replays the original economic receipt even if confirmation price differs", a
     "fetch",
     vi.fn(async () => new Response(JSON.stringify(fillFixture()))),
   );
-  expect(await executeStockTrade({ ...attempt, expected_exec_price: "999" })).toEqual(
+  expect(await executeStockTrade("1", { ...attempt, expected_exec_price: "999" })).toEqual(
     fillFixture(),
   );
 });
 it("rejects invalid local requests before any HTTP call", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  await expect(fetchStockQuote({ ...order, quantity: "1.5" })).rejects.toMatchObject({
+  await expect(fetchStockQuote("1", { ...order, quantity: "1.5" })).rejects.toMatchObject({
     kind: "refused",
   });
-  await expect(fetchStockContext("../private")).rejects.toMatchObject({ kind: "refused" });
-  await expect(executeStockTrade({ ...attempt, idempotency_key: "bad" })).rejects.toMatchObject({
+  await expect(fetchStockContext("1", "../private")).rejects.toMatchObject({ kind: "refused" });
+  await expect(
+    executeStockTrade("1", { ...attempt, idempotency_key: "bad" }),
+  ).rejects.toMatchObject({
     kind: "refused",
   });
   expect(fetcher).not.toHaveBeenCalled();
@@ -416,12 +424,12 @@ it("malformed or mismatched preview success is refused without returning unverif
     "fetch",
     vi.fn(async () => new Response("{}")),
   );
-  await expect(fetchStockQuote(order)).rejects.toMatchObject({ kind: "unknown" });
+  await expect(fetchStockQuote("1", order)).rejects.toMatchObject({ kind: "unknown" });
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response(JSON.stringify(quoteFixture()))),
   );
-  await expect(fetchStockQuote({ ...order, quantity: "3" })).rejects.toMatchObject({
+  await expect(fetchStockQuote("1", { ...order, quantity: "3" })).rejects.toMatchObject({
     kind: "unknown",
   });
 });
@@ -440,7 +448,7 @@ it.each([
           new Response(JSON.stringify({ detail: { code } }), { status: status as number }),
       ),
     );
-    await expect(executeStockTrade(attempt)).rejects.toMatchObject({ kind: "unknown" });
+    await expect(executeStockTrade("1", attempt)).rejects.toMatchObject({ kind: "unknown" });
   },
 );
 it("a current action must carry its affirmative independent reason", () => {

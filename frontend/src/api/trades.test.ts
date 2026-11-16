@@ -11,6 +11,7 @@ import {
 } from "./trades";
 
 const quote: Quote = {
+  portfolio_id: "1",
   symbol: "BTC",
   side: "buy",
   input_kind: "usd",
@@ -31,6 +32,7 @@ const quote: Quote = {
 };
 
 const fill: Fill = {
+  portfolio_id: "1",
   trade_id: 7,
   created_at: "2026-10-28T10:00:01Z",
   symbol: "BTC",
@@ -82,8 +84,8 @@ describe("guards", () => {
     expect(isFill({ ...fill, trade_id: "7" })).toBe(false);
     expect(isFill({ ...fill, cash_after: "-1" })).toBe(false);
     expect(isFill("x")).toBe(false);
-    expect(isHolding({ symbol: "BTC", quantity: "0.5" })).toBe(true);
-    expect(isHolding({ symbol: "BTC", quantity: 0.5 })).toBe(false);
+    expect(isHolding({ portfolio_id: "1", symbol: "BTC", quantity: "0.5" })).toBe(true);
+    expect(isHolding({ portfolio_id: "1", symbol: "BTC", quantity: 0.5 })).toBe(false);
     expect(isHolding(null)).toBe(false);
   });
 });
@@ -94,9 +96,9 @@ describe("fetchQuote", () => {
     const mock = vi.fn(() => Promise.resolve(json(quote)));
     vi.stubGlobal("fetch", mock);
     const order = { symbol: "BTC", side: "buy" as const, amount_usd: "100" };
-    expect(await fetchQuote(order)).toEqual(quote);
+    expect(await fetchQuote("1", order)).toEqual(quote);
     const [url, init] = call(mock, 0);
-    expect(url).toBe("/api/v1/trades/quote");
+    expect(url).toBe("/api/v2/portfolios/1/trades/quote");
     expect(init.method).toBe("POST");
     expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("tok");
     expect(JSON.parse(init.body as string)).toEqual(order);
@@ -105,7 +107,7 @@ describe("fetchQuote", () => {
   it("throws on a malformed quote", async () => {
     document.cookie = "bj_csrf=tok; path=/";
     vi.stubGlobal("fetch", () => Promise.resolve(json({ ...quote, fee: "1E-8" })));
-    await expect(fetchQuote({ symbol: "BTC", side: "buy", amount_usd: "1" })).rejects.toThrow(
+    await expect(fetchQuote("1", { symbol: "BTC", side: "buy", amount_usd: "1" })).rejects.toThrow(
       "Unexpected quote response",
     );
   });
@@ -120,10 +122,10 @@ describe("executeTrade", () => {
       .mockResolvedValueOnce(json(fill, 200));
     vi.stubGlobal("fetch", mock);
     const order = { symbol: "BTC", side: "buy" as const, amount_usd: "100" };
-    expect(await executeTrade(order, "100000.00", "key-1")).toEqual(fill);
-    expect(await executeTrade(order, "100000.00", "key-1")).toEqual(fill);
+    expect(await executeTrade("1", order, "100000.00", "key-1")).toEqual(fill);
+    expect(await executeTrade("1", order, "100000.00", "key-1")).toEqual(fill);
     const [url, init] = call(mock, 0);
-    expect(url).toBe("/api/v1/trades");
+    expect(url).toBe("/api/v2/portfolios/1/trades");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       ...order,
@@ -136,23 +138,29 @@ describe("executeTrade", () => {
     document.cookie = "bj_csrf=tok; path=/";
     vi.stubGlobal("fetch", () => Promise.resolve(json({ trade_id: 1 }, 201)));
     await expect(
-      executeTrade({ symbol: "BTC", side: "sell", quantity: "1" }, "1", "k"),
+      executeTrade("1", { symbol: "BTC", side: "sell", quantity: "1" }, "1", "k"),
     ).rejects.toThrow("Unexpected trade response");
   });
 });
 
 describe("fetchHolding", () => {
   it("GETs the encoded symbol", async () => {
-    const mock = vi.fn(() => Promise.resolve(json({ symbol: "BTC", quantity: "0.5" })));
+    const mock = vi.fn(() =>
+      Promise.resolve(json({ portfolio_id: "1", symbol: "BTC", quantity: "0.5" })),
+    );
     vi.stubGlobal("fetch", mock);
-    expect(await fetchHolding("BTC")).toEqual({ symbol: "BTC", quantity: "0.5" });
-    expect(call(mock, 0)[0]).toBe("/api/v1/holdings/BTC");
-    await fetchHolding("A/B").catch(() => undefined);
-    expect(call(mock, 1)[0]).toBe("/api/v1/holdings/A%2FB");
+    expect(await fetchHolding("1", "BTC")).toEqual({
+      portfolio_id: "1",
+      symbol: "BTC",
+      quantity: "0.5",
+    });
+    expect(call(mock, 0)[0]).toBe("/api/v2/portfolios/1/holdings/BTC");
+    await fetchHolding("1", "A/B").catch(() => undefined);
+    expect(call(mock, 1)[0]).toBe("/api/v2/portfolios/1/holdings/A%2FB");
   });
 
   it("throws on a malformed holding", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(json({ symbol: "BTC" })));
-    await expect(fetchHolding("BTC")).rejects.toThrow("Unexpected holding response");
+    await expect(fetchHolding("1", "BTC")).rejects.toThrow("Unexpected holding response");
   });
 });

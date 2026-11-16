@@ -14,13 +14,19 @@ export const item = {
 };
 afterEach(() => vi.unstubAllGlobals());
 it("preserves exact string fields and the opaque continuation with abort signal", async () => {
-  const body = { items: [item], next_cursor: "opaque_-123" };
+  const cursor = btoa(
+    JSON.stringify({ v: 2, portfolio_id: "1", created_at: item.created_at, id: item.id }),
+  )
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const body = { items: [item], next_cursor: cursor };
   const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
   vi.stubGlobal("fetch", mock);
   const signal = new AbortController().signal;
-  expect(await fetchHistory({ cursor: "opaque_-123", limit: 1 }, signal)).toEqual(body);
+  expect(await fetchHistory("1", { cursor, limit: 1 }, signal)).toEqual(body);
   expect(mock.mock.calls[0]).toEqual([
-    "/api/v1/trades?cursor=opaque_-123&limit=1",
+    `/api/v2/portfolios/1/history?cursor=${cursor}&limit=1`,
     expect.objectContaining({ signal }),
   ]);
   expect(isHistoryPage({ items: [], next_cursor: null })).toBe(true);
@@ -53,5 +59,5 @@ it("rejects malformed responses from the network", async () => {
   vi.stubGlobal("fetch", () =>
     Promise.resolve(new Response(JSON.stringify({ items: null, next_cursor: null }))),
   );
-  await expect(fetchHistory()).rejects.toThrow("Unexpected history response");
+  await expect(fetchHistory("1")).rejects.toThrow("Unexpected history response");
 });
