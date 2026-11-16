@@ -132,7 +132,7 @@ async def test_postmigration_grants_only_after_all_fixed_provenance_checks(failu
     )
     conn = connection(role)
     checks = [name != failure for name in ("schema", "relations", "identity", "functions")]
-    conn.fetchval = AsyncMock(side_effect=[True, False, *checks] if role else [True])
+    conn.fetchval = AsyncMock(side_effect=[True, False, "0014", *checks] if role else [True])
     with patch("app.db.dev_bootstrap.asyncpg.connect", AsyncMock(return_value=conn)):
         if failure:
             with pytest.raises(ValueError, match="refusing"):
@@ -155,4 +155,26 @@ def test_postmigration_cli_mode_is_explicit(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", URL)
     with patch("app.db.dev_bootstrap.bootstrap", new_callable=AsyncMock) as start:
         main(["--after-migrations"])
-    start.assert_awaited_once_with("dev", URL, after_migrations=True)
+    start.assert_awaited_once_with("dev", URL, after_migrations=True, migrate=False)
+
+
+@pytest.mark.parametrize("revision", ["0015", "0016", "0017"])
+async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
+    role = DriverRecord({"oid": 123, **dict.fromkeys(FLAGS, False)})
+    conn = connection(role)
+    conn.fetchval = AsyncMock(side_effect=[True, False, revision])
+    with (
+        patch("app.db.dev_bootstrap.asyncpg.connect", AsyncMock(return_value=conn)),
+        patch("app.db.dev_bootstrap._authorize_portfolios", new_callable=AsyncMock) as final,
+        patch("app.db.dev_bootstrap._authorize_dividends", new_callable=AsyncMock) as legacy,
+    ):
+        if revision == "0017":
+            await bootstrap("dev", URL, after_migrations=True)
+            final.assert_awaited_once_with(conn)
+        else:
+            with pytest.raises(ValueError, match="migration_only"):
+                await bootstrap("dev", URL, after_migrations=True)
+            final.assert_not_awaited()
+        legacy.assert_not_awaited()
+    assert conn.execute.await_count == 1  # No grant before revision admission.
+    conn.close.assert_awaited_once()
