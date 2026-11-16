@@ -1,16 +1,18 @@
-import { useId, useRef, useState, type FormEvent } from "react";
-import { Navigate, useParams } from "react-router";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { Link, Navigate, useOutletContext, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { ApiError } from "@/api/client";
 import { isQuote, type Order, type Quote, type Side } from "@/api/trades";
+import { PortfolioContext } from "@/components/PortfolioContext";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { usePortfolio } from "@/hooks/usePortfolio";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useHolding } from "@/hooks/useHolding";
-import { useMe } from "@/hooks/useMe";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { quoteKey, useQuote } from "@/hooks/useQuote";
@@ -87,17 +89,20 @@ function segment(selected: boolean) {
   );
 }
 
-function TradePage() {
+function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string }) {
   const summaryHeadingId = useId();
-  const params = useParams();
-  const symbol = (params.symbol ?? "").toUpperCase();
+  const resultHeading = useRef<HTMLHeadingElement>(null);
   const queryClient = useQueryClient();
 
   const prices = usePrices();
-  const me = useMe();
-  const holding = useHolding(symbol);
-  const trade = useTrade(symbol);
+  const portfolio = usePortfolio(target);
+  const holding = useHolding(target, symbol);
+  const trade = useTrade(target, symbol);
+  const attemptName = useRef(target.name);
   const now = useNow(1000);
+  useEffect(() => {
+    if (trade.data && target.isCurrent()) resultHeading.current?.focus({ preventScroll: true });
+  }, [trade.data, target]);
 
   const [side, setSide] = useState<Side>("buy");
   const [buyKind, setBuyKind] = useState<Kind>("usd");
@@ -126,12 +131,12 @@ function TradePage() {
       kind === "usd" ? { symbol, side, amount_usd: input } : { symbol, side, quantity: input };
   }
   const debouncedOrder = useDebouncedValue(order, 300);
-  const quoteQuery = useQuote(live ? debouncedOrder : null);
+  const quoteQuery = useQuote(target, live ? debouncedOrder : null);
   const quote: Quote | undefined = quoteQuery.isPlaceholderData ? undefined : quoteQuery.data;
   const settled =
     order !== null &&
     debouncedOrder !== null &&
-    quoteKey(order).join("|") === quoteKey(debouncedOrder).join("|");
+    quoteKey(target, order).join("|") === quoteKey(target, debouncedOrder).join("|");
 
   const error = trade.error;
   const apiError = error instanceof ApiError ? error : null;
@@ -141,6 +146,7 @@ function TradePage() {
   const fill = trade.data;
 
   const quoteApiError = quoteQuery.error instanceof ApiError ? quoteQuery.error : null;
+  if (!target.isCurrent()) return null;
   if (
     (prices.data && !coin) ||
     errorCode === "unknown_coin" ||
@@ -150,13 +156,24 @@ function TradePage() {
   }
 
   const edited = () => {
+    if (trade.outcomeUnknown || trade.isPending) return;
     keyRef.current = null;
     trade.reset();
   };
 
   const confirm = (event: FormEvent) => {
     event.preventDefault();
-    if (trade.isPending || !order || !quote || !settled || !live || refused || fill) return;
+    if (!target.isCurrent() || trade.isPending || fill) return;
+    if (trade.outcomeUnknown && trade.attempt) {
+      trade.mutate({
+        order: trade.attempt.order,
+        expectedMid: trade.attempt.expected_mid,
+        idempotencyKey: trade.attempt.idempotency_key,
+      });
+      return;
+    }
+    if (!order || !quote || !settled || !live || refused) return;
+    attemptName.current = target.name;
     keyRef.current ??= crypto.randomUUID();
     trade.mutate(
       { order, expectedMid: quote.mid, idempotencyKey: keyRef.current },
@@ -171,10 +188,10 @@ function TradePage() {
           if (failure.code === "price_changed") {
             keyRef.current = null;
             const fresh = failure.detail?.quote;
-            if (isQuote(fresh)) {
-              queryClient.setQueryData(quoteKey(order), fresh);
+            if (isQuote(fresh) && fresh.portfolio_id === target.portfolioId) {
+              queryClient.setQueryData(quoteKey(target, order), fresh);
             } else {
-              void queryClient.invalidateQueries({ queryKey: quoteKey(order) });
+              void queryClient.invalidateQueries({ queryKey: quoteKey(target, order) });
             }
           } else if (TERMINAL_CODES.has(failure.code)) {
             keyRef.current = null;
@@ -195,8 +212,11 @@ function TradePage() {
       tradeMessage = NETWORK_MESSAGE;
     } else if (errorCode === "stale_price") {
       tradeMessage = `${STALE_MESSAGE} ${apiError.message}`;
+    } else if (errorCode === "idempotency_conflict") {
+      tradeMessage =
+        "This order reference belongs to a different portfolio or request. Return to the original portfolio to check it.";
     } else {
-      tradeMessage = apiError.message;
+      tradeMessage = refused ? apiError.message : NETWORK_MESSAGE;
     }
   }
   const quoteMessage =
@@ -207,8 +227,11 @@ function TradePage() {
       : null;
 
   const held = holding.data?.quantity;
-  const locked = trade.isPending || fill !== undefined;
-  const canConfirm = live && settled && quote !== undefined && !refused && !trade.isPending;
+  const locked = trade.isPending || trade.outcomeUnknown || fill !== undefined;
+  const canConfirm =
+    target.isCurrent() &&
+    !trade.isPending &&
+    (trade.outcomeUnknown || (live && settled && quote !== undefined && !refused));
   const unit = kind === "usd" ? "USD" : symbol;
   const inputLabel = kind === "usd" ? "Amount" : "Quantity";
 
@@ -216,9 +239,15 @@ function TradePage() {
   if (fill) {
     preview = (
       <>
-        <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
+        <h2
+          ref={resultHeading}
+          tabIndex={-1}
+          id={summaryHeadingId}
+          className="text-xl leading-7 font-semibold tracking-[-0.01em] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           Order filled
         </h2>
+        <PortfolioContext name={attemptName.current} />
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -226,9 +255,14 @@ function TradePage() {
           <Row label="Cash change" value={signedUsd(fill.cash_delta)} />
           <Row label="New cash balance" value={formatUsd(fill.cash_after)} strong />
         </dl>
-        <Button type="button" variant="secondary" onClick={newOrder}>
-          New order
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link to={`/portfolios/${target.portfolioId}`}>Portfolio</Link>
+          </Button>
+          <Button type="button" variant="secondary" onClick={newOrder}>
+            Trade again
+          </Button>
+        </div>
       </>
     );
   } else {
@@ -259,6 +293,12 @@ function TradePage() {
         <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
           Preview
         </h2>
+        <PortfolioContext name={trade.attempt ? attemptName.current : target.name} />
+        {trade.outcomeUnknown && (
+          <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
+            We couldn't confirm the result. Check this order before placing another.
+          </p>
+        )}
         {priceChanged && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             Price updated. Please review again.
@@ -276,20 +316,21 @@ function TradePage() {
           </p>
         )}
         <Button type="submit" form="trade-form" size="lg" disabled={!canConfirm}>
-          {`Confirm ${side}`}
+          {trade.outcomeUnknown ? "Check order result" : `Confirm ${side}`}
         </Button>
       </>
     );
   }
 
   return (
-    <div className="mx-auto my-8 grid max-w-5xl gap-6 lg:grid-cols-12">
+    <div className="mx-auto my-8 grid min-w-0 max-w-5xl gap-6 lg:grid-cols-12">
       <Card className="lg:col-span-7">
         <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-1">
             <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
               Trade {symbol}
             </h1>
+            <PortfolioContext name={target.name} />
             {coin ? (
               <>
                 <p className="text-muted-foreground">{coin.name}</p>
@@ -401,9 +442,9 @@ function TradePage() {
                   You hold {formatQuantity(held)} {symbol}
                 </p>
               )}
-              {side === "buy" && me.data && (
+              {side === "buy" && portfolio.data && (
                 <p className="text-[13px] leading-[18px] text-muted-foreground">
-                  Cash available {formatUsd(me.data.cash_usd)}
+                  Cash available {formatUsd(portfolio.data.cash)}
                 </p>
               )}
             </div>
@@ -422,4 +463,14 @@ function TradePage() {
   );
 }
 
-export default TradePage;
+export default function TradePage() {
+  const target = useOutletContext<PortfolioTarget>();
+  const symbol = (useParams().symbol ?? "").toUpperCase();
+  return (
+    <Ticket
+      key={`${target.owner}:${target.portfolioId}:${target.epoch.session}:${symbol}`}
+      target={target}
+      symbol={symbol}
+    />
+  );
+}

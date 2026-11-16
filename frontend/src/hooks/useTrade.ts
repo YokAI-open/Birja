@@ -21,6 +21,10 @@ const terminal = new Set([
   "invalid_order",
   "idempotency_conflict",
   "unknown_coin",
+  "below_minimum",
+  "insufficient_quantity",
+  "order_too_large",
+  "stale_price",
 ]);
 function sameAttempt(a: TradeAttempt, b: TradeAttempt) {
   return (
