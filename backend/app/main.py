@@ -1,9 +1,9 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -12,6 +12,7 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.connection import database_connect_args
+from app.db.schema_contract import SchemaAdmissionError, require_schema
 from app.services.email import build_email_sender
 from app.services.otp import OtpStore
 
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.http = http
     app.state.email_sender = build_email_sender(settings, http)
     try:
+        async with engine.connect() as connection:
+            await require_schema(connection)
         yield
     finally:
         await http.aclose()
@@ -71,6 +74,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=None if is_prod else "/openapi.json",
     )
     app.state.settings = settings
+
+    @app.middleware("http")
+    async def admit_write(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            try:
+                async with request.app.state.engine.connect() as connection:
+                    await require_schema(connection)
+            except SchemaAdmissionError:
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": {
+                            "code": "schema_unavailable",
+                            "message": "Service is temporarily unavailable.",
+                        }
+                    },
+                )
+        return await call_next(request)
+
     app.add_exception_handler(RedisError, redis_unavailable)  # type: ignore[arg-type]
     app.include_router(api_router, prefix="/api/v1")
     return app
