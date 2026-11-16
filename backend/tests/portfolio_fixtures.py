@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from tests.test_migrations import ensure_dividend_test_owner, run_test_migration, test_migration_url
 
@@ -218,3 +218,96 @@ async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
             await decision(conn, terms, pid)
     await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     return LegacyBooks(tuple(owners), tuple(roots), crypto, stock, tuple(trade_ids), sid)
+
+
+@dataclass(frozen=True)
+class PortfolioWorld:
+    empty_owner: int
+    single_owner: int
+    owner: int
+    foreign_owner: int
+    single: int
+    first: int
+    sibling: int
+    closed: int
+    foreign: int
+    crypto: int
+
+
+async def seed_portfolio_world(conn: AsyncConnection) -> PortfolioWorld:
+    """Final-schema test seeding authenticated as migrator, not public creation."""
+    assert (await conn.execute(text("SELECT session_user"))).scalar_one() == "birja_migrator"
+    owners = []
+    for label in ("empty", "single", "strategies", "foreign"):
+        owners.append(
+            (
+                await conn.execute(
+                    text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                    {"e": f"{label}-{uuid4()}@example.test"},
+                )
+            ).scalar_one()
+        )
+    roots = []
+    for owner, name, cash, closed in (
+        (owners[1], "Only strategy", "9876.54", False),
+        (owners[2], "Strategy A", "1234.56", False),
+        (owners[2], "Strategy B", "4321.09", False),
+        (owners[2], "Ended strategy", "55.55", True),
+        (owners[3], "Foreign strategy", "777.77", False),
+    ):
+        roots.append(
+            (
+                await conn.execute(
+                    text("""INSERT INTO accounts
+            (user_id,name,cash,starting_cash,closed_at)
+            VALUES (:u,:n,:cash,10000,CASE WHEN :closed THEN clock_timestamp() ELSE NULL END)
+            RETURNING id"""),
+                    {"u": owner, "n": name, "cash": Decimal(cash), "closed": closed},
+                )
+            ).scalar_one()
+        )
+    crypto = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+    for root, quantity, basis in ((roots[1], "0.1", "123.00"), (roots[2], "0.2", "456.00")):
+        await conn.execute(
+            text("""INSERT INTO holdings
+            (portfolio_id,user_id,coin_id,quantity,cost_basis) VALUES (:p,:u,:c,:q,:b)"""),
+            {"p": root, "u": owners[2], "c": crypto, "q": Decimal(quantity), "b": Decimal(basis)},
+        )
+    return PortfolioWorld(*owners, *roots, crypto)
+
+
+@pytest_asyncio.fixture
+async def portfolio_world(engine: AsyncEngine, migrated: None):
+    """Private final-schema matrix; all financial changes roll back after a case."""
+    migrator = create_async_engine(test_migration_url())
+    try:
+        async with migrator.connect() as conn:
+            tx = await conn.begin()
+            try:
+                world = await seed_portfolio_world(conn)
+                yield conn, world
+            finally:
+                await tx.rollback()
+    finally:
+        await migrator.dispose()
+
+
+async def seed_owned_crypto_trade(
+    conn: AsyncConnection, world: PortfolioWorld, root: int, key=None
+) -> tuple[int, object]:
+    key = key or uuid4()
+    tid = (
+        await conn.execute(
+            text("""INSERT INTO trades
+        (portfolio_id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,
+         price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key)
+        VALUES (:p,:u,:c,'buy','quantity',0.001,0.001,50000,clock_timestamp(),
+         50000,0.25,-50.25,1184.31,:key) RETURNING id"""),
+            {"p": root, "u": world.owner, "c": world.crypto, "key": key},
+        )
+    ).scalar_one()
+    return tid, key
+
+
+def portfolio_session(conn: AsyncConnection) -> AsyncSession:
+    return AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")
