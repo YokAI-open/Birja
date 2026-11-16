@@ -3,9 +3,164 @@
 import argparse
 import asyncio
 import os
+import secrets
+import sys
+from pathlib import Path
 
 import asyncpg  # type: ignore[import-untyped]  # Driver has no published typing marker.
 from sqlalchemy.engine import make_url
+
+from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+# Existing local application objects only. Never REASSIGN OWNED or transfer an
+# unknown extension/table/function, even in the disposable development database.
+TABLES = frozenset(
+    [
+        "alembic_version",
+        "users",
+        "accounts",
+        "auth_sessions",
+        "refresh_tokens",
+        "coins",
+        "prices",
+        "holdings",
+        "trades",
+        "stock_instruments",
+        "stock_quotes",
+        "stock_sessions",
+        "stock_data_admissions",
+        "stock_action_events",
+        "stock_action_sources",
+        "stock_action_revisions",
+        "stock_action_observations",
+        "stock_action_state",
+        "stock_ownership_movements",
+        "stock_split_applications",
+        "stock_dividend_entitlements",
+        "stock_action_resolutions",
+        "stock_fill_facts",
+        "stock_status_evidence",
+        "stock_dividend_payments",
+        "stock_dividend_decisions",
+        "portfolio_stock_closures",
+    ]
+)
+FUNCTIONS = frozenset(
+    [
+        "reject_stock_action_mutation",
+        "reject_stock_record_mutation",
+        "reject_stock_dividend_mutation",
+        "check_stock_fill_integrity",
+        "assert_stock_execution_current",
+        "apply_stock_action_resolution",
+        "stock_dividend_authority",
+        "apply_stock_dividend",
+        "record_stock_dividend_hold",
+        "associate_legacy_portfolio_only",
+        "check_stock_split_digest_version",
+        "check_portfolio_financial_write",
+        "lock_stock_portfolio_roots",
+    ]
+)
+
+
+async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
+    await conn.execute(PREFLIGHT_SQL)
+    await conn.execute(GRANTS_SQL)
+
+
+async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
+    """Authenticate the finite migration child; keep the parent admin unchanged."""
+    revision = None
+    if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
+        rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 18)}:
+            raise ValueError("Unsupported dev migration revision; refusing")
+        revision = rows[0][0]
+    await conn.execute("SELECT pg_advisory_lock(1026016001)")
+    try:
+        async with conn.transaction():
+            for role in ("birja_migrator", "birja_app", "birja_scheduler", "birja_action_operator"):
+                row = await conn.fetchrow(
+                    "SELECT oid,rolinherit,rolsuper,rolcreatedb,rolcreaterole,"
+                    "rolreplication,rolbypassrls FROM pg_roles WHERE rolname=$1",
+                    role,
+                )
+                if row is None:
+                    # The role list is a closed source-owned set, not user input.
+                    await conn.execute(
+                        f"CREATE ROLE {role} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB "
+                        "NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+                    )
+                elif any(v for k, v in row.items() if k != "oid") or await conn.fetchval(
+                    "SELECT EXISTS(SELECT FROM pg_auth_members WHERE roleid=$1 OR member=$1)",
+                    row["oid"],
+                ):
+                    raise ValueError("Unsafe dev role; refusing repair")
+            relations = await conn.fetch(
+                "SELECT c.relname,c.relkind::text,pg_get_userbyid(c.relowner) FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' "
+                "AND c.relkind IN ('r','S')"
+            )
+            for name, kind, owner in relations:
+                allowed = TABLES if kind == "r" else {t + "_id_seq" for t in TABLES}
+                if name not in allowed or owner not in {"birja", "birja_migrator"}:
+                    raise ValueError("Unexpected dev relation; refusing transfer")
+            functions = await conn.fetch(
+                "SELECT p.oid::regprocedure::text,p.proname,pg_get_userbyid(p.proowner) "
+                "FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
+                "WHERE n.nspname='public'"
+            )
+            for _signature, name, owner in functions:
+                if name not in FUNCTIONS or owner not in {"birja", "birja_migrator"}:
+                    raise ValueError("Unexpected dev routine; refusing transfer")
+            for name, kind, _ in relations:
+                if kind == "r":
+                    await conn.execute(f'ALTER TABLE public."{name}" OWNER TO birja_migrator')
+            for signature, _, _ in functions:
+                await conn.execute(f"ALTER FUNCTION {signature} OWNER TO birja_migrator")
+            await conn.execute(
+                "GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator;"
+                "REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler;"
+                "GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler"
+            )
+            password = secrets.token_hex(32)
+            statement = await conn.fetchval(
+                "SELECT format('ALTER ROLE birja_migrator LOGIN PASSWORD %L',$1::text)", password
+            )
+            await conn.execute(statement)
+        try:
+            child = await asyncio.create_subprocess_exec(
+                sys.executable,
+                "-m",
+                "app.db.portfolio_migrate",
+                cwd=BACKEND_DIR,
+                env={
+                    **os.environ,
+                    "DATABASE_URL": make_url(database_url)
+                    .set(username="birja_migrator", password=password)
+                    .render_as_string(hide_password=False),
+                },
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                await asyncio.wait_for(child.communicate(), timeout=180)
+            except TimeoutError:
+                child.kill()
+                await child.wait()
+                raise ValueError("Dev final migration timed out; resume explicitly") from None
+            if child.returncode:
+                raise ValueError("Dev final migration failed; diagnostics withheld")
+        finally:
+            await conn.execute("ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL")
+        async with conn.transaction():
+            await _authorize_portfolios(conn)
+        print("dev_final_migration=true source_revision=" + str(revision) + " final=0017")
+    finally:
+        await conn.execute("SELECT pg_advisory_unlock(1026016001)")
 
 
 async def _authorize_dividends(conn: asyncpg.Connection) -> None:
@@ -74,7 +229,9 @@ async def _authorize_dividends(conn: asyncpg.Connection) -> None:
     await conn.execute("GRANT UPDATE(cash) ON public.accounts TO birja_migrator")
 
 
-async def bootstrap(env: str, database_url: str, *, after_migrations: bool = False) -> None:
+async def bootstrap(
+    env: str, database_url: str, *, after_migrations: bool = False, migrate: bool = False
+) -> None:
     url = make_url(database_url)
     if (
         env != "dev"
@@ -120,7 +277,15 @@ async def bootstrap(env: str, database_url: str, *, after_migrations: bool = Fal
             ):
                 raise ValueError("Unsafe existing dev migration owner; refusing repair")
             if after_migrations:
-                await _authorize_dividends(conn)
+                revision = await conn.fetchval("SELECT version_num FROM public.alembic_version")
+                if revision in {"0015", "0016"}:
+                    raise ValueError("migration_only; refusing normal dev bootstrap")
+                if revision == "0017":
+                    await _authorize_portfolios(conn)
+                else:
+                    await _authorize_dividends(conn)
+        if migrate:
+            await _migrate_dev(conn, database_url)
     finally:
         await conn.close()
 
@@ -128,12 +293,14 @@ async def bootstrap(env: str, database_url: str, *, after_migrations: bool = Fal
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--after-migrations", action="store_true")
+    parser.add_argument("--migrate", action="store_true")
     args = parser.parse_args(argv)
     asyncio.run(
         bootstrap(
             os.environ.get("ENV", ""),
             os.environ.get("DATABASE_URL", ""),
             after_migrations=args.after_migrations,
+            migrate=args.migrate,
         )
     )
 

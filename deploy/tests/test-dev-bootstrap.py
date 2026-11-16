@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Real ordinary-Compose dividend authority, on exclusively owned dev test stacks."""
+"""Real final portfolio bootstrap on exclusively owned fresh/upgraded dev stacks."""
 
 import argparse
 import json
 import os
-import runpy
 import subprocess
 import tempfile
 import time
@@ -14,69 +13,44 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def financial_program():
-    program = runpy.run_path(str(ROOT / "deploy/tests/dividend-execution-fixture.py"))["PROGRAM"]
-    program = program.split("asyncio.run(main())")[0]
-    # A new synthetic ordinary account receives the original10000 grant, once.
-    old = "INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,100,10000)"
-    assert program.count(old) == 1
-    program = program.replace(old, old.replace("$1,100,", "$1,10000,"))
-    return program + r'''
-import os
-def service_engine(role=None):
- return create_async_engine(os.environ['DATABASE_URL'])
-
-async def actual_dev_financial():
- owner=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
+    return r'''
+import asyncio,os
+from decimal import Decimal as D
+import asyncpg
+from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+async def main():
+ c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
  try:
-  assert await owner.fetchval("SELECT current_database()='birja' AND current_user='birja'")
-  event=await prepare(owner)
-  work=await target(owner,event)
-  original=await service_work(work)
-  assert original['outcome']=='original'
-  assert await service_work(work)==original
-  uid=await owner.fetchval('SELECT user_id FROM stock_dividend_entitlements WHERE id=$1',work['entitlement_id'])
-  cash=lambda:owner.fetchval('SELECT cash FROM accounts WHERE user_id=$1',uid)
-  assert await cash()==D(10001)
-  before=await owner.fetchrow('SELECT * FROM stock_dividend_payments WHERE id=$1',original['payment_id'])
-  await revise(owner,event,'1.5')
-  await cycle()
-  correction=await service_work(await target(owner,event))
-  assert correction['outcome']=='applied' and await cash()==D(10003)
-  assert await service_work(await target(owner,event))==correction
-  revision=await revise(owner,event,'0.5',uncertain=True)
-  await cycle()
-  held=await service_work({'payment_id':original['payment_id'],'revision_fingerprint':revision},hold=True)
-  assert held['outcome']=='held_uncertain' and await cash()==D(10003)
-  count=await owner.fetchval('SELECT count(*) FROM stock_dividend_decisions')
-  await cycle()
-  assert await owner.fetchval('SELECT count(*) FROM stock_dividend_decisions')==count
-  await revise(owner,event,'2',reconcile=True)
-  await cycle()
-  successor=await service_work(await target(owner,event))
-  assert successor['outcome']=='applied' and await cash()==D(10004)
-  assert await service_work(await target(owner,event))==successor
-  await cycle()
-  assert await cash()==D(10004)
-  assert dict(await owner.fetchrow('SELECT * FROM stock_dividend_payments WHERE id=$1',original['payment_id']))==dict(before)
-  assert await owner.fetchval('SELECT count(*) FROM stock_dividend_payments')==1
-  assert await owner.fetchval('SELECT count(*) FROM stock_dividend_decisions')==3
-  assert await owner.fetchval('SELECT starting_cash FROM accounts WHERE user_id=$1',uid)==D(10000)
-  engine=service_engine()
-  try:
-   async with async_sessionmaker(engine)() as db:
-    page=await list_event_history(db,user_id=uid,limit=100)
-    assert len(page.items)==4
-    assert sum(D(x.cash_delta) for x in page.items)==D(4)
-  finally:await engine.dispose()
-  print('actual_ordinary_dev_original_hold_correction_worker_history_replay=true cash10004_starting10000_original_unchanged=true',flush=True)
- finally:await owner.close()
-asyncio.run(actual_dev_financial())
+  assert await c.fetchval("SELECT current_database()='birja' AND session_user='birja'")
+  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0017'
+  await c.execute(PREFLIGHT_SQL)
+  await c.execute("SET ROLE birja_app")
+  uid=await c.fetchval("INSERT INTO users(email) VALUES ('bootstrap@example.test') RETURNING id")
+  root=await c.fetchval("INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,123.45,7777) RETURNING id",uid)
+  await c.execute("UPDATE accounts SET cash=cash+1 WHERE id=$1",root)
+  assert await c.fetchval("SELECT cash FROM accounts WHERE id=$1",root)==D('124.45')
+  for column in ('starting_cash','name','closed_at','user_id'):
+   assert not await c.fetchval("SELECT has_column_privilege(current_user,'accounts',$1,'UPDATE')",column)
+  await c.execute("RESET ROLE; SET ROLE birja_scheduler")
+  assert not await c.fetchval("SELECT has_column_privilege(current_user,'accounts','cash','UPDATE')")
+  assert await c.fetchval("SELECT has_function_privilege(current_user,'lock_stock_portfolio_roots(bigint)','EXECUTE')")
+  assert not await c.fetchval("SELECT has_function_privilege(current_user,'check_portfolio_financial_write()','EXECUTE')")
+  assert not await c.fetchval("SELECT has_table_privilege(current_user,'portfolio_stock_closures','INSERT,UPDATE,DELETE')")
+  await c.execute("RESET ROLE")
+  before=await c.fetch("SELECT id,user_id,cash,starting_cash,name,closed_at FROM accounts ORDER BY id")
+  from app.db.dev_bootstrap import bootstrap
+  await bootstrap('dev',os.environ['DATABASE_URL'],after_migrations=True)
+  assert await c.fetch("SELECT id,user_id,cash,starting_cash,name,closed_at FROM accounts ORDER BY id")==before
+  assert not await c.fetchval("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_migrator'")
+  print('actual_dev_final_roles_exact_cash_baseline_repeat_no_grant=true',flush=True)
+ finally:await c.close()
+asyncio.run(main())
 '''
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default="birja-backend-test:phase05-07")
+    parser.add_argument("--image", default="birja-backend-runtime:pr31-dns")
     args = parser.parse_args()
     env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}
     env.update(COMPOSE_DISABLE_ENV_FILE="1", ENV="dev", POSTGRES_USER="birja",
@@ -96,10 +70,10 @@ def main():
         return result
 
     command(["docker", "image", "inspect", args.image, "--format", "{{.Id}}"])
-    with tempfile.TemporaryDirectory(prefix="birja-phase10-dev-financial-") as directory:
+    with tempfile.TemporaryDirectory(prefix="birja-phase12-dev-financial-") as directory:
         for lane in ("fresh", "upgrade"):
             tick = time.monotonic()
-            project = "birja-phase10-dev-" + lane + "-test"
+            project = "birja-phase12-dev-" + lane + "-test"
             for kind in ("container", "network", "volume"):
                 assert not command(["docker", kind, "ls", "-q", "--filter",
                                     "label=com.docker.compose.project=" + project]).stdout.strip(), "Refuse preexisting owned resources"
@@ -120,17 +94,27 @@ def main():
                                      "-v", "ON_ERROR_STOP=1", "-Atc", statement]).stdout.strip()
 
             def refused():
-                result = command(dc + ["exec", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"], check=False)
+                result = command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"], check=False)
                 assert result.returncode != 0 and "refusing" in result.stdout.lower(), result.stdout
 
             try:
                 command(dc + ["up", "--no-build", "-d", "--wait", "postgres", "redis"])
                 if lane == "upgrade":
-                    command(dc + ["run", "--rm", "--no-deps", "backend", "alembic", "upgrade", "0013"])
-                command(dc + ["up", "--no-build", "-d", "--wait", "backend"])
-                command(dc + ["exec", "-T", "backend", "python", "-"], input=financial_program())
-                command(dc + ["exec", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"])
-                assert sql("SELECT cash||':'||starting_cash FROM accounts") == "10004.00000000:10000.00000000"
+                    command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m", "app.db.dev_bootstrap"])
+                    command(dc + ["run", "--rm", "--no-deps", "backend", "alembic", "upgrade", "0014"])
+                    sql("INSERT INTO users(email) VALUES ('retained@example.test'); INSERT INTO accounts(user_id,cash,starting_cash) SELECT id,321.12,8765 FROM users")
+                command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m", "app.db.dev_bootstrap", "--migrate"])
+                prefix = "\\set bootstrap 'birja'\n\\set db_name 'birja'\n\\set apply true\n" + "".join(
+                    "\\set " + role + "_password '" + "c" * 64 + "'\n"
+                    for role in ("app", "scheduler", "migrator"))
+                command(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-U", "birja",
+                              "-d", "birja", "-v", "ON_ERROR_STOP=1"],
+                        input=prefix + (ROOT / "deploy/db/bootstrap-roles.sql").read_text())
+                command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"], input=financial_program())
+                command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"])
+                assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='bootstrap@example.test')") == "124.45000000:7777.00000000"
+                if lane == "upgrade":
+                    assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='retained@example.test')") == "321.12000000:8765.00000000"
                 sql("ALTER ROLE birja_migrator CREATEROLE")
                 refused()
                 assert sql("SELECT rolcreaterole FROM pg_roles WHERE rolname='birja_migrator'") == "t"
