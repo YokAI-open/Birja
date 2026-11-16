@@ -72,7 +72,7 @@ INVALID = [
     ],
     *[
         token({**VALID, "portfolio_id": value})
-        for value in (True, 7, "", "0", "-1", "07", "+7", "7.0", "7e0", "9223372036854775808", "8")
+        for value in (True, 7, "", "0", "-1", "07", "+7", "7.0", "7e0", "9223372036854775808")
     ],
     token({key: value for key, value in VALID.items() if key != "portfolio_id"}),
     token({"v": 1, "id": "1"}),
@@ -96,6 +96,11 @@ def test_invalid_cursor(cursor):
 def test_cursor_encoder_refuses_naive_time():
     with pytest.raises(InvalidCursor):
         encode_cursor(HistoryCursor(created_at=STAMP.replace(tzinfo=None), id=1, portfolio_id=7))
+
+
+def test_cursor_cannot_continue_another_portfolio():
+    with pytest.raises(InvalidCursor):
+        decode_cursor(token(VALID), expected_portfolio_id=8)
 
 
 @pytest.mark.parametrize("limit", [0, 101, True, 1.0, "1"])
