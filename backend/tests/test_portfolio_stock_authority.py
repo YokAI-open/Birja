@@ -4,7 +4,9 @@ The final_sql cases require actual Alembic0017. Collection before Plan07 is
 intentional; this module never installs SQL or fabricates a final schema.
 """
 
+import ast
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -493,3 +495,158 @@ async def test_final_sql_stock_scheduler_cannot_call_execution_validator(stock_a
         async with conn.begin_nested():
             await assert_current(conn, 1, case)
     assert error.value.orig.sqlstate == "42501"
+
+
+def sql_function(sql, name):
+    match = re.search(
+        rf"CREATE OR REPLACE FUNCTION public\.{name}\(.*?END \$[a-z]+\$;",
+        sql,
+        re.S,
+    )
+    assert match is not None, name
+    return match.group()
+
+
+def test_asset_contract_exact_private_function_inventory_and_invoker_search_paths():
+    sql = ASSET.read_text()
+    assert re.findall(r"CREATE OR REPLACE FUNCTION public\.(\w+)\(", sql) == [
+        "check_stock_fill_integrity",
+        "assert_stock_execution_current",
+        "check_stock_split_digest_version",
+    ]
+    for name in (
+        "check_stock_fill_integrity",
+        "assert_stock_execution_current",
+        "check_stock_split_digest_version",
+    ):
+        function = sql_function(sql, name)
+        assert "LANGUAGE plpgsql SECURITY INVOKER" in function
+        assert "SET search_path=pg_catalog,public,pg_temp" in function
+        assert "SECURITY DEFINER" not in function
+    assert "assert_stock_execution_current(p_trade bigint,p_user bigint,p_expected jsonb)" in sql
+    assert "RETURNS void" in sql_function(sql, "assert_stock_execution_current")
+    for signature in SIGNATURES:
+        assert f"ALTER FUNCTION public.{signature} OWNER TO birja_migrator;" in sql
+
+
+def test_asset_contract_retains_independent_0013_economic_and_market_checks():
+    sql = ASSET.read_text()
+    retained = ast.parse((ASSET.parent.parent / "versions/0013_stock_execution.py").read_text())
+    old = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in retained.body
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+    }
+    for name, function in (
+        ("INTEGRITY", "check_stock_fill_integrity"),
+        ("FINAL_GUARD", "assert_stock_execution_current"),
+    ):
+        current = sql_function(sql, function)
+        # Independent retained source is immutable: none of its explicit refusal
+        # outcomes may disappear when adding portfolio ownership.
+        messages = re.findall(r"RAISE EXCEPTION '([^']+)'", old[name])
+        assert messages and all(f"RAISE EXCEPTION '{message}'" in current for message in messages)
+    integrity = sql_function(sql, "check_stock_fill_integrity")
+    for expression in (
+        "t.fee<>0",
+        "t.input_kind<>'quantity'",
+        "t.input_value<>t.quantity",
+        "t.quantity=trunc(t.quantity)",
+        "t.price_as_of<>f.event_at",
+        "mod(trunc(n*100),2)=1",
+        "mod(trunc(f.exact_mid*1e8),2)=1",
+        "m.after_basis<>expected_basis",
+        "m.cause_kind<>'fill'",
+        "m.application_id IS NOT NULL",
+    ):
+        assert expression in integrity
+    authority = sql_function(sql, "assert_stock_execution_current")
+    for expression in (
+        "facts.authority IS DISTINCT FROM p_expected",
+        "jsonb_array_length(r.admissions)<>5",
+        "a->>'state'<>'approved'",
+        "a->'collection_allowed'",
+        "a->'display_allowed'",
+        "a->'retention_allowed'",
+        "a->'derived_allowed'",
+        "r.held OR r.changed_split",
+        "r.pending_boundary",
+        "ac.health<>'current'",
+        "ac.next_blocking_at",
+        "st.state<>'normal'",
+        "st.bootstrap_verified AND st.continuity_current",
+        "ses.opens_at<=now_at AND now_at<ses.closes_at",
+        "q.source='alpaca' AND q.feed='iex'",
+        "q.event_at>now_at-interval '120 seconds'",
+        "tr.exec_price<>",
+    ):
+        assert expression in authority
+
+
+def test_asset_contract_final_snapshot_pairs_every_financial_root_and_finishes_with_validation():
+    sql = ASSET.read_text()
+    authority = sql_function(sql, "assert_stock_execution_current")
+    for expression in (
+        "root.id=t.portfolio_id AND root.user_id=t.user_id",
+        "h.portfolio_id=t.portfolio_id AND h.user_id=t.user_id",
+        "r.portfolio_closed_at IS NOT NULL",
+        "r.portfolio_owner<>p_user",
+        "r.portfolio_id::text IS DISTINCT FROM p_expected->>'portfolio_id'",
+        "facts.portfolio_id IS DISTINCT FROM tr.portfolio_id",
+        "r.movement_portfolio IS DISTINCT FROM tr.portfolio_id",
+        "r.movement_owner IS DISTINCT FROM tr.user_id",
+        "r.portfolio_cash IS DISTINCT FROM tr.cash_after",
+        "r.portfolio_held IS DISTINCT FROM facts.held_after",
+        "r.portfolio_basis IS DISTINCT FROM r.after_basis",
+        "en.portfolio_id=t.portfolio_id",
+    ):
+        assert expression in authority
+    before, after = authority.split("now_at:=clock_timestamp();")
+    assert "INTO r FROM public.trades" in before
+    # No new table read, lock or mutation can follow the final authority snapshot
+    # and its post-read clock sample. Only record/JSON comparisons remain.
+    assert not re.search(r"\b(?:FROM|JOIN) public\.", after)
+    assert not re.search(r"\b(?:UPDATE|INSERT|DELETE|PERFORM|FOR UPDATE)\b", authority)
+    assert after.rstrip().endswith("END $final$;")
+    integrity = sql_function(sql, "check_stock_fill_integrity")
+    for expression in (
+        "TG_WHEN='BEFORE' AND TG_OP='INSERT'",
+        "id=NEW.portfolio_id AND user_id=NEW.user_id",
+        "root.closed_at IS NOT NULL",
+        "t.portfolio_id IS DISTINCT FROM f.portfolio_id",
+        "t.portfolio_id IS DISTINCT FROM m.portfolio_id",
+    ):
+        assert expression in integrity
+
+
+def test_asset_contract_new_split_marker_is_explicit_with_no_legacy_mutation_path():
+    sql = ASSET.read_text()
+    marker = sql_function(sql, "check_stock_split_digest_version")
+    assert "NEW.owner_digest_version IS DISTINCT FROM 2::smallint" in marker
+    assert "USING ERRCODE='23514'" in marker
+    assert "BEFORE INSERT ON public.stock_split_applications" in sql
+    assert "EXECUTE FUNCTION public.check_stock_split_digest_version()" in sql
+    assert not re.search(r"\b(?:UPDATE|DELETE FROM) public\.stock_split_applications", sql)
+    assert "associate_legacy_portfolio_only" not in sql
+    # The expansion owns column/check shape;0017 must preserve the no-default
+    # legacy NULL interpretation rather than backfill global applications.
+    expansion = (ASSET.parent.parent / "versions/0015_portfolio_expansion.py").read_text()
+    assert '"owner_digest_version", sa.SmallInteger(), nullable=True' in expansion
+    assert "owner_digest_version IS NULL OR owner_digest_version=2" in expansion
+
+
+def test_asset_contract_insert_triggers_and_execute_grants_are_narrow():
+    sql = ASSET.read_text()
+    assert re.findall(r"CREATE TRIGGER (\w+) BEFORE INSERT ON public\.(\w+)", sql) == [
+        ("stock_split_digest_version", "stock_split_applications"),
+        ("portfolio_stock_active_insert", "trades"),
+        ("portfolio_stock_active_insert", "stock_fill_facts"),
+        ("portfolio_stock_active_insert", "stock_ownership_movements"),
+    ]
+    assert sql.count("EXECUTE FUNCTION public.check_stock_fill_integrity();") == 3
+    assert "public.check_stock_split_digest_version() FROM PUBLIC;" in sql
+    assert re.findall(r"GRANT EXECUTE ON FUNCTION public\.(.*?)\s+TO (\w+);", sql, re.S) == [
+        ("assert_stock_execution_current(bigint,bigint,jsonb)", "birja_app")
+    ]
+    assert "FROM birja_scheduler;" in sql and "FROM birja_app;" in sql
+    assert not re.search(r"\bGRANT\s+(?:ALL|UPDATE|INSERT|DELETE|CREATE)", sql)
