@@ -12,6 +12,45 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def stage_program(revision):
+    assert revision in ("0015", "0016")
+    return r'''
+import asyncio,os,sys
+import asyncpg
+from unittest.mock import patch
+from app.db.dev_bootstrap import bootstrap
+original=asyncio.create_subprocess_exec
+target=TARGET
+async def child(*args,**kwargs):
+ return await original(sys.executable,'-m','alembic','upgrade',target,**kwargs)
+async def main():
+ try:
+  with patch('app.db.dev_bootstrap.asyncio.create_subprocess_exec',child):
+   await bootstrap('dev',os.environ['DATABASE_URL'],migrate=True)
+ except asyncpg.RaiseError as exc:
+  assert 'final revision required' in str(exc)
+ else:raise AssertionError('staged schema bootstrapped')
+ c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
+ try:
+  assert await c.fetchval('SELECT version_num FROM alembic_version')==target
+  assert not await c.fetchval("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_migrator'")
+  from sqlalchemy.ext.asyncio import create_async_engine
+  from sqlalchemy import text
+  from app.db.portfolio_migrate import require_migrator
+  e=create_async_engine(os.environ['DATABASE_URL'])
+  try:
+   async with e.connect() as x:
+    await x.execute(text('SET ROLE birja_migrator'))
+    try:await require_migrator(x)
+    except ValueError as exc:assert 'Authenticated restricted migrator' in str(exc)
+    else:raise AssertionError('SET ROLE bypass')
+  finally:await e.dispose()
+  print('actual_staged_migration_durable=true revision='+target,flush=True)
+ finally:await c.close()
+asyncio.run(main())
+'''.replace('TARGET', repr(revision))
+
+
 def financial_program():
     return r'''
 import asyncio,os
@@ -42,6 +81,37 @@ async def main():
   await bootstrap('dev',os.environ['DATABASE_URL'],after_migrations=True)
   assert await c.fetch("SELECT id,user_id,cash,starting_cash,name,closed_at FROM accounts ORDER BY id")==before
   assert not await c.fetchval("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_migrator'")
+  import secrets
+  from sqlalchemy.engine import make_url
+  from sqlalchemy.ext.asyncio import create_async_engine
+  from app.db.portfolio_migrate import require_migrator
+  password=secrets.token_hex(32)
+  await c.execute(await c.fetchval("SELECT format('ALTER ROLE birja_migrator LOGIN PASSWORD %L',$1::text)",password))
+  e=create_async_engine(make_url(os.environ['DATABASE_URL']).set(username='birja_migrator',password=password))
+  try:
+   for change,undo,reason in [
+    ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC','Unsafe migration schema'),
+    ('ALTER ROLE birja_app CREATEROLE','ALTER ROLE birja_app NOCREATEROLE','Unsafe migration schema'),
+    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0017'",'Unsupported portfolio')]:
+    await c.execute(change)
+    try:
+     async with e.connect() as x:
+      try:await require_migrator(x)
+      except ValueError as exc:assert reason in str(exc)
+      else:raise AssertionError('unsafe migration admitted')
+    finally:await c.execute(undo)
+   await c.execute("CREATE FUNCTION public.reject_stock_record_mutation(bigint) RETURNS text LANGUAGE sql AS 'SELECT NULL::text'")
+   await c.execute('ALTER FUNCTION public.reject_stock_record_mutation(bigint) OWNER TO birja_migrator')
+   try:
+    async with e.connect() as x:
+     try:await require_migrator(x)
+     except ValueError as exc:assert 'Unexpected migration routine' in str(exc)
+     else:raise AssertionError('unknown overload admitted')
+   finally:await c.execute('DROP FUNCTION public.reject_stock_record_mutation(bigint)')
+  finally:
+   await e.dispose()
+   await c.execute('ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL')
+  assert await c.fetch("SELECT id,user_id,cash,starting_cash,name,closed_at FROM accounts ORDER BY id")==before
   print('actual_dev_final_roles_exact_cash_baseline_repeat_no_grant=true',flush=True)
  finally:await c.close()
 asyncio.run(main())
@@ -51,6 +121,7 @@ asyncio.run(main())
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default="birja-backend-runtime:pr31-dns")
+    parser.add_argument("--staged", action="store_true")
     args = parser.parse_args()
     env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}
     env.update(COMPOSE_DISABLE_ENV_FILE="1", ENV="dev", POSTGRES_USER="birja",
@@ -71,7 +142,7 @@ def main():
 
     command(["docker", "image", "inspect", args.image, "--format", "{{.Id}}"])
     with tempfile.TemporaryDirectory(prefix="birja-phase12-dev-financial-") as directory:
-        for lane in ("fresh", "upgrade"):
+        for lane in (("0015", "0016") if args.staged else ("fresh", "upgrade")):
             tick = time.monotonic()
             project = "birja-phase12-dev-" + lane + "-test"
             for kind in ("container", "network", "volume"):
@@ -99,10 +170,21 @@ def main():
 
             try:
                 command(dc + ["up", "--no-build", "-d", "--wait", "postgres", "redis"])
-                if lane == "upgrade":
+                if lane != "fresh":
                     command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m", "app.db.dev_bootstrap"])
                     command(dc + ["run", "--rm", "--no-deps", "backend", "alembic", "upgrade", "0014"])
                     sql("INSERT INTO users(email) VALUES ('retained@example.test'); INSERT INTO accounts(user_id,cash,starting_cash) SELECT id,321.12,8765 FROM users")
+                if lane in ("0015", "0016"):
+                    command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
+                            input=stage_program(lane))
+                    before = sql("SELECT cash||':'||starting_cash FROM accounts")
+                    refused()
+                    prefix = "\\set bootstrap 'birja'\n\\set db_name 'birja'\n\\set apply false\n"
+                    result = command(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-U",
+                        "birja", "-d", "birja", "-v", "ON_ERROR_STOP=1"],
+                        input=prefix + (ROOT / "deploy/db/bootstrap-roles.sql").read_text(), check=False)
+                    assert result.returncode and "migration_only" in result.stdout
+                    assert sql("SELECT cash||':'||starting_cash FROM accounts") == before
                 command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m", "app.db.dev_bootstrap", "--migrate"])
                 prefix = "\\set bootstrap 'birja'\n\\set db_name 'birja'\n\\set apply true\n" + "".join(
                     "\\set " + role + "_password '" + "c" * 64 + "'\n"
@@ -113,7 +195,7 @@ def main():
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"], input=financial_program())
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"])
                 assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='bootstrap@example.test')") == "124.45000000:7777.00000000"
-                if lane == "upgrade":
+                if lane != "fresh":
                     assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='retained@example.test')") == "321.12000000:8765.00000000"
                 sql("ALTER ROLE birja_migrator CREATEROLE")
                 refused()

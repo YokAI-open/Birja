@@ -82,15 +82,41 @@ application_schema_incompatible() {
   return 1
 }
 
+portfolio_source_supported() {
+  local digest
+  digest=$(git -C "$APP_DIR" show "$1:backend/alembic/versions/0017_portfolio_ownership.py" 2>/dev/null |
+    sha256sum | awk '{print $1}') || return 1
+  [ "$digest" = df84ca54126423c9de52821906c93a79b3251983a2a9b032da939419b9ee7ee9 ]
+}
+
 admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if [ "${2:-runtime}" = portfolio-upgrade ]; then
+    [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && portfolio_source_supported "$1" || {
+      application_schema_incompatible; return 1;
+    }
+    case "${ADMITTED_REVISION:-}" in
+      0007|0008|0009|0010|0011|0012|0013|0014|0017) return 0 ;;
+      *) application_schema_incompatible; return 1 ;;
+    esac
+  fi
   case "${ADMITTED_REVISION:-}" in
-    0007|0008|0009|0010|0011|0012|0013) return 0 ;;
-    0014)
+    0007|0008|0009|0010|0011|0012|0013)
+      if portfolio_source_supported "$1"; then application_schema_incompatible; return 1; fi
+      return 0 ;;
+    0014|0017)
       [[ "${BIRJA_TESTED_SOURCE:-}" =~ ^[0-9a-f]{40}$ ]] &&
-        [ "$1" = "$BIRJA_TESTED_SOURCE" ] && return 0 ;;
+        [ "$1" = "$BIRJA_TESTED_SOURCE" ] || { application_schema_incompatible; return 1; }
+      if [ "$ADMITTED_REVISION" = 0017 ]; then
+        portfolio_source_supported "$1" || {
+          application_schema_incompatible; return 1;
+        }
+      elif portfolio_source_supported "$1"; then
+        application_schema_incompatible; return 1
+      fi
+      return 0 ;;
   esac
   application_schema_incompatible
 }
@@ -429,7 +455,10 @@ do_deploy() {
     fi
   fi
   STEP="application schema compatibility"
-  admit_application_source "$sha" || return 1
+  admit_application_source "$sha" portfolio-upgrade || return 1
+  # This runner upgrades to0017. A retained legacy rollback has its own finite
+  # no-migration lane; a new deploy cannot pair old code with the final schema.
+  portfolio_source_supported "$sha" || { application_schema_incompatible; return 1; }
   install -d -m 755 "$STATE_DIR"
   date -u +%Y-%m-%dT%H:%M:%SZ > "$PENDING_MARK"
   STEP="git checkout"
@@ -458,9 +487,15 @@ do_deploy() {
   STEP="start postgres and redis"
   dc up -d --wait postgres redis
   bindings --check-running
+  STEP="stop financial writers for portfolio finalization"
+  # The old source must not write while0015/16 are migration-only. Keep
+  # writers stopped on failure; only the final-schema app may restart below.
+  # shellcheck disable=SC2086 # known service names from app_services
+  dc stop $services
   STEP="migrate"
   dc --profile migrate build migrate
-  dc --profile migrate run --rm --no-deps migrate >/dev/null 2>&1
+  BIRJA_BACKUP_LOCK_FD=9 "$BIRJA_RETAINED_DIR/deploy/configure-db.sh" --production \
+    --resume-portfolio-migration --approved-operation portfolio-migration-to-final
   STEP="start backend"
   # shellcheck disable=SC2086 # word list on purpose; --remove-orphans drops a scheduler this release lacks
   dc up -d --wait --remove-orphans $services

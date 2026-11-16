@@ -64,6 +64,23 @@ FUNCTIONS = frozenset(
         "lock_stock_portfolio_roots",
     ]
 )
+FUNCTION_SIGNATURES = frozenset(
+    {
+        "reject_stock_action_mutation()",
+        "reject_stock_record_mutation()",
+        "reject_stock_dividend_mutation()",
+        "check_stock_fill_integrity()",
+        "assert_stock_execution_current(bigint,bigint,jsonb)",
+        "apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text)",
+        "stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)",
+        "apply_stock_dividend(bigint,bigint,text,text)",
+        "record_stock_dividend_hold(bigint,text)",
+        "associate_legacy_portfolio_only()",
+        "check_stock_split_digest_version()",
+        "check_portfolio_financial_write()",
+        "lock_stock_portfolio_roots(bigint)",
+    }
+)
 
 
 async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
@@ -113,8 +130,12 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
                 "FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
                 "WHERE n.nspname='public'"
             )
-            for _signature, name, owner in functions:
-                if name not in FUNCTIONS or owner not in {"birja", "birja_migrator"}:
+            for signature, name, owner in functions:
+                if (
+                    name not in FUNCTIONS
+                    or signature.replace("public.", "").replace(" ", "") not in FUNCTION_SIGNATURES
+                    or owner not in {"birja", "birja_migrator"}
+                ):
                     raise ValueError("Unexpected dev routine; refusing transfer")
             for name, kind, _ in relations:
                 if kind == "r":

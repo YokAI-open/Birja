@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from app.core.config import Settings, get_settings
 from app.db.connection import database_connect_args
-from app.db.dev_bootstrap import FUNCTIONS, TABLES
+from app.db.dev_bootstrap import FUNCTION_SIGNATURES, TABLES
 from app.db.portfolio_bootstrap import PREFLIGHT_SQL
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -55,6 +55,25 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
     ).one()
     if identity[:3] != ("birja_migrator", "birja_migrator", True) or any(identity[3:]):
         raise ValueError("Authenticated restricted migrator required")
+    if not (
+        await conn.execute(
+            text("""SELECT
+      (SELECT count(*)=1 AND bool_and(pg_get_userbyid(nspowner)
+       IN ('birja','pg_database_owner')) FROM pg_namespace WHERE nspname='public')
+      AND NOT EXISTS(SELECT FROM pg_namespace n,
+       LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) x
+       WHERE n.nspname='public' AND x.privilege_type='CREATE' AND x.grantee IN
+        (0,'birja_app'::regrole,'birja_scheduler'::regrole))
+      AND NOT EXISTS(SELECT FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
+       AND (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+        OR rolreplication OR rolbypassrls))
+      AND NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid IN
+       (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler'))
+       OR member IN (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')))
+      """)
+        )
+    ).scalar_one():
+        raise ValueError("Unsafe migration schema or runtime roles")
     revision = None
     if (await conn.execute(text("SELECT to_regclass('public.alembic_version')"))).scalar():
         versions = (
@@ -78,12 +97,16 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
             raise ValueError("Unexpected migration relation ownership")
     rows = (
         await conn.execute(
-            text("""SELECT p.proname,pg_get_userbyid(p.proowner)
+            text("""SELECT p.oid::regprocedure::text,pg_get_userbyid(p.proowner)
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='public'""")
         )
     ).all()
-    if any(name not in FUNCTIONS or owner != "birja_migrator" for name, owner in rows):
+    if any(
+        signature.replace("public.", "").replace(" ", "") not in FUNCTION_SIGNATURES
+        or owner != "birja_migrator"
+        for signature, owner in rows
+    ):
         raise ValueError("Unexpected migration routine ownership")
     return revision
 
