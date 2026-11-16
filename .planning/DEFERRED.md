@@ -7,9 +7,9 @@ actual acceptance evidence is obtained. Starting v1.2 does not complete them.
 
 | Requirement | Outstanding outcome | Status |
 |---|---|---|
-| STOCK-01 | Actual permitted live mappings for the twenty curated identities | Deferred; unverified |
+| STOCK-01 | Actual twenty identity mappings observed Nov16; whole-phase permitted-use/live acceptance remains | Deferred; partially evidenced |
 | STOCK-02 | Final live acceptance of IEX attribution across stock screens | Deferred; unverified |
-| STOCK-03 | Actual live source freshness, collection behavior and acceptance | Deferred; unverified |
+| STOCK-03 | Nov16 measured183/200acceptedquotes,0–41s; intermittent invalids and final acceptance remain | Deferred; partially evidenced |
 | DATA-01 | Applicable quote/action/status access, display/retention rights and operational suitability | Deferred; unverified |
 | MKT-01 | Complete live regular-session acceptance | Deferred; unverified |
 | SAFE-01 | Whole-phase compatibility and live acceptance, beyond substantial local proof | Deferred; unverified |
@@ -19,7 +19,8 @@ The full original requirement definitions and partial local evidence remain in
 [audit](milestones/v1.1-MILESTONE-AUDIT.md), and
 [Phase 7 verification](phases/07-permitted-stock-discovery/07-VERIFICATION.md).
 The milestone was closed with owner-accepted gaps, not six verified outcomes.
-Plan 07-14 tasks 02/03 remain unexecuted; no completion summary is fabricated.
+Plan07-14 task02 was executed in the approved Nov16 campaign; task03/final
+acceptance remains unresolved. No completion summary is fabricated.
 
 Live stock activation stays gated. v1.2 portfolio work may proceed locally,
 but neither portfolio creation nor milestone initialization enables live data.
@@ -46,3 +47,12 @@ The old November 11 run's outcome and request count remain unknown.
   v0.4.0/schema0008; no live system inspection occurred during milestone setup.
 
 Updated: 2026-11-14 when v1.2 scope was confirmed.
+
+## November16 actual measurement
+
+The approved manual campaign completed with30attempts:20distinctidentity mappings
+and10IEXsamples,183/200acceptedquotes (reported0–41s),17invalid observations.
+See[actual review](phases/07-permitted-stock-discovery/07-LIVE-20261116-REVIEW.md).
+This campaign is consumed; no repeat/fallback authorization follows. Allsix
+Phase7requirements remain pending; missing broader rights/action/status and
+final live acceptance are not established. Stock activation remains gated.
