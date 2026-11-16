@@ -42,11 +42,35 @@ def _fingerprint(value: str) -> None:
         raise DividendRefused("invalid_identity")
 
 
-async def _invoke(db: AsyncSession, statement: str, work: dict[str, int | str]) -> DividendResult:
+async def _invoke(
+    db: AsyncSession,
+    statement: str,
+    work: dict[str, int | str],
+    *,
+    portfolio_id: int,
+    cause: Literal["entitlement", "payment"],
+) -> DividendResult:
     if db.in_transaction():
         raise DividendRefused("transaction_active")
     try:
         async with db.begin():
+            # Validate the discovery target before invoking the financial routine.
+            # The definer still derives and locks the root from this immutable
+            # cause and rechecks lifecycle after waits. Nothing reads business
+            # state after its final validator; only transaction commit follows.
+            identity_sql = (
+                "SELECT en.id FROM public.stock_dividend_entitlements en "
+                "JOIN public.accounts a ON (a.id,a.user_id)=(en.portfolio_id,en.user_id) "
+                "WHERE en.id=:entitlement_id AND a.id=:portfolio_id AND a.closed_at IS NULL"
+                if cause == "entitlement"
+                else "SELECT p.id FROM public.stock_dividend_payments p "
+                "JOIN public.accounts a ON (a.id,a.user_id)=(p.portfolio_id,p.user_id) "
+                "WHERE p.id=:payment_id AND a.id=:portfolio_id AND a.closed_at IS NULL"
+            )
+            if (
+                await db.execute(text(identity_sql), {**work, "portfolio_id": portfolio_id})
+            ).scalar_one_or_none() is None:
+                raise DividendRefused("portfolio_unavailable")
             row = (await db.execute(text(statement), work)).one()
             result = DividendResult(
                 row.payment_id, row.decision_id, cast(DividendOutcome, row.outcome)
@@ -65,12 +89,14 @@ async def _invoke(db: AsyncSession, statement: str, work: dict[str, int | str]) 
 async def process_dividend(
     db: AsyncSession,
     *,
+    portfolio_id: int,
     event_id: int,
     entitlement_id: int,
     expected_revision_fingerprint: str,
     expected_entitlement_fingerprint: str,
 ) -> DividendResult:
     """Attempt one verified target; SQL alone decides new authority or replay."""
+    _id(portfolio_id)
     _id(event_id)
     _id(entitlement_id)
     _fingerprint(expected_revision_fingerprint)
@@ -85,17 +111,22 @@ async def process_dividend(
             "revision_fingerprint": expected_revision_fingerprint,
             "entitlement_fingerprint": expected_entitlement_fingerprint,
         },
+        portfolio_id=portfolio_id,
+        cause="entitlement",
     )
 
 
 async def record_dividend_hold(
-    db: AsyncSession, *, payment_id: int, expected_revision_fingerprint: str
+    db: AsyncSession, *, portfolio_id: int, payment_id: int, expected_revision_fingerprint: str
 ) -> DividendResult:
     """Record one current uncertainty observation for an existing paid anchor."""
+    _id(portfolio_id)
     _id(payment_id)
     _fingerprint(expected_revision_fingerprint)
     return await _invoke(
         db,
         "SELECT * FROM public.record_stock_dividend_hold(:payment_id,:revision_fingerprint)",
         {"payment_id": payment_id, "revision_fingerprint": expected_revision_fingerprint},
+        portfolio_id=portfolio_id,
+        cause="payment",
     )

@@ -29,33 +29,38 @@ class DividendCursor:
 
 # Both sources are durable rows. Never join the anchor path to an eligible
 # snapshot: a cancelled replacement may deliberately have no such snapshot.
-VERIFIED = """SELECT en.id AS key,en.event_id,en.id AS entitlement_id,
+VERIFIED = """SELECT en.id AS key,en.portfolio_id,en.event_id,en.id AS entitlement_id,
  r.fingerprint AS revision_fingerprint,en.fingerprint AS entitlement_fingerprint
  FROM public.stock_dividend_entitlements en
+ JOIN public.accounts ac ON (ac.id,ac.user_id)=(en.portfolio_id,en.user_id)
  JOIN public.stock_action_events e ON e.id=en.event_id
  JOIN public.stock_action_revisions r ON r.id=e.current_revision_id
- WHERE en.id>:after AND en.revision_id=r.id AND en.state='eligible'
+ WHERE en.id>:after AND ac.closed_at IS NULL AND en.revision_id=r.id AND en.state='eligible'
  AND r.classification='supported_dividend'
  AND r.normalized_terms->>'payable_date' <=
  to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')
  AND NOT EXISTS(SELECT FROM public.stock_dividend_entitlements newer
- WHERE newer.event_id=en.event_id AND newer.user_id=en.user_id
+ WHERE newer.event_id=en.event_id AND newer.portfolio_id=en.portfolio_id
+ AND newer.user_id=en.user_id
  AND (newer.version,newer.id)>(en.version,en.id))
  ORDER BY en.id LIMIT :cap"""
 
-ANCHORS = """SELECT p.id AS key,p.id AS payment_id,r.fingerprint AS revision_fingerprint
+ANCHORS = """SELECT p.id AS key,p.portfolio_id,p.id AS payment_id,
+ r.fingerprint AS revision_fingerprint
  FROM public.stock_dividend_payments p
+ JOIN public.accounts ac ON (ac.id,ac.user_id)=(p.portfolio_id,p.user_id)
  JOIN public.stock_action_events e ON e.id=p.event_id
  JOIN public.stock_action_revisions r ON r.id=e.current_revision_id
  JOIN public.stock_action_state st ON st.coin_id=p.coin_id
- WHERE p.id>:after AND (
+ WHERE p.id>:after AND ac.closed_at IS NULL AND (
  r.classification<>'supported_dividend' OR st.health<>'current'
  OR st.valid_until IS NULL OR st.valid_until<=clock_timestamp()
  OR NOT EXISTS(SELECT FROM public.stock_dividend_entitlements en
-   WHERE en.event_id=p.event_id AND en.user_id=p.user_id
+   WHERE en.event_id=p.event_id AND en.portfolio_id=p.portfolio_id AND en.user_id=p.user_id
    AND en.revision_id=r.id AND en.state='eligible'
    AND NOT EXISTS(SELECT FROM public.stock_dividend_entitlements newer
-     WHERE newer.event_id=en.event_id AND newer.user_id=en.user_id
+     WHERE newer.event_id=en.event_id AND newer.portfolio_id=en.portfolio_id
+     AND newer.user_id=en.user_id
      AND (newer.version,newer.id)>(en.version,en.id)))
  OR EXISTS(SELECT FROM public.stock_action_events held
    WHERE held.coin_id=p.coin_id AND (
@@ -114,6 +119,7 @@ async def run_dividend_cycle(
                             if held:
                                 await record_dividend_hold(
                                     db,
+                                    portfolio_id=int(candidate["portfolio_id"]),
                                     payment_id=int(candidate["payment_id"]),
                                     expected_revision_fingerprint=str(
                                         candidate["revision_fingerprint"]
@@ -122,6 +128,7 @@ async def run_dividend_cycle(
                             else:
                                 await process_dividend(
                                     db,
+                                    portfolio_id=int(candidate["portfolio_id"]),
                                     event_id=int(candidate["event_id"]),
                                     entitlement_id=int(candidate["entitlement_id"]),
                                     expected_revision_fingerprint=str(
