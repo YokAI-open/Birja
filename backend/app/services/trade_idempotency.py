@@ -27,12 +27,12 @@ def require_same_order(
     side: str,
     kind: str,
     value: Decimal,
-    portfolio_id: int | None = None,
+    portfolio_id: int,
 ) -> None:
     """Confirmation prices are deliberately excluded from economic identity."""
     if not (
         same_instrument
-        and (portfolio_id is None or trade.portfolio_id == portfolio_id)
+        and trade.portfolio_id == portfolio_id
         and trade.side == side
         and trade.input_kind == kind
         and trade.input_value == value

@@ -152,7 +152,14 @@ async def _find_trade(db: AsyncSession, user_id: int, key: uuid.UUID) -> tuple[T
         await db.execute(select(Coin.symbol, Coin.asset_class).where(Coin.id == trade.coin_id))
     ).one()
     if coin.asset_class != "crypto":
-        require_same_order(trade, same_instrument=False, side="", kind="", value=_ZERO)
+        require_same_order(
+            trade,
+            same_instrument=False,
+            side="",
+            kind="",
+            value=_ZERO,
+            portfolio_id=trade.portfolio_id,
+        )
     return trade, coin.symbol
 
 
