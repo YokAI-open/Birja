@@ -1,13 +1,15 @@
 import { act, screen, within, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { Link, MemoryRouter, Route, Routes } from "react-router";
 import { render, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PortfolioPage from "./PortfolioPage";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { cashPortfolio, mixedPortfolio, stockHolding } from "@/test/portfolioFixtures";
 import type { Portfolio } from "@/api/portfolio";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import type { PortfolioSummary } from "@/api/portfolios";
 const clients: QueryClient[] = [];
 function show(body = mixedPortfolio()) {
   vi.stubGlobal(
@@ -16,18 +18,38 @@ function show(body = mixedPortfolio()) {
   );
   return mount();
 }
-function mount() {
+function mount({
+  route = "/portfolios/1",
+  metadata = [{ id: "1", name: "My portfolio" }],
+}: { route?: string; metadata?: PortfolioSummary[] } = {}) {
+  const financialFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/v2/portfolios")
+      return Promise.resolve(new Response(JSON.stringify(metadata)));
+    if (String(input) === "/api/v2/me")
+      return Promise.resolve(new Response(JSON.stringify({ email: "first@example.test" })));
+    return financialFetch(input, init);
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   clients.push(client);
-  client.setQueryData(["me"], { email: "first@example.test", cash_usd: "9796" });
+  client.setQueryData(["me"], { email: "first@example.test" });
   const user = userEvent.setup();
   return {
     user,
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <PortfolioPage />
+        <MemoryRouter initialEntries={[route]}>
+          <Link to="/portfolios/2">Open sibling</Link>
+          <Routes>
+            <Route path="/portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+              <Route index element={<PortfolioPage />} />
+            </Route>
+            <Route
+              path="/portfolio"
+              element={<PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}`} />}
+            />
+          </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -114,7 +136,7 @@ it("shows direct stock figures, seven semantic columns and labelled mobile cards
       expect(view).toHaveTextContent(text);
     expect(within(view).getByRole("link", { name: "Trade AAPL" })).toHaveAttribute(
       "href",
-      "/trade/stocks/AAPL",
+      "/portfolios/1/trade/stocks/AAPL",
     );
     expect(view.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
   }
@@ -199,7 +221,7 @@ it("keeps crypto fees, fractional units and route independent, with alphabetical
   expect(table).toHaveTextContent("0.12345678");
   expect(within(table).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
     "href",
-    "/trade/BTC",
+    "/portfolios/1/trade/BTC",
   );
 });
 it("preserves stored starting cash, realised cash and a truthful empty state", async () => {
@@ -220,7 +242,7 @@ it("preserves stored starting cash, realised cash and a truthful empty state", a
   expect(screen.getByText("No holdings yet")).toBeVisible();
   expect(screen.getByRole("link", { name: "Explore Markets" })).toHaveAttribute("href", "/");
 });
-it("retains valid values after refresh failure and preserves retry focus through recovery", async () => {
+it("hides unvalidated financial projections after refresh failure and preserves retry focus", async () => {
   const p = cashPortfolio();
   vi.stubGlobal(
     "fetch",
@@ -234,9 +256,10 @@ it("retains valid values after refresh failure and preserves retry focus through
   await screen.findByRole("region", { name: "Cash" });
   const refresh = screen.getByRole("button", { name: "Refresh portfolio" });
   await user.click(refresh);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Only still-permitted values");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Can't load your portfolio right now");
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
   expect(refresh).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Retry refresh" }));
+  await user.click(screen.getByRole("button", { name: "Try again" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   expect(refresh).toHaveFocus();
 });
@@ -255,7 +278,7 @@ it("loading and initial error recovery retain a reachable retry", async () => {
       .mockImplementation(() => Promise.resolve(new Response(JSON.stringify(cashPortfolio())))),
   );
   const { user } = mount();
-  expect(screen.getByRole("status", { name: "Loading your portfolio" })).toHaveAttribute(
+  expect(await screen.findByRole("status", { name: "Loading your portfolio" })).toHaveAttribute(
     "aria-busy",
     "true",
   );
@@ -372,4 +395,139 @@ it("positive raw crypto value rounded to zero keeps server allocation instead of
   expect(
     screen.queryByText("Allocation is unavailable while total portfolio value is zero."),
   ).toBeNull();
+});
+
+it("labels the statement and holdings with the full escaped portfolio name", async () => {
+  const name = ("<b>Portfolio</b> " + "Long name ".repeat(4) + "four").slice(0, 60);
+  const p = { ...mixedPortfolio(), name };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.resolve(new Response(JSON.stringify(p)))),
+  );
+  mount({ metadata: [{ id: "1", name }] });
+  await screen.findByRole("table", { name: "Holdings" });
+  const contexts = screen.getAllByText(name);
+  expect(contexts).toHaveLength(2);
+  for (const context of contexts) {
+    expect(context.tagName).toBe("DD");
+    expect(context).toHaveClass("min-w-0", "[overflow-wrap:anywhere]");
+    expect(context.querySelector("b")).toBeNull();
+  }
+});
+
+it("uses the actual unequal baseline and retains one root's figures", async () => {
+  const p = mixedPortfolio();
+  Object.assign(p, {
+    cash: "500.00",
+    starting_cash: "1234.00",
+    total_value: "702.00",
+    known_value: "702.00",
+    total_pl: "-532.00",
+    total_pl_percent: "-43.11",
+    cash_allocation_percent: "71.23",
+    class_values: { cash: "500.00", stocks: "202.00", crypto: "0.00" },
+    class_allocation_percent: { cash: "71.23", stocks: "28.77", crypto: "0.00" },
+  });
+  p.holdings[0].allocation_percent = "28.77";
+  show(p);
+  const summary = await screen.findByRole("region", { name: "Total portfolio value" });
+  expect(summary).toHaveTextContent("$702.00");
+  expect(summary).toHaveTextContent("−$532.00");
+  expect(summary).toHaveTextContent("−43.11%");
+  expect(summary).toHaveTextContent("Compared with your $1,234.00 start");
+  expect(screen.getByRole("region", { name: "Cash" })).toHaveTextContent("$500.00");
+  expect(summary).not.toHaveTextContent("10,000");
+});
+
+it("does not issue financial requests or create a portfolio for a zero-root legacy entry", async () => {
+  const finance = vi.fn();
+  vi.stubGlobal("fetch", finance);
+  mount({ route: "/portfolio", metadata: [] });
+  expect(await screen.findByRole("heading", { name: "No portfolio available" })).toBeVisible();
+  expect(finance).not.toHaveBeenCalled();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.getByRole("link", { name: "Browse markets" })).toHaveAttribute("href", "/");
+});
+
+it("does not fall back from an explicit unavailable root to the sole valid sibling", async () => {
+  const finance = vi.fn();
+  vi.stubGlobal("fetch", finance);
+  mount({ route: "/portfolios/2" });
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(finance).not.toHaveBeenCalled();
+  expect(screen.queryByText("My portfolio")).toBeNull();
+});
+
+it("suppresses a delayed old-root statement after switching to a same-symbol sibling", async () => {
+  let finish!: (response: Response) => void;
+  const sibling = {
+    ...mixedPortfolio(),
+    portfolio_id: "2",
+    name: "Sibling",
+    cash: "300.00",
+    starting_cash: "400.00",
+    total_value: "502.00",
+    known_value: "502.00",
+    total_pl: "102.00",
+    total_pl_percent: "25.50",
+    cash_allocation_percent: "59.76",
+    class_values: { cash: "300.00", stocks: "202.00", crypto: "0.00" },
+    class_allocation_percent: { cash: "59.76", stocks: "40.24", crypto: "0.00" },
+  };
+  sibling.holdings[0].allocation_percent = "40.24";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) =>
+      String(input).endsWith("/1")
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve(new Response(JSON.stringify(sibling))),
+    ),
+  );
+  const { user } = mount({
+    metadata: [
+      { id: "1", name: "My portfolio" },
+      { id: "2", name: "Sibling" },
+    ],
+  });
+  await screen.findByRole("status", { name: "Loading your portfolio" });
+  await user.click(screen.getByRole("link", { name: "Open sibling" }));
+  const cash = await screen.findByRole("region", { name: "Cash" });
+  expect(cash).toHaveTextContent("$300.00");
+  await act(async () => finish(new Response(JSON.stringify(mixedPortfolio()))));
+  expect(cash).toHaveTextContent("$300.00");
+  expect(screen.queryByText("My portfolio")).toBeNull();
+  expect(screen.getByRole("region", { name: "Total portfolio value" })).toHaveTextContent(
+    "$400.00 start",
+  );
+  for (const link of screen.getAllByRole("link", { name: "Trade AAPL" }))
+    expect(link).toHaveAttribute("href", "/portfolios/2/trade/stocks/AAPL");
+});
+
+it("hides accepted holdings and a delayed refresh when the root becomes unavailable", async () => {
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(mixedPortfolio())))
+      .mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+  );
+  const { user, client } = mount();
+  await screen.findByRole("table");
+  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  await act(async () => {
+    client.setQueryData(["portfolios", "first@example.test"], []);
+  });
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  await act(async () => finish(new Response(JSON.stringify(mixedPortfolio()))));
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
 });

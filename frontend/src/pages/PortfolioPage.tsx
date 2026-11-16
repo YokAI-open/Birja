@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useOutletContext } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StockAttribution } from "@/components/StockAttribution";
@@ -8,9 +9,12 @@ import { PortfolioFreshness } from "@/components/PortfolioFreshness";
 import { PortfolioHoldings, PortfolioOutcome } from "@/components/PortfolioHoldings";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { formatUsd } from "@/lib/money";
+import { PortfolioContext } from "@/components/PortfolioContext";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 
 export default function PortfolioPage() {
-  const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio();
+  const target = useOutletContext<PortfolioTarget>();
+  const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio(target);
   const now = useNow();
   const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
   const refreshButton = useRef<HTMLButtonElement | null>(null);
@@ -40,6 +44,7 @@ export default function PortfolioPage() {
           {isFetching ? "Refreshing portfolio…" : "Refresh portfolio"}
         </Button>
       </div>
+      <PortfolioContext name={target.name} />
       {isPending ? (
         <div
           role="status"
@@ -156,6 +161,7 @@ export default function PortfolioPage() {
               </CardContent>
             </Card>
             <PortfolioHoldings
+              target={target}
               holdings={data.holdings}
               elapsed={elapsed}
               freshSeconds={data.fresh_seconds}
