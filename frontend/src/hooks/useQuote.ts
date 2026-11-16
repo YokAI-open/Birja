@@ -66,7 +66,7 @@ export function quoteKey(target: PortfolioTarget | null, order: Order | null) {
 export function useQuote(target: PortfolioTarget | null, order: Order | null) {
   const queryClient = useQueryClient();
   const scope = financialScope(queryClient, target);
-  const key = [...quoteKey(target, order), scope.epoch] as const;
+  const key = quoteKey(target, order);
   const query = useQuery({
     queryKey: key,
     queryFn: async ({ signal }) => {

@@ -16,7 +16,8 @@ import {
   type TimedStockQuote,
   type AuthorityIdentity,
 } from "@/api/stockTrades";
-import { useMe } from "./useMe";
+import type { PortfolioTarget } from "./usePortfolioTarget";
+import { financialScope, revokePortfolioTarget } from "./useQuote";
 
 type Phase = "draft" | "loading_preview" | "preview" | "submitting" | "unknown" | "filled";
 type Attempt = { body: Readonly<StockAttempt>; coin_id: string; provider_asset_id: string };
@@ -277,6 +278,7 @@ function acceptContext(g: ContextGuard, incoming: TimedStockContext): TimedStock
 function compatible(q: TimedStockQuote, c: TimedStockContext): boolean {
   return (
     c.execution_enabled &&
+    q.portfolio_id === c.portfolio_id &&
     c.authority !== null &&
     q.coin_id === c.coin_id &&
     q.provider_asset_id === c.provider_asset_id &&
@@ -302,12 +304,16 @@ function quoteCurrent(q: TimedStockQuote, c: TimedStockContext | undefined): boo
   );
 }
 
-export function useStockTrade(routeSymbol: string) {
+export function useStockTrade(target: PortfolioTarget | null, routeSymbol: string) {
   const client = useQueryClient();
-  const { data: me } = useMe();
+  const scope = useMemo(() => financialScope(client, target), [client, target]);
   const auth = authGuard(client),
-    email = me?.email ?? null;
-  const stateKey = useMemo(() => ["stockTradeState", email] as const, [email]);
+    email = scope.owner,
+    portfolioId = scope.portfolioId;
+  const stateKey = useMemo(
+    () => ["stockTradeState", email, portfolioId, scope.epoch] as const,
+    [email, portfolioId, scope.epoch],
+  );
   const stateQuery = useQuery({
     queryKey: stateKey,
     queryFn: async () => empty(routeSymbol),
@@ -315,26 +321,30 @@ export function useStockTrade(routeSymbol: string) {
     initialData: () => empty(routeSymbol),
     gcTime: Infinity,
   });
-  const state =
-    email === null
-      ? empty(routeSymbol)
-      : (client.getQueryData<StockTradeState>(stateKey) ?? stateQuery.data);
+  const state = !scope.current()
+    ? empty(routeSymbol)
+    : (client.getQueryData<StockTradeState>(stateKey) ?? stateQuery.data);
   const symbol = state.symbol;
-  const key = useMemo(() => ["stockContext", email, symbol] as const, [email, symbol]);
+  const key = useMemo(
+    () => ["stockContext", email, portfolioId, scope.epoch, symbol] as const,
+    [email, portfolioId, scope.epoch, symbol],
+  );
+  const guardKey = `${portfolioId}:${symbol}`;
   const quoteAbort = useRef<AbortController | null>(null),
     quoteSerial = useRef(0);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const contextQuery = useQuery({
     queryKey: key,
-    enabled: email !== null,
+    enabled: scope.current(),
     retry: false,
     gcTime: 0,
     staleTime: 5_000,
     refetchInterval: 15_000,
     refetchOnWindowFocus: true,
     queryFn: async ({ signal }) => {
+      if (target === null || !scope.current()) throw new StockTradeError("unknown");
       const version = auth.version,
-        cg = contextGuard(auth, symbol),
+        cg = contextGuard(auth, guardKey),
         serial = cg.serial;
       const owner = client.getQueryCache().find({ queryKey: key, exact: true });
       const initial = client.getQueryData<TimedStockContext>(key);
@@ -344,6 +354,7 @@ export function useStockTrade(routeSymbol: string) {
         const current = client.getQueryData<TimedStockContext>(key);
         if (
           who(client) !== email ||
+          !scope.current() ||
           auth.version !== version ||
           cg.serial !== serial ||
           (event.query === owner && event.type === "removed") ||
@@ -352,10 +363,11 @@ export function useStockTrade(routeSymbol: string) {
           superseded.abort();
       });
       try {
-        const response = await fetchStockContext(symbol, requestSignal);
+        const response = await fetchStockContext(target.portfolioId, symbol, requestSignal);
         requestSignal.throwIfAborted();
         if (
           auth.version !== version ||
+          !scope.current() ||
           who(client) !== email ||
           cg.serial !== serial ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
@@ -363,7 +375,9 @@ export function useStockTrade(routeSymbol: string) {
           throw new StockTradeError("unknown");
         return acceptContext(cg, response);
       } catch (error) {
-        if (auth.version === version && who(client) === email) {
+        if (auth.version === version && who(client) === email && scope.current()) {
+          if (error instanceof StockTradeError && error.status === 404)
+            revokePortfolioTarget(client, target);
           if (error instanceof StockTradeError && error.status === 401)
             client.setQueryData(["me"], null);
           else if (error instanceof StockTradeError && error.kind === "refused") {
@@ -382,36 +396,49 @@ export function useStockTrade(routeSymbol: string) {
     },
   });
   const raw = client.getQueryData<TimedStockContext>(key);
-  const context = email !== null && raw ? projectStockContext(raw) : undefined;
+  const context =
+    scope.current() && !contextQuery.isError && raw?.portfolio_id === portfolioId
+      ? projectStockContext(raw)
+      : undefined;
   const quoteMutation = useMutation({
+    mutationKey: ["stockQuote", email, portfolioId, scope.epoch, symbol],
     mutationFn: ({
       order,
+      portfolioId,
       signal,
     }: {
+      portfolioId: string;
       order: { symbol: string; side: "buy" | "sell"; quantity: string };
       signal: AbortSignal;
-    }) => fetchStockQuote(order, signal),
+    }) => fetchStockQuote(portfolioId, order, signal),
     retry: false,
     gcTime: 0,
   });
   const tradeMutation = useMutation({
+    mutationKey: ["stockFill", email, portfolioId, scope.epoch, symbol],
     mutationFn: ({ body, signal }: { body: StockAttempt; signal: AbortSignal }) =>
-      executeStockTrade(body, signal),
+      executeStockTrade(body.portfolio_id, body, signal),
     retry: false,
     gcTime: 0,
   });
   const setState = (update: (s: StockTradeState) => StockTradeState) => {
-    if (email !== null && who(client) === email)
+    if (scope.current() && email !== null && who(client) === email)
       client.setQueryData<StockTradeState>(stateKey, (s) => update(s ?? empty(routeSymbol)));
   };
   const currentContext = () => {
     const data = client.getQueryData<TimedStockContext>(key);
-    return email !== null && data ? projectStockContext(data) : undefined;
+    const query = client.getQueryCache().find({ queryKey: key, exact: true });
+    return scope.current() &&
+      query?.state.status === "success" &&
+      data?.portfolio_id === portfolioId
+      ? projectStockContext(data)
+      : undefined;
   };
   const currentState = () => client.getQueryData<StockTradeState>(stateKey) ?? empty(routeSymbol);
   const locked = (s: StockTradeState) =>
     s.phase === "submitting" || s.phase === "unknown" || s.phase === "filled";
   const edit = (changes: Partial<Pick<StockTradeState, "side" | "quantity">>) => {
+    if (!scope.current()) return;
     if (locked(currentState())) return;
     quoteSerial.current++;
     quoteAbort.current?.abort();
@@ -426,12 +453,12 @@ export function useStockTrade(routeSymbol: string) {
     }));
   };
   useEffect(() => {
-    const s = client.getQueryData<StockTradeState>(["stockTradeState", email]);
+    const s = client.getQueryData<StockTradeState>(stateKey);
     if (s && s.symbol !== routeSymbol && s.phase !== "submitting" && s.phase !== "unknown")
-      client.setQueryData(["stockTradeState", email], empty(routeSymbol));
+      client.setQueryData(stateKey, empty(routeSymbol));
     // Route changes do not abandon an unresolved attempt. A later receipt stays
     // visible until explicit Trade again, even if another route was requested.
-  }, [client, email, routeSymbol]);
+  }, [client, email, routeSymbol, stateKey]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let writing = false;
@@ -439,9 +466,12 @@ export function useStockTrade(routeSymbol: string) {
       if (writing) return;
       clearTimeout(timer);
       const cached = client.getQueryData<TimedStockContext>(key);
-      const cg = contextGuard(auth, symbol);
-      const safe = cached ? acceptContext(cg, cached) : undefined;
-      if (cached && safe !== cached) {
+      const cg = contextGuard(auth, guardKey);
+      const safe =
+        scope.current() && cached?.portfolio_id === portfolioId
+          ? acceptContext(cg, cached)
+          : undefined;
+      if (cached && safe && safe !== cached) {
         writing = true;
         client.setQueryData(key, safe);
         writing = false;
@@ -471,10 +501,12 @@ export function useStockTrade(routeSymbol: string) {
       tick();
     };
     const unsubscribe = client.getQueryCache().subscribe((event) => {
-      const [prefix, owner, stock] = event.query.queryKey;
+      const [prefix, owner, root, epoch, stock] = event.query.queryKey;
       if (
         (event.type === "updated" || event.type === "removed") &&
         owner === email &&
+        root === portfolioId &&
+        epoch === scope.epoch &&
         ((prefix === "stockContext" && stock === symbol) || prefix === "stockTradeState")
       )
         update();
@@ -490,10 +522,20 @@ export function useStockTrade(routeSymbol: string) {
       window.removeEventListener("focus", update);
       window.removeEventListener("visibilitychange", update);
       quoteAbort.current?.abort();
+      const previous = client.getQueryData<StockTradeState>(stateKey);
+      if (previous && ["preview", "loading_preview"].includes(previous.phase))
+        client.setQueryData<StockTradeState>(stateKey, {
+          ...previous,
+          phase: "draft",
+          quote: null,
+          replacement: null,
+          interrupted: true,
+        });
     };
-  }, [client, auth, email, symbol, key, stateKey]);
+  }, [client, auth, email, symbol, key, stateKey, portfolioId, guardKey, target, scope]);
 
   const preview = async () => {
+    if (!scope.current() || target === null) return;
     const s = currentState(),
       c = currentContext();
     const order = { symbol: s.symbol, side: s.side, quantity: s.quantity };
@@ -505,7 +547,7 @@ export function useStockTrade(routeSymbol: string) {
     const serial = ++quoteSerial.current,
       version = auth.version;
     const owner = client.getQueryCache().find({ queryKey: stateKey, exact: true });
-    const cg = contextGuard(auth, symbol),
+    const cg = contextGuard(auth, guardKey),
       contextSerial = cg.serial;
     const contextOwner = client.getQueryCache().find({ queryKey: key, exact: true });
     setState((old) => ({
@@ -517,9 +559,14 @@ export function useStockTrade(routeSymbol: string) {
       interrupted: false,
     }));
     try {
-      const q = await quoteMutation.mutateAsync({ order, signal: controller.signal });
+      const q = await quoteMutation.mutateAsync({
+        portfolioId: target.portfolioId,
+        order,
+        signal: controller.signal,
+      });
       if (
         auth.version !== version ||
+        !scope.current() ||
         who(client) !== email ||
         quoteSerial.current !== serial ||
         client.getQueryCache().find({ queryKey: stateKey, exact: true }) !== owner
@@ -543,8 +590,15 @@ export function useStockTrade(routeSymbol: string) {
       }
       setState((old) => ({ ...old, phase: "preview", quote: q, error: null }));
     } catch (error) {
-      if (auth.version !== version || who(client) !== email || quoteSerial.current !== serial)
+      if (
+        auth.version !== version ||
+        who(client) !== email ||
+        quoteSerial.current !== serial ||
+        !scope.current()
+      )
         return;
+      if (error instanceof StockTradeError && error.status === 404)
+        revokePortfolioTarget(client, target);
       if (error instanceof StockTradeError && error.status === 401)
         client.setQueryData(["me"], null);
       else
@@ -559,6 +613,7 @@ export function useStockTrade(routeSymbol: string) {
     }
   };
   const resolve = async (attempt: Attempt) => {
+    if (!scope.current() || target === null || attempt.body.portfolio_id !== portfolioId) return;
     const version = auth.version,
       owner = client.getQueryCache().find({ queryKey: stateKey, exact: true });
     setState((s) => ({
@@ -571,26 +626,59 @@ export function useStockTrade(routeSymbol: string) {
     }));
     const stillOwn = () =>
       auth.version === version &&
+      scope.current() &&
       who(client) === email &&
       client.getQueryCache().find({ queryKey: stateKey, exact: true }) === owner &&
       currentState().attempt?.body.idempotency_key === attempt.body.idempotency_key;
+    const preserveUnknown = () => {
+      if (
+        auth.version === version &&
+        who(client) === email &&
+        client.getQueryCache().find({ queryKey: stateKey, exact: true }) === owner &&
+        currentState().attempt?.body.idempotency_key === attempt.body.idempotency_key
+      )
+        client.setQueryData<StockTradeState>(stateKey, (s) => ({
+          ...(s ?? empty(routeSymbol)),
+          phase: "unknown",
+          attempt,
+          quote: null,
+          fill: null,
+          replacement: null,
+          error: "unknown",
+        }));
+    };
     try {
       const fill = await tradeMutation.mutateAsync({
         body: attempt.body,
         signal: new AbortController().signal,
       });
-      if (!stillOwn()) return;
+      if (!stillOwn()) {
+        preserveUnknown();
+        return;
+      }
       if (fill.coin_id !== attempt.coin_id || fill.provider_asset_id !== attempt.provider_asset_id)
         throw new StockTradeError("unknown");
       setState((s) => ({ ...s, phase: "filled", attempt: null, quote: null, fill, error: null }));
-      auth.contexts.forEach((g) => g.serial++);
+      auth.contexts.forEach((g, k) => {
+        if (k.startsWith(`${portfolioId}:`)) g.serial++;
+      });
       await Promise.all(
-        ["me", "holding", "stockContext", "stocks", "prices", "portfolio", "history"]
-          .map((prefix) => client.invalidateQueries({ queryKey: [prefix] }))
-          .concat(client.invalidateQueries({ queryKey: ["eventHistory", email] })),
+        ["holding", "quote", "stockContext", "portfolio", "history", "eventHistory"]
+          .map((prefix) => client.invalidateQueries({ queryKey: [prefix, email, portfolioId] }))
+          .concat(
+            ["stocks", "prices"].map((prefix) => client.invalidateQueries({ queryKey: [prefix] })),
+          ),
       );
     } catch (error) {
-      if (!stillOwn()) return;
+      if (!stillOwn()) {
+        preserveUnknown();
+        return;
+      }
+      if (error instanceof StockTradeError && error.status === 404) {
+        preserveUnknown();
+        revokePortfolioTarget(client, target);
+        return;
+      }
       if (error instanceof StockTradeError && error.status === 401) {
         client.setQueryData(["me"], null);
         return;
@@ -627,6 +715,7 @@ export function useStockTrade(routeSymbol: string) {
     }
   };
   const confirm = async () => {
+    if (!scope.current() || target === null) return;
     const s = currentState(),
       c = currentContext();
     if (s.phase !== "preview" || s.quote === null) return;
@@ -641,6 +730,7 @@ export function useStockTrade(routeSymbol: string) {
       return;
     }
     const body = Object.freeze({
+      portfolio_id: target.portfolioId,
       symbol: s.symbol,
       side: s.side,
       quantity: s.quantity,
@@ -650,16 +740,21 @@ export function useStockTrade(routeSymbol: string) {
     await resolve({ body, coin_id: s.quote.coin_id, provider_asset_id: s.quote.provider_asset_id });
   };
   const checkResult = async () => {
+    if (!scope.current()) return;
     const s = currentState();
     if (s.phase === "unknown" && s.attempt !== null) await resolve(s.attempt);
   };
   const canPreview =
+    scope.current() &&
     !locked(state) &&
     context?.execution_enabled === true &&
     isStockOrder({ symbol: state.symbol, side: state.side, quantity: state.quantity }) &&
     state.phase !== "loading_preview";
   const canConfirm =
-    state.phase === "preview" && state.quote !== null && quoteCurrent(state.quote, context);
+    scope.current() &&
+    state.phase === "preview" &&
+    state.quote !== null &&
+    quoteCurrent(state.quote, context);
   return {
     ...state,
     context,
@@ -684,6 +779,7 @@ export function useStockTrade(routeSymbol: string) {
     confirm,
     checkResult,
     tradeAgain: () => {
+      if (!scope.current()) return;
       if (currentState().phase !== "filled") return;
       quoteSerial.current++;
       quoteAbort.current?.abort();
