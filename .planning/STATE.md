@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-10-PLAN.md; next12-12 by wave dependency. Phase continues locally.
-last_updated: "2026-11-16T10:09:23.365Z"
+stopped_at: Completed12-12-PLAN.md; next12-11 by wave dependency. Phase continues locally.
+last_updated: "2026-11-16T10:30:28.370Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 10
-  percent: 36
+  completed_plans: 11
+  percent: 39
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 Plans01–10 complete through actual0017, versioned identity HTTP and explicit crypto execution. Next12-12 supplies stock journals before11 stock execution by approved wave dependencies. All28 requirements remain unchecked; remaining financial services, production v2 composition, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 Plans01–10 and12 are complete through actual0017, versioned identity HTTP, explicit crypto and owned stock journals/splits. Next12-11 supplies stock execution by approved wave dependencies. All28 requirements remain unchecked; remaining financial services, production v2 composition, TLS/recovery, security and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 12 of 28 by dependency order; 10 plans complete
-Status: Executing Phase12; Plans01–10 complete, next12-12
-Last activity: 2026-11-16 — Explicit crypto service/API44 pass; next12-12
+Plan: 11 of 28 by dependency order; 11 plans complete
+Status: Executing Phase12; Plans01–10 and12 complete, next12-11
+Last activity: 2026-11-16 — Owned journal/split29 pass; next12-11
 
-Progress: [████░░░░░░] 36%
+Progress: [████░░░░░░] 39%
 
 ## Accepted Closeout and Release Boundary
 
@@ -156,6 +156,17 @@ without weakening constraints. See deferred-items.md. Production crypto router
 registration and v1 finance refusal remain15;11 must make the shared stock
 retry caller root-aware. Next12-12 by wave order; complete financial integration,
 verified TLS, coverage/security, exact recovery and owner UI remain pending.
+Plan12 now supplies portfolio-keyed complete journals and active-only splits,
+with29 real journal/split cases passing, including migrated two-user legacyNULL
+evidence followed by one global2 split across same-owner siblings and a frozen
+original owner. Two independent actual scheduler processors return one effect;
+partial-effect rollback/retry and two later terminal epochs pass. Nine actual
+retained→0017 preservation/inventory and66 restricted SQL regressions pass.
+Actual scheduler root locking required the private lock-only
+lock_stock_portfolio_roots(bigint) in unmerged0017; exact owner/path/scheduler-only
+EXECUTE and no account UPDATE are tested. Plans16/17 must carry its body/ACL
+inventory;11 must supply StockMovementInput.portfolio_id and13 must reconstruct
+by portfolio rather than user. See12-12-SUMMARY.md. Next12-11 by wave order.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -174,9 +185,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | 12 | 08 | 8 min | 2 | 8 |
 | 12 | 09 | 7 min | 2 | 13 |
 | Phase 12 P10 | 10 min | 2 tasks | 6 files |
+| 12 | 12 | 20 min | 2 | 7 |
 
 ## Execution Session
 
-Last session: 2026-11-16T10:09:11.347Z
-Stopped at: Completed12-10-PLAN.md; next12-12 by wave dependency. Phase continues locally.
+Last session: 2026-11-16T10:30:28.349Z
+Stopped at: Completed12-12-PLAN.md; next12-11 by wave dependency. Phase continues locally.
 Resume file: None
