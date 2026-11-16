@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 status: executing
-stopped_at: Completed12-19-PLAN.md; next12-18 by wave dependency
-last_updated: "2026-11-16T12:35:23.171Z"
+stopped_at: Completed12-20-PLAN.md; next12-18-02 targeted continuation
+last_updated: "2026-11-16T13:13:50.401Z"
 last_activity: 2026-11-16
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 28
-  completed_plans: 18
-  percent: 64
+  completed_plans: 19
+  percent: 68
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has18/28 plans complete locally, including browser identity and explicit target discovery in12-19. The98-case auth/client/cache/target run passes; no cash identity fallback or arbitrary root selection exists. Next12-18 qualifies isolated current/retained recovery lanes. All28 requirements remain unchecked; encrypted same-archive TLS/image recovery, integrated security/browser and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
+Current focus: Phase12 has19/28 plans complete locally, including explicit financial browser transport in12-20. Its79-case trade/read transport gate passes. Plan18 Task02 remains incomplete with an actual TLS DividendRefused smoke failure and retained binding work; the owner approved targeted diagnosis/retry in the parent session. Resume12-18-02 before advancing beyond Wave13. All28 requirements remain unchecked; full integration, encrypted same-archive TLS/image recovery and human UI gates remain pending. Published v0.5.0 and v1.1 accepted-gap history remain intact.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — EXECUTING
-Plan: 19 of 28 by dependency order; 18 plans complete, next12-18
-Status: Executing Phase12; 18/28 plans complete, next12-18 by wave order
+Plan: 19/28 complete; next12-18-02 continuation by dependency order
+Status: Executing Wave13; Plan20 complete, Plan18 checkpoint pending targeted continuation
 Last activity: 2026-11-16
 
-Progress: [██████░░░░] 64%
+Progress: [███████░░░] 68%
 
 ## Accepted Closeout and Release Boundary
 
@@ -237,6 +237,19 @@ pass; changed-file lint/format pass. Full frontend typing has only two planned
 Me.cash_usd consumers in AccountPage/TradePage for23/24; no whole frontend build
 or suite success is claimed. See12-19-SUMMARY.md for hook status/epoch contracts.
 Next12-18 by dependency order; requirements and human UI gates stay pending.
+Plan20 now requires explicit canonical portfolio IDs for all crypto/stock/valuation/
+History clients and validates server quote/context/receipt/valuation identities.
+Original stock attempt roots stay immutable and cannot be retargeted; repricing
+and opaque trade2/mixed3 continuations must match the original root.38 trade and
+41 read cases pass; changed-file lint/format pass. Full frontend typing reports
+51 errors across17 later consumer/fixture files, none in this plan's changed
+client/newtest modules. Plans21–25/27 own those explicit-root adaptations.
+See12-20-SUMMARY.md for required signatures and original-attempt types. Plan18
+Task01 is committed but Task02 is incomplete with uncommitted deploy changes;
+12-18-CONTINUATION.md preserves the exact DividendRefused smoke failure and
+remaining source/archive/image bindings. The owner approved targeted diagnosis/
+retry; no Plan18 completion summary exists. Next12-18-02, not Wave14. This
+independent same-wave Plan20 preserved all paused18 files and unrelated.claude/.
 No requirement is complete from collection or model metadata alone.
 Local planning commits remain on feature/milestone-v1.2. The owner selected
 “Keep local for now”; retain that publication preference.
@@ -263,9 +276,10 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 | Phase 12 P15 | 20 min | 2 tasks | 25 files |
 | Phase 12 P17 | 16 min | 2 tasks | 7 files |
 | Phase 12 P19 | 12 min | 2 tasks | 8 files |
+| Phase 12 P20 | 12 min | 2 tasks | 7 files |
 
 ## Execution Session
 
-Last session: 2026-11-16T12:35:23.156Z
-Stopped at: Completed12-19-PLAN.md; next12-18 by wave dependency
-Resume file: None
+Last session: 2026-11-16T13:13:09.771Z
+Stopped at: Completed12-20-PLAN.md; next12-18-02 targeted continuation
+Resume file: phases/12-preserve-existing-investing-under-portfolio-ownership/12-18-CONTINUATION.md

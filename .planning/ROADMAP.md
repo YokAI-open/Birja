@@ -126,7 +126,7 @@ Plans:
 **Wave 13** *(blocked on Wave 12 completion)*
 
 - [ ] 12-18-PLAN.md — Current and retained isolated recovery lanes
-- [ ] 12-20-PLAN.md — Explicit scoped financial browser clients
+- [x] 12-20-PLAN.md — Explicit scoped financial browser clients
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
@@ -272,7 +272,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 18/28 | In progress; next12-18 by wave order | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 19/28 | Wave13; next12-18-02 targeted continuation | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
