@@ -22,6 +22,24 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_direct_compose_keeps_authenticated_images_after_env_rewrite(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == '_integration')
+        assignment = next(node for node in ast.walk(function)
+                          if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == 'compose_env'
+                                  for target in node.targets))
+        image = 'sha256:' + 'd' * 64
+        namespace = {'r': SimpleNamespace(ENV={'BIRJA_QUALIFIED_RUNTIME_IMAGE': 'untrusted',
+                                               'BIRJA_QUALIFIED_MIGRATOR_IMAGE': 'untrusted'}),
+                     'app': Path('/private/app'), 'release': Path('/private/release'),
+                     'current': 'retained', 'qualified_images': {'retained': {'id': image}}}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[assignment], type_ignores=[])),
+                     '<actual-selected-compose-environment>', 'exec'), namespace)
+        for key in ('BIRJA_QUALIFIED_RUNTIME_IMAGE', 'BIRJA_QUALIFIED_MIGRATOR_IMAGE'):
+            self.assertEqual(namespace['compose_env'][key], image)
+
     def test_selected_source_child_rechecks_exact_image_without_application_overlays(self):
         tree = ast.parse((HERE / 'selected-cutover.py').read_text())
         function = next(node for node in ast.walk(tree)

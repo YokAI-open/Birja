@@ -899,6 +899,11 @@ m.main(['--check-volumes'])
                 "BIRJA_APP_DIR": str(app),
                 "BIRJA_OPS_DIR": str(release),
                 "BIRJA_MIGRATOR_CONTEXT": str(release / "backend"),
+                # The production role transition rewrites its private env file.
+                # Direct fixture inspection/cleanup must retain the same pinned
+                # image inputs instead of relying on incidental env-file keys.
+                "BIRJA_QUALIFIED_RUNTIME_IMAGE": qualified_images[current]['id'],
+                "BIRJA_QUALIFIED_MIGRATOR_IMAGE": qualified_images[current]['id'],
             }
 
             def compose(*args, data=None):
