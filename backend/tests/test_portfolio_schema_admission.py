@@ -135,6 +135,45 @@ async def test_uninitialized_schema_refuses_instead_of_auto_migrating(portfolio_
         assert failure.value.reason == "schema_unavailable"
 
 
+@pytest.mark.parametrize("malformation", ["multiple", "wrong_column_type"])
+async def test_actual_malformed_revision_metadata_refuses(portfolio_migration_db, malformation):
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    await migrate_to("0014")
+    async with portfolio_migration_db.connect() as conn, conn.begin():
+        if malformation == "multiple":
+            await conn.execute(text("INSERT INTO alembic_version(version_num) VALUES ('0013')"))
+        else:
+            # Deliberate disposable catalogue corruption, never a valid schema
+            # migration: the admitted protocol requires a text revision value.
+            await conn.execute(
+                text(
+                    "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE integer "
+                    "USING version_num::integer"
+                )
+            )
+    # Fresh driver metadata must actually return the malformed integer rather
+    # than stop earlier at a stale prepared-plan error from ALTER COLUMN.
+    fresh = create_async_engine(portfolio_migration_db.url)
+    try:
+        async with fresh.connect() as conn:
+            if malformation == "wrong_column_type":
+                assert (
+                    type(
+                        (
+                            await conn.execute(text("SELECT version_num FROM alembic_version"))
+                        ).scalar_one()
+                    )
+                    is int
+                )
+            with pytest.raises(SchemaAdmissionError) as failure:
+                await require_schema(conn)
+            assert failure.value.reason == "schema_unavailable"
+    finally:
+        await fresh.dispose()
+
+
 @pytest.mark.parametrize("role", ["birja_app", "birja_scheduler"])
 async def test_restricted_runtime_role_can_read_schema_admission(engine, migrated, role):
     from sqlalchemy import text
