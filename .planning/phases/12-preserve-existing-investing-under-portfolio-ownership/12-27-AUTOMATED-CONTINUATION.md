@@ -314,3 +314,77 @@ runner creates a fresh one. No provider/production operation or private.env read
 occurred. Phase7's consumed authorization/evidence and six pending requirements
 remain unchanged; stock admissions remain OFF. Continue locally without another
 procedural retry question. Phase12 remains26/28, with27 incomplete and noSUMMARY.
+
+## Backend repair segment 3 — 2026-11-17
+
+Two additional local test-only commits repair every remaining family named in
+the prior fifth diagnostic, without treating that partial diagnostic as a full
+backend pass:
+
+- `dd125be` / owning12-14 supplies verified OwnedActivePortfolio roots to the
+  retained valuation and committed-client snapshot tests. Real writes and the
+  negative split-reader control remain; cash, positions, price clock, exact
+  original totals and dividend/correction assertions are unchanged. Root lookup
+  happens before statement capture, so the original single financial SELECT
+  assertion remains exact. Current missing-root behavior explicitly asserts the
+  private404 portfolio_unavailable contract.
+- `4d1d951` / owning12-12 separates current0017 journal constraints from genuine
+  retained action migrations/ACLs. The shared User-only ledger fixture remains
+  unchanged so the dividend fixture does not acquire an accidental sibling.
+  Only current financial consumers create and name an actual Account root;
+  current split rows explicitly carry version2. Original pre-portfolio raw
+  movement columns remain in retained_movement, now explicitly imported by the
+  independent0014 seed_legacy_books oracle. Original narrow scheduler trade
+  reads, actual foreign causal FKs, uniqueness, nonfinite/bounded inputs,
+  hostile-role, interrupted concurrent-index and downgrade refusal assertions
+  all remain. The foreign split/event coin FK is exercised at INSERT, before
+  immutable UPDATE refusal could obscure that causal constraint.
+
+Historical migration/ACL tests use the guarded disposable reset rather than
+trying to downgrade irreversible0017. They run genuine0010–0014 revisions;
+teardown restores actual final0017. Upgrade-only grants remain separate from
+deployed-bootstrap fixtures, preserving independent upgrade/bootstrap parity.
+The exact retained0013 script comes from immutable commit
+c408be806fdad8e8b6ee5961c123d5be52ab096c and is stored at
+backend/tests/fixtures/bootstrap-roles-0013.sql with checked SHA256
+06880ad0cf3592cd6d436c588eafaad8f4490560a1ae0e4dc23da120676421bb.
+The checked-in exact bytes avoid depending on old git objects in shallow backend
+CI checkouts. No current bootstrap is evaluated against a retained schema.
+
+Current resolution consumers execute the complete actual final deployment
+bootstrap, including its existing preceding action-grants block. The earlier
+test helper's final portfolio grant fragment alone omitted that prerequisite
+operator schema USAGE. No production grant, migration or runtime code changed.
+The historical unsafe-operator-membership test also uses its own genuine retained
+lane; current reconciliation, replay and actual gate-wait tests use0017.
+
+Serial real-database receipts:
+
+- /tmp/phase12-27-portfolio-final.log:29 valuation/snapshot/owned cases pass in6.18s.
+- /tmp/phase12-27-action-migrations-second.log:129 current action, independent
+  portfolio migration and dividend-schema cases pass in245.92s.
+- /tmp/phase12-27-action-final-second.log:109 final current/retained action and
+  resolution cases pass in77.61s, including actual stale gate-wait proofs.
+- /tmp/phase12-27-retained-source-final.log:3 original retained parity, hostile
+  role and valid-cause cases pass in17.03s using the checked-in exact source.
+- Full Ruff check and format pass226 files; mypy passes101 app source files.
+
+One first sandboxed valuation run could not create a loopback socket; the
+authorized guarded escalation then ran the actual tests. No package install,
+provider access, private.env, production operation or publication occurred.
+No guard was disabled for these repairs. Post-replay administration verifies
+actual0017 and all noninternal triggers enabled. No pytest/migration child is
+left running; only the previously verified synthetic tmpfs PG/Redis stack stays
+available. No tracked deletion occurred; only unrelated.claude/ is untracked.
+
+Next: run a fresh unfiltered backend diagnostic through later families (the
+old fifth run stopped at the first resolution setup error). It has not been
+repeated after these commits, so later retained stock service/status/trading
+callers may still need explicit-root adaptation. Then qualify full backend
+coverage with all60 critical modules, the actual unchanged all-security runner,
+five actual-image strict scans and one fresh same-archive seven-stage recovery.
+The old archive remains untouched, and final UI packet refresh/owner/native200%
+gates remain pending. Do not create27SUMMARY, advance counts or mark whole
+requirements complete from these bounded receipts. Phase7's consumed campaign,
+six pending requirements and OFF admissions remain unchanged. Continue locally
+under the existing approval; no new procedural retry checkpoint is needed.
