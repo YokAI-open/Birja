@@ -196,6 +196,37 @@ async def test_empty_downgrade_and_populated_upgrade_preserve_financial_rows(
     from tests.test_stock_migrations import _financial_snapshot, migrate
 
     await migrate("0013")
+    # Reset retained lanes cannot borrow populated accounts from earlier tests.
+    # Keep execution tables empty while explicitly preserving real core money.
+    async with engine.begin() as conn:
+        uid = (
+            await conn.execute(
+                text(
+                    "INSERT INTO users(email) VALUES ('execution-upgrade@example.test') "
+                    "RETURNING id"
+                )
+            )
+        ).scalar_one()
+        cid = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+        await conn.execute(
+            text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,9876.54,12500)"),
+            {"u": uid},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) "
+                "VALUES (:u,:c,0.001,123.46)"
+            ),
+            {"u": uid, "c": cid},
+        )
+        await conn.execute(
+            text("""INSERT INTO trades
+            (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+            exec_price,fee,cash_delta,cash_after,idempotency_key)
+            VALUES (:u,:c,'buy','quantity',0.001,0.001,123460,now(),123460,0,-123.46,
+            9876.54,gen_random_uuid())"""),
+            {"u": uid, "c": cid},
+        )
     before = await _financial_snapshot(engine)
     await migrate("0012", down=True)
     assert await _versions(engine) == ["0012"]

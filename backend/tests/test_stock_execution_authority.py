@@ -7,9 +7,13 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from tests.test_migrations import retained_migration_db as _retained_migration_db
+from tests.test_stock_action_migrations import retained_upgrade_roles as _retained_upgrade_roles
 from tests.test_stock_action_migrations import runtime_roles as _runtime_roles
 
 runtime_roles = _runtime_roles
+retained_upgrade_roles = _retained_upgrade_roles
+retained_migration_db = _retained_migration_db
 
 
 @pytest_asyncio.fixture
@@ -213,6 +217,7 @@ async def test_scheduler_can_write_status_and_read_but_not_mutate_receipts(engin
         (coin_id,provider_asset_id,source_ref) VALUES (:c,'synthetic','fixture')"""),
             {"c": cid},
         )
+        await conn.execute(text("SELECT * FROM public.stock_fill_facts"))
         with pytest.raises(DBAPIError) as exc:
             async with conn.begin_nested():
                 await conn.execute(text("DELETE FROM public.stock_fill_facts"))
@@ -258,4 +263,50 @@ async def test_bootstrap_and_upgrade_grants_have_exact_runtime_parity(engine, ru
             'public.assert_stock_execution_current(bigint,bigint,jsonb)','EXECUTE')""")
             )
         ).scalar_one()
+        await conn.rollback()
+
+
+async def test_retained_execution_read_denial_and_bootstrap_parity(engine, retained_upgrade_roles):
+    """Keep the original0013 receipt-read denial on its actual retained schema."""
+    from tests.test_stock_action_migrations import retained_bootstrap_source
+
+    # Genuine schema reset changes receipt columns; do not reuse a prepared
+    # SELECT * from the preceding current-schema authority test connection.
+    await engine.dispose()
+    source = await retained_bootstrap_source()
+    block = (
+        "DO $execution_grants$"
+        + source.split("DO $execution_grants$", 1)[1].split("$execution_grants$;", 1)[0]
+        + "$execution_grants$;"
+    )
+    query = text("""SELECT r,t,p,has_table_privilege(r,t,p) FROM
+      unnest(ARRAY['birja_app','birja_scheduler']) r CROSS JOIN
+      unnest(ARRAY['public.stock_fill_facts','public.stock_status_evidence']) t CROSS JOIN
+      unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+      ORDER BY r,t,p""")
+    async with engine.connect() as conn:
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT proconfig FROM pg_proc WHERE oid="
+                    "'public.assert_stock_execution_current(bigint,bigint,jsonb)'::regprocedure"
+                )
+            )
+        ).scalar_one() == ["search_path=pg_catalog, public"]
+        before = (await conn.execute(query)).all()
+        async with conn.begin_nested():
+            await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
+            with pytest.raises(DBAPIError) as exc:
+                async with conn.begin_nested():
+                    await conn.execute(text("SELECT * FROM public.stock_fill_facts"))
+            assert exc.value.orig.sqlstate == "42501"
+        await conn.execute(text("RESET ROLE"))
+        await conn.execute(
+            text(
+                "REVOKE ALL ON public.stock_fill_facts, "
+                "public.stock_status_evidence FROM birja_app,birja_scheduler"
+            )
+        )
+        await conn.execute(text(block))
+        assert (await conn.execute(query)).all() == before
         await conn.rollback()
