@@ -452,3 +452,83 @@ can create its own exclusive one. Preserve the old recovery directory and all
 prior source/archive guards. Phase12 remains26/28; no27SUMMARY or requirement
 completion follows from these focused receipts. Phase7's consumed campaign,
 six pending requirements and OFF admissions remain unchanged. Keep work local.
+
+## Full backend and critical-refusal segment — 2026-11-17
+
+The full unfiltered backend branch-coverage diagnostic ran at670b7ba, tree
+f9cf760753d081e525ceaeb029aa24effd5547ef. It completed all3032 collected cases:
+**3001passed/31failed/119warnings in772.38s**, overall97.16%. Every failure was
+in test_portfolio_migrations.py and had the same genuine retained0014 oracle
+problem: seed_legacy_books still imported the now-current insert_trade helper,
+which queries accounts.closed_at and inserts portfolio_id. Neither column
+exists at0014. This was introduced by the later current execution fixture
+repair, after the earlier independent migration replay; it was not a runtime
+or migration failure. No other family failed in the full diagnostic.
+
+- 5c90b3e / owning12-01 removes that current helper dependency. The independent
+  oracle asserts actual0014 and inserts the exact original stock fill columns,
+  quantity2, mid/exec10, fee0, delta-20 and cash_after9980. Original economic
+  projection, two-owner global split, complete receipts, preserved original
+  bytes and finite migrator/refusal assertions are unchanged. All45 genuine
+  migration/preservation/interruption/refusal cases pass177.70s afterward.
+- 51ac797 / owning12-14 verifies History encoders reject bool/string/None root
+  coercion, and retired History modules expose only the shared refusal router.
+- 4398c36 / owning12-16 uses actual retained migrations, isolated deliberate
+  malformed revision metadata and a fresh driver connection to prove multirow
+  and integer revision results refuse. A new driver is important: otherwise
+  ALTER COLUMN can stop earlier at a stale prepared-plan error instead of
+  exercising the actual non-string admission check. No valid migration or
+  production catalogue is changed by this adversarial fixture.
+- d1f7050 / owning12-12 exercises actual journal root lineage, legacyNULL
+  ambiguity when sibling roots share one user, a corrupt version2 digest,
+  missing roots and refusal of postclosure historical cutoffs. The latter uses
+  a database timestamp after closure, already in the past at reconstruction;
+  future cutoffs correctly hit the earlier missing_baseline guard.
+- 28e6cd6 / owning12-11 proves inner stock financial reads cannot substitute an
+  absent root and inner replay cannot accept an original crypto fill. Actual
+  restricted portfolio finances remain unchanged on refusal.
+
+Actual receipts:
+
+- /tmp/phase12-27-fullbackend-coverage-first.log: full3032 run above, nonzero.
+- /tmp/phase12-27-retained-oracle-final.log:45pass/177.70s after oracle fix.
+- /tmp/phase12-27-critical-refusals.log:327pass/1new-test fixture failure/98.83s
+  across six affected files. The failure was the future cutoff described above,
+  corrected to the actual database clock; existing assertions were not weakened.
+- /tmp/phase12-27-critical-refusals-corrected.log:3pass/10.80s, corrected closure
+  case plus both strengthened actual malformed revision cases.
+- Full Ruff check/format226files and mypy101 app sources pass.
+
+The coverage data currently appends those focused refusal diagnostics to the
+earlier failed full run. It is **diagnostic only**, not final same-source whole
+qualification. The exact CI60-module command was run without changing any
+inventory/threshold/exclusion and exits2. Latest diagnostic scope is recorded
+in /tmp/phase12-27-critical-after-refusals.log:
+
+| Critical module | Remaining missing lines/branches |
+|---|---|
+| app/db/dev_bootstrap.py |87–88,93–184,309;52% |
+| app/db/portfolio_migrate.py |3–180;0% |
+| app/services/corporate_actions.py |659→662 |
+| app/services/event_history.py |351 |
+| app/services/stock_ownership.py |495,497 |
+| app/services/stock_trading.py |383→386 |
+
+The bootstrap/migrator have genuine subprocess deployment proof, but currently
+lack backend in-process coverage for their finite orchestration/authentication
+and failure cleanup. Add meaningful tests for those boundaries; do not exclude
+them or mistake subprocess proof for measured backend100%. All other54critical
+modules are100% in this diagnostic, including actual schema_contract after the
+fresh-driver malformed test. Final full unfiltered pytest/coverage must run anew
+after all branch repairs, followed by actual all-security and the fresh exact
+same-archive seven-stage recovery. A test-only fixture repair is not a reason to
+reuse the earlier failed result as a final pass.
+
+At handoff no pytest/migration process remains. Read-only administration of the
+exact owned tmpfs birja-test stack verifies actual0017, zero disabled noninternal
+triggers and zero other active database sessions. That synthetic stack stays
+running for diagnostics, not exclusive-run adoption. Only unrelated.claude/ is
+untracked; all tracked changes are committed. No application/runtime, SQL asset,
+dependency, provider, private configuration, production or publication change
+occurred in this segment. Phase12 stays26/28, no27SUMMARY, final UI/native200%
+remain pending, and Phase7's consumed campaign/six gaps/OFF admissions are intact.
