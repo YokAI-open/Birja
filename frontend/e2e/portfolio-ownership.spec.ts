@@ -7,7 +7,10 @@ import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 type Book = { id: string; name: string; cash: string; starting_cash: string; closed: boolean };
-function fixture(mode: "inspect" | "sibling" | "zero" | "close" | "name", email: string): Book[] {
+function fixture(
+  mode: "inspect" | "sibling" | "zero" | "close" | "name" | "price-tick",
+  email: string,
+): Book[] {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return JSON.parse(
     execFileSync(
@@ -253,18 +256,50 @@ test("lost actual response recovers only original portfolio key without duplicat
     (book: { name: string }) => book.name === "Sibling strategy",
   )!.id;
   const attempts: string[] = [];
+  const refusedKeys: string[] = [];
+  const outcomes: number[] = [];
   await page.route(`**/api/v2/portfolios/${id}/trades`, async (route) => {
-    attempts.push(route.request().postData()!);
+    const payload = route.request().postData()!;
+    if (attempts.length === 0 && refusedKeys.length === 0) fixture("price-tick", email);
     const response = await route.fetch();
+    if (response.status() === 409 && attempts.length === 0) {
+      const refusal = await response.json();
+      expect(refusal.detail.code).toBe("price_changed");
+      expect(refusal.detail.quote.portfolio_id).toBe(id);
+      expect(refusal.detail.quote.mid).not.toBe(JSON.parse(payload).expected_mid);
+      const unchanged = await statement(page, id);
+      expect(unchanged.cash).toBe("10000.00");
+      expect(unchanged.holdings).toEqual([]);
+      expect((await statement(page, sibling)).cash).toBe("2000.00");
+      refusedKeys.push(JSON.parse(payload).idempotency_key);
+      await route.fulfill({ response });
+      outcomes.push(409);
+      return;
+    }
+    expect(response.status()).toBe(attempts.length === 0 ? 201 : 200);
+    attempts.push(payload);
     if (attempts.length === 1) {
-      expect(response.status()).toBe(201);
+      expect(refusedKeys).not.toContain(JSON.parse(payload).idempotency_key);
       await route.abort("failed");
     } else await route.fulfill({ response });
+    outcomes.push(response.status());
   });
   await page.goto(`/portfolios/${id}/trade/BTC`);
   await page.getByLabel("Amount", { exact: true }).fill("100");
-  await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Confirm buy", exact: true }).click();
+  // A real provider tick must refuse without cash effects. Each subsequent
+  // confirmation is an explicit user action; only the actual fill is lost.
+  for (let n = 0; n < 3; n++) {
+    const confirm = page.getByRole("button", { name: "Confirm buy", exact: true });
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+    await expect.poll(() => outcomes.length).toBe(n + 1);
+    if (outcomes[n] === 201) break;
+    await expect(
+      page.getByText("Price updated. Please review again.", { exact: true }),
+    ).toBeVisible();
+  }
+  expect(outcomes[0]).toBe(409);
+  expect(outcomes.at(-1)).toBe(201);
   await expect(page.getByRole("button", { name: "Check order result", exact: true })).toBeVisible();
   await page
     .getByRole("navigation", { name: "Main" })

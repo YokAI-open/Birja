@@ -18,7 +18,7 @@ helper = runpy.run_path('/e2e/stock-trade-fixture.py', run_name='private_browser
 
 async def main(mode, email=None):
     helper['guard']()
-    if mode not in {'legacy', 'inspect', 'sibling', 'zero', 'close', 'name'}:
+    if mode not in {'legacy', 'inspect', 'sibling', 'zero', 'close', 'name', 'price-tick'}:
         raise ValueError('Unknown synthetic portfolio operation')
     if mode != 'legacy' and (not email or re.fullmatch(r'e2e-[a-z0-9-]+@example\.com', email) is None):
         raise ValueError('Synthetic owner required')
@@ -50,6 +50,11 @@ async def main(mode, email=None):
                 await db.execute(text('UPDATE accounts SET closed_at=clock_timestamp() WHERE user_id=:u AND closed_at IS NULL' + (' AND id=:p' if mode == 'close' else '')), {'u': uid, 'p': original})
             elif mode == 'name':
                 await db.execute(text('UPDATE accounts SET name=:n WHERE id=:p AND closed_at IS NULL'), {'n': '<Strategy>& ' + 'UnbrokenPortfolioName' * 2, 'p': original})
+            elif mode == 'price-tick':
+                # Real synthetic market evidence changes between preview and
+                # execute. No portfolio money or saved order is modified.
+                changed = (await db.execute(text("UPDATE prices SET mid=mid+1,as_of=clock_timestamp() WHERE coin_id=(SELECT id FROM coins WHERE symbol='BTC' AND asset_class='crypto') AND source='fake' RETURNING coin_id"))).scalars().all()
+                assert len(changed) == 1, 'One actual fake BTC price required'
             rows = (await db.execute(text('SELECT id::text,name,cash::text,starting_cash::text,closed_at IS NOT NULL AS closed FROM accounts WHERE user_id=:u ORDER BY accounts.id'), {'u': uid})).mappings().all()
             print(json.dumps([dict(r) for r in rows]))
     finally:
