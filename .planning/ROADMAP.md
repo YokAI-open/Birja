@@ -48,6 +48,11 @@ qualification. Planning does not satisfy that external prerequisite.
 Plan29's bounded execution at2026-11-17T19:43:24Z confirmed no_candidate from
 official advisory/registry metadata; it stopped before approval without a
 completion summary. Plans30/31 remain blocked; no unchanged tests were rerun.
+The owner then requested a replacement. Independent source review rejected the
+investigated@ryotsu fork for a remaining ReDoS bypass; API-incompatible and
+unmerged alternatives did not yield a safe install candidate. The research and
+rejection are retained; no dependency changed. A broader toolchain migration
+has not been selected or implemented.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 

@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_plan: 29
 status: blocked
-stopped_at: Plan12-29 bounded refresh no_candidate; stopped before package approval, Plans30–31 blocked
-last_updated: "2026-11-17T19:45:05Z"
+stopped_at: Replacement investigation rejected unsafe fork; no safe candidate, Plans29–31 remain blocked
+last_updated: "2026-11-17T20:00:56Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
@@ -88,6 +88,33 @@ audit/test campaign, source/image/service/provider/production change occurred.
 Original28 plans and both owner checks remain complete; totals stay28/31,
 zero phases complete, all28 requirement checkboxes pending. Next prerequisite
 is a legitimate published fix; do not repeat unchanged checks or start13.
+
+## Replacement Investigation — 2026-11-17
+
+The owner explicitly requested replacing the dependency rather than waiting.
+Focused GSD research traced all actual consumers and prepared a private
+prospective alias to@ryotsu/picomatch4.0.7-a. Both npm signatures and all ten
+published/source file bindings were verified. The new single-maintainer fork
+was flagged SUS for young age/low usage, with incomplete Sigstore trust proof.
+No project manifest, lock or installed package changed.
+
+Independent source/security review REJECTED that exact candidate: default
+`+(*a|b)` bypasses its single-branch safeguard and retains exponential regex
+backtracking. A source-derived literal tested only with Node's built-in RegExp
+exceeded a2second subprocess limit at28repeated characters; no candidate code
+was executed. A separate Windows capture compatibility warning also remains.
+Do not request approval for or apply that rejected private alias/lock.
+The complete research and rejection are retained in12-REPLACEMENT-RESEARCH.md
+and12-REPLACEMENT-REVIEW.md. The private prospective packet is evidence only.
+
+Minimatch/zeromatch do not satisfy actual consumer APIs. A final bounded review
+of upstream PR237/238 found unmerged proposals, not an eligible maintained
+published replacement. Status:no_safe_candidate, not proof that alternatives
+can never exist. A broader frontend-toolchain migration would need its own
+concrete architecture/dependency plan; none was implemented or silently chosen.
+No install/audit/financial/browser/recovery campaign, production/provider action
+or publication occurred. Original28 plans and both owner checks remain complete;
+all28 requirements stay pending, Phase12 blocked and Phase13 unstarted.
 
 ## Tooling Note
 
@@ -419,8 +446,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T19:45:05Z
-Stopped at: Plan12-29 no_candidate; no patch available, stopped before approval, Plans30/31 blocked
+Last session: 2026-11-17T20:00:56Z
+Stopped at: Replacement fork rejected by independent review; no safe candidate, Plans29–31 blocked
 Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation
