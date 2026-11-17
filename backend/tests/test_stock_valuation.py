@@ -8,6 +8,8 @@ import pytest
 
 from app.services.portfolio import get_portfolio
 from app.services.stock_trading import execute
+from tests.helpers import selected_portfolio_path
+from tests.stock_action_fixtures import synthetic_owned_portfolio
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 from tests.test_stock_trades_api import stock_http  # noqa: F401
 from tests.test_stock_trading_service import trade_order
@@ -16,8 +18,15 @@ from tests.test_stock_trading_service import trade_order
 async def test_actual_stock_fill_is_valued_at_exact_midpoint(stock_trade_case, settings):
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
-        portfolio = await get_portfolio(db, user_id=uid, settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
+        portfolio = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
     assert portfolio.total_value == Decimal(9998)
     assert portfolio.known_value == Decimal(9998) and portfolio.unvalued_holding_count == 0
     assert portfolio.holdings[0].asset_class == "stock" and portfolio.holdings[0].coin_id == str(
@@ -78,12 +87,19 @@ async def test_unavailable_stock_never_publishes_partial_totals_or_unsafe_costs(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         await db.execute(text(mutation))
     before = await financial_snapshot(factory)
     async with factory() as db:
-        p = await get_portfolio(db, user_id=uid, settings=settings)
+        p = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
     assert p.known_value == 9796 and p.unvalued_holding_count == 1
     assert p.total_value is p.total_pl is p.total_pl_percent is p.cash_allocation_percent is None
     assert p.class_values.stocks is None and p.class_values.crypto == 0
@@ -110,13 +126,20 @@ async def test_halted_old_mark_uses_original_source_and_current_independent_leas
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         await db.execute(text("UPDATE stock_status_evidence SET state='halted'"))
         await db.execute(text("UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes'"))
     before = await financial_snapshot(factory)
     async with factory() as db:
-        p = await get_portfolio(db, user_id=uid, settings=settings)
+        p = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
     mark = p.holdings[0].stock_mark
     assert p.total_value == 9998 and mark.mark_mode == "halted" and mark.feed == "iex"
     assert p.holdings[0].age_seconds >= 300 and mark.event_at < mark.collected_at
@@ -132,7 +155,12 @@ async def test_quote_generation_renewal_requires_fresh_original_rights_proof(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         await db.execute(
             text("UPDATE stock_data_admissions SET generation=5 WHERE product='quotes'")
@@ -144,7 +172,9 @@ async def test_quote_generation_renewal_requires_fresh_original_rights_proof(
             )
         )
     async with factory() as db:
-        missing = await get_portfolio(db, user_id=uid, settings=settings)
+        missing = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
         assert (
             missing.total_value is None
             and missing.holdings[0].stock_mark.valuation_reason == "permission_unavailable"
@@ -152,8 +182,15 @@ async def test_quote_generation_renewal_requires_fresh_original_rights_proof(
         await db.rollback()
         # Current rights can authorize a NEW fill. Its immutable original scope
         # then proves the new quote generation; it never blesses the old one.
-        await execute(db, user_id=uid, order=trade_order(quantity="1"), settings=settings)
-        permitted = await get_portfolio(db, user_id=uid, settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(quantity="1"),
+            settings=settings,
+        )
+        permitted = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
         assert (
             permitted.total_value == 9997 and permitted.holdings[0].stock_mark.mark_mode == "fresh"
         )
@@ -164,11 +201,18 @@ async def test_exact_ninth_decimal_midpoint_is_not_storage_mid(stock_trade_case,
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         await db.execute(text("UPDATE stock_quotes SET bid=1,ask=1.00000001,mid=1"))
     async with factory() as db:
-        p = await get_portfolio(db, user_id=uid, settings=settings)
+        p = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
     assert p.holdings[0].mid == Decimal("1.000000005") and p.total_value == 9798
 
 
@@ -182,7 +226,12 @@ async def test_verified_closed_mark_is_dated_and_never_executes(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        fill, _ = await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        fill, _ = await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     close = fill.executed_at + timedelta(microseconds=1)
     original = stock_sessions.calendars.get_calendar
 
@@ -208,12 +257,19 @@ async def test_verified_closed_mark_is_dated_and_never_executes(
         )
         await db.execute(text("UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes'"))
     async with factory() as db:
-        p = await get_portfolio(db, user_id=uid, settings=settings)
+        p = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
         assert p.total_value == 9998 and p.holdings[0].stock_mark.mark_mode == "closed"
         assert p.holdings[0].age_seconds >= 300
         await db.rollback()
         with pytest.raises(TradeRefused) as exc:
-            await execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         assert exc.value.code == "market_closed"
 
 
@@ -234,7 +290,12 @@ async def test_stock_mark_strict_expiry_never_extends_rights(stock_trade_case, s
                 )
             )
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
         if deadline == "quote":
             at = (
                 await db.scalar(select(StockQuote.collected_at).where(StockQuote.coin_id == cid))
@@ -251,10 +312,15 @@ async def test_stock_mark_strict_expiry_never_extends_rights(stock_trade_case, s
             )
             await db.commit()
         before = await get_portfolio(
-            db, user_id=uid, settings=settings, now=at - timedelta(microseconds=1)
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            settings=settings,
+            now=at - timedelta(microseconds=1),
         )
         assert before.total_value == 9998 and before.holdings[0].stock_mark.valid_until <= at
-        after = await get_portfolio(db, user_id=uid, settings=settings, now=at)
+        after = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings, now=at
+        )
         assert after.total_value is None and after.known_value == 9796
         assert after.holdings[0].stock_mark.valid_until is None
 
@@ -269,7 +335,12 @@ async def test_consumed_split_marker_values_only_compatible_current_units(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         cutoff = await db.scalar(select(func.clock_timestamp()))
         split = await synthetic_split(db, cid, cutoff, boundary=1)
@@ -282,6 +353,7 @@ async def test_consumed_split_marker_values_only_compatible_current_units(
                 Decimal(204),
                 "split:" + str(split.id),
                 application_id=split.id,
+                portfolio_id=(await synthetic_owned_portfolio(db, uid)).portfolio_id,
             ),
         )
         await db.execute(
@@ -300,7 +372,9 @@ async def test_consumed_split_marker_values_only_compatible_current_units(
             {"cid": cid},
         )
     async with factory() as db:
-        p = await get_portfolio(db, user_id=uid, settings=settings)
+        p = await get_portfolio(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+        )
     assert p.total_value == 9998 and p.holdings[0].quantity == 4
     assert p.holdings[0].average_cost == 51 and p.holdings[0].stock_mark.authority.unit_epoch == 1
 
@@ -318,8 +392,14 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory() as reader:
+        target = await synthetic_owned_portfolio(reader, uid)
         real = reader.execute
         queries = []
 
@@ -330,7 +410,10 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
                 async with factory() as writer:
                     if change == "fill":
                         await execute(
-                            writer, user_id=uid, order=trade_order(quantity="1"), settings=settings
+                            writer,
+                            portfolio=await synthetic_owned_portfolio(writer, uid),
+                            order=trade_order(quantity="1"),
+                            settings=settings,
                         )
                     else:
                         if change == "units":
@@ -345,6 +428,9 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
                                     Decimal(204),
                                     "split:" + str(split.id),
                                     application_id=split.id,
+                                    portfolio_id=(
+                                        await synthetic_owned_portfolio(writer, uid)
+                                    ).portfolio_id,
                                 ),
                             )
                             await writer.execute(
@@ -399,7 +485,7 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
             return result
 
         monkeypatch.setattr(reader, "execute", read_then_commit)
-        p = await get_portfolio(reader, user_id=uid, settings=settings)
+        p = await get_portfolio(reader, portfolio=target, settings=settings)
         assert p.cash == 9796 and p.holdings[0].quantity == 2 and p.holdings[0].cost_basis == 204
         assert sum("FROM accounts" in query for query in queries) == 1
         assert len(queries) == 2
@@ -419,12 +505,19 @@ async def test_inactive_stock_keeps_owned_finances_but_no_unverified_mark(
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     async with factory.begin() as db:
         await db.execute(text("UPDATE coins SET is_active=false WHERE id=:cid"), {"cid": cid})
     try:
         async with factory() as db:
-            p = await get_portfolio(db, user_id=uid, settings=settings)
+            p = await get_portfolio(
+                db, portfolio=await synthetic_owned_portfolio(db, uid), settings=settings
+            )
         assert p.total_value is None and p.known_value == 9796
         assert p.holdings[0].quantity == 2 and p.holdings[0].cost_basis == 204
         assert not p.holdings[0].is_active and p.holdings[0].average_cost is None
@@ -442,7 +535,12 @@ async def test_missing_or_malformed_original_terms_never_mint_retention(stock_tr
 
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
-        await execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
         raw = (await db.execute(execution_snapshot_query(now))).one()
         loaded = executions_from_snapshot(raw, settings)[cid]
         original = await db.scalar(
@@ -466,8 +564,10 @@ async def test_actual_stock_portfolio_wire_preserves_plain_strings_and_mark_iden
     from tests.test_stock_trades_api import BASE, body
 
     client, headers, factory, cid, uid, now = stock_http
-    assert (await client.post(BASE, json=body(), headers=headers)).status_code == 201
-    response = await client.get("/api/v1/portfolio")
+    assert (
+        await client.post(await selected_portfolio_path(client, BASE), json=body(), headers=headers)
+    ).status_code == 201
+    response = await client.get(await selected_portfolio_path(client))
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     value = response.json()
     assert value["valuation_complete"] and value["unvalued_holding_count"] == 0

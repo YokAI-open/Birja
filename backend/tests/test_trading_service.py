@@ -32,6 +32,7 @@ from tests.helpers import (
     set_cash,
     trade_count,
 )
+from tests.stock_action_fixtures import synthetic_owned_portfolio
 
 NewUser = Callable[[], Awaitable[int]]
 D = Decimal
@@ -66,7 +67,7 @@ async def test_execute_checks_freshness_after_waiting_for_account_lock(
         pending = asyncio.create_task(
             execute(
                 db,
-                user_id=user_id,
+                portfolio=await synthetic_owned_portfolio(db, user_id),
                 order=_order(),
                 expected_mid=D("100000.00"),
                 idempotency_key=uuid.uuid4(),
@@ -145,10 +146,20 @@ async def test_quote_checks_freshness_after_loading_price(
     monkeypatch.setattr(trading, "_load_coin_price", delayed_price)
     if elapsed:
         with pytest.raises(TradeRefused) as exc:
-            await quote(db, user_id=user_id, order=_order(), settings=settings)
+            await quote(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, user_id),
+                order=_order(),
+                settings=settings,
+            )
         assert exc.value.code == "stale_price"
     else:
-        preview = await quote(db, user_id=user_id, order=_order(), settings=settings)
+        preview = await quote(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
+            order=_order(),
+            settings=settings,
+        )
         assert preview.age_seconds == 119
     assert await trade_count(engine, user_id) == 0
     assert await cash_of(engine, user_id) == D("10000.00")
@@ -185,7 +196,7 @@ async def _buy(
 ) -> trading.Fill:
     fill, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order(value),
         expected_mid=D(mid),
         idempotency_key=key or uuid.uuid4(),
@@ -208,7 +219,13 @@ async def test_quote_buy_is_read_only(
     now: datetime,
 ) -> None:
     user_id, as_of = await _setup(engine, new_user, now)
-    q = await quote(db, user_id=user_id, order=_order(), settings=settings, now=now)
+    q = await quote(
+        db,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
+        order=_order(),
+        settings=settings,
+        now=now,
+    )
     assert q.symbol == "BTC"
     assert q.as_of == as_of
     assert q.age_seconds == 10
@@ -231,7 +248,11 @@ async def test_quote_uses_held_quantity_for_sells(
     user_id, _ = await _setup(engine, new_user, now)
     await put_holding(engine, user_id, "BTC", "0.5", "100.00")
     q = await quote(
-        db, user_id=user_id, order=_order("0.1", "sell", "quantity"), settings=settings, now=now
+        db,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
+        order=_order("0.1", "sell", "quantity"),
+        settings=settings,
+        now=now,
     )
     assert q.plan.held_before == D("0.5")
     assert q.plan.held_after == D("0.4")
@@ -246,7 +267,13 @@ async def test_quote_symbol_is_case_insensitive(
     now: datetime,
 ) -> None:
     user_id, _ = await _setup(engine, new_user, now)
-    q = await quote(db, user_id=user_id, order=_order(symbol="btc"), settings=settings, now=now)
+    q = await quote(
+        db,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
+        order=_order(symbol="btc"),
+        settings=settings,
+        now=now,
+    )
     assert q.symbol == "BTC"
 
 
@@ -260,7 +287,13 @@ async def test_quote_unknown_coin(
 ) -> None:
     user_id, _ = await _setup(engine, new_user, now)
     with pytest.raises(TradeRefused) as exc:
-        await quote(db, user_id=user_id, order=_order(symbol="NOPE"), settings=settings, now=now)
+        await quote(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
+            order=_order(symbol="NOPE"),
+            settings=settings,
+            now=now,
+        )
     assert exc.value.code == "unknown_coin"
 
 
@@ -277,7 +310,13 @@ async def test_quote_inactive_coin_is_unknown(
         await conn.execute(update(Coin).where(Coin.symbol == "BTC").values(is_active=False))
     try:
         with pytest.raises(TradeRefused) as exc:
-            await quote(db, user_id=user_id, order=_order(), settings=settings, now=now)
+            await quote(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, user_id),
+                order=_order(),
+                settings=settings,
+                now=now,
+            )
         assert exc.value.code == "unknown_coin"
     finally:
         async with engine.begin() as conn:
@@ -294,7 +333,13 @@ async def test_quote_without_price_is_stale(
 ) -> None:
     user_id = await new_user()
     with pytest.raises(TradeRefused) as exc:
-        await quote(db, user_id=user_id, order=_order(), settings=settings, now=now)
+        await quote(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
+            order=_order(),
+            settings=settings,
+            now=now,
+        )
     assert exc.value.code == "stale_price"
     assert "no price" in exc.value.message
 
@@ -309,11 +354,23 @@ async def test_quote_price_age_boundary(
 ) -> None:
     user_id = await new_user()
     await put_price(engine, "BTC", "100000.00", now - timedelta(seconds=119))
-    q = await quote(db, user_id=user_id, order=_order(), settings=settings, now=now)
+    q = await quote(
+        db,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
+        order=_order(),
+        settings=settings,
+        now=now,
+    )
     assert q.age_seconds == 119
     await put_price(engine, "BTC", "100000.00", now - timedelta(seconds=120))
     with pytest.raises(TradeRefused) as exc:
-        await quote(db, user_id=user_id, order=_order(), settings=settings, now=now)
+        await quote(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
+            order=_order(),
+            settings=settings,
+            now=now,
+        )
     assert exc.value.code == "stale_price"
     assert exc.value.message == (
         "The price for BTC is 120s old. Trading is paused until it refreshes."
@@ -370,7 +427,7 @@ async def test_execute_replay_returns_original_fill(
     first = await _buy(db, user_id, settings, now, key=key)
     second, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order(),
         expected_mid=D("100000.00"),
         idempotency_key=key,
@@ -397,7 +454,7 @@ async def test_replay_ignores_stale_and_changed_price(
     await put_price(engine, "BTC", "90000.00", now - timedelta(seconds=600))
     again, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order(),
         expected_mid=D("100000.00"),
         idempotency_key=key,
@@ -506,7 +563,7 @@ async def test_unknown_coin_at_execute(
     with pytest.raises(TradeRefused) as exc:
         await execute(
             db,
-            user_id=user_id,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
             order=_order(symbol="NOPE"),
             expected_mid=D("1"),
             idempotency_key=uuid.uuid4(),
@@ -540,7 +597,7 @@ async def test_plan_refusals_write_nothing(
     with pytest.raises(TradeRefused) as exc:
         await execute(
             db,
-            user_id=user_id,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
             order=order,
             expected_mid=D("100000.00"),
             idempotency_key=uuid.uuid4(),
@@ -565,7 +622,7 @@ async def test_whole_position_sell_zeroes_holding_and_keeps_row(
     await _buy(db, user_id, settings, now)
     fill, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order("0.00099501", "sell", "quantity"),
         expected_mid=D("100000.00"),
         idempotency_key=uuid.uuid4(),
@@ -592,7 +649,7 @@ async def test_partial_sell_and_second_buy_adjust_cost_basis(
     await _buy(db, user_id, settings, now)
     await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order("0.0005", "sell", "quantity"),
         expected_mid=D("100000.00"),
         idempotency_key=uuid.uuid4(),
@@ -619,7 +676,7 @@ async def test_sub_cent_whole_position_sell(
     await put_holding(engine, user_id, "DOGE", "0.05", "0.01")
     fill, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order("0.05", "sell", "quantity", "DOGE"),
         expected_mid=D("0.08"),
         idempotency_key=uuid.uuid4(),
@@ -665,7 +722,7 @@ async def test_unique_race_backstop_returns_original_fill(
     _blind_first_lookup(monkeypatch)
     again, created = await execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=_order(),
         expected_mid=D("100000.00"),
         idempotency_key=key,
@@ -752,9 +809,15 @@ async def test_holding_quantity(
     now: datetime,
 ) -> None:
     user_id, _ = await _setup(engine, new_user, now)
-    assert await holding_quantity(db, user_id=user_id, symbol="btc") == ("BTC", D("0"))
+    assert await holding_quantity(
+        db, portfolio=await synthetic_owned_portfolio(db, user_id), symbol="btc"
+    ) == ("BTC", D("0"))
     await _buy(db, user_id, settings, now)
-    assert await holding_quantity(db, user_id=user_id, symbol="BTC") == ("BTC", D("0.00099501"))
+    assert await holding_quantity(
+        db, portfolio=await synthetic_owned_portfolio(db, user_id), symbol="BTC"
+    ) == ("BTC", D("0.00099501"))
     with pytest.raises(TradeRefused) as exc:
-        await holding_quantity(db, user_id=user_id, symbol="nope")
+        await holding_quantity(
+            db, portfolio=await synthetic_owned_portfolio(db, user_id), symbol="nope"
+        )
     assert exc.value.code == "unknown_coin"
