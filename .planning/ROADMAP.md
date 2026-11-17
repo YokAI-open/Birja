@@ -19,7 +19,7 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; twenty-seven plans are complete locally.
+at Phase 12. Phase 12 has 28 approved plans; all28 execution plans are complete locally.
 Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
 and schema-admission checks. Plan08 adds explicit root/identity service contracts;
 Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
@@ -31,8 +31,8 @@ composition now passes259 affected API/auth/onboarding cases with explicit legac
 finance refusal. Browser targets/hooks/navigation, trade surfaces and owned
 holdings/History pages pass their focused gates. Plan27 now passes the actual
 complete security graph, five strict image scans and one-archive seven-stage
-recovery. Both Plan28 owner UI/native200% checks and final phase reviews/goal
-verification remain pending; no whole requirement or phase is marked complete.
+recovery. Both Plan28 owner UI/native200% checks pass. Final phase reviews and
+goal verification remain pending; no whole requirement or phase is marked complete.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -153,7 +153,7 @@ Plans:
 
 **Wave 18** *(blocked on Wave 17 completion)*
 
-- [ ] 12-28-PLAN.md — Owner acceptance of changed surfaces and native browser zoom
+- [x] 12-28-PLAN.md — Owner acceptance of changed surfaces and native browser zoom
 
 **UI hint**: yes
 
@@ -272,11 +272,12 @@ the phase structure itself is approved on 2026-11-14; no implementation is compl
 ## Progress
 
 **Approved execution order:** 12 → 13 → 14 → 15, with separate phase planning.
-No implementation has started.
+Phase12 execution plans are complete; final phase reviews and verification
+remain pending. Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 27/28 | Wave17 complete; awaiting12-28 owner UI/native200% | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/28 | Execution complete; final reviews and goal verification pending | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
