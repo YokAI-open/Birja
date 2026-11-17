@@ -334,6 +334,34 @@ async def test_owner_missing_stock_receipt_refuses_incomplete_uncommitted_facts(
     # Uncommitted incomplete fixture is rolled back, never granted persistence.
 
 
+async def test_disappearing_projection_refuses_partial_history(authority_case, monkeypatch):
+    """A read-result fault must not publish an apparently complete empty page.
+
+    Selection and the actual paid original remain real PostgreSQL facts; only
+    the subsequent read result is fault-injected, without changing cash/journals.
+    """
+    from app.models.dividend import StockDividendPayment
+
+    conn, ids = authority_case
+    paid = await process(conn, ids)
+    async with AsyncSession(bind=conn) as db:
+        real = db.scalars
+
+        async def missing_projection(statement, *args, **kwargs):
+            if statement.column_descriptions[0].get("entity") is StockDividendPayment:
+                assert (await real(statement, *args, **kwargs)).one().id == paid.payment_id
+                return await real(statement.where(False), *args, **kwargs)
+            return await real(statement, *args, **kwargs)
+
+        monkeypatch.setattr(db, "scalars", missing_projection)
+        with pytest.raises(ValueError, match="Incomplete owned History projection"):
+            await list_event_history(
+                db, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])
+            )
+    original = (await page_for(conn, ids["user_id"])).items[0]
+    assert original.id == f"dividend:{paid.payment_id}"
+
+
 async def test_mixed_all_kinds_tied_and_colliding_ids_are_distinct(dividend_case):
     """Read-only retained-record fixture; no successful cash execution is simulated."""
     from tests.test_dividend_schema import decision, payment
