@@ -19,7 +19,8 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; all28 execution plans are complete locally.
+at Phase 12. Phase 12 has31 plans: the original28 execution plans are complete
+locally, and three independently checked conditional gap plans remain pending.
 Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
 and schema-admission checks. Plan08 adds explicit root/identity service contracts;
 Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
@@ -41,6 +42,9 @@ Final goal verification reports gaps_found:7/8 consolidated must-haves and all
 five functional roadmap criteria verified. Qualification remains BLOCKED by
 the unpatched dependency. No whole requirement/phase is complete; Phase13 has
 not started. See the Phase12 verification report for the structured gap.
+Gap plans29–31 preserve completed work and require a legitimate published
+patch, exact package approval, dependency-only repair and fresh complete
+qualification. Planning does not satisfy that external prerequisite.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -78,7 +82,8 @@ financial ownership boundary; they are not separate database/API/UI layers.
   4. OTP sign-in, session refresh and sign-out work independently of zero, one or many financial portfolios in isolated fixtures; legacy financial requests cannot bypass explicit targeting or choose an ambiguous portfolio.
   5. The same investing journeys work on fresh and populated upgraded databases through restricted verified-TLS roles, with original financial payloads, immutable evidence and matching ownership constraints preserved; ordinary roles cannot gain broader mutation rights.
 
-**Plans**: 28 plans (56 tasks, 18 dependency waves; independent planning verification passed)
+**Plans**: 31 plans (62 tasks, 21 dependency waves; original28 complete,
+conditional gap plans29–31 independently checked with0blockers/0warnings)
 
 Plans:
 **Wave 1**
@@ -162,6 +167,25 @@ Plans:
 **Wave 18** *(blocked on Wave 17 completion)*
 
 - [x] 12-28-PLAN.md — Owner acceptance of changed surfaces and native browser zoom
+
+**Wave 19** *(after Wave 18; blocked on a legitimate patched artifact and exact package approval)*
+
+- [ ] 12-29-PLAN.md — Bounded complete-graph package review and exact approval; stop without completion if no candidate exists
+
+**Wave 20** *(blocked on successful Plan 29 and its exact approval)*
+
+- [ ] 12-30-PLAN.md — Approved dependency-only repair, strict audit and frontend compatibility
+
+**Wave 21** *(blocked on successful Plan 30)*
+
+- [ ] 12-31-PLAN.md — Actual complete security and fresh same-archive recovery qualification
+
+**Cross-cutting constraints (gap plans29–31):** Preserve strict HIGH gates,
+both affected dependency paths, exact source/artifact/approval bindings and
+historical failed receipts. No guessed fix, unreviewed substitution or package
+installation under planning authority. Keep accepted UI/native200% results,
+serial isolated DB proofs and deferred Phase7 activation boundaries. Phase12
+remains blocked until actual qualification and independent goal verification.
 
 **UI hint**: yes
 
@@ -286,7 +310,7 @@ Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/28 | Blocked: unpatched picomatch HIGH; goal verification7/8 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/31 | Blocked: unpatched picomatch HIGH; three checked conditional gap plans pending | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

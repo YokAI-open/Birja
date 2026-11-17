@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-current_plan: 28
+current_plan: 29
 status: blocked
-stopped_at: Phase12 goal verification gaps_found7/8; sole unpatched picomatch HIGH qualification blocker
-last_updated: "2026-11-17T18:55:02.771475Z"
+stopped_at: Phase12 gap plans29–31 checked; Plan29 awaits legitimate patch and exact package approval
+last_updated: "2026-11-17T19:25:20Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 28
+  total_plans: 31
   completed_plans: 28
-  percent: 100
+  percent: 90
 ---
 
 # Project State
@@ -21,18 +21,45 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has28/28 execution plans complete and both owner UI/native200% checks passed. Full232-file review and CR01/CR02 integration are complete; security112/112 plus targeted11/11 and UI24/24 have no open source finding. Currentd9da271 whole same-archive recovery passes2697.424s; backend3114/critical60at100%, frontend958 and separate full-browser59/1originalskip plus five strict image scans pass. Complete all-security FAILS unpatched picomatch HIGH (14HIGH/11MODERATE audit entries). Final official refresh18:37Z still latest4.0.7/no patch. Final goal verification is gaps_found:7/8 consolidated must-haves and all five functional criteria verified. Qualification remains BLOCKED solely by the unpatched dependency. All28 requirements stay unchecked; Phase13 has not started. Phase7 six live gaps/OFF admissions remain separate.
+Current focus: Phase12 original28 execution plans complete; three checked conditional gap plans29–31 pending,28/31 total. Both owner UI/native200% checks passed. Full232-file review and CR01/CR02 integration are complete; security112/112 plus targeted11/11 and UI24/24 have no open source finding. Currentd9da271 whole same-archive recovery passes2697.424s; backend3114/critical60at100%, frontend958 and separate full-browser59/1originalskip plus five strict image scans pass. Complete all-security FAILS unpatched picomatch HIGH (14HIGH/11MODERATE audit entries). Final registry refresh18:37Z still latest4.0.7/no patch; bounded gap-planning advisory lookup still lists no patch. Final goal verification is gaps_found:7/8 consolidated must-haves and all five functional criteria verified. Qualification remains BLOCKED solely by the unpatched dependency. All28 requirements stay unchecked; Phase13 has not started. Phase7 six live gaps/OFF admissions remain separate.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
-Current Plan: 28
-Total Plans in Phase: 28
-Plan: 28/28 execution plans complete; goal verification7/8 with strict upstream blocker
+Current Plan: 29 (conditional gap closure; not started)
+Total Plans in Phase: 31
+Plan: 28/31 complete; original28 retained, three checked conditional gap plans pending
 Status: Blocked; unpatched picomatch HIGH prevents complete security qualification
 Last activity: 2026-11-17
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90% (28/31 plans; phase qualification remains blocked)
+
+## Gap Planning — 2026-11-17
+
+The owner invoked `$gsd-plan-phase 12 --gaps` (em dash normalized).
+Plans29–31 add six tasks in waves19–21 without rewriting completed01–28.
+Independent plan check and revision1 recheck pass with0blockers/0warnings;
+all six tasks have explicit read-first files and acceptance criteria. See
+12-GAP-PLAN-CHECK.md and12-GAP-PLAN-COVERAGE.md for the four-source audit,
+seven-requirement coverage and validation supplement. The SDK decision gate
+skips because the context has no machine-trackable decision IDs; its ten
+unnumbered locked decisions are explicitly mapped in the coverage report.
+
+Plan29 performs one bounded official candidate/complete-graph review and
+requires approval of a concrete exact package change. A no_candidate result
+halts without a completion summary or unchanged audit/test loop. Plan30 may
+apply only the reviewed approved manifest/lock repair and qualify frontend
+compatibility. Plan31 requires actual complete all-security and a fresh
+same-archive serial recovery, followed by independent final verification.
+The bounded planning advisory lookup still lists no patched version. No
+candidate, installation, package approval, implementation or test campaign is
+created by planning; all28 requirement checkboxes remain pending. Phase13 and
+the consumed Phase7 provider campaign remain untouched. Keep this branch local.
+
+Planning is checked but phase status remains blocked, rather than using the
+SDK planned-phase mutation that would incorrectly overwrite the unresolved
+qualification state as ready to execute. Next invocation when appropriate:
+`$gsd-execute-phase 12 --gaps-only`;29 must stop if no legitimate fix exists.
 
 ## Blockers
 
@@ -371,9 +398,9 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T18:43:09.711Z
-Stopped at: Phase12 goal verification gaps_found7/8; unpatched picomatch HIGH qualification blocker
-Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-VERIFICATION.md
+Last session: 2026-11-17T19:25:20Z
+Stopped at: Phase12 gap plans29–31 checked; unpatched picomatch HIGH still blocks qualification
+Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation
 
