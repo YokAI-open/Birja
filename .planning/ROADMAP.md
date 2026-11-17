@@ -31,8 +31,10 @@ composition now passes259 affected API/auth/onboarding cases with explicit legac
 finance refusal. Browser targets/hooks/navigation, trade surfaces and owned
 holdings/History pages pass their focused gates. Plan27 now passes the actual
 complete security graph, five strict image scans and one-archive seven-stage
-recovery. Both Plan28 owner UI/native200% checks pass. Final phase reviews and
-goal verification remain pending; no whole requirement or phase is marked complete.
+recovery at their recorded sources. Both Plan28 owner UI/native200% checks pass.
+Final source reviews found and independently rechecked CR-01/CR-02; both repairs
+are integrated. Combined-source automated qualification and goal verification
+remain pending; no whole requirement or phase is marked complete.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 

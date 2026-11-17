@@ -308,3 +308,11 @@ separate gates. Any functional fail-closed discovery issue found by code review
 must be resolved through that gate; this audit is not a whole-phase clean-code
 claim or permission to publish, deploy, activate stocks or advance a milestone.
 
+
+## Post-review targeted source recheck
+
+12-SECURITY-RECHECK.md independently closes the11 affected declared controls
+for CR-01 candidate4c16a30 and CR-02 candidate2ef1f58, integrated asac0f64f and
+328fe2d. Their source patches are preserved. The112-entry original audit stays
+source-bound; combined-source automated security and actual encrypted recovery
+remain pending. No new risk acceptance or phase completion follows.

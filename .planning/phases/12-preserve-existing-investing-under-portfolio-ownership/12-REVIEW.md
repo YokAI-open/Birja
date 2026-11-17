@@ -1,18 +1,28 @@
 ---
 phase: 12-preserve-existing-investing-under-portfolio-ownership
-reviewed: 2026-11-17T00:00:00Z
+reviewed: 2026-11-17
 depth: standard
+coverage: complete_changed_file_scope
+reviewed_head: 328fe2d8ac28fc35b879e480dc4e1df692ebdbeb
 diff_base: e14fa20753a008bab52afbe04c8f735faf5f9fd2
-reviewed_head: d3c603e5a6584d6bba76c16a59496be0b6f4e6d2
-requested_files: 230
-files_reviewed: 73
+files_reviewed: 232
 files_reviewed_list:
+  - .github/workflows/ci.yml
+  - CLAUDE.md
+  - backend/alembic/sql/0017_dividend_portfolio.sql
   - backend/alembic/sql/0017_stock_portfolio.sql
   - backend/alembic/versions/0015_portfolio_expansion.py
   - backend/alembic/versions/0016_portfolio_association.py
   - backend/alembic/versions/0017_portfolio_ownership.py
+  - backend/app/api/v1/auth.py
+  - backend/app/api/v1/event_history.py
+  - backend/app/api/v1/history.py
   - backend/app/api/v1/legacy_finance.py
+  - backend/app/api/v1/me.py
+  - backend/app/api/v1/portfolio.py
+  - backend/app/api/v1/router.py
   - backend/app/api/v1/stock_trades.py
+  - backend/app/api/v1/trades.py
   - backend/app/api/v2/auth.py
   - backend/app/api/v2/history.py
   - backend/app/api/v2/me.py
@@ -26,9 +36,16 @@ files_reviewed_list:
   - backend/app/db/portfolio_migrate.py
   - backend/app/db/schema_contract.py
   - backend/app/main.py
+  - backend/app/models/corporate_action.py
+  - backend/app/models/dividend.py
+  - backend/app/models/stock_execution.py
   - backend/app/models/trade.py
   - backend/app/models/user.py
+  - backend/app/schemas/auth.py
+  - backend/app/schemas/portfolio.py
   - backend/app/schemas/portfolios.py
+  - backend/app/schemas/stock_trades.py
+  - backend/app/schemas/trades.py
   - backend/app/services/accounts.py
   - backend/app/services/auth.py
   - backend/app/services/corporate_actions.py
@@ -42,64 +59,6 @@ files_reviewed_list:
   - backend/app/services/trade_idempotency.py
   - backend/app/services/trading.py
   - backend/app/tasks/dividends.py
-  - backend/tests/test_portfolio_migrate.py
-  - deploy/backup-snapshot.py
-  - deploy/backup.sh
-  - deploy/configure-db.sh
-  - deploy/deploy.sh
-  - deploy/recovery-bundle.sh
-  - deploy/restore-check.sh
-  - deploy/tests/portfolio-sources.py
-  - deploy/tests/run-portfolio-validation.py
-  - deploy/tests/test-portfolio-browser-contracts.py
-  - docker-compose.yml
-  - frontend/src/App.tsx
-  - frontend/src/api/auth.ts
-  - frontend/src/api/client.ts
-  - frontend/src/api/eventHistory.ts
-  - frontend/src/api/history.ts
-  - frontend/src/api/portfolio.ts
-  - frontend/src/api/portfolios.ts
-  - frontend/src/api/stockTrades.ts
-  - frontend/src/api/trades.ts
-  - frontend/src/components/HistoryEventDetails.tsx
-  - frontend/src/components/PortfolioContext.tsx
-  - frontend/src/components/PortfolioHoldings.tsx
-  - frontend/src/components/PortfolioTargetBoundary.tsx
-  - frontend/src/components/StockSection.tsx
-  - frontend/src/components/StockTradeReceipt.tsx
-  - frontend/src/hooks/useEventHistory.ts
-  - frontend/src/hooks/useHistory.ts
-  - frontend/src/hooks/useHolding.ts
-  - frontend/src/hooks/useMe.ts
-  - frontend/src/hooks/usePortfolio.ts
-  - frontend/src/hooks/usePortfolioTarget.ts
-  - frontend/src/hooks/useQuote.ts
-  - frontend/src/hooks/useStockTrade.ts
-  - frontend/src/hooks/useTrade.ts
-  - frontend/src/pages/MarketsPage.tsx
-  - frontend/src/pages/StockTradePage.tsx
-  - frontend/src/pages/TradePage.tsx
-coverage: partial
-files_unreviewed: 157
-files_unreviewed_list:
-  - .github/workflows/ci.yml
-  - CLAUDE.md
-  - backend/alembic/sql/0017_dividend_portfolio.sql
-  - backend/app/api/v1/auth.py
-  - backend/app/api/v1/event_history.py
-  - backend/app/api/v1/history.py
-  - backend/app/api/v1/me.py
-  - backend/app/api/v1/portfolio.py
-  - backend/app/api/v1/router.py
-  - backend/app/api/v1/trades.py
-  - backend/app/models/corporate_action.py
-  - backend/app/models/dividend.py
-  - backend/app/models/stock_execution.py
-  - backend/app/schemas/auth.py
-  - backend/app/schemas/portfolio.py
-  - backend/app/schemas/stock_trades.py
-  - backend/app/schemas/trades.py
   - backend/tests/conftest.py
   - backend/tests/dividend_fixtures.py
   - backend/tests/fixtures/bootstrap-roles-0013.sql
@@ -137,10 +96,12 @@ files_unreviewed_list:
   - backend/tests/test_portfolio_crypto.py
   - backend/tests/test_portfolio_crypto_api.py
   - backend/tests/test_portfolio_dividend_authority.py
+  - backend/tests/test_portfolio_dividend_first_buy.py
   - backend/tests/test_portfolio_dividends.py
   - backend/tests/test_portfolio_entitlements.py
   - backend/tests/test_portfolio_identity.py
   - backend/tests/test_portfolio_identity_api.py
+  - backend/tests/test_portfolio_migrate.py
   - backend/tests/test_portfolio_migrations.py
   - backend/tests/test_portfolio_ownership.py
   - backend/tests/test_portfolio_routes.py
@@ -179,22 +140,33 @@ files_unreviewed_list:
   - backend/tests/test_trading_schema.py
   - backend/tests/test_trading_service.py
   - deploy/backup-manifest.sql
+  - deploy/backup-snapshot.py
+  - deploy/backup.sh
+  - deploy/configure-db.sh
   - deploy/db/bootstrap-roles.sql
+  - deploy/deploy.sh
+  - deploy/recovery-bundle.sh
+  - deploy/restore-check.sh
   - deploy/tests/dividend-execution-fixture.py
   - deploy/tests/fixtures/portfolio-recovery-0017.json
   - deploy/tests/ops-fixtures.py
   - deploy/tests/portfolio-execution-fixture.py
   - deploy/tests/portfolio-retained-sources.json
   - deploy/tests/portfolio-smoke.py
+  - deploy/tests/portfolio-sources.py
+  - deploy/tests/run-portfolio-validation.py
   - deploy/tests/run-stock-browser.py
   - deploy/tests/selected-cutover.py
   - deploy/tests/test-ci-ops.py
   - deploy/tests/test-dev-bootstrap.py
+  - deploy/tests/test-portfolio-browser-contracts.py
   - deploy/tests/test-portfolio-fixture-contracts.py
   - deploy/tests/test-portfolio-migration-runner.py
   - deploy/tests/test-portfolio-recovery-contracts.py
+  - deploy/tests/test-portfolio-smoke-image.py
   - deploy/tests/test-selected-cutover-contracts.py
   - deploy/verify-restore.py
+  - docker-compose.yml
   - frontend/e2e/auth.spec.ts
   - frontend/e2e/dividends-history.spec.ts
   - frontend/e2e/helpers.ts
@@ -206,91 +178,129 @@ files_unreviewed_list:
   - frontend/e2e/stock-trades.spec.ts
   - frontend/e2e/trade.spec.ts
   - frontend/src/App.test.tsx
+  - frontend/src/App.tsx
   - frontend/src/api/auth.test.ts
+  - frontend/src/api/auth.ts
+  - frontend/src/api/client.ts
   - frontend/src/api/eventHistory.test.ts
+  - frontend/src/api/eventHistory.ts
   - frontend/src/api/history.test.ts
+  - frontend/src/api/history.ts
   - frontend/src/api/portfolio.test.ts
+  - frontend/src/api/portfolio.ts
   - frontend/src/api/portfolioReads.test.ts
   - frontend/src/api/portfolioTrades.test.ts
+  - frontend/src/api/portfolios.ts
   - frontend/src/api/stockTrades.test.ts
+  - frontend/src/api/stockTrades.ts
   - frontend/src/api/trades.test.ts
+  - frontend/src/api/trades.ts
   - frontend/src/components/HistoryEventDetails.test.tsx
+  - frontend/src/components/HistoryEventDetails.tsx
+  - frontend/src/components/PortfolioContext.tsx
+  - frontend/src/components/PortfolioHoldings.tsx
   - frontend/src/components/PortfolioTargetBoundary.test.tsx
+  - frontend/src/components/PortfolioTargetBoundary.tsx
   - frontend/src/components/StockSection.test.tsx
+  - frontend/src/components/StockSection.tsx
   - frontend/src/components/StockTradeReceipt.test.tsx
+  - frontend/src/components/StockTradeReceipt.tsx
   - frontend/src/hooks/portfolioCrypto.test.tsx
   - frontend/src/hooks/portfolioHistory.test.tsx
   - frontend/src/hooks/portfolioStock.test.tsx
   - frontend/src/hooks/portfolioValuation.test.tsx
   - frontend/src/hooks/useAuthMutations.test.tsx
   - frontend/src/hooks/useEventHistory.test.tsx
+  - frontend/src/hooks/useEventHistory.ts
   - frontend/src/hooks/useHistory.test.tsx
+  - frontend/src/hooks/useHistory.ts
+  - frontend/src/hooks/useHolding.ts
+  - frontend/src/hooks/useMe.ts
   - frontend/src/hooks/usePortfolio.test.tsx
+  - frontend/src/hooks/usePortfolio.ts
   - frontend/src/hooks/usePortfolioTarget.test.tsx
+  - frontend/src/hooks/usePortfolioTarget.ts
+  - frontend/src/hooks/useQuote.ts
   - frontend/src/hooks/useStockTrade.test.tsx
+  - frontend/src/hooks/useStockTrade.ts
   - frontend/src/hooks/useTrade.test.tsx
+  - frontend/src/hooks/useTrade.ts
   - frontend/src/pages/AccountPage.tsx
   - frontend/src/pages/HistoryPage.test.tsx
   - frontend/src/pages/HistoryPage.tsx
+  - frontend/src/pages/MarketsPage.tsx
   - frontend/src/pages/PortfolioPage.test.tsx
   - frontend/src/pages/PortfolioPage.tsx
   - frontend/src/pages/SignInPage.test.tsx
   - frontend/src/pages/StockTradePage.test.tsx
+  - frontend/src/pages/StockTradePage.tsx
   - frontend/src/pages/TradePage.test.tsx
+  - frontend/src/pages/TradePage.tsx
   - frontend/src/test/portfolioFixtures.ts
   - frontend/src/test/portfolioTargetFixture.ts
   - frontend/src/test/stockTradeFixtures.ts
+files_unreviewed: 0
+resolved_findings: 2
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
+integrated_qualification: pending
 ---
 
-# Phase 12: Code Review Report
+# Phase 12 — Aggregated Code Review
 
-## Narrative Findings (AI reviewer)
+## Narrative Findings (AI reviewers)
 
-### Summary and review boundary
+The original230 changed-file scope is fully accounted for, plus two new
+regression files from the independently reviewed repairs. No source finding
+remains open. Combined-source qualification and final goal verification remain
+pending; earlier passing results are not relabelled as tests of this source.
 
-The requested scope is the exact 230-path list in `/tmp/phase12-final-review-scope.json`, against the base and frozen head above. This report is **not a completed standard review of all 230 files**. The 73 paths listed in frontmatter received direct content or changed-section inspection, with cross-file tracing of portfolio ownership, execution, journal/cutoff authority, migration/role closure, frontend target lifetimes and unknown receipts. Large files were inspected incrementally or by relevant changed sections; this does not claim exhaustive full-line inspection of their unchanged contents. Remaining test and recovery-harness families still require review to satisfy the original all-file standard-depth assignment.
+## Exact Coverage and Method
 
-One source-confirmed BLOCKER was found. No second actionable finding was established. Passing qualification evidence (3,108 backend tests, critical coverage, frontend/browser checks, strict scans and the seven-stage encrypted recovery rehearsal) informed regression context but does not establish correctness of this missing case. No tests, provider calls, production operations, source edits or commits were performed for this review.
+| Receipt | Scope | Method |
+|---|---|---|
+| Initial review atd3c603e |73|Direct runtime/authority/migration/frontend content or relevant changed sections with surrounding call-chain context |
+|12-REVIEW-BACKEND-REMAINING.md|93|Full remaining backend files and independent retained-schema/economic assertions |
+|12-REVIEW-FRONTEND-OPS-REMAINING.md|63|Full remaining executable frontend/operations/test files |
+|12-REVIEW-CATALOGUE.md|1|Complete structured SQL/catalogue/privilege data comparison |
+|12-REVIEW-CR01.md|8repair paths|Complete amended authority/regression and independently reconstructed source/catalogue pins |
+|12-REVIEW-CR02.md|3repair paths|Complete immutable runtime factory, CI loader and provenance tests |
 
-## Critical Issues
+The original four sets are disjoint and their union equals the requested230
+paths. Repair scopes add two new regressions; the unique total is232. This
+records changed-file scope and each receipt's actual method, not an exhaustive
+re-read of every unchanged source line. The initial partial report and original
+finding text remain at05426f7 in this same path. Component reports are retained.
 
-### CR-01 — BLOCKER: A historical dividend permanently blocks a portfolio's first purchase of that stock
+## Resolved Findings
 
-**File:** `backend/alembic/sql/0017_stock_portfolio.sql:121–127`, rejection at `:157–158`  
-**Related producer:** `backend/app/services/corporate_actions.py:931–950`, creation loop at `:1019–1071`
+**CR-01 — BLOCKER, source-resolved.** Historical dividends prevented a never-
+owner's first stock buy. Independently reviewed4c16a30 is integrated asac0f64f.
+The dividend-only zero-obligation exemption requires complete cutoff coverage,
+no earlier root/instrument trade or movement and exact prior journal quantity/
+basis. Historical/unknown owners, incomplete history, closed roots and pending
+splits remain guarded. No zero payment/History, new lock or grant is introduced.
+Actual restricted-role RED, six regressions/106 affected cases and logical
+recovery pass at the repair source.12-REVIEW-CR01.md reproduces all exact pins.
 
-**Trigger:** A supported dividend has passed its verified cutoff and has been processed for an existing owner. Another active portfolio has never held or traded that stock and has no entitlement row for the event. That portfolio attempts its first otherwise admissible stock purchase. This also affects an existing user's original portfolio when buying a stock for the first time; it does not depend on future portfolio-creation UI.
+**CR-02 — BLOCKER, source-resolved.** Cold recovery used a workstation-only cached
+image. Independently reviewed2ef1f58 is integrated as328fe2d. The factory now
+builds the actual committed backend's declared Dockerfile runtime target with
+source/HEAD/context checks and immutable ID/Config/RootFS authentication. No
+cached fallback or application overlay remains. Six new regressions/37 CI cases
+and an actual nonroot build/package-identity proof pass at the repair source.
+Integrated actual cold restoration remains required, not inferred from build.
 
-**Issue:** The final execution authority query treats every supported historical dividend without an entitlement for the target portfolio as a pending boundary:
+## Remaining Qualification
 
-```sql
-AND NOT EXISTS (
-  SELECT FROM public.stock_dividend_entitlements en
-  WHERE en.event_id = ev.id
-    AND en.portfolio_id = t.portfolio_id
-)
-```
-
-Once the cutoff has passed, the final authority function raises SQLSTATE `22023`. However, the entitlement producer only considers portfolios already represented by stock ownership movements, prior entitlements or holdings. A portfolio that has never owned this instrument is absent from that candidate set, so the worker creates no zero-quantity entitlement for it.
-
-The purchase service reaches the final authority check after staging the trade and movement. The authority exception rolls back that transaction and becomes a quote-unavailable refusal. Consequently the tentative first movement never survives to make the portfolio eligible for the worker's candidate discovery. Further worker cycles and retries cannot repair this state: the portfolio remains unable to buy the stock after the historical dividend.
-
-**Evidence:** Direct tracing of the final SQL predicate, its rejection condition, the sole runtime `StockDividendEntitlement` creation loop and stock execution's transactional final-authority call. No database reproduction was run; the parent is preserving this frozen review boundary before an isolated regression repair.
-
-**Fix:** Make entitlement discovery and the final boundary obligation agree for portfolios with provably zero historical ownership. Either materialize legitimate zero-quantity snapshots for every root required by the validator, or explicitly and authoritatively exempt roots with no historical entitlement obligation. Preserve the instrument gate, active-root locking and final execution authority checks; do not merely remove the boundary guard for unresolved historical owners.
-
-**Required regression:** Under the real restricted application role, process a historical dividend for owner A, then allow owner B's previously empty portfolio to execute its first purchase exactly once. Verify an identical replay returns the original result without duplicate financial effects. Cover a same-user sibling portfolio and a portfolio created after cutoff. Retain a negative case proving a genuinely unresolved historical owner is still refused.
-
-## Remaining review coverage
-
-The requested scope must remain open for the unreviewed paths, principally the broad backend test adaptations, frontend test/e2e fixture adaptations and large deployment recovery fixtures/contracts. The complete scope remains available in the named JSON; this report deliberately does not label those files reviewed or infer a clean result from qualification runs.
-
----
-_Reviewer: gsd-code-reviewer; standard-depth partial review._
-
+Security112/112 and targeted11/11 controls are source-closed; UI24/24 and both
+owner UI/native200% responses are recorded. See12-SECURITY-RECHECK.md and UAT.
+All28 execution plans are complete, but repaired combined-source security,
+image and same-archive recovery qualification plus final goal verification are
+pending. Phase12 and requirements are not complete. Phase7's six live gaps/OFF
+admissions remain separate. No new dependency, provider, production or
+publication action is included; keep work local.
