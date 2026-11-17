@@ -24,10 +24,10 @@ SOURCE = {
         "81fa8bcbc59a1a1875d79b53ba6ca7ade32449a16128837f3823e59087d1a327"
     ),
     "alembic/versions/0017_portfolio_ownership.py": (
-        "df84ca54126423c9de52821906c93a79b3251983a2a9b032da939419b9ee7ee9"
+        "92cff0699a40b0b8f5f4d66bc56a39a2ef88e3184860d86d6957607a3413f32b"
     ),
     "alembic/sql/0017_stock_portfolio.sql": (
-        "265262fa8377b801605867ebe692accd43acc29a8764f401633ffdabff25383e"
+        "3dc967baccb425ba26f73bb2fab66b7947aff73f5454ea2f85e03a6e0aa5e08b"
     ),
     "alembic/sql/0017_dividend_portfolio.sql": (
         "fc5cb6864bb553c5116f2580a79ece2ea86188aba6eb309af857b68b88918734"

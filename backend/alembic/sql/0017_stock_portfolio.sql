@@ -123,7 +123,29 @@ BEGIN
      WHERE ev.coin_id=f.coin_id
      AND rv.classification IN ('supported_dividend','supported_forward_split')
      AND NOT EXISTS(SELECT FROM public.stock_split_applications sp WHERE sp.economic_event_id=ev.id)
-     AND NOT EXISTS(SELECT FROM public.stock_dividend_entitlements en WHERE en.event_id=ev.id AND en.portfolio_id=t.portfolio_id))
+     AND NOT EXISTS(SELECT FROM public.stock_dividend_entitlements en WHERE en.event_id=ev.id AND en.portfolio_id=t.portfolio_id)
+     -- A complete journal proves no dividend obligation for a root with no
+     -- pre-cutoff stock activity. Do not manufacture zero payments to admit
+     -- its first purchase. Unknown history and every split remain blocking.
+     AND NOT coalesce(rv.classification='supported_dividend'
+       AND a0.journal_start_at<=rv.verified_cutoff
+       AND a0.complete_from<=rv.verified_cutoff
+       AND a0.coverage_start<=rv.verified_cutoff
+       AND a0.covered_until>=rv.verified_cutoff
+       AND NOT EXISTS(SELECT FROM public.stock_ownership_movements history
+         WHERE history.portfolio_id=t.portfolio_id AND history.coin_id=f.coin_id
+           AND history.economic_at<rv.verified_cutoff)
+       AND NOT EXISTS(SELECT FROM public.trades history
+         WHERE history.portfolio_id=t.portfolio_id AND history.coin_id=f.coin_id
+           AND history.id<>t.id AND history.created_at<rv.verified_cutoff)
+       AND m.before_quantity=coalesce((SELECT sum(history.quantity)
+         FROM public.stock_ownership_movements history
+         WHERE history.portfolio_id=t.portfolio_id AND history.coin_id=f.coin_id
+           AND history.sequence<m.sequence),0)
+       AND m.before_basis=coalesce((SELECT history.after_basis
+         FROM public.stock_ownership_movements history
+         WHERE history.portfolio_id=t.portfolio_id AND history.coin_id=f.coin_id
+           AND history.sequence<m.sequence ORDER BY history.sequence DESC LIMIT 1),0),false))
        AS pending_boundary
  INTO r FROM public.trades t JOIN public.stock_fill_facts f ON f.trade_id=t.id
  JOIN public.accounts root ON root.id=t.portfolio_id AND root.user_id=t.user_id

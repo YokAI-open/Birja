@@ -135,7 +135,7 @@ BEGIN
    RAISE EXCEPTION 'finite portfolio exception remains'; END IF;
  FOR expected IN SELECT * FROM (VALUES
  ('public.check_stock_fill_integrity()','55c8f44882c787923bb9f1ac2e6e26fc2493d7eced19c48d40560e5f042b290b',false,''),
- ('public.assert_stock_execution_current(bigint,bigint,jsonb)','d3da8748084a3458b63ef1a51435b8decc28b1bac8b522fbefd746d62555f907',false,'birja_app'),
+ ('public.assert_stock_execution_current(bigint,bigint,jsonb)','dd923d5797c95072163bd59918a95935849e9acc7af884b406706dcedfa7c158',false,'birja_app'),
  ('public.reject_stock_dividend_mutation()','bbb7ec48f270806ecc4273ce5fb5996c26d2c7a84c8edb9c47de20a9c09016d7',false,''),
  ('public.stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)','a3085991a1d8397bb446f47aabf285b6c3f97d5bf45ea72e7982ab360d34ed12',false,''),
  ('public.apply_stock_dividend(bigint,bigint,text,text)','e9b7686f3b17b5a1df89e351d01c8244a610de03346f847f5ad8c7a3d20ef99e',true,'birja_scheduler'),

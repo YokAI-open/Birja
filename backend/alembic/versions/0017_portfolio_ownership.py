@@ -26,7 +26,7 @@ OWNED = (
     "stock_dividend_decisions",
 )
 SQL_ASSETS = {
-    "0017_stock_portfolio.sql": "265262fa8377b801605867ebe692accd43acc29a8764f401633ffdabff25383e",
+    "0017_stock_portfolio.sql": "3dc967baccb425ba26f73bb2fab66b7947aff73f5454ea2f85e03a6e0aa5e08b",
     "0017_dividend_portfolio.sql": (
         "fc5cb6864bb553c5116f2580a79ece2ea86188aba6eb309af857b68b88918734"
     ),

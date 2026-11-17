@@ -705,9 +705,9 @@ PORTFOLIO_OWNED = ('holdings', 'trades', 'stock_fill_facts',
 # Independently pinned from actual migration0017 and the fixed bootstrap grant
 # contract. Neither the database under backup nor its manifest chooses these.
 PORTFOLIO_SCHEMA_SHA256 = 'a5426b54a96f536cdf6e76dd29b897a1b51b2d8ec681d36ddced25ce24b2467e'
-PORTFOLIO_AUTHORITY_SHA256 = 'dfbad9886f0426961b93391eeca78bce148202998bc1153b1932fc6012d3ba46'
-PORTFOLIO_QUARANTINED_SHA256 = '8165d7b045f7941137dc034f810344817a88c58308a0609117b6e149e51b19d3'
-PORTFOLIO_NO_ACL_SHA256 = 'bb026d36d4f80e7a70276dd6e59da3cbc639d5f266980a1925bcd32dbb08d2c5'
+PORTFOLIO_AUTHORITY_SHA256 = '617fcabb4fe6d24f0cd0c306680f759f5d9dc21d970e7ed8919c8913980a9696'
+PORTFOLIO_QUARANTINED_SHA256 = '7dff7b4ee651cb94592debe260bde4dd4148be3c2c977ac6324327cc23e119b6'
+PORTFOLIO_NO_ACL_SHA256 = '87d1f2cd9dd78a74da974b7a5a86aaf092dc58af1b66bd53e5455c82f1e4afaa'
 
 
 # Frozen reviewed0017 bootstrap grants plus retained operator read boundary.
