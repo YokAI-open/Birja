@@ -98,6 +98,12 @@ def test_cursor_encoder_refuses_naive_time():
         encode_cursor(HistoryCursor(created_at=STAMP.replace(tzinfo=None), id=1, portfolio_id=7))
 
 
+@pytest.mark.parametrize("portfolio_id", [True, "7", None])
+def test_cursor_encoder_cannot_coerce_a_portfolio_identity(portfolio_id):
+    with pytest.raises(InvalidCursor):
+        encode_cursor(HistoryCursor(created_at=STAMP, id=1, portfolio_id=portfolio_id))
+
+
 def test_cursor_cannot_continue_another_portfolio():
     with pytest.raises(InvalidCursor):
         decode_cursor(token(VALID), expected_portfolio_id=8)

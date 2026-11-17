@@ -17,6 +17,15 @@ from tests.test_portfolio_dividends import dividend_books, pay, revise
 __all__ = ["crypto_books", "portfolio_migration_db", "dividend_books"]
 
 
+def test_retired_history_imports_expose_only_the_refusal_adapter():
+    from app.api.v1 import event_history, history, legacy_finance
+
+    assert history.router is event_history.router is legacy_finance.router
+    assert {route.endpoint for route in history.router.routes} == {
+        legacy_finance.portfolio_required
+    }
+
+
 @pytest_asyncio.fixture
 async def read_auth(crypto_books, auth_client, outbox):
     factory, roots, cid = crypto_books

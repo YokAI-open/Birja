@@ -24,6 +24,12 @@ def test_mixed_cursor_roundtrip_preserves_all_order_columns():
     assert decode_cursor(encode_cursor(value), expected_portfolio_id=1) == value
 
 
+@pytest.mark.parametrize("portfolio_id", [True, "1", None])
+def test_mixed_encoder_cannot_coerce_a_portfolio_identity(portfolio_id):
+    with pytest.raises(InvalidCursor):
+        encode_cursor(EventHistoryCursor(datetime(2026, 11, 12, tzinfo=UTC), 4, 1, portfolio_id))
+
+
 STAMP = "2026-11-12T15:01:02.123456Z"
 VALID = {
     "v": 3,
