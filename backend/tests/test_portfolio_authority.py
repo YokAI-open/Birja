@@ -100,8 +100,14 @@ def test_model_metadata_dividend_decisions_cannot_cross_root_causal_chains():
 
     table = StockDividendDecision.__table__
     expected = {
-        "payment_id": ("payment_id", "event_id", "portfolio_id", "user_id", "coin_id"),
-        "entitlement_id": (
+        "fk_dividend_decision_payment_owner": (
+            "payment_id",
+            "event_id",
+            "portfolio_id",
+            "user_id",
+            "coin_id",
+        ),
+        "fk_dividend_decision_entitlement_identity": (
             "entitlement_id",
             "event_id",
             "portfolio_id",
@@ -109,14 +115,14 @@ def test_model_metadata_dividend_decisions_cannot_cross_root_causal_chains():
             "revision_id",
             "entitlement_fingerprint",
         ),
-        "previous_decision_id": (
+        "fk_dividend_decision_previous_owner": (
             "previous_decision_id",
             "payment_id",
             "portfolio_id",
             "user_id",
             "event_id",
         ),
-        "previous_application_id": (
+        "fk_dividend_decision_application_owner": (
             "previous_application_id",
             "payment_id",
             "portfolio_id",
@@ -124,8 +130,10 @@ def test_model_metadata_dividend_decisions_cannot_cross_root_causal_chains():
             "event_id",
         ),
     }
-    for field, columns in expected.items():
-        fk = next(fk for fk in table.foreign_key_constraints if field in fk.column_keys)
+    for name, columns in expected.items():
+        matches = [fk for fk in table.foreign_key_constraints if fk.name == name]
+        assert len(matches) == 1, name
+        fk = matches[0]
         assert tuple(fk.column_keys) == columns
         # Referred ownership fields must line up with the exact source tuple.
         assert [e.column.name for e in fk.elements][columns.index("portfolio_id")] == "portfolio_id"
