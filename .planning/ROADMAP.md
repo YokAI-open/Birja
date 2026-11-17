@@ -19,7 +19,7 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has 28 approved plans; twenty-six plans are complete locally.
+at Phase 12. Phase 12 has 28 approved plans; twenty-seven plans are complete locally.
 Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
 and schema-admission checks. Plan08 adds explicit root/identity service contracts;
 Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
@@ -29,8 +29,10 @@ dividend workers and private valuation/History. Plan16 qualifies restricted fina
 bootstrap and authenticated fresh/retained/staged migration-to-final; production v2
 composition now passes259 affected API/auth/onboarding cases with explicit legacy
 finance refusal. Browser targets/hooks/navigation, trade surfaces and owned
-holdings/History pages now pass their focused gates; final source/UI/recovery
-qualification and owner acceptance remain pending.
+holdings/History pages pass their focused gates. Plan27 now passes the actual
+complete security graph, five strict image scans and one-archive seven-stage
+recovery. Both Plan28 owner UI/native200% checks and final phase reviews/goal
+verification remain pending; no whole requirement or phase is marked complete.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -147,7 +149,7 @@ Plans:
 
 **Wave 17** *(blocked on Wave 16 completion)*
 
-- [ ] 12-27-PLAN.md — Full isolated source-bound security and recovery qualification
+- [x] 12-27-PLAN.md — Full isolated source-bound security and recovery qualification
 
 **Wave 18** *(blocked on Wave 17 completion)*
 
@@ -274,7 +276,7 @@ No implementation has started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 26/28 | Wave16 complete; next12-27 full qualification | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 27/28 | Wave17 complete; awaiting12-28 owner UI/native200% | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

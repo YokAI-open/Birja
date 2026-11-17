@@ -1134,3 +1134,34 @@ tracked change is committed; unrelated.claude/ is untouched. No provider,
 private production configuration, new package, publication or branch switch
 occurred. Keep local and preserve Phase7's consumed campaign/six pending
 requirements/OFF admissions. Plan27 remains incomplete; there is no SUMMARY.
+
+## Final Plan27 Complete — 2026-11-17
+
+The preceding pending/failure entries remain historical. Plan27 is now complete:
+task records11773a9 and summary5b65157 preserve the actual outcomes.
+Complete all-security passes at1f8d5a4 in1541.269s, exit0/zero source drift:
+3108backend/99.8537%overall, exact60critical100%,958frontend, full59browser/
+1originalCSPskip, audits and five actual immutable-ID scans0HIGH/CRITICAL.
+The complete seven-stage recovery passes2708.086s at10121b0 with archive5a495a9d.
+Read-only final authentication passes; exactly one broad inventory test differs,
+outside packaged/runtime/imported recovery inputs. No original run is relabelled.
+
+Owning12-13 repair1f8d5a4 fixes the opening-hour entitlement fixture premise:
+use a completed reviewed session and assert later-split cutoff ordering.
+18deterministic clock cases are RED before/GREEN after;61real financial cases
+pass. The preceding1465pass/1fail interrupted diagnostic remains separate.
+
+New full review capture passes59/1originalskip atfacfa1e,566.694s, zero source
+drift. One earlier143-interrupted capture was preserved without a pass claim;
+private detached wrappers then retained exact commands/gates and atomic results.
+Current combined owner ZIP includes102main and12capture-only zero/multiple
+artifacts with identical249covered source hashes, original ZIPs and private
+capture/runner provenance. Path:/tmp/birja-phase12-ui-review-owner-1f8d5a4.zip;
+SHA256:c87cb4a3eb3feb52c42a37aa60ff69cce66d2ac8e2637847e6a977af1714d55f.
+All exact owned resources are cleaned; only unrelated.claude/ is untracked.
+
+See12-LOCAL-VERIFICATION/RECOVERY-PROOF/HUMAN-UAT/27-SUMMARY for measured source,
+hash, command and repair details. Next: Plan28's two blocking owner UI/native200%
+responses, then final phase reviews/goal verification. No requirement/phase
+completion, Phase13 start, new package/provider/production/publication action
+occurred. Keep local; Phase7's consumed campaign/six pending IDs/OFF gates remain.
