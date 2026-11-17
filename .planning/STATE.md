@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_plan: 29
 status: blocked
-stopped_at: Phase12 gap plans29–31 checked; Plan29 awaits legitimate patch and exact package approval
-last_updated: "2026-11-17T19:25:20Z"
+stopped_at: Plan12-29 bounded refresh no_candidate; stopped before package approval, Plans30–31 blocked
+last_updated: "2026-11-17T19:45:05Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
@@ -26,7 +26,7 @@ Current focus: Phase12 original28 execution plans complete; three checked condit
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
-Current Plan: 29 (conditional gap closure; not started)
+Current Plan: 29 (bounded candidate check recorded; no_candidate, incomplete)
 Total Plans in Phase: 31
 Plan: 28/31 complete; original28 retained, three checked conditional gap plans pending
 Status: Blocked; unpatched picomatch HIGH prevents complete security qualification
@@ -64,9 +64,30 @@ qualification state as ready to execute. Next invocation when appropriate:
 ## Blockers
 
 - Phase12 strict qualification: picomatch GHSA-fc5q-39xc-vjpf HIGH; official
-  latest4.0.7/no patch at2026-11-17T18:37Z. Complete npm audit fails despite
+  latest4.0.7/no patch confirmed by Plan29 at2026-11-17T19:43:24Z. Complete npm audit fails despite
   passing whole recovery and separate browser/image diagnostics. No waiver,
   dependency substitution, Phase13 start or requirement completion.
+
+## Plan29 Bounded Execution — 2026-11-17
+
+The owner resumed execution with `gsd-execute-phase 12 —gaps`; the unsupported
+execution flag adds no filter, and normal resume skips the28 completed plans.
+The three incomplete plans are exactly the gap plans29–31. Wave19/Plan29
+performed one successful official advisory/registry refresh after a disclosed
+sandbox DNS failure and permitted exact read-only transport retry. At19:43:24Z
+both HTTP200 results still show affected<=4.0.7, first_patched_version=null,
+latest4.0.7 and no unaffected published artifact. Raw hashes match the prior
+saved official evidence. Both locked instances remain affected.
+
+See12-29-CANDIDATE.json (status:no_candidate, plan_complete:false) and
+12-29-PACKAGE-REVIEW.md for source/receipt/checksum evidence. The disposition
+check passes, but no candidate review/approval or plan completion is claimed.
+Task02 was not reached; there is no generic package approval request and no
+12-29-SUMMARY. Plans30/31 remain blocked. No install, prospective resolution,
+audit/test campaign, source/image/service/provider/production change occurred.
+Original28 plans and both owner checks remain complete; totals stay28/31,
+zero phases complete, all28 requirement checkboxes pending. Next prerequisite
+is a legitimate published fix; do not repeat unchanged checks or start13.
 
 ## Tooling Note
 
@@ -398,8 +419,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T19:25:20Z
-Stopped at: Phase12 gap plans29–31 checked; unpatched picomatch HIGH still blocks qualification
+Last session: 2026-11-17T19:45:05Z
+Stopped at: Plan12-29 no_candidate; no patch available, stopped before approval, Plans30/31 blocked
 Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation
