@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import asdict, replace
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -15,7 +15,8 @@ from app.models.corporate_action import StockDividendEntitlement
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.services import corporate_actions as actions
-from app.services.stock_sessions import build_sessions
+from app.services.stock_admission import ProductAdmission
+from app.services.stock_sessions import RegularSession, build_sessions
 from tests.test_corporate_action_rules import dividend
 from tests.test_corporate_actions import batch
 from tests.test_portfolio_stock_authority import stock_authority_case
@@ -24,6 +25,43 @@ from tests.test_stock_admission import action_admitted
 from tests.test_stock_sessions import evidence
 
 __all__ = ["stock_authority_case"]
+
+
+def completed_entitlement_session(
+    now: datetime, calendar: ProductAdmission, exchange: str
+) -> RegularSession:
+    sessions = [
+        session
+        for session in build_sessions(now, calendar)
+        if session.exchange == exchange
+        and session.opens_at is not None
+        and session.closes_at is not None
+        and session.closes_at < now
+    ]
+    return max(sessions, key=lambda session: session.session_date)
+
+
+@pytest.mark.parametrize("exchange", ["NYSE", "NASDAQ"])
+@pytest.mark.parametrize(
+    "stamp,expected_day",
+    [
+        ("2026-11-17T14:29:59+00:00", "2026-11-16"),
+        ("2026-11-17T14:30:00+00:00", "2026-11-16"),
+        ("2026-11-17T15:29:59+00:00", "2026-11-16"),
+        ("2026-11-17T20:59:59+00:00", "2026-11-16"),
+        ("2026-11-17T21:00:01+00:00", "2026-11-17"),
+        ("2026-11-27T17:59:59+00:00", "2026-11-25"),
+        ("2026-11-27T18:00:01+00:00", "2026-11-27"),
+        ("2026-11-29T16:00:00+00:00", "2026-11-27"),
+        ("2026-03-09T13:45:00+00:00", "2026-03-06"),
+    ],
+)
+def test_entitlement_fixture_keeps_later_split_after_cutoff(exchange, stamp, expected_day):
+    now = datetime.fromisoformat(stamp).astimezone(UTC)
+    session = completed_entitlement_session(now, evidence(now), exchange)
+    assert session.session_date == date.fromisoformat(expected_day)
+    assert session.closes_at is not None and session.closes_at < now
+    assert session.opens_at is not None and session.opens_at < now - timedelta(hours=1)
 
 
 @pytest_asyncio.fixture
@@ -50,12 +88,7 @@ async def entitlement_case(stock_authority_case):
             select(StockInstrument.listing_exchange).where(StockInstrument.coin_id == case["coin"])
         )
     ).scalar_one()
-    sessions = [
-        s
-        for s in build_sessions(now, calendar)
-        if s.exchange == exchange and s.opens_at is not None and s.opens_at < now
-    ]
-    session = max(sessions, key=lambda s: s.opens_at)
+    session = completed_entitlement_session(now, calendar, exchange)
     await conn.execute(
         text("""UPDATE stock_action_state SET
       journal_start_at=CAST(:n AS timestamptz)-interval '20 days',
@@ -202,6 +235,7 @@ async def test_later_split_does_not_reprice_old_dividend_units(entitlement_case)
 
     db, _, case, action, admission, event = entitlement_case
     original = await actions.derive_dividend_entitlements(db, event)
+    assert original[0].cutoff < case["now"] - timedelta(hours=1)
     assert (
         len(
             await record_split(
