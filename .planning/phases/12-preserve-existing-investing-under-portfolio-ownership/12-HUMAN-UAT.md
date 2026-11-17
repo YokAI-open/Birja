@@ -5,7 +5,7 @@ source: [12-LOCAL-VERIFICATION.md, 12-RECOVERY-PROOF.md, 12-28-PLAN.md]
 started: 2026-11-17
 updated: 2026-11-17
 qualified_source: 1f8d5a4eb500dad879440c2f2ebba892b8b5f65c
-owner_ui_accepted: false
+owner_ui_accepted: true
 native_200_percent_verified: false
 ---
 
@@ -13,8 +13,9 @@ native_200_percent_verified: false
 
 ## Current Test
 
-Awaiting Plan28's two independent blocking owner checks. All Plan27 automated
-gates pass; no owner response is recorded or inferred from previous phases.
+Plan28's changed-UI review is accepted. The owner's exact response to this
+current packet was “approved” on2026-11-17. Native200% is recorded separately
+below; no acceptance is inferred from a prior phase or an automated screenshot.
 
 Download `/tmp/birja-phase12-ui-review-owner-1f8d5a4.zip`, extract it and open
 the top-level index.html. These are inert, read-only actual synthetic pages;
@@ -44,8 +45,10 @@ rename, descriptions, overview management and deletion are later-phase work.
 Use main/index.html for all widths, or the top-level representative links.
 Report explicit acceptance or actionable issues for this packet.
 
-result: pending
-owner_response: none
+result: pass
+owner_response: "approved"
+accepted_on: 2026-11-17
+accepted_packet_sha256: c87cb4a3eb3feb52c42a37aa60ff69cce66d2ac8e2637847e6a977af1714d55f
 
 ### 2. Genuine desktop native 200% zoom — 12-28-02
 
@@ -77,15 +80,16 @@ manifest. See12-LOCAL-VERIFICATION.md for hashes and actual-source scope.
 ## Summary
 
 total: 2
-passed: 0
+passed: 1
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-No owner issue has been reported. Both acceptance checks remain pending.
+No owner issue has been reported. UI acceptance is recorded; the separate
+native200% result remains the second checkpoint until explicitly recorded.
 Final phase code/security/UI reviews and goal verification still follow
 execution; this packet does not complete Phase12, any whole requirement,
 Phase7 live work, publication or deployment.
