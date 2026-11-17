@@ -73,6 +73,43 @@ async def test_root_journals_same_owner_do_not_merge(journal_case):
         assert snapshot.quantity == Decimal(2)
 
 
+@pytest.mark.parametrize("damage", ["owner", "closed"])
+async def test_unjournaled_holding_identity_and_closure_refused(stock_authority_case, damage):
+    """Real loaded holdings remain subject to root checks even without journals."""
+    from app.models.trade import Holding
+
+    conn, case = stock_authority_case
+    await conn.execute(
+        text("UPDATE stock_action_state SET journal_start_at=:n,complete_from=:n WHERE coin_id=:c"),
+        {"n": case["now"] - timedelta(days=1), "c": case["coin"]},
+    )
+    async with AsyncSession(bind=conn) as db:
+        held = (
+            await db.scalars(
+                select(Holding).where(
+                    Holding.portfolio_id == case["first"], Holding.coin_id == case["coin"]
+                )
+            )
+        ).one()
+        if damage == "owner":
+            # A stale/inconsistent in-memory object must also be rejected. The
+            # invalid pair is deliberately never flushed through the SQL FK.
+            held.user_id = case["foreign_owner"]
+        else:
+            await conn.execute(
+                text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
+                {"p": case["first"]},
+            )
+        with (
+            db.no_autoflush,
+            pytest.raises(
+                OwnershipHeld, match="holding_mismatch" if damage == "owner" else "invalid_closure"
+            ),
+        ):
+            await assert_ownership_consistent(db, case["coin"])
+        db.expire_all()
+
+
 async def test_explicit_root_append_does_not_accept_user_only(journal_case):
     db, _, case = journal_case
     with pytest.raises(OwnershipHeld, match="invalid_movement"):

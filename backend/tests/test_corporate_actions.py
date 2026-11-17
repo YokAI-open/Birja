@@ -1130,6 +1130,44 @@ async def test_split_all_owner_exact_or_none(actions, new_user, quantity, rate, 
             assert (await db.get(StockActionState, cid)).health == "reconciling"
 
 
+async def test_split_retains_zero_quantity_owner_sequence(actions):
+    """A sold-out owner's digest advances units without inventing a movement."""
+    factory, cid, uid, action, auth = actions
+    async with factory.begin() as db:
+        await synthetic_opening(db, cid, uid, action.observed_at - timedelta(hours=2))
+        sale = await synthetic_fill(db, cid, uid, side="sell", quantity=Decimal(2))
+        await append_stock_movement(
+            db,
+            StockMovementInput(
+                uid,
+                cid,
+                Decimal(-2),
+                Decimal(0),
+                "sold-out",
+                trade_id=sale.id,
+                portfolio_id=await synthetic_portfolio_id(db, uid),
+            ),
+        )
+    # The cutoff is in the past at processing but strictly after the sale; no
+    # database clock or economic record is changed to manufacture eligibility.
+    async with factory.begin() as db:
+        cutoff = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+        await persist_action_batch(db, batch(split_action(action, cutoff)), auth)
+        ids = await apply_due_actions(db, cid)
+        assert len(ids) == 1
+        app = await db.get(StockSplitApplication, ids[0])
+        assert app.sequence_boundary == 2
+        rows = (
+            await db.scalars(
+                select(StockOwnershipMovement)
+                .where(StockOwnershipMovement.coin_id == cid)
+                .order_by(StockOwnershipMovement.sequence)
+            )
+        ).all()
+        assert len(rows) == 2 and rows[-1].after_quantity == 0
+        assert (await db.get(StockActionState, cid)).unit_epoch == 1
+
+
 async def test_split_failure_after_first_owner_rolls_everything_back(
     actions, new_user, monkeypatch
 ):
