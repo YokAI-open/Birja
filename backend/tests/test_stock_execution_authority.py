@@ -94,6 +94,20 @@ async def guard_case(engine, migrated, new_user, request):
                 {"c": cid},
             )
         ).scalar_one()
+        root = (
+            await conn.execute(
+                text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}
+            )
+        ).scalar_one()
+        snapshot["portfolio_id"] = str(root)
+        await conn.execute(text("UPDATE accounts SET cash=9980 WHERE id=:p"), {"p": root})
+        await conn.execute(
+            text(
+                "INSERT INTO holdings(user_id,portfolio_id,coin_id,quantity,cost_basis) "
+                "VALUES (:u,:p,:c,2,20)"
+            ),
+            {"u": uid, "p": root, "c": cid},
+        )
         tid = await complete_receipt(conn, cid, uid, authority=snapshot, at=now)
         await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         yield conn, cid, uid, tid, snapshot
@@ -174,7 +188,7 @@ async def test_runtime_function_authority_is_invoker_fixed_and_not_public(engine
             )
         ).one()
         assert row.prosecdef is False
-        assert row.proconfig == ["search_path=pg_catalog, public"]
+        assert row.proconfig == ["search_path=pg_catalog, public, pg_temp"]
         assert row.same_owner and row.app and not row.scheduler and not row.public
         await conn.execute(text("CREATE ROLE birja_stock_public_probe NOLOGIN NOINHERIT"))
         await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_stock_public_probe"))
@@ -189,7 +203,7 @@ async def test_runtime_function_authority_is_invoker_fixed_and_not_public(engine
                 assert exc.value.orig.sqlstate == "42501"
 
 
-async def test_scheduler_can_write_status_but_not_receipts(engine, runtime_roles):
+async def test_scheduler_can_write_status_and_read_but_not_mutate_receipts(engine, runtime_roles):
     async with engine.connect() as conn:
         tx = await conn.begin()
         cid = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
@@ -201,7 +215,7 @@ async def test_scheduler_can_write_status_but_not_receipts(engine, runtime_roles
         )
         with pytest.raises(DBAPIError) as exc:
             async with conn.begin_nested():
-                await conn.execute(text("SELECT * FROM public.stock_fill_facts"))
+                await conn.execute(text("DELETE FROM public.stock_fill_facts"))
         assert exc.value.orig.sqlstate == "42501"
         await tx.rollback()
 
@@ -226,7 +240,14 @@ async def test_bootstrap_and_upgrade_grants_have_exact_runtime_parity(engine, ru
             text("""REVOKE ALL ON public.stock_fill_facts,
           public.stock_status_evidence FROM birja_app,birja_scheduler""")
         )
-        await conn.execute(block and text(block))
+        # Current final portfolio grants supersede the retained execution-only
+        # read policy: scheduler journal reconstruction requires receipt reads.
+        from app.db.portfolio_bootstrap import GRANTS_SQL
+
+        await conn.execute(text(block))
+        for statement in GRANTS_SQL.split(";"):
+            if statement.strip():
+                await conn.execute(text(statement))
         assert (await conn.execute(query)).all() == before
         assert (
             await conn.execute(
