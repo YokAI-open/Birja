@@ -230,7 +230,16 @@ def build_retained_image(directory, *, archive, archive_sha, lane='retained'):
     commit = selected['commit']
     app_tree = git('rev-parse', commit+':backend/app').decode().strip()
     verify_source_tree(root, payload)
-    tag = "birja-retained-portfolio:" + commit[:12] + "-" + archive_sha[:16]
+    # Archives are deterministic: separate exclusive campaigns may package the
+    # same bytes. Scope the mutable build alias to this private directory's
+    # identity, including when the fixed path is recreated after preservation.
+    # Existing tags still require this campaign's own immutable binding below.
+    campaign = Path(archive).parent.resolve(strict=True)
+    identity = campaign.stat()
+    namespace = hashlib.sha256(
+        os.fsencode(str(campaign)) + f":{identity.st_dev}:{identity.st_ino}".encode()
+    ).hexdigest()[:16]
+    tag = "birja-retained-portfolio:" + commit[:12] + "-" + archive_sha[:16] + "-" + namespace
     env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}
     record = Path(archive).parent / (lane + '-image-binding.json')
     existing = subprocess.run(["docker", "image", "inspect", tag], capture_output=True, env=env)

@@ -355,6 +355,75 @@ class CI(unittest.TestCase):
             source.record_image_binding(binding_archive,'retained',binding)
             with self.assertRaises(ValueError):source.record_image_binding(binding_archive,'retained',{**binding,'id':'sha256:'+'d'*64})
 
+    def test_identical_archives_have_independent_campaign_image_namespaces(self):
+        import hashlib, io, tarfile
+        source = self.portfolio_sources()
+        row = {'Id': 'sha256:' + 'a' * 64,
+               'Config': {'Labels': {'org.opencontainers.image.revision': source.FIXED_COMMIT},
+                          'User': 'app'},
+               'RootFS': {'Layers': ['sha256:' + 'b' * 64]}}
+        images, builds = {}, []
+        check_output = source.subprocess.check_output
+        run = source.subprocess.run
+
+        def inspect(argv, **kwargs):
+            if argv[:3] == ['docker', 'image', 'inspect']:
+                return json.dumps([images[argv[3]]]).encode()
+            return check_output(argv, **kwargs)
+
+        def docker(argv, **kwargs):
+            if argv[0] != 'docker':
+                return run(argv, **kwargs)
+            if argv[:3] == ['docker', 'image', 'inspect']:
+                image = images.get(argv[3])
+                return SimpleNamespace(returncode=0 if image else 1,
+                                       stdout=json.dumps([image]).encode() if image else b'')
+            self.assertEqual(argv[:2], ['docker', 'build'])
+            tag = argv[argv.index('-t') + 1]
+            self.assertNotIn(tag, images, 'another campaign tag must never be overwritten')
+            images[tag] = row
+            builds.append(tag)
+            return SimpleNamespace(returncode=0, stdout=b'')
+
+        with tempfile.TemporaryDirectory(prefix='birja-source-campaigns-') as tmp:
+            root = Path(tmp)
+            campaign = root / 'fixed-proof'
+            campaign.mkdir(mode=0o700)
+            archive = campaign / 'recovery.tar'
+            with tarfile.open(archive, 'w') as recovery:
+                for name, data in source.archive_payloads().items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(data)
+                    recovery.addfile(info, io.BytesIO(data))
+            archive.chmod(0o400)
+            payload = archive.read_bytes()
+            sha = hashlib.sha256(payload).hexdigest()
+            with patch.object(source.subprocess, 'run', side_effect=docker), \
+                    patch.object(source.subprocess, 'check_output', side_effect=inspect):
+                # Git identity is real; only Docker's external boundary is replaced.
+                first = source.build_retained_image(root / 'context-one', archive=archive,
+                                                    archive_sha=sha)
+                replay = source.build_retained_image(root / 'context-replay', archive=archive,
+                                                     archive_sha=sha)
+                self.assertEqual(first, replay)
+                self.assertEqual(len(builds), 1)
+                historical = root / 'preserved-proof'
+                campaign.rename(historical)
+                campaign.mkdir(mode=0o700)
+                archive.write_bytes(payload)
+                archive.chmod(0o400)
+                second = source.build_retained_image(root / 'context-two', archive=archive,
+                                                     archive_sha=sha)
+                self.assertEqual(first, second)
+                self.assertEqual(len(builds), 2)
+                self.assertNotEqual(builds[0], builds[1])
+                # An existing image with its own campaign binding removed still refuses.
+                record = campaign / 'retained-image-binding.json'
+                record.unlink()
+                with self.assertRaisesRegex(ValueError, 'no private campaign binding'):
+                    source.build_retained_image(root / 'context-unbound', archive=archive,
+                                                archive_sha=sha)
+
     def test_selected_tooling_checks_content_image_and_archive_before_use(self):
         import copy, hashlib
         selected_spec=importlib.util.spec_from_file_location('selected_source_contract', ROOT/'deploy/tests/selected-cutover.py')
