@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_plan: 31
-status: in_progress
-stopped_at: Owner accepted exact advisory risk in issue35; Plans29–30 complete, Plan31 full qualification pending
-last_updated: "2026-11-17T20:32:46Z"
+status: blocked
+stopped_at: Plan31 retry failed final image scans; reviewed Python patch awaits exact local installation approval
+last_updated: "2026-11-17T21:29:59Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
@@ -21,7 +21,7 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Owner accepted the exact unresolved picomatch advisory through issue35. Plans29–30 now complete with narrow shared audit checker,12 exact Node tests,37 CI contracts and independent review0/0; Plan31 actual complete security and fresh same-archive recovery pending. Original28 implementation/owner checks remain complete. All28 requirements pending, zero completed phases, Phase13 unstarted; Phase7 six deferred live outcomes unchanged.
+Current focus: Issue35 created and exact picomatch risk accepted. Plans29–30 complete; Plan31 full retry passed backend3114/critical60at100%, frontend958/fullbrowser59/1originalskip and scopednpm audit, then failed new Python image HIGH. Same-advisory Node-image alignment reviewed0/0 with17image/37CI tests. Official fixed Python family3.14.10_git20261111-r0 is reviewed but not installed; exact local approval pending. Fresh recovery has not started, all6owned resources0, old archive intact. All28 requirements pending, Phase13 unstarted and Phase7 live outcomes unchanged.
 
 ## Current Position
 
@@ -29,7 +29,7 @@ Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
 Current Plan: 31 (actual complete security and fresh same-archive recovery pending)
 Total Plans in Phase: 31
 Plan: 30/31 complete; original28 retained, exact advisory accepted and shared checker reviewed
-Status: In progress; qualification under owner-approved issue35 exception pending
+Status: Blocked on exact local Wolfi Python security patch approval; picomatch risk accepted in issue35
 Last activity: 2026-11-17
 
 Progress: [██████████] 97% (30/31 plans; no phase completion before actual qualification)
@@ -56,6 +56,31 @@ and fresh complete seven-stage recovery, since the validation runner is
 PORTFOLIO_PAYLOAD_V1. Preserve previous actual archive and failed receipts.
 All28 requirements remain pending, completed_phases stays0, Phase13 unstarted.
 Both owner checks and Phase7 deferred live outcomes remain unchanged.
+
+## Plan31 Actual Qualification Results and New Repair Checkpoint
+
+First actual run at e4c0a9f failed an ambiguous unordered metadata-test FK
+selector (3113pass/1fail). Test-only a552a46 selects unique named constraints
+without reducing full column/ownership assertions; focused11/11, six ordering
+permutations/five negative mutations and independent review0/0 passed.
+All original failure receipts remain retained.
+
+Fresh full retry at f97b2d9 ran1535.429seconds and failed ONLY final image
+scans. Actual3114backend/critical60at100%, clean Python audit, frontend958,
+full browser59/1originalskip532.8s, audit12, full npm accepted-risk14HIGH/
+11moderate, builds and smoke5/5 passed first. No complete-security success
+or recovery success is claimed. Source unchanged; all6owned projects cleaned0.
+Old94365aff recovery archive untouched; no new recovery began.
+
+Node image reported the SAME accepted picomatchCVE in npm-bundled4.0.4.
+The exact Node-target/path/version/source/expiry image-policy alignment is
+implemented and independently reviewed0/0;17image/37CI contracts pass.
+All raw HIGH findings remain visible. Separate NEW Python CVE-2026-119170
+remains blocking in runtime/builder.12-PYTHON-PACKAGE-REVIEW.md verifies
+official fixed family3.14.10_git20261111-r0 and exact artifact integrity;
+no new package/image was installed. The current plan excludes new package
+installation, so owner approval of this concrete local patch is required.
+No new advisory waiver, code publication or production change is included.
 
 ## Gap Planning — 2026-11-17
 
@@ -469,8 +494,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T20:32:46Z
-Stopped at: Plans29–30 complete under owner-approved issue35 risk; full security and fresh recovery pending
+Last session: 2026-11-17T21:29:59Z
+Stopped at: Full retry failed final image scans; exact reviewed Wolfi Python patch awaits local approval
 Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation

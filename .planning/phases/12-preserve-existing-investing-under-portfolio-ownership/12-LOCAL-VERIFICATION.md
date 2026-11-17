@@ -192,3 +192,30 @@ authority11/11passed2.57s; six permutations/reverse order pass and five
 malformed-constraint mutations fail. Independent review0blockers/0warnings
 is appended to12-EXCEPTION-REVIEW.md. No model/migration/runtime/financial
 rule or audit policy changed. Fresh complete qualification is still required.
+## Accepted-risk qualification retry — final scan failure
+
+Actual complete all-security at frozen f97b2d91d238563b354d75ad6d1d2a074949a471
+ran1535.429seconds and failed at its final image-scan stage. Backend3114/3114,
+exact60critical modules100%, Python audit, frontend958/lint/types/format/build,
+audit12, actual full npm accepted-risk14HIGH/11moderate/0critical, full browser
+59pass/1originaldeployed-CSPskip(532.8seconds), builds and smoke5/5 all passed
+before that failure. These do not constitute a passed complete command.
+
+Fresh image metadata found separate CVE-2026-119170 HIGH in runtime/builder
+Python3.14.10_git20261104-r0 family, with official fixed3.14.10_git20261111-r0.
+The Node tooling image also reports the SAME owner-accepted picomatch advisory,
+CVE-2026-112366/GHSA-fc5q-39xc-vjpf, in npm's bundled4.0.4. PostgreSQL/Redis
+have zero qualifying findings. No additional vulnerability was accepted.
+
+Raw receipts: /tmp/phase12-accepted-retry1-security-f97b2d9.{log,source.json,result.json}.
+Immutable scan evidence: /tmp/phase12-accepted-retry1-image-reports-f97b2d9/.
+All raw hashes verified, source unchanged, all six owned projects cleaned0.
+Recovery never started; old archive94365aff1bbf8558bcc1481a19c10afea8c571801d54cf3ae3b79156f4af03eb
+remains unchanged. No31 completion summary is created.
+
+The same-advisory Node-image exception is now implemented and independently
+reviewed0blockers/0warnings, with17image/37CI contracts passing; raw HIGH counts
+remain visible. The Python finding remains blocking.12-PYTHON-PACKAGE-REVIEW.md
+prepares the exact official three-package patch, verified signed-index/control/
+data integrity and provenance/transitive limits. No package install/build
+occurred; separate exact owner approval is required before that repair.

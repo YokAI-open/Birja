@@ -39,6 +39,15 @@ ignore, omit-dev option or command-line override of the exception.
 
 ## Qualification boundary
 
+The same advisory also appears in the Node tooling image's npm-bundled
+picomatch4.0.4, exact path
+usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch/package.json.
+The image checker alignment applies the SAME accepted CVE/GHSA only to that
+exact Node target/path/version, current frontend Dockerfile hash and existing
+expiry. Raw findings remain visible with separate accepted/blocking counts;
+no other target/advisory or critical severity is excepted.17image contracts
+and independent review0/0 pass. This does not accept CVE-2026-119170 in Python.
+
 CI and the complete local security runner invoke the same Node-only helper.
 No dependency install, manifest/lock alteration, financial/runtime authority
 change, provider operation or production/publication action is authorized here.
