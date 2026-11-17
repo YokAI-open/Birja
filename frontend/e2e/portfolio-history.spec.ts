@@ -1,7 +1,7 @@
 // Run only in ephemeral fake-price / console-email CI, never real-email dev/prod.
 import { expect, test, type Page } from "@playwright/test";
 import { formatQuantity, formatUnitPrice, formatUsd } from "../src/lib/money.js";
-import { signInNewUser } from "./helpers.js";
+import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
 
 // Wire fields consumed by this Node test; browser API modules use Vite resolution.
 type Fill = Record<
@@ -36,11 +36,14 @@ for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await signInNewUser(page);
+    const id = await portfolioId(page);
     const timestamp = "2026-10-29T23:59:59.123456Z";
     // Synthetic boundary data tests presentation without creating impossible real balances.
-    await page.route("**/api/v1/portfolio", (route) =>
+    await page.route("**" + (await portfolioApi(page)), (route) =>
       route.fulfill({
         json: {
+          portfolio_id: id,
+          name: "My portfolio",
           cash: "999999999999.99",
           starting_cash: "10000.00",
           total_value: "1999999999999.98",
@@ -81,7 +84,7 @@ for (const width of [375, 768, 1024, 1440]) {
         },
       }),
     );
-    await page.route("**/api/v1/history*", (route) =>
+    await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
       route.fulfill({
         json: {
           items: [
@@ -176,9 +179,13 @@ for (const width of [375, 768, 1024, 1440]) {
 
 test("a new user opens their real cash-only portfolio from Markets", async ({ page }) => {
   await signInNewUser(page);
+  const id = await portfolioId(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
-  await page.getByRole("link", { name: "Portfolio", exact: true }).click();
-  await expect(page).toHaveURL((url) => url.pathname === "/portfolio");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolio", exact: true })
+    .click();
+  await expect(page).toHaveURL((url) => url.pathname === `/portfolios/${id}`);
   await expect(page.getByRole("heading", { level: 1, name: "Portfolio" })).toBeVisible();
   await expect(page.getByText("Compared with your $10,000.00 start")).toBeVisible();
   await expect(page.getByRole("region", { name: "Total portfolio value" })).toContainText(
@@ -192,8 +199,9 @@ test("a new user opens their real cash-only portfolio from Markets", async ({ pa
 
 async function confirmFill(page: Page, side: "buy" | "sell"): Promise<Fill> {
   for (let attempt = 0; attempt < 3; attempt++) {
+    const endpoint = await portfolioApi(page, "/trades");
     const response = page.waitForResponse(
-      (r) => r.url().endsWith("/api/v1/trades") && r.request().method() === "POST",
+      (r) => new URL(r.url()).pathname === endpoint && r.request().method() === "POST",
     );
     await page.getByRole("button", { name: `Confirm ${side}` }).click();
     const result = await response;
@@ -215,7 +223,10 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
 }) => {
   test.setTimeout(120_000);
   await signInNewUser(page);
-  await page.getByRole("link", { name: "Portfolio", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolio", exact: true })
+    .click();
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$10,000.00");
   await page.getByRole("link", { name: "Markets", exact: true }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
@@ -225,8 +236,12 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   expect(buy.cash_after).toMatch(/^9900\.0+$/);
 
   async function openPortfolio() {
-    const response = page.waitForResponse((r) => r.url().endsWith("/api/v1/portfolio") && r.ok());
-    await page.getByRole("link", { name: "Portfolio", exact: true }).click();
+    const endpoint = await portfolioApi(page);
+    const response = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint && r.ok());
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Portfolio", exact: true })
+      .click();
     const data = (await (await response).json()) as Portfolio;
     await expect(page.getByRole("heading", { name: "Portfolio", level: 1 })).toBeFocused();
     await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText(
@@ -265,8 +280,9 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await expect(refresh).toBeFocused();
 
   async function openHistory(expected: Fill[]) {
+    const endpoint = await portfolioApi(page, "/event-history");
     const response = page.waitForResponse(
-      (r) => /\/api\/v1\/history(?:\?|$)/.test(r.url()) && r.request().method() === "GET" && r.ok(),
+      (r) => new URL(r.url()).pathname === endpoint && r.request().method() === "GET" && r.ok(),
     );
     await page.getByRole("link", { name: "History", exact: true }).click();
     const data = (await (await response).json()) as HistoryPage;
@@ -303,6 +319,8 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await openHistory([buy]);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
+  // The original receipt remains authoritative until another order is explicit.
+  await page.getByRole("button", { name: "Trade again", exact: true }).click();
   await page.getByRole("radio", { name: "Sell", exact: true }).click();
   await page.getByLabel("Quantity").fill(held.quantity);
   const sell = await confirmFill(page, "sell");
