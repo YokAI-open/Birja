@@ -394,7 +394,12 @@ def _integration(archive=None, *, current0014):
             "deploy/db-security.compose.yml",
         ]
         for name in names:
-            text = (ROOT / name).read_text()
+            # Retained cutover exercises the released finite deployment lane.
+            # Current0017 control correctly refuses a new legacy deployment;
+            # never remove that guard to make this historical fixture pass.
+            # tooling was extracted and authenticated from this lane's exact
+            # selected archive above, before any private host relocation.
+            text = (tooling / name if name == 'deploy/deploy.sh' else ROOT / name).read_text()
             text = re.sub(
                 "|".join(re.escape(key) for key in replacements),
                 lambda match: replacements[match[0]],

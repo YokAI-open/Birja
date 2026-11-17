@@ -22,6 +22,26 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_retained_cutover_reads_its_authenticated_release_control(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == '_integration')
+        loop = next(node for node in ast.walk(function)
+                    if isinstance(node, ast.For) and isinstance(node.iter, ast.Name)
+                    and node.iter.id == 'names')
+        assignment = loop.body[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            current, retained = root / 'current', root / 'authenticated'
+            for path, value in ((current, 'current0017 refusal'),
+                                (retained, 'immutable retained finite control')):
+                (path / 'deploy').mkdir(parents=True)
+                (path / 'deploy/deploy.sh').write_text(value)
+            namespace = {'ROOT': current, 'tooling': retained, 'name': 'deploy/deploy.sh'}
+            exec(compile(ast.fix_missing_locations(ast.Module(body=[assignment], type_ignores=[])),
+                         '<actual-control-source>', 'exec'), namespace)
+            self.assertEqual(namespace['text'], 'immutable retained finite control')
+
     def test_direct_compose_keeps_authenticated_images_after_env_rewrite(self):
         tree = ast.parse((HERE / 'selected-cutover.py').read_text())
         function = next(node for node in tree.body
