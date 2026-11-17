@@ -893,3 +893,91 @@ remains. All tracked changes committed; unrelated.claude/ only is untouched.
 No diagnostic DB remains. Phase12 stays26/28/no27SUMMARY/no whole requirements
 complete. Plan28 owner UI/native200% still blocks; keep local and retain Phase7
 consumed authorization/six pending requirements/OFF admissions.
+
+## Focused Selected Rollback Qualified — 2026-11-17
+
+All three actual selected/rollback lanes now pass at committed source487483b.
+This is a bounded focused proof, **not** a complete seven-stage recovery or
+complete all-security pass. Plan27 remains incomplete at26/28; no SUMMARY or
+whole-requirement completion follows from it.
+
+Two owning12-18 harness fixes preserve the actual safety boundaries:
+
+-777fc10 makes direct fixture Compose calls retain the already authenticated
+  immutable runtime/migrator IDs. The real production-role fixture rewrites its
+  private env file; relying on incidental image keys there made later ps/up
+  and cleanup fail interpolation. Both keys explicitly override unrelated
+  caller values. The actual command-environment regression fails before and
+  passes after. Launcher calls still independently recheck immutable bindings.
+-487483b reads deploy.sh from the selected lane's authenticated released source
+  archive before private host relocation. Current0017 control correctly refuses
+  new deployment of old0008/0014 application code; that production guard remains
+  unchanged. The historical fixture must exercise its real released finite
+  deployment lane. Exact source/image authentication, all original economic,
+  TLS, rollback/refusal and original-volume assertions remain. A regression
+  distinguishes authenticated retained control from unrelated current control.
+
+Diagnostic history is preserved separately:
+
+- /tmp/phase12-27-selected-final.log used the existing b52d5619 TLS diagnostic
+  archive. Legacy old-image rollback passed101.6s, but the direct Compose env
+  omission stopped the selected lane and its ordinary cleanup. The exact two
+  owned candidate containers were inspected for project/config/tmp-root/mount
+  identities, then removed with only their network and four fixed synthetic
+  volumes. No production resource was included.
+- /tmp/phase12-27-selected-second.log used a NEW exclusive source-matching
+  archive under /tmp/birja-backup-test-selected-plan27-777fc10/. Direct Compose
+  and cleanup pass, then current0017 new-deploy admission correctly refuses
+  old0008 source. No guard was relaxed and no old archive was overwritten.
+- /tmp/phase12-27-selected-third.log is the final actual focused pass, exit0,
+  at487483b. It creates one NEW exclusive diagnostic archive at
+  /tmp/birja-backup-test-selected-plan27-487483b/recovery.tar, SHA256
+  d33ac7dbf7a084134b2a1381671cc3081ec8613866bf57fc27a58fe0587dd394.
+  Full authenticate() runs before/after the exact rollback script: packaged/
+  current bytes, fixed retained matrix, immutable image Config/RootFS/content
+  identities and tracked campaign source remain unchanged. Its final receipt
+  records selected_focused_pass/same_archive/source_unchanged=true.
+
+The third campaign was briefly interrupted for an owner status question.
+Host-side inspection confirmed its exact launcher and healthy owned PG/Redis
+were still running. The original unified session was resumed without starting
+another test, packaging another archive or changing frozen source.
+
+Actual final results:
+
+- Original retained installer/real Git checkout and missing-admission, changed
+  launcher, unheld-lock and immutable-routing refusal checks pass.
+- Legacy pre/post-hardening and old-image recovery/TLS rollback pass; schema0008,
+  source identities and the same installed recovery remain preserved.
+- Selected0008 admitted released-source deployment passes109.1s and actual
+  old-app rollback26.9s. Datastore force-recreate, Redis AOF/auth/TTL, unchanged
+  original volume fingerprints and same installed recovery before/after pass.
+- Selected0014 actual released-source deployment passes118.2s. Complete exact
+  financial/schema/sequence/runtime identity oracles and saved stock/dividend
+  receipts replay without another effect; fixed app/scheduler quarantine holds.
+  Unsupported old-source rollback refuses for the intended admission reason
+  with exact-state evidence. Failed-attempt rollback to the same tested source
+  passes10.3s, followed by unchanged finances and original receipt replay.
+- Final selected_cutover_cleanup_complete and selected0014_cleanup_complete
+  are true. Read-only followup verifies zero containers/networks/volumes for
+  birja-test, birja-ops-test and both portfolio fixture projects. No test or
+  migration child remains. No tracked deletion occurred; unrelated.claude/
+  remains the sole untracked path and is untouched.
+
+Offline affected contracts:11 selected-cutover,30 CI/runner,5 independent
+fixture and10 portfolio recovery cases pass; diff check passes. No dependency,
+runtime application, migration, production control/admission or SQL asset changed.
+The existing UI packet still has102 artifacts, all249 source hashes match
+current bytes, ZIP SHA256c2238dc8fc48ce636b2bd93d2e4f90445cebd9baa23e917b10a97348e7469ca0
+unchanged, and native_200_percent_verified=false.
+
+Next: a fresh executor should run the NEW exclusive actual --suite recovery
+at this final committed tooling, all seven stages serially with one archive.
+The fixed /tmp/birja-phase12-proof path is absent and ready; do not copy a
+focused archive there, reconstruct an oracle or rebuild between stages. Then
+the actual COMPLETE --suite all-security runner must pass from start to finish.
+Preserve the qualified focused/source-bound prefixes truthfully; they cannot
+be combined into an invented whole-run pass. Only after both tasks actually
+pass should27's final records/SUMMARY and28 owner UI/native200% checkpoint be
+prepared. Keep all work local; Phase7's consumed campaign/six gaps/OFF gates
+remain unchanged. No provider or private production access occurred.
