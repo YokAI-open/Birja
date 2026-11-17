@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.db import dev_bootstrap
 from app.db.dev_bootstrap import bootstrap, main
 
 URL = "postgresql+asyncpg://birja:synthetic@postgres:5432/birja"
@@ -178,3 +179,145 @@ async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
         legacy.assert_not_awaited()
     assert conn.execute.await_count == 1  # No grant before revision admission.
     conn.close.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "success",
+        "timeout",
+        "child",
+        "spawn",
+        "revision",
+        "role",
+        "membership",
+        "relation",
+        "routine",
+    ],
+)
+async def test_finite_dev_migration_never_leaves_login_enabled(outcome, capsys):
+    """Child orchestration seams; real SQL provenance has independent PG tests."""
+    conn = connection()
+    conn.fetchval = AsyncMock(side_effect=[True, "PASSWORD-SQL"])
+    if outcome == "membership":
+        conn.fetchval = AsyncMock(side_effect=[True, True])
+    elif outcome == "role":
+        conn.fetchval = AsyncMock(return_value=True)
+    elif outcome == "success":
+        # Existing roles exercise the negative membership result as well as
+        # creation of the absent canonical role on subsequent iterations.
+        conn.fetchval = AsyncMock(side_effect=[True, False, "PASSWORD-SQL"])
+    conn.fetch = AsyncMock(
+        side_effect=[
+            [("bad" if outcome == "revision" else "0014",)],
+            [
+                ("unexpected" if outcome == "relation" else "accounts", "r", "birja"),
+                ("accounts_id_seq", "S", "birja_migrator"),
+            ],
+            [
+                (
+                    "bad()" if outcome == "routine" else "check_portfolio_financial_write()",
+                    "check_portfolio_financial_write",
+                    "birja_migrator",
+                )
+            ],
+        ]
+    )
+    role = DriverRecord({"oid": 123, **dict.fromkeys(FLAGS[1:], False)})
+    if outcome == "role":
+        role["rolsuper"] = True
+    conn.fetchrow = AsyncMock(
+        side_effect=[role, None, None, None]
+        if outcome in {"success", "role", "membership"}
+        else [None] * 4
+    )
+    child = MagicMock()
+    child.communicate = AsyncMock(side_effect=TimeoutError if outcome == "timeout" else None)
+    child.wait = AsyncMock()
+    child.returncode = int(outcome == "child")
+    with (
+        patch.object(
+            dev_bootstrap.asyncio,
+            "create_subprocess_exec",
+            AsyncMock(
+                side_effect=OSError("spawn") if outcome == "spawn" else None, return_value=child
+            ),
+        ) as spawn,
+        patch.object(dev_bootstrap, "_authorize_portfolios", new_callable=AsyncMock) as authorize,
+        patch.object(dev_bootstrap.secrets, "token_hex", return_value="ephemeral"),
+    ):
+        if outcome == "success":
+            await dev_bootstrap._migrate_dev(conn, URL)
+            authorize.assert_awaited_once_with(conn)
+            assert (
+                capsys.readouterr().out
+                == "dev_final_migration=true source_revision=0014 final=0017\n"
+            )
+            assert "birja_migrator:ephemeral@" in spawn.call_args.kwargs["env"]["DATABASE_URL"]
+        else:
+            with pytest.raises((ValueError, OSError)):
+                await dev_bootstrap._migrate_dev(conn, URL)
+            authorize.assert_not_awaited()
+            assert capsys.readouterr().out == ""
+    sql = [str(c.args[0]) for c in conn.execute.call_args_list]
+    if outcome == "revision":
+        assert sql == []
+    else:
+        assert sql[0] == "SELECT pg_advisory_lock(1026016001)"
+        assert sql[-1] == "SELECT pg_advisory_unlock(1026016001)"
+    if outcome in {"success", "timeout", "child", "spawn"}:
+        assert "ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL" in sql
+    else:
+        spawn.assert_not_awaited()
+    assert child.kill.call_count == int(outcome == "timeout")
+    assert child.wait.await_count == int(outcome == "timeout")
+
+
+async def test_bootstrap_explicit_migrate_dispatch_closes_parent():
+    conn = connection()
+    with (
+        patch.object(dev_bootstrap.asyncpg, "connect", AsyncMock(return_value=conn)),
+        patch.object(dev_bootstrap, "_migrate_dev", new_callable=AsyncMock) as migrate,
+    ):
+        await bootstrap("dev", URL, migrate=True)
+    migrate.assert_awaited_once_with(conn, URL)
+    conn.close.assert_awaited_once()
+
+
+async def test_finite_dev_migration_fresh_database_reports_none(capsys):
+    conn = connection()
+    conn.fetchval = AsyncMock(side_effect=[False, "PASSWORD-SQL"])
+    conn.fetchrow = AsyncMock(return_value=None)
+    conn.fetch = AsyncMock(side_effect=[[], []])
+    child = MagicMock(returncode=0)
+    child.communicate = AsyncMock()
+    with (
+        patch.object(
+            dev_bootstrap.asyncio, "create_subprocess_exec", AsyncMock(return_value=child)
+        ),
+        patch.object(dev_bootstrap, "_authorize_portfolios", new_callable=AsyncMock),
+    ):
+        await dev_bootstrap._migrate_dev(conn, URL)
+    assert "source_revision=None final=0017" in capsys.readouterr().out
+
+
+async def test_portfolio_authorization_runs_actual_final_sql(engine, migrated):
+    """Use asyncpg's real multi-statement protocol, not a mocked grant result."""
+    from sqlalchemy import text
+
+    async with engine.connect() as conn, conn.begin():
+        raw = await conn.get_raw_connection()
+        await dev_bootstrap._authorize_portfolios(raw.driver_connection)
+        assert not (
+            await conn.execute(
+                text("SELECT has_table_privilege('birja_scheduler','accounts','UPDATE')")
+            )
+        ).scalar_one()
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT has_function_privilege('birja_scheduler',"
+                    "'lock_stock_portfolio_roots(bigint)','EXECUTE')"
+                )
+            )
+        ).scalar_one()
