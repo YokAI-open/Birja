@@ -107,7 +107,10 @@ async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
     """Two actual users, unequal original books and ONE global two-owner split."""
     from tests.test_stock_action_migrations import event
     from tests.test_stock_action_migrations import retained_movement as movement
-    from tests.test_stock_execution_migrations import insert_trade
+
+    assert (
+        await conn.execute(text("SELECT version_num FROM alembic_version"))
+    ).scalar_one() == "0014"
 
     owners, roots, trade_ids = [], [], []
     crypto = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
@@ -145,7 +148,18 @@ async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
              TIMESTAMPTZ '2026-10-01 12:00:00+00',100000,0,-123.46,:cash,:key)"""),
             {"u": uid, "c": crypto, "cash": Decimal(cash), "key": uuid4()},
         )
-        tid = await insert_trade(conn, stock, uid)
+        # The retained oracle uses original0014 columns and economics. Current
+        # execution fixtures require portfolio_id/closed_at, absent in this lane.
+        tid = (
+            await conn.execute(
+                text("""INSERT INTO public.trades
+                (coin_id,user_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+                 exec_price,fee,cash_delta,cash_after,idempotency_key)
+                VALUES (:c,:u,'buy','quantity',2,2,10,clock_timestamp(),10,0,-20,9980,:key)
+                RETURNING id"""),
+                {"c": stock, "u": uid, "key": uuid4()},
+            )
+        ).scalar_one()
         trade_ids.append(tid)
         await conn.execute(
             text("""INSERT INTO stock_fill_facts
