@@ -1046,3 +1046,91 @@ its fixed archive and do not repackage it to chase later documentation hashes.
 No27SUMMARY or plan/phase/requirement advancement in this bounded handoff.
 Keep local; no new dependency/provider/production/publication operation occurred.
 Phase7 consumed campaign/six gaps/OFF gates remain unchanged.
+
+## Final Security Run and Deterministic Price Boundary — 2026-11-17
+
+The actual complete all-security runner at0394bff ran1530.292s and exited1
+at its full browser stage. All tracked source hashes remained unchanged during
+the campaign. Its complete backend/frontend/audit prefix passes:
+
+-3090 backend cases pass845.53s, overall99.85% branch coverage.
+-The same fresh run's exact60 critical modules pass100%:
+  5020statements/1604branches, no misses or partials.
+-Full Ruff/format227files and mypy101 sources pass; Python audit is clean.
+-Frontend lint, build-project types, whole Prettier,44files/958tests and
+  production build pass. Coverage remains97.50%statements/94.65%branches/
+  98.58%functions/98.68%lines. npm has zeroHIGH/CRITICAL and14MODERATE.
+-All60 browser cases ran:58pass,1failure,1original CSPskip in8.9min.
+  The only failure was the real lost-response ownership journey described below.
+  Actual final image builds/scans were unreached; this is not a whole-run pass.
+
+Logs: /tmp/phase12-27-whole-security-final.log,
+/tmp/phase12-27-whole-security-source-0394bff.json and
+/tmp/phase12-27-whole-security-result-0394bff.json. Browser work directory:
+/tmp/birja-phase09-browser-xqov35xl. The exact failure trace and clean backend
+coverage are preserved under /tmp/phase12-27-security-failure-0394bff/.
+
+Trace inspection establishes the actual response, not a guessed failure cause:
+the preview used80879.92 at59seconds old; the real fake-source scheduler tick
+produced fresh80960.958 at2026-11-17T14:39:11Z. Execution correctly returned409
+price_changed with age0, original10000 cash and a fresh quote. The test wrongly
+assumed its first submission must fill201 and threw before simulating the lost
+response. The app's existing price refusal/reconfirmation behavior was correct.
+
+Owning12-26 repair e61f89b changes ONLY
+frontend/e2e/portfolio-browser-fixture.py and portfolio-ownership.spec.ts.
+The guarded process-only synthetic fixture advances actual fake BTC evidence
+between preview and execute, without changing money or saved orders. The test
+now deterministically requires the actual409/no-money-change boundary, checks
+10000cash/empty holdings and the sibling's2000cash on every refusal, presents
+the real updated quote and explicitly clicks a fresh confirmation. A repriced
+attempt gets its proper new key. Only an actual201 fill response is aborted;
+the original committed payload/key is then replayed against its original root,
+with exact9900/2000cash and no duplicate effect. Replay explicitly requires200.
+No response is fabricated as a successful fill, no provider/auth/financial
+guard is weakened, no automatic order retry or timeout increase is introduced.
+
+The forced boundary is RED against the old first201 assertion:
+/tmp/phase12-27-price-boundary-red.log and
+/tmp/birja-phase09-browser-e34lkglo/browser-portfolios.log. A first extra replay
+assertion expected201 where the actual API correctly returns200; it was fixed
+to preserve the exact first-fill201/replay200 contract. Final focused proof:
+/tmp/phase12-27-price-boundary-green-second.log and
+/tmp/birja-phase09-browser-4txffzkn/browser-portfolios.log,1pass/10.8s.
+Whole frontend lint, build-project types, changed-file Prettier, Python compile,
+all6 browser guard contracts and diff check pass at the final test bytes.
+
+### Recovery equivalence and next exclusive UI capture
+
+Read-only full authenticate() succeeds for the already qualified archive
+5a495a9dc2901cac46bfa82f23ae2daef67323eda05ac08dc44c67272a2b01a4.
+All306 actual recovery campaign dependencies, as selected by the real runner's
+campaign_sources(), match their10121b0 pre-campaign hashes. Packaged/current
+CORE,UNITS,portfolio payload, fixed retained matrix and actual immutable image
+content/Config/RootFS bindings remain valid. The two changed frontend/e2e files
+are outside that actual recovery dependency set. No backend, deploy tool,
+runtime, SQL, migration or lock byte changed. Thus the existing complete
+seven-stage proof stays valid for its recorded source; it is not relabelled as
+a whole run at a different HEAD. Do not rerun45minutes or rebuild its archive
+merely to chase unrelated browser-only test hashes. Exact receipt:
+/tmp/phase12-27-recovery-equivalence-e61f89b.json.
+
+The old c2238dc8 UI ZIP is now STALE: exactly its two covered e2e source entries
+above differ. Do not present it as current owner evidence. A fresh executor
+should create a NEW exclusive full packet with the actual full browser suite:
+`python3 deploy/tests/run-stock-browser.py --suite all --review-dir /tmp/birja-phase12-ui-review-final-e61f89b`.
+That new directory is absent; retain the old packet unchanged. The real runner
+sets capture/source environment, creates index/manifest/ZIP only after success,
+and requires all artifacts/current source hashes; native200 staysfalse.
+
+Then run the actual COMPLETE --suite all-security at the unchanged final source.
+Passing focused/preliminary pieces do not establish a whole-run success.
+Only after that actual pass create27's final qualification/UAT/SUMMARY records
+and advance the plan count to27/28; owner UI/native200 and phase reviews remain.
+
+Final read-only host checks verify zero containers/networks/volumes for all
+five exact test projects, including browser; no test child remains. Every
+tracked change is committed; unrelated.claude/ is untouched. No provider,
+private production configuration, new package, publication or branch switch
+occurred. Keep local and preserve Phase7's consumed campaign/six pending
+requirements/OFF admissions. Plan27 remains incomplete; there is no SUMMARY.
