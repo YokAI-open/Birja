@@ -53,7 +53,8 @@ def security_commands():
         "uv run pytest --cov=app --cov-branch --cov-fail-under=80", critical[0], "uv run pip-audit")]
     commands += [("frontend", shlex.split(c)) for c in (
         "npm run lint", "npm run typecheck", "npx prettier --check .",
-        "npm run test -- --coverage", "npm run build", "npm audit --audit-level=high")]
+        "npm run test -- --coverage", "npm run build", "node --test ../deploy/tests/test-frontend-audit.mjs",
+        "node ../deploy/audit-frontend.mjs")]
     commands += [(".", ["python3", "deploy/tests/run-stock-browser.py"])]
     for target, tag, context in (("test-builder", "birja-backend-test:ci", "backend"),
                                  ("runtime", "birja-backend-runtime:ci", "backend"),

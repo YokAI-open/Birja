@@ -210,7 +210,8 @@ def required_gate_policy(j):
         "backend": ["pytest --cov=app --cov-branch --cov-fail-under=80",
                     "coverage report --include=" + ",".join(modules) + " --fail-under=100",
                     "uv run pip-audit"],
-        "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+        "frontend": ["npm run test -- --coverage", "node --test ../deploy/tests/test-frontend-audit.mjs",
+                     "node ../deploy/audit-frontend.mjs"],
         "ci-pass": ["needs: [backend, frontend, image, e2e, ops]", "if: always()",
                     *["contains(needs.*.result, '" + result + "')"
                       for result in ("failure", "cancelled", "skipped")], "exit 1"],
@@ -493,7 +494,8 @@ class CI(unittest.TestCase):
         mutations = {
             "backend": ["--cov-branch", "--cov-fail-under=80", "--fail-under=100",
                         "uv run pip-audit", *re.findall(r"app/[\w/]+\.py", j["backend"])],
-            "frontend": ["npm run test -- --coverage", "npm audit --audit-level=high"],
+            "frontend": ["npm run test -- --coverage", "node --test ../deploy/tests/test-frontend-audit.mjs",
+                         "node ../deploy/audit-frontend.mjs"],
             "ci-pass": ["backend, ", "frontend, ", "image, ", "e2e, ", ", ops",
                         "if: always()", "'failure'", "'cancelled'", "'skipped'", "exit 1"],
         }
@@ -821,7 +823,7 @@ class CI(unittest.TestCase):
             self.assertIn(text, j["backend"])
         for text in [
             "npm run test -- --coverage",
-            "npm audit --audit-level=high",
+            "node ../deploy/audit-frontend.mjs",
             "npm run lint",
             "npm run typecheck",
         ]:
@@ -864,10 +866,11 @@ class PortfolioValidation(unittest.TestCase):
             self.assertIn("run: " + shlex.join(argv), ci["backend"])
         self.assertEqual(frontend, [shlex.split(c) for c in (
             "npm run lint", "npm run typecheck", "npx prettier --check .", "npm run test -- --coverage",
-            "npm run build", "npm audit --audit-level=high")])
+            "npm run build", "node --test ../deploy/tests/test-frontend-audit.mjs",
+            "node ../deploy/audit-frontend.mjs")])
         for argv in frontend:
             self.assertIn("run: " + shlex.join(argv), ci["frontend"])
-        self.assertEqual(commands[12], [".", ["python3", "deploy/tests/run-stock-browser.py"]])
+        self.assertEqual(commands[13], [".", ["python3", "deploy/tests/run-stock-browser.py"]])
         self.assertEqual([argv[argv.index("--target") + 1] for _, argv in commands if argv[:2] == ["docker", "build"]],
                          ["test-builder", "runtime", "toolchain"])
         scan = commands[-1][1]
