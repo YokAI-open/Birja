@@ -784,3 +784,112 @@ No27SUMMARY is created and phase counts remain26/28. Owner UI and genuine
 native200% acceptance in Plan28 remain blocking. No package/provider/private
 production/publication operation or branch switch occurred. Keep all work local
 and retain Phase7's consumed campaign, six pending requirements and OFF gates.
+
+## Strict Images and Recovery Harness Qualification — 2026-11-17
+
+The exact remaining image graph passes at2aafdf9, executed from
+security_commands()[13:] diagnostically, not as a complete all-security pass.
+All three actual declared Dockerfile targets build, pinned PG/Redis/scanner
+pulls pass, containerized smoke5/5 passes, and all five immutable image scans
+have zero HIGH/CRITICAL including unfixed. Fresh scanner database metadata and
+exported-image identity checks pass. No pin or gate changed.
+
+Evidence: /tmp/phase12-27-images-diagnostic.log(exit0/source_unchanged=true),
+/tmp/phase12-27-images-diagnostic-2aafdf9/{results.json,source.json,image-reports/}.
+Final comparison confirms backend/frontend image build-context bytes remain
+identical after these harness-only repairs. Its owned test stack was cleaned.
+
+Local commits:
+
+-09e4d91 corrects only27PLAN/VALIDATION's unsupported --archive example. The
+actual --suite recovery runner exclusively creates its fixed archive; the
+dry-run retains all seven stages and no ownership/exclusivity guard changed.
+-5d9ae72 / owning12-18 removes redundant app/Alembic host overlays from
+role_python. Root-private0500/0400 retained source hid readable files from the
+nonroot immutable image. Exact source/image checks remain; an actual command
+regression fails before and passes after, and actual retained UID1001 reads
+its baked-in app/Alembic/config with network disabled.
+-59e29b6 / owning12-18 removes the same code overlays from TLS composition,
+leaving only readonly public CA. Selected source children recheck/use the
+returned exact image ID without app/Alembic overlays. Actual command/composition
+regressions fail before each fix. Both TLS lanes already verify live0014 before
+consumer probes; populated dispatch now declares actual0014 rather than its
+old pre-upgrade0013. All original economic/TLS/permission assertions remain.
+
+Final offline contracts:30 CI/runner,9 selected-cutover,5 independent fixture,
+10 recovery cases pass; diff check passes. No runtime/SQL/migration/dependency
+or production change occurred. Selected rollback still needs actual integration.
+
+### Preserved whole directories and actual partial full campaigns
+
+Before each fresh campaign, every entry was checked owned/private/regular or
+directory/nonsymlink; archive and checksum-file SHA checked, whole directory
+moved to an absent historical path, then every file hash rechecked. Nothing
+was overwritten or rebuilt between stages:
+
+| Artifact | Preserved whole directory | SHA256 |
+|---|---|---|
+|26 rehearsal|/tmp/birja-phase12-proof-historical-20261117-09e4d91|ca5d677da29548a4b91ff85192fe2741401b287bf54e120c95034e174f3f362a|
+|First27 failure|/tmp/birja-phase12-proof-failed-20261117-09e4d91|3dd328d9c155166f30e889e0db39878e28880c04d59a3e4cdc29b0704cb9f11c|
+|Second27 failure|/tmp/birja-phase12-proof-failed-20261117-5d9ae72|d074c633a35c969d56c421d0aac760c5459c5e667acfd2f264ba1bfec2967306|
+
+Second actual --suite recovery at5d9ae72 passes four serial stages under that
+same d074c633 archive with guards between stages:
+
+1. Image transition38.812s: actual populated PG/collation/reindex/logical restore
+and Redis AOF/auth/noeviction/UID clones, originals untouched.
+2. Retained0007–0014 encrypted roundtrips767.195s: exact rows/schema/sequences,
+source identity/mounts and saved stock/dividend receipts/History/quarantine.
+Includes9 accounting,17 identity,13 resolution-authority and10 execution
+corruption refusals. All original assertions remain.
+3. Current0017 encrypted COLD restore: source/input destruction, separate server,
+immutable before-oracle9a33f36c90c8648cd40306817027b070d425c09bad24fda28df4414757e2e4a3,
+exact root/terminal/journal/financial comparison and fixed quarantine/TLS pass.
+4. Restricted roles323.774s:63 denied operations, fresh/populated accounting ACL
+parity, immutable audit, operator NOLOGIN and quantity-only scheduler pass.
+
+It then fails at first upgraded-TLS probe due the redundant private overlays.
+Logs: /tmp/phase12-27-recovery-first.log and -second.log. Neither campaign is
+a full seven-stage pass; selected rollback remains unreached.
+
+### Corrected focused TLS proof, not final full recovery
+
+/tmp/phase12-27-tls-focused.log at59e29b6 passes populated281.512s and fresh
+275.578s, with equal exact authenticated authority results. Actual accounting,
+ownership/operator replay, calendar, stock execution/split cutoff/crypto cash,
+dividend deficit/cancelled-hold reconciliation, app/scheduler/migrator SSL,
+bad CA/hostname/plaintext refusal, credential mount isolation and renewal pass.
+No timeout increased. The final line confirms both_lanes/authority_equal/
+same_archive/source_unchanged=true.
+
+Its one new exclusive diagnostic archive remains at
+/tmp/birja-backup-test-tls-plan27-59e29b6/recovery.tar, SHA256
+b52d561946e2c7f5f5250a280924c2b321de07b31e49dd77457dd813d7475050.
+Full authenticate() runs before/after each lane: current/package/retained source
+bytes and recorded Config/RootFS/content image identities remain unchanged.
+
+### Exact next work and clean handoff
+
+First run actual focused selected-cutover/rollback integration on the corrected
+immutable-image command before another long whole campaign. It has contract
+proof only. The focused TLS archive can be used if exact archive/current guards
+still match; never overwrite it or label focused pieces a whole-run pass.
+
+Then execute NEW exclusive actual --suite recovery at final committed source,
+all seven stages serially. The fixed /tmp/birja-phase12-proof path is absent and
+ready; do not copy an old diagnostic there. Package once, never rebuild between
+stages. The actual COMPLETE --suite all-security runner must also pass from
+start to finish; earlier prefix/browser/images remain truthful source-bound
+evidence, not whole-run success. Only afterward write27's evidence/SUMMARY.
+
+UI ZIP c2238dc8 stays valid: all249 source_sha256 entries still match current
+bytes,102 artifacts unchanged, native200=false. Its deploy entries are only
+dividend-execution-fixture.py and run-stock-browser.py; these harness fixes do
+not invalidate the packet, so no unnecessary regeneration is required.
+
+Final checks show zero containers/networks/volumes for birja-test, birja-ops-test,
+birja-portfolio-fixture-test and its -cold project. Sessions ended, no test child
+remains. All tracked changes committed; unrelated.claude/ only is untouched.
+No diagnostic DB remains. Phase12 stays26/28/no27SUMMARY/no whole requirements
+complete. Plan28 owner UI/native200% still blocks; keep local and retain Phase7
+consumed authorization/six pending requirements/OFF admissions.
