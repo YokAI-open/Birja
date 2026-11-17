@@ -3,10 +3,12 @@
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
 import subprocess
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -20,6 +22,49 @@ def load(name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def build_current_runtime(sources, env, *, run=subprocess.run):
+    """Build the actual declared runtime from one authenticated Git context.
+
+    A fresh CI runner must be able to create this image without any previous
+    workstation image. Only the committed backend tree is sent to Docker;
+    neither host source overlays nor an alternate dependency base are used.
+    """
+    commit = sources.git("rev-parse", "HEAD").decode().strip()
+    if sources.git("diff", "--name-only", "HEAD", "--", "backend").strip():
+        raise ValueError("current source must be frozen before image build")
+    app_tree = sources.git("rev-parse", commit + ":backend/app").decode().strip()
+    payload = sources.git("archive", commit, "backend")
+    context = hashlib.sha256(payload).hexdigest()
+    tag = "birja-portfolio-current:" + commit[:12] + "-" + context[:20]
+    with tempfile.TemporaryDirectory(prefix="birja-portfolio-current-image-") as image_tmp:
+        image_root = Path(image_tmp)
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            archive.extractall(image_root, filter="data")
+        sources.verify_source_tree(image_root, payload)
+        result = run(["docker", "build", "--target", "runtime", "--label",
+            "org.opencontainers.image.revision=" + commit, "-t", tag,
+            str(image_root / "backend")], env=env, capture_output=True, timeout=600)
+        if result.returncode:
+            raise AssertionError("declared runtime image build failed: "
+                                 + result.stderr.decode()[-1200:])
+        sources.verify_source_tree(image_root, payload)
+    if (sources.git("rev-parse", "HEAD").decode().strip() != commit
+            or sources.git("diff", "--name-only", "HEAD", "--", "backend").strip()):
+        raise ValueError("current source changed during image build")
+    result = run(["docker", "image", "inspect", tag], env=env,
+                 capture_output=True, timeout=30)
+    if result.returncode:
+        raise AssertionError("declared runtime image inspection failed")
+    binding = sources.image_binding(json.loads(result.stdout), source_commit=commit,
+                                    app_tree=app_tree, context_sha256=context)
+    result = run(["docker", "image", "inspect", binding["id"]], env=env,
+                 capture_output=True, timeout=30)
+    if result.returncode:
+        raise AssertionError("declared runtime immutable image missing")
+    sources.verify_image(binding, json.loads(result.stdout))
+    return binding
 
 
 def run(*, archive=None, archive_sha=None, cold=False):
@@ -41,43 +86,8 @@ def run(*, archive=None, archive_sha=None, cold=False):
     for kind in ("container", "network", "volume"):
         if call(["docker", kind, "ls", "-q", "--filter", "label=com.docker.compose.project=" + PROJECT]).strip():
             raise ValueError("refuse preexisting owned fixture resources")
-    commit = sources.git("rev-parse", "HEAD").decode().strip()
-    app_tree = sources.git("rev-parse", "HEAD:backend/app").decode().strip()
-    if sources.git("diff", "--name-only", "HEAD", "--", "backend/app", "backend/alembic", "backend/Dockerfile", "backend/uv.lock", "backend/pyproject.toml").strip():
-        raise ValueError("current source must be frozen before image build")
-    context = hashlib.sha256(sources.git("archive", "HEAD", "backend")).hexdigest()
-    tag = "birja-portfolio-fixture:" + context[:20]
-    # Smoke-only image: reuse the already approved exact dependency runtime.
-    # Final declared Dockerfile rebuild/scans remain the separate Plan27 gate.
-    cached = "sha256:e5c153f11416842a3cbd7f34c1fe9c7d3f4dec35df8478fd22fbf023d1737aec"
-    locked = subprocess.run(["uv", "export", "--offline", "--locked", "--no-default-groups",
-        "--no-hashes", "--no-emit-project", "--format", "requirements-txt"], cwd=ROOT / "backend",
-        env={**env, "UV_CACHE_DIR": "/tmp/birja-portfolio-smoke-uv"}, capture_output=True,
-        check=True, timeout=30).stdout.decode()
-    expected = dict(re.findall(r"^([a-z0-9-]+)==([^ ;\n]+)", locked, re.M))
-    installed = json.loads(call(["docker", "run", "--rm", "--entrypoint", "python", cached,
-        "-c", "import importlib.metadata,json;print(json.dumps({d.metadata['Name'].lower().replace('_','-'):d.version for d in importlib.metadata.distributions()}))"]))
-    if expected != installed:
-        raise ValueError("cached runtime exact locked distribution set/version mismatch")
-    # The legacy builder resolves an exact local image ID without a registry
-    # lookup. This creates a new content ID; it never retags the cached image.
-    with tempfile.TemporaryDirectory(prefix="birja-portfolio-image-") as image_tmp:
-        image_root = Path(image_tmp)
-        import io
-        import tarfile
-        with tarfile.open(fileobj=io.BytesIO(sources.git("archive", "HEAD", "backend"))) as source:
-            source.extractall(image_root, filter="data")
-        dockerfile = image_root / "Smoke.Dockerfile"
-        dockerfile.write_text("FROM " + cached + "\nUSER root\nRUN rm -rf /app/app /app/alembic\n"
-            "COPY --chown=1001:1001 app /app/app\nCOPY --chown=1001:1001 alembic /app/alembic\n"
-            "COPY --chown=1001:1001 alembic.ini /app/alembic.ini\nUSER app\n")
-        result = subprocess.run(["docker", "build", "--network=none", "--label",
-            "org.opencontainers.image.revision=" + commit, "-f", str(dockerfile), "-t", tag,
-            str(image_root / "backend")], env={**env, "DOCKER_BUILDKIT": "0"}, capture_output=True, timeout=180)
-        if result.returncode:
-            raise AssertionError("frozen no-install smoke image failed: " + result.stderr.decode()[-1200:])
-    inspect = json.loads(call(["docker", "image", "inspect", tag]))
-    binding = sources.image_binding(inspect, source_commit=commit, app_tree=app_tree, context_sha256=context)
+    binding = build_current_runtime(sources, env)
+    commit = binding["source_commit"]
     if archive is not None:
         sources.record_image_binding(archive, "current0017", binding)
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-portfolio-") as tmp:
@@ -134,7 +144,8 @@ def run(*, archive=None, archive_sha=None, cold=False):
 
             def transport(code):
                 sources.verify_image(binding, json.loads(call(["docker", "image", "inspect", binding["id"]])))
-                if sources.git("diff", "--name-only", "HEAD", "--", "backend/app", "backend/alembic", "backend/Dockerfile", "backend/uv.lock", "backend/pyproject.toml").strip():
+                if (sources.git("rev-parse", "HEAD").decode().strip() != commit
+                        or sources.git("diff", "--name-only", "HEAD", "--", "backend").strip()):
                     raise ValueError("current source drift")
                 if archive is not None:
                     sources.verify_archive_binding(archive, archive_sha)

@@ -1139,5 +1139,15 @@ class FixtureGitIsolation(unittest.TestCase):
             )
 
 
+def load_tests(loader, tests, pattern):
+    """Keep fresh-runner current-image regressions in the existing CI gate."""
+    path = Path(__file__).with_name("test-portfolio-smoke-image.py")
+    spec = importlib.util.spec_from_file_location("portfolio_smoke_image_contracts", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests.addTests(loader.loadTestsFromModule(module))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()
