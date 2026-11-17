@@ -12,8 +12,8 @@ source_tree: 99405d979af7fad204db4883a2d16b867ecb7158
 
 The actual seven-stage recovery runner passed from start to finish using one
 new exclusively created archive. This completes the recovery task's automated
-proof; Plan27 and Phase12 remain incomplete pending the complete all-security
-runner, owner acceptance and final phase reviews.
+proof. Plan27's complete all-security runner subsequently passed at1f8d5a4;
+Phase12 remains incomplete pending owner acceptance and final phase reviews.
 
 ## Campaign Identity
 
@@ -106,19 +106,43 @@ containers, networks and volumes for birja-test, birja-ops-test,
 birja-portfolio-fixture-test and birja-portfolio-fixture-test-cold. No campaign
 test or migration process remains. Only unrelated.claude/ is untracked.
 
-The existing UI ZIP retains SHA256
-c2238dc8fc48ce636b2bd93d2e4f90445cebd9baa23e917b10a97348e7469ca0.
-All102 artifact hashes and249 current source hashes still match.
-native_200_percent_verified remains false. No new screen capture or owner
-acceptance is invented from recovery success.
+The originalc2238dc8 UI ZIP is historical after the later browser-only repair.
+The current combined owner packet is
+/tmp/birja-phase12-ui-review-owner-1f8d5a4.zip, SHA256
+c87cb4a3eb3feb52c42a37aa60ff69cce66d2ac8e2637847e6a977af1714d55f.
+It preserves the full-browser102-artifact packet and a separate12-artifact
+capture-only zero/multiple supplement; both match all249 current covered source
+hashes. Their original ZIPs and provenance remain intact. Native200% and owner
+acceptance are still pending; see12-LOCAL-VERIFICATION/12-HUMAN-UAT.
 
 Comparison to the qualified261f617 backend/frontend prefix confirms no backend
 or frontend runtime source/lock changes. Differences are seven e2e/helper files,
 recovery fixture/source-dispatch/selected-control tests and planning records.
-Those earlier passing suites remain source-bound evidence; they do not establish
-a complete all-security runner pass. Run that actual whole graph next, then
-complete Plan27 records/SUMMARY and Plan28's separate ownerUI/native200% checks.
-No requirement or phase completion follows from this task record alone.
+Those earlier passing suites remain historical source-bound evidence. The actual
+complete all-security graph now passes1541.269s at1f8d5a4, without changed source
+during execution. Plan28's separate ownerUI/native200% checks and final phase
+reviews remain. No requirement or phase completion follows from this task alone.
+
+## Final Executable-Input Equivalence
+
+The whole recovery run remains recorded at10121b0; it is not relabelled as a new
+run at another HEAD. Final read-only authenticate() confirms unchanged archive,
+packaged/current CORE,UNITS,portfolio payload, fixed retained matrix and actual
+image content/Config/RootFS bindings after the final security builds.
+
+Of306 broad backend/deploy/ops-Compose campaign-inventory paths, exactly one
+differs: backend/tests/test_portfolio_entitlements.py. Its owning12-13 test-only
+repair selects a completed reviewed session, asserts later-split ordering and
+adds18 deterministic clock-boundary cases. It changes no runtime, migration,
+SQL, Dockerfile, package or lock bytes. The test is not packaged in CORE/UNITS/
+portfolio payload or imported by actual recovery programs. The current cold
+image copies app, Alembic and alembic.ini, not these tests. Its broad archived
+context/source label remains bound to the original tested commit; no new image
+is substituted to chase a test-file hash.
+
+Receipt: /tmp/phase12-27-recovery-equivalence-1f8d5a4.json. This explicit scope
+retains the complete original recovery qualification without claiming all306
+broad hashes are unchanged or silently rebuilding the qualified archive.
 
 All work was local and synthetic: no provider calls, B2/production access,
 private production configuration, new dependency, push, merge or deployment.
