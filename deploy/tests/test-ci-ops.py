@@ -222,6 +222,36 @@ def required_gate_policy(j):
 
 
 class CI(unittest.TestCase):
+    def test_tls_retained_services_keep_image_code_and_only_mount_public_ca(self):
+        tree = ast.parse((ROOT / "deploy/tests/ops-fixtures.py").read_text())
+        tls = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "tls")
+        loop = next(node for node in ast.walk(tls)
+                    if isinstance(node, ast.For) and isinstance(node.target, ast.Tuple)
+                    and [item.id for item in node.target.elts] == ["name", "source"])
+        image = "sha256:" + "b" * 64
+        root = Path("/private-synthetic-tls")
+        services = {name: {"image": "unselected", "user": "1001:1001",
+                          "command": ["actual-migration-command"],
+                          "volumes": ["unrelated:/app/app:ro"], "ports": ["1234:1234"]}
+                    for name in ("postgres", "redis", "backend", "scheduler", "migrate")}
+        import copy
+        original = copy.deepcopy(services)
+        namespace = {"prod": {"services": services}, "fixture": {"services": {}},
+                     "root": root, "hba": root / "hba", "retained_image": image,
+                     "retained_source": Path("/unreadable-private-retained-context"), "copy": copy}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[loop], type_ignores=[])),
+                     "<actual-retained-tls-composition>", "exec"), namespace)
+        actual = namespace["fixture"]["services"]
+        self.assertEqual(services, original)
+        for name in ("backend", "scheduler", "migrate"):
+            with self.subTest(service=name):
+                self.assertEqual(actual[name]["image"], image)
+                self.assertEqual(actual[name]["user"], "1001:1001")
+                self.assertEqual(actual[name]["volumes"],
+                                 [str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro"])
+                self.assertNotIn("ports", actual[name])
+        self.assertEqual(actual["migrate"]["command"], ["actual-migration-command"])
+
     def test_retained_role_child_uses_authenticated_image_without_source_overlays(self):
         tree = ast.parse((ROOT / "deploy/tests/ops-fixtures.py").read_text())
         function = next(node for node in tree.body

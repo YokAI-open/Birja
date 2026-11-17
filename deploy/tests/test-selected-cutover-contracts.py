@@ -22,6 +22,37 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_selected_source_child_rechecks_exact_image_without_application_overlays(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in ast.walk(tree)
+                        if isinstance(node, ast.FunctionDef) and node.name == 'source_python')
+        image = 'sha256:' + 'a' * 64
+        source = 'b' * 40
+        verify = mock.Mock(return_value=(Path('/private-retained-source'), image))
+        call = mock.Mock(return_value=b'original-owned-evidence')
+        namespace = {'f': SimpleNamespace(retained_runtime=verify),
+                     'r': SimpleNamespace(BOOT='birja_ops_bootstrap'),
+                     'lane': 'retained', 'current': source,
+                     'qualified_images': {source: {'id': image}},
+                     'app': Path('/unreadable-checkout'),
+                     'seed': ['docker', 'run', '--rm', '-i', '--network', 'birja-ops-test_data'],
+                     'call': call}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
+                     '<actual-selected-source-child>', 'exec'), namespace)
+        self.assertEqual(namespace['source_python']('assert original_evidence', 'birja_migrator'),
+                         b'original-owned-evidence')
+        verify.assert_called_once_with('retained')
+        argv, code = call.call_args.args
+        self.assertEqual(argv[-4:], ['--entrypoint', 'python', image, '-'])
+        self.assertEqual(code, b'assert original_evidence')
+        for option in ('-v', '--volume', '--mount', '--user'):
+            self.assertNotIn(option, argv)
+        verify.return_value = (Path('/private-retained-source'), 'sha256:' + 'c' * 64)
+        call.reset_mock()
+        with self.assertRaises(AssertionError):
+            namespace['source_python']('assert original_evidence')
+        call.assert_not_called()
+
     def test_private_clone_main_tracks_current_for_every_source_checkout(self):
         # Execute the actual fixture's branch preparation with real Git, so a
         # main push and detached PR checkout exercise the same contract.

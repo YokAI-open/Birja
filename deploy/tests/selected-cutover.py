@@ -644,13 +644,12 @@ def _integration(archive=None, *, current0014):
             print("selected_cutover_originals_seeded=true", flush=True)
 
             def source_python(code, role=r.BOOT):
-                f.retained_runtime(lane)
+                _, image = f.retained_runtime(lane)
+                assert image == qualified_images[current]['id']
                 password = 'synthetic-ops-only' if role == r.BOOT else 'c' * 64
                 return call(seed + [
                     '-e', 'DATABASE_URL=postgresql+asyncpg://' + role + ':' + password + '@postgres:5432/birja_source_test',
-                    '-v', str(app / 'backend/app') + ':/app/app:ro',
-                    '-v', str(app / 'backend/alembic') + ':/app/alembic:ro',
-                    '--entrypoint', 'python', qualified_images[current]['id'], '-'], code.encode())
+                    '--entrypoint', 'python', image, '-'], code.encode())
 
             if current0014:
                 source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")

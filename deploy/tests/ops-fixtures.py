@@ -2389,7 +2389,7 @@ def tls(fresh_bootstrap=False):
     if not (ROOT / "deploy/provision-db-tls.sh").exists():
         return tls_red_probe()
     started = time.monotonic()
-    retained_source, retained_image = retained_runtime()
+    _, retained_image = retained_runtime()
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-") as tmp:
         root = Path(tmp)
         root.chmod(0o700)
@@ -2677,8 +2677,6 @@ def tls(fresh_bootstrap=False):
                 s["image"] = retained_image
                 s["volumes"] = [
                     str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro",
-                    str(retained_source / "backend/app") + ":/app/app:ro",
-                    str(retained_source / "backend/alembic") + ":/app/alembic:ro",
                 ]
                 # Test app real services with production trust, never real email/market network.
                 if name != "migrate":
@@ -2822,7 +2820,9 @@ def tls(fresh_bootstrap=False):
             consumer = client('migrate', STOCK_TLS_CALENDAR)
             assert b'calendar_runtime_tls_consumer=true' in consumer.stdout
             print('calendar_runtime_tls_consumer=true lane=' + ('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'), flush=True)
-            declared = '0014' if fresh_bootstrap else '0013'
+            # Both lanes have already verified the actual0014 upgrade above;
+            # the populated lane's original0013 is no longer its live schema.
+            declared = '0014'
             execution_consumer=client('migrate',execution_program(seed=True,revision=declared))
             assert b'guard_consumer=true verified_tls=true' in execution_consumer.stdout
             print('execution_verified_tls=true lane='+('fresh0014' if fresh_bootstrap else 'populated0013_no_grant_repair'),flush=True)
