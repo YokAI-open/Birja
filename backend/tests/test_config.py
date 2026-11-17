@@ -88,6 +88,7 @@ def test_placeholder_otp_secret_rejected_in_prod() -> None:
     with pytest.raises(ValidationError) as exc_info:
         Settings(
             env="prod",
+            price_source="kraken",
             email_backend="resend",
             resend_api_key=FAKE_KEY,
             email_from=FROM,
@@ -137,6 +138,7 @@ def test_placeholder_jwt_secret_rejected_in_prod() -> None:
     with pytest.raises(ValidationError) as exc_info:
         Settings(
             env="prod",
+            price_source="kraken",
             email_backend="resend",
             resend_api_key=FAKE_KEY,
             email_from=FROM,
@@ -156,6 +158,7 @@ def _base(**kw: object) -> Settings:
         "redis_url": REDIS,
         "otp_hmac_secret": VALID_SECRET,
         "jwt_secret": JWT,
+        "price_source": "kraken",
         **kw,
     }
     return Settings(**args)  # type: ignore[arg-type]
