@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.models.trade import Holding
 from app.models.user import Account
 from app.services.portfolio import get_portfolio
+from app.services.portfolios import OwnedActivePortfolio
 from tests.dividend_fixtures import dividend_case, hold, process, revise  # noqa: F401
 from tests.helpers import put_holding, put_price, set_cash
+from tests.stock_action_fixtures import synthetic_portfolio_id
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 
 OLD = (D("9000"), D("1"), D("1000"), D("10000"))
@@ -34,26 +36,33 @@ async def seed(engine, new_user):
     await set_cash(engine, uid, "9000")
     await put_holding(engine, uid, "BTC", "1", "1000")
     await put_price(engine, "BTC", "1000", datetime.now(UTC))
-    return uid
+    async with async_sessionmaker(engine)() as db:
+        return OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
 
 
-async def write_position(session, uid):
-    await session.execute(update(Account).where(Account.user_id == uid).values(cash=D("8000")))
+async def write_position(session, portfolio):
     await session.execute(
-        update(Holding).where(Holding.user_id == uid).values(quantity=D("2"), cost_basis=D("2000"))
+        update(Account)
+        .where(Account.id == portfolio.portfolio_id, Account.user_id == portfolio.user_id)
+        .values(cash=D("8000"))
+    )
+    await session.execute(
+        update(Holding)
+        .where(Holding.portfolio_id == portfolio.portfolio_id, Holding.user_id == portfolio.user_id)
+        .values(quantity=D("2"), cost_basis=D("2000"))
     )
 
 
 async def test_locked_uncommitted_writer_does_not_block_whole_old_snapshot(
     engine, new_user, settings, clean_prices
 ):
-    uid = await seed(engine, new_user)
+    portfolio = await seed(engine, new_user)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     ready, release = asyncio.Event(), asyncio.Event()
 
     async def writer():
         async with sessions() as session, session.begin():
-            await write_position(session, uid)
+            await write_position(session, portfolio)
             ready.set()
             await release.wait()
 
@@ -62,7 +71,7 @@ async def test_locked_uncommitted_writer_does_not_block_whole_old_snapshot(
         await asyncio.wait_for(ready.wait(), timeout=2)
         async with sessions() as reader:
             before = await asyncio.wait_for(
-                get_portfolio(reader, user_id=uid, settings=settings), timeout=2
+                get_portfolio(reader, portfolio=portfolio, settings=settings), timeout=2
             )
         assert not task.done()
         assert financial_tuple(before) == OLD
@@ -70,7 +79,7 @@ async def test_locked_uncommitted_writer_does_not_block_whole_old_snapshot(
         release.set()
         await asyncio.wait_for(task, timeout=2)
     async with sessions() as reader:
-        after = await get_portfolio(reader, user_id=uid, settings=settings)
+        after = await get_portfolio(reader, portfolio=portfolio, settings=settings)
     assert financial_tuple(after) == NEW
 
 
@@ -78,14 +87,14 @@ async def test_locked_uncommitted_writer_does_not_block_whole_old_snapshot(
 async def test_commit_between_input_reads_exposes_split_reader(
     engine, new_user, settings, clean_prices, monkeypatch, split_reader
 ):
-    uid = await seed(engine, new_user)
+    portfolio = await seed(engine, new_user)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     first_read, committed = asyncio.Event(), asyncio.Event()
 
     async def writer():
         await first_read.wait()
         async with sessions() as session, session.begin():
-            await write_position(session, uid)
+            await write_position(session, portfolio)
         committed.set()
 
     task = asyncio.create_task(writer())
@@ -105,11 +114,19 @@ async def test_commit_between_input_reads_exposes_split_reader(
             monkeypatch.setattr(reader, "execute", execute_at_boundary)
             if split_reader:
                 cash = (
-                    await reader.execute(select(Account.cash).where(Account.user_id == uid))
+                    await reader.execute(
+                        select(Account.cash).where(
+                            Account.id == portfolio.portfolio_id,
+                            Account.user_id == portfolio.user_id,
+                        )
+                    )
                 ).scalar_one()
                 quantity, basis = (
                     await reader.execute(
-                        select(Holding.quantity, Holding.cost_basis).where(Holding.user_id == uid)
+                        select(Holding.quantity, Holding.cost_basis).where(
+                            Holding.portfolio_id == portfolio.portfolio_id,
+                            Holding.user_id == portfolio.user_id,
+                        )
                     )
                 ).one()
                 values = cash, quantity, basis, cash + quantity * D("1000")
@@ -117,7 +134,7 @@ async def test_commit_between_input_reads_exposes_split_reader(
                 with pytest.raises(AssertionError, match="different commits"):
                     assert_whole_snapshot(values)
             else:
-                snapshot = await get_portfolio(reader, user_id=uid, settings=settings)
+                snapshot = await get_portfolio(reader, portfolio=portfolio, settings=settings)
                 assert_whole_snapshot(financial_tuple(snapshot))
                 assert financial_tuple(snapshot) == OLD
                 assert len(statements) == 1
@@ -139,12 +156,14 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
     from tests.test_stock_trading_service import trade_order
 
     factory, cid, uid, now = stock_trade_case
+    async with factory() as db:
+        portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     await put_price(engine, "BTC", "100", now)
     async with factory() as db:
-        await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await stock_trading.execute(db, portfolio=portfolio, order=trade_order(), settings=settings)
         await trading.execute(
             db,
-            user_id=uid,
+            portfolio=portfolio,
             order=trading.Order("BTC", "buy", "usd", D(100)),
             expected_mid=D(100),
             idempotency_key=uuid4(),
@@ -160,13 +179,16 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
             if len(statements) == 1:
                 async with factory() as writer:
                     await stock_trading.execute(
-                        writer, user_id=uid, order=trade_order(quantity="1"), settings=settings
+                        writer,
+                        portfolio=portfolio,
+                        order=trade_order(quantity="1"),
+                        settings=settings,
                     )
                 await put_price(engine, "BTC", "200", now)
             return result
 
         monkeypatch.setattr(reader, "execute", read_then_fill)
-        before = await get_portfolio(reader, user_id=uid, settings=settings)
+        before = await get_portfolio(reader, portfolio=portfolio, settings=settings)
         assert before.cash == 9696 and before.total_value == D("9997.50")
         assert [h.symbol for h in before.holdings] == ["AAPL", "BTC"]
         assert [h.quantity for h in before.holdings] == [D(2), D("0.99501246")]
@@ -174,7 +196,7 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
         assert before.class_values.stocks == 202 and before.class_values.crypto == D("99.50")
         assert len(statements) == 2 and sum("FROM accounts" in sql for sql in statements) == 1
     async with factory() as reader:
-        after = await get_portfolio(reader, user_id=uid, settings=settings)
+        after = await get_portfolio(reader, portfolio=portfolio, settings=settings)
         assert after.cash == 9594 and after.total_value == D("10096.00")
         assert after.holdings[0].quantity == 3 and after.holdings[1].mid == 200
 
@@ -186,7 +208,11 @@ async def test_actual_dividend_cash_and_correction_enter_portfolio_once(dividend
 
     async def snapshot():
         async with factory() as db:
-            return await get_portfolio(db, user_id=ids["user_id"], settings=settings)
+            return await get_portfolio(
+                db,
+                portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"]),
+                settings=settings,
+            )
 
     before = await snapshot()
     assert before.cash == D(100) and before.starting_cash == D(10000)
@@ -211,7 +237,9 @@ async def test_actual_dividend_cash_and_correction_enter_portfolio_once(dividend
     assert after.cash == applied.cash and after.starting_cash == before.starting_cash
     assert after.class_values.cash == D("101.50")
     async with factory() as db:
-        history = await list_event_history(db, user_id=ids["user_id"])
+        history = await list_event_history(
+            db, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])
+        )
     assert [item.kind for item in history.items] == [
         "dividend_correction",
         "dividend_correction",
