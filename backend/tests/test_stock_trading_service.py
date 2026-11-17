@@ -351,7 +351,14 @@ async def test_late_failures_roll_back_all_staged_effects(
 
 @pytest.mark.parametrize(
     "hidden,change,expected",
-    [(1, False, "replay"), (2, False, "replay"), (2, True, "conflict"), (99, False, "integrity")],
+    [
+        (-1, False, "replay"),
+        (0, False, "replay"),
+        (1, False, "replay"),
+        (2, False, "replay"),
+        (2, True, "conflict"),
+        (99, False, "integrity"),
+    ],
 )
 async def test_key_rechecked_under_lock_and_unique_backstop(
     stock_trade_case, settings, monkeypatch, hidden, change, expected
@@ -373,7 +380,9 @@ async def test_key_rechecked_under_lock_and_unique_backstop(
     async def miss_then_find(*args):
         nonlocal calls
         calls += 1
-        return None if calls <= hidden else await real(*args)
+        # Also exercise a transient miss after initial detection: the second
+        # locked lookup must still return the immutable original, never refill.
+        return None if calls <= hidden or (hidden == -1 and calls == 2) else await real(*args)
 
     monkeypatch.setattr(stock_trading, "find_user_trade", miss_then_find)
     async with factory() as db:
