@@ -532,3 +532,65 @@ untracked; all tracked changes are committed. No application/runtime, SQL asset,
 dependency, provider, private configuration, production or publication change
 occurred in this segment. Phase12 stays26/28, no27SUMMARY, final UI/native200%
 remain pending, and Phase7's consumed campaign/six gaps/OFF admissions are intact.
+
+## Critical branch repair segment — 2026-11-17
+
+All six remaining critical-module diagnostic gaps now have behavioral tests;
+no runtime, migration, SQL asset, package, threshold or exclusion changed:
+
+- a9e9da6 / owning12-16 adds finite dev/migrator orchestration tests. Exact
+  source bytes, missing/changed/symlink source refusal, explicit endpoint
+  admission, child success/failure/spawn/timeout, redacted CLI failures,
+  advisory-lock release, engine disposal and temporary login revocation are
+  asserted at their process/construction seams. Authentication/catalogue tests
+  use actual credentialed birja_migrator connections and genuine0017 or an
+  intentionally empty disposable schema: unsafe schema CREATE, multi-version,
+  unexpected relation/routine/owner and wrong authenticated identity refuse.
+  Actual asyncpg multi-statement final preflight/grants execute against0017;
+  scheduler cash UPDATE remains denied and the narrow root-lock call admitted.
+- 91cca3c / owning12-12 proves a real sold-out root advances global units while
+  retaining sequence2 and exactly its two original movements. Actual closed
+  unjournaled holdings refuse interpretation. A loaded holding with a stale
+  in-memory owner mismatch also refuses; the invalid pair is never flushed
+  through the real composite FK. No financial SQL constraint is disabled.
+- 48ddd79 / owning12-14 preserves a real paid dividend and immutable History
+  original, fault-injects an empty subsequent projection SQL read and asserts
+  Incomplete owned History projection rather than a falsely complete empty
+  page. The paid original still reads intact afterward. No fabricated cash,
+  entitlement or journal is used to claim a successful financial action.
+- d214119 / owning12-11 extends the existing actual-finance retry/race test with
+  immediate original detection and a transient miss after that detection. The
+  next locked lookup returns the exact original receipt with no duplicate
+  effect; unchanged financial snapshots remain asserted.
+
+Actual serial receipts:
+
+- /tmp/phase12-27-critical-real-migrator-first.log:26pass/34.91s, real
+  authenticated catalogue and orchestration proofs.
+- /tmp/phase12-27-critical-final-focused.log:80pass/40.01s at final test bytes,
+  all new bootstrap/migrator/financial branches and original retry negatives.
+- /tmp/phase12-27-critical-stock-replay-final.log:6pass/5.69s including the final
+  transient locked lookup-miss case.
+- Full Ruff lint/format227files and mypy101 app sources pass; diff check passes.
+- /tmp/phase12-27-critical-diagnostic-final.log:exact CI60-module inventory,
+  5020statements/1604branches, zero misses/partials,100%, exit0.
+
+The coverage file still appends focused diagnostics to the earlier failed full
+run. It is **not final qualification**. Next execute a fresh unfiltered backend
+branch coverage run with80% overall and the exact60critical100% report from
+that clean run. Then complete the unchanged actual all-security graph, all five
+actual Dockerfile/image strict scans/audits/browser, and one new same-archive
+seven-stage current/retained recovery campaign. Do not reuse appended data or
+the earlier3032 failed run as final proof. Preserve/move the old fixed recovery
+directory whole before exclusive packaging; no overwrite/rebuild midcampaign.
+Final source-bound UI packet refresh and separate owner/native200% acceptance
+remain pending. Do not create27SUMMARY or advance26/28 from these receipts.
+
+At handoff the same verified owned tmpfs test stack remains running. Sanitized
+administration confirms genuine0017, zero disabled noninternal triggers and
+zero other active DB sessions. No pytest/migration process remains. Before the
+exclusive all-security runner, clean only this exact verified test Compose so
+the runner creates its own stack. Tracked tree is clean after commits; only
+unrelated.claude/ remains untouched. No provider/private production access,
+installation, publication or branch switch occurred. Keep local and preserve
+Phase7's consumed campaign, six pending requirements and OFF admissions.
