@@ -594,3 +594,110 @@ the runner creates its own stack. Tracked tree is clean after commits; only
 unrelated.claude/ remains untouched. No provider/private production access,
 installation, publication or branch switch occurred. Keep local and preserve
 Phase7's consumed campaign, six pending requirements and OFF admissions.
+
+## Actual all-security campaign and browser handoff — 2026-11-17
+
+The actual unchanged `--suite all-security` runner now has a complete passing
+backend/critical/frontend/audit prefix at committed source
+261f617f180a4a7c6764a0f262e4f87bb939ad70, tree
+1ae42755f3735d42f708076b5b94d809f865f0d1. The whole runner is **not passed**:
+it stops at retained browser fixtures, before the three final Dockerfile builds
+and strict five-image scans. Plan27 remains incomplete; there is no SUMMARY.
+
+Before the campaign, exact Compose labels, checkout/config paths, pinned images,
+loopback55432/56379 and tmpfs/no persistent mounts were verified. The old owned
+diagnostic stack was removed, allowing the runner to create its own fresh one.
+No competing pytest/Alembic process was present. All DB testing remained serial.
+
+The first actual campaign at fc5da53 completed3090 cases with3049pass/41fail
+in867.39s, overall99.40%. All41 failures were the deliberate outer environment's
+PRICE_SOURCE=fake selecting a different path in old production trust/config
+and mocked-Kraken scheduler tests. Exact critical coverage had59modules100%;
+only tasks/scheduler.py missed14lines/5branches because its mock source was not
+selected. All actual portfolio migrations/finance cases passed. This was an
+environment-dependent test fixture mismatch, not a runtime source-policy bug.
+
+261f617 / owning12-26 makes those six test files explicit: production trust and
+secret tests select a production-valid Kraken setting; mocked-Kraken scheduler
+fixtures select their mocked source; default-source tests remove only the
+PRICE_SOURCE override. Explicit fake-production refusal cases remain unchanged.
+All183 affected cases pass25.74s under the **exact runner environment**. No
+runtime setting, network mock, provider boundary, threshold or runner gate was
+weakened. Ruff/format227files and mypy101 app sources pass.
+
+Fresh actual unchanged runner receipts at261f617:
+
+- /tmp/phase12-27-all-security-final-second.log: **3090/3090 backend pass**
+  in846.96s, overall99.85% branch coverage (6409statements,1796branches).
+- The same clean run's exact CI60-module critical report: **100%**,
+  5020statements/1604branches, zero misses or partials.
+- Python pip-audit: no known vulnerabilities.
+- Frontend lint, build-project TypeScript and whole Prettier pass.
+- Full frontend44files/958tests pass; coverage97.50%statements,
+  94.65%branches,98.58%functions and98.68%lines. Production Vite build passes.
+- npm audit --audit-level=high passes: zero HIGH/CRITICAL;14 MODERATE
+  findings remain reported. This is not a claim of zero npm findings.
+
+Full tracked source hash inventory is preserved in
+/tmp/phase12-27-security-source-second.json; comparison after the campaign
+found zero changed tracked files. The qualified clean backend coverage data
+and source inventory are preserved under
+/tmp/phase12-27-qualified-backend-261f617/ for later exact-source comparison.
+The earlier first failed campaign/source record and focused repair logs remain
+separate; none is described as a final all-security success.
+
+### Actual browser diagnostic and next repair scope
+
+The runner built a new synthetic isolated browser stack, applied the guarded
+operator/legacy seed and launched all60 tests. It exposed three concrete old
+contracts, then the fourth test waited on an obsolete v1 response. The exact
+Playwright process received SIGINT to retain its report instead of waiting
+through already-known obsolete URLs. This was a failing **diagnostic**, not a
+filtered final qualification: **3failed,1interrupted,1existing CSPskip,
+55did not run**. Full60 must still run and pass under unchanged scope/gates.
+
+Evidence: /tmp/birja-phase09-browser-7oqwmmd2/browser-all.log; its private build,
+startup and cleanup logs remain alongside it. Detailed error-context.md and
+trace.zip artifacts remain in frontend/test-results for these test names:
+
+- auth: a new user signs in, stays signed in, signs out and signs in again.
+  It still expects $10,000 on the now identity-only Account screen. Preserve
+  the actual grant/no-regrant/session assertions through the owned portfolio;
+  Account must remain email/session-only.
+- dividends-history: authenticated mixed History starts empty. It requests
+  /api/v1/history and correctly receives409 portfolio_required, rather than
+  the intended scoped mixed History page.
+- dividends-history: real restricted worker credits once and publishes
+  uncertainty with no cash change. Actual worker/economic assertions pass up
+  to the same obsolete History request; its error response has no items.
+- dividends-history: actual mixed pages preserve originals, responsive focus
+  and failed-read recovery. Interrupted while cryptoFill waited for a
+  /api/v1/trades response, whereas the real UI uses its explicit v2 root.
+
+Read the full retained e2e files before adaptation: auth.spec.ts,
+dividends-history.spec.ts, stock-trades.spec.ts, portfolio-history.spec.ts,
+trading.spec.ts and their helpers/fixtures. Remaining v1 financial API and old
+route/focus expectations need explicit verified root IDs. Public stocks remain
+v1; old unscoped financial APIs must continue refusing. Existing
+portfolio-ownership.spec.ts supplies current root-aware patterns. Preserve all
+original exact cash/quantity/fee/History/replay/keyboard/reflow assertions and
+real restricted worker facts; do not introduce a production fallback or reduce
+the all60 suite. The worker fixture already completed real payment before its
+old History assertion failed. No new product bug is established by this run.
+
+Both browser and security runners executed cleanup. Read-only followup verifies
+zero test containers and zero browser-project containers/networks/volumes;
+there is no pytest/Alembic process. The diagnostic DB no longer exists: the
+next repair must create its own guarded isolated stack, not assume a running
+one. Unrelated.claude/ is the only untracked path and is untouched.
+
+Next: reconcile/replay all retained browser cases with explicit ownership, then
+finish the actual all-security graph including all final five strict images.
+Reuse passing-prefix data only as truthful source-bound evidence, never claim
+the whole runner passed from it. Once final source is qualified, task02 still
+needs the fresh exclusive one-archive seven-stage recovery campaign and a new
+actual-source UI packet; preserve/move the whole old private proof directory
+before packaging, never rebuild between stages. Plan28 owner UI/native200%
+remains blocking. Phase12 stays26/28; all requirements stay unchecked. No new
+dependency/provider/private production/publication action occurred. Phase7's
+consumed campaign/six pending requirements/OFF admissions are unchanged.
