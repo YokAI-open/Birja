@@ -1,13 +1,34 @@
 ---
 phase: 12-preserve-existing-investing-under-portfolio-ownership
-verified: 2026-11-17T18:50:00Z
-status: gaps_found
-score: 7/8 consolidated must-haves verified
+verified: 2026-11-17T23:03:54.102Z
+status: passed
+score: 8/8 consolidated must-haves verified
 roadmap_score: 5/5
-plan_truths_accounted_for: 56
-overrides_applied: 0
-source_commit: d9da271b2b21f48f965dd54898a6bb8afcc9088e
-reviewed_head: 1945adb0a51e27a1f6499e58c1907ce8589e96dc
+requirements_verified: 7/7
+plan_truths_accounted_for: 59
+overrides_applied: 1
+source_commit: 4b4320b4cc373268a8d598612a563cd5ef199700
+reviewed_head: f2c48f0537b5123d1278721fc14cd3e09d29ef9e
+overrides:
+  - must_have: "The current frozen source satisfies the complete strict security qualification, including npm audit HIGH policy."
+    reason: "The owner explicitly accepted only GHSA-fc5q-39xc-vjpf/CVE-2026-112366 and requested issue35 plus continued development. Raw findings remain visible; exact identity/hash/path/expiry controls reject unrelated HIGH, all critical and invalid evidence. Actual complete security and fresh recovery pass under this documented policy."
+    accepted_by: project owner
+    accepted_at: "2026-11-17"
+    acceptance_time_precision: date
+accepted_risks:
+  - advisory: GHSA-fc5q-39xc-vjpf
+    cve: CVE-2026-112366
+    issue: https://github.com/YokAI-open/Birja/issues/35
+    expires: "2026-12-17T00:00:00Z"
+    status: unresolved_owner_accepted
+    scope: "Reviewed frontend manifest/lock and exact Node tooling npm picomatch4.0.4 identity/path/source only; no other HIGH/critical exception."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 7/8
+  gaps_closed:
+    - "Common security qualification gap: explicit owner advisory acceptance, fail-closed shared npm/image controls, separately approved Python repair, actual complete current security and fresh source-bound recovery."
+  gaps_remaining: []
+  regressions: []
 must_haves:
   truths:
     - "Existing user finances, baseline, holdings, basis, fills, History and retry identities survive first-portfolio association without grant or reset."
@@ -26,9 +47,11 @@ must_haves:
     - path: frontend/src/components/PortfolioTargetBoundary.tsx
       provides: Verified target before financial children
     - path: deploy/tests/run-portfolio-validation.py
-      provides: Strict source-bound security and recovery graph
-    - path: frontend/package-lock.json
-      provides: Exact locked dependency graph subject to HIGH audit gate
+      provides: Actual source-bound complete security and recovery graph
+    - path: deploy/audit-frontend.mjs
+      provides: Fail-closed exact accepted-advisory audit policy and raw findings
+    - path: deploy/scan-images.py
+      provides: Immutable five-image scans with exact accepted Node tooling finding
   key_links:
     - from: backend/app/main.py
       to: backend/app/api/v2/router.py
@@ -40,75 +63,52 @@ must_haves:
       to: frontend/src/components/PortfolioTargetBoundary.tsx
       via: Scoped routes and verified Outlet context
     - from: deploy/tests/run-portfolio-validation.py
-      to: frontend/package-lock.json
-      via: npm audit --audit-level=high in complete security sequence
-gaps:
-  - truth: "The current frozen source satisfies the complete strict security qualification, including npm audit HIGH policy."
-    status: failed
-    classification: BLOCKER
-    reason: "Actual integrated all-security exits1 at npm audit:25 findings,14 HIGH and11 moderate. GHSA-fc5q-39xc-vjpf affects picomatch<=4.0.7; final saved official metadata reports latest4.0.7 and no patched version. Separate later browser/image diagnostics cannot convert the failed complete command into a pass."
-    artifacts:
-      - path: frontend/package-lock.json
-        issue: "Locked picomatch4.0.7 and nested2.3.2 are affected; advisory propagates through14 HIGH package entries."
-      - path: deploy/tests/run-portfolio-validation.py
-        issue: "Correctly enforces unchanged npm audit HIGH gate; current complete execution fails."
-      - path: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-LOCAL-VERIFICATION.md
-        issue: "Current qualification remains blocked despite historical whole-security pass and current passing independent diagnostics."
-    missing:
-      - "A legitimate patched dependency candidate with exact scope, artifact checksums/provenance and separately authorized repair; none exists in the final saved official evidence."
-      - "Successful complete strict qualification of the repaired frozen source with unchanged audit, coverage and image policy before phase advancement."
+      to: deploy/audit-frontend.mjs
+      via: Same node ../deploy/audit-frontend.mjs command as frontend CI
 deferred:
-  - truth: "Public additional strategy creation, naming/renaming, optional descriptions and comparison overview."
-    addressed_in: "Phase13"
-    evidence: "Roadmap Phase13 SC1–4 explicitly deliver create/name/description/funding and stable strategy comparison."
-  - truth: "Public confirmed terminal deletion and the last-portfolio replacement journey."
-    addressed_in: "Phase14"
-    evidence: "Roadmap Phase14 SC1/4 deliver deletion confirmation and zero-active overview/Create portfolio."
-  - truth: "Full integrated create/rename/description/compare/switch/delete lifecycle acceptance and recovery."
-    addressed_in: "Phase15"
-    evidence: "Roadmap Phase15 SC1–4 qualify the complete strategy lifecycle; current revision-specific preservation/recovery/security obligations remain here."
+  - truth: "Public creation, naming/renaming, optional editable/empty descriptions and comparison overview."
+    addressed_in: Phase13
+    evidence: "Roadmap Phase13 success criteria explicitly deliver independently funded strategy management/comparison."
+  - truth: "Public confirmed terminal deletion, including holdings or the final portfolio."
+    addressed_in: Phase14
+    evidence: "Roadmap Phase14 delivers deletion confirmation, freeze and zero-active Create portfolio journey."
+  - truth: "Full integrated management/deletion lifecycle acceptance and recovery."
+    addressed_in: Phase15
+    evidence: "Roadmap Phase15 qualifies create/name/description/compare/switch/delete; current revision recovery is verified here."
 ---
 
-# Phase12: Preserve Existing Investing Under Portfolio Ownership Verification Report
+# Phase12: Preserve Existing Investing Under Portfolio Ownership Verification
 
-**Phase Goal:** Existing users can keep investing in their first named portfolio with their actual finances and History preserved, while financial requests and authority are explicitly bound to that portfolio.
+**Goal:** Existing users keep investing in their first named portfolio with their actual finances and History preserved, while financial requests and authority are explicitly bound to that portfolio.
 
-**Verified:** 2026-11-17T18:50:00Z  
-**Status:** gaps_found — one BLOCKER  
-**Re-verification:** No — initial goal verification. The separate 12-LOCAL-VERIFICATION.md is campaign evidence, not an earlier goal report with structured gaps.
+**Status:** passed — 8/8 consolidated truths, including one explicit owner-approved security-policy override; functional roadmap5/5 and assigned requirements7/7.
 
-The implemented preservation slice satisfies all five functional roadmap criteria in isolated proof. Phase12 cannot close or advance to Phase13 because its mandatory current security qualification fails. Task counts, accepted UI, source review closure, historical audit success and passing separate diagnostics do not change that result.
+**Re-verification:** Yes. The earlier7/8 report is preserved in Git history at2792536 and its underlying failed receipts remain intact. The owner subsequently requested “can you create an issue in gh for the future about this and continue without fixing it?” This accepts the specific unresolved advisory, not a general security waiver or proof of remediation. Exact acceptance time was not recorded; the override records the known date only.
 
 ## Goal Achievement
 
-### Observable Truths
-
-| # | Truth | Status | Implementation and independent proof evidence |
+| # | Observable truth | Verdict | Independently checked evidence |
 |---|---|---|---|
-| 1 | An existing user opens their first named portfolio with exactly the prior cash, stored starting-cash baseline, holdings, basis, fills, event History and retry identities; no migration grant or reset occurs. | VERIFIED | 0015 adds metadata/lineage;0016 associates seven owned tables by their unique original account in bounded NULL-only batches. It does not rewrite cash/baseline/fills/global split digests.0017 validates required compound ownership. accounts.get_or_create_user grants only after a genuinely new User insert; get_me cannot grant. Current migration/preservation suites and same-archive independent before/after economic projections pass. |
-| 2 | The user sees the target portfolio name on tickets, confirmations, receipts and holding details, and can complete the existing crypto/stock preview, fill and original-receipt retry flows under unchanged execution rules; omitted, ambiguous or unavailable targets never select another portfolio. | VERIFIED | OwnedActivePortfolioDep verifies path ID+authenticated owner+active state. Both trade services recheck/lock the root; retry lookup remains user-global and compares original root and payload. Client validators reject mismatched identities. Boundary mounts financial children only for a ready target; pages/receipt/holding details carry its name. Actual full browser diagnostic and backend/frontend regressions pass; owner accepted the render-equivalent packet. |
-| 3 | The user reads only the chosen portfolio's mixed paginated History and original-event details; identities, references and cursors cannot retrieve another portfolio's financial records. | VERIFIED | history.py trade2 and event_history.py mixed3 decode expected portfolio ID; queries and original hydration constrain user+root. Deterministic seek ends in unique source identity. Client cursor validation and owner/root/session hooks prevent old pages/detail publication. Actual scoped service/API/cursor/frontend/browser cases pass. |
-| 4 | OTP sign-in, session refresh and sign-out work independently of zero, one or many financial portfolios in isolated fixtures; legacy financial requests cannot bypass explicit targeting or choose an ambiguous portfolio. | VERIFIED | get_me selects User.email alone; v2 identity is mounted in real create_app. v1 verify refuses before OTP consume; v1 financial handlers use authenticated409 portfolio_required and state-changing routes retain CSRF. Browser discovery distinguishes zero/one/many without financial fallback. Full current auth/session and route tests pass. |
-| 5 | The same investing journeys work on fresh and populated upgraded databases through restricted verified-TLS roles, with original financial payloads, immutable evidence and matching ownership constraints preserved; ordinary roles cannot gain broader mutation rights. | VERIFIED | Actual0017 migration, narrow column grants, trigger/compound-FK authority and fixed routine fingerprints are wired to restricted bootstrap/admission. Full recovery runs fresh+upgraded TLS consumers, role denials, exact financial payloads and authority parity. Unsafe source/schema/intermediate states and broadened roles refuse. |
-| 6 | Current0017 and retained recovery complete against one source-bound immutable archive with exact financial and authority parity. | VERIFIED | Current complete seven-stage recovery receipt exits0,2697.424s; same_archive_final_ci=true and retained0007–0014 proofs. Recomputed archive SHA94365aff…03eb; raw log/source receipt hashes match. Actual declared-runtime source-destroyed cold restore is included; a separate cold-first51.501s result also passes. |
-| 7 | Owner UI and genuine native200% acceptance are explicit and apply to unchanged render inputs. | VERIFIED | HUMAN-UAT records separate “approved” and “Yes—native 200% passed”. Packet SHA c87cb4a3…d55f and all125render inputs remain unchanged. Broad inventory is245/249, with four backend authority/pin changes; no recapture or249/249claim is made. Browser name was not supplied and is not invented. |
-| 8 | The current frozen source satisfies complete strict security qualification, including npm audit HIGH policy. | FAILED — BLOCKER | Complete current all-security exits1 after actual npm audit detects14HIGH/11moderate. Saved official advisory/registry refresh18:37:28Z has latest4.0.7, affected<=4.0.7 and first_patched_version=null. No override, waiver or patched candidate exists. |
+|1|Original cash, stored baseline, holdings, basis, fills, History and retry identity survive association without grant/reset.|VERIFIED|0015/16/17 and all application/Alembic source are byte-unchanged from the prior substantive verification. Existing seven-table bounded NULL-only association and immutable legacy/global evidence remain. Current3114 backend and fresh exact recovery pass. accounts.get_or_create_user grants only after successful new User insertion; get_me reads identity only.|
+|2|Explicit named-root crypto/stock execution and original receipt recovery preserve rules without fallback.|VERIFIED|Resolver actually queries Account.id+user_id+closed_at; services lock/recheck that root and compare original payload/root on globally found retry keys. Production v2 router is mounted by create_app. Boundary renders financial children only for ready verified target. Current full unit/API/browser and recovery service consumers pass.|
+|3|History, originals, references and cursors disclose only the selected root.|VERIFIED|Actual trade/event queries constrain user and portfolio; decoder requires expected root. The unchanged clients/hooks partition root/session/owner and validate response identity. Current complete backend/frontend/browser tests cover private original hydration and seek pagination.|
+|4|Identity/session lifecycle works at zero/one/many portfolios; legacy finance cannot bypass targeting.|VERIFIED|v2 identity returns User.email independently of Account; legacy refusal remains authenticated and state-changing CSRF protected. Real router composition and boundary zero/many/unavailable paths are unchanged and covered by the current full suite.|
+|5|Fresh/upgraded journeys preserve restricted verified TLS, immutable evidence and ownership authority.|VERIFIED|Fresh and upgraded actual service-consumer TLS lanes pass on the approved patched runtime, including63role denials, immutable accounting, scoped stock/dividend effects, badCA/hostname/plaintext refusals and authority parity. No application/model/schema mutation was introduced by audit/image repairs.|
+|6|Current0017 and retained recovery complete from one immutable source-bound archive with exact state/authority.|VERIFIED|Actual full seven-stage recovery exits0,2694.692s, final same_archive_final_ci=true. Independently recomputed new196689920-byte archive SHA d253bc51…26be; declared-runtime source-destroyed cold restore and retained0007–0014 exact oracles pass.|
+|7|Both explicit owner UI/native200 acceptances remain applicable.|VERIFIED|HUMAN-UAT records “approved” and separately “Yes—native 200% passed”,2passed/0pending. Owner ZIP independently hashes c87cb4a3…d55f. Frontend and capture runner are byte-unchanged from prior verified render inputs, so no new UI checkpoint is invented.|
+|8|Current frozen source satisfies complete strict security qualification, including npm HIGH policy.|PASSED (override)|Owner accepted only the named picomatch advisory via issue35. Shared helper and image classifier retain full findings and reject unrelated HIGH/critical, error/schema/transport, changed hashes/path/version and expired approval. Actual whole all-security exits0,1479.850s. The separate Python advisory is fixed by the separately approved official image patch; it is not waived.|
 
-**Score:** 7/8 consolidated must-haves verified; functional roadmap contract5/5. No UNCERTAIN truth or pending human decision remains.
+**Score:**8/8 including1explicit override. No FAILED/BLOCKER or UNCERTAIN/WARNING truth and no pending human item.
 
-### Scope and Disconfirmation
+### Disconfirmation and source regression
 
-Three plausible failure paths were checked: (1) association silently grants/resets finances, (2) global retry keys or stale browser state cross roots, and (3) apparently wired recovery uses a workstation-only image or broadened restored authority. The concrete migrations, root/payload checks, guarded query state, declared-runtime factory and raw exact-recovery receipts disprove those failure hypotheses for the current preservation slice.
+The initial adversarial hypotheses remain disproved: no migration regrant/reset, no root-switch retry/history leak, and no cached-image/broadened-authority substitute for real recovery. This re-verifier checked actual resolver/router/identity/grant code, trade root/lock/retry links, root-bound History predicates and boundary rendering. It also verified that backend/app, backend/alembic, frontend and the capture/browser runner have **no diff from d9da271**. Thus the prior functional data-flow verification is retained by direct source equality, not by trusting task summaries.
 
-A real partial outcome remains: functional behavior is proven while mandatory security qualification is incomplete. The passing offline browser contracts use injected command results; they prove harness guards, not real browser investing. Actual browser evidence comes separately from the full60-collected run. Likewise, SDK schema-drift=false identified no supported ORM and is not schema-equivalence evidence; actual Alembic fresh/upgraded/model/catalogue/TLS proofs supply that evidence. Codebase-drift EPERM is nonblocking and supplies no correctness proof.
+Current HEAD f2c48f0 differs from tested4b4320b only in four qualification documents. A separate git diff over backend/frontend/deploy/.github/all Compose inputs is empty. The new financial-authority test selector is test-only and preserves complete named/ordered ownership constraints; the approved Python/Docker and scoped audit changes were independently reviewed and exercised by actual fresh recovery.
 
-CR-01 was checked against actual integrated SQL: the no-dividend-obligation exception requires complete cutoff coverage, no target pre-cutoff trades/movements and matching previous quantity/basis, with coalesce(false) for incomplete evidence. It does not exempt splits, historical owners or held/revised authority. Its regression negatives explicitly observe final SQL authority and assert rollback rather than passing on an earlier refusal. CR-02's actual build_current_runtime uses a complete committed Git archive, verifies context before/after the declared Dockerfile runtime build, refuses dirty/changed source and binds/rechecks immutable image Config/RootFS. Current full backend/recovery receipts include the integrated repairs.
+## Plans, Artifacts and Wiring
 
-## Required Artifacts and Plan Truth Coverage
-
-All28 PLAN frontmatters were parsed:56 truths,142 artifact references (131 unique existing paths),54 key-link declarations and112 plan threat rows. All28 SDK verify.artifacts calls return all_passed=true. Existence/SDK results alone are not the substantive or wiring verdict: the source/data-flow tables below and actual suites/receipts establish behavior. Tests are wired through the collected full backend/frontend/CI/browser suites; static SQL through0017 fixed checksum consumption; operational artifacts through declared runner stages; acceptance docs through immutable source/packet evidence.
-
-Each pair below records the two exact plan truths in order. VERIFIED for Plan27's truthful-stop clause means the failure is faithfully preserved; it does **not** satisfy must-have8 or represent a successful audit.
+All31plan and31summary frontmatters were read. They declare exactly the seven assigned requirement IDs,59plan truths,145artifact references/133unique existing paths,57key links and121threat rows. No required artifact is missing. Original56plan truths retain the prior substantive/wiring verification by unchanged application and SQL source; revised29–31 are additionally verified below. Existence and task counts alone do not establish success.
 
 | Plan | Exact additional truths | Result | Substantive/wiring evidence |
 |---|---|---|---|
@@ -138,65 +138,37 @@ Each pair below records the two exact plan truths in order. VERIFIED for Plan27'
 | 12-24 | 1. Every crypto investment surface unambiguously names its root with unchanged financial behavior.<br>2. Stock confirmation and immutable receipt remain original-target and accessible at responsive widths. | VERIFIED / VERIFIED | Trade pages consume Outlet target; named confirmation/receipt surfaces and frozen original attempt; scoped receipt component links. |
 | 12-25 | 1. Existing accepted financial presentation is preserved for one explicitly named root.<br>2. History list, pagination and original detail disclose one active owned portfolio only. | VERIFIED / VERIFIED | PortfolioPage→usePortfolio and HistoryPage→useEventHistory render real scoped responses; detail state root/session lifetime. |
 | 12-26 | 1. All new journeys are reachable from isolated target routes; review bundle tied to exact source and synthetic evidence.<br>2. CI graph and retained archive contents enforce ownership/source/security contracts with unchanged strength. | VERIFIED / VERIFIED | Actual browser journeys and strict CI command graph; current browser diagnostic plus independently rerun6 browser/37 CI contracts. |
-| 12-27 | 1. All complete suites/audits/scans actually pass for same frozen source or execution stops with truthful failures; focused latency not falsely claimed.<br>2. Real current and retained isolated recovery proof passed for one exact source/archive, complete sanitized receipt and review packet ready; no production/provider work. | VERIFIED / VERIFIED | Truthful failed security stop is recorded, not called a pass; whole current seven-stage recovery and separate diagnostic have authenticated receipts. |
+| 12-27 | 1. All complete suites/audits/scans actually pass for same frozen source or execution stops with truthful failures; focused latency not falsely claimed.<br>2. Real current and retained isolated recovery proof passed for one exact source/archive, complete sanitized receipt and review packet ready; no production/provider work. | VERIFIED / VERIFIED | Historical failed stops remain recorded; new31 actual complete security and fresh seven-stage recovery pass at one frozen source, with the owner-approved advisory disposition. |
 | 12-28 | 1. Owner explicitly accepts changed synthetic UI for recorded source; absence or ambiguous response is not approval.<br>2. Owner's genuine native200% pass recorded for same source, deferred/live and future-phase boundaries retained. | VERIFIED / VERIFIED | Explicit owner approved and separate Yes—native200%passed; unchanged125render inputs, immutable packet and documented245/249broad match. |
+| 12-29 | The unresolved picomatch advisory has explicit owner acceptance and a bounded follow-up, without claiming a fix. | VERIFIED | Exact owner decision, issue35, immutable lock bindings, expiry and reassessment conditions in12-ACCEPTED-RISK.md. |
+| 12-30 | CI and local qualification visibly report only the exact accepted advisory while rejecting unrelated HIGH/critical and invalid evidence. | VERIFIED | Complete Node helper and shared invocation;12 independently rerun audit tests plus source review and actual full campaign. |
+| 12-31 | Functional/recovery assurance and complete qualification pass while accurately disclosing accepted unresolved risk. | VERIFIED | Independently hashed actual whole-command exit0 receipts at4b4320b, new source-bound archive and all7 recovery stages. |
 
-### Artifact Inventory
+### Required Artifact Coverage
 
-All paths below pass existence/substance checks and participate in the stated proof chain. Local qualification documentation is substantive and truthful, but its **successful-qualification outcome is FAILED**. No artifact is a substitute for that missing outcome.
+The prior initial report's131unique-artifact inventory remains applicable for unchanged implementation. All133current unique required paths exist; the two additional required artifacts are12-ACCEPTED-RISK.md and deploy/audit-frontend.mjs. Changed runtime/test/CI/audit artifacts are substantive and wired, not placeholders.
 
-| Plan | Required artifact paths | Level3 disposition |
+| Artifact group | Substance and actual consumer | Verdict |
 |---|---|---|
-| 12-01 | `backend/tests/portfolio_fixtures.py`<br>`backend/tests/test_portfolio_migrations.py`<br>`backend/tests/test_portfolio_ownership.py`<br>`backend/tests/test_portfolio_authority.py`<br>`backend/tests/conftest.py`<br>`backend/tests/test_migrations.py`<br>`backend/tests/test_stock_migrations.py` | WIRED; implementation/proof consumer mapped above |
-| 12-02 | `backend/app/models/user.py`<br>`backend/tests/test_portfolio_ownership.py`<br>`backend/app/models/trade.py` | WIRED; implementation/proof consumer mapped above |
-| 12-03 | `backend/app/models/stock_execution.py`<br>`backend/app/models/corporate_action.py`<br>`backend/tests/test_portfolio_ownership.py`<br>`backend/app/models/dividend.py`<br>`backend/tests/test_portfolio_authority.py` | WIRED; implementation/proof consumer mapped above |
-| 12-04 | `backend/alembic/versions/0015_portfolio_expansion.py`<br>`backend/tests/test_portfolio_migrations.py`<br>`backend/alembic/versions/0016_portfolio_association.py` | WIRED; implementation/proof consumer mapped above |
-| 12-05 | `backend/tests/test_portfolio_stock_authority.py`<br>`backend/alembic/sql/0017_stock_portfolio.sql` | WIRED; implementation/proof consumer mapped above |
-| 12-06 | `backend/tests/test_portfolio_dividend_authority.py`<br>`backend/alembic/sql/0017_dividend_portfolio.sql` | WIRED; implementation/proof consumer mapped above |
-| 12-07 | `backend/alembic/versions/0017_portfolio_ownership.py`<br>`backend/tests/test_portfolio_migrations.py`<br>`backend/app/db/schema_contract.py`<br>`backend/app/main.py`<br>`backend/tests/test_portfolio_schema_admission.py` | WIRED; implementation/proof consumer mapped above |
-| 12-08 | `backend/app/core/deps.py`<br>`backend/app/schemas/auth.py`<br>`backend/app/schemas/portfolios.py`<br>`backend/tests/test_portfolio_ownership.py`<br>`backend/app/services/accounts.py`<br>`backend/app/services/auth.py`<br>`backend/tests/test_portfolio_identity.py` | WIRED; implementation/proof consumer mapped above |
-| 12-09 | `backend/app/api/v2/auth.py`<br>`backend/app/api/v2/me.py`<br>`backend/app/api/v2/router.py`<br>`backend/tests/test_portfolio_identity_api.py`<br>`backend/app/api/v1/auth.py`<br>`backend/app/api/v1/me.py` | WIRED; implementation/proof consumer mapped above |
-| 12-10 | `backend/app/services/trading.py`<br>`backend/app/services/trade_idempotency.py`<br>`backend/tests/test_portfolio_crypto.py`<br>`backend/app/api/v2/trades.py`<br>`backend/app/schemas/trades.py`<br>`backend/tests/test_portfolio_crypto_api.py` | WIRED; implementation/proof consumer mapped above |
-| 12-11 | `backend/app/services/stock_trading.py`<br>`backend/tests/test_portfolio_stock_trading.py`<br>`backend/app/api/v2/stock_trades.py`<br>`backend/app/schemas/stock_trades.py`<br>`backend/tests/test_portfolio_stock_api.py` | WIRED; implementation/proof consumer mapped above |
-| 12-12 | `backend/app/services/stock_ownership.py`<br>`backend/tests/test_portfolio_stock_ownership.py`<br>`backend/app/services/corporate_actions.py`<br>`backend/tests/test_portfolio_splits.py` | WIRED; implementation/proof consumer mapped above |
-| 12-13 | `backend/app/services/corporate_actions.py`<br>`backend/tests/test_portfolio_entitlements.py`<br>`backend/app/services/dividends.py`<br>`backend/app/tasks/dividends.py`<br>`backend/tests/test_portfolio_dividends.py` | WIRED; implementation/proof consumer mapped above |
-| 12-14 | `backend/app/services/portfolio.py`<br>`backend/app/schemas/portfolio.py`<br>`backend/tests/test_portfolio_valuation.py`<br>`backend/app/services/history.py`<br>`backend/app/services/event_history.py`<br>`backend/tests/test_portfolio_scoped_history.py` | WIRED; implementation/proof consumer mapped above |
-| 12-15 | `backend/app/api/v2/portfolios.py`<br>`backend/app/api/v2/history.py`<br>`backend/tests/test_portfolio_routes.py`<br>`backend/app/api/v2/router.py`<br>`backend/app/api/v1/router.py`<br>`backend/app/main.py` | WIRED; implementation/proof consumer mapped above |
-| 12-16 | `deploy/db/bootstrap-roles.sql`<br>`backend/app/db/dev_bootstrap.py`<br>`deploy/tests/test-dev-bootstrap.py`<br>`deploy/configure-db.sh`<br>`deploy/deploy.sh`<br>`deploy/tests/test-portfolio-migration-runner.py` | WIRED; implementation/proof consumer mapped above |
-| 12-17 | `deploy/backup-snapshot.py`<br>`deploy/backup-manifest.sql`<br>`deploy/tests/test-portfolio-recovery-contracts.py`<br>`deploy/verify-restore.py`<br>`deploy/restore-check.sh`<br>`deploy/backup.sh` | WIRED; implementation/proof consumer mapped above |
-| 12-18 | `deploy/tests/portfolio-execution-fixture.py`<br>`deploy/tests/ops-fixtures.py`<br>`deploy/tests/selected-cutover.py`<br>`deploy/tests/test-ci-ops.py`<br>`deploy/tests/test-portfolio-fixture-contracts.py`<br>`deploy/tests/portfolio-retained-sources.json` | WIRED; implementation/proof consumer mapped above |
-| 12-19 | `frontend/src/api/auth.ts`<br>`frontend/src/hooks/useMe.ts`<br>`frontend/src/api/auth.test.ts`<br>`frontend/src/api/portfolios.ts`<br>`frontend/src/hooks/usePortfolioTarget.ts`<br>`frontend/src/hooks/usePortfolioTarget.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-20 | `frontend/src/api/trades.ts`<br>`frontend/src/api/stockTrades.ts`<br>`frontend/src/api/portfolioTrades.test.ts`<br>`frontend/src/api/portfolio.ts`<br>`frontend/src/api/history.ts`<br>`frontend/src/api/eventHistory.ts`<br>`frontend/src/api/portfolioReads.test.ts` | WIRED; implementation/proof consumer mapped above |
-| 12-21 | `frontend/src/hooks/useQuote.ts`<br>`frontend/src/hooks/useHolding.ts`<br>`frontend/src/hooks/useTrade.ts`<br>`frontend/src/hooks/portfolioCrypto.test.tsx`<br>`frontend/src/hooks/useStockTrade.ts`<br>`frontend/src/hooks/portfolioStock.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-22 | `frontend/src/hooks/usePortfolio.ts`<br>`frontend/src/hooks/portfolioValuation.test.tsx`<br>`frontend/src/hooks/useHistory.ts`<br>`frontend/src/hooks/useEventHistory.ts`<br>`frontend/src/hooks/portfolioHistory.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-23 | `frontend/src/components/PortfolioContext.tsx`<br>`frontend/src/components/PortfolioTargetBoundary.tsx`<br>`frontend/src/components/PortfolioTargetBoundary.test.tsx`<br>`frontend/src/App.tsx`<br>`frontend/src/pages/AccountPage.tsx`<br>`frontend/src/App.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-24 | `frontend/src/pages/TradePage.tsx`<br>`frontend/src/pages/TradePage.test.tsx`<br>`frontend/src/pages/StockTradePage.tsx`<br>`frontend/src/components/StockTradeReceipt.tsx`<br>`frontend/src/pages/StockTradePage.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-25 | `frontend/src/pages/PortfolioPage.tsx`<br>`frontend/src/components/PortfolioHoldings.tsx`<br>`frontend/src/pages/PortfolioPage.test.tsx`<br>`frontend/src/pages/HistoryPage.tsx`<br>`frontend/src/components/HistoryEventDetails.tsx`<br>`frontend/src/pages/HistoryPage.test.tsx` | WIRED; implementation/proof consumer mapped above |
-| 12-26 | `frontend/e2e/portfolio-ownership.spec.ts`<br>`deploy/tests/run-stock-browser.py`<br>`deploy/tests/test-portfolio-browser-contracts.py`<br>`.github/workflows/ci.yml`<br>`deploy/tests/test-ci-ops.py`<br>`deploy/recovery-bundle.sh`<br>`deploy/tests/run-portfolio-validation.py` | WIRED; implementation/proof consumer mapped above |
-| 12-27 | `.planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-LOCAL-VERIFICATION.md`<br>`.planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-RECOVERY-PROOF.md`<br>`.planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-HUMAN-UAT.md` | WIRED evidence; security acceptance BLOCKED |
-| 12-28 | `.planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-HUMAN-UAT.md` | WIRED; implementation/proof consumer mapped above |
+|0015/16/17 migrations, fixed SQL and schema admission|Real finite association, owner tuples, active-root SQL guards and staged/runtime refusal; consumed by authenticated bootstrap/migrator and exact catalogue recovery.|VERIFIED|
+|Identity/root and financial v2 services/routers|Authenticated explicit-root resolver, transactional financial locks, immutable retry payload and private seek queries; mounted in real app.|VERIFIED|
+|Frontend clients/hooks/pages/boundary|Validated target identity and owner/root/session data/cache lifetime feed real financial pages; no financial child before ready metadata.|VERIFIED|
+|Backup/restore/catalogue/roles/TLS/runtime factory|One authenticated archive, independent before-oracle, source destruction, fixed retained bytes, Config/RootFS identity and restricted restored authority.|VERIFIED|
+|deploy/audit-frontend.mjs and tests|Full raw npm audit, exact advisory/lock/expiry policy; same CI/local invocation and12 meaningful positive/refusal tests.|VERIFIED|
+|deploy/scan-images.py and image contracts|All five saved immutable images, fresh DB, exact report/config checks; Node-only specific finding accepted separately; other findings/errors fail.|VERIFIED|
+|backend/Dockerfile and matching assertions|Only approved exact Python-family pins changed; complete reviewed36-package/14-change closure and source/artifact review; actual current images rescan with no Python HIGH.|VERIFIED|
+|Risk, repair, UAT and qualification records|Explicit owner decisions, exact package/source/receipt hashes and raw result evidence; historical failures remain distinguished.|VERIFIED|
 
-## Key Link Verification
+### Key Links
 
-SDK verify.key-links was run for all28 plans. Its “Target not referenced in source” filename heuristic cannot resolve Python dotted imports, SQL foreign-key references, reverse fixture consumption, cross-layer HTTP URLs or manually recorded evidence links. Those are not accepted as missing implementation without checking the actual mechanism. The following semantic chains cover all54 declared links, including the duplicate Plan01 fixture declaration.
-
-| Plans | From → To | Actual mechanism | Result |
-|---|---|---|---|
-| 01 | Authenticated fixtures → migrations/authority tests | conftest restricted migration connection and run_test_migration; independent snapshots imported by test consumers | WIRED |
-| 02–03 | Models → account/trade/event lineage | Compound ForeignKeyConstraint/unique tuples, not Python source filename strings; actual0017 validates matching SQL | WIRED |
-| 04 | 0016 →0015 | down_revision=0015, authenticated finite NULL association guard and batch/resume negatives | WIRED |
-| 05–07 | 0017 → static SQL; main → schema_contract | Fixed companion names/SHA pins consumed by upgrade; startup calls final schema admission | WIRED |
-| 08–09 | deps/auth → resolver/accounts/session | OwnedActivePortfolio dependency and identity-only get_me; before-consume legacy refusal with actual v2 verification | WIRED |
-| 10–11 | v2 trades → services → retry/journal | Required verified portfolio argument, global key lookup/root equality, instrument then root locks and append/final authority | WIRED |
-| 12–13 | Actions/workers → journal/entitlement → SQL | Persisted digest/closure interpretation; active-root discovery and bound cause-derived financial routines | WIRED |
-| 14–15 | Scoped readers/real application → database services | Actual v2 router registration; root baseline query; private mixed union/original hydration and bound seek cursor | WIRED |
-| 16 | Configure/dev startup → final migrator/grants | Fixed runtime inventory and source-pinned authenticated path; actual restricted fresh/upgraded TLS | WIRED |
-| 17–18 | Producer/consumer → manifest/projections/source dispatcher | Fixed source catalogue, archive manifest, exact rows/units, retained source loader and declared current runtime | WIRED |
-| 19–20 | Browser identity/financial clients → v2 API | v2 email-only identity, owned metadata; explicit encoded root URL plus response/cursor identity checks | WIRED |
-| 21–22 | Trade/read hooks → strict clients | Captured owner/root/session query keys, hidden guards, original attempts, same-root page/detail publication | WIRED |
-| 23–25 | App/boundary/pages → target/hooks/details | Scoped routes enter verified Outlet; current target passed to hooks/receipts/original details; unavailable states remove children | WIRED |
-| 26 | Browser/CI → real journeys/validation | Runner selects ownership spec; CI invokes strict full graph including audit and serial recovery | WIRED |
-| 27–28 | Runner receipts → proof/UAT documents | Exact source/archive/packet hashes and explicit owner responses, with current security failure retained | WIRED; successful security qualification FAILED |
+| Link | Concrete wiring | Verdict |
+|---|---|---|
+|create_app→v2 router→owned-active dependency|Actual include_router /api/v2, user/root/active query before financial service.|WIRED|
+|Trade/retry→owned account/holding/journal/final SQL|Root+owner predicates, root lock, immutable original identity/payload and final authority.|WIRED|
+|History→source rows/original hydration/cursor|User/root constrained unions and deterministic seek; expected portfolio identity in cursors.|WIRED|
+|App→boundary→Outlet→hooks/pages|Only ready target mounts children; captured root reaches financial clients and named receipt/details.|WIRED|
+|CI and local security→shared audit helper|Both invoke node ../deploy/audit-frontend.mjs and its Node tests from frontend cwd; raw audit and exact expiry/hash controls.|WIRED|
+|Actual full runner→immutable image scans/recovery|Complete command sequence, failure propagation, source/archive/image checks and fresh/upgraded parity between seven stages.|WIRED|
 
 ## Data-Flow Trace (Level4)
 
@@ -209,105 +181,90 @@ SDK verify.key-links was run for all28 plans. Its “Target not referenced in so
 | Trade History continuation | Owned Trade → history.list_history → v2 history → strict history client/useHistory | Owner/root predicates and trade2 cursor checked before query; final active-root recheck; continuation publication remains target/session bound. | FLOWING |
 | Target label and identity-only Account | User → v2 me; owned active Account IDs/names → metadata API → usePortfolioTarget → boundary/PortfolioContext/pages | Metadata query is real, bounded by supported owned roots and stable ID ordering. Empty/many responses are legitimate states; sole legacy discovery navigates before finance. Account does not synthesize zero cash. | FLOWING |
 
-## Behavioral Spot-Checks
+## Independent Behavioral Spot-Checks and Probes
 
-These were independently invoked by this verifier from repository root. They are offline contract checks with injected/fake command runners; no service, database, provider or production operation was started.
+| Behavior | Actual verifier command/result | Verdict |
+|---|---|---|
+|Exact accepted audit plus unrelated HIGH/critical/schema/graph/error/hash/expiry refusal|node deploy/tests/test-frontend-audit.mjs;12pass/0skip,114ms, exit0. No network audit invoked by this check.|PASS|
+|Image identity, raw finding retention, exact exception and operational/mixed/unknown refusal|python3 deploy/tests/test-image-contracts.py;17pass,0.699s, exit0. Injected Docker/scanner contracts only; no service started.|PASS|
+|Functional source remains the previously verified implementation|git diff d9da271 HEAD -- backend/app backend/alembic frontend deploy/tests/run-stock-browser.py; empty.|PASS|
+|Final source equals the actually qualified runtime/tooling source|git diff4b4320b HEAD over backend/frontend/deploy/.github/Compose; empty.|PASS|
 
-| Behavior | Command | Result | Status |
+Prior initial-verifier offline browser6/recovery10/CI37contract results remain historical supporting evidence, not newly invoked by this verifier. No explicit probe-*.sh is declared by the31plans, and no conventional probe path was identified. Actual full campaigns below were verified from their raw process evidence; no full suite, service, provider or production operation was started during this verification.
+
+## Independently Verified Actual Qualification
+
+Both actual commands ran at frozen4b4320b4cc373268a8d598612a563cd5ef199700. This verifier parsed their raw result/source receipts, recomputed every log/source SHA below, checked unchanged before/after HEAD, empty tracked-drift lists and zero containers/networks/volumes for all six exact-owned projects. These are two successful complete commands, not an assembly of separate diagnostics.
+
+| Actual command | Exit/time | Contents | Verdict |
 |---|---|---|---|
-| Browser harness safety, cleanup and packet contracts | python3 deploy/tests/test-portfolio-browser-contracts.py |6tests,0.241s, exit0 | PASS |
-| Exact recovery producer/consumer mutation contracts | python3 deploy/tests/test-portfolio-recovery-contracts.py |10tests,0.576s, equality/invariants/identities=true, exit0 | PASS |
-| CI graph, source/image provenance and CR-02 refusal contracts | python3 deploy/tests/test-ci-ops.py |37tests,7.835s, exit0; expected injected failure cases asserted | PASS |
+|python3 deploy/tests/run-portfolio-validation.py --suite all-security|0;1479.8497948981822s|Backend3114/60critical modules100%(5020statements/1604branches), clean Python audit, frontend958/lint/types/format/build, audit12, browser59pass/1originaldeployed-CSPskip501.4s, builds/smoke5 and all5image policies.|PASS under explicit accepted risk|
+|python3 deploy/tests/run-portfolio-validation.py --suite recovery|0;2694.6917584463954s|Image transition, retained0007–0014 exact encrypted roundtrips, current0017 declared-runtime source-destroyed cold restore, roles, upgradedTLS, freshTLS and selected rollback/refusal; final same_archive_final_ci=true.|PASS|
 
-### Probe Execution
+| Receipt | Raw log SHA256 | Source-receipt SHA256 |
+|---|---|---|
+|/tmp/phase12-accepted-retry2-security-4b4320b.*|ace8a8e70cc2b80234ad2261ed5e60166e64854873acc43bef660d45dc0c1f62|05485ef32941148f0c78dc0f31114c9d5c20ce5c50978d80954b3cb3f4a58619|
+|/tmp/phase12-accepted-retry2-recovery-4b4320b.*|9bf74942a3aaef89c346c2485e867bdfb3338b064241ddcfc2b66b60c7788b24|f1686473ba3bbaa3665394dfe567fae5208f5219ba9a852cbb6fec0d82603d08|
 
-No explicit probe-*.sh path occurs in the phase PLAN declarations, and no conventional scripts probe shell path was discovered. No production/default-config helper was invoked. The phase's declared actual runnable qualification commands are recorded below; their original process receipts were inspected and hashed, not rerun or replaced by summaries.
+### Actual image findings and identity evidence
 
-## Current Raw Qualification Evidence
+The five preserved reports at /tmp/phase12-accepted-retry2-image-reports-4b4320b/ independently match their status.json report hashes and exported config/report ImageIDs. Aggregate ok=true and each target ok=true. Trivy0.76.1 uses the pinned scanner; DB UpdatedAt2026-11-17T19:04:24Z, DownloadedAt22:08:05Z and NextUpdate2026-11-18T19:04:24Z were fresh for the run.
 
-Tested source is d9da271b2b21f48f965dd54898a6bb8afcc9088e. Current HEAD1945adb is documentation-only afterward: git diff d9da271 HEAD -- backend frontend deploy DockerCompose .github is empty. The raw four source/result receipts record unchanged HEAD and zero changed tracked files during their own commands. This verifier recomputed every raw log SHA and source-receipt SHA and all match the corresponding result JSON.
+| Target | Raw HIGH/CRITICAL | Accepted | Blocking |
+|---|---:|---:|---:|
+|runtime|0|0|0|
+|builder|0|0|0|
+|postgres|0|0|0|
+|redis|0|0|0|
+|node|1|1 exact picomatch finding|0|
 
-| Actual campaign | Source-bound command/evidence | Result | Status |
-|---|---|---|---|
-| Cold-first | /tmp/phase12-reviewfix-cold-d9da271.{log,source.json,result.json}; declared-runtime cold lane |51.501s, exit0; source destroyed, separate PostgreSQL/quarantine/TLS | PASS |
-| Complete security | python3 deploy/tests/run-portfolio-validation.py --suite all-security; /tmp/phase12-reviewfix-security-d9da271.* |993.346s, exit1 at npm audit. Backend3114PASS, exact60critical modules100% (5020statements/1604branches), overall99.85%; Python audit clean; frontend958PASS/lint/types/format/build passed before failure. | FAILED — BLOCKER |
-| Complete recovery | python3 deploy/tests/run-portfolio-validation.py --suite recovery; /tmp/phase12-reviewfix-recovery-d9da271.* |2697.424s, exit0, all7stages; final same_archive_final_ci=true | PASS |
-| Separate remaining diagnostic | /tmp/phase12-reviewfix-remaining-d9da271.*; unchanged commands unreached by failed security prefix |594.239s, exit0; whole_security_pass=false. Full60browser collected,59PASS/1original deployed-CSPskip,505.9s;3declared builds/pinned pulls, smoke5/5 and5immutable strict image scans0HIGH/CRITICAL. | PASS diagnostic; not whole-security PASS |
+Node raw row remains CVE-2026-112366, picomatch4.0.4 at usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch/package.json. The exact node target, vendor advisory, version/path, frontend Dockerfile hash and UTC expiry are required. No critical or unrelated HIGH is accepted. npm raw14HIGH/11moderate remain visible as accepted risk; the HIGH package entries propagate one advisory, not14independent vulnerabilities. The moderate policy remains unchanged.
 
-The full current backend/frontend and browser results cover retained earlier auth/trading/stock/action/dividend/History families, satisfying the regression check without another full-suite run. The original deployed-CSP skip is disclosed; local proof is not deployed-CSP acceptance or Phase7 live stock approval.
+The previously found Python CVE-2026-119170 is absent from both rebuilt runtime/builder scans after the separately approved official Python patch. Its source-provenance/unsigned-individual-APK limitations remain in12-PYTHON-PACKAGE-REVIEW.md; authenticated signed-index/control/data integrity and complete package closure were independently reviewed. No claim of a zero-vulnerability graph or upstream picomatch remediation is made.
 
-| Receipt | Independently matched raw log SHA256 |
-|---|---|
-| cold | ccdc57e5945c19ca9438659b8c7aad69614c243f40f406ffde4480043ad85154 |
-| security | 2c7e4bc2416dfe5e8b5483fc06781cdec1c11b2bdc44d0d3d65cefc25aad9be4 |
-| recovery | bb0d57233c55da8517da95ebd8f9647ae31860f76f1d65c086bacfe3a8c774bb |
-| remaining | ddb3c1ac30a754158a7a55a22e730605e03557dc0cf221db9deef720504e663b |
+### Exact recovery provenance and preserved history
 
-All four result receipts report zero containers/networks/volumes across all six exact owned projects. No pipeline was started by this verifier.
+The new uncompressed strict USTAR file /tmp/birja-phase12-proof/recovery.tar.gz is196689920bytes and independently hashes:
+**d253bc51b876c7d629ee246ee47bd57274a5d9333e71318e11fcef586cff26be**.
+Every stage authenticates current/retained/source/image/CORE/unit/payload bindings; final fresh/upgraded authority comparison passed.
 
-### Exact Recovery Provenance
-
-One fresh archive /tmp/birja-phase12-proof/recovery.tar.gz is196689920bytes. Its independently recomputed SHA256 is **94365aff1bbf8558bcc1481a19c10afea8c571801d54cf3ae3b79156f4af03eb**. Whole recovery covers image transition, retained0007–0014 encrypted roundtrips, current0017 declared-runtime cold restore, restricted roles, upgraded TLS, fresh TLS and selected rollback/refusal. Current/retained/source/image/CORE/unit guards and fresh/upgraded authority parity are enforced between stages. The old archive/proof is retained separately; current evidence does not relabel an older run.
-
-### Dependency Qualification Gap
-
-Raw /tmp/phase12-reviewfix-npm-audit-d9da271.json reports25findings:14HIGH/11moderate. The single new picomatch advisory propagates through14HIGH package entries; these are not14independent direct vulnerabilities. Current lock entries are4.0.7 and nested2.3.2. The saved official final refresh at2026-11-17T18:37:28.517088Z still reports affected<=4.0.7, latest4.0.7 and no patched version.
-
-Primary evidence: [GitHub reviewed advisory](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) and [official registry metadata](https://registry.npmjs.org/picomatch), captured and hashed in12-DEPENDENCY-REVIEW.md. No fresh network lookup or audit loop was performed. Final saved advisory SHA cc99706e61047047b6690db94abb98b5940d007196775c12902c0f79d8aedbd5; registry SHA9a8e64f1208fef4d18c27f48267e00c639b65743484cf3f5e788d018195b6fbb. Audit JSON SHA471ad05e25c3ac71efd8a0fc04e0eb7b5e0f201b2f80720d232cc7101daa6fa1.
-
-The historical whole-security run finished15:56:18Z; advisory metadata updated15:56:44Z. Historical success cannot establish current gate success. The exposure is in the build/test/tooling dependency graph; public-request exploitability is not inferred, and does not waive the owner’s strict HIGH policy. The suggested semver-major Vitest downgrade is not evidence of a patched picomatch. No package installation, force fix, downgrade, override or waiver is authorized or applied. There is no concrete patched candidate to approve; retain the gate.
+The previous full archive/directory is separately retained at /tmp/birja-phase12-proof-d9da271-preserved-before-4b4320b/. Its196689920-byte archive independently still hashes94365aff1bbf8558bcc1481a19c10afea8c571801d54cf3ae3b79156f4af03eb. Historical d9da271 audit failure, e4c0a9f metadata-selector failure and f97b2d9 image failure remain failures, not rewritten passes. The current successful proof uses a new archive and actual commands.
 
 ## Requirements Coverage
 
-All plans declare only the exact seven primary Phase12 IDs. REQUIREMENTS.md assigns the same seven to Phase12, so there are no orphaned Phase12 IDs. All remain unchecked: local functional verification does not close a requirement while the mandatory phase qualification is blocked.
+The31plans declare exactly the seven Phase12IDs mapped in REQUIREMENTS.md. No assigned requirement is orphaned. The global checkboxes are still pending at verification time because this agent does not mutate them; implementation is now verified and ready for the parent's completion step.
 
-| Requirement | Source plans | Local implementation status | Closure status/evidence |
-|---|---|---|---|
-| PFUND-03 — preserve original finances/no migration grant |01–04,06–08,12–14,16–18,26–27 | VERIFIED | BLOCKED closure by common qualification gap; migration economics, no-regrant onboarding, exact same-archive recovery verified. |
-| PFIN-02 — explicit active crypto/stock execution, unchanged rules |05,08,10–12,15,20–21,26–27 | VERIFIED | BLOCKED closure; resolver, transactions, final SQL, scoped clients/hooks and actual browser execution verified. |
-| PFIN-03 — original-root/payload uncertain retry, once-only fill |01,05,10–11,20–21,24,26–27 | VERIFIED | BLOCKED closure; global retry conflict, immutable active-root replay and unavailable-root refusal verified. |
-| PCTX-01 — visible portfolio name on financial surfaces |09,14–15,19,22–28 | VERIFIED | BLOCKED closure; source-rendered names, strict root clients, accepted UI/native200% verified. |
-| PVIEW-03 — private root History/originals/cursors |14–15,20,22,25–28 | VERIFIED | BLOCKED closure; complete scoped union/seek/original detail and cache isolation verified. |
-| PSAFE-02 — zero/one/many identity/session and legacy refusal |07–09,15,19,22–23,26–28 | VERIFIED | BLOCKED closure; identity-only auth, OTP preservation, session lifecycle and explicit route composition verified. |
-| PSAFE-03 — restricted TLS, immutable evidence, exact migration ownership |01–07,11–13,16–18,26–27 | VERIFIED | BLOCKED closure; actual fresh/upgraded TLS, restricted SQL/role denial, immutable catalogue/projection parity and current recovery verified. |
-
-## Anti-Patterns and Threat Coverage
-
-The232 canonical reviewed paths were checked for unreferenced TBD/FIXME/XXX debt markers; none were found. The131 required unique artifacts also have no such unreferenced marker. Empty metadata/no-portfolio states, signed-out boundary return null, initial query state and injected negative contract failures are intentional and do not form hollow financial rendering. Actual database→API→client→hook→page chains are traced above.
-
-| Finding | Severity | Impact |
+| Requirement | Verdict | Supporting preserved implementation and current proof |
 |---|---|---|
-| Current npm audit HIGH finding in exact locked tooling graph | BLOCKER | Mandatory qualification fails; phase must not advance. |
-| Existing1deployed-CSP browser skip and disclosed backend warnings/moderate advisories | Info | No new skip or weakened gate; not evidence of live/deployed acceptance. |
-| SDK key-link filename heuristic false-negatives | Info | Resolved by actual semantic calls, SQL constraints and receipts, not by assuming existence means wiring. |
+|PFUND-03|SATISFIED|Bounded finite migration, actual prior baseline/cash/quantities/economic bytes, no regrant onboarding and current exact same-archive recovery.|
+|PFIN-02|SATISFIED|Explicit active resolver, root locks/final SQL, unchanged fee/freshness/eligibility rules and real current API/browser/TLS consumers.|
+|PFIN-03|SATISFIED|Original root+payload/global retry comparison, immutable receipt replay, concurrent once-only effects and unavailable-root refusal.|
+|PCTX-01|SATISFIED|Real names from metadata through verified target, ticket/confirmation/receipt/holding/History; accepted render-equivalent UI.|
+|PVIEW-03|SATISFIED|Owner/root constrained mixed union, original hydration, root-bound seek/cursors and root/session publication guards.|
+|PSAFE-02|SATISFIED|User-only identity/session, zero/one/many metadata states, no recreation/regrant reads and authenticated legacy refusal.|
+|PSAFE-03|SATISFIED|Actual fresh/upgraded restrictedTLS/grants, immutable ownership catalogue, exact migration/current recovery and approved policy-qualified supply-chain checks.|
 
-The112 authored threat entries and baseline/targeted security reports were considered by boundary: authenticated owned root, immutable financial causes, active/terminal journal semantics, limited SQL authority, stale browser state, exact source/image/archive admission and supply-chain gates. Source control closure in12-SECURITY.md and the11targeted CR rechecks does not erase the newly failed supply-chain qualification. No current security HIGH obligation is deferred to Phase15 and no new risk acceptance is invented.
+## Anti-Patterns, Security Disposition and Human Checks
 
-## Human Verification Required
+No unreferenced TBD/FIXME/XXX marker occurs in the133required artifacts or changed runtime/test/CI source. Ready-state gating, empty metadata, session defaults and injected negative contracts are intentional, not hollow financial UI. Prior source security112threat entries and11targeted CR rechecks remain; new plans add9threat rows with an explicit accepted-advisory disposition. Source review is not substituted for the actual current qualification.
 
-None pending. Both explicit Plan28 checks are accepted in12-HUMAN-UAT.md. The two human-check blocks are those existing owner UI/native200% checks, not additional tasks.
+**No BLOCKER or WARNING remains.** Known nonblocking limits are the explicitly accepted picomatch advisory until the review deadline, the original deployed-CSP skip, recorded backend warnings/moderate advisories and disclosed package provenance limits. These do not imply live stock acceptance or a production/hosted-CI result.
 
-The immutable combined packet has SHA c87cb4a3eb3feb52c42a37aa60ff69cce66d2ac8e2637847e6a977af1714d55f. All125frontend/capture inputs are unchanged;245/249broad hashes match, and the four backend SQL/migration/bootstrap pin changes are disclosed. Render equivalence preserves owner acceptance without claiming a new capture, changing capture-time native200=false metadata, or fabricating a browser name. Human acceptance is separately recorded true in UAT.
+**Human verification required:** None pending. Owner UI and genuine native200% were separately explicitly accepted. The immutable ZIP independently hashes c87cb4a3eb3feb52c42a37aa60ff69cce66d2ac8e2637847e6a977af1714d55f. All frontend/capture render inputs are unchanged since the prior verified125input equivalence; broad249entry equality is not newly claimed. Capture-time native200=false flags and unspecified browser name remain unaltered; later actual human acceptance is recorded separately.
 
-## Deferred Items
+## Deferred Items and Completion Boundary
 
-| Item | Owner | Specific roadmap evidence |
+| Item | Owner | Evidence and boundary |
 |---|---|---|
-| Public additional funded creation, name/rename, optional descriptions, overview comparison | Phase13 | SC1–4 create/manage funded strategies and compare a stable overview. |
-| Public terminal deletion/confirmation and last-portfolio replacement | Phase14 | SC1/4 user deletion and zero-active overview/Create action. Existing terminal safety fixtures remain required here and pass. |
-| Complete integrated management/deletion lifecycle recovery/acceptance | Phase15 | SC1–4 qualify the full create/rename/description/compare/switch/delete lifecycle. Current revision recovery and strict qualification are not deferred. |
-| STOCK-01/02/03, DATA-01, MKT-01, SAFE-01 live stock acceptance | Separately deferred Phase7 campaign | Existing November16 manual campaign is CONSUMED. No activation/provider/network operation or repeat is part of this verification. |
+|Additional funded creation/name/rename/optional editable or empty description/overview|Phase13|Explicit roadmap management and comparison outcomes; preservation foundation does not expose them prematurely.|
+|Public confirmed terminal deletion and zero-active replacement journey|Phase14|Explicit deletion/freeze/last-portfolio outcomes; underlying terminal safety fixtures are already verified here.|
+|Complete public management/deletion lifecycle recovery and acceptance|Phase15|Explicit final integration scope; current revision qualification was completed here, not postponed.|
+|STOCK-01/02/03, DATA-01, MKT-01, SAFE-01 live verification|Separate deferred Phase7|November16manual campaign consumed; requirements remain unverified, admissionsOFF, no07-14summary fabricated.|
 
-## Gaps Summary
+The Phase12 goal is achieved locally under the owner's one documented advisory override. Phase13 may be planned after the parent records completion. This is not milestone completion, stock activation, hosted CI, publication or deployment.
 
-One shared external dependency qualification gap blocks closure. Functional ownership/preservation, current/retained exact recovery, source code/security/UI repair checks and both owner checks are supported by code and raw receipts. The current complete security process nonetheless fails the retained strict HIGH policy. Separate later browser/build/smoke/image passes are diagnostic evidence only.
+Only this report was written by the independent re-verifier. No global state, requirement checkbox, phase-completion SDK mutation, source change, dependency installation, commit, service or network/provider/production operation was performed.
 
-Keep Phase12 and all seven primary requirement closures pending; Phase13 must not start. A legitimate published patched artifact and separately authorized exact repair followed by complete strict qualification are required. No patched candidate exists in the saved final official evidence, so another unchanged audit loop or fabricated candidate/approval would not resolve the gap.
-
-This verifier wrote only this report, made no source changes or commits, and did not mutate SDK state, requirement checkboxes, phase completion, services, dependencies, providers or production.
-
----
-
-_Verified: 2026-11-17T18:50:00Z_  
-_Verifier: independent gsd-verifier agent_
+_Verified: 2026-11-17T23:03:54.102Z_
+_Verifier: independent gsd-verifier agent, re-verification of prior7/8 gap._
 

@@ -4,7 +4,7 @@
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
 - [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements and four-phase roadmap approved 2026-11-14; Phase 12 execution in progress locally.
+- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements; Phase12 complete locally, Phases13–15 remain.
 
 ## Current State
 
@@ -19,55 +19,24 @@ The owner approved the original 27 [v1.2 requirements](REQUIREMENTS.md) and
 subsequently added optional descriptions (PMGT-06), bringing the total to 28
 on 2026-11-14.
 The owner approved the four-phase roadmap on 2026-11-14. Numbering continues
-at Phase 12. Phase 12 has31 plans: the original28 execution plans are complete
-locally, and three independently checked conditional gap plans remain pending.
-Plan07 installs actual0017 with passing restricted-role SQL, preservation/inventory
-and schema-admission checks. Plan08 adds explicit root/identity service contracts;
-Plan09 adds versioned identity HTTP/legacy refusal and Plan10 explicit crypto
-transactions/HTTP. Plan12 adds owned journals, legacy/current digests and active
-split effects with frozen siblings. Plans11/13/14 add scoped stock execution,
-dividend workers and private valuation/History. Plan16 qualifies restricted final
-bootstrap and authenticated fresh/retained/staged migration-to-final; production v2
-composition now passes259 affected API/auth/onboarding cases with explicit legacy
-finance refusal. Browser targets/hooks/navigation, trade surfaces and owned
-holdings/History pages pass their focused gates. Plan27 now passes the actual
-complete security graph, five strict image scans and one-archive seven-stage
-recovery at their recorded sources. Both Plan28 owner UI/native200% checks pass.
-Final source reviews found and independently rechecked CR-01/CR-02; both repairs
-are integrated. Currentd9da271 whole same-archive recovery passes, as do full
-backend3114/critical60at100%, frontend958 and separate full-browser59/1original
-skip/image diagnostics. Complete all-security FAILS the new unpatched picomatch
-HIGH advisory (latest4.0.7/no patch, final official check2026-11-17T18:37Z).
-Final goal verification reports gaps_found:7/8 consolidated must-haves and all
-five functional roadmap criteria verified. Qualification remains BLOCKED by
-the unpatched dependency. No whole requirement/phase is complete; Phase13 has
-not started. See the Phase12 verification report for the structured gap.
-Gap plans29–31 preserve completed work and require a legitimate published
-patch, exact package approval, dependency-only repair and fresh complete
-qualification. Planning does not satisfy that external prerequisite.
-Plan29's bounded execution at2026-11-17T19:43:24Z confirmed no_candidate from
-official advisory/registry metadata; it stopped before approval without a
-completion summary. Plans30/31 remain blocked; no unchanged tests were rerun.
-The owner then requested a replacement. Independent source review rejected the
-investigated@ryotsu fork for a remaining ReDoS bypass; API-incompatible and
-unmerged alternatives did not yield a safe install candidate. The research and
-rejection are retained; no dependency changed. A broader toolchain migration
-has not been selected or implemented.
-The owner subsequently explicitly approved deferring this advisory and
-continuing with follow-up issue35. Revised29–31 passed independent plan check;
-29 accepted-risk record and30 narrow shared audit checker are complete, with
-12 audit tests/37 CI contracts and independent code review0blockers/0warnings.
-31 actual complete security and fresh same-archive recovery remain pending;
-the known vulnerability remains unresolved and visible. No phase/requirement
-is closed by that acceptance alone.
-The actual full retry passed all3114backend/958frontend and full59browser
-checks but failed final scans on a separate Python image advisory. The same
-accepted picomatch advisory in npm's tooling image has a narrowly reviewed
-image-policy alignment; the distinct Python finding remains blocking. A
-concrete official Python package patch was explicitly approved, applied and
-built;17image/37CI contracts and independent review0/0 pass. Full package
-inventory matches the reviewed closure. Plan31's new full security/recovery
-and requirement closure remain pending; no scan pass is inferred from a build.
+at Phase12. Phase12 is complete locally:31plans/62tasks/21waves, independent
+goal verification8/8 with one explicit owner-approved advisory override,
+all5functional criteria and all7assigned requirements satisfied. Both owner
+UI/native200 checks remain accepted. Existing money, explicit target journeys,
+private History, restricted verified-TLS authority and exact current/retained
+recovery are qualified. See the Phase12 verification and31summary.
+
+Actual complete security1479.850s and fresh seven-stage same-archive
+recovery2694.692s pass at4b4320b. Backend3114/critical60at100%, frontend958,
+audit12, browser59/1originaldeployed-CSPskip, smoke5 and fiveimage-policy scans
+pass. Raw picomatch findings remain visible as accepted risk under issue35,
+expiring2026-12-17UTC; this is not a remediation claim. The rejected fork stays
+uninstalled. A separate official Python image patch was explicitly approved,
+verified and qualified. Prior failed runs and the old archive are retained.
+No production/provider/publication action occurred. Phases13–15 remain
+unplanned and unimplemented;21v1.2requirements remain pending. Phase7's six
+live gaps stay separately deferred, with its manual campaign consumed.
+
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -83,9 +52,9 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** APPROVED (2026-11-14). Phase 12 planning passed independent review; Phases 13–15 await planning.
+**Status:** Phase12 verified complete locally; Phases13–15 await planning. The v1.2 milestone remains open.
 
-- [ ] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target.
+- [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [ ] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity.
 - [ ] **Phase 14: End Strategies Safely** — confirm terminal deletion, freeze records, support zero active portfolios and refuse stale or unauthorized targets.
 - [ ] **Phase 15: Verify Exact Portfolio Recovery and Acceptance** — qualify the complete active/deleted lifecycle through exact recovery, compatibility and protected user journeys.
@@ -105,9 +74,8 @@ financial ownership boundary; they are not separate database/API/UI layers.
   4. OTP sign-in, session refresh and sign-out work independently of zero, one or many financial portfolios in isolated fixtures; legacy financial requests cannot bypass explicit targeting or choose an ambiguous portfolio.
   5. The same investing journeys work on fresh and populated upgraded databases through restricted verified-TLS roles, with original financial payloads, immutable evidence and matching ownership constraints preserved; ordinary roles cannot gain broader mutation rights.
 
-**Plans**: 31 plans (62 tasks, 21 dependency waves; original28 complete,
-revised gap plans29–31 independently checked with0blockers/0warnings;
-29–30 complete under issue35 owner-approved advisory exception)
+**Plans**: 31 completed plans (62 tasks, 21 dependency waves;
+independent final verification8/8 with the owner-approved issue35 exception)
 
 Plans:
 **Wave 1**
@@ -202,15 +170,15 @@ Plans:
 
 **Wave 21** *(blocked on successful Plan 30)*
 
-- [ ] 12-31-PLAN.md — Actual complete security and fresh same-archive recovery qualification
+- [x] 12-31-PLAN.md — Actual complete security and fresh same-archive recovery qualification
 
 **Cross-cutting constraints (gap plans29–31):** The owner-approved exception
 applies only to GHSA-fc5q-39xc-vjpf/current dependency hashes until2026-12-17UTC;
 other HIGH/critical and invalid audit evidence remain blocking. Keep full raw
 reports and historical failed receipts, with accepted-risk rather than fixed
 labels. No dependency substitution/install occurs. Preserve owner UI/native200,
-serial isolated DB proofs and Phase7 activation boundaries. Phase12 remains
-pending until actual full qualification and independent goal verification.
+serial isolated DB proofs and Phase7 activation boundaries. Actual full
+qualification and independent final goal verification passed; Phase12 is complete.
 
 **UI hint**: yes
 
@@ -323,19 +291,20 @@ above preserve integrated behavior without duplicating primary ownership.
 | 15 | 3 | 4 |
 | **Total** | **28/28** | **19** |
 
-No requirement is complete by mapping it. All 28 remain unchecked and pending;
-the phase structure itself is approved on 2026-11-14; no implementation is complete.
+Mapping alone completes no requirement. Seven Phase12 requirements are verified complete; the other21 remain pending;
+the phase structure was approved on2026-11-14 and only Phase12 is implemented and verified.
 
 ## Progress
 
 **Approved execution order:** 12 → 13 → 14 → 15, with separate phase planning.
-Phase12 execution plans, source reviews and goal verification are complete.
-Goal verification retains one strict dependency-qualification blocker.
+Phase12 execution, independent reviews and goal verification are complete.
+The owner-approved unresolved picomatch advisory stays tracked in issue35;
+actual complete security and fresh recovery pass under its scoped exception.
 Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 30/31 | Approved Python patch built/reviewed; final qualification pending, picomatch risk in issue35 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

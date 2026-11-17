@@ -55,6 +55,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   tested-source rollback and complete protected local journeys (SAFE-02/03) —
   verified in Phase11 with four independent reviews; live activation deferred.
 
+- [x] Existing investing preserved under explicit private portfolio ownership:
+  original finances/no regrant, target-bound execution/retries, named financial
+  surfaces/private History, zero/one/many identity and restricted verified-TLS
+  recovery — Phase12, seven assigned requirements verified locally. Creation,
+  descriptions/comparison and public deletion remain Phases13–15.
+
 ### Active
 
 - [ ] Create and name up to ten active strategy portfolios per user, each with its own $10,000 initial virtual cash and an optional editable description that can be empty.
@@ -226,18 +232,18 @@ optional-description amendment (PMGT-06, Phase 13), rename,
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Planning:** Research, the original 27 requirements and the four-phase roadmap were
-approved on 2026-11-14; the owner subsequently added optional descriptions
-within Phase 13, bringing the total to 28. Phase12 execution subsequently
-completed28/28 plans with both owner UI/native200% checks accepted. Independent
-reviews and both review repairs are complete. Final goal verification confirms
-all five functional criteria and7/8 consolidated must-haves; the strict npm
-audit is blocked by an unpatched picomatch HIGH advisory. No phase or whole
-requirement is closed, and Phases13–15 have not started. Scope confirmation
-does not approve new packages, provider operations, publication or production
-changes. No historical
-performance chart is included. Keep Phase 7 deferred outcomes visible and
-unchecked; do not repeat its bounded live campaign as part of this workflow.
+**Progress:** Research, the original27requirements and four-phase roadmap
+were approved on2026-11-14; optional descriptions in Phase13 bring the total
+to28. Phase12 is now complete locally:31plans, both owner checks, independent
+8/8verification with one explicit owner-approved advisory override and all
+seven assigned requirements satisfied. Actual full security and fresh
+seven-stage source-bound recovery pass at4b4320b; the approved official
+Python image repair is qualified. Picomatch remains unresolved accepted risk
+in issue35, with narrow fail-closed audit/image reporting and review expiry
+2026-12-17UTC. This is not a vulnerability remediation claim. Phases13–15
+and21requirements remain pending; Phase7live outcomes stay separately
+deferred. Local completion does not publish or deploy the feature branch.
+No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio
 funding limit with independent per-portfolio starting grants. Creating a new

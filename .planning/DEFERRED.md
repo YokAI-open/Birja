@@ -56,3 +56,19 @@ See[actual review](phases/07-permitted-stock-discovery/07-LIVE-20261116-REVIEW.m
 This campaign is consumed; no repeat/fallback authorization follows. Allsix
 Phase7requirements remain pending; missing broader rights/action/status and
 final live acceptance are not established. Stock activation remains gated.
+
+## v1.2 accepted tooling advisory — issue35
+
+The owner explicitly approved continuing without fixing picomatch
+GHSA-fc5q-39xc-vjpf/CVE-2026-112366. Follow-up:
+https://github.com/YokAI-open/Birja/issues/35. Review expires2026-12-17UTC,
+or earlier on a maintained fix, changed dependencies/exposure or new finding.
+Exact frontend manifest/lock and Node tooling image identity/path/hash controls
+retain raw findings while rejecting unrelated HIGH/critical and invalid audit
+evidence. The vulnerability remains unresolved accepted risk. No unsafe fork
+was installed. See Phase12's ACCEPTED-RISK and VERIFICATION records.
+
+This accepted item does not block the locally verified Phase12 closure, waive
+other findings, complete Phase7live acceptance or authorize publication or
+production changes. The separate approved Python image finding was fixed and
+qualified rather than added to this exception.
