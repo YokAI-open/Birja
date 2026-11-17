@@ -193,8 +193,8 @@ async def test_contradictory_terminal_record_fails_closed(journal_case, damage):
         )
 
 
-@pytest.mark.parametrize("version", [1, 3, -1])
-async def test_unknown_persisted_digest_version_fails_closed(journal_case, version):
+@pytest.mark.parametrize("version", [None, 1, 2, 3, -1])
+async def test_unverifiable_digest_identity_or_version_fails_closed(journal_case, version):
     db, _, case = journal_case
     rows = list(
         (
@@ -205,6 +205,8 @@ async def test_unknown_persisted_digest_version_fails_closed(journal_case, versi
             )
         ).scalars()
     )
+    # NULL-v1 cannot represent these same-owner sibling roots; version2 must
+    # authenticate the exact root tuples. Unknown versions must never be guessed.
     app = StockSplitApplication(
         id=9,
         coin_id=case["coin"],
@@ -213,9 +215,37 @@ async def test_unknown_persisted_digest_version_fails_closed(journal_case, versi
         sequence_boundary=2,
         cutoff=case["now"],
         owner_digest_version=version,
+        before_digest="0" * 64,
     )
     with pytest.raises(OwnershipHeld, match="invalid_digest"):
         _check_units(rows, [app], 1, 9, {})
+
+
+async def test_journal_cannot_resolve_an_absent_owner_root(journal_case):
+    db, _, case = journal_case
+    _, rows = await assert_ownership_consistent(db, case["coin"])
+    with pytest.raises(OwnershipHeld, match="history_gap"):
+        _check_closures(rows, [], {}, {})
+
+
+async def test_reconstruction_cannot_select_missing_or_postclosure_root(journal_case):
+    db, conn, case = journal_case
+    at = case["now"] - timedelta(days=1)
+    cutoff = CutoffEvidence(at, "NASDAQ", at.date(), 1, "synthetic")
+    with pytest.raises(OwnershipHeld, match="portfolio_unavailable"):
+        await reconstruct_stock_quantity(db, 9223372036854775807, case["coin"], cutoff, 0)
+    await close_root(db, conn, case, case["first"])
+    # A real time after closure, already in the past when the reader checks its
+    # database clock. Future cutoffs correctly fail the earlier baseline guard.
+    after = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+    with pytest.raises(OwnershipHeld, match="invalid_closure"):
+        await reconstruct_stock_quantity(
+            db,
+            case["first"],
+            case["coin"],
+            CutoffEvidence(after, "NASDAQ", after.date(), 1, "synthetic"),
+            0,
+        )
 
 
 async def test_canonical_v2_digest_uses_portfolio_identity_and_exact_strings(journal_case):
