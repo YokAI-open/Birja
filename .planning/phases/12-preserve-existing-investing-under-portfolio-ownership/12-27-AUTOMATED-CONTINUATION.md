@@ -388,3 +388,67 @@ gates remain pending. Do not create27SUMMARY, advance counts or mark whole
 requirements complete from these bounded receipts. Phase7's consumed campaign,
 six pending requirements and OFF admissions remain unchanged. Continue locally
 under the existing approval; no new procedural retry checkpoint is needed.
+
+## Backend repair segment 4 — 2026-11-17
+
+All28 backend test files lexicographically after test_stock_action_resolutions.py
+now pass together: **1116passed/72warnings in172.46s** at4dce48c source bytes.
+This is the complete later-family diagnostic, not the full backend/coverage or
+all-security qualification. No earlier file is excluded from the final gate.
+
+Local commits:
+
+- cf6c43b roots current raw trades/facts/movements and actual final authority
+  snapshots, including matching cash/holdings. Catalogue/execution downgrade
+  tests use genuine retained0010/13 lanes; final0017 refusal is unchanged.
+  Original invalid arithmetic, immutable records, privilege and cross-row
+  causal assertions remain.74affected cases pass46.90s.
+- 490efd3 roots original crypto/stock isolation proofs and scoped HTTP calls.
+  Split-quote teardown uses only the existing privileged exact-target context
+  for immutable global applications, with triggers enabled before/after.
+  Previously failed cleanup left action state that cascaded into scheduler and
+  status failures; no runtime scheduler assertion was weakened. Calendar fixture
+  horizons use their actual review date, preserving the expired-review negative
+  across UTC midnight.229discovery/isolation/status cases pass36.43s.
+- bb70aed preserves original0013 scheduler receipt-read denial, fixed search_path
+  and independent pinned historical bootstrap parity in its genuine retained
+  lane, alongside current0017's required read-only journal access and mutation
+  denial. Fresh connection plans follow schema changes; test SET LOCAL ROLE is
+  explicitly reset before administrative parity work. The retained preservation
+  case explicitly seeds crypto cash9876.54/baseline12500, holding and fill,
+  rather than accidentally testing an empty reset database.
+- 4dce48c supplies verified roots to original stock/crypto service calls,
+  movements, valuations and HTTP concurrency cases. Rooted schema fixtures
+  preserve all original constraint/precision/uniqueness assertions. Immutable
+  synthetic crypto trades are removed only in privileged teardown after tests.
+  Four historical reconstruction calls now pass actual portfolio_id instead of
+  user_id. Standalone runs had accidentally equal identities; the combined run
+  exposed and then verified the distinction without weakening the exclusive
+  dividend cutoff, split quantity or immutable original receipt assertions.
+
+Receipts:
+
+- /tmp/phase12-27-execution-final.log:74pass/46.90s.
+- /tmp/phase12-27-discovery-final.log:229pass/36.43s.
+- /tmp/phase12-27-final-preservation-waits.log:87pass/41.91s, strengthened
+  populated retained preservation plus all stock wait cases.
+- /tmp/phase12-27-backend-tail-qualified.log:all28later files,1116pass/172.46s.
+- Full Ruff check/format:226files; mypy:101app sources pass.
+
+The full unfiltered backend suite has NOT been rerun after these repairs.
+Next executor must run it with80% overall and all60critical modules100%branch,
+then complete the actual unchanged all-security runner, five actual-image
+strict scans and fresh same-archive seven-stage recovery. Final UI packet refresh
+and separate owner/native200% gates remain pending. Source/runtime/tooling bytes
+did not change in this segment; all changes are fixtures/tests and this record.
+No new dependencies, providers, private configurations, production or publication.
+
+All DB tests were strictly serial. The guarded disposable schema reset restores
+genuine0017 and verifies all noninternal triggers enabled; its log is
+/tmp/phase12-27-backend4-final-reset.log. No pytest/migration process is left;
+only the previously verified owned tmpfs PG/Redis diagnostic stack remains.
+Before final all-security, clean only this exact verified stack so the runner
+can create its own exclusive one. Preserve the old recovery directory and all
+prior source/archive guards. Phase12 remains26/28; no27SUMMARY or requirement
+completion follows from these focused receipts. Phase7's consumed campaign,
+six pending requirements and OFF admissions remain unchanged. Keep work local.
