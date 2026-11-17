@@ -105,3 +105,42 @@ unaffected by this source-only audit-policy review.
 
 _Reviewer: independent gsd-code-reviewer agent. Only this report was written;
 no source, global state, requirement checkboxes or commits were changed._
+
+## Independent follow-up: deterministic foreign-key selector repair
+
+**Verdict: PASS;0BLOCKER/0WARNING in the bounded test-only repair.**
+
+Reviewed the complete diff against e4c0a9f for
+backend/tests/test_portfolio_authority.py, the matching four documented names
+in backend/app/models/dividend.py, the focused raw pytest log and the private
+ordering/negative-mutation proof script. The old containment selector could
+choose any of three distinct constraints containing payment_id because the
+SQLAlchemy constraint collection is unordered. The changed selector chooses
+each exact documented constraint name and requires exactly one match.
+
+The repair retains the full ordered local column tuple assertion, both
+referred portfolio_id/user_id column assertions and the existing index
+assertion. A missing or duplicated expected name fails before dereference;
+incorrect source ordering/ownership and referred ownership still fail. Naming
+the constraint therefore removes ambiguous selection without accepting a
+malformed constraint or weakening the intended ownership contract. The four
+names match the existing model definitions; no model/runtime/schema edit is
+part of this diff.
+
+The inspected private proof enumerates all six orders of the three overlapping
+constraints plus the complete reversed collection, then requires rejection of
+five negative mutations: absent name, duplicate name, wrong ordered columns,
+missing source portfolio ownership and wrong referred portfolio ownership.
+The inspected raw isolated pytest log records11passed in2.57seconds and owned
+PostgreSQL/Redis/network cleanup. These are the executor's actual targeted
+results inspected by this reviewer; no new full-suite run is claimed here.
+
+Reviewed test SHA256:
+7a8fae311337e3034ffa3a9e71a2da631c9d90974c0ea78f8fe408dbb8868e30.
+Focused raw log /tmp/phase12-fk-selector-targeted.log SHA256:
+5a27953f85c2063c6cb4acecccb45b0ab54d7bf76fb903b47798093544143ad5.
+
+The failed earlier complete campaign must remain FAILED. Commit/freeze the
+reviewed test repair before the actual complete security and recovery retry;
+these targeted results do not replace those qualifications. This follow-up
+changed only this report, with no source edits, tests or commits.

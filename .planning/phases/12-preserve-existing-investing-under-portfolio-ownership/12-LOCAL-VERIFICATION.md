@@ -173,3 +173,22 @@ provider call, private production configuration, B2 access, publication, merge
 or deployment occurred. Phase7's consumed campaign, six pending requirements
 and disabled live stock admissions are unchanged. Plan28 and final phase
 reviews/goal verification remain; no phase or requirement completion is claimed.
+# Owner-approved exception qualification — first actual attempt
+
+At source e4c0a9fd10aaee6f9e2aeea6c3ebdbd4c7c87521, the actual complete
+all-security command failed during backend pytest:3113passed/1failed in
+857.11seconds, total wrapper866.180seconds, overall coverage99.85%.
+The authority metadata test selected the first constraint containing
+payment_id from an unordered set; three distinct constraints contain it.
+No frontend/audit/browser/image or recovery stage was reached. No later
+diagnostic is credited as a successful complete run. Raw source/log/result
+receipts are /tmp/phase12-accepted-security-e4c0a9f.*; source unchanged and
+all six owned projects cleaned to zero. The previous recovery archive was
+not moved or overwritten.
+
+The test-only repair selects unique exact constraint names while retaining
+all ordered source columns and referred-owner assertions. Actual focused
+authority11/11passed2.57s; six permutations/reverse order pass and five
+malformed-constraint mutations fail. Independent review0blockers/0warnings
+is appended to12-EXCEPTION-REVIEW.md. No model/migration/runtime/financial
+rule or audit policy changed. Fresh complete qualification is still required.
