@@ -131,3 +131,15 @@ review.json, security.json, security-family.json,
 index-checksum-verification.json and data-integrity.json. Observation time is
 2026-11-17T21:24:55.197490Z. Only this report and private static evidence were
 written; no repository source/lock/state, package/image or service changed.
+
+## Subsequent owner approval and local execution
+
+The owner explicitly approved this exact reviewed Python-family patch and
+isolated local builds/rechecks. That approval was relayed to the executor
+before applying the two pins. The resulting clean-build closure consists
+of the three proposed Python packages and exactly the eleven already
+disclosed native versions, with no unexpected package/version.
+See12-PYTHON-REPAIR.md for complete before/after inventories, authenticated
+control-checksum comparisons, actual image IDs and read-only interpreter
+checks. This addendum does not relabel the original preinstallation review
+as an installation proof or claim final scan/recovery qualification.

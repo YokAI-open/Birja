@@ -64,8 +64,10 @@ The actual full retry passed all3114backend/958frontend and full59browser
 checks but failed final scans on a separate Python image advisory. The same
 accepted picomatch advisory in npm's tooling image has a narrowly reviewed
 image-policy alignment; the distinct Python finding remains blocking. A
-concrete official Python package patch is reviewed and awaits local install
-approval. Plan31/recovery and requirement closure remain pending.
+concrete official Python package patch was explicitly approved, applied and
+built;17image/37CI contracts and independent review0/0 pass. Full package
+inventory matches the reviewed closure. Plan31's new full security/recovery
+and requirement closure remain pending; no scan pass is inferred from a build.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -333,7 +335,7 @@ Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 30/31 | Blocked: separate Python image patch awaits local approval; picomatch risk tracked in issue35 | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 30/31 | Approved Python patch built/reviewed; final qualification pending, picomatch risk in issue35 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

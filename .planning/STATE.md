@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_plan: 31
-status: blocked
-stopped_at: Plan31 retry failed final image scans; reviewed Python patch awaits exact local installation approval
-last_updated: "2026-11-17T21:29:59Z"
+status: in_progress
+stopped_at: Approved Python image patch applied and independently reviewed; final complete security and recovery pending
+last_updated: "2026-11-17T21:42:08Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
@@ -21,15 +21,15 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Issue35 created and exact picomatch risk accepted. Plans29–30 complete; Plan31 full retry passed backend3114/critical60at100%, frontend958/fullbrowser59/1originalskip and scopednpm audit, then failed new Python image HIGH. Same-advisory Node-image alignment reviewed0/0 with17image/37CI tests. Official fixed Python family3.14.10_git20261111-r0 is reviewed but not installed; exact local approval pending. Fresh recovery has not started, all6owned resources0, old archive intact. All28 requirements pending, Phase13 unstarted and Phase7 live outcomes unchanged.
+Current focus: Issue35 tracks the accepted picomatch advisory. Original28/owner checks and29–30 complete. Owner approved exact separate Python image repair; pins applied,17image/37CI tests, actual runtime/builder builds, complete36package/14reviewedchanges inventory and independent review0/0 pass. Final Plan31 full security and fresh same-archive recovery pending. All28 requirements pending; Phase13 unstarted; Phase7 deferred outcomes unchanged.
 
 ## Current Position
 
-Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
+Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — IN PROGRESS
 Current Plan: 31 (actual complete security and fresh same-archive recovery pending)
 Total Plans in Phase: 31
 Plan: 30/31 complete; original28 retained, exact advisory accepted and shared checker reviewed
-Status: Blocked on exact local Wolfi Python security patch approval; picomatch risk accepted in issue35
+Status: Approved Python patch built/reviewed; complete security and fresh recovery pending
 Last activity: 2026-11-17
 
 Progress: [██████████] 97% (30/31 plans; no phase completion before actual qualification)
@@ -58,6 +58,17 @@ All28 requirements remain pending, completed_phases stays0, Phase13 unstarted.
 Both owner checks and Phase7 deferred live outcomes remain unchanged.
 
 ## Plan31 Actual Qualification Results and New Repair Checkpoint
+
+The owner subsequently explicitly approved the exact reviewed local Python
+patch. Both Dockerfile pins/matching assertions now use3.14.10_git20261111-r0.
+17image/37CI contracts pass; actual runtime/test-builder builds pass. Complete
+APK inventories remain36packages with exactly3approved Python-family and11
+previously disclosed native changes; no unexpected additions/removals/versions.
+All changed control checksums match the authenticated official APKINDEX.
+Read-only UID1001 interpreter checks and independent repair review0/0 pass.
+See12-PYTHON-REPAIR.md and12-PYTHON-REPAIR-REVIEW.md. These are prequalification
+builds, not a new security/recovery result. The final frozen-source complete
+security and fresh one-archive seven-stage recovery must still pass.
 
 First actual run at e4c0a9f failed an ambiguous unordered metadata-test FK
 selector (3113pass/1fail). Test-only a552a46 selects unique named constraints
@@ -494,8 +505,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T21:29:59Z
-Stopped at: Full retry failed final image scans; exact reviewed Wolfi Python patch awaits local approval
+Last session: 2026-11-17T21:42:08Z
+Stopped at: Approved Python repair built/reviewed; final full security and fresh recovery pending
 Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation
