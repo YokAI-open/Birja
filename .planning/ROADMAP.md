@@ -37,8 +37,10 @@ are integrated. Currentd9da271 whole same-archive recovery passes, as do full
 backend3114/critical60at100%, frontend958 and separate full-browser59/1original
 skip/image diagnostics. Complete all-security FAILS the new unpatched picomatch
 HIGH advisory (latest4.0.7/no patch, final official check2026-11-17T18:37Z).
-Phase12 qualification is BLOCKED upstream; final goal verification must retain
-that blocker. No whole requirement/phase is complete and Phase13 has not started.
+Final goal verification reports gaps_found:7/8 consolidated must-haves and all
+five functional roadmap criteria verified. Qualification remains BLOCKED by
+the unpatched dependency. No whole requirement/phase is complete; Phase13 has
+not started. See the Phase12 verification report for the structured gap.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -278,12 +280,13 @@ the phase structure itself is approved on 2026-11-14; no implementation is compl
 ## Progress
 
 **Approved execution order:** 12 → 13 → 14 → 15, with separate phase planning.
-Phase12 execution plans are complete; final phase reviews and verification
-remain pending. Phases13–15 have not started.
+Phase12 execution plans, source reviews and goal verification are complete.
+Goal verification retains one strict dependency-qualification blocker.
+Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/28 | Execution complete; final reviews and goal verification pending | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/28 | Blocked: unpatched picomatch HIGH; goal verification7/8 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

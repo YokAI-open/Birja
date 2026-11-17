@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_plan: 28
 status: blocked
-stopped_at: Phase12 qualification blocked by unpatched picomatch HIGH; recovery and separate remaining diagnostic passed
-last_updated: "2026-11-17T18:43:09.729Z"
+stopped_at: Phase12 goal verification gaps_found7/8; sole unpatched picomatch HIGH qualification blocker
+last_updated: "2026-11-17T18:55:02.771475Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
@@ -21,14 +21,14 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 has28/28 execution plans complete and both owner UI/native200% checks passed. Full232-file review and CR01/CR02 integration are complete; security112/112 plus targeted11/11 and UI24/24 have no open source finding. Currentd9da271 whole same-archive recovery passes2697.424s; backend3114/critical60at100%, frontend958 and separate full-browser59/1originalskip plus five strict image scans pass. Complete all-security FAILS unpatched picomatch HIGH (14HIGH/11MODERATE audit entries). Final official refresh18:37Z still latest4.0.7/no patch. Qualification is BLOCKED upstream; final goal verification remains. All28 requirements stay unchecked; Phase13 has not started. Phase7 six live gaps/OFF admissions remain separate.
+Current focus: Phase12 has28/28 execution plans complete and both owner UI/native200% checks passed. Full232-file review and CR01/CR02 integration are complete; security112/112 plus targeted11/11 and UI24/24 have no open source finding. Currentd9da271 whole same-archive recovery passes2697.424s; backend3114/critical60at100%, frontend958 and separate full-browser59/1originalskip plus five strict image scans pass. Complete all-security FAILS unpatched picomatch HIGH (14HIGH/11MODERATE audit entries). Final official refresh18:37Z still latest4.0.7/no patch. Final goal verification is gaps_found:7/8 consolidated must-haves and all five functional criteria verified. Qualification remains BLOCKED solely by the unpatched dependency. All28 requirements stay unchecked; Phase13 has not started. Phase7 six live gaps/OFF admissions remain separate.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
 Current Plan: 28
 Total Plans in Phase: 28
-Plan: 28/28 execution plans complete; final goal verification with strict upstream blocker
+Plan: 28/28 execution plans complete; goal verification7/8 with strict upstream blocker
 Status: Blocked; unpatched picomatch HIGH prevents complete security qualification
 Last activity: 2026-11-17
 
@@ -40,7 +40,10 @@ Progress: [██████████] 100%
   latest4.0.7/no patch at2026-11-17T18:37Z. Complete npm audit fails despite
   passing whole recovery and separate browser/image diagnostics. No waiver,
   dependency substitution, Phase13 start or requirement completion.
-- SDK1.42.3 session persistence inferred completion from28/28 summaries. Its
+
+## Tooling Note
+
+SDK1.42.3 session persistence inferred completion from28/28 summaries. Its
   generated frontmatter was corrected to blocked/zero completed phases because
   execution-plan counts do not satisfy the failed final security gate.
 
@@ -369,8 +372,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 ## Execution Session
 
 Last session: 2026-11-17T18:43:09.711Z
-Stopped at: Phase12 qualification blocked by unpatched picomatch HIGH; recovery and separate remaining diagnostic passed
-Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-REVIEW-QUALIFICATION.md
+Stopped at: Phase12 goal verification gaps_found7/8; unpatched picomatch HIGH qualification blocker
+Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-VERIFICATION.md
 
 ## Plan26 Completed Continuation
 

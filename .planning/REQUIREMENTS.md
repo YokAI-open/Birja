@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** 28 requirements and four-phase roadmap approved, including the owner's optional-description amendment (2026-11-14); implementation not started
+**Status:** 28 requirements and four-phase roadmap approved. Phase12's28 plans are implemented and all five functional criteria verified locally; strict qualification is blocked by unpatched picomatch HIGH. Requirement closure remains pending; Phases13–15 have not started.
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
@@ -183,5 +183,6 @@ Six carried Phase 7 requirements remain separately deferred, not completion clai
   operations, protected merges or deployment.
 
 ---
-*Last updated: 2026-11-14 after research synthesis and confirmed deletion policy;
-all 28 requirements and the four-phase roadmap approved, including optional descriptions; implementation not started.*
+*Last updated: 2026-11-17 after Phase12 goal verification. All28 approved
+requirements remain unchecked; seven Phase12 implementations have local
+evidence, but phase closure is blocked by the strict dependency gate.*
