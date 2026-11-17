@@ -1,5 +1,37 @@
 # Phase12 Reviewed Repair Qualification
 
+## Current Plan31 qualification
+
+Both actual complete commands pass at frozen source
+`4b4320b4cc373268a8d598612a563cd5ef199700`:
+all-security1479.850s and fresh seven-stage recovery2694.692s. Each retained
+unchanged HEAD/empty tracked drift and zero resources across all six owned
+projects. Exact source/result/log receipts are recorded in12-LOCAL-VERIFICATION
+and12-RECOVERY-PROOF. The new exclusively authenticated archive is
+`d253bc51b876c7d629ee246ee47bd57274a5d9333e71318e11fcef586cff26be`.
+
+This is qualification **with the owner's specifically accepted unresolved
+picomatch risk**, tracked in issue35, not zero npm/image HIGH findings or
+dependency remediation. Actual npm14HIGH/11moderate and Node image1rawHIGH
+remain visible and exactly scoped; unrelated findings remain blocking.
+The separately surfaced Python CVE-2026-119170 was fixed by the exact approved
+package update rather than waived; final runtime/builder scans have0HIGH.
+
+The advisory checker and image-policy changes have independent source review,
+targeted positive/negative contracts and exact input/expiry bindings. The
+deterministic test-selector repair and approved Python image patch have their
+own independent reviews; see12-EXCEPTION-REVIEW.md and12-PYTHON-REPAIR-REVIEW.md.
+Earlier actual failures at e4c0a9f/f97b2d9 remain immutable historical receipts,
+alongside the original d9da271 failed audit and passing old recovery.
+
+Original01–28 and owner UI/native200% checks remain accepted. No frontend
+render source changed, no Phase7 live claim was made, and no provider/production
+or publication operation ran. Plan31 evidence is ready for the parent's
+independent final goal verification; this report does not close requirements
+or advance phases merely from successful task counts.
+
+## Historical pre-exception post-review qualification
+
 All28 plans and both owner UI/native200% checks are complete. Full original230
 changed-file scope plus two new regressions is reviewed. CR-01/CR-02 are source-
 resolved and integrated, with no outstanding code/security/UI source finding.

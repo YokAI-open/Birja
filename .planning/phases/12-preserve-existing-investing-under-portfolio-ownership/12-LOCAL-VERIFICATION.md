@@ -1,15 +1,69 @@
 ---
 phase: 12-preserve-existing-investing-under-portfolio-ownership
-plan: "27"
-status: blocked_upstream_dependency
+plan: "31"
+status: passed
+accepted_risk: GHSA-fc5q-39xc-vjpf
 verified: 2026-11-17
-source_commit: 1f8d5a4eb500dad879440c2f2ebba892b8b5f65c
-source_tree: 795b50bace62d54e0a2719c66a013f9198de2cf2
+source_commit: 4b4320b4cc373268a8d598612a563cd5ef199700
+source_tree: 9d19e531ca4b2ededf133203ca74a83ff39ba5e7
 ---
 
 # Phase 12 Local Automated Qualification
 
-## Post-review qualification — current disposition
+## Plan31 actual complete qualification — current disposition
+
+The actual complete command `python3 deploy/tests/run-portfolio-validation.py
+--suite all-security` passed at the frozen source/tree above on2026-11-17,
+21:43:50.182090Z–22:08:30.031868Z, exit0, **1479.850seconds**. This is one
+complete process result, not an assembly of prior diagnostics. Subsequent fresh
+complete seven-stage recovery also passed at that same frozen source; see
+12-RECOVERY-PROOF.md. Independent final goal verification remains separate.
+
+The owner explicitly accepted the unresolved picomatch advisory in issue35.
+This pass is **under that exact accepted-risk policy**, not zero vulnerabilities
+or a fixed picomatch. Backend Python CVE-2026-119170 was separately fixed by the
+approved pinned package update; it was not excepted. Source/test/image repairs
+and independent reviews are recorded in12-EXCEPTION-REVIEW.md and
+12-PYTHON-REPAIR/REPAIR-REVIEW.md.
+
+| Actual full-command stage | Result |
+|---|---|
+|Backend lint/types and suite|Ruff228files/mypy101;3114/3114tests,843.64s, overall99.85%|
+|Exact critical coverage|60modules,5020statements/1604branches,0miss/partial,100%|
+|Python audit|No known vulnerabilities found|
+|Frontend checks|44files/958tests, lint/types/fullPrettier/build pass;97.50%statements/94.65%branches|
+|Scoped audit unit tests|12/12pass in the actual full command|
+|Full npm audit|Raw14HIGH/11moderate/0critical remains visible; exact advisory and inherited causes accepted against issue35, expiry2026-12-17UTC|
+|Full browser|60collected,59pass/1original deployed-CSPskip,501.4s,1worker/0retries|
+|Declared images/container smoke|Three declared Dockerfile targets built; pinned pulls pass; smoke5/5,1.79s|
+|Actual five-image policy scans|All5pass: runtime/builder/Postgres/Redis0qualifying HIGH/critical; Node1rawHIGH/1exact accepted picomatch/0blocking. No unrelated image exception.|
+
+Trivy0.76.1 used database updated2026-11-17T19:04:24.303581049Z, freshly
+downloaded22:08:05.921115135Z. Scanned immutable runtime/builder/Node IDs:
+`sha256:5c201e062267aa8b19ec3d8b18a2327e5b1a6e873b77d7a3ea2db5ea08218550`,
+`sha256:28815f21311a86c9f63c5a9560aae61f139a8eaed48a54ccc78e6bffcb0c32ea`,
+`sha256:1ea9e23593900ab210c0d80cc03143a6da852fedfaaa48ed7a35b8f31a23c24f`.
+Full report/status/inspection/log files were preserved byte-for-byte at
+`/tmp/phase12-accepted-retry2-image-reports-4b4320b/`; inventory SHA256
+`50c48101ec9dcbbc407d7fefa369233f90dacd560457f23257c1411af5dfa08d`.
+Generated repo scan output was removed after verified private preservation.
+
+Private atomic receipts:
+`/tmp/phase12-accepted-retry2-security-4b4320b.{source.json,result.json,log}`.
+Raw log SHA256`ace8a8e70cc2b80234ad2261ed5e60166e64854873acc43bef660d45dc0c1f62`;
+source receipt SHA256`05485ef32941148f0c78dc0f31114c9d5c20ce5c50978d80954b3cb3f4a58619`.
+Both hashes were independently recomputed by this executor. HEAD remained
+unchanged, tracked drift was empty, and all six exact-owned projects ended
+with zero containers/networks/volumes. No production/provider operation ran.
+
+The failed e4c0a9f authority-selector attempt and f97b2d9 image-scan attempt
+remain intact in their original raw receipts. The test-only deterministic
+selector repair and approved Python image patch precede the successful source;
+no earlier failure is relabelled as a pass. Both accepted owner UI/native200%
+checks remain; unchanged frontend rendering did not require duplicate approval.
+Phase7 deferred live outcomes and consumed campaign remain separate.
+
+## Historical d9da271 post-review qualification — prior disposition
 
 The current integrated source is `d9da271b2b21f48f965dd54898a6bb8afcc9088e`,
 tree `ca40c0c8449fc28db127e0781932802d158d1373`. The complete unchanged

@@ -1,16 +1,63 @@
 ---
 phase: 12-preserve-existing-investing-under-portfolio-ownership
-plan: "27"
-task: "12-27-02"
+plan: "31"
+task: "12-31-02"
 status: passed
 verified: 2026-11-17
-source_commit: d9da271b2b21f48f965dd54898a6bb8afcc9088e
-source_tree: ca40c0c8449fc28db127e0781932802d158d1373
+source_commit: 4b4320b4cc373268a8d598612a563cd5ef199700
+source_tree: 9d19e531ca4b2ededf133203ca74a83ff39ba5e7
 ---
 
 # Phase 12 Exact Recovery Proof
 
-## Post-review complete recovery
+## Plan31 fresh complete recovery — current proof
+
+The actual complete command `python3 deploy/tests/run-portfolio-validation.py
+--suite recovery` passed at the same frozen source as the actual complete
+security command:2026-11-17T22:08:32.272997Z–22:53:26.964687Z, exit0,
+**2694.692seconds**. It ran only after the security process succeeded and
+cleaned its owned resources. No campaigns ran concurrently.
+
+One fresh exclusively created archive was authenticated throughout:
+`/tmp/birja-phase12-proof/recovery.tar.gz`,196689920bytes, SHA256
+**d253bc51b876c7d629ee246ee47bd57274a5d9333e71318e11fcef586cff26be**.
+The .gz filename still holds strict uncompressed USTAR; no repackage occurred.
+Final actual marker is
+`same_archive_final_ci=true sha256=d253bc51b876c7d629ee246ee47bd57274a5d9333e71318e11fcef586cff26be`.
+
+| Serial stage | Actual result |
+|---|---|
+|Image transition|PASS38.391s; original/clone ownership and collation drift, reindex-before-refresh, logical restore and abort preservation|
+|Retained0007–0014 roundtrips|PASS759.875s; exact rows/schema/sequences/identities, stock/dividend saved receipts, corruption refusals and quarantine|
+|Current0017 encrypted cold restore|PASS actual declared runtime; source destroyed, separate restore, immutable-before oracle and restricted verified-TLS/quarantine|
+|Roles|PASS318.752s plus3.954ssetup;63denials/12input-lock refusals, fresh/populated authority parity|
+|Upgraded TLS|PASS273.142s plus13.526ssetup; actual financial consumers, transport refusal, isolation and renewal|
+|Fresh TLS|PASS275.741s plus14.919ssetup; same actual consumers, exact upgraded/fresh authority parity at final guard|
+|Selected rollback/refusal|PASS real retained deployment, selected0008 actual old-app rollback246.773s, exact original fingerprints; current0014 replay/quarantine, unsupported rollback refusal and failed-attempt rollback to tested source; both cleanup markers|
+
+Current/retained source, archive inventory, CORE/UNITS/PORTFOLIO_PAYLOAD,
+immutable image Config/RootFS and final TLS authority parity were enforced
+between all seven stages. Source HEAD and all tracked file hashes remained
+unchanged. All six exact-owned projects finished with zero containers,
+networks and volumes.
+
+Before this campaign, the complete six-file prior proof directory and original
+archive94365aff1bbf8558bcc1481a19c10afea8c571801d54cf3ae3b79156f4af03eb
+were hash-verified and moved without changing any bytes to
+`/tmp/birja-phase12-proof-d9da271-preserved-before-4b4320b/`. Preservation receipt:
+`/tmp/phase12-accepted-retry2-previous-recovery-preservation.json`.
+The older preserved campaigns and failed attempts are untouched.
+
+Current atomic raw receipts:
+`/tmp/phase12-accepted-retry2-recovery-4b4320b.{source.json,result.json,log}`.
+Log SHA256`9bf74942a3aaef89c346c2485e867bdfb3338b064241ddcfc2b66b60c7788b24`;
+source receipt SHA256`f1686473ba3bbaa3665394dfe567fae5208f5219ba9a852cbb6fec0d82603d08`.
+Raw receipt and both old/new archive hashes were independently recomputed by
+this executor. This is fresh actual proof, not payload-equivalence substitution.
+The accepted picomatch risk stays explicit in security qualification and issue35;
+recovery success does not claim a fixed vulnerability or hosted CI/deployment.
+
+## Historical d9da271 post-review complete recovery
 
 The actual whole seven-stage runner passed at the integrated source above,
 2026-11-17T17:44:53.463558Z–18:29:50.887311Z, exit0,2697.424seconds.
