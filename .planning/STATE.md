@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-current_plan: 29
-status: blocked
-stopped_at: Replacement investigation rejected unsafe fork; no safe candidate, Plans29–31 remain blocked
-last_updated: "2026-11-17T20:00:56Z"
+current_plan: 31
+status: in_progress
+stopped_at: Owner accepted exact advisory risk in issue35; Plans29–30 complete, Plan31 full qualification pending
+last_updated: "2026-11-17T20:32:46Z"
 last_activity: 2026-11-17
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 31
-  completed_plans: 28
-  percent: 90
+  completed_plans: 30
+  percent: 97
 ---
 
 # Project State
@@ -21,18 +21,41 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase12 original28 execution plans complete; three checked conditional gap plans29–31 pending,28/31 total. Both owner UI/native200% checks passed. Full232-file review and CR01/CR02 integration are complete; security112/112 plus targeted11/11 and UI24/24 have no open source finding. Currentd9da271 whole same-archive recovery passes2697.424s; backend3114/critical60at100%, frontend958 and separate full-browser59/1originalskip plus five strict image scans pass. Complete all-security FAILS unpatched picomatch HIGH (14HIGH/11MODERATE audit entries). Final registry refresh18:37Z still latest4.0.7/no patch; bounded gap-planning advisory lookup still lists no patch. Final goal verification is gaps_found:7/8 consolidated must-haves and all five functional criteria verified. Qualification remains BLOCKED solely by the unpatched dependency. All28 requirements stay unchecked; Phase13 has not started. Phase7 six live gaps/OFF admissions remain separate.
+Current focus: Owner accepted the exact unresolved picomatch advisory through issue35. Plans29–30 now complete with narrow shared audit checker,12 exact Node tests,37 CI contracts and independent review0/0; Plan31 actual complete security and fresh same-archive recovery pending. Original28 implementation/owner checks remain complete. All28 requirements pending, zero completed phases, Phase13 unstarted; Phase7 six deferred live outcomes unchanged.
 
 ## Current Position
 
 Phase: 12 (Preserve Existing Investing Under Portfolio Ownership) — BLOCKED
-Current Plan: 29 (bounded candidate check recorded; no_candidate, incomplete)
+Current Plan: 31 (actual complete security and fresh same-archive recovery pending)
 Total Plans in Phase: 31
-Plan: 28/31 complete; original28 retained, three checked conditional gap plans pending
-Status: Blocked; unpatched picomatch HIGH prevents complete security qualification
+Plan: 30/31 complete; original28 retained, exact advisory accepted and shared checker reviewed
+Status: In progress; qualification under owner-approved issue35 exception pending
 Last activity: 2026-11-17
 
-Progress: [█████████░] 90% (28/31 plans; phase qualification remains blocked)
+Progress: [██████████] 97% (30/31 plans; no phase completion before actual qualification)
+
+## Owner-Approved Risk Disposition and Reviewed Implementation
+
+The owner asked to create a GitHub follow-up and continue without fixing the
+specific advisory. Issue35 exists at https://github.com/YokAI-open/Birja/issues/35.
+This explicitly supersedes the earlier no-exception barrier only for
+GHSA-fc5q-39xc-vjpf/current manifest and lock hashes, expiring2026-12-17UTC.
+The finding remains unresolved and visible; the rejected fork stays uninstalled.
+An earlier detailed issue draft was rejected by automatic approval review;
+only the minimal public-advisory/follow-up issue was published.
+
+Revised29–31 passed independent revision3 plan check.29 risk record and30
+Node-only shared audit checker are complete: exact CI Node tests12/12,
+CI contracts37/37 and independent source/security review0blockers/0warnings.
+Unrelated HIGH/critical, schema/network/timeout, broken/unrooted causes,
+changed input hashes and expired acceptance fail closed. No dependency,
+manifest/lock, app financial/runtime authority or production change occurred.
+
+Plan31 requires an actual complete security run with accepted-risk reporting
+and fresh complete seven-stage recovery, since the validation runner is
+PORTFOLIO_PAYLOAD_V1. Preserve previous actual archive and failed receipts.
+All28 requirements remain pending, completed_phases stays0, Phase13 unstarted.
+Both owner checks and Phase7 deferred live outcomes remain unchanged.
 
 ## Gap Planning — 2026-11-17
 
@@ -61,7 +84,7 @@ SDK planned-phase mutation that would incorrectly overwrite the unresolved
 qualification state as ready to execute. Next invocation when appropriate:
 `$gsd-execute-phase 12 --gaps-only`;29 must stop if no legitimate fix exists.
 
-## Blockers
+## Previous Blocker (now specifically accepted)
 
 - Phase12 strict qualification: picomatch GHSA-fc5q-39xc-vjpf HIGH; official
   latest4.0.7/no patch confirmed by Plan29 at2026-11-17T19:43:24Z. Complete npm audit fails despite
@@ -446,8 +469,8 @@ is authorized by milestone planning. Preserve unrelated .claude/ work.
 
 ## Execution Session
 
-Last session: 2026-11-17T20:00:56Z
-Stopped at: Replacement fork rejected by independent review; no safe candidate, Plans29–31 blocked
+Last session: 2026-11-17T20:32:46Z
+Stopped at: Plans29–30 complete under owner-approved issue35 risk; full security and fresh recovery pending
 Resume file: .planning/phases/12-preserve-existing-investing-under-portfolio-ownership/12-29-PLAN.md
 
 ## Plan26 Completed Continuation

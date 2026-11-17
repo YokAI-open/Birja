@@ -53,6 +53,13 @@ investigated@ryotsu fork for a remaining ReDoS bypass; API-incompatible and
 unmerged alternatives did not yield a safe install candidate. The research and
 rejection are retained; no dependency changed. A broader toolchain migration
 has not been selected or implemented.
+The owner subsequently explicitly approved deferring this advisory and
+continuing with follow-up issue35. Revised29–31 passed independent plan check;
+29 accepted-risk record and30 narrow shared audit checker are complete, with
+12 audit tests/37 CI contracts and independent code review0blockers/0warnings.
+31 actual complete security and fresh same-archive recovery remain pending;
+the known vulnerability remains unresolved and visible. No phase/requirement
+is closed by that acceptance alone.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 
@@ -91,7 +98,8 @@ financial ownership boundary; they are not separate database/API/UI layers.
   5. The same investing journeys work on fresh and populated upgraded databases through restricted verified-TLS roles, with original financial payloads, immutable evidence and matching ownership constraints preserved; ordinary roles cannot gain broader mutation rights.
 
 **Plans**: 31 plans (62 tasks, 21 dependency waves; original28 complete,
-conditional gap plans29–31 independently checked with0blockers/0warnings)
+revised gap plans29–31 independently checked with0blockers/0warnings;
+29–30 complete under issue35 owner-approved advisory exception)
 
 Plans:
 **Wave 1**
@@ -176,24 +184,25 @@ Plans:
 
 - [x] 12-28-PLAN.md — Owner acceptance of changed surfaces and native browser zoom
 
-**Wave 19** *(after Wave 18; blocked on a legitimate patched artifact and exact package approval)*
+**Wave 19** *(after Wave 18; owner-approved risk disposition)*
 
-- [ ] 12-29-PLAN.md — Bounded complete-graph package review and exact approval; stop without completion if no candidate exists
+- [x] 12-29-PLAN.md — Record exact owner-approved advisory deferral and follow-up issue35
 
-**Wave 20** *(blocked on successful Plan 29 and its exact approval)*
+**Wave 20** *(after successful Plan 29)*
 
-- [ ] 12-30-PLAN.md — Approved dependency-only repair, strict audit and frontend compatibility
+- [x] 12-30-PLAN.md — Shared fail-closed audit exception, targeted tests and independent review
 
 **Wave 21** *(blocked on successful Plan 30)*
 
 - [ ] 12-31-PLAN.md — Actual complete security and fresh same-archive recovery qualification
 
-**Cross-cutting constraints (gap plans29–31):** Preserve strict HIGH gates,
-both affected dependency paths, exact source/artifact/approval bindings and
-historical failed receipts. No guessed fix, unreviewed substitution or package
-installation under planning authority. Keep accepted UI/native200% results,
-serial isolated DB proofs and deferred Phase7 activation boundaries. Phase12
-remains blocked until actual qualification and independent goal verification.
+**Cross-cutting constraints (gap plans29–31):** The owner-approved exception
+applies only to GHSA-fc5q-39xc-vjpf/current dependency hashes until2026-12-17UTC;
+other HIGH/critical and invalid audit evidence remain blocking. Keep full raw
+reports and historical failed receipts, with accepted-risk rather than fixed
+labels. No dependency substitution/install occurs. Preserve owner UI/native200,
+serial isolated DB proofs and Phase7 activation boundaries. Phase12 remains
+pending until actual full qualification and independent goal verification.
 
 **UI hint**: yes
 
@@ -318,7 +327,7 @@ Phases13–15 have not started.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 28/31 | Blocked: unpatched picomatch HIGH; three checked conditional gap plans pending | - |
+| 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 30/31 | Qualification pending under owner-approved advisory risk in issue35 | - |
 | 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |

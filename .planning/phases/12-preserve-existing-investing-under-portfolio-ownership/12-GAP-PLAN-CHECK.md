@@ -3,14 +3,107 @@ phase: 12-preserve-existing-investing-under-portfolio-ownership
 mode: gap_closure
 status: passed
 plans_checked: [12-29, 12-30, 12-31]
-revision_checked: 1
+revision_checked: 3
 blockers: 0
 warnings: 0
-execution_prerequisite: legitimate_published_patch_and_exact_owner_approval
+execution_prerequisite: owner_accepted_exact_advisory_policy_and_fresh_recovery
 phase_completion: blocked
 ---
 
 # Phase12 Gap Plan Check
+
+## Current Verdict — Revision3: VERIFICATION PASSED
+
+The sole revision2 blocker is resolved. Plan31-02 now explicitly requires an
+actual fresh complete --suite recovery at the same reviewed frozen source that
+passes31-01, because Plan30 modifies the retained PORTFOLIO_PAYLOAD_V1 runner.
+Its action requires preserving the prior entire campaign/archive and raw
+receipts privately, a new immutable archive through all seven serial stages,
+source/image/CORE/UNITS/payload checks, exact financial/TLS authority parity,
+final same_archive_final_ci=true and exact-owned cleanup. Its automated command
+is the real complete recovery runner; its acceptance criteria require that
+actual proof before independent final verification. The exception context now
+states the same required fresh-proof boundary.
+
+The narrowed advisory acceptance remains scoped only to issue35, exact artifact
+hashes and expiry; no package installation or additional advisory exception is
+introduced. All six task contracts and the earlier revision2 non-recovery
+checks remain applicable. This bounded recheck found **zero blockers and zero
+warnings**; git diff --check passes after EOF whitespace correction.
+
+```yaml
+issues: []
+```
+
+This is plan verification, not completed execution or a clean npm audit claim.
+Phase completion remains pending actual whole security under accepted risk,
+new whole recovery and independent goal verification. Only this report was
+updated; no implementation tests, network operations or commits were performed.
+
+## Historical Revision2: ISSUES FOUND (Resolved by Revision3)
+
+The November17 owner decision in12-EXCEPTION-CONTEXT.md supersedes the earlier
+no-exception requirement **only** for GHSA-fc5q-39xc-vjpf. Issue35 is recorded at
+https://github.com/YokAI-open/Birja/issues/35. No dependency installation or
+additional package authorization is needed for the revised policy-only work.
+Earlier pass sections below describe superseded revisions0/1, not the current
+plans. The current review has **one BLOCKER and zero warnings**.
+
+### BLOCKER — Planned runner change necessarily changes packaged recovery input
+
+Plan30 explicitly modifies deploy/tests/run-portfolio-validation.py to use the
+new audit helper. That runner is not merely an unretained CI harness:
+deploy/verify-restore.py:65 explicitly includes it in PORTFOLIO_PAYLOAD_V1.
+The runner's authenticate function compares every CORE, UNITS and
+PORTFOLIO_PAYLOAD_V1 member from the archive with current bytes and refuses any
+difference. Therefore the planned diff cannot retain the d9da271 whole recovery
+as qualification of unchanged recovery payloads. Plan31-02's policy-only reuse
+branch is infeasible for this concrete plan set, even though application and
+financial runtime bytes can remain unchanged.
+
+**Required revision:** Require an actual fresh complete --suite recovery at the
+same frozen source qualified by31-01. Preserve the old owned campaign/archive
+and raw receipts under a distinct private path before recreating the exclusive
+fixed proof directory; record a new archive SHA and all seven stages with
+current/retained/source/image/authority guards and final same_archive_final_ci.
+Do not repackage or relabel the old archive. Use the actual complete recovery
+command in automated verification; contract tests may supplement it. No new
+implementation or production scope is introduced by this required proof.
+
+### Other Revision2 Checks
+
+All six tasks retain concrete nonempty read_first and acceptance_criteria,
+files/action/verify/done. The28→29→30→31 waves18–21 remain valid. Plan29
+records exact owner risk acceptance, expiry2026-12-17UTC, original manifest and
+lock hashes, exposure reassessment and issue35 without claiming remediation.
+Plan30 uses Node built-ins and full raw npm audit, forbids omit-dev, constrains
+the exact advisory and inherited HIGH graph causes, and requires fail-closed
+critical/unrelated HIGH, malformed/network/schema, hash/expiry and unrooted
+cycle cases. The existing cyclic report is a positive fixture; cycle-only and
+mixed-advisory roots are negative fixtures. Complete output must say accepted
+risk, not clean. CI and the local runner consume the same helper and require
+independent source/security review before full qualification. These controls
+are coherent planning requirements, not a reviewed implementation yet.
+
+Financial/runtime scope, original owner UI/native200 acceptance and Phase7
+deferrals remain preserved. All seven Phase12 IDs still have retained
+implementation plus final qualification coverage. No broad gate waiver, package
+change, provider operation, publication or deployment is authorized.
+
+```yaml
+issues:
+  - plan: "12-31"
+    task: 2
+    dimension: cross_plan_data_contracts
+    severity: blocker
+    description: "Plan30 changes run-portfolio-validation.py, an exact PORTFOLIO_PAYLOAD_V1 archive member, so Plan31 cannot retain d9da271 recovery through unchanged packaged-input equivalence."
+    fix_hint: "Require fresh actual complete --suite recovery at frozen qualified source; preserve prior archive privately and record the new seven-stage same-archive proof."
+```
+
+This bounded static revision2 check changed only this report. No implementation
+test, package install, network/provider operation or commit was performed.
+
+## Historical Revision0/1 Findings (Superseded)
 
 ## VERIFICATION PASSED
 
