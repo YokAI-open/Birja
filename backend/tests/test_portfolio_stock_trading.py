@@ -287,6 +287,35 @@ async def test_cross_asset_original_keys_conflict_in_both_directions(
     assert await snapshot(factory, root) == before
 
 
+async def test_inner_stock_readers_never_substitute_a_root_or_crypto_receipt(
+    stock_books, settings, engine, clean_prices
+):
+    factory, coin, (root, *_), now = stock_books
+    await put_price(engine, "BTC", "100", now)
+    key = uuid4()
+    async with factory() as db:
+        await trading.execute(
+            db,
+            portfolio=root,
+            order=trading.Order("BTC", "buy", "quantity", Decimal(2)),
+            expected_mid=Decimal(100),
+            idempotency_key=key,
+            settings=settings,
+        )
+    before = await snapshot(factory, root)
+    async with factory() as db:
+        with pytest.raises(HTTPException) as missing:
+            await stock_trading._financial(
+                db, OwnedActivePortfolio(9223372036854775807, root.user_id), coin
+            )
+        assert missing.value.status_code == 404
+        assert missing.value.detail == {"code": "portfolio_unavailable"}
+        with pytest.raises(TradeRefused) as conflict:
+            await stock_trading._replay(db, root, order(idempotency_key=str(key)))
+        assert conflict.value.code == "idempotency_conflict"
+    assert await snapshot(factory, root) == before
+
+
 @pytest.mark.parametrize("same_key", [False, True])
 async def test_parallel_stock_requests_one_effect_or_no_overspend(stock_books, settings, same_key):
     factory, _, (root, *_), _ = stock_books
