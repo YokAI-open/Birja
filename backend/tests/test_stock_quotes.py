@@ -465,8 +465,15 @@ async def split_quotes(engine, stock_state):
         yield factory, stock_state[0]
     finally:
         async with factory.begin() as db:
+            from tests.stock_action_fixtures import synthetic_corruption
+
             await db.execute(delete(StockQuote))
-            await db.execute(delete(StockSplitApplication))
+            async with synthetic_corruption(
+                db, "stock_split_applications", trigger="portfolio_record_immutable"
+            ):
+                await db.execute(
+                    delete(StockSplitApplication).where(StockSplitApplication.coin_id == cid)
+                )
             await db.execute(update(StockActionEvent).values(current_revision_id=None))
             await db.execute(delete(StockActionRevision))
             await db.execute(delete(StockActionSource))

@@ -38,6 +38,13 @@ async def synthetic_portfolio_id(db, user_id, portfolio_id=None):
     return root.id
 
 
+async def synthetic_owned_portfolio(db, user_id):
+    """Capture the fixture's verified sole root before invoking a service."""
+    from app.services.portfolios import OwnedActivePortfolio
+
+    return OwnedActivePortfolio(await synthetic_portfolio_id(db, user_id), user_id)
+
+
 async def install_current_runtime_roles(conn):
     """Install the exact final production contract on this guarded test DB."""
     from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
