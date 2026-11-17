@@ -981,3 +981,68 @@ be combined into an invented whole-run pass. Only after both tasks actually
 pass should27's final records/SUMMARY and28 owner UI/native200% checkpoint be
 prepared. Keep all work local; Phase7's consumed campaign/six gaps/OFF gates
 remain unchanged. No provider or private production access occurred.
+
+## Complete Seven-Stage Recovery Qualified — 2026-11-17
+
+The actual WHOLE `python3 deploy/tests/run-portfolio-validation.py --suite recovery`
+passes at10121b02db2b2217b868a9bce30c3f77504eadb3, tree
+99405d979af7fad204db4883a2d16b867ecb7158. It ran13:27:38Z–14:12:46Z,
+2708.086seconds, exit0, zero tracked-source changes during the campaign.
+Final same_archive_final_ci=true and exact upgraded/fresh authority equality
+pass. This is an actual whole-run result, not assembled focused receipts.
+
+One NEW exclusive fixed archive remains at
+/tmp/birja-phase12-proof/recovery.tar.gz, SHA256
+5a495a9dc2901cac46bfa82f23ae2daef67323eda05ac08dc44c67272a2b01a4.
+It was packaged once and never rebuilt between the seven serial stages.
+All current/package/retained matrix/payload and image content/Config/RootFS
+guards ran before and after every stage. Exact final details are committed in
+12-RECOVERY-PROOF.md; private whole log:
+/tmp/phase12-27-whole-recovery-final-second.log, source inventory:
+/tmp/phase12-27-whole-recovery-source-10121b0.json.
+
+Actual stage results: image transition38.383s; retained0007–0014 encrypted
+roundtrips763.603s; current0017 source-destroyed encrypted cold restore with
+immutable oracle64a2358d; restricted roles320.990s/63denied operations;
+upgradedTLS275.696s and freshTLS275.691s with exact parity; selected legacy
+hardening/old-app rollback, selected0008 real deployment/rollback and retained
+0014 exact financial/receipt/dividend preservation, unsupported rollback refusal
+and failed-attempt recovery. Both selected cleanup markers are true.
+
+One owning12-18 harness fix was necessary before the successful whole run:
+10121b0 isolates retained build aliases by canonical private campaign directory
+path/device/inode as well as source/archiveSHA. Deterministic same-byte archives
+had collided with a tag from another campaign and correctly failed missing
+private binding. No existing tag was deleted, overwritten or adopted; existing
+binding/source/content/Config/RootFS guards remain. A regression is RED before
+and GREEN after, including recreated fixed path while old directory is retained
+and missing-binding refusal.31CI/11selected/5fixture/10recovery contracts pass.
+Actual two-private-campaign same-archive Docker builds and same-campaign replay
+also pass independent immutable authentication; log
+/tmp/phase12-27-image-namespace-proof.log. Independent builds may have distinct
+valid image IDs; an initial overstrict local diagnostic assertion was corrected,
+without weakening the actual source/binding checks.
+
+The failed first whole attempt is preserved whole at
+/tmp/birja-phase12-proof-failed-20261117-58baea3 (d33ac7db archive,119.645s,
+missing-private-binding refusal), with original privacy and every file hash
+unchanged; /tmp/phase12-27-whole-recovery-first-preserved.json records this.
+No focused/failed archive was copied into the final fixed path.
+
+Final host checks verify ZERO containers/networks/volumes for birja-test,
+birja-ops-test and both portfolio fixture projects; no test/migration child
+remains. All102 UI artifact and249 source hashes match unchanged ZIPc2238dc8;
+native200=false. No UI recapture or acceptance is claimed.
+
+NEXT: fresh actual COMPLETE --suite all-security at final committed source.
+Earlier qualified261f617 backend3090/critical60/front958/audit prefix,
+ef81676 full59browser+originalCSPskip and actual strict five images remain
+source-bound evidence, not a complete runner pass. Exact comparison confirms
+no backend or frontend runtime/lock byte changed; later differences are e2e/
+helpers, recovery harness/contracts and planning records. All-security needs
+its real full graph success before27SUMMARY, final12-LOCAL-VERIFICATION and
+12-HUMAN-UAT/Plan28 checkpoint preparation. Whole recovery now PASSED; preserve
+its fixed archive and do not repackage it to chase later documentation hashes.
+No27SUMMARY or plan/phase/requirement advancement in this bounded handoff.
+Keep local; no new dependency/provider/production/publication operation occurred.
+Phase7 consumed campaign/six gaps/OFF gates remain unchanged.

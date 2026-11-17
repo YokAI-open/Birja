@@ -1,0 +1,125 @@
+---
+phase: 12-preserve-existing-investing-under-portfolio-ownership
+plan: "27"
+task: "12-27-02"
+status: passed
+verified: 2026-11-17
+source_commit: 10121b02db2b2217b868a9bce30c3f77504eadb3
+source_tree: 99405d979af7fad204db4883a2d16b867ecb7158
+---
+
+# Phase 12 Exact Recovery Proof
+
+The actual seven-stage recovery runner passed from start to finish using one
+new exclusively created archive. This completes the recovery task's automated
+proof; Plan27 and Phase12 remain incomplete pending the complete all-security
+runner, owner acceptance and final phase reviews.
+
+## Campaign Identity
+
+Command: `python3 deploy/tests/run-portfolio-validation.py --suite recovery`.
+The runner received its stripped synthetic environment, without private.env,
+provider credentials or production endpoints. Before startup, exact checks found
+no competing recovery and zero containers/networks/volumes for the four fixed
+test projects. The exclusive fixed proof path did not exist.
+
+| Item | Actual result |
+|---|---|
+| Source |10121b02db2b2217b868a9bce30c3f77504eadb3 |
+| Tree |99405d979af7fad204db4883a2d16b867ecb7158 |
+| Started |2026-11-17T13:27:38Z |
+| Finished |2026-11-17T14:12:46Z |
+| Total measured runtime |2708.086 seconds,45min08sec |
+| Exit |0 |
+| Archive |/tmp/birja-phase12-proof/recovery.tar.gz |
+| SHA256 |5a495a9dc2901cac46bfa82f23ae2daef67323eda05ac08dc44c67272a2b01a4 |
+| Archive format/size |Existing strict USTAR,196689920 bytes; filename extension unchanged |
+| Final guard |same_archive_final_ci=true |
+| Tracked-source comparison |Zero changed files during the complete campaign |
+
+Private local evidence:
+
+- /tmp/phase12-27-whole-recovery-final-second.log — complete stdout/stderr and
+  final exit/time/source-unchanged receipt.
+- /tmp/phase12-27-whole-recovery-source-10121b0.json — source/tree/start and
+  complete tracked-file SHA256 inventory before execution.
+- /tmp/birja-phase12-proof/ — the one selected archive, checksum and four
+  private immutable image-binding records. Do not overwrite or rebuild it.
+
+## Seven Stages
+
+| Stage | Actual proof |
+|---|---|
+| Image transition |PASS38.383s: populated PostgreSQL physical clone, actual collation drift, reindex-before-refresh and logical restore; Redis AOF/auth/noeviction/restart/UID clone; originals preserved. |
+| Retained0007–0014 round trips |PASS763.603s: actual encrypted backups/retrieval/restores, exact rows/schema/sequences, original identities and retained source; saved stock/dividend receipt replay and private History remain intact. Nine accounting,17 identity,13 resolution-authority and10 execution corruption refusals pass. |
+| Current0017 encrypted cold restore |PASS: original inputs and source datastore destroyed before a separate cold server restores; the same immutable pre-backup oracle64a2358d109ae84e797490406ae9712ef6b372428f88ddb485549a5bd7e6122f matches. Active/frozen root lineage, financial journals, legacyNULL/new2 digests, restricted TLS and quarantine pass. |
+| Restricted roles |PASS320.990s:63 denied operations, exact fresh/populated accounting and authority parity, operatorNOLOGIN, immutable audit, quantity-only scheduler, valid concurrent0008 index and runtime consumers. Twelve input/lock rejections and unknown-collation refusal precede role changes. |
+| Upgraded TLS |PASS275.696s plus13.945s setup: actual accounting/ownership/operator/calendar/execution/stock/dividend consumers, split cutoff and cash reuse, immutable/permission denials; app/scheduler/migrator SSL, badCA/hostname/plaintext refusals, credential isolation and renewal. |
+| Fresh TLS |PASS275.691s plus13.481s setup: the same actual consumers and negative controls; the runner's final equality check confirms exact authority parity with the upgraded lane. |
+| Selected rollback |PASS: legacy hardening and old-image rollback101.383s; real selected0008 deployment113.682s and old-app rollback21.721s with force-recreation/original-volume/Redis preservation; retained0014 deployment119.468s, exact financial/identity/runtime preservation and original stock/dividend replay. Unsupported old-source rollback refuses with exact state retained; failed-attempt rollback to the tested source passes10.466s and final receipts/finances remain unchanged. |
+
+All stages ran serially. The runner authenticated archive/current packaged bytes,
+fixed retained source payloads, source matrix and image content/Config/RootFS
+bindings before execution and after every stage. No source overlay, synthetic
+commit, retained-code replacement, archive reconstruction or midcampaign
+repackaging was used. Stage timing figures are measured printed integration
+durations, not a latency claim or a substitute for the complete runtime.
+
+Final immutable image IDs:
+
+- Current0017: sha256:93ba6266e1493b17950f4e7533a1661b2bc452ed1f4b793a9f9cfe596f3fec6d.
+- Retained0014: sha256:f577a0624519985455e254247c8efef8506dac94c25f6b1b2bdcc7bfea84ab23.
+- Legacy0008: sha256:38e600cb562689d940a4b653ced6e5145096f9e2414fe1fc3b463ae4a741d9d5.
+- Legacy0007: sha256:304ffd911dd5ff8df6cb0f2458a371cc27e5e4c855ec5fdca671a15b69d94353.
+
+## Campaign Namespace Repair
+
+The first complete attempt at58baea3 stopped after119.645s at the correct
+missing-private-binding refusal. Its newly packaged deterministic archive had
+the same SHA as an earlier focused proof, so the old content-only build tag
+collided with another campaign's image. The failed proof directory was verified
+owned/private/nonsymlink and preserved whole, with every file hash unchanged,
+at /tmp/birja-phase12-proof-failed-20261117-58baea3. Its d33ac7db archive was
+never overwritten or rebuilt.
+
+Owning12-18 fix10121b0 scopes the mutable build alias to a digest of the
+canonical private campaign directory path/device/inode in addition to source
+commit and archiveSHA. Same-campaign replay still requires its exact private
+binding. Missing-binding, source, image content/Config/RootFS refusals remain.
+No existing image tag was deleted, overwritten or adopted to force a pass.
+
+The behavioral regression failed before and passes after the fix: it preserves
+the old directory, recreates the same fixed path with identical archive bytes,
+requires a different build alias and proves unbound-image refusal remains.
+31CI/runner,11selected,5fixture and10recovery contracts pass. A separate actual
+Docker proof builds from two private campaign directories containing identical
+5a495a9d archives and independently authenticates both images, then replays the
+first campaign's binding. Evidence: /tmp/phase12-27-image-namespace-proof.log.
+An initial diagnostic assertion incorrectly expected independent valid builds
+to share an ID; independent source/Config/RootFS authentication corrected that
+oracle. Neither archive nor image identity was substituted.
+
+## Cleanup, UI and Remaining Gates
+
+Both selected cleanup markers are true. Independent host followup confirms zero
+containers, networks and volumes for birja-test, birja-ops-test,
+birja-portfolio-fixture-test and birja-portfolio-fixture-test-cold. No campaign
+test or migration process remains. Only unrelated.claude/ is untracked.
+
+The existing UI ZIP retains SHA256
+c2238dc8fc48ce636b2bd93d2e4f90445cebd9baa23e917b10a97348e7469ca0.
+All102 artifact hashes and249 current source hashes still match.
+native_200_percent_verified remains false. No new screen capture or owner
+acceptance is invented from recovery success.
+
+Comparison to the qualified261f617 backend/frontend prefix confirms no backend
+or frontend runtime source/lock changes. Differences are seven e2e/helper files,
+recovery fixture/source-dispatch/selected-control tests and planning records.
+Those earlier passing suites remain source-bound evidence; they do not establish
+a complete all-security runner pass. Run that actual whole graph next, then
+complete Plan27 records/SUMMARY and Plan28's separate ownerUI/native200% checks.
+No requirement or phase completion follows from this task record alone.
+
+All work was local and synthetic: no provider calls, B2/production access,
+private production configuration, new dependency, push, merge or deployment.
+Phase7's consumed campaign, six pending requirements and OFF admissions remain.
