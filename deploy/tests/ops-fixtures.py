@@ -1189,7 +1189,10 @@ asyncio.run(main())
 def role_python(code, role=r.BOOT):
     # Only synthetic credentials on the fixed internal network, no host ports.
     password = "synthetic-ops-only" if role == r.BOOT else "a" * 64
-    retained, image = retained_runtime()
+    # The authenticated complete runtime already contains its exact released
+    # app and migrations. Host source is root-private and must not overlay the
+    # nonroot image or alter the code whose content identity was verified.
+    _, image = retained_runtime()
     result = subprocess.run(
         [
             "/usr/bin/docker",
@@ -1214,9 +1217,6 @@ def role_python(code, role=r.BOOT):
             "PRICE_SOURCE=fake",
             "--entrypoint",
             "python",
-            "-v", str(retained / "backend/app") + ":/app/app:ro",
-            "-v",
-            str(retained / "backend/alembic") + ":/app/alembic:ro",
             image,
             "-",
         ],

@@ -222,6 +222,36 @@ def required_gate_policy(j):
 
 
 class CI(unittest.TestCase):
+    def test_retained_role_child_uses_authenticated_image_without_source_overlays(self):
+        tree = ast.parse((ROOT / "deploy/tests/ops-fixtures.py").read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == "role_python")
+        image = "sha256:" + "a" * 64
+        with patch("subprocess.run") as run:
+            run.return_value = SimpleNamespace(returncode=0, stdout=b"original-receipt", stderr=b"")
+            source = SimpleNamespace(BOOT="birja_ops_bootstrap", ENV={"PATH": "/usr/bin:/bin"})
+            retained = lambda: (Path("/unreadable-root-owned-retained-source"), image)
+            namespace = {"r": source, "subprocess": subprocess, "retained_runtime": retained}
+            exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
+                         "<actual-retained-role-child>", "exec"), namespace)
+            self.assertEqual(namespace["role_python"]("assert original_receipt", "birja_migrator"),
+                             b"original-receipt")
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[-2:], [image, "-"])
+            self.assertEqual(argv[argv.index("--network") + 1], "birja-ops-test_isolated")
+            self.assertEqual(argv[argv.index("--entrypoint") + 1], "python")
+            self.assertNotIn("-v", argv)
+            self.assertNotIn("--volume", argv)
+            self.assertNotIn("--mount", argv)
+            self.assertNotIn("--user", argv)
+            self.assertEqual(run.call_args.kwargs["input"], b"assert original_receipt")
+            self.assertEqual(run.call_args.kwargs["env"], source.ENV)
+            namespace["retained_runtime"] = lambda: (_ for _ in ()).throw(ValueError("source binding"))
+            run.reset_mock()
+            with self.assertRaisesRegex(ValueError, "source binding"):
+                namespace["role_python"]("assert original_receipt")
+            run.assert_not_called()
+
     def portfolio_sources(self):
         spec = importlib.util.spec_from_file_location('source_binding_contract', ROOT / 'deploy/tests/portfolio-sources.py')
         module = importlib.util.module_from_spec(spec)
