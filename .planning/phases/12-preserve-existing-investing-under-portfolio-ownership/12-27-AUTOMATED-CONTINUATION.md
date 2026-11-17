@@ -116,7 +116,7 @@ helper tried to append an owned entitlement while the test deliberately held
 its root; that fixture now changes only global revision evidence before lock
 release. All56 final wait/worker cases pass without guard bypass.
 
-## Remaining backend work / next concrete step
+## Earlier backend diagnostic (repaired in segment 2 below)
 
 Full unfiltered diagnostic `/tmp/phase12-27-backend-third.log` reaches548passes,
 3failures and37errors before its40-failure stop. Its three dev-bootstrap failures
@@ -191,3 +191,126 @@ remain pending, stock admissions OFF. Keep all commits local; `.claude/` remains
 unrelated/untracked and untouched. No private `.env`, real rows or provider
 credentials were read. No processes from this segment remain active beyond the
 verified synthetic DB/Redis stack. No user action is needed to continue.
+
+## Backend repair segment 2
+
+The earlier separate schema/authority fixtures and their payment/correction/
+mixed-History callers now run on genuine0017 with actual Account roots:
+
+- `775abf4` / owning12-16 fixes a real final-bootstrap omission found by retained
+  adversarial tests: exact function-body hashes alone did not authenticate OUT
+  argument names/types/modes. Both final preflight copies now authenticate exact
+  proargnames/proargmodes/proallargtypes, including NULL expectations for scalar
+  routines and trigger functions. The three original altered-OUT declaration
+  tests now fail closed as intended; owner/body/path/ACL checks remain enforced.
+  The separate current dividend fixture prepares quantity/units/cutoff/sequence
+  before its immutable INSERT, and installs exact final runtime grants. Legacy
+  retained0014 seeding uses explicit original raw columns and a0014 revision
+  assertion, independent of current owned ORM/helpers. Two migration-auth cases
+  now use the genuine guarded reset fixture rather than expecting upgrade0014
+  to downgrade0017. No downgrade or financial immutability guard was weakened.
+  Payment/hold/History consumers name their original root. Projection seeds
+  include rooted fills/facts/movements and canonical version2 split digests;
+  owner-only and malformed-input assertions remain. The cancellation test now
+  proves cancellation happens after actual apply SQL, rather than accidentally
+  stopping at the new preliminary identity query. Consecutive genuine sessions
+  keep changed-ex-date tests independent of weekend timing.
+- `d7d3595` / owning12-14 moves all25 retained HTTP mixed-History cases to explicit
+  v2 portfolio routes, with real cookie sessions, original saved rows, bounded
+  cursors, exact output/OpenAPI, no-store, causal cash and foreign-owner checks.
+- `484f2a6` / owning12-14 preserves trade-History pagination/rounding/bigint and
+  owner isolation with explicit OwnedActivePortfolio and canonical v2 cursor
+  fixtures. Invalid roots and missing roots are covered. The query-count proof
+  now requires two lifecycle checks surrounding exactly one bounded ledger
+  SELECT, rather than wrongly treating required lifecycle reads as regressions.
+- `49479ff` / owning12-16 preserves email HTTP resource closure against the
+  genuine admitted disposable schema. The health DB-down case starts with a
+  valid schema and then injects an actual request-time loopback connection
+  refusal; it still requires503, private sanitized body and dependency logging.
+
+Actual serial receipts:
+
+- `/tmp/phase12-27-dividend-schema-fourth.log`:79 schema/authority cases pass.
+- `/tmp/phase12-27-dividend-bootstrap-final.log`:176pass/2fail in223.26s; both
+  failures are the subsequently corrected migration-auth fixture assumptions,
+  not financial/authority failures. The two corrected cases are included next.
+- `/tmp/phase12-27-dividend-history-second.log`:204pass in31.98s, including32
+  bootstrap,79 schema/authority, final rooted authority, both migration-auth
+  corrections, all payment/correction and real mixed-History cases.
+- `/tmp/phase12-27-history-http-first.log`:25 HTTP mixed-History cases pass.
+- `/tmp/phase12-27-history-lifecycle-first.log`:78 trade-History/email/health
+  cases pass. A subsequent tiny cursor-fixture review separates a valid foreign
+  root token from universally malformed tokens because HTTP tests import the
+  latter; its dependent replay/commit is recorded below.
+- Static CI/runner28, recovery10, fixture5 and selected-source8 contracts pass.
+  Backend Ruff check/format and mypy101 source files pass.
+
+No migrations, retained SQL function bodies, dependency pins, exclusions,
+coverage thresholds or admissions changed. Final bootstrap source bytes did
+change, so the complete final archive/cold/TLS/image campaign must still be
+fresh and bind the eventual source. No Plan27 SUMMARY or whole-phase completion
+claim is authorized by these bounded repair receipts.
+
+Two final test-only commits complete this bounded segment:
+
+- `48db6df` separates a valid foreign-root cursor from universally malformed
+  vectors reused by HTTP tests; a dedicated assertion still refuses continuing
+  the cursor under another root.
+- `9808652` / owning12-01 updates actual head to0017 and runs original retained
+  empty downgrade/base roundtrips, populated0007/0008 index preservation and
+  0005/0006 cent guards on genuine authenticated retained revisions after the
+  existing guarded reset. The retained index proof ends at0014; independent
+  populated portfolio oracles prove the0014→0017 transition. The final0017
+  downgrade refusal remains unchanged. Teardown restores genuine final head.
+
+`/tmp/phase12-27-baseline-history-final.log` passes all80 baseline migration,
+trade-History service/cursor and dependent HTTP cases in36.86s. Full backend
+Ruff check and format pass226 files; mypy passes101 app source files. No
+tracked deletion occurred, and all commits remain local.
+
+## Latest unfiltered diagnostic and concrete next work
+
+`/tmp/phase12-27-backend-fourth.log` advanced from548 to1004 passes, stopping
+at40 failures in90.76s. The subsequent full unfiltered
+`/tmp/phase12-27-backend-fifth.log` advances to **1822pass/34fail/6errors** in
+630.94s (10m30s). It contains3023 collected cases after added malformed-root
+vectors. Its five baseline migration failures are now repaired and included in
+the80-case final replay above. This diagnostic predates the final cursor/
+baseline test-only commits and is not a final-source full-suite pass.
+
+The next remaining families in that actual log are:
+
+1. `test_portfolio_service.py` (11 failures) and `test_portfolio_snapshot.py`
+   (4 failures): legacy user-only valuation calls and committed snapshot fixtures
+   need explicit owned roots. Preserve original one-snapshot/no-mixed-commit,
+   price-clock, P/L, unavailable/inactive/zero, dividend and concurrency assertions.
+   Authenticate root/lifecycle reads without replacing the authoritative single
+   financial projection or faking committed-client behavior. Do not default a
+   production root or weaken original finance/snapshot guarantees.
+2. `test_stock_action_migrations.py` (14 failures/5 setup errors): its shared
+   ledger still creates only a User, current movement/entitlement/split seeds
+   omit owned roots/digest version, and its original runtime_roles/upgrade cases
+   attempt forbidden final0017 downgrades. Separate genuine retained lanes and
+   current0017 behavioral/ACL proofs. The raw movement helper is ALSO used by
+   the deliberately old0014 `seed_legacy_books`; do not blindly root all its SQL
+   or apply current ORM/services/authority to0013/14. `dividend_case` now creates
+   its own real Account; do not add another default Account via ledger without
+   reconciling that dependency. Use exact final bootstrap for current-role tests,
+   genuine fixed retained source/revision for historical grant/body/index proofs.
+   Preserve all uniqueness, causal foreign-key, hostile-role and concurrent-index
+   assertions; canonical new2 global split digests do not rewrite legacy NULL.
+3. `test_stock_action_resolutions.py` has one setup error at the diagnostic stop,
+   initially inherited from that same old runtime_roles/downgrade fixture. Later
+   cases and all later suites still require unfiltered qualification.
+
+All database invocations in this segment were serial. The10m30 diagnostic
+includes genuine migration/admission cases; it was actively progressing, not
+a concurrent-pytest lock cycle. The final guarded reset restores a clean actual
+0017 diagnostic schema and checks all noninternal triggers enabled. No pytest,
+migration child or reset process is left active at handoff; the same verified
+synthetic tmpfs DB/Redis stack remains available. Preserve its ownership guards,
+and destroy only that exact stack before the eventual exclusive all-security
+runner creates a fresh one. No provider/production operation or private.env read
+occurred. Phase7's consumed authorization/evidence and six pending requirements
+remain unchanged; stock admissions remain OFF. Continue locally without another
+procedural retry question. Phase12 remains26/28, with27 incomplete and noSUMMARY.
