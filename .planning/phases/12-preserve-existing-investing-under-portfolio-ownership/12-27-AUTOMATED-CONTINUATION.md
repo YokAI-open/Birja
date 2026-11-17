@@ -701,3 +701,86 @@ before packaging, never rebuild between stages. Plan28 owner UI/native200%
 remains blocking. Phase12 stays26/28; all requirements stay unchecked. No new
 dependency/provider/private production/publication action occurred. Phase7's
 consumed campaign/six pending requirements/OFF admissions are unchanged.
+
+## Browser Reconciliation Qualified — 2026-11-17
+
+Continuation commit ef816768cdc622732b159266af8dffef64f7c705 reconciles seven
+retained e2e/helper files only, with no runtime, tooling, lockfile, dependency,
+API admission, security gate or production change. Its owning plan is12-26.
+
+The helper resolves the actual authenticated metadata response and requires
+exactly one owned active root for these single-portfolio legacy journeys. All
+financial requests, interceptions and response waits use that explicit root.
+Public market-data endpoints remain v1; the existing ownership suite continues
+asserting that retired unscoped financial endpoints refuse. Account remains
+email/session-only. Grant/no-regrant and refresh/session assertions now inspect
+the same original root, exact10000 cash/baseline and empty holdings through the
+real scoped API and UI. Identity pages explicitly show no cash.
+
+Original exact cash, quantity, fee, stock ask/bid, once-only worker payment,
+correction/held/reconciled evidence, original references, keyboard/focus,
+overflow/reflow, pagination, retries and previous-owner suppression assertions
+remain. The synthetic tied mixed cursor now uses actual version3 and its root.
+DOM identities assert the expected root before removing root/session/layout
+prefixes for the original event-order oracle. Late-owner cleanup retains the
+original route string; it does not read private metadata after logout. Receipt
+navigation targets Main navigation explicitly where a new Portfolio receipt
+link would otherwise be ambiguous. A second crypto order explicitly selects
+Trade again, preserving the authoritative original receipt until then.
+
+Diagnostic receipts remain separate:
+
+- /tmp/phase12-27-browser-reconciled-first.log and
+  /tmp/birja-phase09-browser-ca0zuaw1/browser-all.log: full60 diagnostic,
+  53pass/6fixture failures/1existing CSPskip in10.0min. Those failures were
+  protected Account return after re-login, scoped DOM prefixes, metadata lookup
+  after logout, old cash-on-Account assertion, ambiguous Portfolio link and
+  renamed explicit new-order action. No timeout was increased.
+- /tmp/phase12-27-browser-six-replay.log and
+  /tmp/birja-phase09-browser-yo386w9c/browser-all.log:5pass/1remaining receipt
+  lifecycle fixture failure. After navigating back to the existing crypto
+  receipt, a fresh order must be explicit before choosing Sell.
+- /tmp/phase12-27-browser-roundtrip-replay.log and
+  /tmp/birja-phase09-browser-jw_11khy/browser-all.log: exact real-money
+  buy/Portfolio/History/whole-position sale passes in37.1s after that correction.
+
+Final actual full proof at the clean committed source ef81676:
+
+- /tmp/phase12-27-browser-reconciled-final.log and
+  /tmp/birja-phase09-browser-lgfvmwr_/browser-all.log: **59pass,1original CSPskip,
+  all60 collected, zero failures,536.1s**. No suite filtering or added skip.
+- Whole ESLint, Node/e2e TypeScript, e2e Prettier and diff check pass. Six browser
+  guard contracts pass. No tracked files were deleted.
+- The source-bound review packet is
+  /tmp/birja-phase12-ui-review-plan27-qualified.zip, SHA256
+  c2238dc8fc48ce636b2bd93d2e4f90445cebd9baa23e917b10a97348e7469ca0.
+  Its matching directory contains index.html and manifest.json. All102 artifact
+  hashes and249 source hashes match actual ef81676 bytes; the manifest records
+  the same commit. Direct manifest/file hashing, not a filename, verifies this.
+  Visually inspected loaded320px crypto receipt and1280px stock receipt retain
+  readable escaped/wrapped portfolio names and reachable controls. Automated
+  reflow is not native zoom; native_200_percent_verified remainsfalse.
+
+Comparison to /tmp/phase12-27-security-source-second.json finds only these seven
+e2e/helper files and this continuation record changed from the qualified261f617
+backend/frontend prefix. Backend/app, migrations, runtime frontend, package
+locks, tooling and CI source are unchanged. That exact prefix remains truthful
+source-bound evidence, not a whole-run all-security success. All-security still
+needs its complete graph success, including five actual-image strict scans;
+images and the final same-archive seven-stage recovery remain unreached.
+
+Both full and focused browser runners cleaned only their own guarded synthetic
+projects. Final cleanup verifies zero owned containers/networks/volumes; no
+test process or diagnostic DB remains. Only unrelated.claude/ is untracked.
+Do not rerun full backend merely to diagnose these e2e-only changes, but do not
+claim the complete security runner passed from its earlier prefix plus this
+separate browser proof. Next complete the strict actual-image/security graph,
+then preserve/move the whole old owned proof directory before one fresh
+exclusive source/archive-bound seven-stage recovery campaign. Never overwrite
+or rebuild its archive between stages. Record any new source change and rerun
+affected gates; the new review packet must remain bound to final source.
+
+No27SUMMARY is created and phase counts remain26/28. Owner UI and genuine
+native200% acceptance in Plan28 remain blocking. No package/provider/private
+production/publication operation or branch switch occurred. Keep all work local
+and retain Phase7's consumed campaign, six pending requirements and OFF gates.
