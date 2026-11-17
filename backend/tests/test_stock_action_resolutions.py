@@ -20,6 +20,7 @@ from app.services.stock_sessions import build_sessions
 from tests.stock_action_fixtures import ownership as _ownership
 from tests.test_corporate_actions import actions as _actions
 from tests.test_corporate_actions import batch
+from tests.test_migrations import retained_migration_db as _retained_migration_db
 from tests.test_stock_action_migrations import runtime_roles as _runtime_roles
 from tests.test_stock_sessions import evidence as calendar_evidence
 
@@ -28,6 +29,7 @@ CLI_PATH = Path(__file__).resolve().parents[2] / "scripts/stock-actions.py"
 ownership = _ownership
 actions = _actions
 runtime_roles = _runtime_roles
+retained_migration_db = _retained_migration_db
 
 CALL = """SELECT public.apply_stock_action_resolution(:coin,:event,:revision,:generation,
  :epoch,:key,:decision,encode(sha256(convert_to(CAST(:evidence AS jsonb)::text,'UTF8')),'hex'),
@@ -174,20 +176,20 @@ async def test_authority_identical_confirmation_preserves_reviewed_disposition(r
 
 
 async def test_authority_upgrade_refuses_existing_runtime_operator_membership(
-    engine, runtime_roles
+    engine, retained_migration_db
 ):
     from tests.test_stock_migrations import migrate
 
-    await migrate("0011", down=True)
+    await migrate("0011")
     async with engine.begin() as conn:
         await conn.execute(text("GRANT birja_action_operator TO birja_app"))
     try:
         with pytest.raises(DBAPIError, match="unsafe action operator"):
-            await migrate("head")
+            await migrate("0014")
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("REVOKE birja_action_operator FROM birja_app"))
-        await migrate("head")
+        await migrate("0014")
 
 
 async def test_authority_has_narrow_operator_entrypoint(engine, migrated, runtime_roles):

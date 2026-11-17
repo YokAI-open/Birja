@@ -105,7 +105,8 @@ def legacy_digest(rows: list[list[object]]) -> str:
 
 async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
     """Two actual users, unequal original books and ONE global two-owner split."""
-    from tests.test_stock_action_migrations import event, movement
+    from tests.test_stock_action_migrations import event
+    from tests.test_stock_action_migrations import retained_movement as movement
     from tests.test_stock_execution_migrations import insert_trade
 
     owners, roots, trade_ids = [], [], []
