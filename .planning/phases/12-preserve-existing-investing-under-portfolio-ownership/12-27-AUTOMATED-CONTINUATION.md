@@ -1165,3 +1165,42 @@ hash, command and repair details. Next: Plan28's two blocking owner UI/native200
 responses, then final phase reviews/goal verification. No requirement/phase
 completion, Phase13 start, new package/provider/production/publication action
 occurred. Keep local; Phase7's consumed campaign/six pending IDs/OFF gates remain.
+
+## Post-review integrated qualification — 2026-11-17
+
+Source frozen atd9da271b2b21f48f965dd54898a6bb8afcc9088e, treeca40c0c8.
+Existing recovery wrapper1690945 was reattached without restart; it completed
+all seven stages in2697.424s, exit0, same94365aff archive through the final guard.
+Actual integrated declared-runtime cold-first proof passes51.501s separately.
+The old whole5a495a9d proof directory remains preserved, not overwritten.
+
+Actual complete security attempt exits1/993.346s at npm audit (14HIGH/11MODERATE).
+Before failure, backend3114/critical60modules100%/Python audit/frontend958 and
+lint/types/format/build pass. New reviewed advisory GHSA-fc5q-39xc-vjpf updated
+15:56:44Z, after the historical whole security run finished15:56:18Z. Final
+single official refresh18:37:28Z confirms latest4.0.7/no patch. No install,
+dependency workaround, HIGH waiver or repeated audit was attempted.
+
+After recovery fully exited, one private serial diagnostic ran only unchanged
+commands unreached after audit: wrapper2079742, child2079941, exit0/594.239s.
+Full browser59/1originalCSPskip505.9s at ownedfaefgha0 workdir, three declared
+builds/pinned pulls, smoke5/5 and five immutable-ID strict scans0HIGH/CRITICAL
+pass. Its marker explicitly says whole_security_pass=false. This does not
+convert the failed complete campaign into success. Every atomic result records
+unchanged HEAD/zero tracked drift and zero resources across all six owned
+projects. Image reports were hash-verified and preserved outside the repo.
+
+Current receipts/logs/source inventories:
+`/tmp/phase12-reviewfix-{cold,security,recovery,remaining}-d9da271.*`.
+See12-LOCAL-VERIFICATION/RECOVERY-PROOF/DEPENDENCY-REVIEW/REVIEW-QUALIFICATION
+for exact hashes, images, stage results and primary-source dependency evidence.
+Packet remains immutable;245/249broad hashes match with four reviewed backend
+authority/migration deltas, all125frontend/capture inputs match. Both owner
+responses stay accepted. All28plans are execution-complete, but Phase12 is
+BLOCKED by strict upstream security qualification. No requirement/phase advanced
+and Phase13 has not started. Final goal verification must retain this blocker.
+Work stays local; Phase7 six gaps/consumed campaign/OFF admissions unchanged.
+
+Self-check: all four result/source/log sets, fixed archive/four image bindings,
+five scan reports and current browser log exist; result hashes match, all owned
+resources0, sourcefreeze intact and no required runtime stub introduced.

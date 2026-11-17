@@ -4,11 +4,60 @@ plan: "27"
 task: "12-27-02"
 status: passed
 verified: 2026-11-17
-source_commit: 10121b02db2b2217b868a9bce30c3f77504eadb3
-source_tree: 99405d979af7fad204db4883a2d16b867ecb7158
+source_commit: d9da271b2b21f48f965dd54898a6bb8afcc9088e
+source_tree: ca40c0c8449fc28db127e0781932802d158d1373
 ---
 
 # Phase 12 Exact Recovery Proof
+
+## Post-review complete recovery
+
+The actual whole seven-stage runner passed at the integrated source above,
+2026-11-17T17:44:53.463558Z–18:29:50.887311Z, exit0,2697.424seconds.
+Zero tracked files changed and HEAD remained unchanged. All six exact owned
+projects finished with zero containers/networks/volumes. Final marker:
+`same_archive_final_ci=true`.
+
+One exclusively created archive was used throughout:
+`/tmp/birja-phase12-proof/recovery.tar.gz`,196689920bytes,
+SHA256 `94365aff1bbf8558bcc1481a19c10afea8c571801d54cf3ae3b79156f4af03eb`.
+The complete former5a495a9d proof directory, including all image bindings, was
+preserved unchanged at
+`/tmp/birja-phase12-proof-historical-before-reviewfix-d9da271/`.
+No archive was overwritten, repackaged or substituted between stages.
+
+| Serial stage | Actual current result |
+|---|---|
+| Image transition |PASS40.243s |
+| Retained0007–0014 encrypted round trips |PASS765.276s; exact rows/schema/sequences, immutable receipt replay and corruption refusals |
+| Current0017 cold restore |PASS actual declared committed Dockerfile runtime; source destroyed, separate restore, immutable before-oracle and quarantine |
+| Roles |PASS320.530s plus3.899s setup;63denials,12input/lock rejections, fresh/populated parity |
+| Upgraded TLS |PASS273.317s plus12.884s setup; actual financial consumers and negative transport controls |
+| Fresh TLS |PASS273.688s plus12.745s setup; same consumers, denials and exact authority parity |
+| Selected rollback |PASS real retained deployments, exact finances/identities/original replay, unsupported0014 rollback refusal, tested-source rollback10.652s and both cleanup markers |
+
+Source/archive/current CORE/UNITS, retained matrix and image Config/RootFS guards
+were authenticated throughout and at final completion. Current0017 image:
+`sha256:df5ca830e42d8169ad195d0008385f98b380e4ada6477dde87484192297de8ff`.
+Retained0014 image:
+`sha256:5008f0215c779cfd50f19f391bf4384d29c37eb0518baf98909e977986fe2e8f`.
+Legacy0008 image:
+`sha256:348798855ac2fbeba517c40e96797cccbad65de3f7100fd5c93f3df7f25da840`.
+Legacy0007 image:
+`sha256:9a8da9ac14d204c87d9173c8f0f3057f56de20cd594edacefdd3ba9e1efa359e`.
+Exact source/app/context/Config/RootFS hashes remain in the four private bindings.
+
+Private complete evidence:
+`/tmp/phase12-reviewfix-recovery-d9da271.{log,source.json,result.json}`.
+LogSHA256 `bb0d57233c55da8517da95ebd8f9647ae31860f76f1d65c086bacfe3a8c774bb`.
+A prior separate integrated actual cold-first proof also passed51.501s with
+independently packaged private archive; it is not substituted for this whole run.
+
+Recovery is qualified; complete security remains blocked by the unpatched
+picomatch HIGH advisory. Separate diagnostic browser/images pass and both
+owner checks stay accepted. No phase/requirement completion follows.
+
+## Historical recovery at10121b0
 
 The actual seven-stage recovery runner passed from start to finish using one
 new exclusively created archive. This completes the recovery task's automated

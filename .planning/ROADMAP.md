@@ -33,8 +33,12 @@ holdings/History pages pass their focused gates. Plan27 now passes the actual
 complete security graph, five strict image scans and one-archive seven-stage
 recovery at their recorded sources. Both Plan28 owner UI/native200% checks pass.
 Final source reviews found and independently rechecked CR-01/CR-02; both repairs
-are integrated. Combined-source automated qualification and goal verification
-remain pending; no whole requirement or phase is marked complete.
+are integrated. Currentd9da271 whole same-archive recovery passes, as do full
+backend3114/critical60at100%, frontend958 and separate full-browser59/1original
+skip/image diagnostics. Complete all-security FAILS the new unpatched picomatch
+HIGH advisory (latest4.0.7/no patch, final official check2026-11-17T18:37Z).
+Phase12 qualification is BLOCKED upstream; final goal verification must retain
+that blocker. No whole requirement/phase is complete and Phase13 has not started.
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
 not authorize new dependencies, providers or implementation.
 

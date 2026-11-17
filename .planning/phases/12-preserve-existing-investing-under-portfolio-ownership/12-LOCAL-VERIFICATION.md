@@ -1,13 +1,61 @@
 ---
 phase: 12-preserve-existing-investing-under-portfolio-ownership
 plan: "27"
-status: passed
+status: blocked_upstream_dependency
 verified: 2026-11-17
 source_commit: 1f8d5a4eb500dad879440c2f2ebba892b8b5f65c
 source_tree: 795b50bace62d54e0a2719c66a013f9198de2cf2
 ---
 
 # Phase 12 Local Automated Qualification
+
+## Post-review qualification — current disposition
+
+The current integrated source is `d9da271b2b21f48f965dd54898a6bb8afcc9088e`,
+tree `ca40c0c8449fc28db127e0781932802d158d1373`. The complete unchanged
+all-security command **failed** at `npm audit --audit-level=high`; Phase12
+qualification is blocked. The historical complete pass below remains at its
+original source and time, before the advisory update; it is not a current pass.
+
+| Current same-source campaign | Actual result |
+|---|---|
+| Complete all-security | Exit1, 993.346s, 17:24:10–17:40:43Z on2026-11-17 |
+| Backend |3114/3114, overall99.85%; exact60critical modules100%,5020statements/1604branches; Ruff228files/mypy101 pass |
+| Python / frontend |Python audit clean; frontend958tests, lint/types/format/build pass |
+| npm audit |25findings:14HIGH/11MODERATE; new picomatch advisory propagation blocks acceptance |
+| Separate unreached-command diagnostic |Exit0,594.239s,18:30:22–18:40:16Z; explicitly `whole_security_pass=false` |
+| Diagnostic browser |Full60collected:59pass/1original deployed-CSPskip,505.9s; one worker/zero retries |
+| Diagnostic images / smoke |Three declared Dockerfile builds and pinned pulls pass; smoke5/5; all five immutable-ID strict scans0HIGH/CRITICAL, including unfixed policy |
+| Recovery |Whole seven-stage same-archive pass2697.424s; see12-RECOVERY-PROOF |
+
+All four private wrappers (cold/security/recovery/remaining) recorded zero tracked
+source drift and unchanged HEAD. Every final receipt reports zero containers,
+networks and volumes across all six owned projects. No combined whole-security
+pass is assembled from the failed prefix and separate passing diagnostic.
+
+Receipts: `/tmp/phase12-reviewfix-{cold,security,recovery,remaining}-d9da271`
+with `.log`, `.source.json` and atomic `.result.json`. Current browser evidence:
+`/tmp/birja-phase09-browser-faefgha0/browser-all.log`. All generated image reports
+were preserved with per-file hashes at
+`/tmp/phase12-reviewfix-image-reports-d9da271/`; no generated repo output remains.
+Scanner0.76.1 used database updated2026-11-17T13:00:16Z, downloaded18:39:52Z.
+
+Current scanned image IDs:
+
+- Runtime: `sha256:d292658ed5dc39494d612679b9f54d3e2c55d846f1bd7ff6204bdd7ffb215c51`.
+- Builder: `sha256:3c4ed51aeee06bc65a7d6a814d805f7970db1fe6265f7197c76e9782d1cef060`.
+- Node: `sha256:153ce76dd8ad7537e2ebb1a507c31e7b4df3308548982eb4f84258cc125369af`.
+- PostgreSQL/Redis: unchanged pinned IDs listed in the historical record below.
+
+The single final official metadata refresh at18:37:28Z still finds no patch:
+picomatch latest4.0.7, affected<=4.0.7, first_patched_version=null. See
+[12-DEPENDENCY-REVIEW.md](12-DEPENDENCY-REVIEW.md). No dependency, threshold or
+waiver changed; no audit retry loop ran. Both owner checks remain passed under
+the explicit render-input equivalence in12-HUMAN-UAT. Requirements remain
+unchecked and Phase13 has not started. Final goal verification follows with
+this blocker retained.
+
+## Historical qualification at1f8d5a4
 
 The actual complete security runner passed from start to finish. This is a
 local synthetic qualification, not hosted CI, owner acceptance or deployment.

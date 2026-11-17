@@ -74,6 +74,17 @@ invented.
 
 ## Source and Automated Evidence
 
+Post-review render-input equivalence atd9da271:245/249broad packet source
+hashes match. The four differences are0017stock SQL,0017migration,
+portfolio_bootstrap.py and portfolio_migrate.py from the reviewed backend
+authority repair. All125frontend/capture inputs remain identical. The immutable
+packet and both explicit owner responses therefore remain applicable; no fresh
+capture or249/249current match is claimed, and no repeated owner check is needed.
+Current whole recovery passes; full backend/frontend and separate full-browser/
+five-image diagnostics pass, but complete all-security fails the new unpatched
+picomatch HIGH advisory. See12-LOCAL-VERIFICATION for current versus historical
+campaigns. Owner acceptance does not waive that strict gate.
+
 Actual complete all-security passes at1f8d5a4:3108backend cases, exact60critical
 modules100%,958frontend tests, full59browser/1originalCSPskip, audits and five
 strict image scans. The complete same-archive seven-stage recovery passes at
