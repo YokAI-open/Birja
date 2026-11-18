@@ -8,7 +8,7 @@ import type { PortfolioTarget } from "./usePortfolioTarget";
 import { financialScope, revokePortfolioTarget } from "./useQuote";
 import { eventHistorySession } from "./useEventHistory";
 
-type TimedPortfolio = Portfolio & {
+export type TimedPortfolio = Portfolio & {
   transport: { received_at: number; round_trip_ms: number };
   authority_offset_ms?: number;
 };
@@ -32,7 +32,7 @@ type Guard = {
 };
 const guards = new WeakMap<QueryClient, Map<string, Guard>>();
 const who = (c: QueryClient) => c.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
-function guardFor(
+export function portfolioGuardFor(
   client: QueryClient,
   email: string | null,
   portfolioId: string | null,
@@ -176,7 +176,11 @@ function externalRestriction(client: QueryClient, g: Guard, h: PortfolioHolding)
   );
 }
 /** Suppress stock-derived values only; never calculate a replacement financial subtotal. */
-function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): TimedPortfolio {
+export function projectPortfolio(
+  client: QueryClient,
+  g: Guard,
+  incoming: TimedPortfolio,
+): TimedPortfolio {
   const now = performance.now();
   let p = incoming;
   const ownUpper = upperAt(p, now),
@@ -283,7 +287,7 @@ export function usePortfolio(target: PortfolioTarget | null) {
   const email = scope.owner,
     portfolioId = scope.portfolioId,
     epoch = scope.epoch;
-  const g = guardFor(client, email, portfolioId, epoch);
+  const g = portfolioGuardFor(client, email, portfolioId, epoch);
   const key = useMemo(
     () => ["portfolio", email, portfolioId, epoch] as const,
     [email, portfolioId, epoch],
@@ -311,7 +315,7 @@ export function usePortfolio(target: PortfolioTarget | null) {
         )
           throw new Error("Portfolio session changed");
         const received_at = performance.now();
-        return project(client, g, {
+        return projectPortfolio(client, g, {
           ...body,
           transport: { received_at, round_trip_ms: Math.max(0, received_at - started) },
         });
@@ -349,7 +353,7 @@ export function usePortfolio(target: PortfolioTarget | null) {
       if (!scope.current()) return;
       const cached = client.getQueryData<TimedPortfolio>(key);
       if (cached?.portfolio_id === portfolioId) {
-        const safe = project(client, g, cached);
+        const safe = projectPortfolio(client, g, cached);
         if (safe !== cached) {
           writing = true;
           client.getQueryCache().find({ queryKey: key, exact: true })?.setState({ data: safe });
