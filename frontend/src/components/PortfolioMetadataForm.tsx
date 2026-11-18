@@ -14,9 +14,12 @@ import { useNow } from "@/hooks/useNow";
 export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) {
   const management = usePortfolioManagement(portfolioId);
   const [editing, setEditing] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState(
+    management.metadataSaved ? "Portfolio updated." : "",
+  );
   const trigger = useRef<HTMLButtonElement>(null);
-  const [restore, setRestore] = useState(false);
+  const [restore, setRestore] = useState(!!management.metadataSaved);
+  const restored = useRef(false);
   const saving = useRef(false);
   const { metadata, draft, metadataError, metadataPending, reviewRequired } = management;
   const now = useNow();
@@ -35,10 +38,12 @@ export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) 
   const waiting = now < timing.until;
   const expanded = editing || draft !== null;
   useLayoutEffect(() => {
-    if (!expanded && restore) {
+    if (!expanded && restore && !restored.current && metadata && !metadataPending) {
+      restored.current = true;
       trigger.current?.focus();
+      management.acknowledgeMetadataSaved?.();
     }
-  }, [expanded, restore]);
+  }, [expanded, restore, metadata, metadataPending, management]);
   const name = draft?.name ?? metadata?.name ?? "";
   const description = draft?.description ?? metadata?.description ?? "";
   const valid =
@@ -59,6 +64,11 @@ export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) 
     // from the promise resolving: refused and ambiguous saves also resolve.
   }
   const [submitted, setSubmitted] = useState(false);
+  if (management.metadataSaved && announcement !== "Portfolio updated.") {
+    setAnnouncement("Portfolio updated.");
+    setEditing(false);
+    setRestore(true);
+  }
   if (submitted && !metadataPending && !draft && !metadataError && metadata) {
     setSubmitted(false);
     setEditing(false);
@@ -169,6 +179,7 @@ export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) 
                 onClick={() => {
                   management.discardMetadata();
                   setRestore(true);
+                  restored.current = false;
                   setEditing(false);
                   setSubmitted(false);
                 }}
@@ -189,6 +200,7 @@ export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) 
               onClick={() => {
                 setAnnouncement("");
                 setRestore(false);
+                restored.current = false;
                 setEditing(true);
               }}
             >

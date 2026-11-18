@@ -12,58 +12,176 @@ import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 const clients: QueryClient[] = [];
-it.each(["cross-tab","focus"])("retains a dirty routed metadata draft through deferred %s discovery",async(change)=>{
-  const management={id:"1",name:"My portfolio",description:"Original description"};
-  const metadata=[{id:"1",name:"My portfolio"}];
-  let defer=false;
-  let release!:(response:Response)=>void;
-  const deferred=new Promise<Response>(resolve=>{release=resolve;});
-  vi.stubGlobal("fetch",vi.fn(()=>Promise.resolve(new Response(JSON.stringify(cashPortfolio())))));
-  const {user,client}=mount({metadata,management,discovery:()=>defer?deferred:Promise.resolve(new Response(JSON.stringify(metadata)))});
-  await user.click(await screen.findByRole("button",{name:"Edit portfolio"}));
-  await user.clear(screen.getByLabelText("Portfolio name"));
-  await user.type(screen.getByLabelText("Portfolio name"),"Private dirty draft");
-  await user.clear(screen.getByLabelText("Description (optional)"));
-  await user.type(screen.getByLabelText("Description (optional)"),"Keep my description");
-  management.name="Latest authoritative"; management.description="Other tab description";metadata[0].name=management.name;
-  defer=true;
-  act(()=>{if(change==="cross-tab")broadcastMetadataChange("1");else window.dispatchEvent(new Event("focus"));});
-  await screen.findByLabelText("Loading portfolio");
-  expect(screen.queryByRole("region",{name:"Cash"})).toBeNull();
-  await new Promise(resolve=>setTimeout(resolve,25));
-  await act(async()=>release(new Response(JSON.stringify(metadata))));
-  expect(await screen.findByLabelText("Portfolio name")).toHaveValue("Private dirty draft");
-  expect(screen.getByLabelText("Description (optional)")).toHaveValue("Keep my description");
-  expect(screen.getByText(/Latest portfolio name/)).toHaveTextContent("Latest authoritative");
-  expect(screen.getByRole("button",{name:"Save changes"})).toBeDisabled();
-  await user.click(screen.getByRole("button",{name:"I have reviewed the latest details"}));
-  expect(screen.getByRole("button",{name:"Save changes"})).toBeEnabled();
-  act(()=>client.setQueryData(["me"],null));
-  expect(screen.queryByText("Private dirty draft")).toBeNull();
-  expect(screen.queryByDisplayValue("Private dirty draft")).toBeNull();
-});
-it("retains routed save feedback and restores Edit focus after deferred discovery remount",async()=>{
-  const management={id:"1",name:"My portfolio",description:"Original"};
-  const metadata=[{id:"1",name:"My portfolio"}];
-  let defer=false;
-  let release!:(response:Response)=>void;
-  const deferred=new Promise<Response>(resolve=>{release=resolve;});
-  vi.stubGlobal("fetch",vi.fn((_input:RequestInfo|URL,init?:RequestInit)=>{
-    if(init?.method==="PATCH") {Object.assign(management,JSON.parse(String(init.body)));metadata[0].name=management.name;defer=true;return Promise.resolve(new Response(JSON.stringify(management)));}
-    return Promise.resolve(new Response(JSON.stringify({...cashPortfolio(),name:management.name})));
-  }));
-  const {user}=mount({metadata,management,discovery:()=>defer?deferred:Promise.resolve(new Response(JSON.stringify(metadata)))});
-  await user.click(await screen.findByRole("button",{name:"Edit portfolio"}));
-  await user.clear(screen.getByLabelText("Description (optional)"));
-  await user.type(screen.getByLabelText("Description (optional)"),"Updated");
-  await user.click(screen.getByRole("button",{name:"Save changes"}));
-  await screen.findByLabelText("Loading portfolio");
-  await new Promise(resolve=>setTimeout(resolve,25));
-  await act(async()=>release(new Response(JSON.stringify(metadata))));
-  expect(await screen.findByText("Portfolio updated.")).toBeInTheDocument();
-  await waitFor(()=>expect(screen.getByRole("button",{name:"Edit portfolio"})).toHaveFocus());
-  expect(screen.getByText("Updated")).toBeInTheDocument();
-});
+it.each(["logout", "root", "route", "unavailable"])(
+  "clears a routed private draft on %s during deferred revalidation",
+  async (departure) => {
+    const management = { id: "1", name: "My portfolio", description: "Original" };
+    const metadata = [
+      { id: "1", name: "My portfolio" },
+      { id: "2", name: "Sibling" },
+    ];
+    let defer = false;
+    let release!: (response: Response) => void;
+    const deferred = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(cashPortfolio())))),
+    );
+    const { user, client } = mount({
+      metadata,
+      management,
+      discovery: () => (defer ? deferred : Promise.resolve(new Response(JSON.stringify(metadata)))),
+    });
+    await user.click(await screen.findByRole("button", { name: "Edit portfolio" }));
+    await user.clear(screen.getByLabelText("Description (optional)"));
+    await user.type(screen.getByLabelText("Description (optional)"), "Private description draft");
+    defer = true;
+    act(() => broadcastMetadataChange("1"));
+    await screen.findByLabelText("Loading portfolio");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    if (departure === "logout") act(() => client.setQueryData(["me"], null));
+    if (departure === "root") await user.click(screen.getByRole("link", { name: "Open sibling" }));
+    if (departure === "route")
+      await user.click(screen.getByRole("link", { name: "Open History route" }));
+    await act(async () =>
+      release(new Response(JSON.stringify(departure === "unavailable" ? [metadata[1]] : metadata))),
+    );
+    await waitFor(() =>
+      expect(
+        client
+          .getQueryCache()
+          .findAll({ queryKey: ["portfolioMetadataDraft", "first@example.test", "1"] })
+          .every(
+            (q) =>
+              !(q.state.data as { draft?: unknown; saved?: boolean })?.draft &&
+              !(q.state.data as { saved?: boolean })?.saved,
+          ),
+      ).toBe(true),
+    );
+    expect(screen.queryByDisplayValue("Private description draft")).toBeNull();
+    expect(screen.queryByText("Portfolio updated.")).toBeNull();
+    if (departure === "unavailable")
+      expect(
+        await screen.findByRole("heading", { name: "Portfolio unavailable" }),
+      ).toBeInTheDocument();
+  },
+);
+it.each(["cross-tab", "focus"])(
+  "retains a dirty routed metadata draft through deferred %s discovery",
+  async (change) => {
+    const management = { id: "1", name: "My portfolio", description: "Original description" };
+    const metadata = [{ id: "1", name: "My portfolio" }];
+    let defer = false;
+    let release!: (response: Response) => void;
+    const deferred = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(cashPortfolio())))),
+    );
+    const { user, client } = mount({
+      metadata,
+      management,
+      discovery: () => (defer ? deferred : Promise.resolve(new Response(JSON.stringify(metadata)))),
+    });
+    await user.click(await screen.findByRole("button", { name: "Edit portfolio" }));
+    await user.clear(screen.getByLabelText("Portfolio name"));
+    await user.type(screen.getByLabelText("Portfolio name"), "Private dirty draft");
+    await user.clear(screen.getByLabelText("Description (optional)"));
+    await user.type(screen.getByLabelText("Description (optional)"), "Keep my description");
+    management.name = "Latest authoritative";
+    management.description = "Other tab description";
+    metadata[0].name = management.name;
+    defer = true;
+    act(() => {
+      if (change === "cross-tab") broadcastMetadataChange("1");
+      else {
+        window.dispatchEvent(new Event("focus"));
+        void client.invalidateQueries({ queryKey: ["portfolios", "first@example.test"] });
+      }
+    });
+    await screen.findByLabelText("Loading portfolio");
+    expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await act(async () => release(new Response(JSON.stringify(metadata))));
+    expect(await screen.findByLabelText("Portfolio name")).toHaveValue("Private dirty draft");
+    expect(screen.getByLabelText("Description (optional)")).toHaveValue("Keep my description");
+    expect(screen.getByText(/Latest portfolio name/)).toHaveTextContent("Latest authoritative");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "I have reviewed the latest details" }));
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    act(() => client.setQueryData(["me"], null));
+    expect(screen.queryByText("Private dirty draft")).toBeNull();
+    expect(screen.queryByDisplayValue("Private dirty draft")).toBeNull();
+  },
+);
+it.each(["stay", "logout", "owner", "logout-return"])(
+  "retains routed save feedback only for the current session after deferred discovery (%s)",
+  async (departure) => {
+    const management = { id: "1", name: "My portfolio", description: "Original" };
+    const metadata = [{ id: "1", name: "My portfolio" }];
+    let defer = false;
+    let release!: (response: Response) => void;
+    const deferred = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          Object.assign(management, JSON.parse(String(init.body)));
+          metadata[0].name = management.name;
+          defer = true;
+          return Promise.resolve(new Response(JSON.stringify(management)));
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ ...cashPortfolio(), name: management.name })),
+        );
+      }),
+    );
+    const { user, client } = mount({
+      metadata,
+      management,
+      discovery: () =>
+        defer
+          ? deferred.then((response) => response.clone())
+          : Promise.resolve(new Response(JSON.stringify(metadata))),
+    });
+    await user.click(await screen.findByRole("button", { name: "Edit portfolio" }));
+    await user.clear(screen.getByLabelText("Description (optional)"));
+    await user.type(screen.getByLabelText("Description (optional)"), "Updated");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByLabelText("Loading portfolio");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    if (departure !== "stay")
+      act(() => {
+        client.setQueryData(["me"], null);
+        if (departure !== "logout")
+          client.setQueryData(["me"], {
+            email: departure === "owner" ? "new@example.test" : "first@example.test",
+          });
+      });
+    await act(async () => release(new Response(JSON.stringify(metadata))));
+    if (departure !== "stay") {
+      expect(screen.queryByText("Portfolio updated.")).toBeNull();
+      expect(
+        client
+          .getQueryCache()
+          .findAll({ queryKey: ["portfolioMetadataDraft"] })
+          .every((q) => !(q.state.data as { saved?: boolean })?.saved),
+      ).toBe(true);
+      return;
+    }
+    expect(await screen.findByText("Portfolio updated.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Edit portfolio" })).toHaveFocus(),
+    );
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+  },
+);
 it("cancels a pending original-name financial refresh before accepting a rename", async () => {
   const management = { id: "1", name: "My portfolio", description: "Plan" };
   const metadata = [{ id: "1", name: "My portfolio" }];
@@ -180,12 +298,12 @@ function mount({
   route?: string;
   metadata?: PortfolioSummary[];
   management?: { id: string; name: string; description: string };
-  discovery?:()=>Promise<Response>;
+  discovery?: () => Promise<Response>;
 } = {}) {
   const financialFetch = globalThis.fetch;
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input) === "/api/v2/portfolios")
-      return discovery?discovery():Promise.resolve(new Response(JSON.stringify(metadata)));
+      return discovery ? discovery() : Promise.resolve(new Response(JSON.stringify(metadata)));
     if (String(input) === "/api/v2/me")
       return Promise.resolve(new Response(JSON.stringify({ email: "first@example.test" })));
     if (String(input).endsWith("/metadata")) {
@@ -217,9 +335,11 @@ function mount({
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[route]}>
           <Link to="/portfolios/2">Open sibling</Link>
+          <Link to="/portfolios/1/history">Open History route</Link>
           <Routes>
             <Route path="/portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
               <Route index element={<PortfolioPage />} />
+              <Route path="history" element={<h1>History route</h1>} />
             </Route>
             <Route
               path="/portfolio"

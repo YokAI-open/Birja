@@ -29,6 +29,11 @@ const empty = (): CreationState => ({ phase: "editing", attempt: null, error: nu
 const who = (client: QueryClient) =>
   client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
 type Session = {
+  editorLease: Readonly<{
+    owner: string | null;
+    serial: number;
+    portfolioId: string | undefined;
+  }> | null;
   identityKnown: boolean;
   owner: string | null;
   serial: number;
@@ -50,6 +55,7 @@ function sessionFor(client: QueryClient) {
   const existing = sessions.get(client);
   if (existing) return existing;
   const session: Session = {
+    editorLease: null,
     identityKnown: client.getQueryData(["me"]) !== undefined,
     owner: who(client),
     serial: 0,
@@ -78,6 +84,7 @@ function sessionFor(client: QueryClient) {
     }
     if (owner === session.owner) return;
     session.owner = owner;
+    session.editorLease = null;
     session.serial++;
     session.controllers.forEach((c) => c.abort());
     session.controllers.clear();
@@ -92,6 +99,80 @@ function sessionFor(client: QueryClient) {
 function publish(session: Session) {
   session.version++;
   session.notify.forEach((fn) => fn());
+}
+type Editor = {
+  revision: number;
+  draft: PortfolioMetadataPatch | null;
+  reviewRequired: boolean;
+  awaitingFetch: boolean;
+  pending: boolean;
+  error: Error | null;
+  saved: boolean;
+};
+const emptyEditor = (): Editor => ({
+  revision: 0,
+  draft: null,
+  reviewRequired: false,
+  awaitingFetch: false,
+  pending: false,
+  error: null,
+  saved: false,
+});
+
+/** A metadata-only lease owned by the route, outside its revocable financial Outlet. */
+export function usePortfolioMetadataLifetime(
+  portfolioId: string | undefined,
+  status: string,
+  route: string,
+) {
+  const client = useQueryClient();
+  const session = sessionFor(client);
+  useSyncExternalStore(
+    (fn) => {
+      session.notify.add(fn);
+      return () => {
+        session.notify.delete(fn);
+      };
+    },
+    () => session.version,
+  );
+  const owner = who(client);
+  const serial = session.serial;
+  const key = useMemo(
+    () => ["portfolioMetadataDraft", owner, portfolioId, serial] as const,
+    [owner, portfolioId, serial],
+  );
+  const lease = useMemo(
+    () => ({ owner, serial, portfolioId, route }),
+    [owner, serial, portfolioId, route],
+  );
+  useQuery({
+    queryKey: key,
+    queryFn: async () => emptyEditor(),
+    enabled: false,
+    initialData: emptyEditor,
+    gcTime: 0,
+  });
+  useLayoutEffect(() => {
+    update(session, { editorLease: lease });
+    return () => {
+      if (session.editorLease === lease) update(session, { editorLease: null });
+      client.removeQueries({ queryKey: key, exact: true });
+    };
+  }, [client, key, session, lease]);
+  useLayoutEffect(() => {
+    const state = client.getQueryData<Editor>(key);
+    if (!state) return;
+    if (status !== "ready" && status !== "loading") {
+      if (session.editorLease === lease) update(session, { editorLease: null });
+      if (state.draft || state.saved || state.reviewRequired || state.pending)
+        client.setQueryData(key, emptyEditor());
+    } else if (status === "loading" && state.draft && !state.reviewRequired) {
+      client.setQueryData(key, { ...state, revision: state.revision + 1, reviewRequired: true });
+    }
+    if ((status === "ready" || status === "loading") && session.editorLease === null)
+      update(session, { editorLease: lease });
+  }, [client, key, status, session, lease]);
 }
 
 /** Owner-wide creation lifetime survives route changes; every rendered action is captured. */
@@ -109,22 +190,6 @@ export function usePortfolioManagement(portfolioId?: string) {
     activeScopes.has(scope) && owner !== null && who(client) === owner && session.serial === serial;
   const metadataKey = ["portfolioMetadata", owner, portfolioId, serial] as const;
   const editorKey = ["portfolioMetadataDraft", owner, portfolioId, serial] as const;
-  type Editor = {
-    revision: number;
-    draft: PortfolioMetadataPatch | null;
-    reviewRequired: boolean;
-    awaitingFetch: boolean;
-    pending: boolean;
-    error: Error | null;
-  };
-  const emptyEditor = (): Editor => ({
-    revision: 0,
-    draft: null,
-    reviewRequired: false,
-    awaitingFetch: false,
-    pending: false,
-    error: null,
-  });
   const editorQuery = useQuery({
     queryKey: editorKey,
     queryFn: async () => emptyEditor(),
@@ -152,6 +217,7 @@ export function usePortfolioManagement(portfolioId?: string) {
           client.getQueryCache().find({ queryKey: metadataKey, exact: true }) !== query
         )
           throw new Error("Metadata session changed");
+        if (editor().awaitingFetch) setEditor({ ...editor(), awaitingFetch: false });
         return metadata;
       } catch (error) {
         if (
@@ -384,7 +450,7 @@ export function usePortfolioManagement(portfolioId?: string) {
   }
   function editMetadata(patch: PortfolioMetadataPatch) {
     if (!current() || !metadataQuery.data || metadataQuery.isError || editor().pending) return;
-    setEditor({ ...editor(), draft: Object.freeze({ ...editor().draft, ...patch }) });
+    setEditor({ ...editor(), saved: false, draft: Object.freeze({ ...editor().draft, ...patch }) });
   }
   function reviewMetadata() {
     if (
@@ -401,6 +467,7 @@ export function usePortfolioManagement(portfolioId?: string) {
   }
   async function saveMetadata() {
     const state = editor();
+    const completionLease = session.editorLease;
     if (
       !current() ||
       !isPortfolioId(portfolioId) ||
@@ -436,7 +503,20 @@ export function usePortfolioManagement(portfolioId?: string) {
       setEditor(emptyEditor());
       broadcastMetadataChange(metadata.id);
       await client.invalidateQueries({ queryKey: ["portfolios", owner] });
-      if (!current() || !isPortfolioId(portfolioId)) return;
+      const retainedRoute =
+        completionLease !== null &&
+        completionLease.owner === owner &&
+        completionLease.serial === serial &&
+        completionLease.portfolioId === portfolioId &&
+        session.editorLease === completionLease;
+      if (
+        (!current() && !retainedRoute) ||
+        who(client) !== owner ||
+        session.serial !== serial ||
+        !isPortfolioId(portfolioId)
+      )
+        return;
+      setEditor({ ...editor(), saved: true });
       await Promise.all([
         client.invalidateQueries({ queryKey: ["portfolioOverview", owner] }),
         ...["portfolio", "history", "eventHistory"].map((prefix) =>
@@ -473,6 +553,10 @@ export function usePortfolioManagement(portfolioId?: string) {
     metadataPending: current() && (metadataQuery.isFetching || editorQuery.data.pending),
     draft: current() ? editorQuery.data.draft : null,
     reviewRequired: current() && editorQuery.data.reviewRequired,
+    metadataSaved: current() && editorQuery.data.saved,
+    acknowledgeMetadataSaved: () => {
+      if (current() && editor().saved) setEditor({ ...editor(), saved: false });
+    },
     editMetadata,
     reviewMetadata,
     discardMetadata,

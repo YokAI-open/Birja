@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, Outlet, useParams } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolioTarget, type PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { eventHistorySession } from "@/hooks/useEventHistory";
+import { usePortfolioMetadataLifetime } from "@/hooks/usePortfolioManagement";
 
 /** No financial child mounts until explicit owned-active metadata resolves. */
 export function PortfolioTargetBoundary({
@@ -16,6 +17,8 @@ export function PortfolioTargetBoundary({
 }) {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const result = usePortfolioTarget(portfolioId, { legacyEntry: !!legacyDestination });
+  const { pathname } = useLocation();
+  usePortfolioMetadataLifetime(portfolioId, result.status, pathname);
   const client = useQueryClient();
   // Read only the existence of this session's original unresolved attempt.
   // Unavailable targets never regain financial authority through this notice.
