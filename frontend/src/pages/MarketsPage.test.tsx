@@ -54,26 +54,53 @@ const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body))
 
 describe("MarketsPage", () => {
   it("offers authenticated portfolio choices while public prices stay browsable", async () => {
-    const fetch = vi.fn((url: string)=> url === "/api/v2/me" ? ok({email:"alice@example.test"}) : url === "/api/v2/portfolios" ? ok([{id:"1",name:"First"}, {id:"2",name:"Second"}]) : ok(payload()));
+    const fetch = vi.fn((url: string) =>
+      url === "/api/v2/me"
+        ? ok({ email: "alice@example.test" })
+        : url === "/api/v2/portfolios"
+          ? ok([
+              { id: "1", name: "First" },
+              { id: "2", name: "Second" },
+            ])
+          : ok(payload()),
+    );
     vi.stubGlobal("fetch", fetch);
-    const {user} = renderWithClient(<MarketsPage authenticated portfolioId="1"/>);
-    const select = await screen.findByRole("combobox", {name:"Open portfolio"});
-    await vi.waitFor(()=>expect(select).toBeEnabled());
-    expect(screen.getByRole("link", {name:"Trade BTC"})).toHaveAttribute("href", "/portfolios/1/trade/BTC");
-    await user.selectOptions(select,"2");
-    expect(screen.getByRole("link", {name:"Trade BTC"})).toHaveAttribute("href", "/portfolios/1/trade/BTC");
-    expect(screen.getByRole("link", {name:"Portfolios"})).toHaveAttribute("href", "/portfolios");
-    expect(fetch.mock.calls.filter(([url])=>url==="/api/v1/prices")).toHaveLength(1);
+    const { user } = renderWithClient(<MarketsPage authenticated portfolioId="1" />);
+    const select = await screen.findByRole("combobox", { name: "Open portfolio" });
+    await vi.waitFor(() => expect(select).toBeEnabled());
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    );
+    await user.selectOptions(select, "2");
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    );
+    expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+    expect(fetch.mock.calls.filter(([url]) => url === "/api/v1/prices")).toHaveLength(1);
   });
   it("shows zero active choices without creating a root or hiding public Markets", async () => {
-    const fetch = vi.fn((url: string)=> url === "/api/v2/me" ? ok({email:"alice@example.test"}) : url === "/api/v2/portfolios" ? ok([]) : ok(payload()));
+    const fetch = vi.fn((url: string) =>
+      url === "/api/v2/me"
+        ? ok({ email: "alice@example.test" })
+        : url === "/api/v2/portfolios"
+          ? ok([])
+          : ok(payload()),
+    );
     vi.stubGlobal("fetch", fetch);
-    renderWithClient(<MarketsPage authenticated/>);
-    expect(await screen.findByText("No portfolios yet. Create a portfolio from Portfolios.")).toBeVisible();
-    expect(await screen.findByRole("table", {name:"Markets"})).toBeVisible();
-    expect(screen.getByRole("button", {name:"Open selected portfolio"})).toBeDisabled();
-    expect(screen.getByRole("link", {name:"Portfolios"})).toHaveAttribute("href", "/portfolios");
-    expect(fetch.mock.calls.every(([url])=>["/api/v2/me","/api/v2/portfolios","/api/v1/prices"].includes(url))).toBe(true);
+    renderWithClient(<MarketsPage authenticated />);
+    expect(
+      await screen.findByText("No portfolios yet. Create a portfolio from Portfolios."),
+    ).toBeVisible();
+    expect(await screen.findByRole("table", { name: "Markets" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+    expect(
+      fetch.mock.calls.every(([url]) =>
+        ["/api/v2/me", "/api/v2/portfolios", "/api/v1/prices"].includes(url),
+      ),
+    ).toBe(true);
   });
   it("renders one row per coin in order with formatted prices", async () => {
     vi.stubGlobal(

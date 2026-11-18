@@ -134,7 +134,7 @@ function SignedIn({ me }: { me: Me }) {
       <div ref={content}>
         {explicitId && <PortfolioSwitcher portfolioId={explicitId} />}
         <Routes>
-          <Route index element={<MarketsPage portfolioId={target?.portfolioId} />} />
+          <Route index element={<MarketsPage authenticated portfolioId={target?.portfolioId} />} />
           <Route path="portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
             <Route index element={<PortfolioPage />} />
             <Route path="history" element={<HistoryPage />} />

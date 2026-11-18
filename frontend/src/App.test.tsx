@@ -119,6 +119,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   probes.mounted.mockReset();
   document.cookie = "bj_csrf=; max-age=0; path=/";
+  sessionStorage.clear();
 });
 
 it("keeps public Markets, Account and three safe responsive primary destinations", async () => {
@@ -135,7 +136,10 @@ it("keeps public Markets, Account and three safe responsive primary destinations
   }
   expect(await screen.findByText("$81,042.35")).toBeVisible();
   expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
-  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
 });
 it.each([
   ["/portfolios/1", "Portfolio page"],
@@ -392,5 +396,91 @@ it.each([{ values: [] }, { values: [first] }, { values: [first, second] }])(
     expect(screen.getByRole("button", { name: "Create portfolio" })).toBeEnabled();
     expect(probes.mounted).not.toHaveBeenCalled();
     expect(fetch.mock.calls.some(([url]) => url === "/api/v2/portfolios/overview")).toBe(true);
+  },
+);
+
+it("opens a draft choice at detail, preserving the original trade route for Back", async () => {
+  api({ metadata: () => json([first, second]) });
+  const { user } = setup("/portfolios/1/trade/BTC");
+  await screen.findByRole("heading", { name: "Crypto BTC" });
+  const select = screen.getByRole("combobox", { name: "Open portfolio" });
+  await user.selectOptions(select, "2");
+  expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
+  expect(probes.mounted.mock.calls.every(([, target]) => target.portfolioId === "1")).toBe(true);
+  await user.click(screen.getByRole("button", { name: "Open selected portfolio" }));
+  expect(await screen.findByRole("heading", { name: "Portfolio page" })).toHaveFocus();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
+  expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toHaveFocus();
+  expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
+});
+
+it("navigates a current real creation receipt to its original ID and focuses detail once", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  let values: { id: string; name: string }[] = [];
+  const base = api({ metadata: () => json(values) });
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/api/v2/portfolios" && init?.method === "POST") {
+      values = [{ id: "19", name: "Created strategy" }];
+      return Promise.resolve(json({ id: "19", name: "Created strategy", description: "" }, 201));
+    }
+    return base(url);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const { user, client } = setup("/portfolios");
+  await screen.findByRole("heading", { name: "No portfolios yet" });
+  await user.click(screen.getByRole("button", { name: "Create portfolio" }));
+  const name = screen.getByRole("textbox", { name: "Portfolio name" });
+  expect(name).toHaveFocus();
+  await user.type(name, "Created strategy");
+  await user.click(screen.getAllByRole("button", { name: "Create portfolio" })[1]!);
+  const heading = await screen.findByRole("heading", { name: "Portfolio page" });
+  expect(heading).toHaveFocus();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/19$/);
+  const action = screen.getByRole("button", { name: "Financial action" });
+  action.focus();
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["portfolios"] });
+  });
+  // Revalidation may replace financial children; route focus must not rerun.
+  expect(await screen.findByRole("heading", { name: "Portfolio page" })).not.toHaveFocus();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+});
+
+it.each(["route", "owner"])(
+  "ignores a late real creation receipt after %s departure",
+  async (departure) => {
+    document.cookie = "bj_csrf=synthetic; path=/";
+    let release!: (response: Response) => void;
+    const base = api({ metadata: () => json([first, second]) });
+    const fetch = vi.fn((url: string, init?: RequestInit) =>
+      url === "/api/v2/portfolios" && init?.method === "POST"
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : base(url),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { user, client } = setup("/portfolios");
+    await screen.findByRole("heading", { name: "No portfolios yet" });
+    await user.click(screen.getByRole("button", { name: "Create portfolio" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Portfolio name" }),
+      "Private old creation",
+    );
+    await user.click(screen.getAllByRole("button", { name: "Create portfolio" })[1]!);
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    if (departure === "route") await user.click(screen.getByRole("link", { name: "Markets" }));
+    else act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
+    await act(async () => {
+      release(json({ id: "99", name: "Private old creation", description: "" }, 201));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).not.toHaveTextContent("/portfolios/99"),
+    );
+    expect(screen.queryByText("Private old creation")).toBeNull();
+    expect(probes.mounted).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   },
 );

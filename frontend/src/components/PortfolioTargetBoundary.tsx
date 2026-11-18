@@ -90,7 +90,7 @@ export function PortfolioTargetBoundary({
           ? "Open a portfolio-specific link to continue."
           : result.status === "error"
             ? "Can't load this portfolio right now. Try again."
-            : "This portfolio is unavailable. Return to Markets to continue.";
+            : "This portfolio is unavailable. Choose another portfolio from Portfolios.";
   return (
     <section className="mx-auto my-8 flex min-w-0 max-w-xl flex-col gap-4" aria-live="polite">
       <h1
@@ -114,6 +114,9 @@ export function PortfolioTargetBoundary({
               won&apos;t be retried in another portfolio.
             </p>
           )}
+          <Button asChild variant="secondary" className="min-h-11 whitespace-normal">
+            <Link to="/portfolios">Portfolios</Link>
+          </Button>
           {result.status === "error" ? (
             <Button variant="secondary" onClick={() => void result.refetch().catch(() => {})}>
               Try again

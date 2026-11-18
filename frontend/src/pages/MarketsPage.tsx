@@ -3,12 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { StockSection } from "@/components/StockSection";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { formatAge, freshnessStatus } from "@/lib/age";
 import { formatUnitPrice } from "@/lib/money";
 
-function MarketsPage({ portfolioId }: { portfolioId?: string }) {
+function MarketsPage({
+  portfolioId,
+  authenticated = false,
+}: {
+  portfolioId?: string;
+  authenticated?: boolean;
+}) {
   const { data, isPending, isError, refetch, dataUpdatedAt } = usePrices();
   const now = useNow(1000);
   // Server age plus local elapsed time since the response; never browser clock vs as_of.
@@ -120,6 +127,7 @@ function MarketsPage({ portfolioId }: { portfolioId?: string }) {
           Markets
         </h1>
       </div>
+      {authenticated && <PortfolioSwitcher portfolioId={portfolioId} />}
       <section aria-labelledby="crypto-heading" className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h2 id="crypto-heading" className="font-medium">

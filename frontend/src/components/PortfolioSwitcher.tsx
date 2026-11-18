@@ -17,7 +17,7 @@ export function PortfolioSwitcher({ portfolioId }: { portfolioId?: string }) {
   if (!identity.data || identity.isError) return null;
   return (
     <Choices
-      key={`${identity.data.email}:${session.epoch}:${pathname}`}
+      key={`${identity.data.email}:${session.epoch}:${pathname}:${portfolioId ?? ""}`}
       owner={identity.data.email}
       portfolioId={portfolioId}
     />
@@ -32,7 +32,7 @@ function Choices({ owner, portfolioId }: { owner: string; portfolioId?: string }
   const client = useQueryClient();
   // The target hook owns fetching, parsing, subscription and revocation.
   // Reading its accepted list here adds no query or independent authority.
-  const metadata = client.getQueryData<PortfolioSummary[]>(["portfolios", owner]);
+  const metadata = client.getQueryData<readonly PortfolioSummary[]>(["portfolios", owner]);
   const known = !["loading", "error", "signed_out"].includes(result.status);
   const rows = known ? metadata : undefined;
   const current = rows?.find((row) => row.id === portfolioId);

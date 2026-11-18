@@ -44,6 +44,12 @@ it.each([0, 1, 10])(
     const select = await screen.findByRole("combobox", { name: "Open portfolio" });
     await waitFor(() => expect(select).toBeEnabled());
     expect(screen.getAllByRole("option")).toHaveLength(count + 1);
+    expect(
+      screen
+        .getAllByRole("option")
+        .slice(1)
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(items.map((item) => item.id));
     expect(select).toHaveValue("");
     expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
     expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
@@ -102,4 +108,48 @@ it("hides old owner labels and selection immediately across session loss", async
   act(() => client.setQueryData(["me"], null));
   await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   expect(screen.queryByText(/Private Alice/)).toBeNull();
+});
+
+it("masks choices on failed discovery refresh rather than using stale labels", async () => {
+  const { client } = setup([{ id: "1", name: "Private label" }], "1");
+  await screen.findByText("Private label");
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("{}", { status: 500 })));
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["portfolios"] });
+  });
+  await screen.findByRole("alert");
+  expect(screen.queryByText(/Private label/)).toBeNull();
+  expect(screen.getByRole("combobox")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+});
+
+it("discards late old-owner discovery and never restores its draft in a replacement session", async () => {
+  const { client, user } = setup([{ id: "1", name: "Alice private" }]);
+  const select = await screen.findByRole("combobox");
+  await waitFor(() => expect(select).toBeEnabled());
+  await user.selectOptions(select, "1");
+  let release!: (response: Response) => void;
+  let calls = 0;
+  vi.stubGlobal("fetch", () =>
+    ++calls === 1
+      ? new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+      : Promise.resolve(json([{ id: "2", name: "Bob strategy" }])),
+  );
+  let pending!: Promise<void>;
+  act(() => {
+    pending = client.invalidateQueries({ queryKey: ["portfolios"] });
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
+  expect(await screen.findByRole("option", { name: "Bob strategy · #2" })).toBeVisible();
+  await act(async () => {
+    release(json([{ id: "1", name: "Alice private" }]));
+    await pending;
+  });
+  expect(screen.queryByText(/Alice private/)).toBeNull();
+  expect(screen.getByRole("combobox")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
 });
