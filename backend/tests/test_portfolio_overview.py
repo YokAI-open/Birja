@@ -1,0 +1,115 @@
+"""Bounded shared statements on the actual restricted current-schema database."""
+
+from dataclasses import asdict
+from datetime import UTC, datetime
+from decimal import Decimal
+
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import event, text
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from app.services import portfolio as service
+from app.services.portfolios import OwnedActivePortfolio
+from tests.test_portfolio_creation import management_api
+from tests.test_portfolio_management_authority import authority, close, create
+
+__all__ = ["management_api", "authority"]
+
+
+async def load(api, settings, ids=None, **kwargs):
+    async with async_sessionmaker(api.restricted)() as db:
+        return await service.load_portfolio_snapshots(
+            db, owner_id=api.uid, portfolio_ids=ids, settings=settings, **kwargs
+        )
+
+
+@pytest.mark.parametrize("count", [0, 1, 10])
+async def test_bounded_batch_matches_detail_exactly(management_api, settings, count):
+    api = management_api
+    roots = [await create(api.restricted, api.uid, f"Book {n}") for n in range(count)]
+    now = datetime.now(UTC)
+    queries = []
+
+    def capture(conn, cursor, statement, parameters, context, many):
+        queries.append(statement)
+
+    event.listen(api.restricted.sync_engine, "before_cursor_execute", capture)
+    try:
+        batch = await load(api, settings, now=now)
+    finally:
+        event.remove(api.restricted.sync_engine, "before_cursor_execute", capture)
+    assert len(queries) <= 2
+    assert [p.portfolio_id for p in batch] == [str(r.portfolio_id) for r in roots]
+    for result in batch:
+        assert result.cash == result.starting_cash == result.total_value == Decimal("10000")
+        assert result.total_pl == result.total_pl_percent == 0
+        async with async_sessionmaker(api.restricted)() as db:
+            detail = await service.get_portfolio(
+                db, portfolio=OwnedActivePortfolio(int(result.portfolio_id), api.uid),
+                settings=settings, now=now,
+            )
+        assert asdict(detail) == asdict(result)
+
+
+async def test_shared_symbols_custom_baseline_and_incomplete_are_per_book(management_api, settings):
+    api = management_api
+    roots = [await create(api.restricted, api.uid, f"Book {n}") for n in range(3)]
+    now = datetime.now(UTC)
+    async with api.migrator.begin() as conn:
+        coin = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+        missing = (await conn.execute(text("SELECT id FROM coins WHERE symbol='ETH'"))).scalar_one()
+        await conn.execute(text("DELETE FROM prices"))
+        await conn.execute(text("INSERT INTO prices(coin_id,mid,as_of) VALUES (:c,100,:t)"), {"c": coin, "t": now})
+        for i, root in enumerate(roots):
+            await conn.execute(text("UPDATE accounts SET cash=1000,starting_cash=7654 WHERE id=:p"), {"p": root.portfolio_id})
+            await conn.execute(text("INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) VALUES (:p,:u,:c,:q,5)"), {"p": root.portfolio_id, "u": api.uid, "c": missing if i == 2 else coin, "q": Decimal(i + 1)})
+    a, b, c = await load(api, settings, now=now)
+    assert (a.total_value, b.total_value) == (1100, 1200)
+    assert a.total_pl == -6554 and a.total_pl_percent == Decimal("-85.63")
+    assert c.known_value == 1000 and c.total_value is c.total_pl is c.total_pl_percent is None
+    assert c.unvalued_holding_count == 1 and not c.valuation_complete
+    assert {p.valued_at for p in (a, b, c)} == {now}
+    assert a.prices_as_of == b.prices_as_of == now
+
+
+@pytest.mark.parametrize("target", ["foreign", "closed", "unknown"])
+async def test_explicit_batch_refuses_unavailable_without_partial_result(management_api, settings, target):
+    api = management_api
+    own = await create(api.restricted, api.uid)
+    other = await create(api.restricted, api.other_uid)
+    if target == "closed":
+        await close(api.migrator, own.portfolio_id)
+    ids = {"foreign": [own.portfolio_id, other.portfolio_id], "closed": [own.portfolio_id], "unknown": [9223372036854775807]}[target]
+    with pytest.raises(HTTPException) as exc:
+        await load(api, settings, ids)
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.parametrize("ids", [[0], [-1], [True], ["1"], [1, 1], list(range(1, 12))])
+async def test_malformed_or_overlong_batch_refuses_before_sql(management_api, settings, ids):
+    with pytest.raises(HTTPException) as exc:
+        await load(management_api, settings, ids)
+    assert exc.value.status_code == 422
+
+
+async def test_closure_between_financial_and_final_read_refuses(management_api, settings, monkeypatch):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    api = management_api
+    root = await create(api.restricted, api.uid)
+    execute = AsyncSession.execute
+    reads = 0
+
+    async def intercepted(db, stmt, *args, **kwargs):
+        nonlocal reads
+        result = await execute(db, stmt, *args, **kwargs)
+        reads += 1
+        if reads == 1:
+            await close(api.migrator, root.portfolio_id)
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", intercepted)
+    with pytest.raises(HTTPException) as exc:
+        await load(api, settings)
+    assert exc.value.status_code == 404
