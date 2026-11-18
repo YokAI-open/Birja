@@ -88,8 +88,9 @@ it.each([{ items: [] }, { items: [{ id: "2", name: "Other" }] }])(
     const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
     expect(heading).toHaveFocus();
     expect(
-      screen.getByText("This portfolio is unavailable. Return to Markets to continue."),
+      screen.getByText("This portfolio is unavailable. Choose another portfolio from Portfolios."),
     ).toBeVisible();
+    expect(screen.getByRole("link", {name:"Portfolios"})).toHaveAttribute("href", "/portfolios");
     expect(screen.getByRole("link", { name: "Return to Markets" })).toHaveAttribute("href", "/");
     expect(screen.queryByText(/Private cash/)).toBeNull();
   },
@@ -126,6 +127,7 @@ it.each([
     expect(await screen.findByRole("heading", { name: heading })).toBeVisible();
     expect(screen.getByText(body)).toBeVisible();
     expect(screen.getByRole("link", { name: action })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", {name:"Portfolios"})).toHaveAttribute("href", "/portfolios");
     expect(screen.getByTestId("location")).toHaveTextContent("/portfolio");
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0]).toEqual(expect.arrayContaining(["/api/v2/portfolios"]));
