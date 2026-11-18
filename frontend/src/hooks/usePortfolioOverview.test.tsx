@@ -338,3 +338,23 @@ it("clears current identity on unrecoverable authentication loss", async () => {
   await waitFor(() => expect(client.getQueryData(["me"])).toBeNull());
   expect(hook.result.current.data).toBeUndefined();
 });
+it("does not substitute a newer detail snapshot into the overview's shared valuation time", async () => {
+  const { wrapper } = setup();
+  const detail = { ...mixedPortfolio(), valued_at: "2026-11-10T15:00:20Z", name: "Strategy 1" };
+  let requested = false;
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const path = String(input);
+    if (path.endsWith("/portfolios")) return Promise.resolve(json([{id:"1",name:"Strategy 1"}]));
+    if (path.endsWith("/overview")) { requested = true; return Promise.resolve(json([row("1",true),row("2",true)])); }
+    return Promise.resolve(json(detail));
+  }));
+  const first = renderHook(() => {
+    const target = usePortfolioTarget("1");
+    return usePortfolio(target.target);
+  }, {wrapper});
+  await waitFor(() => expect(first.result.current.data?.valued_at).toBe(detail.valued_at));
+  const overview = renderHook(() => usePortfolioOverview(), {wrapper});
+  await waitFor(() => expect(requested).toBe(true));
+  await waitFor(() => expect(overview.result.current.data).toHaveLength(2));
+  expect(overview.result.current.data?.map((value) => value.valued_at)).toEqual(["2026-11-10T15:00:10Z","2026-11-10T15:00:10Z"]);
+});

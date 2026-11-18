@@ -7,6 +7,7 @@ import { webcrypto } from "node:crypto";
 import { usePortfolioManagement } from "./usePortfolioManagement";
 import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreationAttempt";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
+import { usePortfolioTarget } from "./usePortfolioTarget";
 
 const clients: QueryClient[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -42,6 +43,33 @@ afterEach(() => {
   sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+it.each(["owner", "logout-return"])("does not invalidate overview after %s during awaited creation discovery refresh", async (change) => {
+  let reads = 0;
+  let release!: (value: Response) => void;
+  const discovery = new Promise<Response>((resolve) => { release = resolve; });
+  vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") return Promise.resolve(json(receipt));
+    reads++;
+    return reads === 1 ? Promise.resolve(json([{id:"1",name:"Original"}])) : discovery;
+  }));
+  const hook = setup();
+  const wrapper = ({children}:{children:ReactNode}) => <QueryClientProvider client={hook.client}>{children}</QueryClientProvider>;
+  const target = renderHook(() => usePortfolioTarget("1"),{wrapper});
+  await waitFor(() => expect(target.result.current.status).toBe("ready"));
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+  let pending!:Promise<void>;
+  act(() => { pending = hook.result.current.submitCreation({name:"Original"}); });
+  await waitFor(() => expect(reads).toBe(2));
+  const invalidate = vi.spyOn(hook.client,"invalidateQueries");
+  await act(async () => {
+    hook.client.setQueryData(["me"],null);
+    hook.client.setQueryData(["me"],{email:change === "owner" ? "bob@example.test" : "alice@example.test"});
+    release(json([{id:"1",name:"Original"},{id:"2",name:"Created"}]));
+    await pending;
+  });
+  expect(invalidate).not.toHaveBeenCalledWith({queryKey:["portfolioOverview","alice@example.test"]});
+  expect(hook.result.current.creation.receipt).toBeUndefined();
 });
 it("persists before POST, freezes unknown raw intent and reloads only for explicit same-key retry", async () => {
   const fetch = vi.fn((_url: string, init: RequestInit): Promise<Response> => {
