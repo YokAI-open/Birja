@@ -266,6 +266,9 @@ class RevisionContracts(unittest.TestCase):
     "--postgres" in sys.argv, "real SQL proof explicitly uses isolated birja-test"
 )
 class PostgreSQLContracts(unittest.TestCase):
+    DATABASE = "birja_stock_contracts_test"
+    OWNED_ROLES = {"birja_app", "birja_scheduler", "birja_migrator", "birja_action_operator"}
+
     SOURCE_OWNER = """DO $$ BEGIN
       IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
         CREATE ROLE birja_migrator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
@@ -274,11 +277,50 @@ class PostgreSQLContracts(unittest.TestCase):
     END $$;"""
 
     @classmethod
+    def role_snapshot(cls):
+        return cls.query("""SELECT json_build_object(
+          'roles',(SELECT json_agg(json_build_array(rolname,rolcanlogin,rolinherit,
+            rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolconnlimit,
+            rolvaliduntil,rolconfig) ORDER BY rolname) FROM pg_roles WHERE rolname LIKE 'birja_%'),
+          'memberships',(SELECT json_agg(json_build_array(roleid::regrole::text,
+            member::regrole::text,grantor::regrole::text,admin_option,inherit_option,set_option)
+            ORDER BY roleid,member,grantor) FROM pg_auth_members));""", database='birja_test')
+
+    @classmethod
+    def database_dump(cls, database):
+        return subprocess.check_output(['docker', 'compose', '--env-file', '/dev/null',
+            '-f', str(ROOT / 'docker-compose.test.yml'), 'exec', '-T', 'postgres',
+            'pg_dump', '-U', 'birja_test', '-d', database, '--no-comments',
+            '--restrict-key=birjaSyntheticSourcePreservation17'], timeout=30)
+
+    @classmethod
     def setUpClass(cls):
-        # A fresh standalone probe cannot inherit the full pytest suite's
-        # preprovisioned owner. Existing roles are deliberately never repaired;
-        # the unchanged0014 migration authenticates their flags/memberships.
-        cls.query(cls.SOURCE_OWNER)
+        # Historical probes must never downgrade the complete runner's current
+        # schema. Own one fresh database inside the exact disposable cluster;
+        # refuse existing identity and retain an independent original dump.
+        assert cls.query("SELECT current_database()='birja_test' AND session_user='birja_test' "
+            "AND rolsuper FROM pg_roles WHERE rolname=session_user", database='birja_test') == 't'
+        assert cls.query("SELECT NOT EXISTS(SELECT FROM pg_database WHERE datname='" +
+            cls.DATABASE + "')", database='birja_test') == 't', 'Refuse preexisting historical fixture'
+        cls.original_roles = cls.role_snapshot()
+        cls.original_dump = cls.database_dump('birja_test')
+        cls.query('CREATE DATABASE ' + cls.DATABASE + ' OWNER birja_test', database='birja_test')
+        cls.created_database = True
+        try:
+            # Existing owner flags are never repaired. The unchanged0014
+            # migration authenticates them and their memberships normally.
+            cls.query(cls.SOURCE_OWNER)
+        except BaseException:
+            cls.tearDownClass()
+            raise
+
+    def test_00_source_database_refuses_preexisting_identity_without_mutation(self):
+        before = self.database_dump(self.DATABASE)
+        roles = self.role_snapshot()
+        with self.assertRaisesRegex(AssertionError, 'Refuse preexisting historical fixture'):
+            self.setUpClass()
+        self.assertEqual(self.database_dump(self.DATABASE), before)
+        self.assertEqual(self.role_snapshot(), roles)
 
     def test_00_source_owner_setup_never_repairs_existing_unsafe_role(self):
         alias = 'birja_contract_owner_probe'
@@ -291,12 +333,12 @@ class PostgreSQLContracts(unittest.TestCase):
 
     def test_zzzz_dividend_restore_on_genuinely_fresh_cluster(self):
         """A separate cluster must not inherit source runtime/operator roles."""
-        self.migrate('head')
+        self.migrate('0014')
         restore=load('verify-restore')
         producer=load('backup-snapshot')
         dump=subprocess.check_output(['docker','compose','--env-file','/dev/null','-f',
             str(ROOT/'docker-compose.test.yml'),'exec','-T','postgres','pg_dump',
-            '-U','birja_test','-d','birja_test','--format=custom','--no-owner','--no-acl'])
+            '-U','birja_test','-d',self.DATABASE,'--format=custom','--no-owner','--no-acl'])
         dc=restore.compose()
         for damage in ('none','function','schema','unsafe_runtime'):
             with self.subTest(damage=damage):
@@ -346,12 +388,22 @@ class PostgreSQLContracts(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # Leave the owned disposable stack at the application head. Authority
-        # probes below stay at their exact historical revision, not moving head.
-        cls.migrate("head")
+        if cls.created_database:
+            cls.query('DROP DATABASE ' + cls.DATABASE, database='birja_test')
+            cls.created_database = False
+        original_names = {row[0] for row in json.loads(cls.original_roles)['roles']}
+        current_names = {row[0] for row in json.loads(cls.role_snapshot())['roles']}
+        created_roles = current_names - original_names
+        assert created_roles <= cls.OWNED_ROLES, 'Unexpected historical fixture role'
+        for name in sorted(created_roles):
+            # DROP refuses dependencies outside our already removed database.
+            cls.query('DROP ROLE ' + name, database='birja_test')
+        assert cls.role_snapshot() == cls.original_roles, 'Historical global role mutation leaked'
+        assert cls.database_dump('birja_test') == cls.original_dump, 'Current database changed'
+        print('historical_database_removed_current_dump_and_global_roles_unchanged=true')
 
     @classmethod
-    def query(cls, query):
+    def query(cls, query, *, database=None):
         result = subprocess.run(
             [
                 "docker",
@@ -370,7 +422,7 @@ class PostgreSQLContracts(unittest.TestCase):
                 "-U",
                 "birja_test",
                 "-d",
-                "birja_test",
+                cls.DATABASE if database is None else database,
             ],
             input=query.encode(),
             capture_output=True,
@@ -385,7 +437,7 @@ class PostgreSQLContracts(unittest.TestCase):
         env = {
             **os.environ,
             "ENV": "test",
-            "DATABASE_URL": "postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
+            "DATABASE_URL": "postgresql+asyncpg://birja_test:test@127.0.0.1:55432/" + cls.DATABASE,
             "REDIS_URL": "redis://:test@127.0.0.1:56379/0",
             "OTP_HMAC_SECRET": "test-only-otp-secret-not-for-prod-000000",
             "JWT_SECRET": "test-only-jwt-secret-not-for-prod-000000",
@@ -709,13 +761,13 @@ ALTER FUNCTION """+producer.RESOLUTION_SIGNATURE+" OWNER TO birja_migrator;\nSET
         self.restored_owner_entry(existing_unsafe=True)
 
     def test_zzz_dividend_exact_catalog_and_no_repair(self):
-        self.migrate('head')
+        self.migrate('0014')
         producer=load('backup-snapshot')
         restore=load('verify-restore')
         # Reviewed administrative bootstrap is fixture preparation in a rollback
         # only transaction, never a repair step in the consumer under test.
         boot=(ROOT/'deploy/db/bootstrap-roles.sql').read_text().rsplit('COMMIT;',1)[0]
-        for key,value in {'bootstrap':'birja_test','db_name':'birja_test',
+        for key,value in {'bootstrap':'birja_test','db_name':self.DATABASE,
             'app_password':'test-only-app','scheduler_password':'test-only-scheduler',
             'migrator_password':'test-only-migrator'}.items():
             boot=boot.replace(":'"+key+"'","'"+value+"'").replace(':"'+key+'"','"'+value+'"')
@@ -838,7 +890,7 @@ INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revisio
         # PostgreSQL connection. PUBLIC EXECUTE is the actual --no-acl default;
         # no SQL financial function, grant or denial is mocked in this probe.
         command=['docker','compose','--env-file','/dev/null','-f',str(ROOT/'docker-compose.test.yml'),
-            'exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d','birja_test']
+            'exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d',self.DATABASE]
         with subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) as proc:
             def live(dc,statement,db=None):
                 proc.stdin.write(statement+'\n;\n\\echo PHASE10_QUERY_DONE\n')

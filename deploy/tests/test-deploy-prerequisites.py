@@ -346,6 +346,11 @@ except BaseException as error:
 
 class Evidence(unittest.TestCase):
     def setUp(self):
+        # In-process synthetic restore tests must not inherit a backend test
+        # DATABASE_URL (the real operational boundary intentionally rejects it).
+        environment = patch.dict(os.environ, {}, clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix="birja-backup-test-")
         self.root = Path(self.tmp.name)
         self.state = self.root / "state"
@@ -410,6 +415,16 @@ class Evidence(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_restore_rejects_ambient_database_before_loading_configuration(self):
+        with (
+            patch.dict(os.environ, {"DATABASE_URL": "synthetic-forbidden"}),
+            patch.object(r, "backup_module") as load,
+            self.assertRaisesRegex(ValueError, "recovery guard"),
+        ):
+            r.restore(["--synthetic", str(self.root / "config"), "--snapshot", self.sid])
+        load.assert_not_called()
+        self.assertFalse((self.state / "restore-last-success.json").exists())
 
     def test_restore_requires_the_real_complete_manifest_contract(self):
         b.validate_manifest(self.manifest)

@@ -174,9 +174,9 @@ def main():
                 return command(dc + ["exec", "-T", "postgres", "psql", "-U", "birja", "-d", "birja",
                                      "-v", "ON_ERROR_STOP=1", "-Atc", statement]).stdout.strip()
 
-            def refused():
+            def refused(expected):
                 result = command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"], check=False)
-                assert result.returncode != 0 and "refusing" in result.stdout.lower(), result.stdout
+                assert result.returncode != 0 and expected in result.stdout, result.stdout
 
             try:
                 command(dc + ["up", "--no-build", "-d", "--wait", "postgres", "redis"])
@@ -188,7 +188,7 @@ def main():
                     command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
                             input=stage_program(lane))
                     before = sql("SELECT cash||':'||starting_cash FROM accounts")
-                    refused()
+                    refused("migration_only; refusing normal dev bootstrap")
                     prefix = "\\set bootstrap 'birja'\n\\set db_name 'birja'\n\\set apply false\n"
                     result = command(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-U",
                         "birja", "-d", "birja", "-v", "ON_ERROR_STOP=1"],
@@ -208,13 +208,13 @@ def main():
                 if lane != "fresh":
                     assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='retained@example.test')") == "321.12000000:8765.00000000"
                 sql("ALTER ROLE birja_migrator CREATEROLE")
-                refused()
+                refused("Unsafe existing dev migration owner; refusing repair")
                 assert sql("SELECT rolcreaterole FROM pg_roles WHERE rolname='birja_migrator'") == "t"
                 sql("ALTER ROLE birja_migrator NOCREATEROLE; CREATE ROLE dev_bootstrap_probe NOLOGIN; GRANT birja_migrator TO dev_bootstrap_probe")
-                refused()
+                refused("Unsafe existing dev migration owner; refusing repair")
                 assert sql("SELECT count(*) FROM pg_auth_members WHERE roleid='birja_migrator'::regrole OR member='birja_migrator'::regrole") == "1"
                 sql("REVOKE birja_migrator FROM dev_bootstrap_probe; ALTER TABLE stock_action_events OWNER TO dev_bootstrap_probe")
-                refused()
+                refused("management catalogue mismatch")
                 assert sql("SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid='stock_action_events'::regclass") == "dev_bootstrap_probe"
                 print(lane + "_ordinary_dev_financial_and_unsafe_role_membership_object_refusals=true seconds=" + str(round(time.monotonic() - tick, 3)), flush=True)
             finally:
