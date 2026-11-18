@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 Plans01–16 complete;17 actual whole campaigns continuing. Campaign2 all3342backend tests pass2226.18s/overall99.84%, but critical61 gate failed onlydev_bootstrap finalACLrefusal line108/branch107→108. Test-only5dc6c45 adds meaningful wrongfinalACL/transactionexit/connectionclose regression;48focused pass/module116statements56branches100%, clean independent re-review. App runtime remains99166d9, current packet724607e8...valid; no recapture needed forbackendtest-onlychange. Wholecampaign3 must rerun, prior2failed notcomposed. Allsource/securitygates unchanged; ownerUI/native200 saved, security2actualcampaignrecords pending. Keep local; Phase7livegaps/issue35risk retained.
+Current focus: Phase13 Plans01–16 complete;17 actual campaign4 next. Campaign3 passed3343backend/critical61=100/frontend1194/browser79+1 but FAILEDdeploycompatibility. RealCR03 stale deploy marker corrected74ee5ea against immutablecurrent+retained0017; no migrationchange. Scopedfixtures0e55743/531cf48/fa28d8e independentlyreviewedclean. Finalordered15taildiagnostics pass incl5strictimages(onlyexactacceptedNodeissue35), currentfunded0020dump/containerIDspreserved, allownedresourcesempty. Receipt/tmp/birja-p13-security-tail-repair-receipt.json; tailNOTwholequalification. UIpacket724607stillcurrent(nofrontend/backendrenderchanges); UATaccepted. Actualwholeall-security4 then7stagesamearchivesourcerecoverymandatory, priorfailuresretained. Keep local; Phase7sixlivegaps remain deferred.
 
 ## Current Position
 

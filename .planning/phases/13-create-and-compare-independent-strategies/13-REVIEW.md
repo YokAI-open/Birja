@@ -1,10 +1,10 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T17:22:38Z
+reviewed: 2026-11-18T18:46:46Z
 depth: standard
 diff_base: 7125fec
-reviewed_head: 5dc6c45
-files_reviewed: 67
+reviewed_head: fa28d8e
+files_reviewed: 72
 files_reviewed_list:
   - .github/workflows/ci.yml
   - CLAUDE.md
@@ -73,6 +73,11 @@ files_reviewed_list:
   - backend/tests/test_portfolio_management_grants.py
   - backend/tests/test_portfolio_strategy_events.py
   - backend/tests/test_dev_bootstrap.py
+  - deploy/deploy.sh
+  - deploy/tests/test-deploy-compatibility.sh
+  - deploy/tests/test-deploy-prerequisites.py
+  - deploy/tests/test-stock-recovery-contracts.py
+  - deploy/tests/test-db-config.sh
 findings:
   critical: 0
   warning: 0
@@ -81,6 +86,7 @@ findings:
 resolved_findings:
   - CR-01
   - CR-02
+  - CR-03
 status: clean
 ---
 
@@ -208,7 +214,51 @@ offline contract groups passed8+11+8+6. No new issue was demonstrated. These
 commands were run by the executor, not rerun by this reviewer. They do not
 replace final full-suite/image/browser/TLS/encrypted-recovery qualification.
 
+### CR-03: Deployment source predicate pins the wrong immutable migration bytes
+
+**Original classification:** BLOCKER — the genuine supported portfolio source
+is refused before rollout because its marker hash cannot match the stale pin.
+**Disposition:** RESOLVED at `74ee5ea`, following genuine positive and negative
+source fixtures in `0e55743`.
+
+**File:** `deploy/deploy.sh:89`. The one-line repair replaces stale
+`df84ca54126423c9de52821906c93a79b3251983a2a9b032da939419b9ee7ee9`
+with the actual immutable0017 migration marker hash
+`92cff0699a40b0b8f5f4d66bc56a39a2ef88e3184860d86d6957607a3413f32b`.
+Independently hashed both the current file and the complete retained
+`4b4320b4cc373268a8d598612a563cd5ef199700` Git object's migration bytes; both
+match the repaired pin and the existing `portfolio_migrate.py` source map.
+No migration bytes, schema/profile fingerprint, source predicate structure,
+finite revision set, tested-source equality check or rollback branch changed.
+This repairs the pin to unchanged reviewed bytes; it does not bless modified
+historical migration contents or introduce a permissive fallback.
+
+The47-case compatibility matrix now creates distinct real Git commits for
+legacy-only source, correct immutable portfolio marker and corrupted marker.
+It calls the real source predicate rather than stubbing it. Refusals require
+the exact incompatibility marker, no simulated deployment calls and unchanged
+deployment/pending records. Correct portfolio-upgrade lanes assert writer-stop
+before the inherited-lock configure-db call and restart afterwards. Runtime
+rollback remains separate: supported legacy runtime examples pass,0014/0017
+need the existing pending approval state,0020 remains refused, and malformed,
+missing, unsupported and corrupted marker cases remain refused even when the
+corrupted commit is the declared tested source. The changed old deploy-v0.3.1
+expectations follow the existing portfolio-upgrade source gate; explicit legacy
+runtime rollback positives preserve that separate behavior.
+
+Source/test review finds CR-03 resolved with no new defect. No compatibility or
+database command was run by this reviewer;47 is the inspected matrix's case
+count and the executor's reported focused outcome. Campaign3 remains failed at
+compatibility despite earlier passing backend/critical/frontend/browser stages.
+The in-progress diagnostic tail and final complete security/same-archive proof
+remain separate pending evidence. `deploy.sh` is outside UI render inputs;
+this delta changes no UI and does not require render recapture.
+
 ## Review Scope and Limits
+
+The deployment source-pin/compatibility follow-up reviewed two additional
+paths at `74ee5ea`, bringing the exact cumulative listed scope to69 files.
+Other concurrently changing diagnostic fixtures are not covered by this head.
 
 Initial explicit runtime/config/tool scope: 61 paths, changes relative to
 `7125fec`, at `255c4a0` (runtime bytes last changed at `8cdd175`). This is a
@@ -259,3 +309,54 @@ Verified the focused receipt's committed source and raw-log hashes:
 The prior whole campaign failed at critical coverage and is not relabelled
 successful; remaining full security/image/browser/recovery outcomes are pending.
 See `13-17-FIXTURE-REVIEW.md` for detailed disposition and measurement limits.
+
+## Security Tail Fixture Review — 531cf48
+
+**Disposition: clean, no new findings.** Independently reviewed the three-file
+test-only commit: `test-deploy-prerequisites.py`, `test-dev-bootstrap.py` and
+`test-stock-recovery-contracts.py`. The first two add controlled environment
+isolation with an explicit ambient-DATABASE_URL refusal and assert the actual
+current bootstrap refusal reasons without replacing the authorizer or accepting
+repair of unsafe roles/objects. Historical PostgreSQL probes now own a separate
+database and select0014 explicitly for their two dividend contracts, preserving
+the original financial, catalogue, tamper and fresh-clone assertions.
+
+The historical fixture refuses an existing identity before replacing its saved
+state, authenticates the disposable source database/session, drops only the
+database it created and newly introduced allowlisted roles, and compares the
+original current database's independent dump plus role/membership snapshot after
+cleanup. A new preexisting-database negative verifies refusal without mutation.
+No current0020 downgrade or historic schema/authority redefinition is introduced.
+`test-dev-bootstrap.py` was already in this cumulative list; the two additional
+paths bring the exact cumulative scope to71. See the separate fixture report for
+the source-bound follow-up details; its original35-file hash remains historical.
+
+This pass ran no tests, database, browser or scan command. The active worker owns
+the serial diagnostic lane. The previous whole campaign3 remains failed, and
+tail diagnostic success cannot substitute for complete final-source security
+and same-archive recovery qualification. No source/runtime/dependency or UI
+input changed in this reviewed test-only commit.
+
+## Borrowed Configuration Stack Review — fa28d8e
+
+**Disposition: clean, no new findings.** Reviewed the complete changed wrapper
+and its invoked six backend test modules/fixture context. The wrapper now
+distinguishes a stack it creates from a complete campaign stack it borrows.
+Before using an existing stack it requires exactly the expected two services,
+fixed project/configuration/workdir labels, healthy running state, exact pinned
+image reference and resolved local image ID, expected loopback port bindings and
+test-network membership. A partial, foreign or unhealthy borrowed stack fails
+before pytest and has neither an up operation nor cleanup ownership.
+
+The standalone branch alone executes up and down; it also validates the resulting
+stack before testing. The finally clause checks the captured ownership flag,
+including failure paths, so borrowed containers are not removed after a failed
+test or validation. All six existing test modules, argument boundaries, checks,
+return-code propagation and timeouts remain. This avoids deleting the current
+database needed by later historical probes without weakening the existing136
+configuration/health/scheduler assertions. This adds the72nd cumulative path.
+
+This source review ran no tests or Docker command. Executor standalone and
+ordered borrowed-stack diagnostics are separate measured evidence, not a full
+security pass. Whole final-source security and same-archive recovery remain
+pending. No runtime, dependency or UI input changed in this commit.

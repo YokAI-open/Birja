@@ -218,3 +218,33 @@ are recorded in13-UI-EVIDENCE and13-UAT. Exact four-backend-input delta, zero
 frontend changes; owner UI/native200 association is preserved. The prior
 recapture_pending note is resolved by this actual receipt. Only the two actual
 Plan17 whole-campaign records remain OPEN; no final qualification is inferred.
+
+
+### Reviewed deployment-source and fixture follow-up
+
+Campaign3 was stopped by real source admission in the compatibility fixture.
+Genuine immutable source revealed CR-03: deploy.sh pinned an obsolete0017marker.
+The one-line74ee5ea repair now matches both the unchanged current migration and
+fixed retained4b4320b object (`92cff0699a40b0b8f5f4d66bc56a39a2ef88e3184860d86d6957607a3413f32b`).
+Independent13-REVIEW records the measured source check and preserved47-case
+legacy/current/corrupt/missing-source refusal matrix. This resolves a source-binding
+implementation defect mapped to existing retained/current-source threats, without
+editing0017/schema/financial/authority profiles or accepting a new risk.
+
+Test-only follow-ups531cf48/fa28d8e preserve strict refusal messages and isolate
+historical0007–0014 probes; borrowed-stack ownership now preserves the funded
+current database. Independent review is clean. Actual final15ordered diagnostics
+atfa28d8e all pass, including five immutable image policies with zero blocking
+findings; only the already accepted issue35Node finding is present. The before/
+after funded0020plain dump SHA matches
+`2c16a2492129a3e50164cf1064d8d893fa230aef0b40b129a361eb22d6cb49bc`,
+borrowed container identities match, all12owned resource-label checks are empty.
+Full source/log/image receipts live at
+`/tmp/birja-p13-security-tail-repair-receipt.json`.
+
+These are diagnostic/review records, not a substitute for complete security or
+seven-stage same-archive recovery. The same two campaign-evidence threats stay
+OPEN until actual whole commands succeed at the final frozen revision. No new
+risk waiver, dependency/image upgrade, provider or production operation occurred.
+No UI render input changed, so source-bound packet724607 and owner acceptance
+remain valid; frontend/backend application render source stays99166d9.

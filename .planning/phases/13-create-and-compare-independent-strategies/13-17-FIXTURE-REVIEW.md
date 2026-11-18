@@ -1,12 +1,19 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T17:22:38Z
+reviewed: 2026-11-18T18:46:46Z
 depth: standard
 diff_base: 61e14af
 reviewed_scope: committed backend/tests changes at acbcd4e and 203815f
 reviewed_head: 203815f
 runtime_resolution_reviewed_head: 99166d9
 subsequent_test_only_reviewed_head: 5dc6c45
+deployment_compatibility_reviewed_head: 74ee5ea
+subsequent_tail_fixture_reviewed_head: 531cf48
+borrowed_configuration_stack_reviewed_head: fa28d8e
+subsequent_tail_fixture_files:
+  - deploy/tests/test-deploy-prerequisites.py
+  - deploy/tests/test-dev-bootstrap.py
+  - deploy/tests/test-stock-recovery-contracts.py
 scope_sha256: c6eb3f6619a13b459b2e48d6f915a72684fa85db8999b7c2b06f354bb38b2863
 files_reviewed: 35
 files_reviewed_list:
@@ -53,6 +60,7 @@ findings:
   total: 0
 resolved_findings:
   - CR-02
+  - CR-03
 status: clean
 ---
 
@@ -232,4 +240,107 @@ and dev_bootstrap116statements/56branches at100%. No command was rerun by this
 reviewer. The preceding full campaign stopped at critical coverage after its
 backend suite; this focused result does not convert that failed campaign into
 a complete pass. A new complete final qualification remains required.
+
+## Deployment Compatibility Fixtures and Pin — 0e55743 / 74ee5ea
+
+**Disposition: clean; CR-03 resolved.** Reviewed the actual compatibility-test
+delta and one-line deployment marker-pin repair. The fixture now supplies real
+legacy, immutable-marker and corrupted-marker Git commits rather than empty
+commits that accidentally exercise the wrong source predicate. It preserves
+the real source-admission function. Its47 cases cover finite upgrade/runtime
+rollback lanes and source/revision/pending-state refusals, assert no calls or
+record mutation on refusal, and assert stop/configure/start ordering plus
+the inherited operation-lock FD on valid upgrades. Neither acceptance checks
+nor runtime source validation were stubbed to turn failure into a pass.
+
+The genuine positive uncovered stale deployed-tool source pin CR-03. Independently
+hashed the current0017 migration and its retained4b4320b Git object: both equal
+`92cff0699a40b0b8f5f4d66bc56a39a2ef88e3184860d86d6957607a3413f32b`,
+also already pinned by `portfolio_migrate.py`. The repair changes only that
+expected marker hash in `deploy/deploy.sh`; no immutable migration, schema,
+retained profile, finite revision predicate or rollback rule changed. Missing
+and corrupt sources remain refused, including a corrupt declared tested source.
+See `13-REVIEW.md` for preserved CR-03 history and full disposition.
+
+This source review ran no tests or DB commands. The earlier whole campaign3
+failed at compatibility; passing earlier stages and focused47-case evidence
+do not make it a full pass. Subsequent tail diagnostics and final full security/
+image/recovery qualification remain pending. No UI render input changed here.
+
+## Final Security Tail Test Fixtures — 531cf48
+
+**Disposition: clean, no new findings.** Standard source/diff review covers exactly
+the three paths named in `subsequent_tail_fixture_files` above. The original
+35-file committed scope/hash and its limits remain unchanged.
+
+- `test-deploy-prerequisites.py:349` clears inherited environment only inside the
+  in-process synthetic Evidence fixture and registers restoration with unittest
+  cleanup. Existing real restore/recovery assertions remain. The new negative
+  at419 supplies an ambient DATABASE_URL, calls the real restore entry point and
+  requires guard refusal before configuration loading or success publication.
+  It proves that environment isolation is not removal of the operational guard.
+- `test-dev-bootstrap.py:177` still requires an unsuccessful real bootstrap
+  command. Its four callers now identify the intended migration-only,
+  unsafe-owner/membership or catalogue-mismatch reason, and still prove the
+  unsafe role flag, membership or object owner remains unchanged after refusal.
+  Cash/baseline positive oracles remain124.45/7777 and321.12/8765; no message
+  assertion is substituted for these financial checks.
+- `test-stock-recovery-contracts.py:268` owns a distinct historical database.
+  Setup authenticates birja_test/session/superuser in the fixed disposable stack,
+  refuses an existing database before modifying saved ownership state, snapshots
+  the original current database and global role/membership state, then creates
+  its own database. The real historical migrations, SQL tamper checks, exact
+  financial hashes, identity-state checks and fresh-server clone assertions are
+  preserved. Only the two old moving-head dividend probes select0014 instead.
+- Its new negative at317 calls setup while the owned database exists and asserts
+  the original database refusal plus identical fixture dump and role state.
+  The refusal occurs before overwriting the outer class's original snapshots or
+  created-database flag, so it does not retarget final cleanup.
+- Teardown at390 drops only that successfully created database, permits removal
+  only of newly introduced allowlisted fixture roles, and lets PostgreSQL refuse
+  role deletion with outside dependencies. It then compares the independent
+  current database dump and role/membership snapshot. Existing original roles
+  are not repaired/dropped; a detected leak fails rather than overwriting the
+  original database. A fixed synthetic pg_dump restrict key avoids random
+  restrict-key differences in this equality proof.
+
+These are source-review conclusions, not newly measured test outcomes. The
+reviewer ran no tests/DB/browser/scans and changed no source or test files. The
+executor's focused/tail diagnostics remain separate receipts. Whole campaign3
+is still failed; a new complete final-source command and same-archive seven-stage
+recovery are mandatory before final qualification. No UI render input changed.
+
+## Borrowed Configuration Stack Lifecycle — fa28d8e
+
+**Disposition: clean, no new findings.** Reviewed all of
+`deploy/tests/test-db-config.sh` and traced its unchanged selected backend tests
+and conftest setup. The prior unconditional up/down lifecycle removed the current
+database before later whole-campaign PostgreSQL contracts. The new ownership
+branch fixes that fixture interaction while retaining all136 existing assertion
+cases and their real health/database behavior.
+
+- At21, validation derives the two expected services from the fixed checked-in
+  Compose configuration, then authenticates inspected project, source config,
+  working directory and distinct service labels. It requires healthy running
+  state, exact pinned reference plus resolved image ID, exact loopback port maps
+  and the test network. Partial/foreign/unhealthy existing containers cannot
+  reach pytest through a permissive fallback.
+- At50, the existing identity list is captured before ownership selection. The
+  borrowed branch only validates; it calls no up operation, so validation cannot
+  silently repair or adopt incompatible running services.
+- At70, cleanup is conditional on the original owns_stack flag. Failure during
+  borrowed validation or a borrowed test does not call down. A standalone
+  invocation still creates, validates and cleans its own stack, and propagates
+  failed tests, timeouts or cleanup failure. The fixed stack uses tmpfs data;
+  no persistent production volume or target is introduced by this change.
+- The six selected test modules, uv locked/no-sync arguments, environment guard,
+  tests, timeouts and exit handling remain. Authentication of borrowed resources
+  is fixture isolation, not a substitute for the existing test database guard.
+
+No tests, Docker/database operations or source changes were performed in this
+review. The standalone136 pass and final ordered tail with current-database and
+container preservation belong to executor receipts; they do not qualify the
+whole command. Actual final-source complete security and same-archive recovery
+remain pending. Original35-file fixture scope/hash is not rewritten by this
+one-file follow-up; the separate reviewed head above binds this additional scope.
 
