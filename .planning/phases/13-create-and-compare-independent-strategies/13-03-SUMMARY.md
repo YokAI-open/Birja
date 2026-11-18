@@ -31,8 +31,9 @@ key-decisions:
   - "Retained0017 bootstrap SQL literals remain exactly equal to qualified4b4320b;0020 has a distinct fixed catalogue and privilege contract."
   - "Canonical0020 regrants reset table, column, sequence and routine ACLs before restoring narrow app/scheduler/operator rights; ordinary accounts INSERT and users UPDATE remain denied."
   - "All17 public signatures remain present: nine private validators/canonicalizers, four app entrypoints, three scheduler entrypoints and one operator entrypoint."
+  - "Current preflight rejects every public rewrite rule, service database/schema ownership and effective runtime schema CREATE, including implicit pg_database_owner privileges."
 requirements-completed: [PSAFE-07, PFUND-01, PFUND-02]
-duration: 17min
+duration: 25min
 completed: 2026-11-18
 ---
 
@@ -42,7 +43,7 @@ completed: 2026-11-18
 
 ## Performance
 
-- **Duration:** approximately17min,2026-11-18 08:18–08:35UTC
+- **Original execution duration:** approximately17min,2026-11-18 08:18–08:35UTC; review repairs add approximately8min through08:47UTC
 - **Tasks:**2/2
 - **Implementation/test files:**8, plus this summary
 - **Combined verification:**87passed in181.59s
@@ -107,3 +108,36 @@ Only owned `birja-p13-03` PostgreSQL/Redis resources ran, with existing cached p
 ## Self-Check: PASSED
 
 All eight declared implementation/test paths exist. All four task commits exist with RED before GREEN for each task. Required focused evidence, static checks and immutable migration comparisons pass. Owned resources are removed; no unintended tracked file deletions or generated untracked files remain. Shared planning state is parent-owned.
+
+## Independent Review Repair Addendum — 2026-11-18
+
+The independent review of initial source7295c52 established two BLOCKER findings. Both were reproduced and repaired within Plan03's existing authority-admission boundary under Rule1/2 authorization. Parent owns the review report and independent re-review; this addendum does not claim that re-review has already passed.
+
+- **CR-01 — Rewrite-rule authority drift:** An owner-installed ON INSERT rule on portfolio_creations could add cash without changing the original catalogue or ACL projections. The shared runtime/dev preflight and production preflight now reject every pg_rewrite row on a public relation, regardless of rule name, event or enabled state. The approved public inventory contains no rewrite rules, so there is no exception or new permitted rule profile. Real enabled and disabled versions of the reported cash-credit rule now refuse authenticated app admission, shared preflight and actual production psql bootstrap before any creation/grant mutation. Account counts/cash and empty creation journals remain unchanged. Hostile rules exist only in the guarded disposable schema and fixture-finally teardown removes them.
+- **CR-02 — Implicit database-owner schema authority:** With public owned by pg_database_owner, a runtime database owner has effective schema CREATE through implicit membership. Shared and production preflight now reject app/scheduler/migrator/operator ownership of the current database or public schema and explicitly test effective has_schema_privilege(...,'public','CREATE') for both runtime roles. Tests temporarily assign the disposable database to app and scheduler, independently prove effective CREATE is true, and require authenticated admission/shared/production refusal. Explicit finally cleanup restores database/schema ownership. Valid birja_test administrative ownership and pg_database_owner schema ownership with an administrative database owner remain admitted.
+
+**Repair commits:**
+
+1. `d026a71` — RED: reproduce rewrite and implicit ownership admission gaps. All8 new fresh/upgraded negative cases failed because unsafe current admission incorrectly succeeded; no scaffold/mock substitutes for these PostgreSQL reproductions.
+2. `5f5d087` — GREEN: reject rewrite and implicit ownership authority drift. Exactly12 matching guard lines are added to shared and production preflight. Frozen0017 literals, both expected0020 fingerprints and all migration/SQL source pins remain unchanged.
+
+**Final-source verification:**
+
+`env -i PATH="$PATH" HOME=/tmp ENV=test PRICE_SOURCE=fake EMAIL_BACKEND=console .venv/bin/python -m pytest tests/test_portfolio_management_grants.py -k 'unexpected_grant_rewrite or implicit_database_owner or valid_administrative' -x --tb=short`
+
+**12passed in32.91s:**eight blocker negatives and four valid-owner cases.
+
+`env -i PATH="$PATH" HOME=/tmp ENV=test PRICE_SOURCE=fake EMAIL_BACKEND=console .venv/bin/python -m pytest tests/test_portfolio_management_admission.py tests/test_portfolio_management_grants.py -x --tb=short`
+
+**90passed in214.31s:**15 admission and75 grants cases at final repaired source. This reruns all affected retained literal/source, runtime/financial-role, fresh/upgraded bootstrap, production psql, drift and new review regressions. Changed-file Ruff lint/format, two-module mypy and git diff checks pass. No full-phase campaign or new TLS/recovery qualification is claimed.
+
+**Updated current source hashes:** The following supersede only the two corresponding pre-review handoff hashes above. All other listed source hashes and both0020 catalogue/ACL constants remain unchanged.
+
+- `portfolio_bootstrap.py`: `2429e45f08d72e7adf0dc816e0d5093642a92d8317bff0ad1c74d0cede7212df`
+- `deploy/db/bootstrap-roles.sql`: `58a943a3887d4a53acfa798b48a3812ea7f6655324823634f9aabbb7af5a0854`
+
+Owned birja-p13-03-review labels were checked before teardown; its containers, network and volume queries are empty afterward. No unowned source/global planning files, dependency/pin, provider, private environment, production, push or merge operation occurred. The Plan15 fixture-inventory and later recovery/TLS limits above remain in force.
+
+### Repair Self-Check: PASSED
+
+All eight declared implementation/test files and both repair commits exist. Actual RED precedes GREEN. The full affected90-case regression and focused12-case proof pass. Prior migration/SQL bytes and retained0017 literals remain unchanged. No tracked files were deleted; parent-owned review metadata and unrelated.claude are preserved. Ready for parent independent re-review.
