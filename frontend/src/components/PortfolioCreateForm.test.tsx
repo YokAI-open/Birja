@@ -26,17 +26,35 @@ it("does not consume an earlier resolved receipt when opening a fresh creation",
   expect(onCreated).not.toHaveBeenCalled();
   expect(screen.getByLabelText("Portfolio name")).toHaveValue("");
 });
-it("focuses a linked server error summary", () => {
-  show({
+it("focuses a new linked server error summary", () => {
+  const view = show();
+  fireEvent.change(screen.getByLabelText("Portfolio name"), { target: { value: "Duplicate" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create portfolio" }));
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
     creation: {
       phase: "editing",
       attempt: null,
       error: new PortfolioManagementError("refused", "name_taken", 409),
     },
-  });
+  } as ReturnType<typeof usePortfolioManagement>);
+  view.rerender(<QueryClientProvider client={new QueryClient()}><PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} /></QueryClientProvider>);
   expect(screen.getByRole("alert")).toHaveFocus();
   fireEvent.click(screen.getByRole("link", { name: "Review portfolio name" }));
   expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
+});
+it("discards an old definitive duplicate error when reopening a fresh draft", () => {
+  const refusal = new PortfolioManagementError("refused", "name_taken", 409);
+  const first = show();
+  fireEvent.change(screen.getByLabelText("Portfolio name"), { target: { value: "Duplicate" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create portfolio" }));
+  first.unmount();
+  const reopened = show({ creation: { phase: "editing", attempt: null, error: refusal } });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
+  expect(screen.getByLabelText("Portfolio name")).toHaveValue("");
+  expect(screen.getByLabelText("Portfolio name")).not.toHaveAccessibleDescription(/already have an active/);
+  reopened.unmount();
 });
 it.each([true, false])("publishes only a current captured receipt (%s)", (current) => {
   const onCreated = vi.fn();
