@@ -1,11 +1,12 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T16:32:06Z
+reviewed: 2026-11-18T17:22:38Z
 depth: standard
 diff_base: 61e14af
 reviewed_scope: committed backend/tests changes at acbcd4e and 203815f
 reviewed_head: 203815f
 runtime_resolution_reviewed_head: 99166d9
+subsequent_test_only_reviewed_head: 5dc6c45
 scope_sha256: c6eb3f6619a13b459b2e48d6f915a72684fa85db8999b7c2b06f354bb38b2863
 files_reviewed: 35
 files_reviewed_list:
@@ -204,4 +205,31 @@ test deltas without rewriting that historical scope hash or claiming concurrent
 test execution. It resolves CR-02 as documented above.
 
 _Independent gsd-code-reviewer; no commit created._
+
+## Final Bootstrap ACL Refusal Regression — 5dc6c45
+
+**Disposition: clean, no new findings.** Independently reviewed the23-line
+test-only addition to `backend/tests/test_dev_bootstrap.py:186`. It calls the
+public bootstrap path with the real `_authorize_portfolios` implementation and
+an existing mocked driver protocol. It supplies a valid current0020 revision
+but an incorrect resulting ACL hash, then requires the exact failure message,
+canonical preflight and grants execution in order, evaluation of the exact
+ACL query, propagation of ValueError through the transaction context exit and
+connection close. The authorizer itself is not replaced by a mock raising the
+expected error. This is a meaningful negative authorization/cleanup regression,
+not an assertion that code was merely executed.
+
+The mocked transaction assertion establishes exception propagation to the
+driver context; it does not itself prove a real PostgreSQL rollback. The
+existing real-driver final SQL/privilege test remains intact. No gate, runtime
+source, financial expectation, fixture fingerprint, coverage threshold or
+historical test was changed. This source addition is outside the UI packet's
+render-input inventory and changes no rendered behavior.
+
+Verified the committed test and raw focused-log hashes against
+`/tmp/birja-p13-dev-bootstrap-focused-receipt.json`; the log records48pass in2.84s
+and dev_bootstrap116statements/56branches at100%. No command was rerun by this
+reviewer. The preceding full campaign stopped at critical coverage after its
+backend suite; this focused result does not convert that failed campaign into
+a complete pass. A new complete final qualification remains required.
 

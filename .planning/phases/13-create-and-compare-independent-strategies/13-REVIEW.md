@@ -1,10 +1,10 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T16:32:06Z
+reviewed: 2026-11-18T17:22:38Z
 depth: standard
 diff_base: 7125fec
-reviewed_head: 99166d9
-files_reviewed: 66
+reviewed_head: 5dc6c45
+files_reviewed: 67
 files_reviewed_list:
   - .github/workflows/ci.yml
   - CLAUDE.md
@@ -72,6 +72,7 @@ files_reviewed_list:
   - frontend/src/pages/TradeRenameRecovery.test.tsx
   - backend/tests/test_portfolio_management_grants.py
   - backend/tests/test_portfolio_strategy_events.py
+  - backend/tests/test_dev_bootstrap.py
 findings:
   critical: 0
   warning: 0
@@ -243,3 +244,18 @@ source-bound evidence before final qualification. No provider, production,
 dependency or publication operation occurred.
 
 _Reviewer: independent gsd-code-reviewer; no commit created._
+
+## Subsequent Test-Only Review — 5dc6c45
+
+Reviewed the23-line public bootstrap wrong-ACL regression. It keeps the real
+final authorizer and requires its refusal after canonical preflight/grants,
+the exact ACL query, transaction-exit ValueError and connection close. Driver
+I/O is mocked using the existing test protocol; no real rollback is claimed
+from this unit test. Existing real-driver coverage is retained. No new defect
+or oracle weakening found. This adds one explicitly reviewed test path to the
+cumulative list (67files); the35-file fixture record remains separately bound.
+Verified the focused receipt's committed source and raw-log hashes:
+48pass2.84s, module116statements/56branches100%. This reviewer ran no tests.
+The prior whole campaign failed at critical coverage and is not relabelled
+successful; remaining full security/image/browser/recovery outcomes are pending.
+See `13-17-FIXTURE-REVIEW.md` for detailed disposition and measurement limits.

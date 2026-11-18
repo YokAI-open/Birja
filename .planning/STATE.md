@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 Plans01–16 complete;17 actual campaigns restarting at reviewed runtime99166d9. Whole attempt1 failed on stale current-schema fixtures; broad interrupted diagnostic exposed and reproduced real CR02 owner/FK deadlock. Test repairsacbcd4e, RED203815f, runtimeGREEN99166d9;70focused+33contracts and clean independent review, measured1172catalogue records only3definitions differ/ACL unchanged. Final packet724607e8...20cases/72states/120layouts passes, allfrontend inputs unchanged; ownerUI/native200 accepted and UAT source-associated. Security56/58closed, only2actualcampaigns pending. No final fullsecurity/recovery pass yet. Phase7sixlivegaps and exactissue35risk remain tracked; keep local.
+Current focus: Phase13 Plans01–16 complete;17 actual whole campaigns continuing. Campaign2 all3342backend tests pass2226.18s/overall99.84%, but critical61 gate failed onlydev_bootstrap finalACLrefusal line108/branch107→108. Test-only5dc6c45 adds meaningful wrongfinalACL/transactionexit/connectionclose regression;48focused pass/module116statements56branches100%, clean independent re-review. App runtime remains99166d9, current packet724607e8...valid; no recapture needed forbackendtest-onlychange. Wholecampaign3 must rerun, prior2failed notcomposed. Allsource/securitygates unchanged; ownerUI/native200 saved, security2actualcampaignrecords pending. Keep local; Phase7livegaps/issue35risk retained.
 
 ## Current Position
 
