@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0017"
+EXPECTED_HEAD = "0020"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -57,6 +57,8 @@ MIGRATION_TABLES = frozenset(
         "stock_dividend_payments",
         "stock_dividend_decisions",
         "portfolio_stock_closures",
+        "portfolio_creations",
+        "portfolio_initializations",
     }
 )
 MIGRATION_FUNCTIONS = frozenset(
@@ -74,6 +76,13 @@ MIGRATION_FUNCTIONS = frozenset(
         "check_stock_split_digest_version()",
         "check_portfolio_financial_write()",
         "lock_stock_portfolio_roots(bigint)",
+        "portfolio_display_name(text)",
+        "portfolio_name_key(text)",
+        "portfolio_description(text)",
+        "check_portfolio_management_metadata()",
+        "create_portfolio(bigint,uuid,text,text)",
+        "initialize_portfolio(bigint)",
+        "update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)",
     }
 )
 _MIGRATOR_PASSWORD = secrets.token_hex(32)
@@ -254,6 +263,27 @@ async def ensure_dividend_test_owner() -> None:
         await engine.dispose()
 
 
+async def install_current_test_grants() -> None:
+    """Explicit test bootstrap after final migration; partial revisions never admit app."""
+    from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+
+    test_migration_url()
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
+            )
+            await conn.execute(text(PREFLIGHT_SQL))
+            raw = await conn.get_raw_connection()
+            await raw.driver_connection.execute(GRANTS_SQL)
+            for role in ("birja_app", "birja_scheduler"):
+                password = secrets.token_hex(32)
+                await conn.execute(text(f"ALTER ROLE {role} LOGIN PASSWORD '{password}'"))  # noqa: S608
+    finally:
+        await engine.dispose()
+
+
 def _config() -> Config:
     return Config(str(BACKEND_DIR / "alembic.ini"))
 
@@ -307,13 +337,21 @@ async def test_current_fixture_installs_exact_restricted_authority(engine, migra
     async with engine.connect() as conn:
         assert await require_schema(conn) == "0020"
         assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0020_SHA256
-        roles = (await conn.execute(text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,
+        roles = (
+            await conn.execute(
+                text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,
             rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles
             WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator')
-            ORDER BY rolname"""))).all()
+            ORDER BY rolname""")
+            )
+        ).all()
         assert len(roles) == 3
         assert all(row[1] and not any(row[2:]) for row in roles)
-        assert not (await conn.execute(text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one()
+        assert not (
+            await conn.execute(
+                text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'")
+            )
+        ).scalar_one()
 
 
 async def test_populated_history_index_roundtrip(retained_migration_db) -> None:

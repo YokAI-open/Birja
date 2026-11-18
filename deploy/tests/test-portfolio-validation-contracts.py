@@ -42,7 +42,8 @@ class CurrentCampaign(unittest.TestCase):
     def test_recovery_dispatch_keeps_retained_and_actual_current_modes(self):
         calls = []
         from types import SimpleNamespace
-        ops = SimpleNamespace(roundtrip=lambda path: calls.append(("legacy", path)),
+        ops = SimpleNamespace(image_transition=lambda: None,
+                              roundtrip=lambda path: calls.append(("legacy", path)),
                               roles=lambda: calls.append(("roles",)),
                               tls=lambda **kw: calls.append(("legacy-tls", kw)))
         smoke = SimpleNamespace(run=lambda **kw: calls.append(("smoke", kw)) or "authority")
@@ -54,6 +55,7 @@ class CurrentCampaign(unittest.TestCase):
             graph["tls-fresh"]()
         modes = [call[1] for call in calls if call[0] == "smoke"]
         self.assertEqual(modes[0]["revision"], "0017")
+        self.assertTrue(modes[0]["cold"])
         self.assertEqual(modes[1]["revision"], "0020")
         self.assertTrue(modes[1]["cold"])
         self.assertFalse(modes[2]["fresh_bootstrap"])
@@ -85,6 +87,19 @@ class CurrentCampaign(unittest.TestCase):
                 for path in ("/tmp/birja-phase13-proof/other.tar", "/tmp/birja-phase13-proof-extra/recovery.tar.gz"):
                     with self.assertRaises(ValueError):
                         recovery.synthetic_path(path, False)
+
+    def test_security_source_drift_stops_and_cleans_owned_stack(self):
+        from types import SimpleNamespace
+        calls = []
+        def command(argv, **kwargs):
+            calls.append(argv)
+            return SimpleNamespace(stdout=b'')
+        with patch.object(runner, 'security_sources', side_effect=[{'fixed': 'a'}, {'changed': 'b'}]), \
+             patch.object(runner, 'security_commands', return_value=[('.', ['bounded-probe'])]):
+            with self.assertRaisesRegex(ValueError, 'source changed'):
+                runner.execute_security(run=command)
+        self.assertNotIn(['bounded-probe'], calls)
+        self.assertEqual(calls[-1], runner.STACK + ['down', '-v'])
 
 
 if __name__ == "__main__":

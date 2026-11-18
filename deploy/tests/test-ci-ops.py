@@ -81,19 +81,19 @@ def recovery_policy(ops, runner_source=None):
     tree = ast.parse(source)
     constants = {node.targets[0].id: node.value for node in tree.body
                  if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)}
-    expected = ("image-transition", "retained-roundtrip", "current0017-cold", "roles",
+    expected = ("image-transition", "retained-roundtrip", "current0020-cold", "roles",
                 "tls-upgraded", "tls-fresh", "selected-rollback")
     if ast.literal_eval(constants["STAGES"]) != expected:
         raise ValueError("missing or reordered serial stage")
     for required in (
-        "ops.r.bundle_package(ARCHIVE)", "ops.r.bundle_verify(ARCHIVE, expected",
-        "ops.bind_source_archive(ARCHIVE, expected)", "ops.roundtrip(ARCHIVE)",
-        "cold=True", "ops.roles", "fresh_bootstrap=True", "--recovery-bundle",
+        "ops.package_current_archive(ARCHIVE)", "ops.r.bundle_verify(ARCHIVE, expected",
+        "ops.bind_source_archive(ARCHIVE, expected)", "ops.roundtrip(archive)",
+        "cold=True", "ops.roles", "fresh_bootstrap=fresh", "--recovery-bundle",
         "authenticate(ops, ARCHIVE, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V1", "RETAINED_SOURCE_PAYLOADS",
-        "Path(\"/tmp/birja-phase12-proof/recovery.tar.gz\")",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V2", "RETAINED_SOURCE_PAYLOADS",
+        "Path(\"/tmp/birja-phase13-proof/recovery.tar.gz\")",
     ):
         if required not in source:
             raise ValueError("missing source-frozen graph: " + required)
@@ -538,8 +538,8 @@ class CI(unittest.TestCase):
         recovery_policy(ops)
         source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
         for old in (
-            "ops.r.bundle_package(ARCHIVE)", "ops.roundtrip(ARCHIVE)",
-            "cold=True", "fresh_bootstrap=True", "--recovery-bundle",
+            "ops.package_current_archive(ARCHIVE)", "ops.roundtrip(archive)",
+            "cold=True", "fresh_bootstrap=fresh", "--recovery-bundle",
             "verify_archive_binding(archive, expected)", "verify_image(binding, inspect)",
             "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
             "source != {name: ops.r.digest(ROOT / name) for name in source}",
@@ -872,14 +872,14 @@ class PortfolioValidation(unittest.TestCase):
             self.assertIn("run: " + shlex.join(argv), ci["frontend"])
         self.assertEqual(commands[13], [".", ["python3", "deploy/tests/run-stock-browser.py"]])
         self.assertEqual([argv[argv.index("--target") + 1] for _, argv in commands if argv[:2] == ["docker", "build"]],
-                         ["test-builder", "runtime", "toolchain"])
+                         ["test-builder", "runtime", "toolchain", "test-builder"])
         scan = commands[-1][1]
         self.assertEqual(scan[0:4], ["python3", "deploy/scan-images.py", "--output", "image-reports"])
         self.assertEqual(scan[4::2], ["--runtime", "--builder", "--postgres", "--redis", "--node"])
-        self.assertEqual(len(backend[4][4].split(",")), 60)
+        self.assertEqual(len(backend[4][4].split(",")), 61)
         recovery = json.loads(subprocess.check_output([sys.executable, str(ROOT / "deploy/tests/run-portfolio-validation.py"),
             "--suite", "recovery", "--dry-run"]))
-        self.assertEqual(recovery, {"archive": "/tmp/birja-phase12-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
+        self.assertEqual(recovery, {"archive": "/tmp/birja-phase13-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
 
     def test_security_failures_propagate_and_owned_stack_always_cleans(self):
         runner = self.runner()
@@ -935,8 +935,7 @@ class PortfolioValidation(unittest.TestCase):
             wanted = ["authenticate"]
             for name in runner.STAGES[:count]:
                 wanted.append(name)
-                if name != failed:
-                    wanted.append("authenticate")
+                wanted.append("authenticate")
             self.assertEqual(events, wanted)
         with self.assertRaisesRegex(ValueError, "authority differs"):
             runner.execute_stages({name: (lambda name=name: name) for name in runner.STAGES}, lambda: None)
@@ -972,7 +971,7 @@ class PortfolioValidation(unittest.TestCase):
                 (root / "current.py").write_bytes(b"current-app")
                 content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
                            "sources/retained.tar": b"changed" if mutation == "retained" else b"fixed-retained",
-                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 2 if mutation == "inventory" else 1}}).encode()}
+                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 1 if mutation == "inventory" else 2}}).encode()}
                 with tarfile.open(archive, "w") as tar:
                     for name, data in content.items():
                         info = tarfile.TarInfo(name)
@@ -985,7 +984,7 @@ class PortfolioValidation(unittest.TestCase):
                 if mutation == "source":
                     (root / "current.py").write_bytes(b"changed")
                 actual_image = inspect if mutation != "image" else [{**inspect[0], "RootFS": {"Type": "layers", "Layers": []}}]
-                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V1=[],
+                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V2=[],
                     RETAINED_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
                     digest=r.digest, sha_bytes=r.sha_bytes, private=r.private, call=lambda argv: json.dumps(actual_image))
                 ops = SimpleNamespace(r=fake_r, portfolio_sources=lambda: sources)
@@ -1144,11 +1143,13 @@ class FixtureGitIsolation(unittest.TestCase):
 
 def load_tests(loader, tests, pattern):
     """Keep fresh-runner current-image regressions in the existing CI gate."""
-    path = Path(__file__).with_name("test-portfolio-smoke-image.py")
-    spec = importlib.util.spec_from_file_location("portfolio_smoke_image_contracts", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    tests.addTests(loader.loadTestsFromModule(module))
+    for filename in ("test-portfolio-smoke-image.py", "test-portfolio-validation-contracts.py",
+                     "test-portfolio-browser-contracts.py"):
+        path = Path(__file__).with_name(filename)
+        spec = importlib.util.spec_from_file_location(filename.replace('-', '_'), path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        tests.addTests(loader.loadTestsFromModule(module))
     return tests
 
 

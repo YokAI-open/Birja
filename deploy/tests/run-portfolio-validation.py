@@ -7,6 +7,7 @@ remains the uncompressed, strict-member USTAR used by older consumers.
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -16,8 +17,8 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ARCHIVE = Path("/tmp/birja-phase12-proof/recovery.tar.gz")
-STAGES = ("image-transition", "retained-roundtrip", "current0017-cold",
+ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
+STAGES = ("image-transition", "retained-roundtrip", "current0020-cold",
           "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
 STACK = ["docker", "compose", "--env-file", "/dev/null", "-f", "docker-compose.test.yml"]
 PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
@@ -35,6 +36,7 @@ def load(name):
 def environment():
     return {**{k: os.environ[k] for k in ("PATH", "HOME", "LANG") if k in os.environ},
             "COMPOSE_DISABLE_ENV_FILE": "1", "ENV": "test", "PRICE_SOURCE": "fake",
+            "UV_NO_SYNC": "1", "UV_OFFLINE": "1",
             "EMAIL_BACKEND": "console", "DATABASE_URL": "postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test",
             "REDIS_URL": "redis://:test@127.0.0.1:56379/0",
             "OTP_HMAC_SECRET": "synthetic-only-validation-otp-" + "x" * 32,
@@ -65,11 +67,26 @@ def security_commands():
                  (".", ["python3", "deploy/scan-images.py", "--output", "image-reports",
                         "--runtime", "birja-backend-runtime:ci", "--builder", "birja-backend-test:ci",
                         "--postgres", PG, "--redis", REDIS, "--node", "birja-node-toolchain:ci"])]
+    # The CI image/ops contract gates remain part of the whole security graph.
+    commands[-1:-1] = [(".", ["python3", "deploy/tests/" + name + ".py"]) for name in (
+        "test-image-contracts", "test-ci-ops", "test-portfolio-browser-contracts",
+        "test-portfolio-validation-contracts")]
+    commands[-1:-1] = [(".", shlex.split(command)) for command in (
+        "bash deploy/tests/test-backup.sh", "bash deploy/tests/test-deploy-compatibility.sh",
+        "python3 deploy/tests/test-selected-cutover-contracts.py", "bash deploy/tests/test-restore-safety.sh",
+        "bash deploy/tests/test-db-config.sh", "python3 deploy/tests/test-deploy-prerequisites.py",
+        "python3 deploy/tests/test-datastore-bindings.py", "bash deploy/tests/test-reexec.sh",
+        "bash deploy/tests/test-rollback-target.sh", "bash deploy/tests/test-app-services.sh",
+        "bash deploy/tests/test-smoke-ports.sh", "bash deploy/tests/test-smoke-trading.sh",
+        "bash deploy/check-nginx-config.sh", "python3 deploy/tests/test-stock-recovery-contracts.py --postgres",
+        "docker build --target test-builder -t birja-backend-test:phase05-07 backend",
+        "python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07")]
     return commands
 
 
 def execute_security(run=subprocess.run):
     env = environment()
+    frozen = security_sources()
     # Refuse to adopt somebody else's running test stack; cleanup is ours only.
     existing = run(STACK + ["ps", "-q"], cwd=ROOT, env=env, capture_output=True, check=True)
     if existing.stdout.strip():
@@ -77,19 +94,31 @@ def execute_security(run=subprocess.run):
     try:
         run(STACK + ["up", "-d", "--wait"], cwd=ROOT, env=env, check=True)
         for directory, argv in security_commands():
+            if security_sources() != frozen:
+                raise ValueError("security campaign source changed")
             if argv[:2] == ["python3", "deploy/scan-images.py"]:
                 argv = argv.copy()
                 for flag in ("--runtime", "--builder", "--node"):
                     index = argv.index(flag) + 1
                     argv[index] = run(["docker", "image", "inspect", argv[index], "--format", "{{.Id}}"],
                         cwd=ROOT, env=env, capture_output=True, check=True).stdout.decode().strip()
-            run(argv, cwd=ROOT / directory, env=env, check=True)
+            try:
+                run(argv, cwd=ROOT / directory, env=env, check=True)
+            finally:
+                if security_sources() != frozen:
+                    raise ValueError("security campaign source changed")
     finally:
         run(STACK + ["down", "-v"], cwd=ROOT, env=env, check=True)
 
 
+def security_sources():
+    names = subprocess.check_output(['git', 'ls-files', 'backend', 'frontend', 'deploy',
+        'nginx', '.github', 'CLAUDE.md', 'docker-compose*.yml'], cwd=ROOT).decode().splitlines()
+    return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in names}
+
+
 def campaign_sources(ops):
-    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V1
+    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V2
     # Complete current application input, separate from fixed retained sources.
     tracked = subprocess.check_output(["git", "ls-files", "backend", "deploy", "docker-compose.ops-test.yml"], cwd=ROOT).decode().splitlines()
     return {name: ops.r.digest(ROOT / name) for name in sorted(set(names + tracked))}
@@ -101,9 +130,9 @@ def authenticate(ops, archive, expected, source, image_records=None):
         raise ValueError("current campaign source changed")
     with tarfile.open(archive, "r:") as retained:
         inventory = json.load(retained.extractfile("INVENTORY.json"))
-        if inventory.get("portfolio_payload", {}).get("version") != 1:
+        if inventory.get("portfolio_payload", {}).get("version") != 2:
             raise ValueError("current campaign requires successor inventory")
-        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V1:
+        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V2:
             if retained.extractfile(name).read() != (ROOT / name).read_bytes():
                 raise ValueError("packaged/current source substitution")
         for name, digest in ops.r.RETAINED_SOURCE_PAYLOADS.items():
@@ -128,10 +157,49 @@ def execute_stages(operations, guard):
     results = {}
     guard()
     for name in STAGES:
-        results[name] = operations[name]()
-        guard()
+        try:
+            results[name] = operations[name]()
+        finally:
+            guard()
     if results["tls-upgraded"] != results["tls-fresh"]:
         raise ValueError("fresh/upgraded TLS authority differs")
+
+
+def recovery_operations(ops, archive, expected):
+    smoke = load("portfolio-smoke")
+
+    def retained():
+        ops.roundtrip(archive)
+        # Complete immutable0017 is a real source/image/TLS lane, never HEAD.
+        smoke.run(archive=archive, archive_sha=expected, revision="0017", cold=True)
+
+    def tls(fresh):
+        # Preserve every legacy transport/role refusal before current authority.
+        ops.tls(fresh_bootstrap=fresh)
+        return smoke.run(archive=archive, archive_sha=expected, revision="0020",
+                         fresh_bootstrap=fresh)
+
+    def roles():
+        ops.roles()
+        smoke.run(archive=archive, archive_sha=expected, revision="0020")
+
+    def rollback():
+        subprocess.run(["bash", str(ROOT / "deploy/tests/test-rollback-db-security.sh"),
+            "--recovery-bundle", str(archive)], cwd=ROOT, env=environment(), check=True)
+        # New-schema unsupported old writers must refuse against an actual
+        # current server using the authenticated immutable0017 image/consumer.
+        smoke.run(archive=archive, archive_sha=expected, revision="0020")
+
+    return {
+        "image-transition": ops.image_transition,
+        "retained-roundtrip": retained,
+        "current0020-cold": lambda: smoke.run(archive=archive, archive_sha=expected,
+                                               revision="0020", cold=True),
+        "roles": roles,
+        "tls-upgraded": lambda: tls(False),
+        "tls-fresh": lambda: tls(True),
+        "selected-rollback": rollback,
+    }
 
 
 def execute_recovery():
@@ -139,22 +207,30 @@ def execute_recovery():
     # Exclusive directory ownership prevents silently reusing an earlier run.
     ARCHIVE.parent.mkdir(mode=0o700)
     ops.r.private(ARCHIVE.parent, True)
-    ops.r.bundle_package(ARCHIVE)
+    ops.package_current_archive(ARCHIVE)
     expected = ops.r.digest(ARCHIVE)
-    ops.r.bundle_verify(ARCHIVE, expected, required_profile="deploy-recovery-v2")
+    ops.r.bundle_verify(ARCHIVE, expected, required_profile="deploy-recovery-v3")
     source = campaign_sources(ops)
     image_records = {}
     ops.bind_source_archive(ARCHIVE, expected)
-    execute_stages({
-        "image-transition": ops.image_transition,
-        "retained-roundtrip": lambda: ops.roundtrip(ARCHIVE),
-        "current0017-cold": lambda: load("portfolio-smoke").run(archive=ARCHIVE, archive_sha=expected, cold=True),
-        "roles": ops.roles,
-        "tls-upgraded": ops.tls,
-        "tls-fresh": lambda: ops.tls(fresh_bootstrap=True),
-        "selected-rollback": lambda: subprocess.run(["bash", str(ROOT / "deploy/tests/test-rollback-db-security.sh"),
-            "--recovery-bundle", str(ARCHIVE)], cwd=ROOT, env=environment(), check=True),
-    }, lambda: authenticate(ops, ARCHIVE, expected, source, image_records))
+    status = {"ok": False, "archive_sha256": expected, "stages": {}}
+    status_path = ARCHIVE.parent / "status.json"
+    operations = recovery_operations(ops, ARCHIVE, expected)
+    def recorded(name):
+        def execute():
+            status["current_stage"] = name
+            status_path.write_text(json.dumps(status, sort_keys=True))
+            result = operations[name]()
+            status["stages"][name] = "operation-returned"
+            return result
+        return execute
+    try:
+        execute_stages({name: recorded(name) for name in STAGES},
+                       lambda: authenticate(ops, ARCHIVE, expected, source, image_records))
+        status["ok"] = True
+        status["stages"] = dict.fromkeys(STAGES, "passed-authenticated")
+    finally:
+        status_path.write_text(json.dumps(status, sort_keys=True))
     print("same_archive_final_ci=true sha256=" + expected, flush=True)
 
 

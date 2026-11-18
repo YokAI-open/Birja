@@ -81,9 +81,12 @@ def provision_test_migration_owner(dividend_owner_prerequisite: None) -> None:
 
 @pytest.fixture(scope="session")
 def migrated() -> None:
-    from tests.test_migrations import run_test_migration
+    import asyncio
+
+    from tests.test_migrations import install_current_test_grants, run_test_migration
 
     run_test_migration("head")
+    asyncio.run(install_current_test_grants())
 
 
 @pytest_asyncio.fixture(scope="session")

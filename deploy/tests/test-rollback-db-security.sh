@@ -43,7 +43,7 @@ def options(argv):
         assert a.recovery_bundle
         archive = r.synthetic_path(a.recovery_bundle)
         sha = r.private(str(archive) + '.sha256').read_text().strip()
-        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v2')
+        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v3')
     return a
 
 

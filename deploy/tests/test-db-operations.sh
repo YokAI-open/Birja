@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # --backup-restore, --dividend-sql, --roles, --tls, --tls-pair and --all are serial modes.
 # --dividend-sql is a focused genuine scheduler SQL plus quarantined clone proof.
-# --all performs retained0007–0014 backup/restore, restricted roles, then TLS.
+# --all is a retained0007–0014 diagnostic, with the current V2 recovery tools.
+# Final current0020 + complete immutable0017 qualification uses the seven-stage
+# run-portfolio-validation.py --suite recovery graph and one Phase13 archive.
 # Both --roles and --all also run the genuine calendar evaluator over persisted
 # app-role reads and scheduler writes with verified TLS, in populated and fresh lanes.
 # The producer owns

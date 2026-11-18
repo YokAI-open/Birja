@@ -138,7 +138,8 @@ def synthetic_path(path, exists=True):
         len(p.parts) >= 4
         and p.parts[1] == "tmp"
         and (p.parts[2].startswith("birja-backup-test-")
-             or p == Path("/tmp/birja-phase12-proof/recovery.tar.gz"))
+             or p in (Path("/tmp/birja-phase12-proof/recovery.tar.gz"),
+                      Path("/tmp/birja-phase13-proof/recovery.tar.gz")))
     )
     private(Path(*p.parts[:3]), True)
     for component in [p, *list(p.parents)[:-1]]:
@@ -556,6 +557,7 @@ def verify_portfolio_inventory(inventory, expected):
     """An absent field is legacy; a present field has no permissive fallback."""
     if "portfolio_payload" in inventory:
         files = portfolio_payload_files(inventory)
+        require(all(name in expected for name in files))
         payload = {'version': inventory['portfolio_payload']['version'], 'sha256':
                    {name: expected[name] for name in files}}
         if payload['version'] == 2:
@@ -761,7 +763,7 @@ def bundle(args):
     p.add_argument("--output")
     p.add_argument("--synthetic-root")
     p.add_argument("--include-units", action="store_true")
-    p.add_argument("--require-profile", choices=["deploy-recovery-v2"])
+    p.add_argument("--require-profile", choices=["deploy-recovery-v2", "deploy-recovery-v3"])
     a = p.parse_args(args)
     if a.mode == "package":
         require(a.output and not a.archive and not a.sha and not a.synthetic_root)

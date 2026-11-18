@@ -32,6 +32,14 @@ def source_git(*args):
     return r.call(["git", "-c", "safe.directory=" + str(ROOT), "-C", str(ROOT), *args])
 
 
+def package_current_archive(archive):
+    """Use the explicit successor producer; the old V1 packager stays immutable."""
+    spec = importlib.util.spec_from_file_location('current_bundle_producer', ROOT / 'deploy/backup-snapshot.py')
+    producer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(producer)
+    producer.bundle_package_v2(archive, recovery=r)
+
+
 SEED = r"""
 import asyncio, uuid
 from datetime import datetime, UTC
@@ -180,7 +188,7 @@ def options(args):
     if a.recovery_bundle:
         archive = r.synthetic_path(a.recovery_bundle)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v2")
+        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v3")
     return a
 
 
@@ -359,9 +367,9 @@ def installed_recovery(archive_arg=None):
         root.chmod(0o700)
         archive = Path(archive_arg) if archive_arg else root / "recovery.tar"
         if not archive_arg:
-            r.bundle_package(archive)
+            package_current_archive(archive)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v2")
+        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v3")
         bind_source_archive(archive, sha)
         old = root / "old"
         old.mkdir(mode=0o700)
@@ -400,7 +408,7 @@ def installed_recovery(archive_arg=None):
                 "--sha",
                 sha,
                 "--require-profile",
-                "deploy-recovery-v2",
+                "deploy-recovery-v3",
                 "--synthetic-root",
                 str(root / "host"),
             ],
@@ -550,9 +558,9 @@ def selected_source_archive():
     if _SELECTED_ARCHIVE is None:
         _STANDALONE_ARCHIVE = tempfile.TemporaryDirectory(prefix='birja-backup-test-source-')
         archive = Path(_STANDALONE_ARCHIVE.name) / 'recovery.tar'
-        r.bundle_package(archive)
+        package_current_archive(archive)
         sha = r.private(str(archive)+'.sha256').read_text().strip()
-        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v2')
+        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v3')
         bind_source_archive(archive, sha)
     archive, sha = _SELECTED_ARCHIVE
     portfolio_sources().verify_archive_binding(archive, sha)

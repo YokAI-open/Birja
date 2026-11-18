@@ -31,6 +31,14 @@ def browser_specs(suite):
     return ['e2e/' + name + '.spec.ts' for name in selections[suite]]
 
 
+def require_browser_specs(specs, *, directory=None):
+    directory = directory or ROOT / 'frontend'
+    for name in specs:
+        path = directory / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('missing or unsafe required browser journey: ' + name)
+
+
 def source_snapshot():
     """Bind rendered review evidence to actual source, including uncommitted files."""
     paths = [ROOT / 'frontend/package-lock.json', ROOT / 'backend/uv.lock', Path(__file__),
@@ -77,6 +85,8 @@ def main():
     parser.add_argument("--review-dir", type=Path, help="Exclusive synthetic Phase12 review directory under /tmp")
     parser.add_argument("--grep", help="Optional bounded Playwright test-name selector")
     args = parser.parse_args()
+    required_specs = browser_specs(args.suite)
+    require_browser_specs(required_specs)
     source = source_snapshot()
     if args.grep is not None and (not args.grep or len(args.grep) > 256):
         parser.error("--grep must contain1..256 characters")
@@ -178,7 +188,7 @@ def main():
         "--workers=1",
         "--retries=0",
     ]
-    pw.extend(browser_specs(args.suite))
+    pw.extend(required_specs)
     if args.grep is not None:
         pw.extend(["--grep", args.grep])
 

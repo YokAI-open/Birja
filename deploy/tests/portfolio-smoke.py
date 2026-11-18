@@ -208,6 +208,11 @@ def management_role_program(code):
     checks = r"""
    if MODE=='verify':
     from sqlalchemy import text
+    from app.db.portfolio_bootstrap import CATALOGUE_SQL,ACL_SQL
+    async with engine.connect() as authority:
+     catalogue=(await authority.execute(text(CATALOGUE_SQL))).scalar_one()
+     acl=(await authority.execute(text(ACL_SQL))).scalar_one()
+     print('portfolio_authority='+json.dumps([catalogue,acl]))
     for role in ('app','scheduler'):
      client=create_async_engine(url.set(username='birja_'+role,password=os.environ['FIXTURE_'+role.upper()+'_PASSWORD']),connect_args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])})
      try:
@@ -230,7 +235,87 @@ def management_role_program(code):
     return code.replace(marker, checks + "\n" + marker, 1)
 
 
-def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
+def fresh_authority_program():
+    """Genuine empty-schema0020 migration and restricted TLS clients, no staged reset."""
+    return r"""
+MODE='create'
+import asyncio,json,os,ssl
+from uuid import uuid4
+from decimal import Decimal
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+async def run():
+ await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),'0020')
+ from app.db.portfolio_bootstrap import PREFLIGHT_SQL,GRANTS_SQL,CATALOGUE_SQL,ACL_SQL
+ from app.db.schema_contract import require_schema
+ url=make_url(os.environ['DATABASE_URL'])
+ args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])}
+ engine=create_async_engine(url,connect_args=args)
+ try:
+  async with engine.begin() as conn:
+   raw=await conn.get_raw_connection()
+   await raw.driver_connection.execute(PREFLIGHT_SQL)
+   await raw.driver_connection.execute(GRANTS_SQL)
+   uid=(await conn.execute(text("INSERT INTO users(email) VALUES ('fresh@example.test') RETURNING id"))).scalar_one()
+  for role in ('app','scheduler'):
+   client=create_async_engine(url.set(username='birja_'+role,password=os.environ['FIXTURE_'+role.upper()+'_PASSWORD']),connect_args=args)
+   try:
+    async with client.begin() as restricted:
+     assert await require_schema(restricted)=='0020'
+     assert (await restricted.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+     assert not (await restricted.execute(text("SELECT has_table_privilege(current_user,'accounts','INSERT')"))).scalar_one()
+     if role=='app':
+      key=uuid4()
+      original=(await restricted.execute(text("SELECT * FROM create_portfolio(:u,:k,'Fresh strategy','')"),{'u':uid,'k':key})).one()
+      replay=(await restricted.execute(text("SELECT * FROM create_portfolio(:u,:k,'Fresh strategy','')"),{'u':uid,'k':key})).one()
+      assert not original.replayed and replay.replayed and original.portfolio_id==replay.portfolio_id
+      assert (await restricted.execute(text('SELECT cash FROM accounts WHERE id=:p'),{'p':original.portfolio_id})).scalar_one()==Decimal('10000')
+     else:
+      assert not (await restricted.execute(text("SELECT has_function_privilege(current_user,'create_portfolio(bigint,uuid,text,text)','EXECUTE')"))).scalar_one()
+   finally:await client.dispose()
+  async with engine.connect() as conn:
+   catalogue=(await conn.execute(text(CATALOGUE_SQL))).scalar_one()
+   acl=(await conn.execute(text(ACL_SQL))).scalar_one()
+   assert (await conn.execute(text('SELECT count(*) FROM portfolio_creations'))).scalar_one()==1
+   print('portfolio_authority='+json.dumps([catalogue,acl]))
+   print('portfolio_projection='+json.dumps({'revision':'0020','fresh':True}))
+   print('portfolio_verified_tls=true')
+ finally:await engine.dispose()
+asyncio.run(run())
+"""
+
+
+def retained_writer_refusal_program():
+    return r"""
+import asyncio,os,ssl
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+async def run():
+ url=make_url(os.environ['DATABASE_URL']).set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD'])
+ engine=create_async_engine(url,connect_args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])})
+ try:
+  async with engine.connect() as conn:
+   revision=(await conn.execute(text('SELECT version_num FROM alembic_version'))).scalar_one()
+   session_user=(await conn.execute(text('SELECT session_user'))).scalar_one()
+   assert session_user=='birja_app'
+   if revision != '0020':raise ValueError('expected current schema before old consumer import')
+   from app.db.schema_contract import require_schema,SchemaAdmissionError
+   try:await require_schema(conn)
+   except SchemaAdmissionError:pass
+   else:raise AssertionError('retained0017 writer admitted current0020')
+   print('retained0017_current0020_write_refused=true')
+ finally:await engine.dispose()
+asyncio.run(run())
+"""
+
+
+def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bootstrap=False):
+    if fresh_bootstrap and (revision != "0020" or cold):
+        raise ValueError("fresh authority requires current0020 non-cold lane")
     sources = load("portfolio-sources")
     fixture = selected_fixture(
         sources, revision, archive=archive, archive_sha=archive_sha
@@ -431,8 +516,9 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
                 "FIXTURE_SCHEDULER_PASSWORD": passwords["scheduler"],
             }
 
+            authorities = []
             def transport(code):
-                if revision == "0020":
+                if revision == "0020" and not fresh_bootstrap:
                     code = management_role_program(code)
                 code = admitted_program(code, revision)
                 sources.verify_image(
@@ -462,6 +548,9 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
                     argv += ["-e", key + "=" + value]
                 argv += ["--entrypoint", "python", binding["id"], "-"]
                 output = call(argv, data=code.encode())
+                for line in output.splitlines():
+                    if line.startswith(b'portfolio_authority='):
+                        authorities.append(json.loads(line.split(b'=', 1)[1]))
                 rows = [
                     line.split(b"=", 1)[1]
                     for line in output.splitlines()
@@ -474,6 +563,12 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
                     raise AssertionError("missing actual verified TLS projection")
                 return json.loads(rows[0])
 
+            if fresh_bootstrap:
+                transport(fresh_authority_program())
+                if len(authorities) != 1:
+                    raise ValueError('missing measured fresh authority')
+                print('actual_current0020_fresh_tls_restricted_roles=true', flush=True)
+                return authorities[0]
             fixture.main(["create"], transport=transport)
             expected = root / "immutable-before.json"
             digest = fixture.main(
@@ -481,6 +576,20 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
             )
             expected.chmod(0o400)
             fixture.main(["verify"], transport=transport)
+            if revision == "0020" and archive is not None:
+                old_binding = build_selected_runtime(sources, env, revision="0017",
+                    archive=archive, archive_sha=archive_sha)
+                sources.record_image_binding(archive, 'retained0017-refusal', old_binding)
+                sources.verify_archive_binding(archive, archive_sha)
+                sources.verify_image(old_binding, json.loads(call(['docker', 'image', 'inspect', old_binding['id']])))
+                old_argv = ['docker', 'run', '--rm', '-i', '--network', client_network,
+                    '-v', str(root / 'db-tls/ca.crt') + ':/run/birja/db-ca.crt:ro']
+                for key, value in client_env.items():
+                    old_argv += ['-e', key + '=' + value]
+                old_argv += ['--entrypoint', 'python', old_binding['id'], '-']
+                refusal = call(old_argv, data=retained_writer_refusal_program().encode())
+                if b'retained0017_current0020_write_refused=true' not in refusal.splitlines():
+                    raise AssertionError('missing genuine retained writer refusal')
             fixture.main(
                 ["compare", "--snapshot", str(expected), "--expected-sha256", digest],
                 transport=transport,
@@ -601,6 +710,10 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020"):
                 + "_portfolio_tls_restricted_roles=true immutable_snapshot_compare=true",
                 flush=True,
             )
+            if revision == "0020":
+                if len(authorities) != 1:
+                    raise ValueError('missing measured upgraded authority')
+                return authorities[0]
         finally:
             call(dc + ["down", "-v", "--remove-orphans"], timeout=120)
             call(clone_dc + ["down", "-v", "--remove-orphans"], timeout=120)
