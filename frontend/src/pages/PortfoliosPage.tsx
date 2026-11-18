@@ -31,8 +31,10 @@ function Times({ row }: { row: PortfolioOverview }) {
           <>
             Oldest source <time dateTime={row.prices_as_of}>{timestamp(row.prices_as_of)}</time>
           </>
-        ) : (
+        ) : row.holdings.length === 0 ? (
           "No market prices needed."
+        ) : (
+          "Source time unavailable — refresh required."
         )}
       </p>
     </div>
@@ -167,6 +169,11 @@ export default function PortfoliosPage() {
         </div>
       ) : (
         <>
+          {!query.isError && (
+            <p role="status" aria-live="polite" className="sr-only">
+              {query.isFetching ? "Refreshing portfolios…" : "Portfolios updated."}
+            </p>
+          )}
           {query.isError && (
             <div role="alert" className="rounded-control bg-warn-soft p-4 text-warn-text">
               <p>
