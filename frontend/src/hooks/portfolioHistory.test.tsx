@@ -5,6 +5,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { PortfolioTarget } from "./usePortfolioTarget";
 import { useHistory } from "./useHistory";
 import { useEventHistory } from "./useEventHistory";
+import { usePortfolioTarget } from "./usePortfolioTarget";
+import { useTrade } from "./useTrade";
+import { useStockTrade } from "./useStockTrade";
+import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixtures";
 
 const alice = "alice@example.test",
   bob = "bob@example.test";
@@ -526,3 +530,57 @@ it.each(["trade", "mixed"] as const)(
     expect(ids(hook.result.current.data)).toEqual(expected(lane, ["9"]));
   },
 );
+
+it("invalidates the current owner comparison once for new attributable events without a refetch loop", async () => {
+  const {client, wrapper, target} = setup();
+  const t = target();
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(page("mixed", ["3"]))));
+  const invalidate = vi.spyOn(client,"invalidateQueries");
+  const hook = renderHook(() => useEventHistory(t.value),{wrapper});
+  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({queryKey:["portfolioOverview",alice,0],exact:true}));
+  invalidate.mockClear();
+  await act(async () => { await hook.result.current.refetch(); });
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+it.each(["crypto", "stock"] as const)("accepted real-target %s fill invalidates only its root and current owner overview", async (asset) => {
+  const {client, wrapper} = setup();
+  document.cookie = "bj_csrf=test; path=/";
+  const crypto = {portfolio_id:"1",trade_id:17, created_at:stamp,symbol:"BTC",side:"buy",input_kind:"usd",input_value:"100",mid:"10000",as_of:stamp,exec_price:"10025",quantity:"0.00995018",notional:"99.75",fee:"0.25",cash_delta:"-100",cash_after:"9900"};
+  vi.stubGlobal("fetch", vi.fn((input:RequestInfo|URL) => {
+    const path=String(input);
+    return Promise.resolve(json(path.endsWith("/portfolios") ? [{id:"1",name:"Original"},{id:"2",name:"Sibling"}] : path.endsWith("/context") ? contextFixture() : path.endsWith("/quote") ? quoteFixture() : asset === "stock" ? fillFixture() : crypto));
+  }));
+  const hook=renderHook(() => {
+    const p=usePortfolioTarget("1");
+    return {p,crypto:useTrade(p.target,"BTC"),stock:useStockTrade(asset === "stock" ? p.target : null,"AAPL")};
+  },{wrapper});
+  await waitFor(() => expect(hook.result.current.p.status).toBe("ready"));
+  if(asset === "stock") {
+    await waitFor(() => expect(hook.result.current.stock.context?.execution_enabled).toBe(true));
+    act(() => hook.result.current.stock.setQuantity("2"));
+    await act(async () => { await hook.result.current.stock.preview(); });
+  }
+  const invalidate=vi.spyOn(client,"invalidateQueries");
+  await act(async () => {
+    if(asset === "stock") await hook.result.current.stock.confirm();
+    else await hook.result.current.crypto.mutateAsync({order:{symbol:"BTC",side:"buy",amount_usd:"100"},expectedMid:"10000",idempotencyKey:"original-key"});
+  });
+  expect(invalidate).toHaveBeenCalledWith({queryKey:["portfolioOverview",alice,0],exact:true});
+  expect(invalidate).toHaveBeenCalledWith({queryKey:["portfolio",alice,"1"]});
+  expect(invalidate.mock.calls.every(([filter]) => ["prices","stocks"].includes(String(filter?.queryKey?.[0])) || filter?.queryKey?.[1]===alice && (filter?.queryKey?.[0]==="portfolioOverview" ? filter.queryKey[2]===0 : filter?.queryKey?.[2]==="1"))).toBe(true);
+});
+
+it("does not invalidate a returned owner's new session while pre-event cancellation is pending", async () => {
+  const {client,wrapper,target}=setup(); const t=target();
+  vi.stubGlobal("fetch",vi.fn(() => Promise.resolve(page("mixed",["3"]))));
+  let release!:()=>void;
+  const pending=new Promise<void>((resolve)=>{release=resolve;});
+  vi.spyOn(client,"cancelQueries").mockImplementation(() => pending);
+  const invalidate=vi.spyOn(client,"invalidateQueries");
+  renderHook(() => useEventHistory(t.value),{wrapper});
+  await waitFor(() => expect(client.cancelQueries).toHaveBeenCalled());
+  act(()=>{client.setQueryData(["me"],null);client.setQueryData(["me"],{email:alice});});
+  await act(async()=>{release();});
+  expect(invalidate).not.toHaveBeenCalled();
+});
