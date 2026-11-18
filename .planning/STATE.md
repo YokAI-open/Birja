@@ -5,7 +5,7 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 13
 current_plan: 17
 status: executing
-stopped_at: Phase13 Plans01–16 complete/reviewed; Plan17 pre-freeze phase-wide code review
+stopped_at: Phase13 Plans01–16 complete; integrated review repaired/clean; owner UI/native200 accepted; Plan17 full campaigns next
 last_updated: "2026-11-18T14:47:53.908723Z"
 last_activity: 2026-11-18 -- Plans01–16 complete; pre-freeze final review
 progress:
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 executing:16/18plans complete/reviewed clean.16current20browser/72states/120offline layouts+12strictartifactcontracts/140UIchecks pass; code re-reviewclean andUI24/24. PacketSHAeac08181... ownerUI/native200pending18. Phase-wide standard runtime/configreview before17frozenactualall-security+samearchive recovery. Fulloldsource79/1evidence distinct, currentfullunfilteredmandatory17notwaived. NoPhase13whole requirementcomplete; issue35deadline2026-12-17,Phase7sixlivegaps deferred. Keep local.
+Current focus: Phase13 executing:16/18plans complete/reviewed clean.16current20browser/72states/120offline layouts+12strictartifactcontracts/140UIchecks pass; code re-reviewclean andUI24/24. PacketSHAeac08181... ownerUI/native200accepted18; UAT persisted. Phase-wide standard runtime/configreview before17frozenactualall-security+samearchive recovery. Fulloldsource79/1evidence distinct, currentfullunfilteredmandatory17notwaived. NoPhase13whole requirementcomplete; issue35deadline2026-12-17,Phase7sixlivegaps deferred. Keep local.
 
 ## Current Position
 
