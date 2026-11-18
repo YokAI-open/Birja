@@ -86,7 +86,7 @@ portfolio_source_supported() {
   local digest
   digest=$(git -C "$APP_DIR" show "$1:backend/alembic/versions/0017_portfolio_ownership.py" 2>/dev/null |
     sha256sum | awk '{print $1}') || return 1
-  [ "$digest" = df84ca54126423c9de52821906c93a79b3251983a2a9b032da939419b9ee7ee9 ]
+  [ "$digest" = 92cff0699a40b0b8f5f4d66bc56a39a2ef88e3184860d86d6957607a3413f32b ]
 }
 
 admit_application_source() {
