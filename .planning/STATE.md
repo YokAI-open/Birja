@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 13
-current_plan: 14
+current_plan: 9
 status: executing
-stopped_at: Phase13 Plans01–08 complete/reviewed; starting wave8 Plan14 accounting proofs
+stopped_at: Phase13 Plans01–08 and14 complete/reviewed; starting wave9 Plan09 creation state
 last_updated: "2026-11-18T07:43:38.262Z"
 last_activity: 2026-11-18 -- Phase 13 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 49
-  completed_plans: 39
+  completed_plans: 40
   percent: 25
 ---
 
@@ -22,17 +22,17 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 executing: Plans01–08 complete/reviewed clean,8/18.08strictfrontendtransport205affectedtests/typecheck/lintpass. NextPlan14 perwave8,newHTTPcreatedstrategyaccounting/concurrency/events proof; after14continue09. FullUI/security/recovery17pending; noPhase13whole requirementcomplete. Phase12complete31/31;issue35deadline2026-12-17;Phase7sixlivegaps deferred. Keep local.
+Current focus: Phase13 executing:9/18plans complete/reviewed clean (01–08,14).14actualHTTProotfinancial+eventproof21lifecycle/60accountingpass; deterministicinitializerlocktestreviewwarningfixedand21rerunpass. Next09 browsercreationoriginalpersistence/cross-tabmetadata coherence. FullUI/security/recovery17pending; noPhase13whole requirementcomplete. Phase12complete31/31;issue35deadline2026-12-17;Phase7sixlivegaps deferred. Keep local.
 
 ## Current Position
 
 Phase: 13 (Create and Compare Independent Strategies) — EXECUTING
-Current Plan: 14 (wave8 accounting proof)Total Plans in Phase: 18
-Plan: 8/18 complete (01–08); execute14 next by wave order, then09
+Current Plan: 9 (wave9 creation persistence/coherence)Total Plans in Phase: 18
+Plan: 9/18 complete (01–08,14); next09 by wave order
 Status: Executing Phase 13
 Last activity: 2026-11-18 -- Phase 13 execution started
 
-Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;39/49 planned plans complete)
+Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;40/49 planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -113,6 +113,15 @@ managementoriginalpayload/keyauthrecovery/unknownoutcome and19fieldoverview
 financialparseradapter validated. Independent13-08-REVIEWclean0/0. NoDB/
 package/pin/provideroperations. Next14samewave8 accountingthen09; count8/18
 complete not14/18. use_worktrees=false requiressequentialdispatch.
+
+Plan14 complete(wave8):4ee728c,d1a38a2,22eb447,summaryc2d5c24.
+21lifecycle73.55s/60accounting151.91s pass;16retainedcalendar/pandas
+deprecationwarnings. ActualHTTPcreatedroots/current0020restrictedroles;
+synthetic historicalopenings declared,retainedcash100fixturespreserve
+10000baseline/journal. No runtimebug/edit. IndependentreviewWR01sleep-based
+initializercontentionproof fixed5a951cb(actualblockedPID/refreshedobserver/
+boundedcleanup); summary19b5f6f. Focused2pass+21affected72.76s/staticpass;
+re-reviewclean0/0. Ownedresourcesremoved. Next09,not15;9/18complete.
 
 ## Phase13 Planning Closeout — 2026-11-18
 
