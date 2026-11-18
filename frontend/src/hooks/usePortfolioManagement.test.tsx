@@ -407,3 +407,42 @@ it("a cross-tab change while PATCH is pending retains the draft for review of la
   expect(result.current.draft).toEqual({ name: "Draft" });
   expect(result.current.metadata?.name).toBe("Newer");
 });
+it.each([
+  { source: "cross-tab", status: 409, code: "name_taken" },
+  { source: "focus", status: 409, code: "name_taken" },
+  { source: "cross-tab", status: 422, code: "invalid_input" },
+  { source: "focus", status: 422, code: "invalid_input" },
+])("late $status refusal preserves review after $source authoritative refresh", async ({ source, status, code }) => {
+  let release!: (response: Response) => void;
+  let server = receipt;
+  let patches = 0;
+  const fetch = vi.fn((_url: string, init: RequestInit) => {
+    if (init.method !== "PATCH") return Promise.resolve(json(server));
+    patches++;
+    if (patches === 1) return new Promise<Response>(resolve => { release = resolve; });
+    server = { ...server, ...JSON.parse(init.body as string) };
+    return Promise.resolve(json(server));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup("2");
+  await waitFor(() => expect(result.current.metadata).toEqual(receipt));
+  act(() => result.current.editMetadata({ name: "Draft", description: "" }));
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.saveMetadata(); });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  server = { ...receipt, name: "Newer authoritative", description: "Other tab description" };
+  act(() => { if (source === "focus") window.dispatchEvent(new Event("focus")); else broadcastMetadataChange("2"); });
+  await waitFor(() => expect(result.current.metadata).toEqual(server));
+  expect(result.current.reviewRequired).toBe(true);
+  await act(async () => { release(json({ detail: { code } }, status)); await pending; });
+  await waitFor(() => expect(result.current.metadataError).not.toBeNull());
+  expect(result.current.reviewRequired).toBe(true);
+  expect(result.current.metadata).toEqual(server);
+  expect(result.current.draft).toEqual({ name: "Draft", description: "" });
+  await act(async () => { await result.current.saveMetadata(); });
+  expect(patches).toBe(1);
+  act(() => result.current.reviewMetadata());
+  await act(async () => { await result.current.saveMetadata(); });
+  expect(patches).toBe(2);
+  expect(server).toEqual({ id: "2", name: "Draft", description: "" });
+});
