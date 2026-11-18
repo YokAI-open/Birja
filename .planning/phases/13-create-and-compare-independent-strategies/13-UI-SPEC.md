@@ -147,7 +147,7 @@ Cards use max content width 1440px, the existing shell gutters, 24px desktop / 1
 
 Sources: D-01–D-09; research Concrete metadata rule, API transport and Bounded exact overview. These technical choices are selected under Agent Discretion, not new owner requirements.
 
-- Names: reject C0/C1 controls in raw input before trimming; use the research's explicit Unicode White_Space trim set, then NFC and 1–60 Unicode code points. Reject NUL/unpaired surrogates. The database is authoritative for `NFC(casefold(display_name COLLATE pg_catalog."PG_UNICODE_FAST"))`; do not implement uniqueness with browser lowercase. Preserve accents and display casing. UI accepts Unicode, sends raw validated strings and uses canonical returned metadata. Client validation is assistance; duplicate/race validation comes from the server.
+- Names: reject C0/C1 controls in raw input before trimming; use the research's explicit Unicode White_Space trim set, then NFC and 1–60 Unicode code points. Reject NUL/unpaired surrogates. The database is authoritative for `NFC(casefold(display_name COLLATE pg_catalog.pg_unicode_fast))`; do not implement uniqueness with browser lowercase. Preserve accents and display casing. UI accepts Unicode, sends raw validated strings and uses canonical returned metadata. Client validation is assistance; duplicate/race validation comes from the server.
 - Descriptions: initial/default `''`; 0–1000 Unicode code points after CRLF/CR → LF, preserve whitespace and line breaks, allow TAB/LF, reject remaining C0/C1 controls, NUL and unpaired surrogates. Count Unicode code points, not UTF-16 units; do not use HTML maxlength alone as the Unicode boundary. Permit editing/pasting over the bound and show an error/counter without silent truncation; disable submission until valid. Omission on create means empty, PATCH absence means unchanged, explicit empty clears; null is invalid.
 - All metadata uses React escaped text, including labels/options and strings resembling HTML, scripts, URLs or currency. No HTML/Markdown interpretation, automatic links or `dangerouslySetInnerHTML`.
 - Preserve exact two-key `{id,name}` parsing of GET `/api/v2/portfolios`. Use the research's separate GET `/api/v2/portfolios/overview`, POST `/api/v2/portfolios`, PATCH `/api/v2/portfolios/{id}` and explicit strict management response parsers for descriptions. Register static overview before dynamic backend routes. Do not append description or financial fields to the existing identity list without an explicit coordinated parser change.
@@ -221,11 +221,11 @@ Pre-populated: CONTEXT's 14 decisions; research metadata/transport/recovery/valu
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Planning checker approval:** approved in13-UI-CHECK.md; actual implemented owner UI/native200 acceptance remains pending Plan18.
