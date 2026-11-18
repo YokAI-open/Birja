@@ -86,3 +86,26 @@ The old recovery archive remains untouched at `/tmp/birja-phase12-proof/recovery
 ## Self-Check: PASSED
 
 All six declared implementation/test paths and this summary exist. Four task commits exist, with RED before GREEN for both tasks. No tracked file deletions or task-generated untracked output remains. Stub scan found no TODO/FIXME/placeholder markers in the six changed sources; no new unplanned endpoint/auth/schema trust boundary was introduced. Shared planning progress remains parent-owned.
+
+## Independent Review Repair Addendum — 2026-11-18
+
+The independent review of b0bd7c1 identified CR-01: V2 inherited optional retained-source/schema metadata semantics from V1. A coherently repackaged archive could remove either declaration, remove the corresponding source members, recompute inventory membership/checksums/archive digest and still be admitted. This was reproduced and repaired under Rule2 within the existing consumer boundary. Parent owns the independent re-review; this addendum does not claim that re-review is already clean.
+
+- **RED `0677561`:** The real V2 assembly test constructs three coherent omissions: retained_source_payloads alone with every sources/*.tar removed, schema_contract alone, and both together. Each updates INVENTORY.files, serialized INVENTORY.json, every SHA256SUMS entry and the supplied archive digest. All three failed because bundle_verify accepted them. These failures do not depend on stale checksums or declarations of already-missing members.
+- **GREEN `2c2efae`:** V2 now requires both fields before constructing its allowed-member set. It checks the exact four retained-release archive hashes, exact schema-contract field inventory, exact finite revision array and exact CORE source-hash key inventory. Existing later validation still compares the source-hash values to the actual authenticated members. Omitted or substituted declarations refuse before saved-image verification or runtime admission. The original V1 branch and its optional-field absence meaning remain unchanged.
+- **V1 controls:** Four positive archives use the actual fixed4b4320b complete release's original CORE/unit/V1 source bytes: both optional declarations present, each individually absent, and both absent. Their inventories/checksums/digests are coherently regenerated and all are accepted. External image transport remains explicitly mocked, matching the existing real-assembly test; this is structural/source compatibility evidence, not an image/encryption qualification receipt.
+
+**Final-source verification:** management8passed (9.13s), retained recovery11passed (0.45s), migration/runner6passed (1.91s), smoke-image9passed (1.75s), fixture8passed (1.74s): **42 focused tests**, including three new coherent negative subcases and four fixed-source V1 positive controls. The changed management test passes unfiltered Ruff lint/format; git diff checks pass.
+
+`env -i PATH="$PATH" HOME=/tmp python3 deploy/tests/test-portfolio-management-recovery.py --postgres` also passes after the repair: actual current0014→0017→0020/fresh0020 migrations, populated downgrade refusal, authentic retained0017 consumer refusal, no-owner/noACL logical restore, quarantined helper/account permissions, eight measured-noACL pregrant negatives and the immutable29-table/22-tail oracle comparison. No full image/TLS/encrypted campaign was added.
+
+Final source SHA256:
+
+- deploy/verify-restore.py: `106011c363587b323fd58247f85082fb85c535b119b4985d898efb7415815118`
+- deploy/tests/test-portfolio-management-recovery.py: `4ce18329303e5cb875ac3b9c057b575630e5511102aeb0c425d4405d2510b2e0`
+
+The verified owned birja-p13-04 containers/network/volumes are removed, and exact label queries are empty. The preserved old archive still hashes to d253bc51b876c7d629ee246ee47bd57274a5d9333e71318e11fcef586cff26be. No unowned/global planning/review file, dependency/pin, provider/private environment, production, push or merge operation occurred. Existing Plan15/17 deployment/TLS/image/full-campaign limits remain unchanged.
+
+### Repair Self-Check: PASSED
+
+Both changed source paths and the summary exist; RED0677561 precedes GREEN2c2efae. All focused and actual roundtrip checks pass. No tracked file deletions or generated untracked files remain; unrelated.claude and the parent-owned review report are untouched. Ready for independent re-review.
