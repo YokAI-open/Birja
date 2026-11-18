@@ -68,10 +68,20 @@ class BrowserContracts(unittest.TestCase):
         calls = self.command()
         browser = next(c for c in calls if c[0].endswith('/playwright'))
         self.assertIn('e2e/portfolio-ownership.spec.ts', browser)
+        self.assertIn('e2e/portfolio-strategies.spec.ts', browser)
         legacy = next(c for c in calls if '/e2e/portfolio-browser-fixture.py' in c)
         self.assertEqual(legacy[-1], 'legacy')
         self.assertLess(calls.index(legacy), next(i for i, c in enumerate(calls) if '--wait-timeout' in c))
         self.assertTrue(any('down' in c and '--volumes' in c for c in calls))
+
+    def test_default_command_explicitly_retains_every_financial_spec(self):
+        expected = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
+                    'stock-trades', 'stock-actions', 'dividends-history',
+                    'portfolio-history', 'portfolio-ownership', 'portfolio-strategies')
+        self.assertEqual(runner.browser_specs('all'),
+                         ['e2e/' + name + '.spec.ts' for name in expected])
+        with self.assertRaises(ValueError):
+            runner.browser_specs('unknown')
 
     def test_runner_rejects_live_data_mount_provider_and_ports_before_build(self):
         for mutation in ('mount', 'provider', 'port'):

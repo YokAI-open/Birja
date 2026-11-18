@@ -64,6 +64,7 @@ CRITICAL_MODULES = (
     "app/db/schema_contract.py",
     "app/api/v2/router.py",
     "app/api/v1/legacy_finance.py",
+    "app/api/v2/portfolio_management.py",
 )
 
 
