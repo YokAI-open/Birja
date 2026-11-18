@@ -12,33 +12,96 @@ import { usePortfolioTarget } from "./usePortfolioTarget";
 const clients: QueryClient[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const receipt = { id: "2", name: "Original", description: "raw" };
-it.each(["owner","logout-return"])("does not refresh financial data after %s during metadata discovery",async(change)=>{
-  let reads=0;
-  let release!:(response:Response)=>void;
-  const deferred=new Promise<Response>(resolve=>{release=resolve;});
-  vi.stubGlobal("fetch",vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
-    if(String(input)==="/api/v2/portfolios") {reads++;return reads===1?Promise.resolve(json([{id:"2",name:"Original"}])):deferred;}
-    return Promise.resolve(json(init?.method==="PATCH"?{...receipt,name:"Renamed"}:receipt));
-  }));
-  const hook=setup("2");
-  const wrapper=({children}:{children:ReactNode})=><QueryClientProvider client={hook.client}>{children}</QueryClientProvider>;
-  const target=renderHook(()=>usePortfolioTarget("2"),{wrapper});
-  await waitFor(()=>expect(target.result.current.status).toBe("ready"));
-  await waitFor(()=>expect(hook.result.current.metadata).toEqual(receipt));
-  act(()=>hook.result.current.editMetadata({name:"Renamed"}));
-  const invalidate=vi.spyOn(hook.client,"invalidateQueries");
-  let pending!:Promise<void>;
-  act(()=>{pending=hook.result.current.saveMetadata();});
-  await waitFor(()=>expect(reads).toBeGreaterThanOrEqual(2));
-  expect(invalidate.mock.calls.some(([filter])=>["portfolio","history","eventHistory","portfolioOverview"].includes(String(filter?.queryKey?.[0])))).toBe(false);
-  await act(async()=>{
-    hook.client.setQueryData(["me"],null);
-    hook.client.setQueryData(["me"],{email:change==="owner"?"bob@example.test":"alice@example.test"});
-    release(json([{id:"2",name:"Renamed"}]));
+it("preserves a newer dirty-draft review arriving during financial cancellation", async () => {
+  let server = receipt;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Draft" } : server)),
+    ),
+  );
+  const hook = setup("2");
+  await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
+  let release!: () => void;
+  const cancellation = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(hook.client, "cancelQueries").mockImplementation(() => cancellation);
+  act(() => hook.result.current.editMetadata({ name: "Draft" }));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = hook.result.current.saveMetadata();
+  });
+  await waitFor(() => expect(hook.client.cancelQueries).toHaveBeenCalled());
+  server = { ...receipt, name: "Newer authoritative" };
+  act(() => broadcastMetadataChange("2"));
+  await waitFor(() => expect(hook.result.current.metadata?.name).toBe("Newer authoritative"));
+  await act(async () => {
+    release();
     await pending;
   });
-  expect(invalidate.mock.calls.some(([filter])=>["portfolio","history","eventHistory","portfolioOverview"].includes(String(filter?.queryKey?.[0])))).toBe(false);
+  expect(hook.result.current.metadata?.name).toBe("Newer authoritative");
+  expect(hook.result.current.draft).toEqual({ name: "Draft" });
+  expect(hook.result.current.reviewRequired).toBe(true);
 });
+it.each(["owner", "logout-return"])(
+  "does not refresh financial data after %s during metadata discovery",
+  async (change) => {
+    let reads = 0;
+    let release!: (response: Response) => void;
+    const deferred = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/api/v2/portfolios") {
+          reads++;
+          return reads === 1 ? Promise.resolve(json([{ id: "2", name: "Original" }])) : deferred;
+        }
+        return Promise.resolve(
+          json(init?.method === "PATCH" ? { ...receipt, name: "Renamed" } : receipt),
+        );
+      }),
+    );
+    const hook = setup("2");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={hook.client}>{children}</QueryClientProvider>
+    );
+    const target = renderHook(() => usePortfolioTarget("2"), { wrapper });
+    await waitFor(() => expect(target.result.current.status).toBe("ready"));
+    await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
+    act(() => hook.result.current.editMetadata({ name: "Renamed" }));
+    const invalidate = vi.spyOn(hook.client, "invalidateQueries");
+    let pending!: Promise<void>;
+    act(() => {
+      pending = hook.result.current.saveMetadata();
+    });
+    await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2));
+    expect(
+      invalidate.mock.calls.some(([filter]) =>
+        ["portfolio", "history", "eventHistory", "portfolioOverview"].includes(
+          String(filter?.queryKey?.[0]),
+        ),
+      ),
+    ).toBe(false);
+    await act(async () => {
+      hook.client.setQueryData(["me"], null);
+      hook.client.setQueryData(["me"], {
+        email: change === "owner" ? "bob@example.test" : "alice@example.test",
+      });
+      release(json([{ id: "2", name: "Renamed" }]));
+      await pending;
+    });
+    expect(
+      invalidate.mock.calls.some(([filter]) =>
+        ["portfolio", "history", "eventHistory", "portfolioOverview"].includes(
+          String(filter?.queryKey?.[0]),
+        ),
+      ),
+    ).toBe(false);
+  },
+);
 function setup(
   id?: string,
   client = new QueryClient({

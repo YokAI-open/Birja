@@ -421,14 +421,29 @@ export function usePortfolioManagement(portfolioId?: string) {
         await refreshMetadata();
         return;
       }
+      await Promise.all(
+        ["portfolio", "history", "eventHistory"].map((prefix) =>
+          client.cancelQueries({ queryKey: [prefix, owner, portfolioId] }),
+        ),
+      );
+      if (!current()) return;
+      if (editor().revision !== state.revision) {
+        setEditor({ ...editor(), pending: false, reviewRequired: true });
+        await refreshMetadata();
+        return;
+      }
       client.setQueryData(metadataKey, metadata);
       setEditor(emptyEditor());
       broadcastMetadataChange(metadata.id);
+      await client.invalidateQueries({ queryKey: ["portfolios", owner] });
+      if (!current() || !isPortfolioId(portfolioId)) return;
       await Promise.all([
-        client.invalidateQueries({ queryKey: ["portfolios", owner] }),
         client.invalidateQueries({ queryKey: ["portfolioOverview", owner] }),
         ...["portfolio", "history", "eventHistory"].map((prefix) =>
-          client.invalidateQueries({ queryKey: [prefix, owner, portfolioId] }),
+          // A metadata update changes no financial bytes. Mark these views
+          // stale without invoking an observer's old target-bound queryFn
+          // before React commits the authoritative renamed target.
+          client.invalidateQueries({ queryKey: [prefix, owner, portfolioId], refetchType: "none" }),
         ),
       ]);
     } catch (error) {
