@@ -100,6 +100,34 @@ async def test_bootstrap_preserves_money_and_exact_roles(current):
                 text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
             )
         ).one() == (9999, 10000)
+        created = (
+            await conn.execute(
+                text(
+                    "SELECT * FROM create_portfolio(:u,:key,'Independent','Original description')"
+                ),
+                {"u": uid, "key": uuid4()},
+            )
+        ).one()
+        edited = (
+            await conn.execute(
+                text("SELECT * FROM update_portfolio_metadata(:u,:root,'Renamed','',true,true)"),
+                {"u": uid, "root": created.portfolio_id},
+            )
+        ).one()
+        assert (edited.portfolio_id, edited.name, edited.description) == (
+            created.portfolio_id,
+            "Renamed",
+            "",
+        )
+        assert (
+            await conn.execute(text("SELECT initialize_portfolio(:u)"), {"u": uid})
+        ).scalar_one() == root
+        assert (
+            await conn.execute(
+                text("SELECT cash,starting_cash FROM accounts WHERE id=:root"),
+                {"root": created.portfolio_id},
+            )
+        ).one() == (10000, 10000)
     async with engine.connect() as conn:
         legacy = (
             await conn.execute(text("SELECT cash,starting_cash FROM accounts WHERE name='Legacy'"))

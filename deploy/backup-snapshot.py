@@ -897,12 +897,12 @@ def validate_portfolio_manifest(manifest, *, quarantined=False):
         require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
 
 
-MANAGEMENT_BOOTSTRAP_SHA256 = '2429e45f08d72e7adf0dc816e0d5093642a92d8317bff0ad1c74d0cede7212df'
+MANAGEMENT_BOOTSTRAP_SHA256 = 'b2f3326a7b19392491c7133fcc9cc34816dcf5b29360a1fc9fdd44ec68ec117c'
 MANAGEMENT_SCHEMA_SHA256 = '7aa08fba535a66c8978dd19f956dc0db1c3da7c4d461f75f9d341ea1e5fe2da7'
-MANAGEMENT_AUTHORITY_SHA256 = '785a5086286f815972eb0b09edbb4c8f6b15fe220fd614d233cda9051c191228'
-MANAGEMENT_QUARANTINED_SHA256 = '47e3589ac675ecfc69308d1806a55ee5b9c24db42947d94c5a69fee9ace3aa9a'
+MANAGEMENT_AUTHORITY_SHA256 = '0192d3a7222af2a91930d34b7089ef93371e849bc32f911cacc8383fd5ac5ebf'
+MANAGEMENT_QUARANTINED_SHA256 = 'd6486b31f5609a6fdbeadaf4eeb7d9f0b4eaabe1de0566e646d85080a939fa26'
 MANAGEMENT_QUARANTINED_ACL_SHA256 = '500ae682129bf6b3bc252d0c4f15cf41bdeed63785b17458c8d1c9ab70eb3f7c'
-MANAGEMENT_NO_ACL_SHA256 = 'a0a40e73d9fed9d6a420fcf17f4df6e70f032bd1bbeebfb8ae06d3c2fccd5a7c'
+MANAGEMENT_NO_ACL_SHA256 = 'e88cb1971126447232f872c3b93fe18454ef58094becdcecd4d9066af44e3cfe'
 MANAGEMENT_NO_ACL_PRIVILEGES_SHA256 = 'bd65d43da215a53d24b6a2a384951f57ea03efa76948d7603c953a84250b2b55'
 
 
@@ -973,7 +973,7 @@ def validate_management_manifest(manifest, *, quarantined=False):
             (MANAGEMENT_QUARANTINED_SHA256 if quarantined else MANAGEMENT_AUTHORITY_SHA256))
     contract = manifest['management_contract']
     require(set(contract) == {'catalogue', 'acl', 'unsafe'})
-    require(contract['catalogue'] == 'd8f42ef33af7989badf342b5295d8d523cd6bf53839de6156a14e5251b5ee263')
+    require(contract['catalogue'] == '535cacb140a3a1753b5cf27e2eadcb80bc272a9b12772defd3936a3edc6c2209')
     require(contract['acl'] == (MANAGEMENT_QUARANTINED_ACL_SHA256 if quarantined else
             '041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e'))
     require(type(contract['unsafe']) is int and contract['unsafe'] == 0)

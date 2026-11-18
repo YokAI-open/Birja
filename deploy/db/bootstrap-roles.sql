@@ -293,7 +293,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
  WHERE c.relnamespace='public'::regnamespace
 ) catalogue
-) IS DISTINCT FROM 'd8f42ef33af7989badf342b5295d8d523cd6bf53839de6156a14e5251b5ee263'
+) IS DISTINCT FROM '535cacb140a3a1753b5cf27e2eadcb80bc272a9b12772defd3936a3edc6c2209'
  THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
  IF EXISTS(SELECT FROM pg_proc p,
   LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x

@@ -58,12 +58,12 @@ IDENTITY_NAMES = TABLE_NAMES - {
     "stock_status_evidence",
 }
 SOURCE_SHA256 = {
-    "app/db/portfolio_bootstrap.py": "2429e45f08d72e7adf0dc816e0d5093642a92d8317bff0ad1c74d0cede7212df",
+    "app/db/portfolio_bootstrap.py": "b2f3326a7b19392491c7133fcc9cc34816dcf5b29360a1fc9fdd44ec68ec117c",
     "alembic/versions/0018_portfolio_management_expansion.py": "8e63586555c85b6f6495d0da1bad4b8a455e5de71249a0f08e2c758e4b22b0b0",
     "alembic/versions/0019_portfolio_management_backfill.py": "75f40d134e05ebdf06b15bff677d866474aa34ac64bdf66ec412bc8e0615f66d",
-    "alembic/versions/0020_portfolio_management_authority.py": "53df31be89835558ef7a3b72d2febdb3e6a6130c26d27b961c282d7f9a0de860",
+    "alembic/versions/0020_portfolio_management_authority.py": "b6e304a0d3b610468caa93a893f300138269efcc5c80f014fa7c77a58eafcc9c",
     "alembic/sql/0019_portfolio_metadata.sql": "a26d4230843f75af9202fce71a771818d0bd7f041777a8a01a0d53a8df7a7c65",
-    "alembic/sql/0020_portfolio_management.sql": "ff97c417260fd9ed80f70c3a51ddfe32837b9b41c803bfcce4e7f37bc33be9d2",
+    "alembic/sql/0020_portfolio_management.sql": "9fe1fd5706df5ac319f7a70dcfe73a437f0886ba7e4a827758fa8c414106963d",
 }
 
 

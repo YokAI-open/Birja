@@ -407,7 +407,10 @@ async def test_active_split_gate_does_not_invert_management_or_waiting_stock_ord
     assert await evidence(api, "trades") == []
 
 
-async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(strategy_events):
+@pytest.mark.parametrize("operation", ["metadata", "creation-replay"])
+async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(
+    strategy_events, operation
+):
     """Real root→user FK overlap must coexist with management owner→root order."""
     api, roots, cid, _, _, _, _, engine = strategy_events
     async with api.migrator.connect() as observer:
@@ -422,6 +425,15 @@ async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(stra
                 {"root": int(roots[0])},
             )
         ).one()
+        intent = (
+            await observer.execute(
+                text(
+                    "SELECT creation_key,canonical_payload FROM portfolio_creations "
+                    "WHERE portfolio_id=:root"
+                ),
+                {"root": int(roots[0])},
+            )
+        ).one()
     pending = None
     try:
         async with scheduler(engine) as financial:
@@ -429,7 +441,18 @@ async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(stra
             await financial.execute(
                 text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": cid}
             )
-            pending = asyncio.create_task(patch(api, roots[0], {"description": "Concurrent FK"}))
+            action = (
+                patch(api, roots[0], {"description": "Concurrent FK"})
+                if operation == "metadata"
+                else post(
+                    api,
+                    intent.canonical_payload["name"],
+                    key=intent.creation_key,
+                    description=intent.canonical_payload["description"],
+                )
+            )
+            routine = "update_portfolio_metadata" if operation == "metadata" else "create_portfolio"
+            pending = asyncio.create_task(action)
             async with engine.connect() as observer, asyncio.timeout(5):
                 while True:
                     blocked = (
@@ -439,9 +462,9 @@ async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(stra
                                 "WHERE datname=current_database() "
                                 "AND state='active' AND wait_event_type='Lock' "
                                 "AND :blocker=ANY(pg_blocking_pids(pid)) "
-                                "AND query LIKE '%update_portfolio_metadata%')"
+                                "AND query LIKE :routine)"
                             ),
-                            {"blocker": pid},
+                            {"blocker": pid, "routine": "%" + routine + "%"},
                         )
                     ).scalar_one()
                     await observer.commit()
@@ -458,7 +481,15 @@ async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(stra
             await financial.commit()
         response = await asyncio.wait_for(pending, 5)
         assert response.status_code == 200, response.text
+        assert response.json()["id"] == roots[0]
         assert (await ledger(api, roots[0]))[0][0] == Decimal("10000.50")
+        async with api.migrator.connect() as observer:
+            assert (
+                await observer.execute(
+                    text("SELECT count(*) FROM portfolio_creations WHERE user_id=:owner"),
+                    {"owner": api.uid},
+                )
+            ).scalar_one() == 2
     finally:
         if pending is not None and not pending.done():
             pending.cancel()

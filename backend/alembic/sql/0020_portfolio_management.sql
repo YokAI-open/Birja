@@ -1,6 +1,7 @@
 -- Authenticated owner IDs come from the backend. Database roles are service
 -- identities, not end-user identities: caller GUCs never establish ownership.
 -- Management lock order is user -> account; no stock instrument locks occur.
+-- Non-key owner locks serialize management without blocking ledger FK KEY SHARE.
 CREATE FUNCTION public.create_portfolio(p_user bigint,p_key uuid,p_name text,p_description text)
 RETURNS TABLE(portfolio_id bigint,name text,description text,creation_id bigint,replayed boolean)
 LANGUAGE plpgsql SECURITY DEFINER
@@ -12,7 +13,7 @@ BEGIN
  IF p_user IS NULL OR p_user<=0 OR p_key IS NULL
    OR p_key::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
    RAISE EXCEPTION 'invalid creation intent' USING ERRCODE='22023'; END IF;
- PERFORM u.id FROM public.users u WHERE u.id=p_user FOR UPDATE;
+ PERFORM u.id FROM public.users u WHERE u.id=p_user FOR NO KEY UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'portfolio_unavailable' USING ERRCODE='P0002'; END IF;
  display:=public.portfolio_display_name(p_name);
  details:=public.portfolio_description(p_description);
@@ -59,7 +60,7 @@ DECLARE root_id bigint; journal_id bigint;
 BEGIN
  IF p_user IS NULL OR p_user<=0 THEN
    RAISE EXCEPTION 'invalid initialization intent' USING ERRCODE='22023'; END IF;
- PERFORM u.id FROM public.users u WHERE u.id=p_user FOR UPDATE;
+ PERFORM u.id FROM public.users u WHERE u.id=p_user FOR NO KEY UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'portfolio_unavailable' USING ERRCODE='P0002'; END IF;
  SELECT i.portfolio_id INTO root_id FROM public.portfolio_initializations i
    WHERE i.user_id=p_user;
@@ -92,7 +93,7 @@ BEGIN
    OR p_has_name IS NULL OR p_has_description IS NULL
    OR NOT(p_has_name OR p_has_description) THEN
    RAISE EXCEPTION 'invalid metadata intent' USING ERRCODE='22023'; END IF;
- PERFORM u.id FROM public.users u WHERE u.id=p_user FOR UPDATE;
+ PERFORM u.id FROM public.users u WHERE u.id=p_user FOR NO KEY UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'portfolio_unavailable' USING ERRCODE='P0002'; END IF;
  SELECT a.* INTO root FROM public.accounts a
    WHERE a.id=p_portfolio AND a.user_id=p_user AND a.closed_at IS NULL FOR UPDATE;
