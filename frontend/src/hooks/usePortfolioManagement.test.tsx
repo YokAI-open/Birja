@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { webcrypto } from "node:crypto";
 import { usePortfolioManagement } from "./usePortfolioManagement";
 import { CREATION_STORAGE_KEY } from "@/lib/portfolioCreationAttempt";
+import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 
 const clients: QueryClient[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -180,4 +181,52 @@ it("captured receipt cannot navigate after logout and the same owner returns", a
   });
   expect(captured.isCurrent()).toBe(false);
   expect(result.current.creation.receipt).toBeUndefined();
+});
+it("refetches authoritative metadata on cross-tab change, retains dirty drafts and requires review", async () => {
+  let server = { id: "2", name: "Original", description: "Server" };
+  const fetch = vi.fn((_url: string, init: RequestInit) => {
+    if (init.method === "PATCH") server = { ...server, ...JSON.parse(init.body as string) };
+    return Promise.resolve(json(server));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup("2");
+  await waitFor(() => expect(result.current.metadata?.name).toBe("Original"));
+  act(() => { result.current.editMetadata({ name: "Draft", description: "" }); });
+  server = { ...server, name: "Other tab" };
+  act(() => { broadcastMetadataChange("2"); });
+  await waitFor(() => expect(result.current.metadata?.name).toBe("Other tab"));
+  expect(result.current.draft).toEqual({ name: "Draft", description: "" });
+  expect(result.current.reviewRequired).toBe(true);
+  await act(async () => { await result.current.saveMetadata(); });
+  expect(fetch.mock.calls.filter(([, init]) => init.method === "PATCH")).toHaveLength(0);
+  act(() => { result.current.reviewMetadata(); });
+  await act(async () => { await result.current.saveMetadata(); });
+  expect(server).toEqual({ id: "2", name: "Draft", description: "" });
+  expect(result.current.draft).toBeNull();
+});
+it("ambiguous PATCH preserves the draft and refetches current same-ID metadata for explicit review", async () => {
+  const fetch = vi.fn((_url: string, init: RequestInit) => init.method === "PATCH" ? Promise.reject(new TypeError("lost")) : Promise.resolve(json(receipt)));
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup("2");
+  await waitFor(() => expect(result.current.metadata).toEqual(receipt));
+  act(() => { result.current.editMetadata({ description: "Retained" }); });
+  await act(async () => { await result.current.saveMetadata(); });
+  expect(result.current.draft).toEqual({ description: "Retained" });
+  expect(result.current.reviewRequired).toBe(true);
+  expect(fetch.mock.calls.filter(([, init]) => init.method === "PATCH")).toHaveLength(1);
+  expect(fetch.mock.calls.filter(([, init]) => init.method === "GET")).toHaveLength(2);
+});
+it("revokes captured edits across root changes and preserves original creation recovery", async () => {
+  vi.stubGlobal("fetch", (url: string) => Promise.resolve(json({ ...receipt, id: url.includes("/3/") ? "3" : "2" })));
+  const hook = setup("2");
+  await waitFor(() => expect(hook.result.current.metadata?.id).toBe("2"));
+  const oldEdit = hook.result.current.editMetadata;
+  const oldSave = hook.result.current.saveMetadata;
+  act(() => { hook.result.current.editMetadata({ name: "Old" }); });
+  hook.rerender({ root: "3" });
+  expect(hook.result.current.draft).toBeNull();
+  oldEdit({ name: "Stale" });
+  await act(async () => { await oldSave(); });
+  await waitFor(() => expect(hook.result.current.metadata?.id).toBe("3"));
+  expect(hook.result.current.draft).toBeNull();
 });
