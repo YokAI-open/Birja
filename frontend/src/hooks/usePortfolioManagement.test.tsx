@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { webcrypto } from "node:crypto";
 import { usePortfolioManagement } from "./usePortfolioManagement";
-import { CREATION_STORAGE_KEY } from "@/lib/portfolioCreationAttempt";
+import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreationAttempt";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 
 const clients: QueryClient[] = [];
@@ -16,9 +16,11 @@ function setup(
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   }),
+  seedIdentity = true,
 ) {
   clients.push(client);
-  if (!client.getQueryData(["me"])) client.setQueryData(["me"], { email: "alice@example.test" });
+  if (seedIdentity && !client.getQueryData(["me"]))
+    client.setQueryData(["me"], { email: "alice@example.test" });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -191,42 +193,217 @@ it("refetches authoritative metadata on cross-tab change, retains dirty drafts a
   vi.stubGlobal("fetch", fetch);
   const { result } = setup("2");
   await waitFor(() => expect(result.current.metadata?.name).toBe("Original"));
-  act(() => { result.current.editMetadata({ name: "Draft", description: "" }); });
+  act(() => {
+    result.current.editMetadata({ name: "Draft", description: "" });
+  });
   server = { ...server, name: "Other tab" };
-  act(() => { broadcastMetadataChange("2"); });
+  act(() => {
+    broadcastMetadataChange("2");
+  });
   await waitFor(() => expect(result.current.metadata?.name).toBe("Other tab"));
   expect(result.current.draft).toEqual({ name: "Draft", description: "" });
   expect(result.current.reviewRequired).toBe(true);
-  await act(async () => { await result.current.saveMetadata(); });
+  await act(async () => {
+    await result.current.saveMetadata();
+  });
   expect(fetch.mock.calls.filter(([, init]) => init.method === "PATCH")).toHaveLength(0);
-  act(() => { result.current.reviewMetadata(); });
-  await act(async () => { await result.current.saveMetadata(); });
+  act(() => {
+    result.current.reviewMetadata();
+  });
+  await act(async () => {
+    await result.current.saveMetadata();
+  });
   expect(server).toEqual({ id: "2", name: "Draft", description: "" });
   expect(result.current.draft).toBeNull();
 });
 it("ambiguous PATCH preserves the draft and refetches current same-ID metadata for explicit review", async () => {
-  const fetch = vi.fn((_url: string, init: RequestInit) => init.method === "PATCH" ? Promise.reject(new TypeError("lost")) : Promise.resolve(json(receipt)));
+  const fetch = vi.fn((_url: string, init: RequestInit) =>
+    init.method === "PATCH"
+      ? Promise.reject(new TypeError("lost"))
+      : Promise.resolve(json(receipt)),
+  );
   vi.stubGlobal("fetch", fetch);
   const { result } = setup("2");
   await waitFor(() => expect(result.current.metadata).toEqual(receipt));
-  act(() => { result.current.editMetadata({ description: "Retained" }); });
-  await act(async () => { await result.current.saveMetadata(); });
+  act(() => {
+    result.current.editMetadata({ description: "Retained" });
+  });
+  await waitFor(() => expect(result.current.draft).toEqual({ description: "Retained" }));
+  await act(async () => {
+    await result.current.saveMetadata();
+  });
   expect(result.current.draft).toEqual({ description: "Retained" });
-  expect(result.current.reviewRequired).toBe(true);
+  await waitFor(() => expect(result.current.reviewRequired).toBe(true));
   expect(fetch.mock.calls.filter(([, init]) => init.method === "PATCH")).toHaveLength(1);
   expect(fetch.mock.calls.filter(([, init]) => init.method === "GET")).toHaveLength(2);
 });
 it("revokes captured edits across root changes and preserves original creation recovery", async () => {
-  vi.stubGlobal("fetch", (url: string) => Promise.resolve(json({ ...receipt, id: url.includes("/3/") ? "3" : "2" })));
+  vi.stubGlobal("fetch", (url: string) =>
+    Promise.resolve(json({ ...receipt, id: url.includes("/3/") ? "3" : "2" })),
+  );
   const hook = setup("2");
   await waitFor(() => expect(hook.result.current.metadata?.id).toBe("2"));
   const oldEdit = hook.result.current.editMetadata;
   const oldSave = hook.result.current.saveMetadata;
-  act(() => { hook.result.current.editMetadata({ name: "Old" }); });
+  act(() => {
+    hook.result.current.editMetadata({ name: "Old" });
+  });
   hook.rerender({ root: "3" });
   expect(hook.result.current.draft).toBeNull();
   oldEdit({ name: "Stale" });
-  await act(async () => { await oldSave(); });
+  await act(async () => {
+    await oldSave();
+  });
   await waitFor(() => expect(hook.result.current.metadata?.id).toBe("3"));
   expect(hook.result.current.draft).toBeNull();
+});
+it("cold authenticated identity resolution restores recovery without automatic POST", async () => {
+  const original = {
+    key: "12345678-1234-4234-8234-123456789abc",
+    name: "Original",
+    description: "raw",
+  };
+  (await openCreationRecovery("alice@example.test")).persist(original);
+  const fetch = vi.fn(() => Promise.resolve(json({ email: "alice@example.test" })));
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup(undefined, undefined, false);
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  expect(result.current.creation.attempt).toEqual(original);
+  expect(result.current.creation.phase).toBe("unknown");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledWith("/api/v2/me", expect.objectContaining({ method: "GET" }));
+});
+it.each(["logout", "owner", "root", "unmount"])(
+  "suppresses late metadata save after %s",
+  async (change) => {
+    let release!: (response: Response) => void;
+    let signal!: AbortSignal;
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      if (init.method === "PATCH") {
+        signal = init.signal!;
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      }
+      return Promise.resolve(json(receipt));
+    });
+    vi.stubGlobal("fetch", fetch);
+    const hook = setup("2");
+    await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
+    act(() => {
+      hook.result.current.editMetadata({ name: "Draft" });
+    });
+    let pending!: Promise<void>;
+    act(() => {
+      pending = hook.result.current.saveMetadata();
+    });
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    if (change === "unmount") hook.unmount();
+    else if (change === "root") hook.rerender({ root: "3" });
+    else
+      act(() =>
+        hook.client.setQueryData(
+          ["me"],
+          change === "logout" ? null : { email: "bob@example.test" },
+        ),
+      );
+    expect(signal.aborted).toBe(true);
+    await act(async () => {
+      release(json({ ...receipt, name: "Old saved" }));
+      await pending;
+    });
+    if (change !== "unmount") expect(hook.result.current.metadata?.name).not.toBe("Old saved");
+  },
+);
+it("focus fallback retains a dirty draft and forbids review until authoritative refresh completes", async () => {
+  let release!: (response: Response) => void;
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(json(receipt))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup("2");
+  await waitFor(() => expect(result.current.metadata).toEqual(receipt));
+  act(() => {
+    result.current.editMetadata({ name: "Draft" });
+    window.dispatchEvent(new Event("focus"));
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  act(() => result.current.reviewMetadata());
+  await act(async () => {
+    await result.current.saveMetadata();
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await act(async () => release(json({ ...receipt, name: "Latest" })));
+  await waitFor(() => expect(result.current.reviewRequired).toBe(true));
+  expect(result.current.draft).toEqual({ name: "Draft" });
+});
+it("an aborted unmount permits same-original retry while its obsolete response remains unresolved", async () => {
+  let release!: (response: Response) => void;
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(json(receipt));
+  vi.stubGlobal("fetch", fetch);
+  const first = setup();
+  await waitFor(() => expect(first.result.current.ready).toBe(true));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = first.result.current.submitCreation({ name: "Original" });
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  const original = first.result.current.creation.attempt;
+  first.unmount();
+  const next = setup(undefined, first.client);
+  await waitFor(() => expect(next.result.current.creation.phase).toBe("unknown"));
+  expect(next.result.current.creation.attempt).toEqual(original);
+  await act(async () => {
+    await next.result.current.retryCreation();
+  });
+  expect(next.result.current.creation.receipt?.metadata).toEqual(receipt);
+  await act(async () => {
+    release(json({ ...receipt, name: "Obsolete" }));
+    await pending;
+  });
+  expect(next.result.current.creation.receipt?.metadata).toEqual(receipt);
+});
+it("a cross-tab change while PATCH is pending retains the draft for review of latest metadata", async () => {
+  let release!: (response: Response) => void;
+  let server = receipt;
+  const fetch = vi.fn((_url: string, init: RequestInit) =>
+    init.method === "PATCH"
+      ? new Promise<Response>((resolve) => {
+          release = resolve;
+        })
+      : Promise.resolve(json(server)),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const { result } = setup("2");
+  await waitFor(() => expect(result.current.metadata).toEqual(receipt));
+  act(() => result.current.editMetadata({ name: "Draft" }));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = result.current.saveMetadata();
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  server = { ...receipt, name: "Newer" };
+  act(() => broadcastMetadataChange("2"));
+  await waitFor(() => expect(result.current.metadata?.name).toBe("Newer"));
+  await act(async () => {
+    release(json({ ...receipt, name: "Draft" }));
+    await pending;
+  });
+  await waitFor(() => expect(result.current.reviewRequired).toBe(true));
+  expect(result.current.draft).toEqual({ name: "Draft" });
+  expect(result.current.metadata?.name).toBe("Newer");
 });

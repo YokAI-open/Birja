@@ -48,3 +48,12 @@ it("refuses failed persistence and malformed originals before any transport", as
   expect(() => store.persist(input)).toThrow();
   expect(store.attempt).toBeNull();
 });
+it("concurrent recovery observers share a lifecycle rather than overwrite an outstanding original", async () => {
+  const first = openCreationRecovery("alice@example.test");
+  const second = openCreationRecovery("alice@example.test");
+  const one = await first;
+  one.persist(input);
+  const two = await second;
+  expect(two.attempt).toEqual(input);
+  expect(two.persist(input)).toEqual(input);
+});

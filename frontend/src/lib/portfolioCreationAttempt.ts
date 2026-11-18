@@ -59,7 +59,7 @@ export function clearCreationRecovery() {
   }
 }
 /** Only non-secret intent metadata is persisted. Binding never authorizes an API call. */
-export async function openCreationRecovery(owner: string, isCurrent: () => boolean = () => true) {
+async function openRecovery(owner: string, isCurrent: () => boolean) {
   try {
     let envelope = read();
     if (envelope && envelope.binding !== (await binding(owner, envelope.nonce))) {
@@ -112,5 +112,11 @@ export async function openCreationRecovery(owner: string, isCurrent: () => boole
   } catch {
     throw storageError();
   }
+}
+let opening: Promise<unknown> = Promise.resolve();
+export function openCreationRecovery(owner: string, isCurrent: () => boolean = () => true) {
+  const result = opening.then(() => openRecovery(owner, isCurrent));
+  opening = result.catch(() => undefined);
+  return result;
 }
 export type CreationRecovery = Awaited<ReturnType<typeof openCreationRecovery>>;
