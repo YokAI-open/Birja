@@ -29,6 +29,15 @@ DOCKERFILE = b"FROM approved-pinned-base AS runtime\nCOPY app /app/app\nUSER app
 
 
 class FreshAuthority(unittest.TestCase):
+    def test_retained_writer_uses_its_own_consumer_and_refuses_current_before_writes(self):
+        code = smoke.retained_writer_refusal_program()
+        compile(code, '<retained-writer>', 'exec')
+        self.assertLess(code.index('revision !='), code.index('from app.db.schema_contract'))
+        self.assertIn('except SchemaAdmissionError', code)
+        self.assertIn("session_user=='birja_app'", code)
+        self.assertNotIn('INSERT', code)
+        self.assertNotIn('UPDATE', code)
+
     def test_fresh_program_migrates_directly_to_current_and_uses_real_roles(self):
         code = smoke.fresh_authority_program()
         compile(code, '<fresh0020>', 'exec')
