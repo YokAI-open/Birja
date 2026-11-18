@@ -11,6 +11,17 @@ import type { Portfolio } from "@/api/portfolio";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 const clients: QueryClient[] = [];
+it("adds authoritative metadata editing beside unchanged cash and valuation",async()=>{
+  const {user}=show(cashPortfolio());
+  expect(await screen.findByText("A plain-text strategy.")).toBeInTheDocument();
+  const cash=await screen.findByRole("region",{name:"Cash"});
+  expect(cash).toHaveTextContent("$10,000.00");
+  await user.click(screen.getByRole("button",{name:"Edit portfolio"}));
+  await user.clear(screen.getByLabelText("Description (optional)"));
+  expect(cash).toHaveTextContent("$10,000.00");
+  await user.click(screen.getByRole("button",{name:"Discard changes"}));
+  expect(screen.getByRole("button",{name:"Edit portfolio"})).toHaveFocus();
+});
 function show(body = mixedPortfolio()) {
   vi.stubGlobal(
     "fetch",
@@ -28,6 +39,11 @@ function mount({
       return Promise.resolve(new Response(JSON.stringify(metadata)));
     if (String(input) === "/api/v2/me")
       return Promise.resolve(new Response(JSON.stringify({ email: "first@example.test" })));
+    if (String(input).endsWith("/metadata")) {
+      const id=String(input).split("/").at(-2);
+      const portfolio=metadata.find(row=>row.id===id);
+      return Promise.resolve(new Response(JSON.stringify(portfolio?{...portfolio,description:"A plain-text strategy."}:{}),{status:portfolio?200:404}));
+    }
     return financialFetch(input, init);
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
