@@ -396,3 +396,53 @@ it("refuses a backwards overview snapshot as a whole rather than mixing accepted
   expect(hook.result.current.data).toHaveLength(1);
   expect(hook.result.current.data?.[0].valued_at).toBe("2026-11-10T15:00:20Z");
 });
+
+it.each(["detail", "overview"] as const)(
+  "propagates actual %s unsafe responses across views without copying financial snapshots",
+  async (source) => {
+    const { client, wrapper } = setup();
+    let detail = { ...mixedPortfolio(), name: "Strategy 1" };
+    let overview = [row("1", true), row("2", true)];
+    const fetch = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      return Promise.resolve(json(path.endsWith("/overview") ? overview : path.endsWith("/portfolios")
+        ? [{id:"1",name:"Strategy 1"},{id:"2",name:"Strategy 2"}] : detail));
+    });
+    vi.stubGlobal("fetch",fetch);
+    const hook = renderHook(() => {
+      const target = usePortfolioTarget("1");
+      return { detail:usePortfolio(target.target), overview:usePortfolioOverview() };
+    },{wrapper});
+    await waitFor(() => expect(hook.result.current.detail.data?.total_value).toBe("9998.00"));
+    await waitFor(() => expect(hook.result.current.overview.data?.[0].total_value).toBe("9998.00"));
+    const unsafe = row("1",true);
+    unsafe.valued_at="2026-11-10T15:00:20Z";
+    Object.assign(unsafe,{valuation_complete:false,known_value:"9796.00",total_value:null,total_pl:null,total_pl_percent:null,cash_allocation_percent:null,unvalued_holding_count:1,prices_as_of:null,class_values:{cash:"9796.00",stocks:null,crypto:"0.00"},class_allocation_percent:{cash:null,stocks:null,crypto:null}});
+    Object.assign(unsafe.holdings[0],{average_cost:null,mid:null,current_value:null,unrealized_pl:null,unrealized_pl_percent:null,allocation_percent:null,as_of:null,age_seconds:null,status:"unpriced"});
+    Object.assign(unsafe.holdings[0].stock_mark!,{mark_mode:"unavailable",valuation_reason:"quote_unavailable",source:null,feed:null,event_at:null,collected_at:null,historical_admission_until:null,retained_until:null,valid_until:null,authority:null,units_safe:false});
+    const {id:_id,description:_description,...statement}=unsafe;
+    void _id;void _description;
+    if(source==="detail") detail={...statement,portfolio_id:"1"};
+    else overview=[unsafe,{...row("2",true),valued_at:unsafe.valued_at}];
+    await act(async()=>{await hook.result.current[source].refetch();});
+    expect(hook.result.current.detail.data?.holdings[0]).toMatchObject({average_cost:null,mid:null,current_value:null,stock_mark:{units_safe:false}});
+    expect(hook.result.current.overview.data?.[0].holdings[0]).toMatchObject({average_cost:null,mid:null,current_value:null,stock_mark:{units_safe:false}});
+    expect(hook.result.current.detail.data?.total_value).toBeNull();
+    expect(hook.result.current.overview.data?.[0].total_value).toBeNull();
+    expect(hook.result.current.overview.data?.[1].total_value).toBe("9998.00");
+    const expectedTime=source==="detail"?"2026-11-10T15:00:10Z":unsafe.valued_at;
+    expect(hook.result.current.overview.data?.map((book)=>book.valued_at)).toEqual([expectedTime,expectedTime]);
+    expect(hook.result.current.detail.data?.valued_at).toBe(source==="detail"?unsafe.valued_at:"2026-11-10T15:00:10Z");
+    for(const valued_at of ["2026-11-10T15:00:10Z",unsafe.valued_at]) {
+      detail={...mixedPortfolio(),name:"Strategy 1",valued_at};
+      overview=[{...row("1",true),valued_at},{...row("2",true),valued_at}];
+      await act(async()=>{await hook.result.current.detail.refetch();await hook.result.current.overview.refetch();});
+      expect(hook.result.current.detail.data?.holdings[0].mid).toBeNull();
+      expect(hook.result.current.overview.data?.[0].holdings[0].mid).toBeNull();
+      expect(hook.result.current.overview.data?.[1].total_value).toBe("9998.00");
+    }
+    expect(client.getQueryData(["stockContext",alice,"1",0,"AAPL"])).toBeUndefined();
+    expect(client.getQueryData(["stocks",alice])).toBeUndefined();
+    expect(fetch.mock.calls.filter(([path])=>String(path).endsWith("/overview"))).toHaveLength(source==="overview"?4:3);
+  },
+);
