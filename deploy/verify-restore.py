@@ -428,6 +428,17 @@ def bundle_verify(archive, sha, required_profile=None):
         names = tar_members(t)
         require({"INVENTORY.json", "SHA256SUMS"} <= names)
         inventory = json.load(t.extractfile("INVENTORY.json"))
+        if inventory.get('portfolio_payload', {}).get('version') == 2:
+            # Successor completeness is mandatory, even when an archive has
+            # been coherently repackaged with new inventory/checksum bytes.
+            require({'schema_contract', 'retained_source_payloads'} <= inventory.keys())
+            retained = dict(RETAINED_SOURCE_PAYLOADS)
+            retained['sources/portfolio0017.tar'] = '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248'
+            require(inventory['retained_source_payloads'] == retained)
+            require(set(inventory['schema_contract']) == {'revisions', 'payload_sha256'})
+            require(inventory['schema_contract']['revisions'] ==
+                    ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020'])
+            require(set(inventory['schema_contract']['payload_sha256']) == set(CONTRACT_PAYLOAD))
         allowed = set(
             CORE
             + [

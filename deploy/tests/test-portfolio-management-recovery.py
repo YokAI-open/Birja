@@ -428,15 +428,17 @@ class ManagementRecoveryContracts(unittest.TestCase):
             def coherent_archive(name, metadata, content):
                 """Rewrite every affected checksum; never rely on stale hashes."""
                 content = dict(content)
-                content.pop('SHA256SUMS', None)
-                metadata['files'] = sorted(set(content) - {'INVENTORY.json'})
-                content['INVENTORY.json'] = json.dumps(metadata, sort_keys=True).encode()
-                content['SHA256SUMS'] = ''.join(
-                    hashlib.sha256(data).hexdigest() + '  ' + path + '\n'
+                content.pop("SHA256SUMS", None)
+                metadata["files"] = sorted(set(content) - {"INVENTORY.json"})
+                content["INVENTORY.json"] = json.dumps(
+                    metadata, sort_keys=True
+                ).encode()
+                content["SHA256SUMS"] = "".join(
+                    hashlib.sha256(data).hexdigest() + "  " + path + "\n"
                     for path, data in sorted(content.items())
                 ).encode()
                 path = Path(tmp) / name
-                with tarfile.open(path, 'w:') as archive:
+                with tarfile.open(path, "w:") as archive:
                     for member_name, data in content.items():
                         member = tarfile.TarInfo(member_name)
                         member.size = len(data)
@@ -445,46 +447,105 @@ class ManagementRecoveryContracts(unittest.TestCase):
                 return path
 
             for omissions in (
-                ('retained_source_payloads',),
-                ('schema_contract',),
-                ('retained_source_payloads', 'schema_contract'),
+                ("retained_source_payloads",),
+                ("schema_contract",),
+                ("retained_source_payloads", "schema_contract"),
             ):
                 metadata = copy.deepcopy(inventory)
                 content = dict(members)
                 for field in omissions:
                     del metadata[field]
-                if 'retained_source_payloads' in omissions:
-                    content = {name: data for name, data in content.items() if not name.startswith('sources/')}
-                damaged = coherent_archive('coherent-' + '-'.join(omissions) + '.tar', metadata, content)
-                with self.subTest(coherent_omissions=omissions):
-                    with mock.patch.object(recovery, 'runtime') as runtime, mock.patch.object(recovery, 'verify_saved_image') as image:
-                        with self.assertRaises(ValueError):
-                            recovery.bundle_verify(damaged, recovery.digest(damaged), required_profile='deploy-recovery-v3')
-                        runtime.assert_not_called()
-                        image.assert_not_called()
+                if "retained_source_payloads" in omissions:
+                    content = {
+                        name: data
+                        for name, data in content.items()
+                        if not name.startswith("sources/")
+                    }
+                damaged = coherent_archive(
+                    "coherent-" + "-".join(omissions) + ".tar", metadata, content
+                )
+                with (
+                    self.subTest(coherent_omissions=omissions),
+                    mock.patch.object(recovery, "runtime") as runtime,
+                    mock.patch.object(recovery, "verify_saved_image") as image,
+                ):
+                    with self.assertRaises(ValueError):
+                        recovery.bundle_verify(
+                            damaged,
+                            recovery.digest(damaged),
+                            required_profile="deploy-recovery-v3",
+                        )
+                    runtime.assert_not_called()
+                    image.assert_not_called()
 
             # Real fixed-release V1 source bytes, with coherent V1 inventories.
             # Legacy absence semantics remain valid for each optional field.
-            with tarfile.open(fileobj=io.BytesIO(members['sources/portfolio0017.tar'])) as retained:
-                original = {m.name: retained.extractfile(m).read() for m in retained.getmembers() if m.isfile()}
-            for omissions in ((), ('retained_source_payloads',), ('schema_contract',), ('retained_source_payloads', 'schema_contract')):
+            with tarfile.open(
+                fileobj=io.BytesIO(members["sources/portfolio0017.tar"])
+            ) as retained:
+                original = {
+                    m.name: retained.extractfile(m).read()
+                    for m in retained.getmembers()
+                    if m.isfile()
+                }
+            for omissions in (
+                (),
+                ("retained_source_payloads",),
+                ("schema_contract",),
+                ("retained_source_payloads", "schema_contract"),
+            ):
                 metadata = copy.deepcopy(inventory)
-                content = {name: data for name, data in members.items()
-                           if name not in set(recovery.PORTFOLIO_PAYLOAD_V2) - set(recovery.PORTFOLIO_PAYLOAD_V1)
-                           and name != 'sources/portfolio0017.tar'}
-                for name in (*recovery.CORE, *recovery.UNITS, *recovery.PORTFOLIO_PAYLOAD_V1):
+                content = {
+                    name: data
+                    for name, data in members.items()
+                    if name
+                    not in set(recovery.PORTFOLIO_PAYLOAD_V2)
+                    - set(recovery.PORTFOLIO_PAYLOAD_V1)
+                    and name != "sources/portfolio0017.tar"
+                }
+                for name in (
+                    *recovery.CORE,
+                    *recovery.UNITS,
+                    *recovery.PORTFOLIO_PAYLOAD_V1,
+                ):
                     content[name] = original[name]
-                metadata['portfolio_payload'] = {'version': 1, 'sha256': {name: hashlib.sha256(content[name]).hexdigest() for name in recovery.PORTFOLIO_PAYLOAD_V1}}
-                metadata['recovery_profile'] = 'deploy-recovery-v2'
-                metadata['retained_source_payloads'] = dict(recovery.RETAINED_SOURCE_PAYLOADS)
-                metadata['schema_contract'] = {'revisions': [r for r in producer.SUPPORTED_REVISIONS if r != '0020'], 'payload_sha256': {name: hashlib.sha256(content[name]).hexdigest() for name in recovery.CONTRACT_PAYLOAD}}
+                metadata["portfolio_payload"] = {
+                    "version": 1,
+                    "sha256": {
+                        name: hashlib.sha256(content[name]).hexdigest()
+                        for name in recovery.PORTFOLIO_PAYLOAD_V1
+                    },
+                }
+                metadata["recovery_profile"] = "deploy-recovery-v2"
+                metadata["retained_source_payloads"] = dict(
+                    recovery.RETAINED_SOURCE_PAYLOADS
+                )
+                metadata["schema_contract"] = {
+                    "revisions": [
+                        r for r in producer.SUPPORTED_REVISIONS if r != "0020"
+                    ],
+                    "payload_sha256": {
+                        name: hashlib.sha256(content[name]).hexdigest()
+                        for name in recovery.CONTRACT_PAYLOAD
+                    },
+                }
                 for field in omissions:
                     del metadata[field]
-                if 'retained_source_payloads' in omissions:
-                    content = {name: data for name, data in content.items() if not name.startswith('sources/')}
-                control = coherent_archive('v1-' + '-'.join(omissions) + '.tar', metadata, content)
+                if "retained_source_payloads" in omissions:
+                    content = {
+                        name: data
+                        for name, data in content.items()
+                        if not name.startswith("sources/")
+                    }
+                control = coherent_archive(
+                    "v1-" + "-".join(omissions) + ".tar", metadata, content
+                )
                 with self.subTest(v1_optional_omissions=omissions):
-                    recovery.bundle_verify(control, recovery.digest(control), required_profile='deploy-recovery-v2')
+                    recovery.bundle_verify(
+                        control,
+                        recovery.digest(control),
+                        required_profile="deploy-recovery-v2",
+                    )
             with self.assertRaises(ValueError):
                 producer.bundle_package_v2(output, recovery=recovery)
 
