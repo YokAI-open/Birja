@@ -26,8 +26,10 @@ type Guard = {
   session: number;
   lifecycle: number;
   serial: number;
+  // Proof knowledge and conservative time are shared by all views of this root.
   holdings: Map<string, HoldingGuard>;
-  latest: TimedPortfolio | null;
+  // Financial statements keep the response's own cash, holdings and valued_at.
+  latest: Record<"detail" | "overview", TimedPortfolio | null>;
   clock: { upper: number; at: number } | null;
 };
 const guards = new WeakMap<QueryClient, Map<string, Guard>>();
@@ -37,7 +39,6 @@ export function portfolioGuardFor(
   email: string | null,
   portfolioId: string | null,
   session: number,
-  view: "detail" | "overview" = "detail",
 ) {
   let roots = guards.get(client);
   if (!roots) {
@@ -54,14 +55,14 @@ export function portfolioGuardFor(
         guard.lifecycle++;
         guard.serial++;
         guard.holdings.clear();
-        guard.latest = null;
+        guard.latest = { detail: null, overview: null };
         guard.clock = null;
       }
       current.clear();
       if (old !== null) client.removeQueries({ queryKey: ["portfolio", old] });
     });
   }
-  const key = JSON.stringify([email, portfolioId, session, view]);
+  const key = JSON.stringify([email, portfolioId, session]);
   const existing = roots.get(key);
   if (existing) return existing;
   const g: Guard = {
@@ -71,7 +72,7 @@ export function portfolioGuardFor(
     lifecycle: 0,
     serial: 0,
     holdings: new Map(),
-    latest: null,
+    latest: { detail: null, overview: null },
     clock: null,
   };
   roots.set(key, g);
@@ -181,6 +182,7 @@ export function projectPortfolio(
   client: QueryClient,
   g: Guard,
   incoming: TimedPortfolio,
+  view: "detail" | "overview" = "detail",
 ): TimedPortfolio {
   const now = performance.now();
   let p = incoming;
@@ -189,14 +191,15 @@ export function projectPortfolio(
       ownUpper,
       g.clock === null ? ownUpper : g.clock.upper + Math.max(0, now - g.clock.at),
     );
+  const latest = g.latest[view];
   const staleSnapshot =
-    g.latest !== null && stockInstant(p.valued_at) < stockInstant(g.latest.valued_at);
+    latest !== null && stockInstant(p.valued_at) < stockInstant(latest.valued_at);
   const lateRestrictions = new Set(
     staleSnapshot
       ? p.holdings.filter((h) => h.stock_mark?.mark_mode === "unavailable").map((h) => h.coin_id)
       : [],
   );
-  if (staleSnapshot) p = g.latest!;
+  if (staleSnapshot) p = latest!;
   let changed = false;
   const at = stockInstant(p.valued_at);
   const holdings = p.holdings.map((h) => {
@@ -274,7 +277,7 @@ export function projectPortfolio(
     };
   }
   g.clock = { upper, at: now };
-  g.latest = p;
+  g.latest[view] = p;
   return p;
 }
 export function usePortfolio(target: PortfolioTarget | null) {
@@ -326,9 +329,7 @@ export function usePortfolio(target: PortfolioTarget | null) {
           error instanceof ApiError &&
           error.code === "portfolio_unavailable"
         ) {
-          g.latest = null;
-          g.holdings.clear();
-          g.clock = null;
+          g.latest.detail = null;
           revokePortfolioTarget(client, target);
         }
         if (
@@ -360,7 +361,7 @@ export function usePortfolio(target: PortfolioTarget | null) {
           client.getQueryCache().find({ queryKey: key, exact: true })?.setState({ data: safe });
           writing = false;
         }
-        const upper = upperAt(safe, performance.now());
+        const upper = Math.max(upperAt(safe, performance.now()), g.clock?.upper ?? 0);
         const deadlines = safe.holdings.flatMap((h) =>
           h.stock_mark?.valid_until ? [Date.parse(h.stock_mark.valid_until) - upper] : [],
         );
@@ -374,8 +375,11 @@ export function usePortfolio(target: PortfolioTarget | null) {
       if (
         (event.type === "updated" || event.type === "removed") &&
         owner === email &&
-        (prefix === "stocks" || (root === portfolioId && session === epoch)) &&
-        ["portfolio", "stockContext", "stocks"].includes(String(prefix))
+        (prefix === "stocks" ||
+          (prefix === "portfolioOverview"
+            ? root === epoch
+            : root === portfolioId && session === epoch)) &&
+        ["portfolio", "portfolioOverview", "stockContext", "stocks"].includes(String(prefix))
       )
         update();
     });

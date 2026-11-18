@@ -53,8 +53,9 @@ export function usePortfolioOverview() {
         const detail: TimedPortfolio = { ...statement, portfolio_id: id };
         const guarded = projectPortfolio(
           client,
-          portfolioGuardFor(client, owner, id, epoch, "overview"),
+          portfolioGuardFor(client, owner, id, epoch),
           detail,
+          "overview",
         );
         // Preserve authenticated current metadata even if an older financial snapshot is refused.
         if (guarded === detail) return row;
@@ -88,7 +89,7 @@ export function usePortfolioOverview() {
         // Never splice a retained book into an older comparison response.
         if (
           rows.some((row) => {
-            const latest = portfolioGuardFor(client, owner, row.id, epoch, "overview").latest;
+            const latest = portfolioGuardFor(client, owner, row.id, epoch).latest.overview;
             return latest !== null && stockInstant(row.valued_at) < stockInstant(latest.valued_at);
           })
         )
@@ -119,7 +120,7 @@ export function usePortfolioOverview() {
           writing = false;
         }
         const bounds = safe.flatMap((row) => {
-          const clock = portfolioGuardFor(client, owner, row.id, epoch, "overview").clock;
+          const clock = portfolioGuardFor(client, owner, row.id, epoch).clock;
           if (!clock) return [];
           return row.holdings.flatMap((holding) => {
             const mark = holding.stock_mark;
