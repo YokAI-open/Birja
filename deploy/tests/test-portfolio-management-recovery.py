@@ -129,7 +129,7 @@ def postgres_proof():
         "EMAIL_BACKEND": "console",
     }
     code = r"""
-import asyncio,importlib.util,json,tempfile
+import asyncio,importlib.util,json,tempfile,subprocess
 import tests.conftest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -203,12 +203,33 @@ async def main():
       assert message in str(error.orig);await conn.rollback()
      else:raise AssertionError('closed/conflicting creation replay admitted')
   finally:await app.dispose()
+  recovery=load('consumer','deploy/verify-restore.py');recovery.BOOT='birja_test'
+  dc=['docker','compose','--env-file','/dev/null','-p','birja-p13-04','-f',str(root/'docker-compose.test.yml')]
+  dump=recovery.call(dc+['exec','-T','postgres','pg_dump','-U','birja_migrator','-d','birja_test','--format=custom','--no-owner','--no-acl'])
+  recovery.call(dc+['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d','birja_test'],b'CREATE DATABASE birja_ops_test;')
+  try:
+   with recovery.restored(dc,dump):
+    recovery.verify(dc,manifest)
+    restored_engine=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(database='birja_restore_test'))
+    try:
+     async with restored_engine.connect() as conn:
+      await conn.execute(text("SET TIME ZONE 'UTC'"))
+      clone=await fixture.project(conn)
+      with tempfile.TemporaryDirectory(prefix='birja-restored-oracle-') as tmp:
+       path=Path(tmp)/'before.json';digest=fixture.save_snapshot(path,value)
+       fixture.compare_snapshot(path,digest,clone)
+      for role,signature in [('birja_app','create_portfolio(bigint,uuid,text,text)'),('birja_app','initialize_portfolio(bigint)'),('birja_app','update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)'),('birja_scheduler','apply_stock_dividend(bigint,bigint,text,text)'),('birja_scheduler','record_stock_dividend_hold(bigint,text)'),('birja_scheduler','lock_stock_portfolio_roots(bigint)')]:
+       assert not (await conn.execute(text("SELECT has_function_privilege(:r,:f,'EXECUTE')"),{'r':role,'f':signature})).scalar_one()
+      assert not (await conn.execute(text("SELECT has_table_privilege('birja_app','accounts','INSERT')"))).scalar_one()
+      assert not (await conn.execute(text("SELECT has_column_privilege('birja_app','accounts','description','UPDATE')"))).scalar_one()
+    finally:await restored_engine.dispose()
+  finally:recovery.call(dc+['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d','birja_test'],b'DROP DATABASE birja_ops_test;')
   async with admin.connect() as conn:
    after=await fixture.project(conn)
    with tempfile.TemporaryDirectory(prefix='birja-management-live-oracle-') as tmp:
     path=Path(tmp)/'before.json';digest=fixture.save_snapshot(path,value)
     assert fixture.compare_snapshot(path,digest,after)==digest
-   print(json.dumps({'manifest':manifest,'projection':value,'quarantined':quarantined,'noacl':noacl},sort_keys=True))
+   print(json.dumps({'manifest':manifest,'projection':value,'quarantined':quarantined,'noacl':noacl,'restored':True},sort_keys=True))
  finally:
   if migrator:await migrator.dispose()
   await reset_disposable_schema(admin);await admin.dispose()
@@ -238,9 +259,16 @@ class ManagementRecoveryContracts(unittest.TestCase):
             damaged = copy.deepcopy(inventory)
             damaged["version"] = version
             with self.assertRaises(ValueError):
-                recovery.verify_portfolio_inventory({"portfolio_payload": damaged}, hashes)
-        expected = json.loads((ROOT / "deploy/tests/fixtures/portfolio-recovery-0020.json").read_text())
-        with mock.patch.object(recovery, "canonical", return_value=expected), mock.patch.object(recovery, "sql", return_value=b"t"):
+                recovery.verify_portfolio_inventory(
+                    {"portfolio_payload": damaged}, hashes
+                )
+        expected = json.loads(
+            (ROOT / "deploy/tests/fixtures/portfolio-recovery-0020.json").read_text()
+        )
+        with (
+            mock.patch.object(recovery, "canonical", return_value=expected),
+            mock.patch.object(recovery, "sql", return_value=b"t"),
+        ):
             recovery.verify([], expected, quarantined=False)
             for section in ("tables", "identity_state", "management_state"):
                 damaged = copy.deepcopy(expected)
@@ -250,7 +278,11 @@ class ManagementRecoveryContracts(unittest.TestCase):
                     damaged[section][0][1] += 1
                 else:
                     damaged[section]["initializations"] -= 1
-                with self.subTest(section=section), mock.patch.object(recovery, "canonical", return_value=damaged), self.assertRaises(ValueError):
+                with (
+                    self.subTest(section=section),
+                    mock.patch.object(recovery, "canonical", return_value=damaged),
+                    self.assertRaises(ValueError),
+                ):
                     recovery.verify([], expected, quarantined=False)
 
     def test_consumer_source_authentication_before_sql_or_import(self):
