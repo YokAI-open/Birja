@@ -28,6 +28,24 @@ IMAGE = "sha256:" + "c" * 64
 DOCKERFILE = b"FROM approved-pinned-base AS runtime\nCOPY app /app/app\nUSER app\n"
 
 
+class FreshAuthority(unittest.TestCase):
+    def test_fresh_program_migrates_directly_to_current_and_uses_real_roles(self):
+        code = smoke.fresh_authority_program()
+        compile(code, '<fresh0020>', 'exec')
+        self.assertIn("command.upgrade,Config('/app/alembic.ini'),'0020'", code)
+        self.assertNotIn("'0017'", code)
+        self.assertIn('GRANTS_SQL', code)
+        self.assertIn('require_schema(restricted)', code)
+        self.assertIn('create_portfolio', code)
+        self.assertIn('portfolio_authority=', code)
+        self.assertIn('portfolio_verified_tls=true', code)
+
+    def test_selected_fresh_refuses_retained_before_build(self):
+        with mock.patch.object(smoke, 'build_selected_runtime', side_effect=AssertionError('build')):
+            with self.assertRaisesRegex(ValueError, 'fresh'):
+                smoke.run(revision='0017', fresh_bootstrap=True)
+
+
 def payload():
     result = io.BytesIO()
     with tarfile.open(fileobj=result, mode="w") as archive:
