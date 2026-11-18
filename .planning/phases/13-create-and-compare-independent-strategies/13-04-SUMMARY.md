@@ -97,3 +97,17 @@ Exact owned Docker labels were checked before teardown. Container, network and v
 ## Self-Check: PASSED
 
 All nine declared paths exist; all five task commits exist, with RED before GREEN for each task. Focused contracts, final real-source proof, new-file static checks and preserved old archive hash pass. No tracked deletions, goal-blocking stubs or unplanned network/auth/schema surface was introduced. Only the intended new sources/fixture/summary are added.
+
+## Independent Review Repair — 2026-11-18
+
+**[Rule2 — Missing critical authority check] CR-01: operator LOGIN drift.** Independent review established that the current producer omitted the action operator's NOLOGIN flag even though shared/production admission already enforce it. The actual0020 manifest remained accepted after `ALTER ROLE birja_action_operator LOGIN` because the frozen role projection intentionally omits LOGIN and neither the catalogue nor ACL hashes include it.
+
+- RED `c26ba5b` adds a real PostgreSQL regression: validate the normal manifest, enable operator LOGIN, regenerate the actual producer manifest and require validation refusal. It fails on the original producer with `LOGIN-enabled action operator admitted by actual0020 producer`. A `finally` block rolls back the experiment and explicitly restores/commits NOLOGIN even when the assertion fails.
+- GREEN `9a54623` adds exactly one term to the0020-only `management_contract.unsafe` aggregate for the operator's `rolcanlogin`. Existing validation rejects nonzero unsafe counts. Frozen0017 SQL/projections and every independently pinned schema, catalogue, authority, quarantine and noACL constant remain unchanged; no fixture/hash repinning is needed.
+- Final real command `env -i PATH="$PATH" HOME=/tmp python3 deploy/tests/test-portfolio-management-recovery.py --postgres-operator-login` passes. It includes the new actual LOGIN negative and all existing populated producer, normal/quarantine/noACL fingerprints, separately authenticated original replay, closed-original/key-conflict refusal and immutable before/after table/sequence equality checks.
+- Final affected offline regression passes:8 source/image contracts in1.65s,6 management recovery contracts in1.79s and10 retained recovery contracts in0.42s. Unfiltered new-file Ruff/format, changed command compilation, shell syntax and diff checks pass.
+- Owned `birja-p13-04` labels were checked before teardown; container/network/volume queries are empty. No review report, global planning file, dependency, provider, production or publication operation was changed. Consumer/full encrypted/TLS qualification limits above remain in force. Parent owns independent re-review.
+
+### Repair Self-Check: PASSED
+
+Both repair commits exist with actual RED before GREEN. The sole production change is the current unsafe-role term; the regression restores NOLOGIN in `finally`. All affected focused and actual database checks pass, and owned resources are removed.
