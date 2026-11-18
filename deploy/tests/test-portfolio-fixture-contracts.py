@@ -8,12 +8,16 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("portfolio_fixture", Path(__file__).with_name("portfolio-execution-fixture.py"))
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
+source_spec = importlib.util.spec_from_file_location("portfolio_sources", Path(__file__).with_name("portfolio-sources.py"))
+sources = importlib.util.module_from_spec(source_spec)
+source_spec.loader.exec_module(sources)
 
 
 def example():
@@ -33,6 +37,35 @@ def example():
 
 
 class PortfolioFixtureContracts(unittest.TestCase):
+    def test_complete_retained0017_and_current0020_profiles(self):
+        self.assertEqual(sources.profile_for("0020")["revision"], "0020")
+        profile = sources.profile_for("0017")
+        self.assertEqual(profile["commit"], "4b4320b4cc373268a8d598612a563cd5ef199700")
+        payload = sources.source_archive("portfolio0017")
+        import tarfile
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            for name in ("deploy/backup-snapshot.py", "deploy/verify-restore.py", "deploy/backup-manifest.sql",
+                         "deploy/systemd/birja-backup.service", "backend/Dockerfile", "backend/uv.lock",
+                         "deploy/tests/portfolio-execution-fixture.py"):
+                self.assertTrue(archive.getmember(name).isfile())
+        for revision in ("0015", "0016", "0018", "0019", "head", "0021", None):
+            with self.subTest(revision=revision), self.assertRaises(ValueError):
+                sources.profile_for(revision)
+
+    def test_retained_profile_mutations_refuse_before_binding_or_import(self):
+        for field in ("commit", "archive_sha256", "app_tree", "alembic_tree", "revision", "payload_version"):
+            value = copy.deepcopy(sources.MATRIX)
+            value["portfolio0017"][field] = "substituted"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                sources.validate_matrix(value)
+        value = copy.deepcopy(sources.MATRIX)
+        value["current"]["revision"] = "0017"
+        with self.assertRaises(ValueError):
+            sources.validate_matrix(value)
+        with mock.patch.object(sources, "source_archive", side_effect=AssertionError("source read")):
+            with self.assertRaises(ValueError):
+                sources.retained_program("portfolio", revision="0020", archive="missing", archive_sha="0" * 64)
+
     def run_command(self, args, value, calls=None):
         def transport(code):
             compile(code, "<actual-generated-program>", "exec")
