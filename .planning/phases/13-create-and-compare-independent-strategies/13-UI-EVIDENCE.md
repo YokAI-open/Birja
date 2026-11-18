@@ -229,3 +229,71 @@ current-source unfiltered browser command and its complete security/recovery gat
 The dev-administrator browser DB provenance limit remains unchanged. No source,
 test, dependency, provider, private environment, production or parent-owned review/
 global planning file was edited in this documentation-only continuation.
+
+## Post-CR02 lock-fix recapture — 2026-11-18, latest binding
+
+The latest canonical packet is freshly rendered from committed runtime source
+`99166d9cbe3fd8938a2bd43ca7763aec5a15e39e`. This appendix supersedes only the
+earlier canonical-path source/hash values; prior receipts and approval
+associations remain historical evidence.
+
+- Packet: `/tmp/birja-phase13-ui-review.zip`
+- ZIP SHA256: `724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361`
+- 340-input digest: `e082f97d9aaa758fa17a6060877328ed6f6dd39c31f2d66942c00bb7dba47a47`
+- Actual Chromium 156.0.8078.4; all 20 focused browser cases passed in 227.7s.
+- 72 fresh states, 120 PNGs and 265 required hashed artifacts plus manifest.
+- Raw log: `/tmp/birja-phase09-browser-b2mhzno6/browser-portfolios.log`.
+
+Comparison of the entire previous/current 340-input maps finds exactly four
+changed hashed runtime inputs:
+
+- `backend/alembic/sql/0020_portfolio_management.sql`
+- `backend/alembic/versions/0020_portfolio_management_authority.py`
+- `backend/app/db/portfolio_bootstrap.py`
+- `backend/app/db/portfolio_migrate.py`
+
+There are **zero frontend changes since the reviewed 6bfb447 recapture**. All
+frontend management inputs remain byte-identical. The parent runtime repair
+uses FOR NO KEY UPDATE at the three management owner-serialization sites and
+updates the corresponding current integrity bindings; it does not redesign the
+management surfaces. The broader 11-file repair scope, including regressions and
+recovery pins outside this UI-map inventory, is separately bound by
+`/tmp/birja-p13-cr02-repair-receipt.json`, SHA256
+`0cda7e1bfa6032485d0e608088da5a47ab115336b0f27f2f71ade430bcf264e2`.
+All 11 source hashes matched before and after capture. Its 70 focused and 33
+offline passes are the parent's recorded repair evidence, not tests rerun or
+added to this browser count. Independent runtime review remains parent-owned.
+
+The prior canonical 7e6d7d packet and directory are preserved under
+`/tmp/birja-phase13-ui-review-before-cr02-lock-fix.zip` and its matching directory;
+the unchanged full SHA256 is
+`7e6d7dc7bb08f3863547c96a692b609796deab2971c0010cb5bd03fcfe38145f`.
+Its offline receipt is preserved at
+`/tmp/birja-phase13-offline-layout-before-cr02-lock-fix.json`.
+The original owner-approved packet remains separately preserved under
+`-owner-approved-before-trade-label-fix`, with unchanged ZIP SHA256
+`eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`.
+No earlier preserved packet was overwritten.
+
+All 12 strict evidence contracts pass. Current verification passes all 340 input
+hashes, the exact 265-artifact/266-disk-member inventory, capture paths, embedded
+metadata and corresponding traces. The existing offline browser check passes
+72 files/120 layouts with fonts and conditional table/cards reflow, no horizontal
+overflow and zero external requests. Its current receipt is
+`/tmp/birja-phase13-offline-layout-receipt.json`.
+
+The owner's existing AcceptPhase13UI and Native200passes responses remain
+associated with the separately preserved owner-approved packet and unchanged
+management inputs, as recorded by the parent. No repeat confirmation or new
+human approval is claimed. Current automated manifest flags remain false;
+owner_accepted and native_200_percent_verified describe this capture's automated
+proof and were not rewritten to simulate owner approval.
+
+Owned cleanup completed in 2.9s with empty exact container/network/volume labels;
+the offline browser closed and the exclusive lane is released. This is a focused
+recapture, not a full current-source browser/security/recovery qualification.
+Plan17 must run its complete mandatory campaigns on the final committed source.
+The dev-administrator browser DB provenance limit and all prior sourceA/B/C/D
+qualification limits remain explicit. This continuation edits only the two
+owned evidence documents; no source/test, dependency, provider, private
+environment, production, review report or global planning file was changed.

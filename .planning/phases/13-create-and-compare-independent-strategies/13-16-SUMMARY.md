@@ -391,3 +391,77 @@ Both owned evidence docs exist; current packet/source/digest/counts and exact
 three-file delta were verified, the approved archive hash remains unchanged, and
 current strict verification plus 120-layout offline proof pass. This continuation
 stages only UI-EVIDENCE.md and this SUMMARY.md.
+
+## Post-CR02 runtime-lock source recapture — 2026-11-18
+
+This append-only continuation refreshes the packet after the parent runtime
+repair committed as `99166d9cbe3fd8938a2bd43ca7763aec5a15e39e`. The reviewed
+fixture report and `/tmp/birja-p13-cr02-repair-receipt.json` were read. The
+receipt records three management owner locks changed to FOR NO KEY UPDATE,
+current integrity-binding updates, unchanged ACLs, 70 focused passes and 33
+offline passes. All 11 repair-file hashes matched before and after this capture;
+those tests are parent-reported repair evidence and were not rerun here.
+Receipt SHA256:
+`0cda7e1bfa6032485d0e608088da5a47ab115336b0f27f2f71ade430bcf264e2`.
+The parent retains independent runtime review and the complete final campaigns.
+
+The complete prior/current UI input maps differ at exactly four hashed runtime
+paths: 0020_portfolio_management.sql, its 0020 migration authority wrapper,
+backend/app/db/portfolio_bootstrap.py and backend/app/db/portfolio_migrate.py.
+The broader repair also binds focused tests/recovery pins outside the UI capture
+map. No frontend path changed since the reviewed 6bfb447 recapture; all frontend
+management inputs remain byte-identical. No application or test source was edited
+by this executor during this continuation.
+
+Fresh latest canonical evidence:
+
+- Render source: `99166d9cbe3fd8938a2bd43ca7763aec5a15e39e`.
+- Packet: `/tmp/birja-phase13-ui-review.zip`.
+- ZIP SHA256: `724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361`.
+- 340-input digest: `e082f97d9aaa758fa17a6060877328ed6f6dd39c31f2d66942c00bb7dba47a47`.
+- Actual Chromium 156.0.8078.4; 20/20 focused browser cases passed in 227.7s.
+- 72 freshly rendered states, 120 PNGs and 265 hashed required artifacts plus
+  manifest. No old captures were rebound to new source.
+- Raw log: `/tmp/birja-phase09-browser-b2mhzno6/browser-portfolios.log`.
+
+All 12 strict evidence contracts pass. Current source/artifact verification passes
+the exact 265-artifact/266-disk-member inventory, metadata/path/trace
+correspondence and all 340 source hashes. The existing actual offline browser
+check passes 72 files/120 layouts with fonts and responsive table/cards, no
+horizontal overflow and zero external requests. Current receipt:
+`/tmp/birja-phase13-offline-layout-receipt.json`.
+
+The previous canonical 7e6d7d packet and directory are preserved under
+`/tmp/birja-phase13-ui-review-before-cr02-lock-fix.zip` and its matching directory.
+The full old SHA256 remains
+`7e6d7dc7bb08f3863547c96a692b609796deab2971c0010cb5bd03fcfe38145f`;
+its offline receipt is preserved at
+`/tmp/birja-phase13-offline-layout-before-cr02-lock-fix.json`.
+The separately preserved original owner-approved eac081 packet is unchanged at
+`/tmp/birja-phase13-ui-review-owner-approved-before-trade-label-fix.zip`, SHA256
+`eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`.
+No previous packet was overwritten.
+
+The owner's earlier AcceptPhase13UI and Native200passes responses stay associated
+with the original approved packet and unchanged management surfaces. The parent
+records that UAT association. This automated source refresh requests no repeat
+confirmation and fabricates no new owner outcome. Both current capture flags
+remain false: owner_accepted and native_200_percent_verified.
+
+Owned-stack cleanup took 2.9s and exact container/network/volume-label queries
+return empty. The offline browser closed; the exclusive lane is released. The
+browser's disposable dev-administrator connection is not least-privilege runtime
+proof. No full current-source unfiltered browser/security/recovery campaign ran
+here; Plan17's mandatory complete campaigns must use the final committed source.
+Prior sourceA 79/one-skip and all earlier focused receipts remain separate history.
+No source/test, dependency, provider, private environment or production change was
+made here. Parent-owned 13-REVIEW.md/13-17-FIXTURE-REVIEW.md and unrelated .claude/
+remain untouched. Only UI-EVIDENCE.md and this SUMMARY.md are staged.
+
+### Post-CR02 self-check: PASSED
+
+Both owned docs exist. Current packet/source/digest/counts, the exact four-input
+runtime delta, absence of frontend changes, all repair receipt hashes and both
+preserved ZIP hashes were verified. Strict current verification and the actual
+120-layout offline receipt pass. Independent review and whole final campaigns
+remain with the parent.
