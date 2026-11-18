@@ -386,3 +386,29 @@ async def test_existing_statement_still_uses_owned_root_and_stored_fixed_baselin
     assert "description" not in statement.json()
     denied = await api.other.get(f"/api/v2/portfolios/{root}")
     assert denied.status_code == 404 and denied.headers["cache-control"] == "no-store"
+
+
+async def test_initial_winner_rollback_unblocks_explicit_http_creation(management_api):
+    """Uncommitted onboarding must neither latch nor supplement a later root."""
+    api = management_api
+    async with api.restricted.connect() as conn:
+        tx = await conn.begin()
+        initial = (
+            await conn.execute(text("SELECT public.initialize_portfolio(:u)"), {"u": api.uid})
+        ).scalar_one()
+        pending = asyncio.create_task(post(api, "Explicit after rollback"))
+        # The second independent connection must wait on the owner lock.
+        await asyncio.sleep(0.1)
+        assert not pending.done()
+        await tx.rollback()
+        created = await asyncio.wait_for(pending, 6)
+    assert created.status_code == 201, created.text
+    assert created.json()["id"] != str(initial)
+    async with api.migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*),sum(cash),sum(starting_cash) FROM accounts"))
+        ).one() == (1, 10000, 10000)
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_initializations"))
+        ).scalar_one() == 0
+    assert await counts(api) == (1, 1, 10000)
