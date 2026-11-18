@@ -27,7 +27,62 @@ def load(name):
     return module
 
 
-def build_current_runtime(sources, env, *, run=subprocess.run):
+def campaign_image_binding(sources, env, *, archive, archive_sha, revision,
+                           source_commit, app_tree, context_sha256, run):
+    """Reuse only this archive's first-use immutable image, never a mutable tag.
+
+    Missing or altered recorded images are an integrity failure. Rebuilding an
+    equivalent filesystem can change its OCI index ID and invalidate another
+    stage's authenticated identity, so that is deliberately not a fallback.
+    """
+    if archive is None:
+        return None
+    archive = Path(archive)
+    parent = archive.parent
+    if (parent.is_symlink() or not parent.is_dir()
+            or parent.stat().st_uid != os.getuid() or parent.stat().st_mode & 0o077):
+        raise ValueError("private campaign image directory required")
+    sources.verify_archive_binding(archive, archive_sha)
+    if archive.stat().st_uid != os.getuid() or archive.stat().st_mode & 0o077:
+        raise ValueError("private campaign archive required")
+    record = parent / ("current" + revision + "-image-binding.json")
+    if record.is_symlink():
+        raise ValueError("private campaign image record required")
+    if not record.exists():
+        return None
+    if (not record.is_file() or record.stat().st_uid != os.getuid()
+            or record.stat().st_mode & 0o077):
+        raise ValueError("private campaign image record required")
+    binding = json.loads(record.read_text())
+    if (not isinstance(binding, dict)
+            or binding.get("source_commit") != source_commit
+            or binding.get("app_tree") != app_tree
+            or binding.get("context_sha256") != context_sha256
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(binding.get("id")))):
+        raise ValueError("campaign image source binding mismatch")
+    result = run(["docker", "image", "inspect", binding["id"]],
+                 env=env, capture_output=True, timeout=30)
+    if result.returncode:
+        raise ValueError("recorded campaign immutable image missing")
+    sources.verify_image(binding, json.loads(result.stdout))
+    sources.verify_archive_binding(archive, archive_sha)
+    if json.loads(record.read_text()) != binding:
+        raise ValueError("campaign image binding replaced during reuse")
+    return binding
+
+
+def campaign_image_tag(tag, archive):
+    if archive is None:
+        return tag
+    parent = Path(archive).parent.resolve(strict=True)
+    identity = parent.stat()
+    namespace = hashlib.sha256(
+        os.fsencode(str(parent)) + f":{identity.st_dev}:{identity.st_ino}".encode()
+    ).hexdigest()[:16]
+    return tag + "-" + namespace
+
+
+def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=subprocess.run):
     """Build the actual declared runtime from one authenticated Git context.
 
     A fresh CI runner must be able to create this image without any previous
@@ -40,13 +95,22 @@ def build_current_runtime(sources, env, *, run=subprocess.run):
     app_tree = sources.git("rev-parse", commit + ":backend/app").decode().strip()
     payload = sources.git("archive", commit, "backend")
     context = hashlib.sha256(payload).hexdigest()
-    tag = "birja-portfolio-current:" + commit[:12] + "-" + context[:20]
+    binding = campaign_image_binding(
+        sources, env, archive=archive, archive_sha=archive_sha, revision="0020",
+        source_commit=commit, app_tree=app_tree, context_sha256=context, run=run,
+    )
+    if binding is not None:
+        if (sources.git("rev-parse", "HEAD").decode().strip() != commit
+                or sources.git("diff", "--name-only", "HEAD", "--", "backend").strip()):
+            raise ValueError("current source changed during image reuse")
+        return binding
+    tag = campaign_image_tag("birja-portfolio-current:" + commit[:12] + "-" + context[:20], archive)
     with tempfile.TemporaryDirectory(
         prefix="birja-portfolio-current-image-"
     ) as image_tmp:
         image_root = Path(image_tmp)
-        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
-            archive.extractall(image_root, filter="data")
+        with tarfile.open(fileobj=io.BytesIO(payload)) as source_tar:
+            source_tar.extractall(image_root, filter="data")
         sources.verify_source_tree(image_root, payload)
         result = run(
             [
@@ -94,6 +158,9 @@ def build_current_runtime(sources, env, *, run=subprocess.run):
     if result.returncode:
         raise AssertionError("declared runtime immutable image missing")
     sources.verify_image(binding, json.loads(result.stdout))
+    if archive is not None:
+        sources.verify_archive_binding(archive, archive_sha)
+        sources.record_image_binding(archive, "current0020", binding)
     return binding
 
 
@@ -102,14 +169,21 @@ def build_selected_runtime(
 ):
     profile = sources.profile_for(revision)
     if revision == "0020":
-        return build_current_runtime(sources, env, run=run)
+        return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha, run=run)
     if revision != "0017":
         raise ValueError("unsupported portfolio smoke schema")
     payload = sources.source_archive(
         "portfolio0017", archive=archive, archive_sha=archive_sha
     )
     context = hashlib.sha256(payload).hexdigest()
-    tag = "birja-portfolio-retained:" + profile["commit"][:12] + "-" + context[:20]
+    binding = campaign_image_binding(
+        sources, env, archive=archive, archive_sha=archive_sha, revision="0017",
+        source_commit=profile["commit"], app_tree=profile["app_tree"],
+        context_sha256=context, run=run,
+    )
+    if binding is not None:
+        return binding
+    tag = campaign_image_tag("birja-portfolio-retained:" + profile["commit"][:12] + "-" + context[:20], archive)
     with tempfile.TemporaryDirectory(prefix="birja-portfolio-retained-image-") as tmp:
         root = Path(tmp)
         with tarfile.open(fileobj=io.BytesIO(payload)) as source:
@@ -154,6 +228,9 @@ def build_selected_runtime(
     if result.returncode:
         raise ValueError("retained immutable image missing")
     sources.verify_image(binding, json.loads(result.stdout))
+    if archive is not None:
+        sources.verify_archive_binding(archive, archive_sha)
+        sources.record_image_binding(archive, "current0017", binding)
     return binding
 
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Offline current-image provenance regressions; no database or Docker daemon."""
 
-import copy
 import hashlib
 import importlib.util
 import os
