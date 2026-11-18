@@ -7,7 +7,10 @@ from uuid import uuid4
 import httpx
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.security import create_access_token
 from app.db.portfolio_bootstrap import GRANTS_SQL
@@ -84,7 +87,9 @@ async def counts(api):
         return (
             await conn.execute(
                 text(
-                    "SELECT (SELECT count(*) FROM accounts), (SELECT count(*) FROM portfolio_creations), (SELECT coalesce(sum(amount),0) FROM portfolio_creations)"
+                    "SELECT (SELECT count(*) FROM accounts), "
+                    "(SELECT count(*) FROM portfolio_creations), "
+                    "(SELECT coalesce(sum(amount),0) FROM portfolio_creations)"
                 )
             )
         ).one()
@@ -249,3 +254,135 @@ async def test_attempt_limit_counts_replays_and_invalid_keys_without_journal_gro
     limited = await post(api, "New")
     assert limited.status_code == 429 and int(limited.headers["Retry-After"]) > 0
     assert await counts(api) == (1, 1, 10000)
+
+
+async def test_actual_committed_response_failure_is_private_and_original_retry_recovers(
+    management_api, monkeypatch
+):
+    from app.api.v2 import portfolios
+
+    api = management_api
+    key = uuid4()
+    original = portfolios.create_portfolio
+
+    async def lost_response(*args, **kwargs):
+        await original(*args, **kwargs)
+        raise RuntimeError("private credentials and committed result lost")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(portfolios, "create_portfolio", lost_response)
+        failed = await post(api, key=key)
+    assert failed.status_code == 500 and "original" in failed.text
+    assert failed.headers["cache-control"] == "no-store"
+    assert "credentials" not in failed.text
+    assert await counts(api) == (1, 1, 10000)
+    replay = await post(api, key=key)
+    assert replay.status_code == 200
+    assert await counts(api) == (1, 1, 10000)
+
+
+async def test_real_owner_lock_timeout_rolls_back_and_retry_does_not_regrant(management_api):
+    api = management_api
+    key = uuid4()
+    async with api.migrator.begin() as conn:
+        await conn.execute(text("SELECT id FROM users WHERE id=:u FOR UPDATE"), {"u": api.uid})
+        refused = await asyncio.wait_for(post(api, key=key), timeout=6)
+        assert refused.status_code == 503 and refused.headers["Retry-After"] == "5"
+        assert refused.json()["detail"] == {"code": "service_unavailable"}
+        assert await counts(api) == (0, 0, 0)
+    assert (await post(api, key=key)).status_code == 201
+
+
+async def test_redis_failure_and_revoked_session_fail_closed_before_any_grant(
+    management_api, monkeypatch
+):
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.api.v2 import portfolio_management
+
+    api = management_api
+
+    async def unavailable(*args, **kwargs):
+        raise RedisConnectionError("private redis credential")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(portfolio_management, "enforce", unavailable)
+        response = await post(api)
+    assert response.status_code == 503 and response.headers["Retry-After"] == "5"
+    assert response.headers["cache-control"] == "no-store" and "credential" not in response.text
+    async with api.migrator.begin() as conn:
+        await conn.execute(
+            text("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE user_id=:u"),
+            {"u": api.uid},
+        )
+    response = await post(api)
+    assert response.status_code == 401
+    assert await counts(api) == (0, 0, 0)
+
+
+async def test_services_roll_back_known_and_unknown_actual_sql_failures(management_api):
+    from app.models.user import User
+    from app.schemas.portfolios import PortfolioCreate, PortfolioPatch
+    from app.services.portfolios import create_portfolio, update_portfolio_metadata
+
+    api = management_api
+    user = User(id=api.uid, email="owned-service@example.test")
+    sessions = async_sessionmaker(api.restricted, expire_on_commit=False)
+    root = (await post(api)).json()["id"]
+    before = await counts(api)
+    async with sessions() as db:
+        # Deliberately bypass the transport model to prove SQL is authoritative
+        # and rollback permits a later valid service transaction.
+        with pytest.raises(HTTPException) as invalid:
+            await create_portfolio(
+                db, user, uuid4(), PortfolioCreate.model_construct(name="\tBad", description="")
+            )
+        assert invalid.value.status_code == 422 and not db.in_transaction()
+        with pytest.raises(HTTPException) as invalid:
+            await update_portfolio_metadata(
+                db, user, int(root), PortfolioPatch.model_construct(description="\x1f")
+            )
+        assert invalid.value.status_code == 422 and not db.in_transaction()
+
+    # Exercise the unrecognized-database-error branch using actual42501, never
+    # a fake database. This direct service test intentionally has no API/schema
+    # admission claim while its owned test-only EXECUTE grant is revoked.
+    for signature, operation in [
+        (
+            "create_portfolio(bigint,uuid,text,text)",
+            lambda db: create_portfolio(db, user, uuid4(), PortfolioCreate(name="New")),
+        ),
+        (
+            "update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)",
+            lambda db: update_portfolio_metadata(
+                db, user, int(root), PortfolioPatch(description="changed")
+            ),
+        ),
+    ]:
+        async with api.migrator.begin() as conn:
+            await conn.execute(
+                text(f"REVOKE EXECUTE ON FUNCTION public.{signature} FROM birja_app")
+            )  # noqa: S608 - fixed signatures above
+        try:
+            async with sessions() as db:
+                with pytest.raises(DBAPIError) as denied:
+                    await operation(db)
+                assert denied.value.orig.sqlstate == "42501" and not db.in_transaction()
+        finally:
+            async with api.migrator.begin() as conn:
+                await conn.execute(
+                    text(f"GRANT EXECUTE ON FUNCTION public.{signature} TO birja_app")
+                )  # noqa: S608
+    assert await counts(api) == before
+
+
+async def test_existing_statement_still_uses_owned_root_and_stored_fixed_baseline(management_api):
+    api = management_api
+    root = (await post(api)).json()["id"]
+    statement = await api.client.get(f"/api/v2/portfolios/{root}")
+    assert statement.status_code == 200, statement.text
+    assert statement.json()["portfolio_id"] == root
+    assert statement.json()["cash"] == statement.json()["starting_cash"] == "10000.00"
+    assert "description" not in statement.json()
+    denied = await api.other.get(f"/api/v2/portfolios/{root}")
+    assert denied.status_code == 404 and denied.headers["cache-control"] == "no-store"

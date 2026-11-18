@@ -1,15 +1,40 @@
 """Private metadata discovery and explicitly owned portfolio statements."""
 
-from fastapi import APIRouter
+from typing import Annotated, cast
 
-from app.api.v1.stock_trades import PrivateRoute
-from app.core.deps import CurrentUserDep, DbDep, OwnedActivePortfolioDep, SettingsDep
+from fastapi import APIRouter, HTTPException, Path, Request, Response
+
+from app.api.v2.portfolio_management import (
+    ManagementRoute,
+    creation_key,
+    enforce_creation_attempt,
+    read_management_body,
+)
+from app.core.deps import (
+    ClientIpDep,
+    CsrfDep,
+    CurrentUserDep,
+    DbDep,
+    OwnedActivePortfolioDep,
+    RedisDep,
+    SettingsDep,
+)
 from app.schemas.portfolio import PortfolioOut
-from app.schemas.portfolios import PortfolioSummary
+from app.schemas.portfolios import (
+    PortfolioCreate,
+    PortfolioMetadata,
+    PortfolioPatch,
+    PortfolioSummary,
+)
 from app.services.portfolio import get_portfolio
-from app.services.portfolios import list_active_portfolios
+from app.services.portfolios import (
+    create_portfolio,
+    get_portfolio_metadata,
+    list_active_portfolios,
+    update_portfolio_metadata,
+)
 
-router = APIRouter(prefix="/portfolios", tags=["portfolios"], route_class=PrivateRoute)
+router = APIRouter(prefix="/portfolios", tags=["portfolios"], route_class=ManagementRoute)
 
 
 @router.get(
@@ -32,3 +57,69 @@ async def portfolio(
     portfolio: OwnedActivePortfolioDep, db: DbDep, settings: SettingsDep
 ) -> PortfolioOut:
     return PortfolioOut.from_value(await get_portfolio(db, portfolio=portfolio, settings=settings))
+
+
+PortfolioPath = Annotated[str, Path(pattern=r"^[1-9][0-9]{0,18}$", max_length=19)]
+
+
+def _portfolio_id(value: str) -> int:
+    result = int(value)
+    if result > 9223372036854775807:
+        raise HTTPException(422, detail={"code": "invalid_input"})
+    return result
+
+
+@router.post(
+    "",
+    response_model=PortfolioMetadata,
+    status_code=201,
+    summary="Create one independently funded portfolio",
+    description="Uses the original UUIDv4 key for permanent safe retries; returns200 on replay.",
+)
+async def create(
+    request: Request,
+    response: Response,
+    user: CurrentUserDep,
+    csrf: CsrfDep,
+    db: DbDep,
+    redis: RedisDep,
+    ip: ClientIpDep,
+    settings: SettingsDep,
+) -> PortfolioMetadata:
+    await enforce_creation_attempt(redis, user.id, ip, settings)
+    keys = request.headers.getlist("idempotency-key")
+    key = creation_key(keys[0] if len(keys) == 1 else None)
+    payload = cast(PortfolioCreate, await read_management_body(request, patch=False))
+    result, replayed = await create_portfolio(db, user, key, payload)
+    response.status_code = 200 if replayed else 201
+    return result
+
+
+@router.patch(
+    "/{portfolio_id}",
+    response_model=PortfolioMetadata,
+    summary="Edit an owned active portfolio's metadata",
+    description="Changes name or description without changing funding, trades or original intent.",
+)
+async def edit_metadata(
+    portfolio_id: PortfolioPath,
+    request: Request,
+    user: CurrentUserDep,
+    csrf: CsrfDep,
+    db: DbDep,
+) -> PortfolioMetadata:
+    target = _portfolio_id(portfolio_id)
+    payload = cast(PortfolioPatch, await read_management_body(request, patch=True))
+    return await update_portfolio_metadata(db, user, target, payload)
+
+
+@router.get(
+    "/{portfolio_id}/metadata",
+    response_model=PortfolioMetadata,
+    summary="Read an owned active portfolio's metadata",
+    description="Returns only ID, name and description; no pooled or financial values.",
+)
+async def metadata(
+    portfolio_id: PortfolioPath, user: CurrentUserDep, db: DbDep
+) -> PortfolioMetadata:
+    return await get_portfolio_metadata(db, user, _portfolio_id(portfolio_id))

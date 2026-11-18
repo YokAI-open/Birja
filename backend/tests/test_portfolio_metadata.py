@@ -1,5 +1,7 @@
 """Metadata mutation never changes the original journal, finances or history."""
 
+from uuid import uuid4
+
 from sqlalchemy import text
 
 from tests.test_portfolio_creation import authority, management_api, patch, post
@@ -13,6 +15,28 @@ async def test_private_detail_edit_clear_and_legacy_summary_remain_exact(managem
     response = await post(api, "Long term")
     assert response.status_code == 201
     root = response.json()["id"]
+    # Persist nonempty real financial/history evidence, then compare every byte
+    # outside the only three editable account columns after all metadata edits.
+    async with api.migrator.begin() as conn:
+        params = {"p": int(root), "u": api.uid, "k": uuid4()}
+        await conn.execute(text("UPDATE accounts SET cash=9949.75 WHERE id=:p"), params)
+        await conn.execute(
+            text(
+                "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                "SELECT :p,:u,id,.001,50.25 FROM coins WHERE symbol='BTC'"
+            ),
+            params,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO trades(portfolio_id,user_id,coin_id,side,input_kind,input_value,"
+                "quantity,mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,"
+                "idempotency_key) "
+                "SELECT :p,:u,id,'buy','quantity',.001,.001,50000,clock_timestamp(),"
+                "50000,.25,-50.25,9949.75,:k FROM coins WHERE symbol='BTC'"
+            ),
+            params,
+        )
     before = await economic_evidence(api)
     assert (await api.client.get(f"/api/v2/portfolios/{root}/metadata")).json() == {
         "id": root,
@@ -56,17 +80,20 @@ async def economic_evidence(api):
     )
     async with api.migrator.connect() as conn:
         return tuple(
-            tuple(
-                (
-                    await conn.execute(
-                        text(
-                            f"SELECT (to_jsonb(t)-'name'-'name_key'-'description')::text FROM {table} t ORDER BY id"
+            [
+                tuple(
+                    (
+                        await conn.execute(
+                            text(
+                                "SELECT (to_jsonb(t)-'name'-'name_key'-'description')::text "  # noqa: S608
+                                f"FROM {table} t ORDER BY id"
+                            )
                         )
-                    )
-                ).scalars()
-            )
-            for table in tables
-        )  # noqa: S608
+                    ).scalars()
+                )
+                for table in tables
+            ]
+        )
 
 
 async def test_owner_closed_unknown_privacy_and_no_public_delete(management_api):

@@ -1,13 +1,21 @@
 """Resolve one explicit owned active financial root, without fallback."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Account, User
-from app.schemas.portfolios import PortfolioSummary
+from app.schemas.portfolios import (
+    PortfolioCreate,
+    PortfolioMetadata,
+    PortfolioPatch,
+    PortfolioSummary,
+)
 
 
 @dataclass(frozen=True)
@@ -40,3 +48,96 @@ async def list_active_portfolios(db: AsyncSession, user: User) -> list[Portfolio
         .order_by(Account.id)
     )
     return [PortfolioSummary(id=row.id, name=row.name) for row in rows]
+
+
+def _management_error(exc: DBAPIError) -> HTTPException | None:
+    state = getattr(exc.orig, "sqlstate", None)
+    cause = getattr(exc.orig, "__cause__", None)
+    message = getattr(cause, "message", None)
+    if state == "23505" and message in {"name_taken", "creation_key_conflict"}:
+        return HTTPException(409, detail={"code": message})
+    if state == "23514" and message == "portfolio_limit":
+        return HTTPException(409, detail={"code": message})
+    if state == "P0002" and message == "portfolio_unavailable":
+        return HTTPException(404, detail={"code": message})
+    if state == "22023":
+        return HTTPException(422, detail={"code": "invalid_input"})
+    if state == "P0001" and message == "creation_quota":
+        now = datetime.now(UTC)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        return HTTPException(
+            429,
+            detail={"code": message},
+            headers={"Retry-After": str(max(1, int((midnight - now).total_seconds()) + 1))},
+        )
+    if state in {"55P03", "57014", "40001", "40P01"}:
+        return HTTPException(
+            503, detail={"code": "service_unavailable"}, headers={"Retry-After": "5"}
+        )
+    return None
+
+
+async def create_portfolio(
+    db: AsyncSession, user: User, key: UUID, payload: PortfolioCreate
+) -> tuple[PortfolioMetadata, bool]:
+    """SQL owns canonical intent, owner lock, grant and replay ordering; service commits."""
+    try:
+        row = (
+            await db.execute(
+                text("SELECT * FROM public.create_portfolio(:u,:k,:n,:d)"),
+                {"u": user.id, "k": key, "n": payload.name, "d": payload.description},
+            )
+        ).one()
+        result = PortfolioMetadata(id=row.portfolio_id, name=row.name, description=row.description)
+        replayed = bool(row.replayed)
+        await db.commit()
+        return result, replayed
+    except DBAPIError as exc:
+        await db.rollback()
+        refusal = _management_error(exc)
+        if refusal is not None:
+            raise refusal from None
+        raise
+
+
+async def update_portfolio_metadata(
+    db: AsyncSession, user: User, portfolio_id: int, payload: PortfolioPatch
+) -> PortfolioMetadata:
+    try:
+        row = (
+            await db.execute(
+                text("SELECT * FROM public.update_portfolio_metadata(:u,:p,:n,:d,:hn,:hd)"),
+                {
+                    "u": user.id,
+                    "p": portfolio_id,
+                    "n": payload.name,
+                    "d": payload.description,
+                    "hn": "name" in payload.model_fields_set,
+                    "hd": "description" in payload.model_fields_set,
+                },
+            )
+        ).one()
+        result = PortfolioMetadata(id=row.portfolio_id, name=row.name, description=row.description)
+        await db.commit()
+        return result
+    except DBAPIError as exc:
+        await db.rollback()
+        refusal = _management_error(exc)
+        if refusal is not None:
+            raise refusal from None
+        raise
+
+
+async def get_portfolio_metadata(
+    db: AsyncSession, user: User, portfolio_id: int
+) -> PortfolioMetadata:
+    row = (
+        await db.execute(
+            select(Account.id, Account.name, Account.description).where(
+                Account.id == portfolio_id, Account.user_id == user.id, Account.closed_at.is_(None)
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, detail={"code": "portfolio_unavailable"})
+    return PortfolioMetadata(id=row.id, name=row.name, description=row.description)
