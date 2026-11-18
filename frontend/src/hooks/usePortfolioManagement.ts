@@ -302,6 +302,7 @@ export function usePortfolioManagement(portfolioId?: string) {
       });
       publish(session);
       await client.invalidateQueries({ queryKey: ["portfolios", owner] });
+      if (!ownsSession()) return;
       await client.invalidateQueries({ queryKey: ["portfolioOverview", owner] });
     } catch (error) {
       if (!ownsSession()) return;
