@@ -80,7 +80,52 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020")
+MANAGEMENT_COLUMNS = {
+    'portfolio_creations': 'id user_id creation_key portfolio_id origin payload_version canonical_payload amount created_at',
+    'portfolio_initializations': 'id user_id origin portfolio_id creation_id created_at',
+}
+# V1 is the original exact inventory. V2 extends it; no historical payload is
+# interpreted as V2 merely because the running application has changed.
+PORTFOLIO_PAYLOAD_V1 = [
+    'backend/alembic/versions/0015_portfolio_expansion.py',
+    'backend/alembic/versions/0016_portfolio_association.py',
+    'backend/alembic/versions/0017_portfolio_ownership.py',
+    'backend/alembic/sql/0017_dividend_portfolio.sql',
+    'backend/alembic/sql/0017_stock_portfolio.sql',
+    'backend/app/db/portfolio_bootstrap.py', 'backend/app/db/portfolio_migrate.py',
+    'backend/app/db/dev_bootstrap.py', 'deploy/tests/portfolio-execution-fixture.py',
+    'deploy/tests/portfolio-smoke.py', 'deploy/tests/portfolio-sources.py',
+    'deploy/tests/portfolio-retained-sources.json', 'deploy/tests/run-portfolio-validation.py',
+    'deploy/tests/ops-fixtures.py', 'deploy/tests/selected-cutover.py',
+    'deploy/tests/test-rollback-db-security.sh',
+]
+PORTFOLIO_PAYLOAD_V2 = PORTFOLIO_PAYLOAD_V1 + [
+    'backend/alembic/versions/0018_portfolio_management_expansion.py',
+    'backend/alembic/versions/0019_portfolio_management_backfill.py',
+    'backend/alembic/versions/0020_portfolio_management_authority.py',
+    'backend/alembic/sql/0019_portfolio_metadata.sql',
+    'backend/alembic/sql/0020_portfolio_management.sql',
+    'backend/app/models/user.py', 'backend/app/models/portfolio_creation.py',
+    'backend/app/db/schema_contract.py', 'backend/app/services/accounts.py',
+    'deploy/db/bootstrap-roles.sql',
+    'deploy/tests/portfolio-management-recovery-fixture.py',
+    'deploy/tests/fixtures/portfolio-recovery-0020.json',
+]
+
+
+def portfolio_payload_inventory(root):
+    root = Path(root).resolve(strict=True)
+    hashes = {}
+    for name in PORTFOLIO_PAYLOAD_V2:
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {'version': 2, 'revision': '0020', 'sha256': hashes}
+
+
+def validate_payload_inventory(inventory, root):
+    require(inventory == portfolio_payload_inventory(root))
 BASE_COLUMNS = {
     "users": "id email created_at",
     "accounts": "id user_id cash starting_cash created_at",
@@ -378,8 +423,10 @@ def validate_resolution_authority(authority, revision='0012'):
 
 
 def identity_tables(revision):
-    if revision in ('0015', '0016'):
+    if revision in ('0015', '0016', '0018', '0019'):
         raise ValueError('migration_only')
+    if revision == '0020':
+        return sorted([*identity_tables('0017'), *MANAGEMENT_COLUMNS])
     if revision == '0017':
         return sorted([*identity_tables('0014'), 'portfolio_stock_closures'])
     names = ["users", "accounts", "auth_sessions", "refresh_tokens", "coins", "holdings", "trades"]
@@ -414,8 +461,13 @@ def dump_identity_state(raw, revision="0011"):
 
 
 def contract_columns(revision):
-    if revision in ('0015', '0016'):
+    if revision in ('0015', '0016', '0018', '0019'):
         raise ValueError('migration_only')
+    if revision == '0020':
+        columns = contract_columns('0017')
+        columns['accounts'] |= {'name_key', 'description'}
+        columns.update({table: set(value.split()) for table, value in MANAGEMENT_COLUMNS.items()})
+        return columns
     if revision == '0017':
         columns = contract_columns('0014')
         columns['accounts'] |= {'name', 'closed_at'}
@@ -446,6 +498,8 @@ def manifest_sql(revision):
     All substitutions are fixed repository fragments, never operator input.
     """
     contract_columns(revision)
+    if revision == '0020':
+        return management_manifest_sql()
     if revision == '0017':
         return portfolio_manifest_sql()
     source = (HERE / "backup-manifest.sql").read_text()
@@ -538,6 +592,9 @@ def schema_guard_sql(revision):
 def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
+    require(isinstance(manifest.get('tables'), dict) and set(manifest['tables']) == set(expected))
+    if manifest['revision'] == '0020':
+        validate_management_manifest(manifest, quarantined=quarantined)
     if manifest['revision'] == '0017':
         validate_portfolio_manifest(manifest, quarantined=quarantined)
     if manifest['revision']=='0014':
@@ -838,6 +895,102 @@ def validate_portfolio_manifest(manifest, *, quarantined=False):
     require(isinstance(states,list) and [row[0] for row in states] == identity_tables('0017'))
     for _,value,called in states:
         require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
+
+
+MANAGEMENT_BOOTSTRAP_SHA256 = '2429e45f08d72e7adf0dc816e0d5093642a92d8317bff0ad1c74d0cede7212df'
+MANAGEMENT_SCHEMA_SHA256 = '7aa08fba535a66c8978dd19f956dc0db1c3da7c4d461f75f9d341ea1e5fe2da7'
+MANAGEMENT_AUTHORITY_SHA256 = '785a5086286f815972eb0b09edbb4c8f6b15fe220fd614d233cda9051c191228'
+MANAGEMENT_QUARANTINED_SHA256 = '47e3589ac675ecfc69308d1806a55ee5b9c24db42947d94c5a69fee9ace3aa9a'
+MANAGEMENT_QUARANTINED_ACL_SHA256 = '500ae682129bf6b3bc252d0c4f15cf41bdeed63785b17458c8d1c9ab70eb3f7c'
+MANAGEMENT_NO_ACL_SHA256 = 'a0a40e73d9fed9d6a420fcf17f4df6e70f032bd1bbeebfb8ae06d3c2fccd5a7c'
+MANAGEMENT_NO_ACL_PRIVILEGES_SHA256 = 'bd65d43da215a53d24b6a2a384951f57ea03efa76948d7603c953a84250b2b55'
+
+
+def management_bootstrap():
+    """Authenticate authority source before importing even its SQL constants."""
+    path = HERE.parent / 'backend/app/db/portfolio_bootstrap.py'
+    require(path.is_file() and not path.is_symlink())
+    require(hashlib.sha256(path.read_bytes()).hexdigest() == MANAGEMENT_BOOTSTRAP_SHA256)
+    spec = importlib.util.spec_from_file_location('authenticated_management_bootstrap', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def management_manifest_sql():
+    bootstrap = management_bootstrap()
+    query = portfolio_manifest_sql()
+    query = '\n'.join(line.replace(')::text FROM accounts', ',name_key,description)::text FROM accounts')
+                      if "SELECT 'accounts'," in line else line for line in query.splitlines())
+    rows = []
+    for table, columns in MANAGEMENT_COLUMNS.items():
+        values = ["to_char(created_at,'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')" if c == 'created_at'
+                  else c + '::text' for c in columns.split()]
+        rows.append(" UNION ALL SELECT '"+table+"',id,json_build_array("+','.join(values)+")::text FROM "+table)
+    query = query.replace('\n), names(name) AS (', '\n'+'\n'.join(rows)+'\n), names(name) AS (')
+    query = query.replace("('portfolio_stock_closures')\n", "('portfolio_stock_closures'),"+
+                          ','.join("('"+name+"')" for name in MANAGEMENT_COLUMNS)+'\n')
+    query = query.replace("SELECT 'users',last_value,is_called FROM users_id_seq",
+                          ' UNION ALL '.join("SELECT '"+name+"',last_value,is_called FROM "+name+"_id_seq"
+                                            for name in MANAGEMENT_COLUMNS)+
+                          " UNION ALL SELECT 'users',last_value,is_called FROM users_id_seq")
+    invalid = """
+      (SELECT count(*) FROM users u LEFT JOIN portfolio_initializations i ON i.user_id=u.id WHERE i.id IS NULL)
+      +(SELECT count(*) FROM portfolio_creations c LEFT JOIN accounts a ON (a.id,a.user_id)=(c.portfolio_id,c.user_id)
+        WHERE a.id IS NULL OR c.amount<>10000 OR c.payload_version<>1
+        OR c.canonical_payload IS DISTINCT FROM jsonb_build_object(
+           'name',public.portfolio_display_name(c.canonical_payload->>'name'),
+           'description',public.portfolio_description(c.canonical_payload->>'description')))
+      +(SELECT count(*) FROM portfolio_initializations i LEFT JOIN portfolio_creations c
+        ON (c.id,c.portfolio_id,c.user_id)=(i.creation_id,i.portfolio_id,i.user_id)
+        WHERE (i.origin='initial' AND (c.id IS NULL OR c.origin<>'initial'))
+           OR (i.origin='legacy' AND (i.creation_id IS NOT NULL OR i.portfolio_id IS NOT NULL)))
+      +(SELECT count(*) FROM accounts WHERE name IS DISTINCT FROM public.portfolio_display_name(name)
+        OR name_key IS DISTINCT FROM public.portfolio_name_key(name)
+        OR description IS DISTINCT FROM public.portfolio_description(description))
+      +(SELECT count(*) FROM (SELECT user_id FROM accounts WHERE closed_at IS NULL
+        GROUP BY user_id HAVING count(*)>10) excessive)
+    """
+    unsafe = """(SELECT count(*) FROM pg_rewrite r JOIN pg_class c ON c.oid=r.ev_class
+        WHERE c.relnamespace='public'::regnamespace)
+      +(SELECT count(*) FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
+        AND has_schema_privilege(oid,'public','CREATE'))
+      +(SELECT count(*) FROM pg_database WHERE datname=current_database() AND
+        pg_get_userbyid(datdba) IN ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))
+      +(SELECT count(*) FROM pg_namespace WHERE nspname='public' AND
+        pg_get_userbyid(nspowner) IN ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))"""
+    fields = " 'management_state',json_build_object('creations',(SELECT count(*) FROM portfolio_creations)," \
+             "'initializations',(SELECT count(*) FROM portfolio_initializations),'invalid',("+invalid+")),\n"
+    fields += " 'management_contract',json_build_object('catalogue',("+bootstrap.CATALOGUE_SQL+")," \
+              "'acl',("+bootstrap.ACL_SQL+"),'unsafe',("+unsafe+")),\n"
+    return query.replace(" 'schema',json_build_object(", fields+" 'schema',json_build_object(")
+
+
+def validate_management_manifest(manifest, *, quarantined=False):
+    require(canonical_hash(manifest['schema']) == MANAGEMENT_SCHEMA_SHA256)
+    require(canonical_hash(manifest['portfolio_authority']) ==
+            (MANAGEMENT_QUARANTINED_SHA256 if quarantined else MANAGEMENT_AUTHORITY_SHA256))
+    contract = manifest['management_contract']
+    require(set(contract) == {'catalogue', 'acl', 'unsafe'})
+    require(contract['catalogue'] == 'd8f42ef33af7989badf342b5295d8d523cd6bf53839de6156a14e5251b5ee263')
+    require(contract['acl'] == (MANAGEMENT_QUARANTINED_ACL_SHA256 if quarantined else
+            '041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e'))
+    require(type(contract['unsafe']) is int and contract['unsafe'] == 0)
+    state = manifest['management_state']
+    require(set(state) == {'creations', 'initializations', 'invalid'})
+    require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
+    require(state['creations'] == manifest['tables']['portfolio_creations']['count'])
+    require(state['initializations'] == manifest['tables']['portfolio_initializations']['count'] == manifest['tables']['users']['count'])
+    states = manifest['identity_state']
+    require(isinstance(states, list) and [r[0] for r in states] == identity_tables('0020'))
+    for _, value, called in states:
+        require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
+    state = manifest['portfolio_state']
+    require(set(state) == {'active', 'closed', 'legacy_markers', 'v2_markers', 'invalid'})
+    require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
+    require(state['active']+state['closed'] == manifest['tables']['accounts']['count'])
+    require(state['legacy_markers']+state['v2_markers'] == manifest['tables']['stock_split_applications']['count'])
+    require(manifest['stock_invalid'] == 0)
 
 
 def strict_json(data):
@@ -1540,7 +1693,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012", "0013", "0014", "0017"):
+            if revision in ("0011", "0012", "0013", "0014", "0017", "0020"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
@@ -1743,8 +1896,152 @@ class Job:
                 return 1
 
 
+def bundle_package_v2(output, *, recovery=None):
+    """Produce V2; the separately owned consumer must admit V2 explicitly."""
+    management_bootstrap()
+    source_spec = importlib.util.spec_from_file_location('package_sources', HERE / 'tests/portfolio-sources.py')
+    source_module = importlib.util.module_from_spec(source_spec)
+    source_spec.loader.exec_module(source_module)
+    source_module.validate_matrix()
+    if recovery is None:
+        spec = importlib.util.spec_from_file_location('producer_recovery_tools', HERE / 'verify-restore.py')
+        recovery = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(recovery)
+    synthetic_path = recovery.synthetic_path
+    runtime = recovery.runtime
+    digest = recovery.digest
+    image_inspect = recovery.image_inspect
+    registry_manifests = recovery.registry_manifests
+    verify_saved_image = recovery.verify_saved_image
+    CORE = recovery.CORE
+    UNITS = recovery.UNITS
+    PROVENANCE = recovery.PROVENANCE
+    REGISTRY_REF = recovery.REGISTRY_REF
+    IMAGE_PROVENANCE = recovery.IMAGE_PROVENANCE
+    ENV = recovery.ENV
+    IMAGE_ID = recovery.IMAGE_ID
+    INDEX_DIGEST = recovery.INDEX_DIGEST
+    PLATFORM_DIGEST = recovery.PLATFORM_DIGEST
+    RESTIC_SHA = recovery.RESTIC_SHA
+    CONTRACT_PAYLOAD = recovery.CONTRACT_PAYLOAD
+    recovery_contract = recovery.recovery_contract
+    output = synthetic_path(output, False)
+    require(not output.exists())
+    versions = runtime()
+    tools = Path("/tmp/birja-test-tools/restic-0.19.1")
+    require(digest(tools / "restic") == RESTIC_SHA)
+    require(all(digest(tools / n) == h for n, h in PROVENANCE.items()))
+    image_inspect(REGISTRY_REF)
+    index_bytes, manifest_bytes = registry_manifests()
+    with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
+        stage = Path(tmp)
+        files = CORE + UNITS + PORTFOLIO_PAYLOAD_V2
+        for name in files:
+            src = HERE.parent / name
+            require(src.is_file() and not src.is_symlink())
+            dest = stage / name
+            dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            shutil.copyfile(src, dest)
+        source_payloads = source_module.archive_payloads()
+        if source_payloads:
+            RETAINED_SOURCE_PAYLOADS = {name: identity[1] for lane, identity in source_module.FIXED_RELEASES.items()
+                                        for name in ['sources/' + lane + '.tar']}
+            require(set(source_payloads) == set(RETAINED_SOURCE_PAYLOADS))
+            for name, data in source_payloads.items():
+                require(hashlib.sha256(data).hexdigest() == RETAINED_SOURCE_PAYLOADS[name])
+                destination = stage / name
+                destination.parent.mkdir(mode=0o700, exist_ok=True)
+                destination.write_bytes(data)
+        for directory in ["tools", "images", "provenance"]:
+            (stage / directory).mkdir(mode=0o700)
+        shutil.copyfile(tools / "restic", stage / "tools/restic")
+        for n in PROVENANCE:
+            shutil.copyfile(tools / n, stage / "provenance" / n)
+        (stage / "provenance/verified.json").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "CF8F18F2844575973F79D4E191A6868BD3F7A907",
+                    "binary_sha256": RESTIC_SHA,
+                    "compressed_sha256": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+                    "signature": "GOODSIG VALIDSIG; verified 2026-11-02; official restic 0.19.1 linux amd64",
+                },
+                sort_keys=True,
+            )
+        )
+        with (stage / "images/postgres.tar").open("wb") as f:
+            run = subprocess.run(
+                ["docker", "image", "save", "--platform", "linux/amd64", REGISTRY_REF],
+                check=False,
+                stdout=f,
+                stderr=subprocess.DEVNULL,
+                env=ENV,
+                timeout=120,
+            )
+            require(run.returncode == 0)
+        for name, data in zip(
+            IMAGE_PROVENANCE, [index_bytes, manifest_bytes], strict=True
+        ):
+            (stage / name).write_bytes(data)
+        with (stage / "images/postgres.tar").open("rb") as saved:
+            verify_saved_image(saved, index_bytes, manifest_bytes)
+        files = sorted(
+            p.relative_to(stage).as_posix() for p in stage.rglob("*") if p.is_file()
+        )
+        inventory = {
+            "format": 1,
+            "portfolio_payload": portfolio_payload_inventory(stage),
+            "recovery_profile": "deploy-recovery-v3",
+            "files": files,
+            "units": UNITS,
+            "image_id": IMAGE_ID,
+            "registry_reference": REGISTRY_REF,
+            "registry_index_digest": INDEX_DIGEST,
+            "platform_manifest_digest": PLATFORM_DIGEST,
+            "restic_sha256": RESTIC_SHA,
+            "runtime": versions,
+            "schema_contract": {
+                "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+                "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
+            },
+        }
+        if source_payloads:
+            inventory["retained_source_payloads"] = RETAINED_SOURCE_PAYLOADS
+        (stage / "INVENTORY.json").write_text(json.dumps(inventory, sort_keys=True))
+        files.append("INVENTORY.json")
+        (stage / "SHA256SUMS").write_text(
+            "".join(digest(stage / n) + "  " + n + "\n" for n in sorted(files))
+        )
+        files.append("SHA256SUMS")
+        with tarfile.open(output, "x", format=tarfile.USTAR_FORMAT) as t:
+            for name in sorted(files):
+                p = stage / name
+                info = tarfile.TarInfo(name)
+                info.size = p.stat().st_size
+                info.mode = (
+                    0o700 if name.endswith(".sh") or name == "tools/restic" else 0o600
+                )
+                with p.open("rb") as f:
+                    t.addfile(info, f)
+        with tarfile.open(output, 'r:') as archive:
+            require(recovery.tar_members(archive) == set(files))
+    output.chmod(0o600)
+    sha = digest(output)
+    record = output.with_suffix(output.suffix + ".sha256")
+    require(not record.exists())
+    record.write_text(sha + "\n")
+    record.chmod(0o600)
+    print("archive_sha256=" + sha)
+
+
 def main(argv, *, config=None):
     os.umask(0o077)
+    if argv and argv[0] == 'bundle-v2':
+        parser = argparse.ArgumentParser(allow_abbrev=False)
+        parser.add_argument('--output', required=True)
+        parser.add_argument('--include-units', action='store_true')
+        args = parser.parse_args(argv[1:])
+        bundle_package_v2(args.output)
+        return 0
     try:
         require(argv and argv[0] in ["backup", "status", "recovery-gate"])
         if argv[0] == "recovery-gate":

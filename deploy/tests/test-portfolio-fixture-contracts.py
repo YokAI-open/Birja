@@ -5,11 +5,10 @@ import contextlib
 import copy
 import importlib.util
 import io
-import json
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("portfolio_fixture", Path(__file__).with_name("portfolio-execution-fixture.py"))
@@ -65,6 +64,27 @@ class PortfolioFixtureContracts(unittest.TestCase):
         with mock.patch.object(sources, "source_archive", side_effect=AssertionError("source read")):
             with self.assertRaises(ValueError):
                 sources.retained_program("portfolio", revision="0020", archive="missing", archive_sha="0" * 64)
+
+    def test_image_revision_config_and_rootfs_substitution_refuse(self):
+        inspect = [{'Id': 'sha256:'+'a'*64, 'Config': {'Labels': {
+            'org.opencontainers.image.revision': '4b4320b4cc373268a8d598612a563cd5ef199700'}, 'Env': ['ENV=test']},
+            'RootFS': {'Layers': ['sha256:'+'b'*64]}}]
+        expected = sources.image_binding(inspect, source_commit='4b4320b4cc373268a8d598612a563cd5ef199700',
+                                         app_tree=sources.PORTFOLIO0017['app_tree'],
+                                         context_sha256=sources.PORTFOLIO0017['archive_sha256'])
+        self.assertEqual(sources.verify_image(expected, inspect), inspect[0]['Id'])
+        for field in ('revision', 'config', 'rootfs', 'id'):
+            damaged = copy.deepcopy(inspect)
+            if field == 'revision':
+                damaged[0]['Config']['Labels']['org.opencontainers.image.revision'] = 'futureHEAD'
+            elif field == 'config':
+                damaged[0]['Config']['Env'] = ['ENV=prod']
+            elif field == 'rootfs':
+                damaged[0]['RootFS']['Layers'] = []
+            else:
+                damaged[0]['Id'] = 'sha256:'+'c'*64
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                sources.verify_image(expected, damaged)
 
     def run_command(self, args, value, calls=None):
         def transport(code):
