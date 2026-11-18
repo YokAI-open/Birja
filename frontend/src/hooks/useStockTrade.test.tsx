@@ -66,6 +66,10 @@ it("keeps one frozen attempt after response loss and resolves it explicitly afte
     await result.current.confirm();
   });
   expect(result.current.phase).toBe("unknown");
+  const original = result.current.attempt!;
+  expect(Object.isFrozen(original)).toBe(true);
+  expect(Object.isFrozen(original.body)).toBe(true);
+  expect(original.portfolioName).toBe("My portfolio");
   const closed = contextFixture();
   closed.execution_enabled = false;
   closed.execution_reason = "market_closed";
@@ -89,6 +93,7 @@ it("keeps one frozen attempt after response loss and resolves it explicitly afte
     await result.current.checkResult();
   });
   expect(result.current.phase).toBe("filled");
+  expect(result.current.originalName).toBe(original.portfolioName);
   expect(bodies).toHaveLength(2);
   expect(bodies[1]).toEqual(bodies[0]);
 });

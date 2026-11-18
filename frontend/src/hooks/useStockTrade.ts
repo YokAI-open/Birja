@@ -20,7 +20,12 @@ import type { PortfolioTarget } from "./usePortfolioTarget";
 import { financialScope, revokePortfolioTarget } from "./useQuote";
 
 type Phase = "draft" | "loading_preview" | "preview" | "submitting" | "unknown" | "filled";
-type Attempt = { body: Readonly<StockAttempt>; coin_id: string; provider_asset_id: string };
+type Attempt = Readonly<{
+  body: Readonly<StockAttempt>;
+  coin_id: string;
+  provider_asset_id: string;
+  portfolioName: string;
+}>;
 export type StockTradeState = {
   phase: Phase;
   symbol: string;
@@ -32,6 +37,7 @@ export type StockTradeState = {
   replacement: StockPriceChanged | null;
   error: StockRefusal | "unknown" | null;
   interrupted: boolean;
+  originalName?: string;
 };
 const empty = (symbol: string): StockTradeState => ({
   phase: "draft",
@@ -614,12 +620,14 @@ export function useStockTrade(target: PortfolioTarget | null, routeSymbol: strin
   };
   const resolve = async (attempt: Attempt) => {
     if (!scope.current() || target === null || attempt.body.portfolio_id !== portfolioId) return;
+    if (target.isOriginalCurrent && !target.isOriginalCurrent()) return;
     const version = auth.version,
       owner = client.getQueryCache().find({ queryKey: stateKey, exact: true });
     setState((s) => ({
       ...s,
       phase: "submitting",
       attempt,
+      originalName: attempt.portfolioName,
       quote: null,
       replacement: null,
       error: null,
@@ -737,7 +745,14 @@ export function useStockTrade(target: PortfolioTarget | null, routeSymbol: strin
       expected_exec_price: s.quote.exec_price,
       idempotency_key: crypto.randomUUID(),
     });
-    await resolve({ body, coin_id: s.quote.coin_id, provider_asset_id: s.quote.provider_asset_id });
+    await resolve(
+      Object.freeze({
+        body,
+        coin_id: s.quote.coin_id,
+        provider_asset_id: s.quote.provider_asset_id,
+        portfolioName: target.name,
+      }),
+    );
   };
   const checkResult = async () => {
     if (!scope.current()) return;
