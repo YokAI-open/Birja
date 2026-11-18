@@ -37,15 +37,23 @@ async def staged(engine):
 
 
 async def user(conn):
-    return (await conn.execute(text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
-                              {"e": f"management-{uuid4()}@example.test"})).scalar_one()
+    return (
+        await conn.execute(
+            text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+            {"e": f"management-{uuid4()}@example.test"},
+        )
+    ).scalar_one()
 
 
 async def account(conn, owner, name="My portfolio", *, closed=False):
-    return (await conn.execute(text("""INSERT INTO accounts
+    return (
+        await conn.execute(
+            text("""INSERT INTO accounts
         (user_id,name,cash,starting_cash,closed_at) VALUES (:u,:n,8765.43,12500,
         CASE WHEN :closed THEN clock_timestamp() ELSE NULL END) RETURNING id"""),
-        {"u": owner, "n": name, "closed": closed})).scalar_one()
+            {"u": owner, "n": name, "closed": closed},
+        )
+    ).scalar_one()
 
 
 async def rejected(conn, sql, params=None, state="23514"):
@@ -77,23 +85,48 @@ async def test_expansion_preserves_money_and_adds_only_empty_metadata(staged):
         before = (await conn.execute(text("SELECT to_jsonb(a)::text FROM accounts a"))).all()
     await migrate("0018")
     async with staged.begin() as conn:
-        assert (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "0018"
-        assert (await conn.execute(text("SELECT (to_jsonb(a)-'description'-'name_key')::text FROM accounts a"))).all() == before
-        assert (await conn.execute(text("SELECT description,name_key FROM accounts WHERE id=:p"), {"p": root})).one() == ("", None)
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_initializations"))).scalar_one() == 0
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_creations"))).scalar_one() == 0
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0018"
+        assert (
+            await conn.execute(
+                text("SELECT (to_jsonb(a)-'description'-'name_key')::text FROM accounts a")
+            )
+        ).all() == before
+        assert (
+            await conn.execute(
+                text("SELECT description,name_key FROM accounts WHERE id=:p"), {"p": root}
+            )
+        ).one() == ("", None)
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_initializations"))
+        ).scalar_one() == 0
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_creations"))
+        ).scalar_one() == 0
         foreign = await user(conn)
-        await rejected(conn, """INSERT INTO portfolio_creations
+        await rejected(
+            conn,
+            """INSERT INTO portfolio_creations
             (user_id,creation_key,portfolio_id,origin,payload_version,canonical_payload,amount)
             VALUES (:u,:k,:p,'explicit',1,'{"name":"My portfolio","description":""}',10000)""",
-            {"u": foreign, "k": uuid4(), "p": root}, "23503")
+            {"u": foreign, "k": uuid4(), "p": root},
+            "23503",
+        )
         for amount in (Decimal("9999"), Decimal("10000.00000001"), Decimal("NaN")):
-            await rejected(conn, """INSERT INTO portfolio_creations
+            await rejected(
+                conn,
+                """INSERT INTO portfolio_creations
                 (user_id,creation_key,portfolio_id,origin,payload_version,canonical_payload,amount)
                 VALUES (:u,:k,:p,'explicit',1,'{"name":"My portfolio","description":""}',:a)""",
-                {"u": owner, "k": uuid4(), "p": root, "a": amount})
-        await rejected(conn, """INSERT INTO portfolio_initializations
-            (user_id,origin,portfolio_id) VALUES (:u,'legacy',:p)""", {"u": owner, "p": root})
+                {"u": owner, "k": uuid4(), "p": root, "a": amount},
+            )
+        await rejected(
+            conn,
+            """INSERT INTO portfolio_initializations
+            (user_id,origin,portfolio_id) VALUES (:u,'legacy',:p)""",
+            {"u": owner, "p": root},
+        )
 
 
 @pytest.mark.asyncio
@@ -101,12 +134,19 @@ async def test_expansion_refuses_downgrade_before_dropping_evidence(staged):
     await migrate("0018")
     async with staged.begin() as conn:
         owner = await user(conn)
-        await conn.execute(text("INSERT INTO portfolio_initializations(user_id,origin) VALUES (:u,'legacy')"), {"u": owner})
+        await conn.execute(
+            text("INSERT INTO portfolio_initializations(user_id,origin) VALUES (:u,'legacy')"),
+            {"u": owner},
+        )
     with pytest.raises(RuntimeError, match="downgrade refused"):
         await migrate("0017", down=True)
     async with staged.connect() as conn:
-        assert (await conn.execute(text("SELECT user_id,origin FROM portfolio_initializations"))).one() == (owner, "legacy")
-        assert (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "0018"
+        assert (
+            await conn.execute(text("SELECT user_id,origin FROM portfolio_initializations"))
+        ).one() == (owner, "legacy")
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0018"
 
 
 def test_expansion_is_not_a_runtime_schema():

@@ -7,10 +7,12 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     Numeric,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,6 +40,18 @@ class Account(Base):
         CheckConstraint("cash >= 0", name="cash_non_negative"),
         CheckConstraint("starting_cash >= 0", name="starting_cash_non_negative"),
         CheckConstraint("cash = round(cash, 2)", name="cash_cents"),
+        CheckConstraint("name = public.portfolio_display_name(name)", name="name_canonical"),
+        CheckConstraint("name_key = public.portfolio_name_key(name)", name="name_key_canonical"),
+        CheckConstraint(
+            "description = public.portfolio_description(description)", name="description_canonical"
+        ),
+        Index(
+            "uq_accounts_active_name",
+            "user_id",
+            "name_key",
+            unique=True,
+            postgresql_where=text("closed_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -45,6 +59,8 @@ class Account(Base):
         BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(Text, nullable=False, server_default="My portfolio")
+    name_key: Mapped[str] = mapped_column(Text(collation="C"), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cash: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     starting_cash: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
