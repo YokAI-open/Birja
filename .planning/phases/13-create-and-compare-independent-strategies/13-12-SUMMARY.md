@@ -31,6 +31,7 @@ key-files:
     - frontend/src/pages/PortfolioPage.test.tsx
     - frontend/src/hooks/usePortfolioManagement.ts
     - frontend/src/hooks/usePortfolioManagement.test.tsx
+    - frontend/src/components/PortfolioTargetBoundary.tsx
 key-decisions:
   - Preserve the approved UI contract and existing design system without dependencies or redesign.
   - Cancel captured financial reads before publishing renamed metadata; refresh discovery before marking unchanged financial views stale without immediate refetch.
@@ -123,3 +124,33 @@ No package/lock/image/Python pin, live provider admission, private `.env`, produ
 ## Self-Check: PASSED
 
 All ten source/test paths and this summary exist. All nine named task/refinement commits resolve and RED precedes GREEN. Final affected/focused and static checks pass; no tracked deletion or new generated untracked artifact was introduced. Only unrelated `.claude/` remains untracked. Independent parent review, global state bookkeeping and later browser/owner acceptance remain pending.
+
+## Independent Review CR-01 Repair
+
+The independent review identified a routed lifetime blocker that the initial immediate-discovery tests did not exercise: discovery invalidation makes the unchanged target boundary unmount its financial Outlet. With the editor query's zero-GC lifetime, a deferred discovery request collected the dirty draft, required review and local successful-save feedback. The parent explicitly authorized the minimal metadata-only boundary extension in addition to the existing Plan 12 hook/form/test files. The parent-owned review remains untouched.
+
+RED `09214df` adds actual `PortfolioTargetBoundary` + `PortfolioPage` + real management/target/query-hook tests. Both dirty cross-tab and focus-plus-explicit-discovery-revalidation cases defer discovery through a 25ms timer turn; they independently fail when the editor fields disappear after the returned authoritative statement. The delayed successful-PATCH case independently fails because Portfolio updated is absent after remount. These are component-level routed tests with controlled HTTP responses, not actual browser or owner acceptance.
+
+The GREEN repair introduces `usePortfolioMetadataLifetime(portfolioId, status, pathname)` in the existing management module. The boundary invokes it before its existing conditional Outlet rendering. Its disabled query observes only the existing metadata editor record; it performs no fetch, broadcast, financial read or financial rendering. `gcTime: 0` is retained. A single route lease is bound to the captured owner/session/root and pathname by token identity. Explicit cleanup removes the editor query on true route/root/session departure; refusal/unavailability/error clears retained editor state. Loading of the same route keeps the observer and marks dirty drafts for review. Metadata is authoritatively fetched by the existing management hook when its form remounts; an accepted response clears only the outstanding-fetch flag and does not remove required review.
+
+Successful-save feedback is one bounded boolean in that same editor record. It is published only after discovery returns and only when the original management scope is still current or the exact captured owner/root/session/route lease remains active. Owner/session checks still run after the await. The form handles a newly delivered or remounted success marker, waits for the actual enabled Edit control and current metadata, restores focus once, then acknowledges the marker. No receipt, financial value, token, browser storage or additional private metadata is retained by the lease. Earlier creation storage and strict original-order guards are unchanged.
+
+The boundary continues to revoke target/action authority synchronously and unmount financial children while discovery is pending. No `isCurrent` check, unavailable-target refusal, stock proof, root-bound History cursor or original-retry guard is relaxed. The earlier cancellation → captured guard → discovery → captured guard → stale-only financial invalidation ordering remains in place. A matching route lease only permits metadata completion bookkeeping across the intended temporary Outlet absence; it cannot authorize a trade, financial projection or sibling route.
+
+Final new routed coverage consists of **10 cases**: cross-tab dirty draft retention; focus plus explicit discovery revalidation retention; delayed-save success/focus; no late-save feedback after logout, owner change or logout/return; draft cleanup on logout, root change, same-root History route departure or unavailable target. Tests assert absence of the Cash region during revoked discovery, retained original text plus latest authoritative metadata and review-blocked Save after renewal, successful focus restoration, and no retained old draft/success flag after departure.
+
+Final verification:
+
+- Four focused suites: **95 passed**, 5.87s.
+- Sixteen affected suites: **384 passed**, 16.56s, including all 19 existing boundary cases and the earlier financial-read/creation/original-order regressions.
+- Whole frontend `npm run typecheck` and `npm run lint`: passed.
+- Four changed-file Prettier check and `git diff --check`: passed.
+- Four changed source/test files: `usePortfolioManagement.ts`, `PortfolioMetadataForm.tsx`, `PortfolioTargetBoundary.tsx`, `PortfolioPage.test.tsx`. No existing boundary-test fixture adjustment was necessary.
+
+The implementation used the existing session update helper to comply with the repository's React immutability lint rule. The focus test explicitly invalidates discovery alongside the focus event; it does not claim that an ordinary focus event alone always unmounts this boundary. No arbitrary production retention delay or infinite editor cache was added. No new endpoint, fetch effect, storage mechanism, dependency, schema or unmodeled trust surface was introduced.
+
+Plan 13 inherits the pathname-scoped metadata-only boundary lease; it must preserve it while adding navigation/switcher integration. Parent global state, review, later browser/native200/owner acceptance, publication and all original provider/accepted-risk boundaries remain unchanged. Repair work took approximately 8 minutes.
+
+### Repair Self-Check: PASSED
+
+All four changed paths exist, committed RED precedes GREEN, and the final 384-case affected regression and static checks pass. No tracked deletion was introduced. The parent-owned untracked review and unrelated `.claude/` were left untouched. The repaired plan now has eleven source/test paths in its cumulative ownership; the initial ten-file counts above remain the historical initial execution record.
