@@ -1,10 +1,10 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T14:58:14Z
+reviewed: 2026-11-18T16:32:06Z
 depth: standard
 diff_base: 7125fec
-reviewed_head: 6bfb447
-files_reviewed: 64
+reviewed_head: 99166d9
+files_reviewed: 66
 files_reviewed_list:
   - .github/workflows/ci.yml
   - CLAUDE.md
@@ -70,6 +70,8 @@ files_reviewed_list:
   - frontend/src/pages/TradePage.tsx
   - frontend/src/pages/StockTradePage.tsx
   - frontend/src/pages/TradeRenameRecovery.test.tsx
+  - backend/tests/test_portfolio_management_grants.py
+  - backend/tests/test_portfolio_strategy_events.py
 findings:
   critical: 0
   warning: 0
@@ -77,6 +79,7 @@ findings:
   total: 0
 resolved_findings:
   - CR-01
+  - CR-02
 status: clean
 ---
 
@@ -152,6 +155,58 @@ executor reports all six failed before the consumer repair and passed after it;
 actual diff, test and hook/caller lifecycle; it did not rerun those commands.
 No remaining or newly introduced defect was demonstrated in this repair.
 
+### CR-02: Management owner locks invert the dividend user foreign-key lock
+
+**Original classification:** BLOCKER — concurrent metadata/creation replay and
+dividend processing can deadlock or encounter a lock-timeout refusal.
+**Disposition:** RESOLVED in `99166d9`, independently reviewed after deterministic
+RED `203815f`. Original trace and fixture review are preserved in
+`13-17-FIXTURE-REVIEW.md`.
+
+**Runtime source:** `backend/alembic/sql/0020_portfolio_management.sql:16`,
+`:63`, `:96`. All three owner-row locks now use `FOR NO KEY UPDATE`, retaining
+mutual serialization among management operations while allowing the dividend
+ledger FK's `KEY SHARE`. The account lock, authenticated owner predicate,
+canonicalization, cap/quota ordering, permanent owner/key binding, grant amount,
+transactions, timeout and row checks are unchanged. The fix does not alter
+retained0017 dividend SQL or historical0015–17/0019 migrations.
+
+**Binding review:** Independently compared all1172 measured catalogue records
+before/after: reversing only the exact `WHERE u.id=p_user FOR NO KEY UPDATE;`
+line in the three routine definitions makes the entire record multiset equal.
+The measured ACL is unchanged at
+`041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e`.
+The current catalogue becomes
+`535cacb140a3a1753b5cf27e2eadcb80bc272a9b12772defd3936a3edc6c2209`.
+The producer, production bootstrap, migration runner, restore source guards and
+current recovery fixture all bind the corresponding current hashes; no matching
+predicate, source guard, historical literal or privilege check was removed.
+The stored0020 specimen's only JSON changes are that catalogue hash and the
+same three function definitions; finances, table digests, identity tails,
+constraints, owners and ACLs remain exact.
+
+Recomputed the current authority hash from the specimen as
+`0192d3a7222af2a91930d34b7089ef93371e849bc32f911cacc8383fd5ac5ebf`;
+independently projecting the six quarantined financial/management routine ACL
+revocations yields
+`d6486b31f5609a6fdbeadaf4eeb7d9f0b4eaabe1de0566e646d85080a939fa26`;
+projecting no-ACL tables/columns/sequences and default PUBLIC function EXECUTE
+yields `e88cb1971126447232f872c3b93fe18454ef58094becdcecd4d9066af44e3cfe`.
+These match the repaired constants; schema and ACL fingerprints stay unchanged.
+This validates the intended new definition, not an arbitrary repin of a failing
+financial or permission oracle.
+
+**Regression review:** The observed-blocking-PID case now covers metadata and
+original creation replay, requiring both successful200, the same root ID,
+cash10000.50 and exactly two original creation records. Restricted-grant tests
+also exercise initialize/create/rename after reapplying the unchanged ACL
+profile. Existing cap, canonical intent and replay tests remain in scope.
+Inspected the receipt and verified its committed source and log hashes:
+70 focused tests passed363.48s, the two overlap cases passed12.71s, and four
+offline contract groups passed8+11+8+6. No new issue was demonstrated. These
+commands were run by the executor, not rerun by this reviewer. They do not
+replace final full-suite/image/browser/TLS/encrypted-recovery qualification.
+
 ## Review Scope and Limits
 
 Initial explicit runtime/config/tool scope: 61 paths, changes relative to
@@ -160,7 +215,11 @@ standard change-oriented integration review using source/diffs and surrounding
 callers, not a fresh requalification of all historical unchanged implementation.
 The two initially unchanged trade-page consumers were followed to establish CR-01;
 the follow-up explicitly reviewed their repair plus the new routed regression
-file at `6bfb447`, bringing the exact listed cumulative scope to 64 files.
+file at `6bfb447`. CR-02 follow-up reviewed the eleven-file delta
+`203815f..99166d9`, including two strengthened test files added to this cumulative
+list, bringing its exact scope to66. The separate35-file fixture review is
+retained in `13-17-FIXTURE-REVIEW.md`; those paths are not silently claimed as
+another full runtime review here.
 The separate 51 changed test paths have per-plan review records; this report
 does not claim another comprehensive review of every test. Fallow was disabled
 and no structural substrate was supplied.

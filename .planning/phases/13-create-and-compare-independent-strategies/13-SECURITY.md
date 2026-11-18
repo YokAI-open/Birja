@@ -1,15 +1,16 @@
 ---
 phase: 13-create-and-compare-independent-strategies
 audited: 2026-11-18
-reviewed_runtime_head: 6bfb447
+reviewed_runtime_head: 99166d9
 register_authored_at_plan_time: true
 status: qualification_pending
 asvs_level: 1
 threats_total: 58
-threats_closed: 54
-threats_open: 4
+threats_closed: 56
+threats_open: 2
 implementation_gaps: 0
-qualification_pending: 4
+qualification_pending: 2
+current_packet_binding: recapture_pending
 unregistered_flags: 0
 ---
 
@@ -18,8 +19,9 @@ unregistered_flags: 0
 Independent declared-threat review before Plan17. All18plan-time threat models
 are parsed:40mitigate dispositions and18references to the same accepted risk.
 The36delivered implementation mitigations are present at the cited enforcement
-points. No implementation gap was demonstrated in this pass. Four evidence gates
-remain OPEN pending actual Plans17/18completion; this report does **not** mark
+points. Two further human-response mitigations are now verified from13-UAT.md.
+No implementation gap remains demonstrated after CR-02 repair at99166d9. Two
+evidence gates remain OPEN pending actual Plan17completion; this report does **not** mark
 Phase13 threat-secure or approve advancement. Completing the already planned
 qualification is the required next action, not accepting a new risk.
 
@@ -28,7 +30,7 @@ qualification is the required next action, not accepting a new risk.
 Read AGENTS.md, full CLAUDE.md, Codex adapter/secure-phase workflow and role,
 PROJECT/REQUIREMENTS/ROADMAP/STATE/config, all18plan threat registers,
 01–16summary threat-flag sections, current clean integrated code review
-(including CR-01 resolved at6bfb447), UI review and UI evidence, Phase12accepted
+(including CR-01 resolved at6bfb447 and CR-02 at99166d9), UI review and UI evidence, Phase12accepted
 risk, then followed the named implementation/control call sites and corresponding
 negative regressions. The summaries contain no `## Threat Flags` headings;
 that absence was not treated as proof of no attack surface. Source-boundary
@@ -51,7 +53,7 @@ this is threat-register verification, not a comprehensive ASVS certification.
 | T-13-01-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
 | T-13-02-01 | Elevation of privilege | mitigate | CLOSED — implementation verified | `backend/alembic/sql/0020_portfolio_management.sql:4` — Only fixed10000 cash/baseline and paired immutable journal are inserted; app accounts INSERT/sequence authority revoked. initialize has once-only latch. Regression: `backend/tests/test_portfolio_management_authority.py:269`. |
 | T-13-02-02 | Tampering | mitigate | CLOSED — implementation verified | `backend/alembic/sql/0020_portfolio_management.sql:20` — Owner/key payload replay precedes cap/name/quota; closed original refuses rather than creating. Regression: `backend/tests/test_portfolio_management_authority.py:144`. |
-| T-13-02-03 | Denial of service | mitigate | CLOSED — implementation verified | `backend/alembic/sql/0020_portfolio_management.sql:7` — Owner FOR UPDATE precedes account; ten-active check under owner serialization;2s lock timeout; management never acquires instrument lock. Regression: `backend/tests/test_portfolio_management_authority.py:168`. |
+| T-13-02-03 | Denial of service | mitigate | CLOSED — implementation verified | `backend/alembic/sql/0020_portfolio_management.sql:7` — Owner FOR NO KEY UPDATE precedes account; ten-active check under mutual owner serialization;2s lock timeout. Non-key lock permits dividend FK KEY SHARE and avoids the demonstrated owner/root inversion; see CR-02 refresh below. Regression: `backend/tests/test_portfolio_management_authority.py:168`. |
 | T-13-02-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
 | T-13-03-01 | Elevation of privilege | mitigate | CLOSED — implementation verified | `backend/app/db/schema_contract.py:13` — Current admits0020 only with exact preflight/catalogue/ACL; actual retained0017 consumer refuses successor. Regression: `backend/tests/test_portfolio_management_admission.py:30`. |
 | T-13-03-02 | Elevation of privilege | mitigate | CLOSED — implementation verified | `deploy/db/bootstrap-roles.sql:225` — Fixed catalogue/ACL admission refuses public rewrite rules, unsafe schema/database ownership, effective CREATE and private helper EXECUTE; app funding writes restricted. Regression: `backend/tests/test_portfolio_management_grants.py:335`. |
@@ -101,8 +103,8 @@ this is threat-register verification, not a comprehensive ASVS certification.
 | T-13-17-01 | Tampering/Repudiation | mitigate | OPEN — qualification pending | Runner control present at `deploy/tests/run-portfolio-validation.py:87`; actual complete final-source all-security/coverage/raw audits/five image receipts not yet produced. Do not substitute focused passes or Phase12 proof. |
 | T-13-17-02 | Tampering/Elevation of privilege | mitigate | OPEN — qualification pending | Seven-stage source/archive/image guards present at `deploy/tests/run-portfolio-validation.py:127`; new full same-archive0020/retained/cold/TLS/rollback receipts not yet produced. |
 | T-13-17-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
-| T-13-18-01 | Repudiation | mitigate | OPEN — qualification pending | Owner explicitly replied “Accept the Phase 13 UI” for preserved SHAeac08181… packet. Current recapture/source-delta association and durable13-UAT.md remain pending; no new approval inferred from automation. |
-| T-13-18-02 | Repudiation | mitigate | OPEN — qualification pending | Owner separately replied “Native 200% zoom passes”. Captureflags remain false; durable13-UAT.md source/response association remains pending. Browser/version not supplied; do not invent it. |
+| T-13-18-01 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the actual separate “Accept the Phase 13 UI” response against preserved approved SHAeac08181… packet and the unchanged management inputs after CR-01. Subsequent backend-only CR-02/source-pin changes do not alter those surfaces; refreshed current packet binding remains separately pending. |
+| T-13-18-02 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the separate actual “Native 200% zoom passes” response, not emulation or inherited Phase12 approval. Browser/version was not supplied and is not invented. Automated captureflags remain false; refreshed source-bound packet is separately pending. |
 | T-13-18-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
 
 ## Accepted risks
@@ -136,14 +138,16 @@ results against this policy; the prior Phase12campaign cannot supply those passe
  before-backup exact oracle, current0020 and fixed retained0017/earlier profiles,
  source destruction/cold restore, restricted verified-TLS fresh/upgraded parity,
  authenticated rollback/refusal and exact-owned cleanup.
-- **T-13-18-01/02:** persist both explicit owner replies against the approved
- packet and current verified render-source association after recapture. The
- post-acceptance delta is two trade-label consumers plus their routed regression;
- it does not alter management layouts/text. Do not claim owner checked different
- screens or invent browser/version. Capture-time automatedfalseflags stay false.
+- **T-13-18-01/02 — human-response evidence CLOSED:** both explicit replies are
+ persisted in13-UAT.md, preserving their approved packet association. No repeated
+ owner confirmation is needed for the backend-only CR-02 repair. Current packet
+ recapture at99166d9 is separately pending and must be reconciled by the parent
+ with UI-EVIDENCE/UAT and final17source receipts before global completion. It is
+ not another missing owner response or a newly accepted security risk. Capture-time
+ automatedfalseflags remain false; browser/version is not invented.
 
-These four OPEN records are planned unfinished evidence, **not four newly
-identified vulnerabilities**. No additional owner waiver is requested. Refresh
+These two OPEN records are planned unfinished campaign evidence, **not two
+newly identified vulnerabilities**. No additional owner waiver is requested. Refresh
 this report from actual final receipts and durable UAT before asserting
 `threats_open: 0` or allowing phase completion.
 
@@ -155,3 +159,62 @@ risk references);4qualification gates pending;0demonstrated implementation gaps;
 0unregistered summary flags. Integrated CR-01 is resolved by retained hook-name
 consumers and six real routed lost/pending/filled rename/remount/replay tests.
 Final campaign and owner source-association outcomes are intentionally not inferred.
+
+## CR-02 mitigation refresh at99166d9
+
+The earlier implementation verification missed a real lock inversion, later
+reproduced by the deterministic restricted-role dividend/HTTP management overlap
+regression. This update records the defect and reviewed repair rather than
+rewriting the initial pass into a claim that no defect ever existed. It maps to
+**T-13-02-03** (owner/action lock coexistence) and **T-13-14-02** (accounting
+worker/action ordering), with source-authentication propagation covered by
+T-13-03-01/02, T-13-04-01 and T-13-05-01.
+
+Inspected actual203815f..99166d9diff: all three management user-row locks in
+`backend/alembic/sql/0020_portfolio_management.sql:16`, `:63`, `:96` now use
+`FOR NO KEY UPDATE`. That lock still conflicts with another such owner lock,
+serializing cap/name/grant/replay/metadata decisions, but permits ledger user-FK
+`KEY SHARE` while management waits on an account held by the scheduler. Account
+`FOR UPDATE`, owner predicates, immutable request binding, fixed10000grant,
+canonical payload, quota/cap ordering and transactional boundaries remain.
+Retained0017dividend SQL and historical0015–17/0019 are unchanged.
+
+Read independently clean13-REVIEW and13-17-FIXTURE-REVIEW resolution. The
+1172-record measured catalogue differs only in the three function definitions;
+ACLs remain `041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e`.
+The new catalogue is
+`535cacb140a3a1753b5cf27e2eadcb80bc272a9b12772defd3936a3edc6c2209`.
+Source/migration/bootstrap/producer/restore/current-fixture pins bind the new
+definitions; normal/quarantined/no-ACL authority fingerprints are updated without
+removing equality checks or repinning financial/privilege oracles. Reviewed the
+actual source changes and current-fingerprint-delta receipt. Verified all11file
+SHA256values and four raw-log hashes from
+`/tmp/birja-p13-cr02-repair-receipt.json` against disk; no test was rerun here.
+
+The regression at `backend/tests/test_portfolio_strategy_events.py:410` covers
+metadata and original creation replay, waits for actual PostgreSQL blocking PID
+state before the dividend FK insertion, and requires successful200, same root,
+cash10000.50 and exactly two original creation records. It does not accept503
+or skip the overlap. Separate restricted-role checks execute initialization,
+creation and rename under unchanged grants. The verified executor receipt reports
+70focused cases passing363.48s, two direct overlap cases12.71s and33offline
+contracts (8+11+8+6), with owned resources empty. These remain affected-source
+proof, **not** final complete security or encrypted recovery qualification.
+
+Refresh totals:58registered,56CLOSED (36implementation +2human-response
+mitigations +18same-scope accepted-risk references),2OPEN planned complete
+campaigns,0open implementation gaps,0unregistered summary flags. Current packet
+binding remains explicitly recapture_pending until the capture worker supplies
+its99166d9receipt. Only this SECURITY.md changed; no tests/DB/browser/source/git/
+provider/production operations or new acceptance occurred in this refresh.
+
+
+### Parent source-association update after capture
+
+Capture worker completed current99166d9 proof inb20bdf1:20browser cases,12strict
+contracts and120offline layouts pass. Current packet SHA724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361
+and340-input digeste082f97d9aaa758fa17a6060877328ed6f6dd39c31f2d66942c00bb7dba47a47
+are recorded in13-UI-EVIDENCE and13-UAT. Exact four-backend-input delta, zero
+frontend changes; owner UI/native200 association is preserved. The prior
+recapture_pending note is resolved by this actual receipt. Only the two actual
+Plan17 whole-campaign records remain OPEN; no final qualification is inferred.

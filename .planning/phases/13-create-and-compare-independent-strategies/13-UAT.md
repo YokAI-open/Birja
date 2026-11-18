@@ -4,8 +4,8 @@ status: accepted_pending_automated_qualification
 owner_ui: accepted
 native_200: passed
 approved_packet_sha256: eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68
-current_packet_sha256: 7e6d7dc7bb08f3863547c96a692b609796deab2971c0010cb5bd03fcfe38145f
-current_runtime_head: 6bfb447db37e4b3492f709dcb04766a70b5adcbb
+current_packet_sha256: 724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361
+current_runtime_head: 99166d9cbe3fd8938a2bd43ca7763aec5a15e39e
 ---
 
 # Phase 13 owner acceptance
@@ -54,3 +54,24 @@ Plan17 complete current-source security and same-archive seven-stage recovery
 remain pending. Plan18 and global phase completion cannot be claimed from these
 human responses alone. Final goal verification must reconcile both actual
 qualification receipts with this accepted, unchanged management UI.
+
+## Backend-only CR-02 repair and current binding
+
+Final integrated diagnostics found a genuine management/dividend FK deadlock.
+The deterministic RED203815f was repaired at99166d9 by changing only the three
+management user locks to FOR NO KEY UPDATE, preserving account locks and all
+serialization/idempotency/grant guards. Current integrity fingerprints were
+measured and re-reviewed;70 focused cases and33 binding contracts pass. The
+failed complete campaign and interrupted fixture diagnostics remain failed history.
+
+Fresh actual capture at99166d9 passed20 cases227.7s,12contracts and120offline
+layouts; source-bound evidence appendices are committedb20bdf1. Canonical ZIP SHA
+`724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361`,
+render digest `e082f97d9aaa758fa17a6060877328ed6f6dd39c31f2d66942c00bb7dba47a47`.
+The complete source-map comparison identifies exactly four changed hashed backend
+inputs (0020SQL/migration wrapper and portfolio_bootstrap/portfolio_migrate),
+with zero frontend changes since the previous capture. All owner-approved
+management surfaces remain byte-identical. Prior7e6d packet is preserved at
+`-before-cr02-lock-fix`; original owner-approvedeac081 packet remains unchanged.
+Owner approval is retained for the same management surfaces, without inventing a
+new human result or modifying capture-time flags. Final Plan17 remains pending.

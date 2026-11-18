@@ -6,7 +6,7 @@ current_phase: 13
 current_plan: 17
 status: executing
 stopped_at: Phase13 Plans01–16 complete; integrated review repaired/clean; owner UI/native200 accepted; Plan17 full campaigns next
-last_updated: "2026-11-18T14:47:53.908723Z"
+last_updated: "2026-11-18T16:40:43.952541+00:00"
 last_activity: 2026-11-18 -- Plans01–16 complete; pre-freeze final review
 progress:
   total_phases: 4
@@ -22,13 +22,14 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 executing:16/18plans complete/reviewed clean.16current20browser/72states/120offline layouts+12strictartifactcontracts/140UIchecks pass; code re-reviewclean andUI24/24. PacketSHAeac08181... ownerUI/native200accepted18; UAT persisted. Phase-wide standard runtime/configreview before17frozenactualall-security+samearchive recovery. Fulloldsource79/1evidence distinct, currentfullunfilteredmandatory17notwaived. NoPhase13whole requirementcomplete; issue35deadline2026-12-17,Phase7sixlivegaps deferred. Keep local.
+Current focus: Phase13 Plans01–16 complete;17 actual campaigns restarting at reviewed runtime99166d9. Whole attempt1 failed on stale current-schema fixtures; broad interrupted diagnostic exposed and reproduced real CR02 owner/FK deadlock. Test repairsacbcd4e, RED203815f, runtimeGREEN99166d9;70focused+33contracts and clean independent review, measured1172catalogue records only3definitions differ/ACL unchanged. Final packet724607e8...20cases/72states/120layouts passes, allfrontend inputs unchanged; ownerUI/native200 accepted and UAT source-associated. Security56/58closed, only2actualcampaigns pending. No final fullsecurity/recovery pass yet. Phase7sixlivegaps and exactissue35risk remain tracked; keep local.
 
 ## Current Position
 
 Phase: 13 (Create and Compare Independent Strategies) — EXECUTING
-Current Plan: 17 (wave16 final code review then security/recovery)Total Plans in Phase: 18
-Plan: 16/18 complete (01–16); next17, then18 human acceptance
+Current Plan: 17 (actual frozen-source security/recovery)
+Total Plans in Phase: 18
+Plan: 16/18 complete (01–16); 17 in progress;18 acceptance received, final qualification pending
 Status: Executing Phase 13
 Last activity: 2026-11-18 -- Plan16 repaired/reviewed; final review before17
 
