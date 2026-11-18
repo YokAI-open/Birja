@@ -61,11 +61,17 @@ async def main():
  c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
  try:
   assert await c.fetchval("SELECT current_database()='birja' AND session_user='birja'")
-  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0017'
+  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0020'
   await c.execute(PREFLIGHT_SQL)
-  await c.execute("SET ROLE birja_app")
+  # Disposable administrative fixture only: retain the original custom-baseline
+  # economic oracle without granting ordinary account INSERT or rewriting a baseline.
   uid=await c.fetchval("INSERT INTO users(email) VALUES ('bootstrap@example.test') RETURNING id")
-  root=await c.fetchval("INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,123.45,7777) RETURNING id",uid)
+  root=await c.fetchval("INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) VALUES ($1,'Custom baseline',portfolio_name_key('Custom baseline'),123.45,7777) RETURNING id",uid)
+  await c.execute("INSERT INTO portfolio_initializations(user_id,origin) VALUES ($1,'legacy')",uid)
+  await c.execute("SET ROLE birja_app")
+  try:await c.execute("INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,123.45,7777)",uid)
+  except asyncpg.InsufficientPrivilegeError:pass
+  else:raise AssertionError('ordinary account INSERT admitted')
   await c.execute("UPDATE accounts SET cash=cash+1 WHERE id=$1",root)
   assert await c.fetchval("SELECT cash FROM accounts WHERE id=$1",root)==D('124.45')
   for column in ('starting_cash','name','closed_at','user_id'):
@@ -85,6 +91,7 @@ async def main():
   from sqlalchemy.engine import make_url
   from sqlalchemy.ext.asyncio import create_async_engine
   from app.db.portfolio_migrate import require_migrator
+  from app.db.schema_contract import require_schema, SchemaAdmissionError
   password=secrets.token_hex(32)
   await c.execute(await c.fetchval("SELECT format('ALTER ROLE birja_migrator LOGIN PASSWORD %L',$1::text)",password))
   e=create_async_engine(make_url(os.environ['DATABASE_URL']).set(username='birja_migrator',password=password))
@@ -92,12 +99,15 @@ async def main():
    for change,undo,reason in [
     ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC','Unsafe migration schema'),
     ('ALTER ROLE birja_app CREATEROLE','ALTER ROLE birja_app NOCREATEROLE','Unsafe migration schema'),
-    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0017'",'Unsupported portfolio')]:
+    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0020'",'migration_only')]:
     await c.execute(change)
     try:
      async with e.connect() as x:
-      try:await require_migrator(x)
-      except ValueError as exc:assert reason in str(exc)
+      try:
+       # Partial revisions are valid for the migration client, never the app.
+       if reason=='migration_only':await require_schema(x)
+       else:await require_migrator(x)
+      except (ValueError,SchemaAdmissionError) as exc:assert reason in str(exc)
       else:raise AssertionError('unsafe migration admitted')
     finally:await c.execute(undo)
    await c.execute("CREATE FUNCTION public.reject_stock_record_mutation(bigint) RETURNS text LANGUAGE sql AS 'SELECT NULL::text'")
