@@ -237,8 +237,7 @@ async def test_all_private_helpers_have_no_nonowner_execute(current):
         assert set(actual) == private
 
 
-async def test_production_admin_bootstrap_agrees_with_current_grants(current):
-    engine, _ = current
+async def production_bootstrap():
     path = Path(__file__).parents[2] / "deploy/db/bootstrap-roles.sql"
     password = secrets.token_hex(32)
     found = await asyncio.to_thread(
@@ -293,6 +292,80 @@ async def test_production_admin_bootstrap_agrees_with_current_grants(current):
     result = await asyncio.to_thread(
         subprocess.run, command, input=path.read_text(), capture_output=True, text=True, timeout=30
     )
-    assert result.returncode == 0, result.stderr.replace(password, "[redacted]")
+    return result.returncode, result.stderr.replace(password, "[redacted]")
+
+
+async def test_production_admin_bootstrap_agrees_with_current_grants(current):
+    engine, _ = current
+    code, diagnostic = await production_bootstrap()
+    assert code == 0, diagnostic
     async with engine.connect() as conn:
+        assert await require_schema(conn) == "0020"
+
+
+@pytest.mark.parametrize("disabled", [False, True])
+async def test_unexpected_grant_rewrite_refuses_runtime_and_bootstrap(current, disabled):
+    engine, roles = current
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("""CREATE RULE unexpected_grant AS
+            ON INSERT TO public.portfolio_creations DO ALSO UPDATE public.accounts
+            SET cash=cash+NEW.amount WHERE id=NEW.portfolio_id""")
+        )
+        if disabled:
+            await conn.execute(
+                text("ALTER TABLE portfolio_creations DISABLE RULE unexpected_grant")
+            )
+        before = (await conn.execute(text("SELECT count(*),sum(cash) FROM accounts"))).one()
+    async with roles["birja_app"].connect() as conn:
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            await require_schema(conn)
+    async with engine.connect() as conn:
+        with pytest.raises(DBAPIError, match="rewrite"):
+            async with conn.begin_nested():
+                await conn.execute(text(PREFLIGHT_SQL))
+    code, diagnostic = await production_bootstrap()
+    assert code != 0 and "rewrite" in diagnostic, diagnostic
+    async with engine.connect() as conn:
+        assert (await conn.execute(text("SELECT count(*),sum(cash) FROM accounts"))).one() == before
+        assert not (await conn.execute(text("SELECT id FROM portfolio_creations"))).all()
+
+
+@pytest.mark.parametrize("role", ["birja_app", "birja_scheduler"])
+async def test_implicit_database_owner_create_refuses_admission_and_bootstrap(current, role):
+    engine, roles = current
+    async with engine.begin() as conn:
+        assert (await conn.execute(text("SELECT current_database(),current_user"))).one() == (
+            "birja_test",
+            "birja_test",
+        )
+        await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+        await conn.execute(text(f"ALTER DATABASE birja_test OWNER TO {role}"))  # noqa: S608 - fixed role matrix
+    try:
+        async with roles[role].connect() as conn:
+            assert (
+                await conn.execute(
+                    text("SELECT has_schema_privilege(current_user,'public','CREATE')")
+                )
+            ).scalar_one() is True
+            with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+                await require_schema(conn)
+        async with engine.connect() as conn:
+            with pytest.raises(DBAPIError, match="ownership|schema"):
+                async with conn.begin_nested():
+                    await conn.execute(text(PREFLIGHT_SQL))
+        code, _ = await production_bootstrap()
+        assert code != 0
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER DATABASE birja_test OWNER TO birja_test"))
+            await conn.execute(text("ALTER SCHEMA public OWNER TO birja_test"))
+
+
+@pytest.mark.parametrize("schema_owner", ["birja_test", "pg_database_owner"])
+async def test_valid_administrative_schema_ownership_is_admitted(current, schema_owner):
+    engine, roles = current
+    async with engine.begin() as conn:
+        await conn.execute(text(f"ALTER SCHEMA public OWNER TO {schema_owner}"))  # noqa: S608 - fixed owner matrix
+    async with roles["birja_app"].connect() as conn:
         assert await require_schema(conn) == "0020"
