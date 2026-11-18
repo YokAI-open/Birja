@@ -183,6 +183,29 @@ async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
     conn.close.assert_awaited_once()
 
 
+async def test_current_final_acl_mismatch_refuses_and_closes_transaction():
+    """A current revision is not enough when the resulting privileges disagree."""
+    role = DriverRecord({"oid": 123, **dict.fromkeys(FLAGS, False)})
+    conn = connection(role)
+    conn.fetchval = AsyncMock(side_effect=[True, False, "0020", "0" * 64])
+    with (
+        patch("app.db.dev_bootstrap.asyncpg.connect", AsyncMock(return_value=conn)),
+        pytest.raises(ValueError, match="Unexpected final management grants"),
+    ):
+        # Keep the real final authorizer: it must check the resulting ACL after
+        # executing the canonical preflight/grants, rather than report success.
+        await bootstrap("dev", URL, after_migrations=True)
+    assert [call.args[0] for call in conn.execute.call_args_list] == [
+        "SELECT pg_catalog.pg_advisory_xact_lock(1026016001)",
+        dev_bootstrap.PREFLIGHT_SQL,
+        dev_bootstrap.GRANTS_SQL,
+    ]
+    assert conn.fetchval.await_count == 4
+    assert conn.fetchval.call_args.args == (dev_bootstrap.ACL_SQL,)
+    assert conn.transaction.return_value.__aexit__.await_args.args[0] is ValueError
+    conn.close.assert_awaited_once()
+
+
 @pytest.mark.parametrize(
     "outcome",
     [
