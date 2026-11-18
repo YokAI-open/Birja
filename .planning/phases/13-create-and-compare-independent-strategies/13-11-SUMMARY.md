@@ -32,7 +32,7 @@ key-files:
     - frontend/src/hooks/usePortfolioManagement.ts
     - frontend/src/hooks/usePortfolioManagement.test.tsx
 key-decisions:
-  - "Reuse detail's stock proof and monotonic clock projection while partitioning latest financial snapshots by detail/overview lane."
+  - "Share owner/root/session stock proof and monotonic clock knowledge across views while partitioning only latest financial snapshots by detail/overview lane."
   - "Refuse a backwards comparison response atomically instead of mixing retained per-book valuation instants."
   - "Recheck creation's captured session after awaited discovery invalidation before refreshing overview."
 requirements-completed: [PCTX-02, PVIEW-01, PVIEW-02]
@@ -67,7 +67,7 @@ Both tasks have committed RED before GREEN. No tracked file was deleted. Parent 
 
 A failed refresh keeps still-authorized permitted values with `isError`/`error` observable for the UI's required failure notice. Each stock holding independently passes the exact existing detail projector, including quote deadlines, admissions, unit/safety epochs, sequence/hash continuity, external stock/context restrictions and monotonic clock bounds. Expiry clears unsafe basis/mark/value/return fields without calculating replacement totals; other books remain usable. Re-fetching the same raw old statement cannot renew proof. Overview has one display interval and one nearest-proof deadline timer for the whole collection, plus one 30-second owner-wide query refresh; there are no per-book provider polls/jobs.
 
-`usePortfolio.ts` exports `TimedPortfolio`, `portfolioGuardFor(client, owner, root, session, view = "detail")`, and `projectPortfolio(client, guard, statement)`. The overview uses `view = "overview"`: shared projection semantics and owner/session cleanup, independent latest-statement retention per book/view. A newer detail response therefore cannot replace only one comparison row. A returned comparison older than a retained overview book refuses as a whole, preserving the previous authorized collection with an error. Equal-time restriction reductions remain irreversible until newer permitted evidence.
+`usePortfolio.ts` exports `TimedPortfolio`, `portfolioGuardFor(client, owner, root, session)`, and `projectPortfolio(client, guard, statement, view = "detail")`. One guard shares proof versions, hashes, provider identity, continuity/sequence, restriction floors and conservative clock across both views of that owner/root/session. Only `guard.latest.detail` and `guard.latest.overview` are separate financial statements. The overview passes `view = "overview"`; a newer detail response therefore cannot replace only one comparison row. Accepted detail/overview cache changes trigger reprojection in both directions without network invalidation or a notification loop. A returned comparison older than a retained overview book refuses as a whole, preserving the previous authorized collection with an error. Equal-time restriction reductions remain irreversible until newer permitted evidence.
 
 Owner loss synchronously clears private queries and revokes hidden guard state. Query-object identity, abort, captured owner/session and mounted scope prevent late responses, stale manual refresh and old401 from publishing into a new lifecycle. Focus, visibility, cache safety changes, render and bounded timers reapply safety. Identity-only metadata events invalidate authoritative owner discovery and this exact overview under current authentication; messages supply neither labels nor ownership authority.
 
@@ -130,3 +130,17 @@ No package, manifest, lockfile, image/Python pin, live provider admission, priva
 ## Self-Check: PASSED
 
 All twelve changed source/test paths and this summary exist. All eight task/refinement commits resolve, RED precedes corresponding GREEN, the final 755-case affected regression and whole frontend lint/type checks pass. No tracked deletions or generated untracked artifacts were introduced; unrelated `.claude/` is preserved. Independent parent review and global state updates remain pending.
+
+## Independent Review CR-01 Repair
+
+The initial independent review identified a blocking regression: separating whole guards by view also separated monotonic stock safety knowledge. An actual detail response with unavailable/unsafe units left its older overview mark visible; an actual overview restriction did not promptly reach detail. The earlier stockContext-injection test could not detect that path. The original report is parent-owned and remains unchanged.
+
+RED `dd5c69f` adds two paired real-hook regressions. Each first accepts safe detail/overview data, then delivers a newer actual unsafe response through one financial endpoint. Both fail at the opposite view's still-visible basis/mark assertion. They also require separate financial times, unaffected sibling books, no revival by older/equal safe responses, no stockContext/stocks injection and bounded exact fetch counts.
+
+GREEN `9f07f23` keys the guard only by owner/root/session, sharing all monotonic proof/restriction and clock evidence. It partitions only latest financial statements by view. Detail now subscribes to accepted overview cache updates, complementing overview's existing detail subscription; local cache reprojection is reduction-only and does not refetch. A root-unavailable detail response clears only its financial lane rather than erasing shared safety knowledge. Its next deadline also uses the conservative shared clock. Overview's atomic backwards-response refusal and common statement timestamp remain intact.
+
+Ten additional paired actual-response cases independently exercise detail→overview and overview→detail unit epoch, safety epoch, same-generation admission hash, status sequence and advancing-clock knowledge. All 45 overview/valuation cases pass, including all prior owner/session, backwards/time and sibling-isolation assertions. The affected 26-suite regression passes **767 tests**; whole frontend typing/lint and changed-three-file Prettier/ESLint checks pass. No components, endpoints, storage, dependencies, backend, providers or global planning files changed. This is a Rule 1/2 repair within the existing T-13-11-01 proof boundary; no new feature or permission boundary was added.
+
+### Repair Self-Check: PASSED
+
+The three source/test files exist; RED `dd5c69f` precedes GREEN `9f07f23`. All original execution/publication/accepted-risk limits remain. Parent independent recheck and global state updates remain pending.
