@@ -79,6 +79,28 @@ it("keeps permitted data after refresh failure and offers retry", () => {
   fireEvent.click(screen.getByRole("button", { name: "Retry refresh" }));
   expect(refetch).toHaveBeenCalled();
 });
+it.each([1, 2])("uses correct missing-holding copy for %i without inventing a return", (count) => {
+  show([
+    {
+      ...cashPortfolio(),
+      id: "1",
+      description: "",
+      valuation_complete: false,
+      known_value: "9000.00",
+      total_value: null,
+      total_pl: null,
+      total_pl_percent: null,
+      unvalued_holding_count: count,
+    },
+  ]);
+  expect(
+    screen.getByText(`${count} ${count === 1 ? "holding" : "holdings"} cannot be valued.`, {
+      exact: true,
+    }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Return unavailable", { exact: true })).toBeInTheDocument();
+  expect(screen.getByText(/Known value: \$9,000.00/)).toBeInTheDocument();
+});
 it("shows ten books and the visible cap reason", () => {
   show(
     Array.from({ length: 10 }, (_, i) => ({

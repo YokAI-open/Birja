@@ -44,6 +44,8 @@ it("focuses a new linked server error summary", () => {
     </QueryClientProvider>,
   );
   expect(screen.getByRole("alert")).toHaveFocus();
+  expect(screen.getByRole("alert").querySelector("svg")).toHaveAttribute("width", "20");
+  expect(screen.getByRole("alert").querySelector("svg")).toHaveAttribute("height", "20");
   fireEvent.click(screen.getByRole("link", { name: "Review portfolio name" }));
   expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
 });
@@ -247,6 +249,34 @@ it("keeps original unknown payload readonly and retryable at cap", () => {
   expect(screen.getByRole("button", { name: "Close creation" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Discard draft" })).toBeNull();
 });
+it.each([null, new PortfolioManagementError("unknown")])(
+  "announces unknown recovery once with original fields retained (%s)",
+  (error) => {
+    show({
+      creation: {
+        phase: "unknown",
+        attempt: { key: "original", name: "Original", description: "Keep" },
+        error,
+      },
+    });
+    const instruction =
+      "We couldn't confirm whether your portfolio was created. Retry this creation to check its original result.";
+    expect(screen.getAllByText(instruction, { exact: true })).toHaveLength(1);
+    const region = screen.getByRole(error ? "alert" : "status");
+    expect(region).toHaveTextContent(instruction);
+    expect(screen.getByLabelText("Portfolio name")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Portfolio name")).toHaveValue("Original");
+    expect(screen.getByLabelText("Description (optional)")).toHaveValue("Keep");
+    if (error) {
+      const icon = region.querySelector("svg")!;
+      expect(icon).toHaveAttribute("width", "20");
+      expect(icon).toHaveAttribute("height", "20");
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Retry creation" }));
+    expect(retryCreation).toHaveBeenCalledOnce();
+  },
+);
 it.each([null, 10])("blocks new creation while cap is unknown or full (%s)", (count) => {
   show({}, count);
   fireEvent.change(screen.getByLabelText("Portfolio name"), { target: { value: "Valid name" } });

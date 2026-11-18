@@ -80,6 +80,11 @@ it("keeps native selection and Escape separate from explicit keyboard Open", asy
   expect(current).toHaveTextContent(name);
   await user.tab();
   expect(screen.getByRole("button", { name: "Open selected portfolio" })).toHaveFocus();
+  await user.tab();
+  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveFocus();
+  await user.tab({ shift: true });
+  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toHaveFocus();
+  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
   await user.keyboard("{Enter}");
   expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
 });

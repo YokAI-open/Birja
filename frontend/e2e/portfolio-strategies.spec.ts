@@ -637,9 +637,58 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
   );
 });
 
+async function reviewedLayout(page: Page, state: string, width: number) {
+  const dimensions: Record<string, number> = {};
+  const navigation = page.getByRole("region", { name: "Portfolio navigation", exact: true });
+  if (width < 768 && (await navigation.isVisible())) {
+    const select = navigation.getByLabel("Open portfolio", { exact: true });
+    const label = navigation.locator("label");
+    const open = navigation.getByRole("button", { name: "Open selected portfolio", exact: true });
+    const link = navigation.getByRole("link", { name: "Portfolios", exact: true });
+    const [regionBox, fieldBox, labelBox, openBox, linkBox] = await Promise.all([
+      navigation.boundingBox(),
+      select.boundingBox(),
+      label.boundingBox(),
+      open.boundingBox(),
+      link.boundingBox(),
+    ]);
+    expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
+    expect(fieldBox!.height).toBeGreaterThanOrEqual(48);
+    expect(labelBox!.height).toBeLessThanOrEqual(24);
+    for (const action of [openBox!, linkBox!]) {
+      expect(action.width).toBeGreaterThanOrEqual(44);
+      expect(action.height).toBeGreaterThanOrEqual(44);
+      expect(action.y).toBeGreaterThanOrEqual(fieldBox!.y + fieldBox!.height + 7.5);
+    }
+    Object.assign(dimensions, {
+      select_width: fieldBox!.width,
+      select_height: fieldBox!.height,
+      label_height: labelBox!.height,
+      open_gap: openBox!.y - fieldBox!.y - fieldBox!.height,
+    });
+  }
+  if (state === "unknown") {
+    await expect(
+      page.getByText(
+        "We couldn't confirm whether your portfolio was created. Retry this creation to check its original result.",
+        { exact: true },
+      ),
+    ).toHaveCount(1);
+  }
+  if (state === "keyboard-error-focus" || state === "unknown") {
+    const icon = page.getByRole("alert").locator("svg");
+    const box = (await icon.boundingBox())!;
+    expect(box.width).toBe(20);
+    expect(box.height).toBe(20);
+    Object.assign(dimensions, { error_icon_width: box.width, error_icon_height: box.height });
+  }
+  return dimensions;
+}
+
 /** Freeze only the actual public DOM/styles/fonts; no cookies, storage or scripts. */
 async function capture(page: Page, info: TestInfo, state: string, width: number) {
   await noOverflow(page);
+  const layout = await reviewedLayout(page, state, width);
   const name = `phase13-${state}-${width}`;
   const destination = process.env.BIRJA_PHASE12_REVIEW_DIR;
   const path = (suffix: string) =>
@@ -696,6 +745,7 @@ async function capture(page: Page, info: TestInfo, state: string, width: number)
     )
       await expect(page.getByRole("table")).toHaveCount(0);
     await noOverflow(page);
+    await reviewedLayout(page, state, Math.floor(width / 2));
     const narrow = await render();
     await page.screenshot({ path: path("reflow.png"), fullPage: true });
     await page.setViewportSize(viewport);
@@ -728,6 +778,13 @@ async function capture(page: Page, info: TestInfo, state: string, width: number)
     synthetic: true,
     source: process.env.BIRJA_PHASE12_SOURCE,
     native_200_percent_verified: false,
+    layout,
+    artifacts: {
+      html: name + ".html",
+      png: name + ".png",
+      trace: name + ".trace.json",
+      ...(width >= 768 ? { reflow_png: name + ".reflow.png" } : {}),
+    },
     scope: createHash("sha256")
       .update(JSON.stringify(await (await page.request.get("/api/v2/me")).json()))
       .digest("hex"),
