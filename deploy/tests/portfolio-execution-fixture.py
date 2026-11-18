@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent current0017 oracle and immutable synthetic snapshot commands.
+"""Independent retained0017 oracle and immutable synthetic snapshot commands.
 
 No application test fixture is imported. The transport is supplied by the owned
 TLS harness; command tests may inject a transport but cannot claim a DB proof.
@@ -297,7 +297,15 @@ async def run():
  finally:await engine.dispose()
 asyncio.run(run())
 '''
-    return prelude + COMMON + runner
+    # This fixture is retained, not a way to run future application imports
+    # against0017. The source dispatcher extracts the complete tested release.
+    source_guard = r'''
+import hashlib
+from pathlib import Path
+if hashlib.sha256(Path('/app/app/db/portfolio_bootstrap.py').read_bytes()).hexdigest()!='ee352f8659fd3bac96b90e583b1c30c41e4cd5819ce59928568c9d75ee02654e':
+ raise ValueError('retained0017 source mismatch before application import')
+'''
+    return prelude + source_guard + COMMON + runner
 
 
 def command_transport(source):

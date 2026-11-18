@@ -30,10 +30,30 @@ FIXED_FILES = {
     'deploy/tests/dividend-execution-fixture.py': '74c3fda06e53b141cfcecfa92b082419d208fd95',
 }
 FIXED_RELEASES = {
+    "portfolio0017": ("4b4320b4cc373268a8d598612a563cd5ef199700", "361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248"),
     "retained": (FIXED_COMMIT, "1f3a8539a796aa8fdedbc79153e449035f90a06d715c6b2e4c667caed019ae85"),
     "legacy0008": ("46d24c8591de2207cf219429aac0768962bed4c3", "09ab46937e7da0f8cf6760bd245dd960242c541f7e136b269b3fd7db98c92bdb"),
     "legacy0007": ("0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7", "f732a59390add4a7c5e538a5d04fde1b53ec6e026ee26f6a0da3e7ac00c6a312"),
 }
+PORTFOLIO0017 = {
+    "revision": "0017", "payload_version": 1,
+    "commit": FIXED_RELEASES["portfolio0017"][0],
+    "archive_sha256": FIXED_RELEASES["portfolio0017"][1],
+    "app_tree": "5c77a8dc0972861aa49d18be4fa8618e97557c30",
+    "alembic_tree": "67791e54f8ddc2d9a1ab8ca55562ecf0d1608ac9",
+}
+
+
+def profile_for(revision):
+    validate_matrix()
+    if revision == "0017":
+        return dict(PORTFOLIO0017)
+    if revision == "0020":
+        return dict(MATRIX["current"])
+    if revision in {f"{n:04}" for n in range(7, 15)}:
+        return {"revision": revision, "lane": "legacy0007" if revision == "0007" else
+                "legacy0008" if revision == "0008" else "retained"}
+    raise ValueError("unsupported or migration_only source/schema")
 
 
 def git(*args):
@@ -43,7 +63,9 @@ def git(*args):
 def validate_matrix(matrix=MATRIX):
     retained = matrix["retained"]
     if (matrix["format"] != 1 or matrix["current"] != {
-            "revision": "0017", "program": "deploy/tests/portfolio-execution-fixture.py"}
+            "revision": "0020", "payload_version": 2,
+            "program": "deploy/tests/portfolio-management-recovery-fixture.py"}
+            or matrix.get("portfolio0017") != PORTFOLIO0017
             or retained["commit"] != FIXED_COMMIT or retained["app_tree"] != FIXED_APP
             or retained["alembic_tree"] != FIXED_ALEMBIC
             or retained['files'] != FIXED_FILES):
@@ -51,6 +73,9 @@ def validate_matrix(matrix=MATRIX):
     if any((matrix[lane]["commit"], matrix[lane]["archive_sha256"]) != identity
            for lane, identity in FIXED_RELEASES.items()):
         raise ValueError("immutable source release substituted")
+    for key, path in (("app_tree", "backend/app"), ("alembic_tree", "backend/alembic")):
+        if git("rev-parse", PORTFOLIO0017["commit"] + ":" + path).decode().strip() != PORTFOLIO0017[key]:
+            raise ValueError("retained0017 complete tree substitution")
     for key, path in (("app_tree", "backend/app"), ("alembic_tree", "backend/alembic")):
         if git("rev-parse", FIXED_COMMIT + ":" + path).decode().strip() != retained[key]:
             raise ValueError("source tree substitution")
@@ -81,10 +106,14 @@ def source_archive(lane="retained", *, archive=None, archive_sha=None):
 
 def archive_payloads():
     return {"sources/" + lane + ".tar": source_archive(lane)
-            for lane in ("retained", "legacy0008", "legacy0007")}
+            for lane in ("retained", "legacy0008", "legacy0007", "portfolio0017")}
 
 
 def qualified_revision(revision, kind, *, mode=None):
+    if kind == "management":
+        if revision != "0020":
+            raise ValueError("current consumer on retained schema")
+        return
     if kind == "portfolio":
         if revision != "0017":
             raise ValueError("current consumer on retained schema")
@@ -101,15 +130,21 @@ def qualified_revision(revision, kind, *, mode=None):
 
 def retained_program(kind, *, revision, archive, archive_sha, **kwargs):
     qualified_revision(revision, kind, mode=kwargs.get("mode"))
+    if kind == "management":
+        raise ValueError("current source is not a retained program")
     validate_matrix()
-    payload = source_archive(archive=archive, archive_sha=archive_sha)
+    lane = "portfolio0017" if kind == "portfolio" else "retained"
+    payload = source_archive(lane, archive=archive, archive_sha=archive_sha)
     filename = {"execution": "stock-execution-fixture.py", "runtime": "stock-runtime-fixture.py",
-                "dividend": "dividend-execution-fixture.py"}[kind]
+                "dividend": "dividend-execution-fixture.py",
+                "portfolio": "portfolio-execution-fixture.py"}[kind]
     path = "deploy/tests/" + filename
     with tarfile.open(fileobj=io.BytesIO(payload)) as source:
         code = source.extractfile(path).read()
     blob = hashlib.sha1(b"blob " + str(len(code)).encode() + b"\0" + code).hexdigest()
-    if blob != MATRIX["retained"]["files"][path]:
+    expected_blob = (git("rev-parse", PORTFOLIO0017["commit"] + ":" + path).decode().strip()
+                     if kind == "portfolio" else MATRIX["retained"]["files"][path])
+    if blob != expected_blob:
         raise ValueError("proof blob mismatch before import")
     module = types.ModuleType("authenticated_retained_" + kind)
     exec(compile(code, "<authenticated-v0.5.0-" + filename + ">", "exec"), module.__dict__)
@@ -143,9 +178,9 @@ for directory,dirs,files in os.walk(retained,topdown=False):
  os.chmod(directory,0o500)
 sys.path.insert(0,retained+'/backend')
 '''
-    return ("# birja-retained-source=" + FIXED_COMMIT + "\nEXPECTED_REVISION=" + repr(revision)
+    return ("# birja-retained-source=" + MATRIX[lane]["commit"] + "\nEXPECTED_REVISION=" + repr(revision)
             + "\nEXPECTED_DATABASE=" + repr(kwargs.get("database"))
-            + "\nEXPECTED_SOURCE_ARCHIVE=" + repr(MATRIX['retained']['archive_sha256'])
+            + "\nEXPECTED_SOURCE_ARCHIVE=" + repr(MATRIX[lane]['archive_sha256'])
             + "\nRETAINED_ARCHIVE=" + repr(base64.b64encode(payload).decode())
             + "\n" + prelude + body)
 
