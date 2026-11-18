@@ -11,15 +11,25 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.security import decode_access_token
 from app.models.auth import AuthSession
+from app.models.portfolio_creation import PortfolioInitialization
 from app.models.user import Account, User
 from app.schemas.auth import IdentityOut
 from app.services import accounts, auth
 from app.services.otp import OtpStore
+from tests import test_portfolio_management_authority as authority_harness
+
+authority = authority_harness.authority
 
 
 @pytest.fixture
-def sessions(engine, migrated):
-    return async_sessionmaker(engine, expire_on_commit=False)
+def sessions(authority):
+    # Explicit0020 authority harness until Plan03 finalizes runtime admission.
+    return async_sessionmaker(authority[0], expire_on_commit=False)
+
+
+@pytest.fixture
+def legacy_sessions(authority):
+    return async_sessionmaker(authority[1], expire_on_commit=False)
 
 
 async def seed_identity(sessions, count, *, closed=False):
@@ -29,11 +39,13 @@ async def seed_identity(sessions, count, *, closed=False):
         db.add(user)
         await db.flush()
         uid = user.id
+        db.add(PortfolioInitialization(user_id=uid, origin="legacy"))
         for n in range(count):
             db.add(
                 Account(
                     user_id=uid,
                     name=f"Original {n}",
+                    name_key=f"original {n}",
                     cash=Decimal("4321.09") + n,
                     starting_cash=Decimal("8765.43") + n,
                     closed_at=datetime.now(UTC) if closed else None,
@@ -62,8 +74,10 @@ async def root_snapshot(sessions, uid):
 
 
 @pytest.mark.parametrize("count,closed", [(0, False), (1, False), (2, False), (1, True)])
-async def test_identity_read_and_returning_lookup_never_create_or_regrant(sessions, count, closed):
-    uid, email = await seed_identity(sessions, count, closed=closed)
+async def test_identity_read_and_returning_lookup_never_create_or_regrant(
+    sessions, legacy_sessions, count, closed
+):
+    uid, email = await seed_identity(legacy_sessions, count, closed=closed)
     before = await root_snapshot(sessions, uid)
     for _ in range(2):
         async with sessions() as db:
@@ -119,9 +133,9 @@ async def test_aborted_onboarding_rolls_back_user_and_funding_together(sessions)
 
 @pytest.mark.parametrize("count,closed", [(0, False), (1, False), (2, False), (1, True)])
 async def test_otp_identity_refresh_logout_independent_of_roots(
-    sessions, redis_client, settings, count, closed
+    sessions, legacy_sessions, redis_client, settings, count, closed
 ):
-    uid, email = await seed_identity(sessions, count, closed=closed)
+    uid, email = await seed_identity(legacy_sessions, count, closed=closed)
     before = await root_snapshot(sessions, uid)
     otp = OtpStore(redis_client, settings.otp_hmac_secret)
     code = await otp.issue(email)
