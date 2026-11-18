@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import { isPortfolioId } from "./portfolios";
+import { isPortfolioId, isCanonicalPortfolioName } from "./portfolios";
 import { stockTimestamp, stockInstant } from "./stocks";
 import {
   isStockAuthority,
@@ -187,14 +187,7 @@ export function isPortfolio(v: unknown): v is Portfolio {
       "portfolio_id name cash starting_cash total_value total_pl total_pl_percent cash_allocation_percent valuation_complete known_value unvalued_holding_count class_values class_allocation_percent valued_at prices_as_of fresh_seconds stale_seconds holdings",
     ) ||
     !isPortfolioId(v.portfolio_id) ||
-    typeof v.name !== "string" ||
-    v.name.trim() !== v.name ||
-    v.name.length === 0 ||
-    [...v.name].length > 60 ||
-    [...v.name].some((character) => {
-      const point = character.codePointAt(0)!;
-      return point < 32 || (point >= 127 && point <= 159);
-    }) ||
+    !isCanonicalPortfolioName(v.name) ||
     !unsigned(v.cash) ||
     !unsigned(v.starting_cash) ||
     !unsigned(v.known_value) ||
