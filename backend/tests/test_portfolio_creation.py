@@ -388,20 +388,54 @@ async def test_existing_statement_still_uses_owned_root_and_stored_fixed_baselin
     assert denied.status_code == 404 and denied.headers["cache-control"] == "no-store"
 
 
-async def test_initial_winner_rollback_unblocks_explicit_http_creation(management_api):
+async def test_initial_winner_rollback_unblocks_explicit_http_creation(management_api, engine):
     """Uncommitted onboarding must neither latch nor supplement a later root."""
     api = management_api
     async with api.restricted.connect() as conn:
         tx = await conn.begin()
-        initial = (
-            await conn.execute(text("SELECT public.initialize_portfolio(:u)"), {"u": api.uid})
-        ).scalar_one()
-        pending = asyncio.create_task(post(api, "Explicit after rollback"))
-        # The second independent connection must wait on the owner lock.
-        await asyncio.sleep(0.1)
-        assert not pending.done()
-        await tx.rollback()
-        created = await asyncio.wait_for(pending, 6)
+        pending = None
+        try:
+            initializer_pid = (await conn.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+            initial = (
+                await conn.execute(text("SELECT public.initialize_portfolio(:u)"), {"u": api.uid})
+            ).scalar_one()
+            pending = asyncio.create_task(post(api, "Explicit after rollback"))
+            # The disposable admin observer can see the app backend's SQL;
+            # neither runtime role receives monitoring or extra write grants.
+            async with engine.connect() as observer, asyncio.timeout(5):
+                while True:
+                    waiter = (
+                        await observer.execute(
+                            text(
+                                "SELECT pid FROM pg_stat_activity "
+                                "WHERE datname=current_database() AND usename='birja_app' "
+                                "AND state='active' AND wait_event_type='Lock' "
+                                "AND query LIKE :statement AND :blocker=ANY(pg_blocking_pids(pid))"
+                            ),
+                            {
+                                "statement": "SELECT * FROM public.create_portfolio(%",
+                                "blocker": initializer_pid,
+                            },
+                        )
+                    ).scalar_one_or_none()
+                    # Refresh the statistics snapshot on the next observation.
+                    await observer.commit()
+                    assert not pending.done(), "HTTP create ended before observed owner contention"
+                    if waiter is not None:
+                        assert waiter != initializer_pid
+                        break
+                    await asyncio.sleep(0.01)
+            await tx.rollback()
+            created = await asyncio.wait_for(pending, 6)
+        finally:
+            try:
+                if pending is not None:
+                    if not pending.done():
+                        pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+            finally:
+                if tx.is_active:
+                    await tx.rollback()
     assert created.status_code == 201, created.text
     assert created.json()["id"] != str(initial)
     async with api.migrator.connect() as conn:
