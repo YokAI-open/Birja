@@ -37,6 +37,7 @@ export function portfolioGuardFor(
   email: string | null,
   portfolioId: string | null,
   session: number,
+  view: "detail" | "overview" = "detail",
 ) {
   let roots = guards.get(client);
   if (!roots) {
@@ -60,7 +61,7 @@ export function portfolioGuardFor(
       if (old !== null) client.removeQueries({ queryKey: ["portfolio", old] });
     });
   }
-  const key = JSON.stringify([email, portfolioId, session]);
+  const key = JSON.stringify([email, portfolioId, session, view]);
   const existing = roots.get(key);
   if (existing) return existing;
   const g: Guard = {

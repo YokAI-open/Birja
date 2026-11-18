@@ -13,6 +13,7 @@ import { useMe } from "./useMe";
 import { eventHistorySession } from "./useEventHistory";
 import { portfolioGuardFor, projectPortfolio, type TimedPortfolio } from "./usePortfolio";
 import { subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
+import { stockInstant } from "@/api/stocks";
 
 type TimedOverview = readonly (PortfolioOverview & Pick<TimedPortfolio, "transport">)[];
 const activeScopes = new WeakSet<object>();
@@ -52,7 +53,7 @@ export function usePortfolioOverview() {
         const detail: TimedPortfolio = { ...statement, portfolio_id: id };
         const guarded = projectPortfolio(
           client,
-          portfolioGuardFor(client, owner, id, epoch),
+          portfolioGuardFor(client, owner, id, epoch, "overview"),
           detail,
         );
         // Preserve authenticated current metadata even if an older financial snapshot is refused.
@@ -83,6 +84,15 @@ export function usePortfolioOverview() {
         signal.throwIfAborted();
         if (!current() || client.getQueryCache().find({ queryKey: key, exact: true }) !== captured)
           throw new Error("Overview session changed");
+        // Membership and the common statement time belong to one response.
+        // Never splice a retained book into an older comparison response.
+        if (
+          rows.some((row) => {
+            const latest = portfolioGuardFor(client, owner, row.id, epoch, "overview").latest;
+            return latest !== null && stockInstant(row.valued_at) < stockInstant(latest.valued_at);
+          })
+        )
+          throw new Error("Overview snapshot moved backwards");
         const received_at = performance.now();
         const transport = { received_at, round_trip_ms: Math.max(0, received_at - started) };
         return project(rows.map((row) => ({ ...row, transport })));
@@ -109,7 +119,7 @@ export function usePortfolioOverview() {
           writing = false;
         }
         const bounds = safe.flatMap((row) => {
-          const clock = portfolioGuardFor(client, owner, row.id, epoch).clock;
+          const clock = portfolioGuardFor(client, owner, row.id, epoch, "overview").clock;
           if (!clock) return [];
           return row.holdings.flatMap((holding) => {
             const mark = holding.stock_mark;

@@ -342,30 +342,56 @@ it("does not substitute a newer detail snapshot into the overview's shared valua
   const { wrapper } = setup();
   const detail = { ...mixedPortfolio(), valued_at: "2026-11-10T15:00:20Z", name: "Strategy 1" };
   let requested = false;
-  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
-    const path = String(input);
-    if (path.endsWith("/portfolios")) return Promise.resolve(json([{id:"1",name:"Strategy 1"}]));
-    if (path.endsWith("/overview")) { requested = true; return Promise.resolve(json([row("1",true),row("2",true)])); }
-    return Promise.resolve(json(detail));
-  }));
-  const first = renderHook(() => {
-    const target = usePortfolioTarget("1");
-    return usePortfolio(target.target);
-  }, {wrapper});
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/portfolios"))
+        return Promise.resolve(json([{ id: "1", name: "Strategy 1" }]));
+      if (path.endsWith("/overview")) {
+        requested = true;
+        return Promise.resolve(json([row("1", true), row("2", true)]));
+      }
+      return Promise.resolve(json(detail));
+    }),
+  );
+  const first = renderHook(
+    () => {
+      const target = usePortfolioTarget("1");
+      return usePortfolio(target.target);
+    },
+    { wrapper },
+  );
   await waitFor(() => expect(first.result.current.data?.valued_at).toBe(detail.valued_at));
-  const overview = renderHook(() => usePortfolioOverview(), {wrapper});
+  const overview = renderHook(() => usePortfolioOverview(), { wrapper });
   await waitFor(() => expect(requested).toBe(true));
   await waitFor(() => expect(overview.result.current.data).toHaveLength(2));
-  expect(overview.result.current.data?.map((value) => value.valued_at)).toEqual(["2026-11-10T15:00:10Z","2026-11-10T15:00:10Z"]);
+  expect(overview.result.current.data?.map((value) => value.valued_at)).toEqual([
+    "2026-11-10T15:00:10Z",
+    "2026-11-10T15:00:10Z",
+  ]);
 });
 it("refuses a backwards overview snapshot as a whole rather than mixing accepted times", async () => {
   const { wrapper } = setup();
   let old = false;
-  vi.stubGlobal("fetch",vi.fn(() => Promise.resolve(json(old ? [row("1",true),row("2",true)] : [{...row("1",true),valued_at:"2026-11-10T15:00:20Z"}]))));
-  const hook=renderHook(() => usePortfolioOverview(),{wrapper});
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      Promise.resolve(
+        json(
+          old
+            ? [row("1", true), row("2", true)]
+            : [{ ...row("1", true), valued_at: "2026-11-10T15:00:20Z" }],
+        ),
+      ),
+    ),
+  );
+  const hook = renderHook(() => usePortfolioOverview(), { wrapper });
   await waitFor(() => expect(hook.result.current.data?.[0].valued_at).toBe("2026-11-10T15:00:20Z"));
-  old=true;
-  await act(async()=>{await hook.result.current.refetch();});
+  old = true;
+  await act(async () => {
+    await hook.result.current.refetch();
+  });
   expect(hook.result.current.isError).toBe(true);
   expect(hook.result.current.data).toHaveLength(1);
   expect(hook.result.current.data?.[0].valued_at).toBe("2026-11-10T15:00:20Z");
