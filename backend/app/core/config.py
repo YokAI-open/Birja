@@ -47,6 +47,11 @@ class Settings(_StockSettings):
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
 
+    # Create attempts include retries/rejections; successful grants have a
+    # separate durable100/UTC-day ceiling in the serialized SQL authority.
+    portfolio_create_owner_limit: int = Field(default=30, ge=1, le=30)
+    portfolio_create_ip_limit: int = Field(default=60, ge=1, le=60)
+
     # Email: console logs codes (dev/test only); resend sends real mail (D-01).
     # The key lives only in the local git-ignored .env (D-02).
     email_backend: Literal["console", "resend"] = "console"

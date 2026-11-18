@@ -12,11 +12,21 @@ from pydantic import ValidationError
 
 @pytest.mark.parametrize(
     "payload",
-    [{}, {"name": None}, {"name": 42}, {"name": ""}, {"name": "\tbad"},
-     {"name": "bad\x85"}, {"name": "x" * 61}, {"name": "\ud800"},
-     {"name": "ok", "description": None}, {"name": "ok", "description": "\x00"},
-     {"name": "ok", "description": "\x7f"}, {"name": "ok", "description": "😀" * 1001},
-     *({"name": "ok", key: 10000} for key in ("owner", "user_id", "cash", "starting_cash"))],
+    [
+        {},
+        {"name": None},
+        {"name": 42},
+        {"name": ""},
+        {"name": "\tbad"},
+        {"name": "bad\x85"},
+        {"name": "x" * 61},
+        {"name": "\ud800"},
+        {"name": "ok", "description": None},
+        {"name": "ok", "description": "\x00"},
+        {"name": "ok", "description": "\x7f"},
+        {"name": "ok", "description": "😀" * 1001},
+        *({"name": "ok", key: 10000} for key in ("owner", "user_id", "cash", "starting_cash")),
+    ],
 )
 def test_create_schema_refuses_invalid_and_authority_fields(payload):
     schemas = importlib.import_module("app.schemas.portfolios")
@@ -66,29 +76,38 @@ async def test_streamed_body_is_bounded_even_with_deceptive_length(boundary_app,
     headers = {"content-type": "application/json"}
     if declared:
         headers["content-length"] = declared
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=boundary_app), base_url="https://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=boundary_app), base_url="https://test"
+    ) as client:
         response = await client.post("/probe", content=chunks(), headers=headers)
     assert response.status_code == 413
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["vary"] == "Cookie, Authorization"
 
 
-@pytest.mark.parametrize("body,media,status", [
-    (b'{"name":"x"}', "text/plain", 415),
-    (b'{', "application/json", 422),
-    (b'[]', "application/json", 422),
-    (b'{"name":"a","name":"b"}', "application/json", 422),
-    (json.dumps({"name": "x"}).encode().ljust(8192), "application/json; charset=utf-8", 200),
-])
+@pytest.mark.parametrize(
+    "body,media,status",
+    [
+        (b'{"name":"x"}', "text/plain", 415),
+        (b"{", "application/json", 422),
+        (b"[]", "application/json", 422),
+        (b'{"name":"a","name":"b"}', "application/json", 422),
+        (json.dumps({"name": "x"}).encode().ljust(8192), "application/json; charset=utf-8", 200),
+    ],
+)
 async def test_json_boundary_and_exact_body_limit(boundary_app, body, media, status):
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=boundary_app), base_url="https://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=boundary_app), base_url="https://test"
+    ) as client:
         response = await client.post("/probe", content=body, headers={"content-type": media})
     assert response.status_code == status
     assert response.headers["cache-control"] == "no-store"
 
 
 async def test_private_unknown_result_copy_does_not_claim_no_creation(boundary_app):
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=boundary_app), base_url="https://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=boundary_app), base_url="https://test"
+    ) as client:
         response = await client.get("/fail")
         refused = await client.get("/refuse")
     assert response.status_code == 500
@@ -98,7 +117,9 @@ async def test_private_unknown_result_copy_does_not_claim_no_creation(boundary_a
     assert refused.status_code == 401 and refused.headers["cache-control"] == "no-store"
 
 
-@pytest.mark.parametrize("key", [None, "", "x" * 10000, str(uuid4()).upper(), "00000000-0000-0000-0000-000000000000"])
+@pytest.mark.parametrize(
+    "key", [None, "", "x" * 10000, str(uuid4()).upper(), "00000000-0000-0000-0000-000000000000"]
+)
 def test_creation_key_is_one_bounded_canonical_uuid4(key):
     management = importlib.import_module("app.api.v2.portfolio_management")
     with pytest.raises(HTTPException) as error:
@@ -110,3 +131,37 @@ def test_valid_creation_key():
     management = importlib.import_module("app.api.v2.portfolio_management")
     key = uuid4()
     assert management.creation_key(str(key)) == key
+
+
+async def test_attempt_buckets_have_ttl_count_rejections_and_cannot_rotate_keys(
+    redis_client, settings
+):
+    management = importlib.import_module("app.api.v2.portfolio_management")
+    limits = settings.model_copy(
+        update={"portfolio_create_owner_limit": 2, "portfolio_create_ip_limit": 4}
+    )
+    for _ in range(2):
+        await management.enforce_creation_attempt(redis_client, 101, "192.0.2.1", limits)
+    with pytest.raises(HTTPException) as error:
+        await management.enforce_creation_attempt(redis_client, 101, "192.0.2.1", limits)
+    assert error.value.status_code == 429 and int(error.value.headers["Retry-After"]) > 0
+    await management.enforce_creation_attempt(redis_client, 102, "192.0.2.1", limits)
+    with pytest.raises(HTTPException) as error:
+        await management.enforce_creation_attempt(redis_client, 103, "192.0.2.1", limits)
+    assert error.value.status_code == 429
+    keys = [key async for key in redis_client.scan_iter(match="sim:rl:portfolio_create:*")]
+    assert len(keys) <= 4
+    assert all([0 < await redis_client.ttl(key) <= 60 for key in keys])
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("portfolio_create_owner_limit", 0),
+        ("portfolio_create_owner_limit", 31),
+        ("portfolio_create_ip_limit", 61),
+    ],
+)
+def test_settings_refuse_unbounded_creation_attempt_limits(settings, field, value):
+    with pytest.raises(ValidationError):
+        type(settings).model_validate({**settings.model_dump(), field: value})
