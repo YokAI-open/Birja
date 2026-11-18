@@ -99,7 +99,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   const portfolio = usePortfolio(target);
   const holding = useHolding(target, symbol);
   const trade = useTrade(target, symbol);
-  const [attemptName, setAttemptName] = useState(target.name);
   const now = useNow(1000);
   useEffect(() => {
     if (trade.data && target.isCurrent() && focusedReceipt.current !== trade.data.trade_id) {
@@ -177,7 +176,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       return;
     }
     if (!order || !quote || !settled || !live || refused) return;
-    setAttemptName(target.name);
     keyRef.current ??= crypto.randomUUID();
     trade.mutate(
       { order, expectedMid: quote.mid, idempotencyKey: keyRef.current },
@@ -251,7 +249,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         >
           Order filled
         </h2>
-        <PortfolioContext name={attemptName} />
+        <PortfolioContext name={trade.originalName ?? target.name} />
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -297,7 +295,9 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
           Preview
         </h2>
-        <PortfolioContext name={trade.attempt ? attemptName : target.name} />
+        <PortfolioContext
+          name={trade.attempt ? (trade.originalName ?? target.name) : target.name}
+        />
         {trade.outcomeUnknown && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             We couldn't confirm the result. Check this order before placing another.

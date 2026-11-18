@@ -42,7 +42,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     id = useId(),
     input = useRef<HTMLInputElement>(null);
   const [retrying, setRetrying] = useState(false);
-  const [originalName, setOriginalName] = useState(target.name);
+  const [previewName, setPreviewName] = useState(target.name);
   const oldPhase = useRef(t.phase);
   useEffect(() => {
     if (oldPhase.current === "filled" && t.phase === "draft") input.current?.focus();
@@ -172,7 +172,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               className="flex min-w-0 flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
-                setOriginalName(target.name);
+                setPreviewName(target.name);
                 void t.preview();
               }}
             >
@@ -266,13 +266,21 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               <StockTradeReceipt
                 fill={t.fill}
                 target={target}
-                portfolioName={originalName}
+                portfolioName={t.originalName ?? target.name}
                 onTradeAgain={t.tradeAgain}
               />
             ) : (
               <>
                 <h2 className="text-[24px] leading-7 font-medium">Trade preview</h2>
-                <PortfolioContext name={t.quote || t.attempt ? originalName : target.name} />
+                <PortfolioContext
+                  name={
+                    t.attempt
+                      ? (t.originalName ?? target.name)
+                      : t.quote
+                        ? previewName
+                        : target.name
+                  }
+                />
                 {t.phase === "loading_preview" && (
                   <div
                     aria-busy="true"

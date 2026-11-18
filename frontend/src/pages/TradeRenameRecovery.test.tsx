@@ -167,5 +167,9 @@ it.each(
       "/portfolios/1",
     );
     expect(requests).toHaveLength(mode === "filled" ? 1 : 2);
+    await user.click(receipt.getByRole("button", { name: "Trade again" }));
+    expect(screen.queryByText("Original")).toBeNull();
+    expect(screen.getAllByText("Renamed")).toHaveLength(2);
+    expect(screen.getByLabelText(stock ? "Whole-share quantity" : "Amount")).toHaveValue("");
   },
 );
