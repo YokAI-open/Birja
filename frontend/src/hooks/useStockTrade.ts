@@ -678,6 +678,17 @@ export function useStockTrade(target: PortfolioTarget | null, routeSymbol: strin
           ),
       );
     } catch (error) {
+      // Original identity permits revocation after rename, never publication.
+      if (
+        target.isOriginalCurrent?.() &&
+        error instanceof StockTradeError &&
+        (error.status === 404 || error.status === 401)
+      ) {
+        preserveUnknown();
+        if (error.status === 404) revokePortfolioTarget(client, target);
+        else client.setQueryData(["me"], null);
+        return;
+      }
       if (!stillOwn()) {
         preserveUnknown();
         return;

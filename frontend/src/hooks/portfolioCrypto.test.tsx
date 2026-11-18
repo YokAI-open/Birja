@@ -114,14 +114,17 @@ it.each(["lost", "pending", "unavailable"])(
   async (mode) => {
     const { client, wrapper } = setup();
     let name = "Original",
-      metadataPending = false, unavailable = false;
+      metadataPending = false,
+      unavailable = false;
     const late = deferred(),
       metadata = deferred();
     const bodies: string[] = [];
     const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.endsWith("/portfolios"))
-        return metadataPending ? metadata.promise : Promise.resolve(json(unavailable ? [] : [{ id: "1", name }]));
+        return metadataPending
+          ? metadata.promise
+          : Promise.resolve(json(unavailable ? [] : [{ id: "1", name }]));
       bodies.push(init!.body as string);
       if (bodies.length === 1)
         return mode === "lost" ? Promise.reject(new Error("lost")) : late.promise;
@@ -160,7 +163,12 @@ it.each(["lost", "pending", "unavailable"])(
     });
     await act(async () => {
       unavailable = mode === "unavailable";
-      if (mode !== "lost") late.resolve(mode === "unavailable" ? json({ detail: { code: "portfolio_unavailable" } }, 404) : json(fill()));
+      if (mode !== "lost")
+        late.resolve(
+          mode === "unavailable"
+            ? json({ detail: { code: "portfolio_unavailable" } }, 404)
+            : json(fill()),
+        );
       await pending;
     });
     if (mode === "unavailable") {

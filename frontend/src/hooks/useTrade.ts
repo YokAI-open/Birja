@@ -115,9 +115,10 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
             originalName,
           });
         }
-        if (scope.current() && error instanceof ApiError && error.code === "portfolio_unavailable")
+        const originalCurrent = scope.current() || target.isOriginalCurrent?.() === true;
+        if (originalCurrent && error instanceof ApiError && error.code === "portfolio_unavailable")
           revokePortfolioTarget(client, target);
-        if (scope.current() && error instanceof ApiError && error.status === 401)
+        if (originalCurrent && error instanceof ApiError && error.status === 401)
           client.setQueryData(["me"], null);
         throw failure;
       }

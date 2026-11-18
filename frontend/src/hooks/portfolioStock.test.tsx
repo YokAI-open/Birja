@@ -166,7 +166,12 @@ it.each(["lost", "pending", "unavailable"])(
     await waitFor(() => expect(h.result.current.p.target?.name).toBe("Renamed"));
     await act(async () => {
       if (mode === "unavailable") active = false;
-      if (mode !== "lost") late.resolve(mode === "unavailable" ? json({ detail: { code: "portfolio_unavailable" } }, 404) : json(fill()));
+      if (mode !== "lost")
+        late.resolve(
+          mode === "unavailable"
+            ? json({ detail: { code: "portfolio_unavailable" } }, 404)
+            : json(fill()),
+        );
       await pending;
     });
     if (mode === "unavailable") {
