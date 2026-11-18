@@ -154,3 +154,24 @@ Plan 13 inherits the pathname-scoped metadata-only boundary lease; it must prese
 ### Repair Self-Check: PASSED
 
 All four changed paths exist, committed RED precedes GREEN, and the final 384-case affected regression and static checks pass. No tracked deletion was introduced. The parent-owned untracked review and unrelated `.claude/` were left untouched. The repaired plan now has eleven source/test paths in its cumulative ownership; the initial ten-file counts above remain the historical initial execution record.
+
+## Independent Review CR-02 Repair
+
+The second independent review found a different ordering: PATCH is still pending when same-root discovery revalidation unmounts the form. The lease correctly retained the editor, but its pending flag survived the controller abort; the inactive old handler returned without clearing it. Review, Save and Discard remained disabled indefinitely. CR-01's successful-PATCH-before-discovery tests could not cover this ordering. The parent explicitly authorized this bounded second repair; its review remains untouched.
+
+RED `16b433d` defers the actual routed page's PATCH before triggering the same-root metadata event and deferred discovery. Abort-aware rejection and a transport that ignores abort both independently fail because the restored Review button is disabled. The separate logout control passes before the repair. A fourth final regression starts a newer explicitly reviewed PATCH before delivering the obsolete first response.
+
+The repair changes only `usePortfolioManagement.ts` and `PortfolioPage.test.tsx`. Each save captures an immutable operation token containing its starting editor revision and exact route lease; the editor and originating scope retain that same token. Scope cleanup, before aborting its controllers, transitions only its matching still-pending operation under the exact captured owner/root/session/path lease to non-pending, review-required and awaiting authoritative metadata. It retains the draft, increments revision, records an unknown/interrupted-save explanation and revokes that operation token. True departure/privacy cleanup is unchanged.
+
+The remounted existing metadata query must successfully obtain authoritative metadata before clearing the outstanding-fetch flag. Review remains required, Save stays blocked until explicit review, and Discard becomes usable. No automatic PATCH retry occurs. Response, catch and post-await completion handling require the exact operation token as well as captured current authority/retained lease. Editing or replacing an operation revokes its earlier token. An old abort rejection or late response can therefore neither publish success nor clear a newer save's pending state. The operation is removed from its scope's active set in `finally`.
+
+Final real routed coverage verifies both abort behaviors, current latest metadata plus the retained draft, enabled Review/Discard with review-blocked Save, exactly one PATCH before explicit action, no obsolete success feedback, successful discard, logout clearing, and an obsolete first reply leaving a second explicit save pending until that second save itself resolves. Existing CR-01 delayed-success focus and all financial/original-order guards remain covered.
+
+- Four focused suites: **99 passed**, 6.52s.
+- Sixteen affected suites: **388 passed**, 15.71s.
+- Whole frontend typing/lint, two-file Prettier and diff checks: passed.
+- No boundary, route, creation storage, provider, dependency, financial guard, global planning state or parent review change. No production, push or merge operation.
+
+### CR-02 Repair Self-Check: PASSED
+
+Both changed paths exist, RED is committed before GREEN and the final 388-case affected regression/static checks pass. No tracked deletion or generated artifact was introduced. Parent-owned review and unrelated `.claude/` remain untouched. Independent re-review remains the parent's next step; browser/native200/owner acceptance and the original publication/accepted-risk boundaries remain pending or unchanged as previously recorded.
