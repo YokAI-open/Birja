@@ -18,7 +18,7 @@ helper = runpy.run_path('/e2e/stock-trade-fixture.py', run_name='private_browser
 
 async def main(mode, email=None):
     helper['guard']()
-    if mode not in {'legacy', 'inspect', 'sibling', 'zero', 'close', 'name', 'price-tick'}:
+    if mode not in {'legacy', 'inspect', 'economic', 'sibling', 'zero', 'close', 'name', 'price-tick'}:
         raise ValueError('Unknown synthetic portfolio operation')
     if mode != 'legacy' and (not email or re.fullmatch(r'e2e-[a-z0-9-]+@example\.com', email) is None):
         raise ValueError('Synthetic owner required')
@@ -45,16 +45,32 @@ async def main(mode, email=None):
                 raise ValueError('Sign in with actual OTP first')
             original = await db.scalar(text('SELECT min(id) FROM accounts WHERE user_id=:u'), {'u': uid})
             if mode == 'sibling':
-                await db.execute(text("INSERT INTO accounts(user_id,name,cash,starting_cash) VALUES (:u,'Sibling strategy',2000,2000)"), {'u': uid})
+                # Retained historical opening, never represented as a new grant.
+                await db.execute(text("INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) VALUES (:u,'Sibling strategy',public.portfolio_name_key('Sibling strategy'),2000,2000)"), {'u': uid})
             elif mode in {'zero', 'close'}:
                 await db.execute(text('UPDATE accounts SET closed_at=clock_timestamp() WHERE user_id=:u AND closed_at IS NULL' + (' AND id=:p' if mode == 'close' else '')), {'u': uid, 'p': original})
             elif mode == 'name':
-                await db.execute(text('UPDATE accounts SET name=:n WHERE id=:p AND closed_at IS NULL'), {'n': '<Strategy>& ' + 'UnbrokenPortfolioName' * 2, 'p': original})
+                await db.execute(text('UPDATE accounts SET name=:n,name_key=public.portfolio_name_key(:n) WHERE id=:p AND closed_at IS NULL'), {'n': '<Strategy>& ' + 'UnbrokenPortfolioName' * 2, 'p': original})
             elif mode == 'price-tick':
                 # Real synthetic market evidence changes between preview and
                 # execute. No portfolio money or saved order is modified.
                 changed = (await db.execute(text("UPDATE prices SET mid=mid+1,as_of=clock_timestamp() WHERE coin_id=(SELECT id FROM coins WHERE symbol='BTC' AND asset_class='crypto') AND source='fake' RETURNING coin_id"))).scalars().all()
                 assert len(changed) == 1, 'One actual fake BTC price required'
+            if mode == 'economic':
+                result = {}
+                # Immutable before-oracle: metadata edits must preserve every
+                # economic/history/journal byte, not just the displayed cash.
+                for table in ('accounts', 'holdings', 'trades', 'portfolio_creations', 'portfolio_initializations'):
+                    # Preserve exact numeric text: decoding JSONB into Python
+                    # floats would weaken the immutable financial oracle.
+                    columns = "(to_jsonb(t) - 'name' - 'name_key' - 'description')::text" if table == 'accounts' else 'to_jsonb(t)::text'
+                    result[table] = (await db.execute(text(
+                        f'SELECT {columns} AS row FROM public.{table} t WHERE user_id=:u ORDER BY id'
+                        if table != 'portfolio_initializations' else
+                        f'SELECT {columns} AS row FROM public.{table} t WHERE user_id=:u ORDER BY user_id'
+                    ), {'u': uid})).scalars().all()
+                print(json.dumps(result, sort_keys=True))
+                return
             rows = (await db.execute(text('SELECT id::text,name,cash::text,starting_cash::text,closed_at IS NOT NULL AS closed FROM accounts WHERE user_id=:u ORDER BY accounts.id'), {'u': uid})).mappings().all()
             print(json.dumps([dict(r) for r in rows]))
     finally:

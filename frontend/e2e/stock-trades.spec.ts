@@ -1,7 +1,7 @@
 import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { stockFixture } from "./stock-trade-fixtures.js";
-import { portfolioApi, signInNewUser } from "./helpers.js";
+import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
 type StockFill = Record<"exec_price" | "cash_after" | "fee" | "held_after", string>;
 
 /** Actual DOM/CSS, frozen for offline owner zoom review; no API, script or navigation. */
@@ -58,6 +58,19 @@ async function reviewSnapshot(page: Page, info: TestInfo, name: string) {
 
 test.beforeEach(() => stockFixture("fresh"));
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
+async function openOwnedPortfolio(page: Page) {
+  const id = await portfolioId(page);
+  const overview = nav(page).getByRole("link", { name: "Portfolios", exact: true });
+  await overview.click();
+  await expect(overview).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeFocused();
+  await page
+    .getByRole("link", { name: "Open portfolio", exact: true })
+    .and(page.locator(`[href="/portfolios/${id}"]`))
+    .click();
+  await expect(page).toHaveURL(`/portfolios/${id}`);
+  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeFocused();
+}
 async function ticket(page: Page) {
   await signInNewUser(page);
   const link = page.getByRole("link", { name: "Trade AAPL", exact: true });
@@ -112,7 +125,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(buy.cash_after).toBe("9796.00000000");
   expect(buy.fee).toBe("0.00000000");
   expect(buy.held_after).toBe("2.00000000");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   const portfolio = await page.request.get(await portfolioApi(page));
   const p = await portfolio.json();
   expect(p.cash).toBe("9796.00");
@@ -147,7 +160,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   await preview(page, "1");
   const next = await fill(page);
   expect(next.cash_after).toBe("9794.00000000");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   const mixed = await (await page.request.get(await portfolioApi(page))).json();
   expect(mixed.cash).toBe("9794.00");
   expect(mixed.starting_cash).toBe("10000.00");
@@ -261,7 +274,7 @@ test("real historical closed/halted marks survive execution age while uncertain 
   await preview(page);
   await fill(page);
   stockFixture("close");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   await expect(
     page
       .getByRole("table", { name: "Holdings", exact: true })
@@ -314,7 +327,7 @@ for (const width of [320, 375, 768, 1024, 1440]) {
     await noOverflow(page);
     await page.screenshot({ path: info.outputPath(`stock-receipt-${width}.png`), fullPage: true });
     if (width === 1440) await reviewSnapshot(page, info, "stock-receipt-review");
-    await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+    await openOwnedPortfolio(page);
     await expect(page.getByRole("table", { name: "Holdings", exact: true })).toHaveCount(
       width >= 1024 ? 1 : 0,
     );
@@ -417,7 +430,7 @@ test("checks browser zoom support and captures explicit supplementary reflow", a
     fullPage: true,
   });
   await fill(page);
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   await noOverflow(page);
   await page.screenshot({
     path: info.outputPath(
