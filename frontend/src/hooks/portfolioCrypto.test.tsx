@@ -109,19 +109,19 @@ it.each(["removed", "owner", "logout", "switch"])(
     }
   },
 );
-it.each(["lost", "pending"])(
+it.each(["lost", "pending", "unavailable"])(
   "keeps the real-target crypto original across a %s rename and explicit replay",
   async (mode) => {
     const { client, wrapper } = setup();
     let name = "Original",
-      metadataPending = false;
+      metadataPending = false, unavailable = false;
     const late = deferred(),
       metadata = deferred();
     const bodies: string[] = [];
     const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path.endsWith("/portfolios"))
-        return metadataPending ? metadata.promise : Promise.resolve(json([{ id: "1", name }]));
+        return metadataPending ? metadata.promise : Promise.resolve(json(unavailable ? [] : [{ id: "1", name }]));
       bodies.push(init!.body as string);
       if (bodies.length === 1)
         return mode === "lost" ? Promise.reject(new Error("lost")) : late.promise;
@@ -159,9 +159,17 @@ it.each(["lost", "pending"])(
       await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
     });
     await act(async () => {
-      if (mode === "pending") late.resolve(json(fill()));
+      unavailable = mode === "unavailable";
+      if (mode !== "lost") late.resolve(mode === "unavailable" ? json({ detail: { code: "portfolio_unavailable" } }, 404) : json(fill()));
       await pending;
     });
+    if (mode === "unavailable") {
+      await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
+      expect(h.result.current.t.attempt).toBeNull();
+      expect(h.result.current.t.data).toBeUndefined();
+      expect(bodies).toHaveLength(1);
+      return;
+    }
     await waitFor(() => expect(h.result.current.t.outcomeUnknown).toBe(true));
     expect(h.result.current.t.originalName).toBe("Original");
     expect(success).not.toHaveBeenCalled();

@@ -103,7 +103,7 @@ it.each(["owner", "logout", "switch", "removed"])(
     }
   },
 );
-it.each(["lost", "pending"])(
+it.each(["lost", "pending", "unavailable"])(
   "preserves real-target stock originals during %s rename and closed-market replay",
   async (mode) => {
     const client = new QueryClient({
@@ -165,9 +165,18 @@ it.each(["lost", "pending"])(
     act(() => broadcastMetadataChange("1"));
     await waitFor(() => expect(h.result.current.p.target?.name).toBe("Renamed"));
     await act(async () => {
-      if (mode === "pending") late.resolve(json(fill()));
+      if (mode === "unavailable") active = false;
+      if (mode !== "lost") late.resolve(mode === "unavailable" ? json({ detail: { code: "portfolio_unavailable" } }, 404) : json(fill()));
       await pending;
     });
+    if (mode === "unavailable") {
+      await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
+      expect(h.result.current.t.attempt).toBeNull();
+      expect(h.result.current.t.fill).toBeNull();
+      expect(h.result.current.t.context).toBeUndefined();
+      expect(requests).toHaveLength(1);
+      return;
+    }
     await waitFor(() => expect(h.result.current.t.phase).toBe("unknown"));
     expect(h.result.current.t.attempt?.portfolioName).toBe("Original");
     expect(h.result.current.t.fill).toBeNull();
