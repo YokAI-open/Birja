@@ -40,11 +40,6 @@ class Account(Base):
         CheckConstraint("cash >= 0", name="cash_non_negative"),
         CheckConstraint("starting_cash >= 0", name="starting_cash_non_negative"),
         CheckConstraint("cash = round(cash, 2)", name="cash_cents"),
-        CheckConstraint("name = public.portfolio_display_name(name)", name="name_canonical"),
-        CheckConstraint("name_key = public.portfolio_name_key(name)", name="name_key_canonical"),
-        CheckConstraint(
-            "description = public.portfolio_description(description)", name="description_canonical"
-        ),
         Index(
             "uq_accounts_active_name",
             "user_id",
