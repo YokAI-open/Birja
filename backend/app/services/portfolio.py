@@ -178,7 +178,12 @@ async def load_portfolio_snapshots(
     # READ COMMITTED gives this a fresh view after the financial await. Include
     # every owner root for overview so a newly created/closed root cannot silently
     # disappear from a supposedly complete comparison.
-    current_ids = root_query.order_by(Account.id).limit(11).subquery()
+    # Retain shared root locks until the caller's read transaction ends. A
+    # closer/owner writer cannot commit between the final await and response
+    # serialization. No financial values are reread or changed by this check.
+    current_ids = (
+        root_query.order_by(Account.id).limit(11).with_for_update(read=True, of=Account).subquery()
+    )
     current_raw = (
         await db.execute(
             execution_snapshot_query(now or datetime.now(UTC)).add_columns(

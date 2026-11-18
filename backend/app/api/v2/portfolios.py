@@ -19,14 +19,17 @@ from app.core.deps import (
     RedisDep,
     SettingsDep,
 )
-from app.schemas.portfolio import PortfolioOut
+from app.schemas.portfolio import HoldingOut, PortfolioOut
 from app.schemas.portfolios import (
     PortfolioCreate,
     PortfolioMetadata,
+    PortfolioOverview,
+    PortfolioOverviewList,
     PortfolioPatch,
     PortfolioSummary,
 )
-from app.services.portfolio import get_portfolio
+from app.schemas.trades import Money
+from app.services.portfolio import get_portfolio, load_portfolio_snapshots
 from app.services.portfolios import (
     create_portfolio,
     get_portfolio_metadata,
@@ -35,6 +38,8 @@ from app.services.portfolios import (
 )
 
 router = APIRouter(prefix="/portfolios", tags=["portfolios"], route_class=ManagementRoute)
+
+PortfolioOverview.model_rebuild(_types_namespace={"HoldingOut": HoldingOut, "Money": Money})
 
 
 @router.get(
@@ -45,6 +50,19 @@ router = APIRouter(prefix="/portfolios", tags=["portfolios"], route_class=Manage
 )
 async def portfolios(user: CurrentUserDep, db: DbDep) -> list[PortfolioSummary]:
     return await list_active_portfolios(db, user)
+
+
+@router.get(
+    "/overview",
+    response_model=PortfolioOverviewList,
+    summary="Compare your active portfolio statements",
+    description="Returns up to ten owned books in ID order with separate values and returns.",
+)
+async def overview(
+    user: CurrentUserDep, db: DbDep, settings: SettingsDep
+) -> list[PortfolioOverview]:
+    snapshots = await load_portfolio_snapshots(db, owner_id=user.id, settings=settings)
+    return [PortfolioOverview.from_value(value) for value in snapshots]
 
 
 @router.get(

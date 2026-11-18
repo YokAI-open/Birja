@@ -193,6 +193,9 @@ async def test_bounded_batch_matches_detail_exactly(management_api, settings, co
 
     event.listen(api.restricted.sync_engine, "before_cursor_execute", capture)
     try:
+        if count == 0:
+            assert await load(api, settings, [], now=now) == ()
+            assert queries == []
         batch = await load(api, settings, now=now)
     finally:
         event.remove(api.restricted.sync_engine, "before_cursor_execute", capture)
@@ -350,15 +353,17 @@ async def test_final_membership_protects_response_until_reader_releases(
             try:
                 async with api.migrator.begin() as writer:
                     await writer.execute(text("SET LOCAL lock_timeout='50ms'"))
-                    await writer.execute(text("UPDATE accounts SET closed_at=clock_timestamp() "
-                        "WHERE id=:p"), {"p": root.portfolio_id})
+                    await writer.execute(
+                        text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
+                        {"p": root.portfolio_id},
+                    )
             except DBAPIError as exc:
                 assert exc.orig.sqlstate == "55P03"
                 protected = True
         return result
 
     monkeypatch.setattr(AsyncSession, "execute", intercepted)
-    result, = await load(api, settings)
+    (result,) = await load(api, settings)
     assert result.portfolio_id == str(root.portfolio_id) and protected
     await close(api.migrator, root.portfolio_id)
     assert await load(api, settings) == ()

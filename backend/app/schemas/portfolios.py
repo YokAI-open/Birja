@@ -1,9 +1,26 @@
 """Private portfolio metadata; metadata never grants financial authority."""
 
-import unicodedata
-from typing import Annotated, Self
+from __future__ import annotations
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
+import unicodedata
+from typing import TYPE_CHECKING, Annotated, Self
+
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    model_validator,
+)
+
+from app.services.portfolio_math import ClassAllocation, ClassValues
+
+if TYPE_CHECKING:
+    from app.schemas.portfolio import HoldingOut
+    from app.schemas.trades import Money
+    from app.services.portfolio import PortfolioSnapshot
 
 PortfolioId = Annotated[
     int,
@@ -72,3 +89,42 @@ class PortfolioPatch(BaseModel):
 
 class PortfolioMetadata(PortfolioSummary):
     description: str
+
+
+class PortfolioOverview(BaseModel):
+    """A statement with management metadata and one canonical root identity."""
+
+    # PortfolioId is a low-level dependency of trading/statement schemas. The
+    # router binds their types after imports finish, avoiding a financial cycle.
+    model_config = ConfigDict(extra="forbid", defer_build=True)
+    id: PortfolioId
+    name: str
+    description: str
+    cash: Money
+    starting_cash: Money
+    total_value: Money | None
+    total_pl: Money | None
+    total_pl_percent: Money | None
+    cash_allocation_percent: Money | None
+    valuation_complete: bool
+    known_value: Money
+    unvalued_holding_count: int = Field(ge=0)
+    class_values: ClassValues
+    class_allocation_percent: ClassAllocation
+    valued_at: AwareDatetime
+    prices_as_of: AwareDatetime | None
+    fresh_seconds: int = Field(ge=0)
+    stale_seconds: int = Field(ge=0)
+    holdings: list[HoldingOut]
+
+    @classmethod
+    def from_value(cls, value: PortfolioSnapshot) -> Self:
+        from app.schemas.portfolio import PortfolioOut
+
+        statement = PortfolioOut.from_value(value).model_dump(exclude={"portfolio_id"})
+        return cls.model_validate(
+            {**statement, "id": int(value.portfolio_id), "description": value.description}
+        )
+
+
+PortfolioOverviewList = Annotated[list[PortfolioOverview], Field(max_length=10)]
