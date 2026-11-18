@@ -6,8 +6,9 @@ from sqlalchemy import text
 
 from tests.test_portfolio_creation import authority, management_api, patch, post
 from tests.test_portfolio_management_authority import close
+from tests.test_portfolio_strategy_lifecycle import ledger, strategy_books, trade
 
-__all__ = ["authority", "management_api"]
+__all__ = ["authority", "management_api", "strategy_books"]
 
 
 async def test_private_detail_edit_clear_and_legacy_summary_remain_exact(management_api):
@@ -74,6 +75,7 @@ async def economic_evidence(api):
         "portfolio_initializations",
         "holdings",
         "trades",
+        "stock_fill_facts",
         "stock_ownership_movements",
         "stock_dividend_payments",
         "stock_dividend_decisions",
@@ -86,7 +88,8 @@ async def economic_evidence(api):
                         await conn.execute(
                             text(
                                 "SELECT (to_jsonb(t)-'name'-'name_key'-'description')::text "  # noqa: S608
-                                f"FROM {table} t ORDER BY id"
+                                f"FROM {table} t ORDER BY "
+                                + ("trade_id" if table == "stock_fill_facts" else "id")
                             )
                         )
                     ).scalars()
@@ -143,3 +146,20 @@ async def test_patch_shape_scalar_boundaries_csrf_and_name_conflict_leave_eviden
         response = await api.client.get(f"/api/v2/portfolios/{malformed}/metadata")
         assert response.status_code == 422
     assert await economic_evidence(api) == before
+
+
+async def test_metadata_after_real_stock_crypto_fills_preserves_every_original(strategy_books):
+    api, (root, sibling), _, _ = strategy_books
+    for stock in (False, True):
+        filled = await trade(api, root, stock=stock, quantity="2")
+        assert filled.status_code == 201, filled.text
+    before = await economic_evidence(api)
+    sibling_before = await ledger(api, sibling)
+    history_before = (await api.client.get(f"/api/v2/portfolios/{root}/event-history")).json()
+    changed = await patch(api, root, {"name": "Edited invested root", "description": "notes"})
+    assert changed.status_code == 200
+    assert await economic_evidence(api) == before
+    assert await ledger(api, sibling) == sibling_before
+    assert (
+        await api.client.get(f"/api/v2/portfolios/{root}/event-history")
+    ).json() == history_before
