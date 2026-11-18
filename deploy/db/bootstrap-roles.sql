@@ -237,10 +237,22 @@ BEGIN
   ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))
  OR EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator' AND rolcanlogin)
  THEN RAISE EXCEPTION 'unsafe management roles'; END IF;
+ IF EXISTS(SELECT FROM pg_rewrite r JOIN pg_class c ON c.oid=r.ev_class
+  WHERE c.relnamespace='public'::regnamespace)
+ THEN RAISE EXCEPTION 'unexpected management rewrite rule'; END IF;
+ IF EXISTS(SELECT FROM pg_database d JOIN pg_roles r ON r.oid=d.datdba
+  WHERE d.datname=current_database() AND r.rolname IN
+  ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))
+ OR EXISTS(SELECT FROM pg_namespace n JOIN pg_roles r ON r.oid=n.nspowner
+  WHERE n.nspname='public' AND r.rolname IN
+  ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))
+ THEN RAISE EXCEPTION 'unsafe management database/schema ownership'; END IF;
  IF EXISTS(SELECT FROM pg_namespace n,
   LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) x
   WHERE n.nspname='public' AND x.privilege_type='CREATE' AND
   x.grantee IN (0,'birja_app'::regrole,'birja_scheduler'::regrole))
+ OR has_schema_privilege('birja_app','public','CREATE')
+ OR has_schema_privilege('birja_scheduler','public','CREATE')
  THEN RAISE EXCEPTION 'unsafe management schema'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
