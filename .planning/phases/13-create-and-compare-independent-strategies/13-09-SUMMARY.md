@@ -91,3 +91,15 @@ No component/browser/native zoom/owner acceptance proof, full frontend coverage,
 ## Self-Check: PASSED
 
 All six declared source/test files and the summary exist. RED/GREEN commits `5767b6a`, `673c00a`, `edaf875`, `9386cdf` exist; both required task commands and the final affected regression pass. No stubs prevent the plan goal. New storage/event boundaries match the plan threat register; no additional network/auth/financial authority surface was introduced.
+
+## Independent Review CR-01 Repair
+
+Independent review identified that a late definitive PATCH refusal reset `reviewRequired` to false after cross-tab/focus revalidation had marked the retained draft for review. Four deferred-response regressions (409 `name_taken` and 422 `invalid_input`, each after cross-tab and focus authoritative GET) reproduced the defect at the expected review-protection assertion. RED commit `11b6189` records those failures.
+
+GREEN commit `2d62dd7` changes the failure handler to capture the latest editor once and preserve `latest.reviewRequired || latest.revision !== submitted.revision || ambiguous`, along with its current draft and refresh state. The tests prove the latest metadata and dirty draft survive, another Save sends no PATCH until explicit review, and reviewed Save remains available. No interface or feature change.
+
+Post-repair qualification passes **33 new cases and 188 affected tests** across the same 10 suites in 4.39s. Full frontend typecheck, six-file ESLint/Prettier and `git diff --check` pass. This is a Rule 1 correctness repair within the existing Task 2 boundary. The original review report remains parent-owned and unmodified; independent recheck remains pending.
+
+### Repair Self-Check: PASSED
+
+The regression and source files exist; RED commit `11b6189` and subsequent GREEN `2d62dd7` exist with passing affected regression and static checks. All original runtime/publication limits remain unchanged.
