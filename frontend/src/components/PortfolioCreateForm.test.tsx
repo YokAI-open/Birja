@@ -38,7 +38,11 @@ it("focuses a new linked server error summary", () => {
       error: new PortfolioManagementError("refused", "name_taken", 409),
     },
   } as ReturnType<typeof usePortfolioManagement>);
-  view.rerender(<QueryClientProvider client={new QueryClient()}><PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} /></QueryClientProvider>);
+  view.rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
   expect(screen.getByRole("alert")).toHaveFocus();
   fireEvent.click(screen.getByRole("link", { name: "Review portfolio name" }));
   expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
@@ -53,7 +57,9 @@ it("discards an old definitive duplicate error when reopening a fresh draft", ()
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
   expect(screen.getByLabelText("Portfolio name")).toHaveValue("");
-  expect(screen.getByLabelText("Portfolio name")).not.toHaveAccessibleDescription(/already have an active/);
+  expect(screen.getByLabelText("Portfolio name")).not.toHaveAccessibleDescription(
+    /already have an active/,
+  );
   reopened.unmount();
 });
 it.each([true, false])("publishes only a current captured receipt (%s)", (current) => {

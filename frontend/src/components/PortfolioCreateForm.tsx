@@ -221,7 +221,19 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
     }
   }, [creation.receipt, onCreated]);
   const now = useNow();
-  const refusal = creation.error;
+  // A discarded, definitively refused name belongs to the previous editor.
+  // Keep the shared attempt untouched: unknown/pending recovery, resource
+  // limits and timing refusals must still govern the original operation.
+  const dismissedNameError = useRef(
+    creation.phase === "editing" &&
+      creation.attempt === null &&
+      creation.error instanceof PortfolioManagementError &&
+      creation.error.outcome === "refused" &&
+      creation.error.code === "name_taken"
+      ? creation.error
+      : null,
+  );
+  const refusal = creation.error === dismissedNameError.current ? null : creation.error;
   const [timing, setTiming] = useState<{ error: Error | null; until: number }>({
     error: null,
     until: 0,
