@@ -22,6 +22,10 @@ function Times({ row }: { row: PortfolioOverview }) {
       <p>
         Calculated at <time dateTime={row.valued_at}>{timestamp(row.valued_at)}</time>
       </p>
+      {row.holdings.some(
+        (holding) =>
+          holding.stock_mark?.mark_mode === "closed" || holding.stock_mark?.mark_mode === "halted",
+      ) && <p>Values include dated stock marks.</p>}
       <p>
         {row.prices_as_of ? (
           <>
@@ -79,7 +83,10 @@ export default function PortfoliosPage() {
   const desktop = useSyncExternalStore(subscribe, wide, () => false);
   const navigate = useNavigate();
   const created = useCallback(
-    (metadata: { id: string }) => navigate(`/portfolios/${metadata.id}`),
+    (metadata: { id: string }, replay: boolean) =>
+      navigate(`/portfolios/${metadata.id}`, {
+        state: { creationResult: { id: metadata.id, replay } },
+      }),
     [navigate],
   );
   const rows = query.data;
@@ -104,7 +111,7 @@ export default function PortfoliosPage() {
         <div className="flex flex-col gap-2 min-[375px]:flex-row min-[375px]:flex-wrap">
           <Button
             variant="secondary"
-            className="min-h-11"
+            className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
             aria-disabled={query.isFetching}
             onClick={refresh}
           >
@@ -112,7 +119,7 @@ export default function PortfoliosPage() {
           </Button>
           <Button
             ref={trigger}
-            className="min-h-11"
+            className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
             disabled={open || (!original && (!capKnown || limit))}
             aria-describedby={limit ? "portfolio-cap" : undefined}
             onClick={() => setOpen(true)}
@@ -132,7 +139,11 @@ export default function PortfoliosPage() {
       {!open && original && (
         <div role="status" className="rounded-control bg-warn-soft p-4 text-warn-text">
           <p>An original creation request is unresolved. Closing creation does not cancel it.</p>
-          <Button className="mt-2 min-h-11" variant="secondary" onClick={() => setOpen(true)}>
+          <Button
+            className="mt-2 min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
+            variant="secondary"
+            onClick={() => setOpen(true)}
+          >
             Review original creation
           </Button>
         </div>
@@ -146,7 +157,11 @@ export default function PortfoliosPage() {
       ) : !rows ? (
         <div role="alert">
           <p>Can&apos;t load your portfolios right now. Try again.</p>
-          <Button className="mt-2 min-h-11" onClick={refresh} aria-disabled={query.isFetching}>
+          <Button
+            className="mt-2 min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
+            onClick={refresh}
+            aria-disabled={query.isFetching}
+          >
             Try again
           </Button>
         </div>
@@ -159,7 +174,7 @@ export default function PortfoliosPage() {
                 update are shown.
               </p>
               <Button
-                className="mt-2 min-h-11"
+                className="mt-2 min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
                 variant="secondary"
                 onClick={refresh}
                 aria-disabled={query.isFetching}

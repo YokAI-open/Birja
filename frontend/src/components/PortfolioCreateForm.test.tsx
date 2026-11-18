@@ -7,6 +7,25 @@ import { PortfolioManagementError } from "@/api/portfolioManagement";
 vi.mock("@/hooks/usePortfolioManagement");
 const submitCreation = vi.fn();
 const retryCreation = vi.fn();
+it("does not consume an earlier resolved receipt when opening a fresh creation", () => {
+  const onCreated = vi.fn();
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
+    creation: {
+      phase: "resolved",
+      attempt: null,
+      error: null,
+      receipt: { metadata: { id: "8", name: "Earlier", description: "" }, isCurrent: () => true },
+    },
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={onCreated} />
+    </QueryClientProvider>,
+  );
+  expect(onCreated).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Portfolio name")).toHaveValue("");
+});
 it("focuses a linked server error summary", () => {
   show({
     creation: {
@@ -21,6 +40,16 @@ it("focuses a linked server error summary", () => {
 });
 it.each([true, false])("publishes only a current captured receipt (%s)", (current) => {
   const onCreated = vi.fn();
+  const client = new QueryClient();
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
+    creation: { phase: "editing", attempt: null, error: null },
+  } as ReturnType<typeof usePortfolioManagement>);
+  const view = render(
+    <QueryClientProvider client={client}>
+      <PortfolioCreateForm count={10} onClose={vi.fn()} onCreated={onCreated} />
+    </QueryClientProvider>,
+  );
   vi.mocked(usePortfolioManagement).mockReturnValue({
     ready: true,
     creation: {
@@ -33,13 +62,16 @@ it.each([true, false])("publishes only a current captured receipt (%s)", (curren
       },
     },
   } as unknown as ReturnType<typeof usePortfolioManagement>);
-  render(
-    <QueryClientProvider client={new QueryClient()}>
+  view.rerender(
+    <QueryClientProvider client={client}>
       <PortfolioCreateForm count={10} onClose={vi.fn()} onCreated={onCreated} />
     </QueryClientProvider>,
   );
   if (current)
-    expect(onCreated).toHaveBeenCalledWith({ id: "8", name: "Renamed", description: "Latest" });
+    expect(onCreated).toHaveBeenCalledWith(
+      { id: "8", name: "Renamed", description: "Latest" },
+      false,
+    );
   else expect(onCreated).not.toHaveBeenCalled();
 });
 it("clears a local creation draft on owner/session loss", () => {
@@ -58,7 +90,7 @@ it("clears a local creation draft on owner/session loss", () => {
   act(() => client.setQueryData(["me"], null));
   expect(screen.getByLabelText("Portfolio name")).toHaveValue("");
 });
-function show(overrides = {}, count: number | undefined = 0) {
+function show(overrides = {}, count: number | null = 0) {
   vi.mocked(usePortfolioManagement).mockReturnValue({
     ready: true,
     creation: { phase: "editing", attempt: null, error: null },
@@ -68,7 +100,11 @@ function show(overrides = {}, count: number | undefined = 0) {
   } as unknown as ReturnType<typeof usePortfolioManagement>);
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <PortfolioCreateForm count={count} onClose={vi.fn()} onCreated={vi.fn()} />
+      <PortfolioCreateForm
+        count={count === null ? undefined : count}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />
     </QueryClientProvider>,
   );
 }
@@ -117,7 +153,8 @@ it("keeps original unknown payload readonly and retryable at cap", () => {
   expect(screen.getByRole("button", { name: "Close creation" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Discard draft" })).toBeNull();
 });
-it.each([undefined, 10])("blocks new creation while cap is unknown or full (%s)", (count) => {
+it.each([null, 10])("blocks new creation while cap is unknown or full (%s)", (count) => {
   show({}, count);
+  fireEvent.change(screen.getByLabelText("Portfolio name"), { target: { value: "Valid name" } });
   expect(screen.getByRole("button", { name: "Create portfolio" })).toBeDisabled();
 });

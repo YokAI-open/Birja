@@ -15,14 +15,24 @@ import { useNow } from "@/hooks/useNow";
 import { eventHistorySession } from "@/hooks/useEventHistory";
 
 function metadataErrors(name: string, description: string) {
+  const controls = [...name].some((c) => {
+    const point = c.codePointAt(0)!;
+    return point < 32 || (point >= 127 && point <= 159) || (point >= 0xd800 && point <= 0xdfff);
+  });
   return {
     name:
       portfolioNameDisplay(name) === null
-        ? "Enter a portfolio name of 1–60 characters without control characters."
+        ? controls
+          ? "Remove control characters from the name."
+          : name === ""
+            ? "Enter a portfolio name."
+            : "Use 1–60 characters."
         : null,
     description:
       normalizePortfolioDescription(description) === null
-        ? "Use plain text up to 1,000 characters, without control characters other than tabs and line breaks."
+        ? [...description.replace(/\r\n?/g, "\n")].length > 1000
+          ? "Use 1,000 characters or fewer."
+          : "Remove unsupported control characters from the description."
         : null,
   };
 }
@@ -54,12 +64,14 @@ export function MetadataFields({
   description,
   onChange,
   readOnly = false,
+  nameIssue,
 }: {
   prefix: string;
   name: string;
   description: string;
   onChange: (field: "name" | "description", value: string) => void;
   readOnly?: boolean;
+  nameIssue?: string;
 }) {
   const errors = metadataErrors(name, description);
   return (
@@ -75,14 +87,14 @@ export function MetadataFields({
           value={name}
           readOnly={readOnly}
           onChange={(e) => onChange("name", e.target.value)}
-          aria-invalid={!!errors.name}
+          aria-invalid={!!errors.name || !!nameIssue}
           aria-describedby={`${prefix}-name-help ${prefix}-name-error`}
         />
         <p id={`${prefix}-name-help`} className="text-sm text-muted-foreground">
           1–60 characters. Names must be unique among your active portfolios, ignoring case.
         </p>
         <p id={`${prefix}-name-error`} className="text-sm text-loss-text">
-          {errors.name}
+          {nameIssue ?? errors.name}
         </p>
       </div>
       <div className="flex min-w-0 flex-col gap-1">
@@ -168,7 +180,7 @@ export function FormError({
 type CreateProps = {
   count: number | undefined;
   onClose: () => void;
-  onCreated: (metadata: PortfolioMetadata) => void;
+  onCreated: (metadata: PortfolioMetadata, replay: boolean) => void;
 };
 export function PortfolioCreateForm(props: CreateProps) {
   const client = useQueryClient();
@@ -197,12 +209,15 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
   const displayedName = creation.attempt?.name ?? name;
   const displayedDescription = creation.attempt?.description ?? description;
   const errors = metadataErrors(displayedName, displayedDescription);
-  const handled = useRef<object | null>(null);
+  // A receipt predating this editor is already resolved; opening a fresh
+  // intent must not navigate back to an earlier creation.
+  const handled = useRef<object | null>(creation.receipt ?? null);
+  const replay = useRef(creation.phase === "unknown");
   useLayoutEffect(() => {
     const receipt = creation.receipt;
     if (receipt && handled.current !== receipt && receipt.isCurrent()) {
       handled.current = receipt;
-      onCreated(receipt.metadata);
+      onCreated(receipt.metadata, replay.current);
     }
   }, [creation.receipt, onCreated]);
   const now = useNow();
@@ -228,8 +243,8 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
     count >= 10 ||
     (refusal instanceof PortfolioManagementError && refusal.code === "portfolio_limit");
   return (
-    <Card>
-      <CardContent className="min-w-0 p-4 md:p-6">
+    <Card className="min-w-0 p-4 md:p-6">
+      <CardContent className="min-w-0">
         <form
           className="flex max-w-[640px] min-w-0 flex-col gap-4 text-base leading-6"
           onSubmit={(e) => {
@@ -268,11 +283,17 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
               check its original result.
             </p>
           )}
+          {creation.phase === "submitting" && <p role="status">Creating portfolio…</p>}
           <MetadataFields
             prefix="create"
             name={displayedName}
             description={displayedDescription}
             readOnly={frozen}
+            nameIssue={
+              refusal instanceof PortfolioManagementError && refusal.code === "name_taken"
+                ? "You already have an active portfolio with this name. Choose another name."
+                : undefined
+            }
             onChange={(field, value) => (field === "name" ? setName(value) : setDescription(value))}
           />
           {capped && !frozen && (
@@ -289,16 +310,19 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
             {creation.phase === "unknown" ? (
               <Button
                 type="button"
-                className="min-h-11"
+                className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
                 disabled={!management.ready || waiting}
-                onClick={() => void management.retryCreation()}
+                onClick={() => {
+                  replay.current = true;
+                  void management.retryCreation();
+                }}
               >
                 Retry creation
               </Button>
             ) : (
               <Button
                 type="submit"
-                className="min-h-11"
+                className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
                 disabled={
                   frozen ||
                   capped ||
@@ -311,7 +335,12 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
                 {creation.phase === "submitting" ? "Creating portfolio…" : "Create portfolio"}
               </Button>
             )}
-            <Button type="button" className="min-h-11" variant="secondary" onClick={onClose}>
+            <Button
+              type="button"
+              className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
+              variant="secondary"
+              onClick={onClose}
+            >
               {frozen ? "Close creation" : "Discard draft"}
             </Button>
           </div>
