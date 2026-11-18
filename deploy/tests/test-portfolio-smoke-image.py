@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Offline current-image provenance regressions; no database or Docker daemon."""
 
+import copy
+import hashlib
 import importlib.util
+import os
 import io
 import json
 import subprocess
 import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -77,6 +81,8 @@ class Sources:
 
     profile_for = staticmethod(sources_module.profile_for)
     source_archive = staticmethod(sources_module.source_archive)
+    verify_archive_binding = staticmethod(sources_module.verify_archive_binding)
+    record_image_binding = staticmethod(sources_module.record_image_binding)
 
     def __init__(self, *, dirty=False):
         self.dirty = dirty
@@ -303,6 +309,131 @@ class CurrentImageContracts(unittest.TestCase):
             ):
                 smoke.run()
         factory.assert_called_once()
+
+
+class CampaignImageContracts(unittest.TestCase):
+    def campaign(self, revision):
+        temporary = tempfile.TemporaryDirectory(prefix="birja-image-contract-")
+        self.addCleanup(temporary.cleanup)
+        directory = Path(temporary.name)
+        archive = directory / "recovery.tar"
+        archive.write_bytes(b"independent authenticated synthetic recovery archive")
+        archive.chmod(0o400)
+        sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+        source = Sources()
+        source.source_archive = lambda lane, **kwargs: (
+            sources_module.verify_archive_binding(kwargs["archive"], kwargs["archive_sha"])
+            or source.payload
+        )
+        command = ImageCommands(source)
+        if revision == "0017":
+            command.image[0]["Config"]["Labels"]["org.opencontainers.image.revision"] = source.profile_for(revision)["commit"]
+        return archive, sha, source, command
+
+    def invoke(self, revision, archive, sha, source, command):
+        # Reloading the module models separate stage invocations: the file,
+        # rather than process-local memory, is the first-use identity authority.
+        return load("portfolio-smoke").build_selected_runtime(
+            source, {}, revision=revision, archive=archive, archive_sha=sha, run=command
+        )
+
+    def test_repeated_current_and_retained_use_original_id_without_rebuild(self):
+        for revision in ("0017", "0020"):
+            with self.subTest(revision=revision):
+                archive, sha, source, command = self.campaign(revision)
+                first = self.invoke(revision, archive, sha, source, command)
+                record = archive.parent / ("current" + revision + "-image-binding.json")
+                self.assertTrue(record.is_file(), "first use must persist its campaign identity")
+                self.assertEqual(record.stat().st_mode & 0o777, 0o400)
+                before = record.read_bytes()
+                second = self.invoke(revision, archive, sha, source, command)
+                self.assertEqual(first, second)
+                self.assertEqual(record.read_bytes(), before)
+                self.assertEqual(sum(argv[:2] == ["docker", "build"] for argv in command.calls), 1)
+                self.assertEqual(command.calls[-1], ["docker", "image", "inspect", first["id"]])
+
+    def test_recorded_missing_or_reindexed_same_content_image_never_rebuilds(self):
+        for revision in ("0017", "0020"):
+            for mutation in ("missing", "id", "config", "rootfs"):
+                with self.subTest(revision=revision, mutation=mutation):
+                    archive, sha, source, command = self.campaign(revision)
+                    first = self.invoke(revision, archive, sha, source, command)
+                    record = archive.parent / ("current" + revision + "-image-binding.json")
+                    before = record.read_bytes()
+                    if mutation == "id":
+                        command.image[0]["Id"] = "sha256:" + "e" * 64
+                    elif mutation == "config":
+                        command.image[0]["Config"]["User"] = "root"
+                    elif mutation == "rootfs":
+                        command.image[0]["RootFS"]["Layers"] = ["changed"]
+                    def missing(argv, **kwargs):
+                        if mutation == "missing" and argv == ["docker", "image", "inspect", first["id"]]:
+                            command.calls.append(argv)
+                            return subprocess.CompletedProcess(argv, 1, b"", b"missing")
+                        return command(argv, **kwargs)
+                    with self.assertRaises(ValueError):
+                        self.invoke(revision, archive, sha, source, missing)
+                    self.assertEqual(record.read_bytes(), before)
+                    self.assertEqual(sum(argv[:2] == ["docker", "build"] for argv in command.calls), 1)
+
+    def test_unsafe_or_wrong_campaign_record_refuses_before_docker(self):
+        for mutation in ("mode", "symlink", "source_commit", "app_tree", "context_sha256", "id", "json"):
+            with self.subTest(mutation=mutation):
+                archive, sha, source, command = self.campaign("0020")
+                self.invoke("0020", archive, sha, source, command)
+                record = archive.parent / "current0020-image-binding.json"
+                if mutation == "mode":
+                    record.chmod(0o644)
+                elif mutation == "symlink":
+                    original = archive.parent / "original.json"
+                    record.rename(original)
+                    record.symlink_to(original)
+                elif mutation == "json":
+                    record.chmod(0o600)
+                    record.write_text("{")
+                else:
+                    value = json.loads(record.read_text())
+                    value[mutation] = "wrong"
+                    record.chmod(0o600)
+                    record.write_text(json.dumps(value))
+                    record.chmod(0o400)
+                command.calls.clear()
+                with self.assertRaises(ValueError):
+                    self.invoke("0020", archive, sha, source, command)
+                self.assertEqual(command.calls, [])
+
+    def test_changed_archive_dirty_source_or_unsafe_parent_never_reuses(self):
+        for mutation in ("archive", "dirty", "parent", "owner"):
+            with self.subTest(mutation=mutation):
+                archive, sha, source, command = self.campaign("0020")
+                self.invoke("0020", archive, sha, source, command)
+                if mutation == "archive":
+                    archive.chmod(0o600)
+                    archive.write_bytes(b"changed")
+                elif mutation == "dirty":
+                    source.dirty = True
+                elif mutation == "parent":
+                    archive.parent.chmod(0o755)
+                command.calls.clear()
+                if mutation == "owner":
+                    with mock.patch.object(smoke.os, "getuid", return_value=os.getuid() + 1):
+                        with self.assertRaises(ValueError):
+                            # Use the patched module specifically for ownership.
+                            smoke.build_selected_runtime(source, {}, revision="0020", archive=archive, archive_sha=sha, run=command)
+                else:
+                    with self.assertRaises(ValueError):
+                        self.invoke("0020", archive, sha, source, command)
+                self.assertEqual(command.calls, [])
+
+    def test_new_campaign_does_not_adopt_another_campaign_tag(self):
+        archive, sha, source, command = self.campaign("0020")
+        self.invoke("0020", archive, sha, source, command)
+        archive2, sha2, source2, command2 = self.campaign("0020")
+        self.invoke("0020", archive2, sha2, source2, command2)
+        first_tag = next(argv[argv.index("-t") + 1] for argv in command.calls if argv[:2] == ["docker", "build"])
+        second_tag = next(argv[argv.index("-t") + 1] for argv in command2.calls if argv[:2] == ["docker", "build"])
+        self.assertNotEqual(first_tag, second_tag)
+        self.assertEqual(command2.calls[0][:2], ["docker", "build"])
 
 
 if __name__ == "__main__":
