@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { useOutletContext } from "react-router";
+import { useLocation, useOutletContext } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StockAttribution } from "@/components/StockAttribution";
@@ -11,9 +11,11 @@ import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { formatUsd } from "@/lib/money";
 import { PortfolioContext } from "@/components/PortfolioContext";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioMetadataForm } from "@/components/PortfolioMetadataForm";
 
 export default function PortfolioPage() {
   const target = useOutletContext<PortfolioTarget>();
+  const { state } = useLocation();
   const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio(target);
   const now = useNow();
   const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
@@ -45,6 +47,15 @@ export default function PortfolioPage() {
         </Button>
       </div>
       <PortfolioContext name={target.name} />
+      {state?.creationResult?.id === target.portfolioId && (
+        <p role="status">
+          {state.creationResult.replay ? "Original portfolio confirmed." : "Portfolio created."}
+        </p>
+      )}
+      <PortfolioMetadataForm
+        key={`${target.owner}:${target.portfolioId}:${target.epoch.session}`}
+        portfolioId={target.portfolioId}
+      />
       {isPending ? (
         <div
           role="status"
