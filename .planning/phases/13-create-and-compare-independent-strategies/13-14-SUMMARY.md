@@ -44,6 +44,7 @@ completed: 2026-11-18
 - Task1: `4ee728c` — Prove newly created strategy financial isolation. Initial named group20passed in69.95s.
 - Task1 supplement: `d1a38a2` — Preserve original fills through metadata edits. Final named group21passed in73.55s.
 - Task2: `22eb447` — Prove active accounting across new strategy roots. Final named group60passed in151.91s.
+- Review repair: `5a951cb` — Observe actual creation lock contention. Two focused passes and the affected21-case group pass; details below.
 - All seven owned modules pass Ruff lint and format checks; `git diff --check` passes. No tracked file was deleted.
 
 ## Delivered Evidence
@@ -89,6 +90,24 @@ The16 warnings are retained pandas/calendar timezone deprecations. An intermedia
 
 Test authoring corrections resolved actual wire field names/signed totals, aggregate fee rounding and internally consistent supported split source dates. The baseline immutability trigger correctly refused an attempted legacy fixture baseline rewrite; only mutable cash is seeded. No financial trigger, admission or source authority was disabled to make tests pass. The initial sandbox local-socket refusal was resolved by scoped escalation for the disposable test services, not an authentication gate.
 
+## Review Repair: WR-01
+
+The independent review correctly identified that the original initializer rollback test's100ms sleep and pending-task check did not prove the HTTP request had reached database contention. This was a test-proof defect, not an established production accounting defect.
+
+Commit `5a951cb` captures the initializer connection's actual `pg_backend_pid()` and uses a third, independent disposable-admin connection to observe `pg_stat_activity`. Before rolling back, the test requires an active `birja_app` backend executing `SELECT * FROM public.create_portfolio(...)`, with a lock wait and the initializer PID reported by `pg_blocking_pids`. The observer commits between observations to refresh its statistics snapshot. A5second timeout bounds observation; merely pending HTTP work cannot satisfy it. Cleanup cancels and awaits the request if necessary, with transaction rollback guaranteed in a nested `finally`. Runtime roles receive no monitoring or additional authority grants.
+
+The repaired actual case passed in4.59s and4.21s in two focused runs. After tightening failure-path cleanup, the exact affected Task1 group below passed21 tests in72.76s, including a third execution of the repaired contention proof:
+
+```text
+cd backend
+env -i PATH="$PATH" HOME=/tmp UV_OFFLINE=1 UV_NO_SYNC=1 uv run pytest \
+  tests/test_portfolio_strategy_lifecycle.py tests/test_portfolio_creation.py \
+  tests/test_portfolio_metadata.py -x -q
+21 passed in72.76s
+```
+
+Changed-file Ruff lint/format and `git diff --check` pass. The unchanged60-case event group was not rerun; its earlier151.91s result remains the recorded proof. Owned cached-image disposable project `birja-p13-14-wr01` was removed, and exact-label container/network/volume queries return empty. No production, shared fixture, review report or global planning file was changed. Independent parent recheck remains separate.
+
 ## Cleanup and Limits
 
 - Exact-owned Compose containers/network were removed with `down -v`. Project-label queries for containers, networks and volumes return empty. The exclusive DB lane is released.
@@ -99,4 +118,4 @@ Test authoring corrections resolved actual wire field names/signed totals, aggre
 
 ## Self-Check: PASSED
 
-Both created test modules, all five modified test modules and this summary exist. Task commits `4ee728c`, `d1a38a2` and `22eb447` resolve. Final named groups pass, seven-file static checks pass, and no tracked deletion or owned disposable resource remains.
+Both created test modules, all five modified test modules and this summary exist. Task commits `4ee728c`, `d1a38a2`, `22eb447` and review-repair commit `5a951cb` resolve. Final named groups and affected repair regression pass; seven-file original and changed-file repair static checks pass. No tracked deletion or owned disposable resource remains.
