@@ -1,10 +1,18 @@
+/// <reference types="node" />
 import { afterEach, expect, it, vi } from "vitest";
 import { webcrypto } from "node:crypto";
 import { openCreationRecovery, CREATION_STORAGE_KEY } from "./portfolioCreationAttempt";
 
 vi.stubGlobal("crypto", webcrypto);
-const input = { key: "12345678-1234-4234-8234-123456789abc", name: "  e\u0301  ", description: "x\r\ny" };
-afterEach(() => { sessionStorage.clear(); vi.restoreAllMocks(); });
+const input = {
+  key: "12345678-1234-4234-8234-123456789abc",
+  name: "  e\u0301  ",
+  description: "x\r\ny",
+};
+afterEach(() => {
+  sessionStorage.clear();
+  vi.restoreAllMocks();
+});
 it("stores one frozen raw original, restores same owner, and never persists email or money", async () => {
   const store = await openCreationRecovery("alice@example.test");
   store.persist(input);
@@ -20,7 +28,12 @@ it("clears crossed-owner intent without exposing its original", async () => {
   expect((await openCreationRecovery("bob@example.test")).attempt).toBeNull();
   expect(sessionStorage.getItem(CREATION_STORAGE_KEY)).not.toContain(input.key);
 });
-it.each(["{", "x".repeat(16001), JSON.stringify({ version: 1, key: input.key }), JSON.stringify({ version: 9 })])("blocks corrupted recovery instead of funding a replacement", async (raw) => {
+it.each([
+  "{",
+  "x".repeat(16001),
+  JSON.stringify({ version: 1, key: input.key }),
+  JSON.stringify({ version: 9 }),
+])("blocks corrupted recovery instead of funding a replacement", async (raw) => {
   sessionStorage.setItem(CREATION_STORAGE_KEY, raw);
   await expect(openCreationRecovery("alice@example.test")).rejects.toThrow();
   expect(sessionStorage.getItem(CREATION_STORAGE_KEY)).toBe(raw);
@@ -29,7 +42,9 @@ it("refuses failed persistence and malformed originals before any transport", as
   const store = await openCreationRecovery("alice@example.test");
   expect(() => store.persist({ ...input, key: "bad" })).toThrow();
   expect(() => store.persist({ ...input, description: "x".repeat(1001) })).toThrow();
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("quota");
+  });
   expect(() => store.persist(input)).toThrow();
   expect(store.attempt).toBeNull();
 });
