@@ -5,6 +5,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixtures";
 import { useStockTrade } from "./useStockTrade";
 import type { PortfolioTarget } from "./usePortfolioTarget";
+import { usePortfolioTarget } from "./usePortfolioTarget";
+import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 
 const alice = "alice@example.test",
   bob = "bob@example.test";
@@ -20,6 +22,66 @@ function deferred() {
   return { promise, resolve };
 }
 const clients: QueryClient[] = [];
+it.each(["lost", "pending"])("preserves real-target stock originals during %s rename and closed-market replay", async (mode) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  clients.push(client);
+  client.setQueryData(["me"], { email: alice });
+  document.cookie = "bj_csrf=test; path=/";
+  let name = "Original", marketClosed = false, active = true;
+  const late = deferred();
+  const requests: { path: string; body: string }[] = [];
+  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path.endsWith("/portfolios")) return Promise.resolve(json(active ? [{ id: "1", name }, { id: "2", name: "Other" }] : [{ id: "2", name: "Other" }]));
+    if (path.endsWith("/context")) return Promise.resolve(json(marketClosed ? closed() : ctx()));
+    if (path.endsWith("/quote")) return Promise.resolve(json(quote()));
+    requests.push({ path, body: init!.body as string });
+    if (requests.length === 1) return mode === "lost" ? Promise.reject(new Error("lost")) : late.promise;
+    return Promise.resolve(json(fill()));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const h = renderHook(({ id }) => { const p = usePortfolioTarget(id); return { p, t: useStockTrade(p.target, "AAPL") }; }, { wrapper, initialProps: { id: "1" } });
+  await waitFor(() => expect(h.result.current.t.context?.execution_enabled).toBe(true));
+  act(() => h.result.current.t.setQuantity("2"));
+  await act(async () => { await h.result.current.t.preview(); });
+  expect(h.result.current.t.canConfirm).toBe(true);
+  let pending!: Promise<void>;
+  act(() => { pending = h.result.current.t.confirm(); });
+  await waitFor(() => expect(requests).toHaveLength(1));
+  const stale = h.result.current.t.checkResult;
+  name = "Renamed";
+  marketClosed = true;
+  act(() => broadcastMetadataChange("1"));
+  await waitFor(() => expect(h.result.current.p.target?.name).toBe("Renamed"));
+  await act(async () => { if (mode === "pending") late.resolve(json(fill())); await pending; });
+  await waitFor(() => expect(h.result.current.t.phase).toBe("unknown"));
+  expect(h.result.current.t.attempt?.portfolioName).toBe("Original");
+  expect(h.result.current.t.fill).toBeNull();
+  await act(async () => { await stale(); });
+  expect(requests).toHaveLength(1);
+  await act(async () => { await h.result.current.t.refreshContext(); });
+  expect(h.result.current.t.context?.execution_enabled).toBe(false);
+  expect(h.result.current.t.canConfirm).toBe(false);
+  const original = h.result.current.t.attempt!.body;
+  h.rerender({ id: "2" });
+  expect(h.result.current.t.attempt).toBeNull();
+  expect(h.result.current.t.fill).toBeNull();
+  h.rerender({ id: "1" });
+  await waitFor(() => expect(h.result.current.t.phase).toBe("unknown"));
+  expect(h.result.current.t.attempt!.body).toBe(original);
+  expect(requests).toHaveLength(1);
+  await act(async () => { await h.result.current.t.checkResult(); });
+  await waitFor(() => expect(h.result.current.t.phase).toBe("filled"));
+  expect(requests[1]).toEqual(requests[0]);
+  active = false;
+  act(() => broadcastMetadataChange("1"));
+  await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
+  expect(h.result.current.t.context).toBeUndefined();
+  expect(h.result.current.t.fill).toBeNull();
+  await act(async () => { await h.result.current.t.checkResult(); });
+  expect(requests).toHaveLength(2);
+});
 function setup(
   tweak?: (path: string, init?: RequestInit) => Promise<Response> | Response | undefined,
 ) {
