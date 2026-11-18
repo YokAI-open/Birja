@@ -55,6 +55,7 @@ class BrowserContracts(unittest.TestCase):
              patch.dict(os.environ, {'ALPACA_API_KEY': 'must-not-leak', 'RESEND_API_KEY': 'must-not-leak'}), \
              patch.object(runner.socket, 'socket') as socket, \
              patch.object(runner.subprocess, 'run', side_effect=run), \
+             patch.object(runner, 'require_browser_specs'), \
              patch.object(runner.subprocess, 'check_output', return_value='a' * 40):
             socket.return_value.__enter__.return_value = SimpleNamespace(bind=lambda value: None, getsockname=lambda: ('127.0.0.1', 12345))
             if mutation or failure or occupied:
@@ -82,6 +83,21 @@ class BrowserContracts(unittest.TestCase):
                          ['e2e/' + name + '.spec.ts' for name in expected])
         with self.assertRaises(ValueError):
             runner.browser_specs('unknown')
+
+    def test_missing_or_symlinked_journey_refuses_before_collection(self):
+        with tempfile.TemporaryDirectory(prefix='birja-browser-spec-contract-') as tmp:
+            root = Path(tmp)
+            (root / 'e2e').mkdir()
+            good = root / 'e2e/portfolio-ownership.spec.ts'
+            good.write_text('actual test')
+            with patch.object(runner, 'ROOT', root.parent):
+                with self.assertRaisesRegex(ValueError, 'missing|unsafe'):
+                    runner.require_browser_specs(['e2e/portfolio-strategies.spec.ts'], directory=root)
+                runner.require_browser_specs(['e2e/portfolio-ownership.spec.ts'], directory=root)
+                link = root / 'e2e/portfolio-strategies.spec.ts'
+                link.symlink_to(good)
+                with self.assertRaisesRegex(ValueError, 'missing|unsafe'):
+                    runner.require_browser_specs(['e2e/portfolio-strategies.spec.ts'], directory=root)
 
     def test_runner_rejects_live_data_mount_provider_and_ports_before_build(self):
         for mutation in ('mount', 'provider', 'port'):
