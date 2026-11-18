@@ -1,6 +1,6 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T18:46:46Z
+reviewed: 2026-11-18T20:33:54Z
 depth: standard
 diff_base: 61e14af
 reviewed_scope: committed backend/tests changes at acbcd4e and 203815f
@@ -10,6 +10,10 @@ subsequent_test_only_reviewed_head: 5dc6c45
 deployment_compatibility_reviewed_head: 74ee5ea
 subsequent_tail_fixture_reviewed_head: 531cf48
 borrowed_configuration_stack_reviewed_head: fa28d8e
+campaign_image_reuse_reviewed_head: 312d8c9
+campaign_image_reuse_files:
+  - deploy/tests/portfolio-smoke.py
+  - deploy/tests/test-portfolio-smoke-image.py
 subsequent_tail_fixture_files:
   - deploy/tests/test-deploy-prerequisites.py
   - deploy/tests/test-dev-bootstrap.py
@@ -61,6 +65,7 @@ findings:
 resolved_findings:
   - CR-02
   - CR-03
+  - CR-04
 status: clean
 ---
 
@@ -343,4 +348,45 @@ container preservation belong to executor receipts; they do not qualify the
 whole command. Actual final-source complete security and same-archive recovery
 remain pending. Original35-file fixture scope/hash is not rewritten by this
 one-file follow-up; the separate reviewed head above binds this additional scope.
+
+## Authenticated Campaign Image Reuse — 312d8c9
+
+**Disposition: clean; CR-04 resolved after RED5693083.** Reviewed the complete
+`portfolio-smoke.py` and `test-portfolio-smoke-image.py` changes and traced the
+existing source/archive/image/record helpers and final campaign guard.
+
+The repair uses a private first-use file, not a mutable Docker tag or process
+cache, as the image identity for later invocations. It checks archive ownership
+and checksum, directory and record ownership/modes/symlink boundaries, expected
+commit/app-tree/context, then inspects the recorded exact ID and verifies full
+ID/config/RootFS equality. Archive and record bytes are rechecked afterward.
+Missing/changed recorded images fail closed without rebuilding, accepting equal
+content or rewriting a prior record. Current Git dirty/HEAD checks and extracted
+source-tree validation remain. First use still builds from authenticated source
+and persists the verified record; new aliases are scoped to private campaign
+directory identity so another campaign's tag is not replaced.
+
+The added regressions meaningfully cover both selected revisions through
+separate module loads, persisted first-use identity, one build across two uses,
+missing/reindexed/config/rootFS substitutions, unsafe or mismatched records,
+archive/current-source/private-directory refusals and distinct new-campaign tags.
+No financial, source or corruption oracle is weakened. The unchanged runner
+still authenticates every recorded ID and detects record disappearance/change
+after each stage, including failures.
+
+Verified all source, RED/GREEN-log and real-proof-receipt hashes from
+`/tmp/birja-p13-image-binding-repair-receipt.json`. Its measured17 image methods
+and26 related contracts pass. The actual separate-process Docker receipt proves
+retained0017 and current0020 each build once and then reuse the same ID with zero
+build commands. A nonexistent recorded ID causes one exact-ID inspect and no
+build. The failed canonical recovery archive remains unchanged. This reviewer
+ran no tests or Docker commands and does not independently remeasure those
+executor results.
+
+These two paths are a separate follow-up scope; the original35-file fixture list
+and hash remain historical. The complete security pass at535a5b7 and failed
+recovery do not qualify this new helper. Final-source whole security and fresh
+seven-stage same-archive recovery remain pending. No implementation, dependency,
+migration, retained profile, UI input or approval record changed in this review;
+only the two owned report files were updated, with no commit.
 

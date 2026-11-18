@@ -248,3 +248,38 @@ OPEN until actual whole commands succeed at the final frozen revision. No new
 risk waiver, dependency/image upgrade, provider or production operation occurred.
 No UI render input changed, so source-bound packet724607 and owner acceptance
 remain valid; frontend/backend application render source stays99166d9.
+
+
+### CR-04 strict image binding repair and diagnostic follow-up
+
+Complete all-security at535a5b7 passed3374.206s, including3343backend tests,
+61critical modules100% (5287statements/1668branches),1194frontend tests,
+79browser passes/one retained deployed-CSP skip, full infra tail and five image
+policies. This is measured history for535a5b7, not qualification of later helpers.
+
+The following whole recovery correctly failed its exact image-ID guard after
+retained0017/current0020cold operations returned: repeating a deterministic build
+tag replaced an OCI index ID. CR-04 was repaired by RED5693083/GREEN312d8c9:
+private first-use campaign records are reused only after archive/source/context
+and exact ID/config/RootFS validation; missing/changed IDs refuse without rebuild.
+New aliases are campaign-scoped. The guard and comparison equality are unchanged.
+Independent code review is clean;17image methods/26related contracts and actual
+separate-process Docker first-build/zero-build-reuse/missing-IDrefusal proofs pass.
+Receipt:`/tmp/birja-p13-image-binding-repair-receipt.json`.
+
+Remaining-stage diagnostics used a separate219289600byte archiveSHA
+6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92.
+Roles and both TLS stages passed authenticated; user interruption stopped selected
+rollback without a completion receipt. Exact-owned orphaned synthetic resources
+were inventoried and removed; source, private records and archives were preserved.
+A resumable one-shot reran only that diagnostic stage, passing950.7065s with all
+six image-record hashes unchanged, fresh/upgraded authority equal and all21owned
+resource checks empty. It retains explicit false fullsecurity/sevenstage flags:
+`/tmp/birja-backup-test-phase13-rollback-resume-312d8c9-20261118/receipt.json`.
+
+This diagnostic composite is not an uninterrupted seven-stage pass. Final new
+all-security and seven-stage recovery remain required at the same frozen source;
+the same two evidence threats remain OPEN. Failed archiveSHA2d182e0b91488138cf4a9bbe96b2a43e35f3f99e785dfb45543f3c76e0318375
+is preserved under`/tmp/birja-phase13-proof-campaign4-failed-535a5b7/` for the
+new canonical campaign directory to be created exclusively. No new waiver,
+provider/production operation or UI render change occurred.

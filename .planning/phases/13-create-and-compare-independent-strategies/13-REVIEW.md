@@ -1,10 +1,10 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-reviewed: 2026-11-18T18:46:46Z
+reviewed: 2026-11-18T20:33:54Z
 depth: standard
 diff_base: 7125fec
-reviewed_head: fa28d8e
-files_reviewed: 72
+reviewed_head: 312d8c9
+files_reviewed: 73
 files_reviewed_list:
   - .github/workflows/ci.yml
   - CLAUDE.md
@@ -78,6 +78,7 @@ files_reviewed_list:
   - deploy/tests/test-deploy-prerequisites.py
   - deploy/tests/test-stock-recovery-contracts.py
   - deploy/tests/test-db-config.sh
+  - deploy/tests/test-portfolio-smoke-image.py
 findings:
   critical: 0
   warning: 0
@@ -87,6 +88,7 @@ resolved_findings:
   - CR-01
   - CR-02
   - CR-03
+  - CR-04
 status: clean
 ---
 
@@ -360,3 +362,55 @@ This source review ran no tests or Docker command. Executor standalone and
 ordered borrowed-stack diagnostics are separate measured evidence, not a full
 security pass. Whole final-source security and same-archive recovery remain
 pending. No runtime, dependency or UI input changed in this commit.
+
+## CR-04: Campaign Image Rebuild Replaced a Recorded Identity
+
+**Original classification:** BLOCKER — the retained/current recovery graph
+could not complete with its authenticated image IDs preserved.
+**Disposition:** RESOLVED by `312d8c9`, following RED `5693083`.
+
+The failed recovery at `535a5b7` exposed repeated builds of the same mutable
+retained-image tag: the later OCI index had a different image ID despite matching
+configuration and filesystem content. The existing immutable-ID guard correctly
+refused the campaign. This finding concerns recovery tooling, not a demonstrated
+financial restore mismatch; the old failure remains failed.
+
+Reviewed both changed files in full and traced `portfolio-sources.py` archive,
+source-tree, first-use record and image verification plus the unchanged runner's
+post-stage authentication. `portfolio-smoke.py:29` now checks the campaign
+directory/archive and record ownership, private modes and symlink/file identity,
+then matches the expected source commit, app tree, complete context hash and
+well-formed image ID. A reused image is inspected by that exact ID and passed to
+the unchanged full `verify_image` comparison, including config and RootFS hashes.
+The archive and record contents are checked again after inspection. Missing,
+substituted, malformed or mismatched recorded images fail without a rebuild or a
+mutable-tag fallback; equal filesystem content never substitutes for equal ID.
+
+At `portfolio-smoke.py:73`, new campaign aliases include private-directory
+identity, avoiding replacement of another campaign's build alias. First use still
+builds the declared authenticated Git/archive context, verifies every extracted
+source byte before and after build, checks the revision label and exact inspected
+ID, then persists the first-use record. Current-source dirty/HEAD checks apply on
+both build and reuse. The existing record writer refuses replacement; runner
+checks for disappeared/changed record bytes and immutable image IDs remain intact.
+No retained source/profile, migration, authority fingerprint, dependency or guard
+was changed. Non-campaign fresh-build behavior remains available.
+
+The new tests exercise both revisions across reloaded modules, one-build/two-use
+behavior, private/source/archive/context errors, missing or reindexed IDs,
+config/RootFS substitution and distinct campaign aliases. Existing complete
+source and build-failure assertions remain. Verified both changed source hashes,
+the RED/GREEN log hashes and the independent real-proof receipt hash against
+`/tmp/birja-p13-image-binding-repair-receipt.json`. The executor records17 image
+methods and26 related contracts passing, and actual separate-process Docker
+proof: each revision builds once then reuses with zero build commands; a missing
+recorded ID produces exactly one inspect and no build. Those are executor
+measurements, not tests rerun by this reviewer.
+
+**This follow-up review is clean: zero open findings.** The additional image
+contract test brings the cumulative explicit scope to73paths. The full security
+pass at535a5b7 is historical evidence for that source; failed recovery and focused
+reuse proof do not qualify312d8c9. Actual complete final-source security and a new
+seven-stage same-archive recovery remain mandatory. The accepted management UI
+render inputs are unchanged. This review performed no tests, Docker/database
+operations, source edits or commits; only the two owned review reports changed.
