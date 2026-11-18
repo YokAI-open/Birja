@@ -46,6 +46,7 @@ type Session = {
   creationSerial: number;
   creationScope: object | null;
 };
+type MetadataOperation = Readonly<{ revision: number; lease: Session["editorLease"] }>;
 const sessions = new WeakMap<QueryClient, Session>();
 const activeScopes = new WeakSet<object>();
 function update(session: Session, changes: Partial<Session>) {
@@ -101,6 +102,7 @@ function publish(session: Session) {
   session.notify.forEach((fn) => fn());
 }
 type Editor = {
+  operation: MetadataOperation | null;
   revision: number;
   draft: PortfolioMetadataPatch | null;
   reviewRequired: boolean;
@@ -110,6 +112,7 @@ type Editor = {
   saved: boolean;
 };
 const emptyEditor = (): Editor => ({
+  operation: null,
   revision: 0,
   draft: null,
   reviewRequired: false,
@@ -183,7 +186,13 @@ export function usePortfolioManagement(portfolioId?: string) {
   const owner = me.data?.email ?? null;
   const serial = session.serial;
   const scope = useMemo(
-    () => ({ owner, serial, portfolioId, controllers: new Set<AbortController>() }),
+    () => ({
+      owner,
+      serial,
+      portfolioId,
+      controllers: new Set<AbortController>(),
+      metadataOperations: new Set<MetadataOperation>(),
+    }),
     [owner, serial, portfolioId],
   );
   const current = () =>
@@ -321,6 +330,35 @@ export function usePortfolioManagement(portfolioId?: string) {
     }
     return () => {
       activeScopes.delete(scope);
+      for (const operation of scope.metadataOperations) {
+        const lease = operation.lease;
+        const key = ["portfolioMetadataDraft", owner, portfolioId, serial] as const;
+        const latest = client.getQueryData<Editor>(key);
+        if (
+          lease !== null &&
+          session.editorLease === lease &&
+          who(client) === owner &&
+          session.serial === serial &&
+          lease.owner === owner &&
+          lease.serial === serial &&
+          lease.portfolioId === portfolioId &&
+          latest?.pending &&
+          latest.operation === operation
+        ) {
+          client.setQueryData(key, {
+            ...latest,
+            operation: null,
+            pending: false,
+            reviewRequired: true,
+            awaitingFetch: true,
+            saved: false,
+            revision: latest.revision + 1,
+            error: new Error(
+              "Metadata save interrupted. Review the latest details before saving again.",
+            ),
+          });
+        }
+      }
       scope.controllers.forEach((c) => c.abort());
       if (session.creationScope === scope && session.creation.phase === "submitting") {
         update(session, {
@@ -331,7 +369,7 @@ export function usePortfolioManagement(portfolioId?: string) {
         publish(session);
       }
     };
-  }, [client, owner, scope, serial, session]);
+  }, [client, owner, portfolioId, scope, serial, session]);
   const creationMutation = useMutation({
     retry: false,
     gcTime: 0,
@@ -450,7 +488,12 @@ export function usePortfolioManagement(portfolioId?: string) {
   }
   function editMetadata(patch: PortfolioMetadataPatch) {
     if (!current() || !metadataQuery.data || metadataQuery.isError || editor().pending) return;
-    setEditor({ ...editor(), saved: false, draft: Object.freeze({ ...editor().draft, ...patch }) });
+    setEditor({
+      ...editor(),
+      operation: null,
+      saved: false,
+      draft: Object.freeze({ ...editor().draft, ...patch }),
+    });
   }
   function reviewMetadata() {
     if (
@@ -479,10 +522,15 @@ export function usePortfolioManagement(portfolioId?: string) {
       state.pending
     )
       return;
-    setEditor({ ...state, pending: true, error: null });
+    const operation: MetadataOperation = Object.freeze({
+      revision: state.revision,
+      lease: completionLease,
+    });
+    scope.metadataOperations.add(operation);
+    setEditor({ ...state, operation, pending: true, error: null });
     try {
       const metadata = await metadataMutation.mutateAsync(state.draft);
-      if (!current()) return;
+      if (!current() || editor().operation !== operation) return;
       if (editor().revision !== state.revision) {
         setEditor({ ...editor(), pending: false, reviewRequired: true });
         await refreshMetadata();
@@ -493,14 +541,14 @@ export function usePortfolioManagement(portfolioId?: string) {
           client.cancelQueries({ queryKey: [prefix, owner, portfolioId] }),
         ),
       );
-      if (!current()) return;
+      if (!current() || editor().operation !== operation) return;
       if (editor().revision !== state.revision) {
         setEditor({ ...editor(), pending: false, reviewRequired: true });
         await refreshMetadata();
         return;
       }
       client.setQueryData(metadataKey, metadata);
-      setEditor(emptyEditor());
+      setEditor({ ...emptyEditor(), operation });
       broadcastMetadataChange(metadata.id);
       await client.invalidateQueries({ queryKey: ["portfolios", owner] });
       const retainedRoute =
@@ -513,10 +561,11 @@ export function usePortfolioManagement(portfolioId?: string) {
         (!current() && !retainedRoute) ||
         who(client) !== owner ||
         session.serial !== serial ||
+        editor().operation !== operation ||
         !isPortfolioId(portfolioId)
       )
         return;
-      setEditor({ ...editor(), saved: true });
+      setEditor({ ...editor(), operation: null, saved: true });
       await Promise.all([
         client.invalidateQueries({ queryKey: ["portfolioOverview", owner] }),
         ...["portfolio", "history", "eventHistory"].map((prefix) =>
@@ -527,7 +576,7 @@ export function usePortfolioManagement(portfolioId?: string) {
         ),
       ]);
     } catch (error) {
-      if (!current()) return;
+      if (!current() || editor().operation !== operation) return;
       if (error instanceof PortfolioManagementError && error.status === 401) {
         client.setQueryData(["me"], null);
         return;
@@ -536,11 +585,14 @@ export function usePortfolioManagement(portfolioId?: string) {
       const latest = editor();
       setEditor({
         ...latest,
+        operation: null,
         pending: false,
         reviewRequired: latest.reviewRequired || latest.revision !== state.revision || ambiguous,
         error: error instanceof Error ? error : new Error("Metadata result unavailable"),
       });
       if (ambiguous) await refreshMetadata();
+    } finally {
+      scope.metadataOperations.delete(operation);
     }
   }
   return {
