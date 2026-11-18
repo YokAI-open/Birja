@@ -6,13 +6,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-Consumer = Literal["portfolio", "retained0014", "retained0008"]
+Consumer = Literal["portfolio", "retained0017", "retained0014", "retained0008"]
 SUPPORTED = {
-    "portfolio": frozenset({"0017"}),
+    "portfolio": frozenset({"0020"}),
+    "retained0017": frozenset({"0017"}),
     "retained0014": frozenset({"0013", "0014"}),
     "retained0008": frozenset({"0007", "0008"}),
 }
-MIGRATION_ONLY = frozenset({"0015", "0016"})
+MIGRATION_ONLY = frozenset({"0015", "0016", "0018", "0019"})
 
 
 class SchemaAdmissionError(RuntimeError):

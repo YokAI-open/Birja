@@ -24,7 +24,9 @@ async def staged(engine):
         await reset_disposable_schema(engine)
 
 
-@pytest.mark.parametrize("revision", ["0007", "0008", "0014", "0015", "0016", "0017", "0018", "0019"])
+@pytest.mark.parametrize(
+    "revision", ["0007", "0008", "0014", "0015", "0016", "0017", "0018", "0019"]
+)
 async def test_current_refuses_every_retained_or_partial_before_writes(staged, revision):
     await asyncio.to_thread(run_test_migration, revision)
     async with staged.connect() as conn:
@@ -36,12 +38,17 @@ async def test_current_refuses_every_retained_or_partial_before_writes(staged, r
 
 async def test_complete_current_and_actual_retained_source_refusal(staged):
     await asyncio.to_thread(run_test_migration, "0020")
-    old_source = subprocess.run(
-        ["git", "show", "4b4320b:backend/app/db/schema_contract.py"],
-        check=True, capture_output=True, text=True,
+    old_source = (
+        await asyncio.to_thread(
+            subprocess.run,
+            ["/usr/bin/git", "show", "4b4320b:backend/app/db/schema_contract.py"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     ).stdout
     namespace = {}
-    exec(compile(old_source, "retained0017/schema_contract.py", "exec"), namespace)
+    exec(compile(old_source, "retained0017/schema_contract.py", "exec"), namespace)  # noqa: S102 - pinned trusted git source
     async with staged.connect() as conn:
         assert await require_schema(conn) == "0020"
         with pytest.raises(namespace["SchemaAdmissionError"], match="incompatible_schema"):
@@ -63,7 +70,9 @@ async def test_genuine_migrator_admits_finite_forward_path_and_denies_admin(stag
     # public CREATE is explicitly removed, even in this disposable admin schema.
     async with staged.begin() as conn:
         await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
-        await conn.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler"))
+        await conn.execute(
+            text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
+        )
     migrator = create_async_engine(test_migration_url())
     try:
         for revision in ("0017", "0018", "0019", "0020"):

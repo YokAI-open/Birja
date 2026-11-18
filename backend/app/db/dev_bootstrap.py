@@ -45,6 +45,8 @@ TABLES = frozenset(
         "stock_dividend_payments",
         "stock_dividend_decisions",
         "portfolio_stock_closures",
+        "portfolio_creations",
+        "portfolio_initializations",
     ]
 )
 FUNCTIONS = frozenset(
@@ -62,6 +64,14 @@ FUNCTIONS = frozenset(
         "check_stock_split_digest_version",
         "check_portfolio_financial_write",
         "lock_stock_portfolio_roots",
+        "portfolio_display_name",
+        "portfolio_name_key",
+        "portfolio_description",
+        "check_portfolio_management_metadata",
+        "associate_portfolio_metadata_only",
+        "create_portfolio",
+        "initialize_portfolio",
+        "update_portfolio_metadata",
     ]
 )
 FUNCTION_SIGNATURES = frozenset(
@@ -79,6 +89,14 @@ FUNCTION_SIGNATURES = frozenset(
         "check_stock_split_digest_version()",
         "check_portfolio_financial_write()",
         "lock_stock_portfolio_roots(bigint)",
+        "portfolio_display_name(text)",
+        "portfolio_name_key(text)",
+        "portfolio_description(text)",
+        "check_portfolio_management_metadata()",
+        "associate_portfolio_metadata_only()",
+        "create_portfolio(bigint,uuid,text,text)",
+        "initialize_portfolio(bigint)",
+        "update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)",
     }
 )
 
@@ -93,7 +111,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 18)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 21)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")
@@ -179,7 +197,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
             await conn.execute("ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL")
         async with conn.transaction():
             await _authorize_portfolios(conn)
-        print("dev_final_migration=true source_revision=" + str(revision) + " final=0017")
+        print("dev_final_migration=true source_revision=" + str(revision) + " final=0020")
     finally:
         await conn.execute("SELECT pg_advisory_unlock(1026016001)")
 
@@ -299,10 +317,12 @@ async def bootstrap(
                 raise ValueError("Unsafe existing dev migration owner; refusing repair")
             if after_migrations:
                 revision = await conn.fetchval("SELECT version_num FROM public.alembic_version")
-                if revision in {"0015", "0016"}:
+                if revision in {"0015", "0016", "0018", "0019"}:
                     raise ValueError("migration_only; refusing normal dev bootstrap")
-                if revision == "0017":
+                if revision == "0020":
                     await _authorize_portfolios(conn)
+                elif revision == "0017":
+                    raise ValueError("Retained schema requires explicit forward migration")
                 else:
                     await _authorize_dividends(conn)
         if migrate:
