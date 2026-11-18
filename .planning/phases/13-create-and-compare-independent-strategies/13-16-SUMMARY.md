@@ -323,3 +323,71 @@ receipts remain preserved; currentC20-case log, exact339-input/265artifact packe
 verification and actual120-layout offline receipt pass. No tracked deletion or
 task-generated untracked repository artifact remains. Parent-owned review reports
 and unrelated`.claude/` are left untouched.
+
+## Post-integration-review source recapture — 2026-11-18
+
+This documentation-only continuation refreshes the automated source binding after
+the parent resolved and re-reviewed integration CR-01 clean at
+`6bfb447db37e4b3492f709dcb04766a70b5adcbb`. No source or test edits were made here.
+The prior summary, sourceA full result and sourceB/C focused receipts remain
+historical records; this appendix supplies the latest canonical packet values.
+
+The owner expressly replied **AcceptPhase13UI** and **Native200passes** for the
+reviewed sourceC packet, render source
+`8cdd17582ba69cb0815bb0ecd48e4819a2c2f762`, ZIP SHA256
+`eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`.
+That exact packet and directory were preserved before recapture under
+`/tmp/birja-phase13-ui-review-owner-approved-before-trade-label-fix.zip` and the
+matching directory. Its hash was checked before and after; its offline receipt
+is preserved at
+`/tmp/birja-phase13-offline-layout-owner-approved-before-trade-label-fix.json`.
+No prior preserved packet was overwritten. The parent owns the formal UAT record.
+Earlier pending-acceptance wording predates these affirmative owner responses.
+This automated recapture does not claim a new human approval or request a repeat.
+
+Comparison of the complete approved/current render-input maps establishes exactly
+three changed paths: TradePage.tsx, StockTradePage.tsx and the new
+TradeRenameRecovery.test.tsx, all under frontend/src/pages/. The changes concern
+only retained-original trade-label consumers and their routed regression test.
+All management-screen source and every other prior render input are unchanged.
+The two application consumers were changed by the parent, not by this executor.
+
+Actual current-source evidence:
+
+- Capture source: `6bfb447db37e4b3492f709dcb04766a70b5adcbb`.
+- Canonical packet: `/tmp/birja-phase13-ui-review.zip`.
+- ZIP SHA256: `7e6d7dc7bb08f3863547c96a692b609796deab2971c0010cb5bd03fcfe38145f`.
+- 340-input digest: `4e5db3963d3ba8fa809a9c08b980dd4f3a0d06622e4b2f26d6c211a517fd6cea`.
+- Actual Chromium 156.0.8078.4; all 20 focused browser cases passed in 226.5s.
+- 72 freshly rendered states, 120 PNGs and 265 required hashed artifacts plus
+  manifest, at the same six widths. No old screenshot was rebound.
+- Raw log: `/tmp/birja-phase09-browser-9drq5fos/browser-portfolios.log`.
+
+All 12 strict evidence contracts pass. Current-source verification passes all 340
+source hashes, exact 265-artifact/266-disk-member inventory, capture paths,
+embedded metadata and matching traces. The existing actual offline browser check
+passes 72 files/120 layouts, including fonts and conditional table/cards reflow,
+with no horizontal overflow or external requests. Current offline receipt:
+`/tmp/birja-phase13-offline-layout-receipt.json`.
+
+Both automated capture flags remain false: owner_accepted and
+native_200_percent_verified. They describe this capture's automated proof, not the
+separately recorded owner acceptance associated with the preserved approved
+packet and unchanged management surfaces. No new owner outcome is fabricated.
+
+The owned stack completed cleanup in 2.9s; exact container/network/volume-label
+queries are empty. The offline browser closed and the exclusive lane is released.
+The existing dev-administrator browser DB provenance limit remains explicit.
+No full current-source unfiltered browser/security campaign ran here; Plan17's
+mandatory current unfiltered browser command, complete security and recovery gates
+remain required. Prior sourceA 79-pass/one-skip and sourceB/C focused results are
+not substituted for those gates. No source/test, dependency, provider, private
+environment or production operation was introduced. Parent-owned13-REVIEW.md,
+global planning files and unrelated.claude/ remain untouched.
+
+### Post-review self-check: PASSED
+
+Both owned evidence docs exist; current packet/source/digest/counts and exact
+three-file delta were verified, the approved archive hash remains unchanged, and
+current strict verification plus 120-layout offline proof pass. This continuation
+stages only UI-EVIDENCE.md and this SUMMARY.md.

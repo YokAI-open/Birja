@@ -167,3 +167,65 @@ before recapture.
 Issue35's exact accepted-risk scope/deadline2026-12-17T00:00:00Z, Python pin
 20261111 and Phase7 live-admission OFF remain unchanged. No dependency/pin,
 provider, production, push, merge or deployment operation occurred.
+
+## Post-integration-review recapture — 2026-11-18
+
+This appendix records the latest canonical packet binding. Earlier sourceA/B/C
+measurements and their then-current/pending wording remain historical evidence.
+
+The owner expressly replied **AcceptPhase13UI** and **Native200passes** for the
+reviewed sourceC packet, ZIP SHA256
+`eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`,
+render source`8cdd17582ba69cb0815bb0ecd48e4819a2c2f762`. That exact ZIP and
+directory are preserved at
+`/tmp/birja-phase13-ui-review-owner-approved-before-trade-label-fix.zip` and the
+matching directory. The hash was verified before and after preservation. Its
+offline receipt is preserved at
+`/tmp/birja-phase13-offline-layout-owner-approved-before-trade-label-fix.json`.
+The parent records the formal UAT association separately. These existing owner
+responses are not replaced, revoked or attributed to a new packet by this
+automated recapture; no repeat owner confirmation is requested.
+
+Integration CR-01 was resolved and re-reviewed clean at committed source
+`6bfb447db37e4b3492f709dcb04766a70b5adcbb`. Comparing the entire approved and
+new render-input maps establishes exactly three changed paths:
+
+- `frontend/src/pages/TradePage.tsx`
+- `frontend/src/pages/StockTradePage.tsx`
+- `frontend/src/pages/TradeRenameRecovery.test.tsx`
+
+Only the two retained-original trade-label consumers and their new routed test
+changed. Management-screen source and every other prior input remain unchanged.
+This recapture changes no application or test source.
+
+Latest canonical automated evidence:
+
+- Packet:`/tmp/birja-phase13-ui-review.zip`
+- ZIP SHA256:`7e6d7dc7bb08f3863547c96a692b609796deab2971c0010cb5bd03fcfe38145f`
+- Render source:`6bfb447db37e4b3492f709dcb04766a70b5adcbb`
+- 340-input digest:`4e5db3963d3ba8fa809a9c08b980dd4f3a0d06622e4b2f26d6c211a517fd6cea`
+- Actual Chromium`156.0.8078.4`;20/20focused browser cases passed in226.5s.
+- 72states at the same six widths;265required hashed artifacts plus manifest.
+- Raw log:`/tmp/birja-phase09-browser-9drq5fos/browser-portfolios.log`
+
+All12strict contract methods pass. Current-source verification passes the exact
+265artifact map/266on-disk-member inventory, capture paths, embedded metadata,
+corresponding traces and all340source hashes. The existing offline browser check
+passes72files/120layouts with loaded fonts, correct conditional responsive DOM,
+no horizontal overflow and zero external requests. Current receipt:
+`/tmp/birja-phase13-offline-layout-receipt.json`. The approved prior packet and all
+earlier preserved packets remain unchanged.
+
+Both current manifest capture flags remain false: `owner_accepted` and
+`native_200_percent_verified`. They describe what this automated capture verified;
+they neither invent a new human approval nor contradict the owner's separately
+recorded acceptance of the unchanged management surfaces in the preserved packet.
+
+Owned-stack cleanup completed in2.9s with empty exact container/network/volume
+labels; the offline browser closed and the exclusive lane is released. No full
+unfiltered browser/security campaign ran for this recapture. The sourceA79/one-skip
+and earlier focused receipts remain distinct. Plan17 must execute the mandatory
+current-source unfiltered browser command and its complete security/recovery gates.
+The dev-administrator browser DB provenance limit remains unchanged. No source,
+test, dependency, provider, private environment, production or parent-owned review/
+global planning file was edited in this documentation-only continuation.
