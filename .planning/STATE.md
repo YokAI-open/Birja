@@ -85,6 +85,12 @@ reproduced3cases;GREEN2c2efae earlymandatoryexactV2fields;summary668d769.
 Ownedresourcesremoved,oldarchivepreserved. Next06; noglobalrequirements
 completed byindividualplan summaries.
 
+Plan06executionclarification: plan20dailygrantlimit conflicted withresearch/
+reviewed0020durable100limit. D-11doesnotlocknumber; parentaligned06/COVERAGE
+toexistingdurable100, preserving30/minowner+60/minIPattemptcontrols,10activecap
+andSQLreplay-first. NoRedis-onlygrantcounter/newSELECTpermission/SQLrevision.
+Executorcontinues meaningfulAPItests; noPhase13requirementcomplete.
+
 ## Phase13 Planning Closeout — 2026-11-18
 
 The owner authorized research, an existing-design-system UI contract and checked
