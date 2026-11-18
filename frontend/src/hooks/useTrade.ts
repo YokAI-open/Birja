@@ -10,6 +10,7 @@ type State = {
   attempt: TradeAttempt | null;
   fill?: Fill;
   error: Error | null;
+  originalName?: string;
 };
 const empty = (): State => ({ phase: "idle", attempt: null, error: null });
 const terminal = new Set([
@@ -64,6 +65,8 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
         idempotency_key: idempotencyKey,
       });
       const state = currentState();
+      if (state.attempt && target.isOriginalCurrent && !target.isOriginalCurrent())
+        throw new Error("Portfolio target changed");
       if (
         state.phase === "submitting" ||
         state.phase === "filled" ||
@@ -74,7 +77,8 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
       const owns = () =>
         client.getQueryCache().find({ queryKey: key, exact: true }) === owner &&
         client.getQueryData<{ email: string } | null>(["me"])?.email === scope.owner;
-      client.setQueryData<State>(key, { phase: "submitting", attempt, error: null });
+      const originalName = state.originalName ?? target.name;
+      client.setQueryData<State>(key, { phase: "submitting", attempt, error: null, originalName });
       try {
         const fill = await executeTrade(
           attempt.portfolio_id,
@@ -83,7 +87,13 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
           attempt.idempotency_key,
         );
         if (!scope.current()) throw new Error("Portfolio target changed");
-        client.setQueryData<State>(key, { phase: "filled", attempt: null, fill, error: null });
+        client.setQueryData<State>(key, {
+          phase: "filled",
+          attempt: null,
+          fill,
+          error: null,
+          originalName,
+        });
         await Promise.all([
           ...["holding", "quote", "portfolio", "history", "eventHistory", "stockContext"].map(
             (prefix) =>
@@ -102,6 +112,7 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
             phase: refused ? "refused" : "unknown",
             attempt: refused ? null : attempt,
             error: failure,
+            originalName,
           });
         }
         if (scope.current() && error instanceof ApiError && error.code === "portfolio_unavailable")
@@ -151,6 +162,7 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
       : undefined,
     failureReason: visible.error,
     attempt: visible.attempt,
+    originalName: visible.originalName,
     outcomeUnknown: visible.phase === "unknown",
     mutate: (variables: TradeVariables, options?: Options) =>
       mutation.mutate(variables, optionsFor(options)),

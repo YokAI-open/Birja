@@ -47,45 +47,75 @@ function deferred() {
   return { promise, resolve };
 }
 const clients: QueryClient[] = [];
-it.each(["lost", "pending"])("keeps the real-target crypto original across a %s rename and explicit replay", async (mode) => {
-  const { client, wrapper } = setup();
-  let name = "Original", metadataPending = false;
-  const late = deferred(), metadata = deferred();
-  const bodies: string[] = [];
-  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const path = String(input);
-    if (path.endsWith("/portfolios")) return metadataPending ? metadata.promise : Promise.resolve(json([{ id: "1", name }]));
-    bodies.push(init!.body as string);
-    if (bodies.length === 1) return mode === "lost" ? Promise.reject(new Error("lost")) : late.promise;
-    return Promise.resolve(json(fill()));
-  });
-  vi.stubGlobal("fetch", fetch);
-  const h = renderHook(() => { const p = usePortfolioTarget("1"); return { p, t: useTrade(p.target, "BTC") }; }, { wrapper });
-  await waitFor(() => expect(h.result.current.p.status).toBe("ready"));
-  const stale = h.result.current.t.mutateAsync, success = vi.fn();
-  let pending!: Promise<unknown>;
-  act(() => { pending = stale(variables(), { onSuccess: success }).catch(() => undefined); });
-  await waitFor(() => expect(bodies).toHaveLength(1));
-  metadataPending = true;
-  act(() => broadcastMetadataChange("1"));
-  expect(h.result.current.t.data).toBeUndefined();
-  await act(async () => { await expect(stale(variables())).rejects.toThrow("Portfolio target changed"); });
-  name = "Renamed";
-  metadataPending = false;
-  await act(async () => { metadata.resolve(json([{ id: "1", name }])); });
-  await waitFor(() => expect(h.result.current.p.target?.name).toBe(name));
-  await act(async () => { if (mode === "pending") late.resolve(json(fill())); await pending; });
-  await waitFor(() => expect(h.result.current.t.outcomeUnknown).toBe(true));
-  expect(success).not.toHaveBeenCalled();
-  expect(h.result.current.t.attempt).toMatchObject({ portfolio_id: "1", expected_mid: "10000", idempotency_key: "original-key" });
-  expect(bodies).toHaveLength(1);
-  await act(async () => { await h.result.current.t.mutateAsync(variables()); });
-  await waitFor(() => expect(h.result.current.t.data?.portfolio_id).toBe("1"));
-  expect(bodies[1]).toBe(bodies[0]);
-  act(() => client.setQueryData(["portfolios", alice], []));
-  await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
-  expect(h.result.current.t.data).toBeUndefined();
-});
+it.each(["lost", "pending"])(
+  "keeps the real-target crypto original across a %s rename and explicit replay",
+  async (mode) => {
+    const { client, wrapper } = setup();
+    let name = "Original",
+      metadataPending = false;
+    const late = deferred(),
+      metadata = deferred();
+    const bodies: string[] = [];
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/portfolios"))
+        return metadataPending ? metadata.promise : Promise.resolve(json([{ id: "1", name }]));
+      bodies.push(init!.body as string);
+      if (bodies.length === 1)
+        return mode === "lost" ? Promise.reject(new Error("lost")) : late.promise;
+      return Promise.resolve(json(fill()));
+    });
+    vi.stubGlobal("fetch", fetch);
+    const h = renderHook(
+      () => {
+        const p = usePortfolioTarget("1");
+        return { p, t: useTrade(p.target, "BTC") };
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(h.result.current.p.status).toBe("ready"));
+    const stale = h.result.current.t.mutateAsync,
+      success = vi.fn();
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = stale(variables(), { onSuccess: success }).catch(() => undefined);
+    });
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    metadataPending = true;
+    act(() => broadcastMetadataChange("1"));
+    expect(h.result.current.t.data).toBeUndefined();
+    await act(async () => {
+      await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
+    });
+    name = "Renamed";
+    metadataPending = false;
+    await act(async () => {
+      metadata.resolve(json([{ id: "1", name }]));
+    });
+    await waitFor(() => expect(h.result.current.p.target?.name).toBe(name));
+    await act(async () => {
+      if (mode === "pending") late.resolve(json(fill()));
+      await pending;
+    });
+    await waitFor(() => expect(h.result.current.t.outcomeUnknown).toBe(true));
+    expect(h.result.current.t.originalName).toBe("Original");
+    expect(success).not.toHaveBeenCalled();
+    expect(h.result.current.t.attempt).toMatchObject({
+      portfolio_id: "1",
+      expected_mid: "10000",
+      idempotency_key: "original-key",
+    });
+    expect(bodies).toHaveLength(1);
+    await act(async () => {
+      await h.result.current.t.mutateAsync(variables());
+    });
+    await waitFor(() => expect(h.result.current.t.data?.portfolio_id).toBe("1"));
+    expect(bodies[1]).toBe(bodies[0]);
+    act(() => client.setQueryData(["portfolios", alice], []));
+    await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
+    expect(h.result.current.t.data).toBeUndefined();
+  },
+);
 function setup() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },

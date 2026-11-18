@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { ApiError } from "@/api/client";
 import { fetchPortfolios, isPortfolioId, type PortfolioSummary } from "@/api/portfolios";
 import { useMe } from "./useMe";
+import { subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
 
 type Guard = { owner: string | null; session: number; serial: number };
 const guards = new WeakMap<QueryClient, Guard>();
@@ -39,6 +40,8 @@ export type PortfolioTarget = Readonly<{
   epoch: PortfolioTargetEpoch;
   /** Captured previews/callbacks must check this before publishing or submitting. */
   isCurrent: () => boolean;
+  /** Original recovery only: stable identity, never preview/receipt authority. */
+  isOriginalCurrent?: () => boolean;
 }>;
 export type PortfolioTargetStatus =
   | "signed_out"
@@ -75,6 +78,7 @@ export function usePortfolioTarget(
         legacyEntry,
         session,
         listeners: new Set<() => void>(),
+        authority: { revision: 0 },
       }),
     [owner, routePortfolioId, legacyEntry, session],
   );
@@ -102,8 +106,10 @@ export function usePortfolioTarget(
     subscribe,
     useCallback(() => activeScopes.has(scope), [scope]),
   );
-  const current = () =>
-    activeScopes.has(scope) && who(client) === owner && session === guard.session;
+  const current = useCallback(
+    () => activeScopes.has(scope) && who(client) === owner && session === guardFor(client).session,
+    [scope, client, owner, session],
+  );
 
   const metadata = useQuery({
     queryKey: key,
@@ -140,29 +146,59 @@ export function usePortfolioTarget(
     },
   });
 
+  useLayoutEffect(
+    () =>
+      subscribeMetadataEvents((id) => {
+        if (!current() || owner === null || (explicit && id !== routePortfolioId)) return;
+        // An event supplies no labels or ownership evidence. Revoke old handles
+        // synchronously and renew only from the authenticated discovery endpoint.
+        scope.authority.revision++;
+        void client.invalidateQueries({ queryKey: key, exact: true });
+      }),
+    [client, owner, explicit, routePortfolioId, key, scope, current],
+  );
+
   const selected =
     valid && explicit ? metadata.data?.find((p) => p.id === routePortfolioId) : undefined;
   const target = useMemo<PortfolioTarget | null>(() => {
-    if (!owner || !selected || metadata.isError) return null;
+    if (
+      !owner ||
+      !selected ||
+      metadata.isError ||
+      (metadata.isFetching && client.getQueryState(key)?.isInvalidated)
+    )
+      return null;
     const epoch = Object.freeze({ owner, portfolioId: selected.id, session });
+    const revision = scope.authority.revision;
+    const originalCurrent = () => {
+      const query = client.getQueryCache().find({ queryKey: key, exact: true });
+      const values = query?.state.data as readonly PortfolioSummary[] | undefined;
+      return (
+        activeScopes.has(scope) &&
+        who(client) === owner &&
+        guard.session === session &&
+        query?.state.status === "success" &&
+        !query.state.isInvalidated &&
+        values?.some((p) => p.id === selected.id) === true
+      );
+    };
     return Object.freeze({
       owner,
       portfolioId: selected.id,
       name: selected.name,
       epoch,
+      isOriginalCurrent: originalCurrent,
       isCurrent: () => {
         const query = client.getQueryCache().find({ queryKey: key, exact: true });
         const values = query?.state.data as readonly PortfolioSummary[] | undefined;
         return (
-          activeScopes.has(scope) &&
-          who(client) === owner &&
-          guard.session === session &&
-          query?.state.status === "success" &&
-          values?.some((p) => p.id === selected.id && p.name === selected.name) === true
+          originalCurrent() &&
+          scope.authority.revision === revision &&
+          values?.find((p) => p.id === selected.id) === selected
         );
       },
     });
-  }, [owner, selected, metadata.isError, session, client, key, scope, guard]);
+  }, [owner, selected, metadata.isError, metadata.isFetching, session, client, key, scope, guard]);
 
   let status: PortfolioTargetStatus;
   let redirectPortfolioId: string | null = null;

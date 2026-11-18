@@ -15,9 +15,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const clients: QueryClient[] = [];
 it("renews metadata authority from an identity-only event without reviving old handles", async () => {
   let release!: (value: Response) => void;
-  const fetch = vi.fn().mockResolvedValueOnce(json([first])).mockImplementationOnce(
-    () => new Promise<Response>((resolve) => { release = resolve; }),
-  ).mockResolvedValueOnce(json([first]));
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(json([first]))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(json([first]));
   vi.stubGlobal("fetch", fetch);
   const h = setup("1");
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
@@ -30,8 +37,10 @@ it("renews metadata authority from an identity-only event without reviving old h
   expect(original.isOriginalCurrent?.()).toBe(true);
   expect(original.isCurrent()).toBe(false);
   const renamed = h.result.current.target!;
-  await act(async () => { await h.result.current.refetch(); });
-  expect(h.result.current.target?.name).toBe(first.name);
+  await act(async () => {
+    await h.result.current.refetch();
+  });
+  await waitFor(() => expect(h.result.current.target?.name).toBe(first.name));
   expect(original.isCurrent()).toBe(false);
   expect(renamed.isCurrent()).toBe(false);
   act(() => h.client.setQueryData(["me"], null));
