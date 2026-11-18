@@ -48,6 +48,9 @@ class Sources:
     verify_image = staticmethod(sources_module.verify_image)
     verify_source_tree = staticmethod(sources_module.verify_source_tree)
 
+    profile_for = staticmethod(sources_module.profile_for)
+    source_archive = staticmethod(sources_module.source_archive)
+
     def __init__(self, *, dirty=False):
         self.dirty = dirty
         self.head = COMMIT
@@ -104,6 +107,28 @@ class ImageCommands:
 
 
 class CurrentImageContracts(unittest.TestCase):
+    def test_selected_schema_source_refuses_unsupported_before_build(self):
+        for revision in ('0018', '0019', 'head', '0021'):
+            command = ImageCommands(Sources())
+            with self.subTest(revision=revision), self.assertRaises(ValueError):
+                smoke.build_selected_runtime(Sources(), {}, revision=revision, run=command)
+            self.assertEqual(command.calls, [])
+
+    def test_retained_runtime_uses_the_complete_fixed_source(self):
+        calls = []
+        profile = sources_module.profile_for('0017')
+        image = [{'Id': IMAGE, 'Config': {'Labels': {'org.opencontainers.image.revision': profile['commit']}, 'User': 'app'}, 'RootFS': {'Type': 'layers', 'Layers': ['fixed']}}]
+        def command(argv, **kwargs):
+            calls.append(argv)
+            if argv[:2] == ['docker', 'build']:
+                context = Path(argv[-1])
+                self.assertEqual((context / 'app/db/portfolio_bootstrap.py').read_bytes(), sources_module.git('show', profile['commit'] + ':backend/app/db/portfolio_bootstrap.py'))
+                self.assertFalse((context / 'alembic/versions/0020_portfolio_management_authority.py').exists())
+            return subprocess.CompletedProcess(argv, 0, json.dumps(image).encode(), b'')
+        binding = smoke.build_selected_runtime(sources_module, {}, revision='0017', run=command)
+        self.assertEqual(binding['source_commit'], profile['commit'])
+        self.assertEqual(calls[0][:2], ['docker', 'build'])
+
     def test_builds_declared_frozen_runtime_before_first_use_and_rechecks_id(self):
         source = Sources()
         command = ImageCommands(source)
