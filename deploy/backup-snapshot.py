@@ -953,6 +953,7 @@ def management_manifest_sql():
     """
     unsafe = """(SELECT count(*) FROM pg_rewrite r JOIN pg_class c ON c.oid=r.ev_class
         WHERE c.relnamespace='public'::regnamespace)
+      +(SELECT count(*) FROM pg_roles WHERE rolname='birja_action_operator' AND rolcanlogin)
       +(SELECT count(*) FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
         AND has_schema_privilege(oid,'public','CREATE'))
       +(SELECT count(*) FROM pg_database WHERE datname=current_database() AND
