@@ -101,6 +101,17 @@ class CurrentCampaign(unittest.TestCase):
         self.assertNotIn(['bounded-probe'], calls)
         self.assertEqual(calls[-1], runner.STACK + ['down', '-v'])
 
+    def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
+        module = runner.load('test-dev-bootstrap')
+        code = module.financial_program()
+        compile(code, '<dev0020>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0020'", code)
+        self.assertIn("version_num='0018'", code)
+        self.assertIn("version_num='0020'", code)
+        self.assertIn("D('124.45')", code)
+        self.assertIn('7777', code)
+        self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))
+
 
 if __name__ == "__main__":
     unittest.main()
