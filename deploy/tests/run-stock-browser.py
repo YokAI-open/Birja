@@ -19,6 +19,18 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECT = "birja-phase09-e2e-test"
 
 
+def browser_specs(suite):
+    retained = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
+                'stock-trades', 'stock-actions', 'dividends-history',
+                'portfolio-history', 'portfolio-ownership', 'portfolio-strategies')
+    selections = {'all': retained, 'stocks': ('stock-trades',),
+                  'actions': ('stock-actions',), 'dividends': ('dividends-history',),
+                  'portfolios': ('portfolio-ownership', 'portfolio-strategies')}
+    if suite not in selections:
+        raise ValueError('unsupported browser suite')
+    return ['e2e/' + name + '.spec.ts' for name in selections[suite]]
+
+
 def source_snapshot():
     """Bind rendered review evidence to actual source, including uncommitted files."""
     paths = [ROOT / 'frontend/package-lock.json', ROOT / 'backend/uv.lock', Path(__file__),
@@ -166,15 +178,7 @@ def main():
         "--workers=1",
         "--retries=0",
     ]
-    if args.suite != "all":
-        pw.append(
-            {
-                "stocks": "e2e/stock-trades.spec.ts",
-                "actions": "e2e/stock-actions.spec.ts",
-                "dividends": "e2e/dividends-history.spec.ts",
-                "portfolios": "e2e/portfolio-ownership.spec.ts",
-            }[args.suite]
-        )
+    pw.extend(browser_specs(args.suite))
     if args.grep is not None:
         pw.extend(["--grep", args.grep])
 
