@@ -213,6 +213,7 @@ it("invalidates captured target callbacks and epoch immediately when the route c
   expect(result.current.target!.epoch).not.toBe(original.epoch);
   expect(original.isCurrent()).toBe(false);
   await expect(staleRefetch()).rejects.toThrow("Portfolio target changed");
+  expect(original.isOriginalCurrent?.()).toBe(false);
   rerender({ routeId: "1", legacy: false });
   expect(result.current.target!.epoch).not.toBe(original.epoch);
   expect(original.isCurrent()).toBe(false);
@@ -276,6 +277,7 @@ it("invalidates the target when fresh metadata removes its root", async () => {
   });
   expect(original.isCurrent()).toBe(false);
   await waitFor(() => expect(result.current.status).toBe("unavailable"));
+  expect(original.isOriginalCurrent?.()).toBe(false);
   expect(result.current.target).toBeNull();
   expect(result.current.redirectPortfolioId).toBeNull();
 });
@@ -330,6 +332,7 @@ it("hides target authority on metadata failure and only retries the same target"
   await waitFor(() => expect(result.current.status).toBe("error"));
   expect(result.current.target).toBeNull();
   expect(original.isCurrent()).toBe(false);
+  expect(original.isOriginalCurrent?.()).toBe(false);
   await act(async () => {
     await result.current.refetch();
   });

@@ -155,9 +155,9 @@ it.each(["lost", "pending"])(
       metadata.resolve(json([{ id: "1", name }]));
     });
     await waitFor(() => expect(h.result.current.p.target?.name).toBe(name));
-  await act(async () => {
-    await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
-  });
+    await act(async () => {
+      await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
+    });
     await act(async () => {
       if (mode === "pending") late.resolve(json(fill()));
       await pending;

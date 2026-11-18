@@ -77,7 +77,7 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
       const owns = () =>
         client.getQueryCache().find({ queryKey: key, exact: true }) === owner &&
         client.getQueryData<{ email: string } | null>(["me"])?.email === scope.owner;
-      const originalName = state.originalName ?? target.name;
+      const originalName = state.attempt ? (state.originalName ?? target.name) : target.name;
       client.setQueryData<State>(key, { phase: "submitting", attempt, error: null, originalName });
       try {
         const fill = await executeTrade(
@@ -164,10 +164,13 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
     attempt: visible.attempt,
     originalName: visible.originalName,
     outcomeUnknown: visible.phase === "unknown",
-    mutate: (variables: TradeVariables, options?: Options) =>
-      mutation.mutate(variables, optionsFor(options)),
+    mutate: (variables: TradeVariables, options?: Options) => {
+      if (scope.current()) mutation.mutate(variables, optionsFor(options));
+    },
     mutateAsync: (variables: TradeVariables, options?: Options) =>
-      mutation.mutateAsync(variables, optionsFor(options)),
+      scope.current()
+        ? mutation.mutateAsync(variables, optionsFor(options))
+        : Promise.reject(new Error("Portfolio target changed")),
     reset: () => {
       if (!scope.current() || ["submitting", "unknown"].includes(currentState().phase)) return;
       client.setQueryData(key, empty());

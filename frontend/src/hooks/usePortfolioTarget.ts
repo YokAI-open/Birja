@@ -207,7 +207,12 @@ export function usePortfolioTarget(
   else if (owner === null || who(client) !== owner) status = "signed_out";
   else if (!valid) status = "required";
   else if (metadata.isError) status = "error";
-  else if (metadata.isPending || !activated) status = "loading";
+  else if (
+    metadata.isPending ||
+    !activated ||
+    (metadata.isFetching && client.getQueryState(key)?.isInvalidated)
+  )
+    status = "loading";
   else if (explicit) status = target ? "ready" : "unavailable";
   else if (metadata.data?.length === 0) status = "empty";
   else if (metadata.data?.length === 1) {
