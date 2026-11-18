@@ -229,6 +229,48 @@ asyncio.run(main())
 
 
 class ManagementRecoveryContracts(unittest.TestCase):
+    def test_consumer_version_dispatch_and_exact_management_equality(self):
+        recovery = load("consumer", "deploy/verify-restore.py")
+        inventory = producer.portfolio_payload_inventory(ROOT)
+        hashes = inventory["sha256"]
+        recovery.verify_portfolio_inventory({"portfolio_payload": inventory}, hashes)
+        for version in (True, 0, 3, "2"):
+            damaged = copy.deepcopy(inventory)
+            damaged["version"] = version
+            with self.assertRaises(ValueError):
+                recovery.verify_portfolio_inventory({"portfolio_payload": damaged}, hashes)
+        expected = json.loads((ROOT / "deploy/tests/fixtures/portfolio-recovery-0020.json").read_text())
+        with mock.patch.object(recovery, "canonical", return_value=expected), mock.patch.object(recovery, "sql", return_value=b"t"):
+            recovery.verify([], expected, quarantined=False)
+            for section in ("tables", "identity_state", "management_state"):
+                damaged = copy.deepcopy(expected)
+                if section == "tables":
+                    damaged[section]["accounts"]["sha256"] = "0" * 64
+                elif section == "identity_state":
+                    damaged[section][0][1] += 1
+                else:
+                    damaged[section]["initializations"] -= 1
+                with self.subTest(section=section), mock.patch.object(recovery, "canonical", return_value=damaged), self.assertRaises(ValueError):
+                    recovery.verify([], expected, quarantined=False)
+
+    def test_consumer_source_authentication_before_sql_or_import(self):
+        recovery = load("consumer_source", "deploy/verify-restore.py")
+        recovery.management_source()
+        with tempfile.TemporaryDirectory(prefix="birja-consumer-source-") as tmp:
+            root = Path(tmp)
+            for name in recovery.MANAGEMENT_SOURCE_SHA256:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((ROOT / "backend" / name).read_bytes())
+            recovery.management_source(root)
+            for name in recovery.MANAGEMENT_SOURCE_SHA256:
+                path = root / name
+                original = path.read_bytes()
+                path.write_bytes(original + b"\nraise RuntimeError('must not import')")
+                with self.subTest(source=name), self.assertRaises(ValueError):
+                    recovery.management_source(root)
+                path.write_bytes(original)
+
     def test_v2_package_assembles_exact_current_and_retained_bytes(self):
         recovery = load("assembly_recovery", "deploy/verify-restore.py")
         original_run = subprocess.run
