@@ -51,7 +51,10 @@ function Value({ row }: { row: PortfolioOverview }) {
           ? "Value unavailable — refresh required"
           : `Known value: ${formatUsd(row.known_value)} — incomplete`}
       {!row.valuation_complete && (
-        <p className="text-sm">{row.unvalued_holding_count} holdings cannot be valued.</p>
+        <p className="text-sm">
+          {row.unvalued_holding_count} {row.unvalued_holding_count === 1 ? "holding" : "holdings"}{" "}
+          cannot be valued.
+        </p>
       )}
     </>
   );

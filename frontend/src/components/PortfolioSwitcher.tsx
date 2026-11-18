@@ -47,7 +47,7 @@ function Choices({ owner, portfolioId }: { owner: string; portfolioId?: string }
     >
       {current && <PortfolioContext name={current.name} />}
       <div className="flex min-w-0 flex-wrap items-end gap-2">
-        <div className="flex min-w-0 max-w-full flex-1 flex-col gap-1">
+        <div className="flex w-full min-w-0 max-w-full flex-none flex-col gap-1 md:w-auto md:flex-1">
           <label htmlFor={id} className="text-sm leading-5">
             Open portfolio
           </label>

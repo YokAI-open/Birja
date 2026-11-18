@@ -45,14 +45,28 @@ def input_digest(source):
     return digest(json.dumps(source, sort_keys=True, separators=(',', ':')).encode())
 
 
+def capture_artifacts(width, state):
+    stem = f'phase13-{state}-{width}'
+    return {'html': stem + '.html', 'png': stem + '.png', 'trace': stem + '.trace.json',
+            **({'reflow_png': stem + '.reflow.png'} if width >= 768 else {})}
+
+
+def required_artifacts():
+    """Source-owned inventory; a manifest cannot choose which proof to omit."""
+    return {'index.html'} | {name for width in WIDTHS for state in STATES
+                            for name in capture_artifacts(width, state).values()}
+
+
 def contract_example():
     """Independent schema specimen for offline negative tests, never a receipt."""
     source = {'frontend/src/App.tsx': 'a' * 64}
     return {'format': 1, 'phase': 13, 'synthetic': True, 'source_sha256': source,
             'git_commit': 'a' * 40, 'render_inputs_sha256': input_digest(source),
             'native_200_percent_verified': False, 'owner_accepted': False,
+            'artifacts': {name: 'a' * 64 for name in required_artifacts()},
             'captures': [{'state': state, 'width': width, 'browser': 'chromium',
                           'browser_version': '1.2.3', 'scope': 'a' * 64,
+                          'artifacts': capture_artifacts(width, state),
                           'render_inputs_sha256': input_digest(source)}
                          for width in WIDTHS for state in STATES]}
 
@@ -70,14 +84,23 @@ def validate_manifest(value, *, source=None):
     bound = input_digest(sources)
     if value.get('render_inputs_sha256') != bound:
         raise ValueError('Render input mismatch')
+    artifacts = value.get('artifacts')
+    if not isinstance(artifacts, dict) or set(artifacts) != required_artifacts() or any(
+        not isinstance(checksum, str) or not HASH.fullmatch(checksum) for checksum in artifacts.values()
+    ):
+        raise ValueError('Incomplete or unexpected artifact inventory')
     captures = value.get('captures')
     if not isinstance(captures, list) or len(captures) != len(WIDTHS) * len(STATES):
         raise ValueError('Incomplete capture matrix')
     found, scopes, browsers = set(), {}, set()
     for capture in captures:
+        if not isinstance(capture, dict):
+            raise ValueError('Malformed capture')
         width, state = capture.get('width'), capture.get('state')
         if width not in WIDTHS or state not in STATES or (width, state) in found:
             raise ValueError('Unexpected or duplicate capture')
+        if capture.get('artifacts') != capture_artifacts(width, state):
+            raise ValueError('Capture paths do not match its required state/width')
         found.add((width, state))
         scope = capture.get('scope')
         if not isinstance(scope, str) or not HASH.fullmatch(scope) or scopes.setdefault(width, scope) != scope:
@@ -92,12 +115,50 @@ def validate_manifest(value, *, source=None):
 
 
 def verify_artifacts(directory, hashes):
-    if not isinstance(hashes, dict) or not hashes:
-        raise ValueError('No artifacts')
-    for name, expected in hashes.items():
+    expected_names = required_artifacts()
+    if not isinstance(hashes, dict) or set(hashes) != expected_names:
+        raise ValueError('Incomplete or unexpected required artifacts')
+    if directory.is_symlink() or not directory.is_dir() or {p.name for p in directory.iterdir()} != expected_names | {'manifest.json'}:
+        raise ValueError('Missing or unexpected on-disk evidence')
+    for name in expected_names | {'manifest.json'}:
         path = directory / name
-        if Path(name).name != name or path.is_symlink() or not path.is_file() or not HASH.fullmatch(expected) or digest(path.read_bytes()) != expected:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('Unsafe evidence member: ' + name)
+    manifest = json.loads((directory / 'manifest.json').read_text())
+    validate_manifest(manifest)
+    if manifest['artifacts'] != hashes:
+        raise ValueError('Manifest artifact map mismatch')
+    for name, expected in hashes.items():
+        if not isinstance(expected, str) or not HASH.fullmatch(expected) or digest((directory / name).read_bytes()) != expected:
             raise ValueError('Missing/unsafe/tampered artifact: ' + name)
+    validate_html((directory / 'index.html').read_text())
+    for capture in manifest['captures']:
+        paths = capture_artifacts(capture['width'], capture['state'])
+        content = (directory / paths['html']).read_text()
+        validate_html(content)
+        metadata = capture_metadata(content)
+        verify_capture_metadata(metadata, capture, manifest['git_commit'])
+        if json.loads((directory / paths['trace']).read_text()) != metadata.get('trace'):
+            raise ValueError('Timing trace does not correspond to its capture')
+
+
+def capture_metadata(content):
+    matches = re.findall(r'<meta name="birja-evidence" content="([^"]+)">', content)
+    if len(matches) != 1:
+        raise ValueError('Missing or duplicate browser capture metadata')
+    value = json.loads(html.unescape(matches[0]))
+    if not isinstance(value, dict):
+        raise ValueError('Malformed browser capture metadata')
+    return value
+
+
+def verify_capture_metadata(metadata, capture, commit):
+    expected = {'phase': 13, 'state': capture['state'], 'width': capture['width'],
+                'source': commit, 'synthetic': True, 'native_200_percent_verified': False,
+                'browser': capture['browser'], 'version': capture['browser_version'],
+                'scope': capture['scope'], 'artifacts': capture_artifacts(capture['width'], capture['state'])}
+    if any(metadata.get(key) != value for key, value in expected.items()) or not isinstance(metadata.get('trace'), list):
+        raise ValueError('Capture metadata/source/path correspondence mismatch')
 
 
 def validate_html(content):
@@ -117,15 +178,13 @@ def package(captured, destination, source, commit):
             stem = f'phase13-{state}-{width}'
             text = (captured / (stem + '.html')).read_text()
             validate_html(text)
-            match = re.search(r'<meta name="birja-evidence" content="([^"]+)">', text)
-            if not match:
-                raise ValueError('Missing browser capture metadata')
-            metadata = json.loads(html.unescape(match[1]))
-            if metadata.get('state') != state or metadata.get('width') != width or metadata.get('source') != commit or metadata.get('synthetic') is not True or metadata.get('native_200_percent_verified') is not False:
-                raise ValueError('Capture state/source mismatch')
-            captures.append({'state': state, 'width': width, 'browser': metadata['browser'],
-                             'browser_version': metadata['version'], 'scope': metadata['scope'],
-                             'render_inputs_sha256': bound})
+            metadata = capture_metadata(text)
+            capture = {'state': state, 'width': width, 'browser': metadata['browser'],
+                       'browser_version': metadata['version'], 'scope': metadata['scope'],
+                       'render_inputs_sha256': bound, 'artifacts': capture_artifacts(width, state),
+                       'layout': metadata.get('layout', {})}
+            verify_capture_metadata(metadata, capture, commit)
+            captures.append(capture)
             for suffix in ('.html', '.png'):
                 path = captured / (stem + suffix)
                 if path.is_symlink() or not path.is_file():
@@ -147,8 +206,8 @@ def package(captured, destination, source, commit):
     (destination / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Phase13 UI review</title><h1>Phase13 synthetic UI review</h1><p>Actual rendered read-only application states. Source hashes, browser version and credential-free performance traces are in manifest.json. Self-hosted fonts and CSS are embedded in each page. Owner acceptance and genuine desktop native 200% zoom remain PENDING Plan18. Viewport reflow is automated evidence only. Use your browser menu to inspect zoom and keyboard reachability.</p><ul>' + links + '</ul>')
     manifest['artifacts'] = {p.name: digest(p.read_bytes()) for p in sorted(destination.iterdir())}
     validate_manifest(manifest, source=source)
-    verify_artifacts(destination, manifest['artifacts'])
     (destination / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2))
+    verify_artifacts(destination, manifest['artifacts'])
     archive = destination.with_suffix('.zip')
     with zipfile.ZipFile(archive, 'x', compression=zipfile.ZIP_DEFLATED) as output:
         for path in sorted(destination.iterdir()):

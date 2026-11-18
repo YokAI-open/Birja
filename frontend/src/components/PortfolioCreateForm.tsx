@@ -146,7 +146,7 @@ export function FormError({
       className="rounded-control bg-loss-soft p-4 text-loss-text outline-offset-2"
     >
       <p className="flex items-start gap-2">
-        <AlertCircle size={16} aria-hidden="true" />
+        <AlertCircle size={20} className="shrink-0" aria-hidden="true" />
         <span>{message}</span>
       </p>
       {nameError && (
@@ -289,12 +289,14 @@ function CreationEditor({ count, onClose, onCreated }: CreateProps) {
               descriptionError={!!errors.description}
             />
           )}
-          {creation.phase === "unknown" && (
-            <p role="status">
-              We couldn&apos;t confirm whether your portfolio was created. Retry this creation to
-              check its original result.
-            </p>
-          )}
+          {creation.phase === "unknown" &&
+            message !==
+              "We couldn't confirm whether your portfolio was created. Retry this creation to check its original result." && (
+              <p role="status">
+                We couldn&apos;t confirm whether your portfolio was created. Retry this creation to
+                check its original result.
+              </p>
+            )}
           {creation.phase === "submitting" && <p role="status">Creating portfolio…</p>}
           <MetadataFields
             prefix="create"
