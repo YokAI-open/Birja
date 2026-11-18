@@ -163,6 +163,19 @@ async def main():
    await conn.execute(text("SET TIME ZONE 'UTC'"))
    value=await fixture.project(conn);fixture.require_projection(value)
    manifest=(await conn.execute(text(producer.manifest_sql('0020')))).scalar_one()
+   producer.validate_manifest(manifest)
+   try:
+    await conn.execute(text('ALTER ROLE birja_action_operator LOGIN'))
+    assert (await conn.execute(text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one()
+    unsafe=(await conn.execute(text(producer.manifest_sql('0020')))).scalar_one()
+    try:producer.validate_manifest(unsafe)
+    except ValueError:pass
+    else:raise AssertionError('LOGIN-enabled action operator admitted by actual0020 producer')
+   finally:
+    await conn.rollback()
+    await conn.execute(text('ALTER ROLE birja_action_operator NOLOGIN'))
+    await conn.commit()
+   assert not (await conn.execute(text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one()
    await conn.rollback()
    quarantine='REVOKE EXECUTE ON FUNCTION public.create_portfolio(bigint,uuid,text,text),public.initialize_portfolio(bigint),public.update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean) FROM birja_app; REVOKE EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),public.record_stock_dividend_hold(bigint,text),public.lock_stock_portfolio_roots(bigint) FROM birja_scheduler;'
    await sql(conn,quarantine)
@@ -418,7 +431,7 @@ class ManagementRecoveryContracts(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--postgres"]:
+    if sys.argv[1:] in (["--postgres"], ["--postgres-operator-login"]):
         result = postgres_proof()
         producer.validate_manifest(result["manifest"])
         producer.validate_manifest(result["quarantined"], quarantined=True)
