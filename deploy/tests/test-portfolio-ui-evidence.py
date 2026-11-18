@@ -87,7 +87,8 @@ class EvidenceContracts(unittest.TestCase):
     def test_render_inventory_includes_fonts_configuration_and_backend(self):
         sources = self.module.source_snapshot()
         for path in ('frontend/src/App.tsx', 'frontend/index.html', 'frontend/package-lock.json',
-                     'frontend/vite.config.ts', 'backend/app/services/portfolios.py',
+                     'frontend/vite.config.ts', 'frontend/tsconfig.app.json',
+                     'frontend/node_modules/@fontsource-variable/inter/index.css', 'backend/app/services/portfolios.py',
                      'frontend/e2e/portfolio-strategies.spec.ts', 'deploy/tests/portfolio-ui-evidence.py'):
             self.assertIn(path, sources)
         self.assertTrue(any(name.endswith('.woff2') for name in sources))
