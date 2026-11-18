@@ -437,10 +437,11 @@ export function usePortfolioManagement(portfolioId?: string) {
         return;
       }
       const ambiguous = !(error instanceof PortfolioManagementError) || error.outcome === "unknown";
+      const latest = editor();
       setEditor({
-        ...editor(),
+        ...latest,
         pending: false,
-        reviewRequired: ambiguous,
+        reviewRequired: latest.reviewRequired || latest.revision !== state.revision || ambiguous,
         error: error instanceof Error ? error : new Error("Metadata result unavailable"),
       });
       if (ambiguous) await refreshMetadata();
