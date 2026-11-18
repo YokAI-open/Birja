@@ -11,16 +11,45 @@ import type { Portfolio } from "@/api/portfolio";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 const clients: QueryClient[] = [];
-it("adds authoritative metadata editing beside unchanged cash and valuation",async()=>{
-  const {user}=show(cashPortfolio());
+it("renames and clears descriptions through actual management hooks without altering finances",async()=>{
+  const management={id:"1",name:"My portfolio",description:"Keep this strategy"};
+  const metadata=[{id:"1",name:"My portfolio"}];
+  const patches:unknown[]=[];
+  vi.stubGlobal("fetch",vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+    if(String(input)==="/api/v2/portfolios/1"&&init?.method==="PATCH") {
+      const patch=JSON.parse(String(init.body)) as Record<string,string>;
+      patches.push(patch);
+      Object.assign(management,patch);
+      metadata[0].name=management.name;
+      return Promise.resolve(new Response(JSON.stringify(management)));
+    }
+    return Promise.resolve(new Response(JSON.stringify({...cashPortfolio(),name:management.name})));
+  }));
+  const {user}=mount({metadata,management});
+  await user.click(await screen.findByRole("button",{name:"Edit portfolio"}));
+  await user.clear(screen.getByLabelText("Portfolio name"));
+  await user.type(screen.getByLabelText("Portfolio name"),"Long-term <b>plan</b>");
+  await user.clear(screen.getByLabelText("Description (optional)"));
+  await user.click(screen.getByRole("button",{name:"Save changes"}));
+  expect(await screen.findByText("Portfolio updated.")).toBeInTheDocument();
+  expect(patches).toEqual([{name:"Long-term <b>plan</b>",description:""}]);
+  expect(screen.getByRole("button",{name:"Edit portfolio"})).toHaveFocus();
+  expect(screen.getByText("No description.")).toBeInTheDocument();
+  expect(screen.getByRole("heading",{name:"Long-term <b>plan</b>"})).toBeInTheDocument();
+  expect(document.querySelector("b")).toBeNull();
+  expect(await screen.findByRole("region",{name:"Cash"})).toHaveTextContent("$10,000.00");
+  expect(screen.getByRole("region",{name:"Total portfolio value"})).toHaveTextContent("$10,000.00");
+});
+it("adds authoritative metadata editing beside unchanged cash and valuation", async () => {
+  const { user } = show(cashPortfolio());
   expect(await screen.findByText("A plain-text strategy.")).toBeInTheDocument();
-  const cash=await screen.findByRole("region",{name:"Cash"});
+  const cash = await screen.findByRole("region", { name: "Cash" });
   expect(cash).toHaveTextContent("$10,000.00");
-  await user.click(screen.getByRole("button",{name:"Edit portfolio"}));
+  await user.click(screen.getByRole("button", { name: "Edit portfolio" }));
   await user.clear(screen.getByLabelText("Description (optional)"));
   expect(cash).toHaveTextContent("$10,000.00");
-  await user.click(screen.getByRole("button",{name:"Discard changes"}));
-  expect(screen.getByRole("button",{name:"Edit portfolio"})).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Discard changes" }));
+  expect(screen.getByRole("button", { name: "Edit portfolio" })).toHaveFocus();
 });
 function show(body = mixedPortfolio()) {
   vi.stubGlobal(
@@ -32,7 +61,8 @@ function show(body = mixedPortfolio()) {
 function mount({
   route = "/portfolios/1",
   metadata = [{ id: "1", name: "My portfolio" }],
-}: { route?: string; metadata?: PortfolioSummary[] } = {}) {
+  management,
+}: { route?: string; metadata?: PortfolioSummary[];management?:{id:string;name:string;description:string} } = {}) {
   const financialFetch = globalThis.fetch;
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input) === "/api/v2/portfolios")
@@ -40,9 +70,14 @@ function mount({
     if (String(input) === "/api/v2/me")
       return Promise.resolve(new Response(JSON.stringify({ email: "first@example.test" })));
     if (String(input).endsWith("/metadata")) {
-      const id=String(input).split("/").at(-2);
-      const portfolio=metadata.find(row=>row.id===id);
-      return Promise.resolve(new Response(JSON.stringify(portfolio?{...portfolio,description:"A plain-text strategy."}:{}),{status:portfolio?200:404}));
+      const id = String(input).split("/").at(-2);
+      const portfolio = metadata.find((row) => row.id === id);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify(management?.id===id?management:portfolio ? { ...portfolio, description: "A plain-text strategy." } : {}),
+          { status: portfolio ? 200 : 404 },
+        ),
+      );
     }
     return financialFetch(input, init);
   });
@@ -422,7 +457,8 @@ it("labels the statement and holdings with the full escaped portfolio name", asy
   );
   mount({ metadata: [{ id: "1", name }] });
   await screen.findByRole("table", { name: "Holdings" });
-  const contexts = screen.getAllByText(name);
+  const contexts = screen.getAllByText(name).filter((node) => node.tagName === "DD");
+  expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
   expect(contexts).toHaveLength(2);
   for (const context of contexts) {
     expect(context.tagName).toBe("DD");
