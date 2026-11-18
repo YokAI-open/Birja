@@ -19,12 +19,16 @@ from app.services.stock_admission import ProductAdmission
 from app.services.stock_sessions import RegularSession, build_sessions
 from tests.test_corporate_action_rules import dividend
 from tests.test_corporate_actions import batch
-from tests.test_portfolio_stock_authority import stock_authority_case
+from tests.test_portfolio_creation import authority, management_api
 from tests.test_portfolio_stock_ownership import close_root
+from tests.test_portfolio_strategy_lifecycle import (
+    current_stock_authority_case as stock_authority_case,
+)
+from tests.test_portfolio_strategy_lifecycle import strategy_books
 from tests.test_stock_admission import action_admitted
 from tests.test_stock_sessions import evidence
 
-__all__ = ["stock_authority_case"]
+__all__ = ["authority", "management_api", "strategy_books", "stock_authority_case"]
 
 
 def completed_entitlement_session(

@@ -18,11 +18,15 @@ from app.services import corporate_actions as actions
 from app.services.stock_ownership import assert_ownership_consistent
 from tests.test_corporate_action_rules import dividend
 from tests.test_corporate_actions import batch, split_action
-from tests.test_portfolio_stock_authority import stock_authority_case
+from tests.test_portfolio_creation import authority, management_api
 from tests.test_portfolio_stock_ownership import close_root, journal_case
+from tests.test_portfolio_strategy_lifecycle import (
+    current_stock_authority_case as stock_authority_case,
+)
+from tests.test_portfolio_strategy_lifecycle import strategy_books
 from tests.test_stock_admission import action_admitted
 
-__all__ = ["stock_authority_case", "journal_case"]
+__all__ = ["authority", "management_api", "strategy_books", "stock_authority_case", "journal_case"]
 
 
 @pytest_asyncio.fixture

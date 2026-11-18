@@ -1,7 +1,8 @@
 """Independent real clients qualify owned dividend services and worker discovery."""
 
 import asyncio
-from contextlib import asynccontextmanager
+from dataclasses import replace
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -11,49 +12,73 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services import corporate_actions as actions
 from app.services import dividends, trading
 from app.services.portfolios import OwnedActivePortfolio
 from app.services.trade_math import TradeRefused
 from app.tasks import dividends as worker
 from tests.helpers import put_price
-from tests.portfolio_fixtures import migrate_to, portfolio_migration_db
-from tests.test_portfolio_dividend_authority import dividend_portfolio_case, successor
+from tests.stock_action_fixtures import synthetic_opening
+from tests.test_corporate_actions import batch
+from tests.test_portfolio_creation import authority, management_api, post
+from tests.test_portfolio_dividend_authority import successor
+from tests.test_portfolio_strategy_events import strategy_events
+from tests.test_portfolio_strategy_lifecycle import scheduler, strategy_books
 
-__all__ = ["portfolio_migration_db"]
+__all__ = ["authority", "management_api", "strategy_books", "strategy_events"]
 
 
 @pytest_asyncio.fixture
-async def dividend_books(portfolio_migration_db):
-    """Commit the already qualified exact0017 synthetic setup for real clients.
-
-    This fixture owns the whole disposable schema through portfolio_migration_db;
-    immutable records are discarded by its guarded schema teardown, never by a
-    disabled financial trigger or a public mutation/cleanup endpoint.
-    """
-    engine = portfolio_migration_db
-    await migrate_to("0017")
-    seed = dividend_portfolio_case.__wrapped__(engine, None)
-    conn, targets = await anext(seed)
-    await conn.commit()
-    try:
-        yield engine, async_sessionmaker(engine, expire_on_commit=False), targets
-    finally:
-        await seed.aclose()
-
-
-@asynccontextmanager
-async def scheduler(engine):
-    """Actual installed role/ACL, restored before returning the pooled connection."""
-    async with engine.connect() as conn:
-        await conn.execute(text("SET ROLE birja_scheduler"))
-        await conn.commit()
-        try:
-            async with AsyncSession(bind=conn, expire_on_commit=False) as db:
-                yield db
-        finally:
-            await conn.rollback()
-            await conn.execute(text("RESET ROLE"))
-            await conn.commit()
+async def dividend_books(strategy_events):
+    """Retained payment oracles on current0020 publicly created financial roots."""
+    api, roots, cid, now, action, admission, event, engine = strategy_events
+    response = await post(api, "Foreign dividend", client=api.other)
+    assert response.status_code == 201, response.text
+    foreign = int(response.json()["id"])
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory.begin() as db:
+        assert (
+            await db.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0020"
+        await synthetic_opening(
+            db,
+            cid,
+            api.other_uid,
+            now - timedelta(days=10),
+            quantity=Decimal(6),
+            basis=Decimal(0),
+            sequence=3,
+            portfolio_id=foreign,
+        )
+        # Preserve existing100cash correction/spending oracles as explicit
+        # synthetic financial setup, without changing once-only grant evidence.
+        await db.execute(text("UPDATE accounts SET cash=100"))
+    async with scheduler(engine) as db:
+        await actions.persist_action_batch(
+            db, batch(replace(action, rate=Decimal(".5"))), admission
+        )
+        entitlements = await actions.derive_dividend_entitlements(db, event)
+        targets = [
+            {
+                "event_id": event,
+                "coin_id": cid,
+                "user_id": row.user_id,
+                "portfolio_id": row.portfolio_id,
+                "revision_id": row.revision_id,
+                "revision_fingerprint": (
+                    await db.execute(
+                        text("SELECT fingerprint FROM stock_action_revisions WHERE id=:r"),
+                        {"r": row.revision_id},
+                    )
+                ).scalar_one(),
+                "entitlement_id": row.id,
+                "entitlement_fingerprint": row.fingerprint,
+            }
+            for row in entitlements
+        ]
+        await db.commit()
+    assert [t["portfolio_id"] for t in targets] == [int(r) for r in roots] + [foreign]
+    yield engine, factory, targets
 
 
 def work(target, **changes):

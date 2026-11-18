@@ -1,6 +1,9 @@
 """Publicly created strategies exercise the real restricted financial routes."""
 
 import asyncio
+import json
+from contextlib import asynccontextmanager
+from dataclasses import asdict
 from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -8,13 +11,32 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.corporate_action import StockActionState
+from app.services.stock_eligibility import load_execution_evidence
+from app.services.stock_trading import _encoded
 from tests import stock_trade_fixtures
 from tests.helpers import put_price
 from tests.test_portfolio_creation import authority, management_api, patch, post
+from tests.test_portfolio_management_authority import close
 
 __all__ = ["authority", "management_api"]
+
+
+@asynccontextmanager
+async def scheduler(engine):
+    """Use installed scheduler ACLs; always reset a returned pooled connection."""
+    async with engine.connect() as conn:
+        await conn.execute(text("SET ROLE birja_scheduler"))
+        await conn.commit()
+        try:
+            async with AsyncSession(bind=conn, expire_on_commit=False) as db:
+                yield db
+        finally:
+            await conn.rollback()
+            await conn.execute(text("RESET ROLE"))
+            await conn.commit()
 
 
 @pytest_asyncio.fixture
@@ -93,6 +115,52 @@ async def ledger(api, root):
             )
         ).all()
     return money, holdings
+
+
+@pytest_asyncio.fixture
+async def current_stock_authority_case(strategy_books, engine):
+    """The retained accounting tests' contract, backed by actual current0020."""
+    api, roots, cid, now = strategy_books
+    closed = (await post(api, "Retained closed")).json()["id"]
+    foreign = (await post(api, "Foreign", client=api.other)).json()["id"]
+    await close(api.migrator, int(closed))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as db:
+        loaded = await load_execution_evidence(db, cid, api.app.state.settings)
+        snapshot = json.loads(json.dumps(asdict(loaded.evidence), default=_encoded))
+        snapshot["portfolio_id"] = int(roots[0])
+    async with engine.connect() as conn:
+        tx = await conn.begin()
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0020"
+        await conn.execute(
+            text("UPDATE stock_action_state SET admission_generation=1 WHERE coin_id=:c"),
+            {"c": cid},
+        )
+        for root in roots:
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,2,20)"
+                ),
+                {"p": int(root), "u": api.uid, "c": cid},
+            )
+        case = {
+            "coin": cid,
+            "owner": api.uid,
+            "foreign_owner": api.other_uid,
+            "first": int(roots[0]),
+            "sibling": int(roots[1]),
+            "closed": int(closed),
+            "foreign": int(foreign),
+            "now": now,
+            "snapshot": snapshot,
+        }
+        try:
+            yield conn, case
+        finally:
+            await tx.rollback()
 
 
 async def test_created_siblings_same_crypto_stock_buy_sell_exact_history_overview(strategy_books):
