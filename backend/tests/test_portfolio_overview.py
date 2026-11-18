@@ -17,6 +17,64 @@ from tests.test_portfolio_management_authority import authority, close, create
 __all__ = ["management_api", "authority"]
 
 
+@pytest.mark.parametrize("count", [0, 1, 10])
+async def test_actual_overview_contract_and_constant_financial_queries(management_api, count):
+    api = management_api
+    roots = [await create(api.restricted, api.uid, f"Book {n}", f"Description {n}")
+             for n in range(count)]
+    foreign = await create(api.restricted, api.other_uid, "Private foreign")
+    closed = await create(api.restricted, api.other_uid, "Private closed")
+    await close(api.migrator, closed.portfolio_id)
+    queries = []
+
+    def capture(conn, cursor, statement, params, context, many):
+        queries.append(statement)
+
+    engine = api.app.state.engine.sync_engine
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        response = await api.client.get("/api/v2/portfolios/overview")
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert response.status_code == 200, response.text
+    assert len(queries) <= 3  # One session/auth check plus <=2 financial SQL.
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["vary"] == "Cookie, Authorization"
+    payload = response.json()
+    assert [p["id"] for p in payload] == [str(r.portfolio_id) for r in roots]
+    assert len({p["valued_at"] for p in payload}) <= 1
+    for index, row in enumerate(payload):
+        detail = (await api.client.get(f"/api/v2/portfolios/{row['id']}")).json()
+        expected_keys = (detail.keys() - {"portfolio_id"}) | {"id", "description"}
+        assert row.keys() == expected_keys
+        assert row["description"] == f"Description {index}"
+        assert row["cash"] == row["starting_cash"] == row["total_value"] == "10000.00"
+        assert row["total_pl"] == row["total_pl_percent"] == "0.00"
+        assert {k: v for k, v in row.items() if k not in {"id", "description", "valued_at"}} == {
+            k: v for k, v in detail.items() if k not in {"portfolio_id", "valued_at"}
+        }
+    discovery = await api.client.get("/api/v2/portfolios")
+    assert discovery.json() == [{"id": str(r.portfolio_id), "name": r.name} for r in roots]
+    other = await api.other.get("/api/v2/portfolios/overview")
+    assert [p["id"] for p in other.json()] == [str(foreign.portfolio_id)]
+
+
+async def test_actual_overview_private_auth_and_corrupt_overcap_refusal(management_api):
+    import httpx
+
+    api = management_api
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api.app), base_url="https://test") as guest:
+        response = await guest.get("/api/v2/portfolios/overview")
+    assert response.status_code == 401 and response.headers["cache-control"] == "no-store"
+    async with api.migrator.begin() as conn:
+        for n in range(11):
+            await conn.execute(text("INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,:n,:n,1,1)"), {"u": api.uid, "n": f"corrupt-{n}"})
+    response = await api.client.get("/api/v2/portfolios/overview")
+    assert response.status_code == 409 and response.json()["detail"] == {"code": "portfolio_limit"}
+    assert response.headers["cache-control"] == "no-store"
+
+
 async def load(api, settings, ids=None, **kwargs):
     async with async_sessionmaker(api.restricted)() as db:
         return await service.load_portfolio_snapshots(
