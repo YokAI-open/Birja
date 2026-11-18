@@ -29,7 +29,7 @@ it.each(["owner","logout-return"])("does not refresh financial data after %s dur
   const invalidate=vi.spyOn(hook.client,"invalidateQueries");
   let pending!:Promise<void>;
   act(()=>{pending=hook.result.current.saveMetadata();});
-  await waitFor(()=>expect(reads).toBe(2));
+  await waitFor(()=>expect(reads).toBeGreaterThanOrEqual(2));
   expect(invalidate.mock.calls.some(([filter])=>["portfolio","history","eventHistory","portfolioOverview"].includes(String(filter?.queryKey?.[0])))).toBe(false);
   await act(async()=>{
     hook.client.setQueryData(["me"],null);

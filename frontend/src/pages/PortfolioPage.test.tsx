@@ -11,6 +11,38 @@ import type { Portfolio } from "@/api/portfolio";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 const clients: QueryClient[] = [];
+it("cancels a pending original-name financial refresh before accepting a rename",async()=>{
+  const management={id:"1",name:"My portfolio",description:"Plan"};
+  const metadata=[{id:"1",name:"My portfolio"}];
+  let defer=false;
+  let release!:(response:Response)=>void;
+  let oldSignal:AbortSignal|undefined;
+  vi.stubGlobal("fetch",vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{
+    if(String(input)==="/api/v2/portfolios/1"&&init?.method==="PATCH") {
+      Object.assign(management,JSON.parse(String(init.body)));
+      metadata[0].name=management.name;
+      return Promise.resolve(new Response(JSON.stringify(management)));
+    }
+    if(defer){defer=false;oldSignal=init?.signal as AbortSignal;return new Promise<Response>(resolve=>{release=resolve;});}
+    return Promise.resolve(new Response(JSON.stringify({...cashPortfolio(),name:management.name})));
+  }));
+  const {user,client}=mount({metadata,management});
+  await screen.findByRole("region",{name:"Cash"});
+  defer=true;
+  await user.click(screen.getByRole("button",{name:"Refresh portfolio"}));
+  await waitFor(()=>expect(release).toBeTypeOf("function"));
+  await user.click(await screen.findByRole("button",{name:"Edit portfolio"}));
+  await user.clear(screen.getByLabelText("Portfolio name"));
+  await user.type(screen.getByLabelText("Portfolio name"),"New plan");
+  await user.click(screen.getByRole("button",{name:"Save changes"}));
+  await screen.findByText("Portfolio updated.");
+  expect(oldSignal?.aborted).toBe(true);
+  await act(async()=>release(new Response(JSON.stringify(cashPortfolio()))));
+  await waitFor(()=>expect(screen.getByRole("region",{name:"Cash"})).toHaveTextContent("$10,000.00"));
+  expect(client.getQueryCache().getAll().filter(q=>q.queryKey[0]==="portfolio").every(q=>q.state.error===null)).toBe(true);
+  await user.click(screen.getByRole("button",{name:"Refresh portfolio"}));
+  await waitFor(()=>expect(screen.getByRole("region",{name:"Cash"})).toHaveTextContent("$10,000.00"));
+});
 it("renames and clears descriptions through actual management hooks without altering finances",async()=>{
   const management={id:"1",name:"My portfolio",description:"Keep this strategy"};
   const metadata=[{id:"1",name:"My portfolio"}];
