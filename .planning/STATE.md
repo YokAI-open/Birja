@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 13
-current_plan: 8
+current_plan: 14
 status: executing
-stopped_at: Phase13 Plans01–07 complete/reviewed; starting wave8 Plan08 then14 sequentially
+stopped_at: Phase13 Plans01–08 complete/reviewed; starting wave8 Plan14 accounting proofs
 last_updated: "2026-11-18T07:43:38.262Z"
 last_activity: 2026-11-18 -- Phase 13 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 49
-  completed_plans: 38
+  completed_plans: 39
   percent: 25
 ---
 
@@ -22,18 +22,17 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 executing: Plans01–07 complete/reviewed clean.07sharedexactoverview/detail<=2SQL,41valuation+57affectedcases/service100%/mypy103pass; realfinal-awaitclosuregap reproduced/fixed viaorderedsharedmembershiplocks. Nextwave8 Plan08browsertransport then14newstrategyaccounting, sequential becauseuse_worktrees=false. UI/fullsecurity/recovery17pending; noPhase13whole requirementcomplete. Phase12complete31/31;issue35deadline2026-12-17;Phase7sixlivegaps deferred. Keep local.
+Current focus: Phase13 executing: Plans01–08 complete/reviewed clean,8/18.08strictfrontendtransport205affectedtests/typecheck/lintpass. NextPlan14 perwave8,newHTTPcreatedstrategyaccounting/concurrency/events proof; after14continue09. FullUI/security/recovery17pending; noPhase13whole requirementcomplete. Phase12complete31/31;issue35deadline2026-12-17;Phase7sixlivegaps deferred. Keep local.
 
 ## Current Position
 
 Phase: 13 (Create and Compare Independent Strategies) — EXECUTING
-Current Plan: 8
-Total Plans in Phase: 18
-Plan: 8 of 18 (01–07 complete; wave8 also includes14)
+Current Plan: 14 (wave8 accounting proof)Total Plans in Phase: 18
+Plan: 8/18 complete (01–08); execute14 next by wave order, then09
 Status: Executing Phase 13
 Last activity: 2026-11-18 -- Phase 13 execution started
 
-Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;38/49 planned plans complete)
+Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;39/49 planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -107,6 +106,13 @@ Perrootstockproof/sharedtime/marks/incompleteisolationtested; overview
 19strictfields(idreplacesportfolio_id,+description),detailunchanged.
 Independent13-07-REVIEWclean0/0; ownedresourcesremoved. Nextwave8
 08frontendtransportthen14accounting; noactualworktreeisolation,serial.
+
+Plan08 complete:7ce0fc9/2d9eb54,de4cc8a/6ac87e5,013104c,summary0b040fc.
+205affectedfrontendtests2.53s,typecheck+changedESLint/Prettierpass. Strict
+managementoriginalpayload/keyauthrecovery/unknownoutcome and19fieldoverview
+financialparseradapter validated. Independent13-08-REVIEWclean0/0. NoDB/
+package/pin/provideroperations. Next14samewave8 accountingthen09; count8/18
+complete not14/18. use_worktrees=false requiressequentialdispatch.
 
 ## Phase13 Planning Closeout — 2026-11-18
 
