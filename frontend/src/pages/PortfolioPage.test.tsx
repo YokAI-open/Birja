@@ -12,6 +12,58 @@ import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 const clients: QueryClient[] = [];
+it.each(["reject-abort","late-response","late-response-logout"])("interrupts a routed pending PATCH for review without accepting its obsolete outcome (%s)",async(mode)=>{
+  const management={id:"1",name:"My portfolio",description:"Original"};
+  const metadata=[{id:"1",name:"My portfolio"}];
+  let deferDiscovery=false;
+  let releaseDiscovery!:(response:Response)=>void;
+  const discovery=new Promise<Response>(resolve=>{releaseDiscovery=resolve;});
+  let releasePatch!:(response:Response)=>void;
+  let signal:AbortSignal|undefined;
+  let patches=0;
+  vi.stubGlobal("fetch",vi.fn((_input:RequestInfo|URL,init?:RequestInit)=>{
+    if(init?.method==="PATCH") {
+      patches++;signal=init.signal as AbortSignal;
+      return new Promise<Response>((resolve,reject)=>{releasePatch=resolve;if(mode==="reject-abort")signal!.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true});});
+    }
+    return Promise.resolve(new Response(JSON.stringify({...cashPortfolio(),name:management.name})));
+  }));
+  const {user,client}=mount({metadata,management,discovery:()=>deferDiscovery?discovery.then(response=>response.clone()):Promise.resolve(new Response(JSON.stringify(metadata)))});
+  await user.click(await screen.findByRole("button",{name:"Edit portfolio"}));
+  await user.clear(screen.getByLabelText("Description (optional)"));
+  await user.type(screen.getByLabelText("Description (optional)"),"My pending draft");
+  await user.click(screen.getByRole("button",{name:"Save changes"}));
+  await waitFor(()=>expect(patches).toBe(1));
+  management.description="Latest other-tab metadata";
+  deferDiscovery=true;
+  act(()=>broadcastMetadataChange("1"));
+  await screen.findByLabelText("Loading portfolio");
+  await waitFor(()=>expect(signal?.aborted).toBe(true));
+  await new Promise(resolve=>setTimeout(resolve,25));
+  if(mode==="late-response-logout")act(()=>client.setQueryData(["me"],null));
+  await act(async()=>releaseDiscovery(new Response(JSON.stringify(metadata))));
+  if(mode==="late-response-logout") {
+    await act(async()=>releasePatch(new Response(JSON.stringify({...management,description:"Obsolete reply"}))));
+    expect(screen.queryByDisplayValue("My pending draft")).toBeNull();
+    expect(screen.queryByText("Portfolio updated.")).toBeNull();
+    expect(client.getQueryCache().findAll({queryKey:["portfolioMetadataDraft","first@example.test"]})).toHaveLength(0);
+    return;
+  }
+  expect(await screen.findByLabelText("Description (optional)")).toHaveValue("My pending draft");
+  expect(screen.getByText(/Latest description/)).toHaveTextContent("Latest other-tab metadata");
+  const review=screen.getByRole("button",{name:"I have reviewed the latest details"});
+  expect(review).toBeEnabled();
+  expect(screen.getByRole("button",{name:"Discard changes"})).toBeEnabled();
+  expect(screen.getByRole("button",{name:"Save changes"})).toBeDisabled();
+  if(mode==="late-response")await act(async()=>releasePatch(new Response(JSON.stringify({...management,description:"Obsolete reply"}))));
+  expect(screen.queryByText("Portfolio updated.")).toBeNull();
+  expect(screen.getByLabelText("Description (optional)")).toHaveValue("My pending draft");
+  expect(patches).toBe(1);
+  await user.click(review);
+  expect(screen.getByRole("button",{name:"Save changes"})).toBeEnabled();
+  await user.click(screen.getByRole("button",{name:"Discard changes"}));
+  expect(screen.getByText("Latest other-tab metadata")).toBeInTheDocument();
+});
 it.each(["logout", "root", "route", "unavailable"])(
   "clears a routed private draft on %s during deferred revalidation",
   async (departure) => {
