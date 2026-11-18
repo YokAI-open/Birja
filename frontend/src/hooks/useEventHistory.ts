@@ -105,12 +105,17 @@ export function useEventHistory(target: PortfolioTarget | null) {
     const views = [
       { queryKey: ["portfolio", email, portfolioId] },
       { queryKey: ["stockContext", email, portfolioId] },
+      { queryKey: ["portfolioOverview", email, epoch], exact: true },
     ];
     void (async () => {
       // Drop pending pre-event views before requesting authoritative replacements.
       await Promise.all(views.map((view) => client.cancelQueries(view)));
       if (!scope.current() || guard.epoch !== epoch) return;
-      await Promise.all(views.map((view) => client.invalidateQueries(view)));
+      await Promise.all(
+        views.map((view) =>
+          scope.current() && guard.epoch === epoch ? client.invalidateQueries(view) : undefined,
+        ),
+      );
     })();
   }, [client, email, portfolioId, epoch, guard, query.data, scope, seenKey]);
   return {

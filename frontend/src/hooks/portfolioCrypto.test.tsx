@@ -491,6 +491,10 @@ it("never invalidates sibling financial views after an original fill", async () 
     invalidate.mock.calls.every(
       ([filters]) =>
         filters?.queryKey?.[0] === "prices" ||
+        (filters?.queryKey?.[0] === "portfolioOverview" &&
+          filters.queryKey[1] === alice &&
+          filters.queryKey[2] === 0 &&
+          filters.exact === true) ||
         (filters?.queryKey?.[1] === alice && filters?.queryKey?.[2] === "1"),
     ),
   ).toBe(true);

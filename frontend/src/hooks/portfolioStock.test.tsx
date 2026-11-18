@@ -585,6 +585,10 @@ it("invalidates only the filled root's financial views", async () => {
     invalidate.mock.calls.every(
       ([f]) =>
         ["stocks", "prices"].includes(String(f?.queryKey?.[0])) ||
+        (f?.queryKey?.[0] === "portfolioOverview" &&
+          f.queryKey[1] === alice &&
+          f.queryKey[2] === 0 &&
+          f.exact === true) ||
         (f?.queryKey?.[1] === alice && f?.queryKey?.[2] === "1"),
     ),
   ).toBe(true);

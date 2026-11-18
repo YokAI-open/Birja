@@ -94,12 +94,21 @@ export function useTrade(target: PortfolioTarget | null, symbol: string) {
           error: null,
           originalName,
         });
+        if (!scope.current()) throw new Error("Portfolio target changed");
         await Promise.all([
           ...["holding", "quote", "portfolio", "history", "eventHistory", "stockContext"].map(
             (prefix) =>
-              client.invalidateQueries({ queryKey: [prefix, scope.owner, scope.portfolioId] }),
+              scope.current()
+                ? client.invalidateQueries({ queryKey: [prefix, scope.owner, scope.portfolioId] })
+                : undefined,
           ),
-          client.invalidateQueries({ queryKey: ["prices"] }),
+          scope.current()
+            ? client.invalidateQueries({
+                queryKey: ["portfolioOverview", scope.owner, scope.epoch],
+                exact: true,
+              })
+            : undefined,
+          scope.current() ? client.invalidateQueries({ queryKey: ["prices"] }) : undefined,
         ]);
         if (!scope.current()) throw new Error("Portfolio target changed");
         return fill;

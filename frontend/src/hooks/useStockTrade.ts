@@ -672,9 +672,25 @@ export function useStockTrade(target: PortfolioTarget | null, routeSymbol: strin
       });
       await Promise.all(
         ["holding", "quote", "stockContext", "portfolio", "history", "eventHistory"]
-          .map((prefix) => client.invalidateQueries({ queryKey: [prefix, email, portfolioId] }))
+          .map((prefix) =>
+            scope.current() && auth.version === version
+              ? client.invalidateQueries({ queryKey: [prefix, email, portfolioId] })
+              : undefined,
+          )
           .concat(
-            ["stocks", "prices"].map((prefix) => client.invalidateQueries({ queryKey: [prefix] })),
+            ["stocks", "prices"].map((prefix) =>
+              scope.current() && auth.version === version
+                ? client.invalidateQueries({
+                    queryKey: prefix === "stocks" ? [prefix, email] : [prefix],
+                  })
+                : undefined,
+            ),
+            scope.current() && auth.version === version
+              ? client.invalidateQueries({
+                  queryKey: ["portfolioOverview", email, scope.epoch],
+                  exact: true,
+                })
+              : undefined,
           ),
       );
     } catch (error) {

@@ -32,6 +32,7 @@ export function useHistory(target: PortfolioTarget | null) {
         signal.throwIfAborted();
         if (
           !scope.current() ||
+          eventHistorySession(client).epoch !== epoch ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
         )
           throw new Error("Portfolio target changed");
@@ -51,7 +52,7 @@ export function useHistory(target: PortfolioTarget | null) {
   });
   return {
     ...query,
-    data: scope.current() ? query.data : undefined,
+    data: scope.current() && eventHistorySession(client).epoch === epoch ? query.data : undefined,
     refetch: (options?: Parameters<typeof query.refetch>[0]) =>
       scope.current()
         ? query.refetch(options)
