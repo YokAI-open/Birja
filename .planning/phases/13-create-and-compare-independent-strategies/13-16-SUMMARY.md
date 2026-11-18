@@ -31,12 +31,16 @@ key-files:
     - frontend/e2e/stock-trades.spec.ts
     - frontend/src/components/PortfolioCreateForm.tsx
     - frontend/src/components/PortfolioCreateForm.test.tsx
+    - frontend/src/components/PortfolioSwitcher.tsx
+    - frontend/src/components/PortfolioSwitcher.test.tsx
+    - frontend/src/pages/PortfoliosPage.tsx
+    - frontend/src/pages/PortfoliosPage.test.tsx
 key-decisions:
   - "Record full sourceA browser qualification separately from final sourceB affected/capture proof; final17 must run the complete current-source browser command."
   - "Capture actual same-state desktop/narrow DOM variants so inert desktop review files preserve the application's conditional table/cards reflow."
   - "Dismiss only old duplicate-name feedback in an untouched editor that has never observed an original attempt; never reset or rekey recovery."
 requirements-completed: [PMGT-01, PMGT-02, PMGT-06, PFUND-02, PCTX-02, PVIEW-01, PVIEW-02]
-duration: approximately59min
+duration: approximately71min including bounded review repair
 completed: 2026-11-18
 ---
 
@@ -46,8 +50,9 @@ completed: 2026-11-18
 
 ## Performance and Commits
 
-Approximately59minutes on2026-11-18;2/2 tasks;9 source/test/evidence paths plus
-this summary. Work remained local on`feature/milestone-v1.2`.
+Initial execution approximately59minutes, followed by the bounded review repair
+below;2/2 tasks. Cumulatively13source/test/evidence paths plus this summary changed.
+Work remained local on`feature/milestone-v1.2`.
 
 - Evidence-contract RED `9ea64aa`: missing capture implementation fails import.
 - Focus regression RED `1887768`: discarded duplicate error incorrectly appears
@@ -116,7 +121,7 @@ are preserved in that directory. The exact six changed browser/product inputs
 were verified unchanged after completion. Receipt SHA256:
 `97b41e256e547fe145861cf36a37fce7a4bf7927eb66f175968e58a5d1a30e11`.
 
-**Final sourceB:** Following that aggregate, sourceB adds only the production
+**Prior sourceB:** Following that aggregate, sourceB adds only the production
 `attemptKey === undefined` protection to the stale-name filter, plus its
 regression. A recovered original's new refusal must remain visible/focused.
 The regression actually failed before this guard; afterward:
@@ -133,7 +138,7 @@ python3 deploy/tests/portfolio-ui-evidence.py
 Final-sourceB actual browser:20/20 PASS,223.9s
 ```
 
-The final actual browser log is
+The pre-review actual browser log is
 `/tmp/birja-phase09-browser-6mjvxx84/browser-portfolios.log`. Its capture source is
 committed`e791d8888a2f09981a707e00504eaae4ac3674fe`.
 The fullA result and focused/captureB result are distinct, overlapping evidence;
@@ -145,8 +150,9 @@ prior full receipt. Complete coverage/critical61/image/TLS/recovery remain17.
 ## Review Packet
 
 - `/tmp/birja-phase13-ui-review.zip`
-- ZIP SHA256:`1fb8795e5acc82bf74186a12050363960a8469d2838db571fe4b9d44a874e8c6`
--339-input digest:`304e012896cf3dc5e385bfa6dbb411d6e8007323c136204c660a1dc51eafde71`
+- ZIP SHA256:`eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`
+-339-input digest:`9eee8a15364a997f189881aca49140c9e1ea7e56ae32dc78f15cf30cfaf86cbb`
+- Current capture source:`8cdd17582ba69cb0815bb0ecd48e4819a2c2f762`.
 - Actual Chromium`156.0.8078.4`;72HTML states,120PNG screenshots,72sanitized
   timing traces and index:265hashed artifacts plus manifest.
 - States at320/375/768/1024/1280/1440:overview,create-long-astral,
@@ -230,10 +236,90 @@ frontmatter describe this plan's contribution, not whole-requirement/phase
 acceptance. Any hashed render-source change requires recapture or explicit exact
 matching-source evidence; planning/review/summary-only commits preserve binding.
 
+## Bounded Review Repair — CR-01 and W-01–04
+
+The parent authorized one batch after the independent code/UI reviews. Reports
+remain parent-owned and unchanged. No further optional product scope was added.
+
+**RED `fb33b6a`.** The verifier contracts independently enumerate all six widths,
+twelve states and265required names. A complete materialized offline control passes
+before the fix. Five coherent-omission negatives delete HTML, main PNG, narrowed
+PNG, timing trace or index together with its hash/declarations, recomputing forged
+remaining HTML metadata and hashes. The old verifier incorrectly accepts these.
+Additional tests cover index-only maps, extra disk files, missing/symlinked
+manifest, capture-path/embedded-state mismatch and recomputed timing-body mismatch.
+The actual RED records12rejection failures; these are subtest failures, not12
+separate full browser runs. All retained source/owner/browser/native/privacy
+negatives remain. UI RED records three failures for20px icon size, duplicated
+unknown instructions and singular missing-holding copy. New actual bounding-box
+checks were authored in existing capture cases before implementation; the existing
+independent visual review supplies the original mobile34px-selector observation.
+Raw RED logs:`/tmp/birja-p13-16-review-contract-red.log` and
+`/tmp/birja-p13-16-review-ui-red.log`.
+
+**GREEN `8cdd175`.** The verifier now derives its required names solely from
+source-owned WIDTHS×STATES plus narrowed desktop PNGs and index. Both the manifest
+map and actual disk members must match exactly (265artifacts plus manifest.json).
+It rejects extras, missing members, symlinks and traversal. Each capture's explicit
+paths must match its canonical state/width names; embedded HTML source/browser/
+scope/path metadata and the corresponding trace body must agree. Packaging writes
+and verifies this complete manifest before archive creation. It cannot qualify
+metadata-only or coherently omitted evidence.
+
+The mobile selector gets its own full-width row below md, with actions wrapping
+beneath. Existing current name, native selection, readiness/current-authority and
+explicit Open behavior remain. Unknown creation has one persistent recovery
+instruction/live announcement while ordinary transport errors and restored
+attempts retain their original read-only payload/retry. The decorative AlertCircle
+is20px and cannot shrink. Missing-holding copy is singular at one and plural
+otherwise. No palette/font/dependency, key/guard or financial change occurred.
+
+Affected validation passes6suites/140tests in7.01s, whole frontend types,
+changed-file lint/format and targeted Python error lint. The12evidence contract
+methods pass, including the independent complete positive control and coherent
+forgery negatives. GREEN logs:
+`/tmp/birja-p13-16-review-contract-green.log` and
+`/tmp/birja-p13-16-review-ui-green.log`.
+
+After every code change was committed, the current sourceC capture executed all
+20browser cases successfully in224.6s and freshly rendered all72states. Raw log:
+`/tmp/birja-phase09-browser-rkpa8pog/browser-portfolios.log`. It generated the
+canonical packet/hash/digest above, from committed
+`8cdd17582ba69cb0815bb0ecd48e4819a2c2f762`; no old screenshots were rebound.
+Strict current-source/artifact/disk/capture verification passes. Actual live
+capture.layout measurements record320px select288×48px and375px select343×48px,
+20px one-line labels and8px Open gaps; each action is at least44×44px. Error icons
+measure20×20px at both widths. These checks also run at narrowed desktop widths.
+The recaptured offline72files/120layouts pass again, with zero external requests.
+Owned-stack cleanup2.6s reports empty container/network/volume labels; the offline
+browser closed and the exclusive lane is released.
+
+The old packet and directory were atomically renamed to
+`/tmp/birja-phase13-ui-review-before-review-fix.zip` and the corresponding directory
+before recapture. Old ZIP SHA256
+`1fb8795e5acc82bf74186a12050363960a8469d2838db571fe4b9d44a874e8c6`
+was verified before and after; its offline receipt is preserved at
+`/tmp/birja-phase13-offline-layout-before-review-fix.json`. PriorA79/one-skip and
+priorB20receipts remain distinct preserved history. This currentC20-case run is
+not a complete current-source unfiltered browser/security qualification. Plan17
+must run the mandatory current unfiltered browser command inside actual
+all-security, plus its other complete gates; no reuse/omission is authorized.
+Owner UI and genuine native200% remain false/pending18. The documented disposable
+dev-administrator browser DB connection remains a provenance limit, not proof of
+least-privilege runtime authority.
+
+This repair changes nine source/test paths: evidence tool/contracts, existing
+strategy browser spec, PortfolioCreateForm/test, PortfolioSwitcher/test and
+PortfoliosPage/test. It also updates only the owned UI-EVIDENCE and SUMMARY docs.
+The four Switcher/Portfolios source/test files are the additional parent-authorized
+extensions reflected in frontmatter. Independent code/UI rechecks remain with
+the parent; their earlier reports were not edited or staged.
+
 ## Self-Check: PASSED
 
-All9changed source/test/evidence paths and this summary exist. All7listed task
-commits resolve with relevant RED before final GREEN. FullA input receipt,
-finalB20-case raw log,339-input packet/265artifact verification and actual120-layout
-offline receipt pass. No tracked deletion or task-generated untracked repository
-artifact remains. Only the pre-existing unrelated`.claude/` is untracked.
+All13changed source/test/evidence paths and this summary exist. All original task
+and review-repair commits resolve with relevant RED before GREEN. FullA and priorB
+receipts remain preserved; currentC20-case log, exact339-input/265artifact packet
+verification and actual120-layout offline receipt pass. No tracked deletion or
+task-generated untracked repository artifact remains. Parent-owned review reports
+and unrelated`.claude/` are left untouched.

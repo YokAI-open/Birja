@@ -1,17 +1,17 @@
 # Phase13 implemented UI evidence
 
 Generated2026-11-18 from committed render source
-`e791d8888a2f09981a707e00504eaae4ac3674fe`. This is automated implementation
+`8cdd17582ba69cb0815bb0ecd48e4819a2c2f762`. This is automated implementation
 evidence. **Owner UI acceptance and genuine desktop native200% acceptance both
 remain PENDING Plan18.** Phase12 approval is not approval of these new surfaces.
 
 ## Review packet and authentication
 
 - Packet: `/tmp/birja-phase13-ui-review.zip`
-- ZIP SHA256: `1fb8795e5acc82bf74186a12050363960a8469d2838db571fe4b9d44a874e8c6`
+- ZIP SHA256: `eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68`
 - Extracted index: `/tmp/birja-phase13-ui-review/index.html`
 - Manifest: `/tmp/birja-phase13-ui-review/manifest.json`
-- Current339-input digest: `304e012896cf3dc5e385bfa6dbb411d6e8007323c136204c660a1dc51eafde71`
+- Current339-input digest: `9eee8a15364a997f189881aca49140c9e1ea7e56ae32dc78f15cf30cfaf86cbb`
 - Actual browser: Chromium`156.0.8078.4`, existing Playwright installation.
 - Inventory:72HTML states,120PNG screenshots,72credential-free resource timing
   traces and an index;265hashed artifacts, plus the manifest.
@@ -28,16 +28,26 @@ The final verifier passes against the current repository:
 
 ```text
 python3 deploy/tests/test-portfolio-ui-evidence.py
-  9 offline negative contracts PASS
+  12 offline contract methods PASS, including a complete positive control
 python3 deploy/tests/portfolio-ui-evidence.py
-  actual20/20 new browser cases PASS,223.9s
+  actual20/20 new browser cases PASS,224.6s
 python3 deploy/tests/portfolio-ui-evidence.py --verify /tmp/birja-phase13-ui-review
   CURRENT SOURCE AND ARTIFACTS VERIFIED
 ```
 
-The contracts reject source/render-input drift, missing/duplicate/cross-owner
-captures, malformed browser/version/width, missing/tampered/symlinked/traversing
-artifacts, active/private HTML and inherited owner/native200 claims. They are
+The verifier derives the exact265canonical names independently from its six
+widths/twelve states: HTML/main PNG/timing trace per capture,48required narrowed
+desktop PNGs and index. It requires exact artifact-map equality and exactly those
+files plus manifest.json on disk, with no extras or symlinks. Capture paths must
+match their state/width, embedded HTML metadata must match the capture/source and
+the corresponding timing file must match that HTML's trace. Coherently removing
+a file, its hash and associated metadata still refuses, including HTML/main PNG/
+narrow PNG/timing/index omissions. Tests enumerate the required matrix separately
+from production helpers and recompute forged remaining declarations/hashes.
+
+The contracts also reject source/render-input drift, missing/duplicate/cross-owner
+captures, malformed browser/version/width, tampered/traversing artifacts,
+active/private HTML and inherited owner/native200 claims. They are
 contract tests; their synthetic specimen is not a browser execution receipt.
 
 ## Implemented capture matrix
@@ -72,6 +82,16 @@ drop actual responses or fail transport; they do not replace the financial flow
 with fabricated success responses.
 
 ## Portable offline review and limits
+
+The bounded review repair also resolves the four reported UI warnings. The mobile
+selector has its own full-width row and actions wrap below. Actual320/375capture
+checks record288/343px select widths,48px height,20px one-line labels and8px gaps
+before Open; all action hit areas are at least44px. The decorative error icon
+measures20×20px with shrink disabled. Ordinary transport-unknown and restored
+attempts retain one recovery instruction/live announcement and the original
+read-only payload. Missing-holding copy uses singular for one and plural for
+multiple. These measurements are retained in capture.layout metadata. Existing
+authority checks, explicit Open, recovery keys and financial values are unchanged.
 
 Open the extracted index in a desktop browser. Each page contains actual captured
 DOM, embedded current CSS and embedded self-hosted fonts. Scripts, forms, handlers
@@ -110,8 +130,22 @@ owner's implemented-UI outcome and actual desktop browser-menu200% outcome.
   RED, then128affected component/integration cases and types/lint/format passed.
   SourceB actual20-case capture run passes at the committed source above:
   `/tmp/birja-phase09-browser-6mjvxx84/browser-portfolios.log`.
-- SourceA full proof and sourceB focused/capture proof are distinct. **No complete
-  final-sourceB browser/security pass is claimed here.** Plan17 must execute its
+- The reviewed sourceB packet is preserved at
+  `/tmp/birja-phase13-ui-review-before-review-fix.zip` and its matching directory,
+  with unchanged SHA256
+  `1fb8795e5acc82bf74186a12050363960a8469d2838db571fe4b9d44a874e8c6`.
+  Its source was e791d8888a2f09981a707e00504eaae4ac3674fe and input digest
+  304e012896cf3dc5e385bfa6dbb411d6e8007323c136204c660a1dc51eafde71.
+  Its offline receipt is preserved at
+  `/tmp/birja-phase13-offline-layout-before-review-fix.json`.
+- Current review-repair sourceC is the committed source at the top of this file.
+  REDfb33b6a reproduced12 verifier rejection failures while the positive control
+  passed, plus three UI failures; GREEN8cdd175 passes12evidence contracts and
+  140affected UI cases. The current actual20-case capture raw log is
+  `/tmp/birja-phase09-browser-rkpa8pog/browser-portfolios.log`.
+- SourceA full proof, prior sourceB focused proof and current sourceC capture proof
+  are distinct. **No complete current-sourceC browser/security pass is claimed
+  here.** Plan17 must execute its
   mandatory unfiltered current-source browser command within actual all-security,
   plus the complete coverage/image/restricted-role/TLS/recovery obligations.
 
