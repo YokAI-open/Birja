@@ -358,3 +358,15 @@ it("does not substitute a newer detail snapshot into the overview's shared valua
   await waitFor(() => expect(overview.result.current.data).toHaveLength(2));
   expect(overview.result.current.data?.map((value) => value.valued_at)).toEqual(["2026-11-10T15:00:10Z","2026-11-10T15:00:10Z"]);
 });
+it("refuses a backwards overview snapshot as a whole rather than mixing accepted times", async () => {
+  const { wrapper } = setup();
+  let old = false;
+  vi.stubGlobal("fetch",vi.fn(() => Promise.resolve(json(old ? [row("1",true),row("2",true)] : [{...row("1",true),valued_at:"2026-11-10T15:00:20Z"}]))));
+  const hook=renderHook(() => usePortfolioOverview(),{wrapper});
+  await waitFor(() => expect(hook.result.current.data?.[0].valued_at).toBe("2026-11-10T15:00:20Z"));
+  old=true;
+  await act(async()=>{await hook.result.current.refetch();});
+  expect(hook.result.current.isError).toBe(true);
+  expect(hook.result.current.data).toHaveLength(1);
+  expect(hook.result.current.data?.[0].valued_at).toBe("2026-11-10T15:00:20Z");
+});
