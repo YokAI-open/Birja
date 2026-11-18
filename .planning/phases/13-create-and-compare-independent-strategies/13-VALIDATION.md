@@ -79,3 +79,56 @@ Issue35 picomatch exception remains exact/hash/path/expiry bound through2026-12-
 - [ ] Critical100/full security/current-retained recovery/reviews/UI-native200 gates retained
 
 Approval: pending plan check. Wave0 remains incomplete until execution supplies actual tests; final Nyquist status reflects checked sampling coverage, not test execution.
+
+## Final executable plan/task/wave and threat map
+
+Revision1: threat register rows01/02 (and03 where applicable) now denote each plan’s concrete attacker/invariant/negative-test scenarios rather than uniform grouped threats. The scenario-to-test mapping in each PLAN is authoritative; SC remains the exact unchanged issue35 entry. Underlying proof targets:17.1 verifies02/06/15 funding/authz/resource/inventory threats,17.2 verifies04/05/15 archive/source/ACL/immutable-state threats,18.1–2 verify16’s current-source and distinct actual human outcomes. No implementation proof is credited by this map.
+
+This table supersedes the initial proposed verification map above. Status remains planned: Wave0 is not executed, no tests or runtime operations ran during planning, and Nyquist approval awaits independent plan check. Every new test/command file below is created meaningfully before implementation by its owning task; existing files are extended there. No MISSING command relies on an unassigned creator.
+
+| Plan/tasks | Wave | Test creator / commands (serial when DB-bearing) | Threat IDs | Requirements |
+|---|---|---|---|---|
+|13-01.1–2|1|Task1: `cd backend && uv run pytest tests/test_portfolio_management_migrations.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_management_migrations.py -x`|T-13-01-01/02/03/SC|PMGT-02, PMGT-06, PFUND-01, PFUND-02, PSAFE-07|
+|13-02.1–2|2|Task1: `cd backend && uv run pytest tests/test_portfolio_management_authority.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_funding.py tests/test_portfolio_identity.py -x`|T-13-02-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PFUND-01, PFUND-02|
+|13-03.1–2|3|Task1: `cd backend && uv run pytest tests/test_portfolio_management_admission.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_management_grants.py tests/test_portfolio_authority.py -x`|T-13-03-01/02/03/SC|PSAFE-07, PFUND-01, PFUND-02|
+|13-04.1–2|4|Task1: `python3 deploy/tests/test-portfolio-fixture-contracts.py`<br>Task2: `python3 deploy/tests/test-portfolio-management-recovery.py`|T-13-04-01/02/03/SC|PSAFE-07, PFUND-02|
+|13-05.1–2|5|Task1: `python3 deploy/tests/test-portfolio-management-recovery.py`<br>Task2: `python3 deploy/tests/test-portfolio-recovery-contracts.py && python3 deploy/tests/test-portfolio-migration-runner.py && python3 deploy/tests/test-portfolio-smoke-image.py`|T-13-05-01/02/03/SC|PSAFE-07, PFUND-02|
+|13-06.1–2|6|Task1: `cd backend && uv run pytest tests/test_portfolio_management_api.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_creation.py tests/test_portfolio_metadata.py tests/test_portfolio_management_api.py -x`|T-13-06-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PFUND-01, PFUND-02, PSAFE-07|
+|13-07.1–2|7|Task1: `cd backend && uv run pytest tests/test_portfolio_overview.py tests/test_portfolio_valuation.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_overview.py -x`|T-13-07-01/02/03/SC|PVIEW-01, PVIEW-02, PSAFE-07|
+|13-08.1–2|8|Task1: `cd frontend && npm run test -- src/api/portfolioManagement.test.ts`<br>Task2: `cd frontend && npm run test -- src/api/portfolioOverview.test.ts src/api/portfolioReads.test.ts`|T-13-08-01/02/03/SC|PMGT-02, PMGT-06, PFUND-02, PVIEW-01, PVIEW-02|
+|13-09.1–2|9|Task1: `cd frontend && npm run test -- src/lib/portfolioCreationAttempt.test.ts src/hooks/usePortfolioManagement.test.tsx`<br>Task2: `cd frontend && npm run test -- src/hooks/usePortfolioManagement.test.tsx src/lib/portfolioMetadataEvents.test.ts`|T-13-09-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PFUND-02, PCTX-02|
+|13-10.1–2|10|Task1: `cd frontend && npm run test -- src/hooks/usePortfolioTarget.test.tsx src/hooks/portfolioCrypto.test.tsx`<br>Task2: `cd frontend && npm run test -- src/hooks/portfolioStock.test.tsx src/hooks/useStockTrade.test.tsx`|T-13-10-01/02/03/SC|PCTX-02|
+|13-11.1–2|11|Task1: `cd frontend && npm run test -- src/hooks/usePortfolioOverview.test.tsx src/hooks/portfolioValuation.test.tsx`<br>Task2: `cd frontend && npm run test -- src/hooks/portfolioCrypto.test.tsx src/hooks/portfolioStock.test.tsx src/hooks/portfolioHistory.test.tsx`|T-13-11-01/02/03/SC|PCTX-02, PVIEW-01, PVIEW-02|
+|13-12.1–2|12|Task1: `cd frontend && npm run test -- src/pages/PortfoliosPage.test.tsx src/components/PortfolioCreateForm.test.tsx`<br>Task2: `cd frontend && npm run test -- src/components/PortfolioMetadataForm.test.tsx src/pages/PortfolioPage.test.tsx`|T-13-12-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PFUND-02, PVIEW-01, PVIEW-02|
+|13-13.1–2|13|Task1: `cd frontend && npm run test -- src/components/PortfolioSwitcher.test.tsx src/App.test.tsx`<br>Task2: `cd frontend && npm run test -- src/components/PortfolioTargetBoundary.test.tsx src/pages/MarketsPage.test.tsx`|T-13-13-01/02/03/SC|PMGT-01, PCTX-02, PVIEW-01|
+|13-14.1–2|8|Task1: `cd backend && uv run pytest tests/test_portfolio_strategy_lifecycle.py tests/test_portfolio_creation.py tests/test_portfolio_metadata.py -x`<br>Task2: `cd backend && uv run pytest tests/test_portfolio_strategy_events.py tests/test_portfolio_dividends.py tests/test_portfolio_entitlements.py tests/test_portfolio_splits.py -x`|T-13-14-01/02/03/SC|PFIN-01, PFIN-04, PMGT-01, PFUND-01, PFUND-02, PCTX-02, PSAFE-07|
+|13-15.1–2|14|Task1: `python3 deploy/tests/test-portfolio-browser-contracts.py`<br>Task2: `python3 deploy/tests/test-portfolio-validation-contracts.py`|T-13-15-01/02/03/SC|PSAFE-07, PFUND-02|
+|13-16.1–2|15|Task1: `python3 deploy/tests/run-stock-browser.py`<br>Task2: `python3 deploy/tests/test-portfolio-ui-evidence.py && python3 deploy/tests/portfolio-ui-evidence.py`|T-13-16-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PFUND-02, PCTX-02, PVIEW-01, PVIEW-02|
+|13-17.1–2|16|Task1: `python3 deploy/tests/run-portfolio-validation.py --suite all-security`<br>Task2: `python3 deploy/tests/run-portfolio-validation.py --suite recovery`|T-13-17-01/02/03/SC|PSAFE-07, PFUND-01, PFUND-02, PFIN-01, PFIN-04, PVIEW-02|
+|13-18.1–2|17|Task1: `python3 deploy/tests/test-portfolio-ui-evidence.py`<br>Task2: `python3 deploy/tests/test-portfolio-ui-evidence.py`|T-13-18-01/02/03/SC|PMGT-01, PMGT-02, PMGT-06, PCTX-02, PVIEW-01, PVIEW-02|
+
+Every task supplies read_first, files, specific action, behavior, automated verification, acceptance_criteria and done. Both18 checkpoints additionally require explicit separately recorded owner responses; their automated evidence contracts do not replace either response. Source/source-profile/authority mutation tests are assigned03–05 and15, real PostgreSQL concurrency/money/accounting proofs02/06/14, API bounds06/07, parser/hook/component safety08–13, actual browser/capture16, complete frozen-source critical/security/images and current+retained same-archive recovery17.
+
+### Serial resource and sampling contract
+
+Backend pytest ALWAYS acquires the exclusive owned isolated test lane, including test_critical_coverage_config and other nominal pure files because autouse conftest provisions migration ownership. DB ops/browser/recovery likewise serialize with that lane. Same-wave08 frontend and14 DB may overlap only their disjoint non-DB work. Commands within a task run sequentially, not concurrent subprocesses. Provision disposable stacks only with synthetic stripped environment/fake providers/console email and exact-owned cleanup. Never reuse dev/private .env. Measure selectors before claiming60second feedback; full security/recovery/browser/concurrency are explicit long-running gates with raw timing/status updates.
+
+### Final gate contract
+
+- Plan15 explicitly updates the prior60-module critical inventory in CI/docs/assertion with new API/grant/normalization/shared valuation/authz critical modules while retaining overall80/critical100 and raw audit/all5 immutable-image policies.
+- Plan17.1 executes actual whole `python3 deploy/tests/run-portfolio-validation.py --suite all-security` at frozen reviewed source;17.2 executes actual whole `python3 deploy/tests/run-portfolio-validation.py --suite recovery` at that same source with new exclusive Phase13 archive. Seven stages name current0020, retain complete authenticated0017/earlier profiles, authenticate exact archive/current+retained/CORE/unit/source/image bytes before/after every stage, destroy original source before cold recovery, compare fresh/upgradedTLS authority and support rollback or explicit before-write refusal. No prior/partial receipts substitute.
+- Parent independent code/security/UI reviews and final goal verification remain required. Plan16's source-bound implemented screenshots/instructions cover new UI;18.1 owner UI and18.2 genuine desktop native200 remain separately blocking and cannot autoapprove. Existing Phase12 acceptance is only unchanged-screen evidence.
+- Full four-source GOAL/11REQ/20RESEARCH/14CONTEXT and checkedUI audit resides in13-PLAN-COVERAGE. No deferred scope is silently brought forward; active split/dividend/correction and current recovery are not deferred.
+
+### Planned sampling sign-off
+
+- [x] Final tasks/waves/commands/threat IDs assigned in18 bounded plans
+- [x] New tests and command files have creation owners and behavioral assertions before implementation
+- [x] Every task has automated verification; no three implementation tasks lack feedback
+- [x] Exclusive backend/DB resource lane retained and same-wave files disjoint
+- [x] Critical100/full security/current-retained exact recovery/reviews/UI-native200 gates retained
+- [ ] Independent plan checker approval
+- [ ] Actual Wave0 tests authored and executed during implementation
+- [ ] Final implementation, full campaigns and both owner outcomes passed
+
+Planning-map completeness is not execution or phase completion. Leave wave_0_complete false and nyquist_compliant false until independent check/execution policy records evidence; do not mark Phase13 complete.

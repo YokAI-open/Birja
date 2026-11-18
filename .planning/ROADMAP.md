@@ -33,7 +33,7 @@ pass. Raw picomatch findings remain visible as accepted risk under issue35,
 expiring2026-12-17UTC; this is not a remediation claim. The rejected fork stays
 uninstalled. A separate official Python image patch was explicitly approved,
 verified and qualified. Prior failed runs and the old archive are retained.
-No production/provider/publication action occurred. Phases13–15 remain
+No production/provider/publication action occurred. Phase13 is planned and unimplemented; Phases14–15 remain
 unplanned and unimplemented;21v1.2requirements remain pending. Phase7's six
 live gaps stay separately deferred, with its manual campaign consumed.
 
@@ -52,7 +52,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** Phase12 verified complete locally; Phases13–15 await planning. The v1.2 milestone remains open.
+**Status:** Phase12 verified complete locally; Phase13 planned and ready to execute; Phases14–15 await planning. The v1.2 milestone remains open.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [ ] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity.
@@ -210,7 +210,79 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
   4. The user compares active strategies in a stable overview showing name, cash, exact total or known value and dollar/percentage return against each stored baseline; detail and overview agree on timestamps and incompleteness, without a pooled wealth total or making other strategies unavailable.
   5. Switching portfolios isolates cached pages, cursors, actionable previews, pending attempts and late responses instead of retargeting them; requests and jobs remain bounded, creation has appropriate resource controls, shared market polling does not multiply, and existing activation/backup-capacity guards remain effective.
 
-**Plans**: TBD
+**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). No implementation has started.
+
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — Expand and backfill canonical metadata and durable provenance
+
+**Wave 2** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-02-PLAN.md — Install narrow serialized create, initialization and metadata authority
+
+**Wave 3** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-03-PLAN.md — Admit only complete management schema with exact grants
+
+**Wave 4** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-04-PLAN.md — Retain immutable source and produce exact successor recovery payload
+
+**Wave 5** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-05-PLAN.md — Restore current and retained authority without losing retry evidence
+
+**Wave 6** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-06-PLAN.md — Expose strict bounded private creation and metadata APIs
+
+**Wave 7** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-07-PLAN.md — Share exact bounded valuation between overview and detail
+
+**Wave 8** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-08-PLAN.md — Define strict browser management and overview transport
+- [ ] 13-14-PLAN.md — Prove newly created books invest and receive active events independently
+
+**Wave 9** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-09-PLAN.md — Preserve creation intent and management coherence across refresh
+
+**Wave 10** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-10-PLAN.md — Separate target authority from immutable unresolved orders
+
+**Wave 11** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-11-PLAN.md — Guard comparison reads and invalidate scoped financial views
+
+**Wave 12** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-12-PLAN.md — Build accessible overview and inline creation/metadata forms
+
+**Wave 13** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-13-PLAN.md — Route overview and explicit native-select portfolio opening
+
+**Wave 14** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-15-PLAN.md — Extend critical gates and revision-aware seven-stage qualification
+
+**Wave 15** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-16-PLAN.md — Add real management browser journey and source-bound UI packet
+
+**Wave 16** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-17-PLAN.md — Qualify complete frozen-source security and exact recovery
+
+**Wave 17** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 13-18-PLAN.md — Obtain separate implemented UI and genuine native200 acceptance
+
+**Cross-cutting constraints:** All DB-bearing tests, browser stacks and ops proofs use one serial disposable lane; wave8 frontend08 may run alongside DB14 only with disjoint ownership. Retain exact owner/key/payload funding retries, all-existing-user initialization, immutable0018+ migrations, restricted grants/TLS and source-bound current/retained recovery. Preserve original critical60 plus new critical paths at100%, all security/image gates and the exact issue35 scoped exception/expiry. Actual new UI and native200 acceptance remain separate blocking checks after implementation. Keep provider activation, public deletion/freeze and publication outside this planning authorization.
+
 **UI hint**: yes
 
 **Delivery boundary**: Enable additional funded creation only after Phase 12's
@@ -300,12 +372,12 @@ the phase structure was approved on2026-11-14 and only Phase12 is implemented an
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phases13–15 have not started.
+Phase13 planning is checked; implementation has not started. Phases14–15 await planning.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
-| 13. Create and Compare Independent Strategies | v1.2 | 0/TBD | Not started | - |
+| 13. Create and Compare Independent Strategies | v1.2 | 0/18 | Planned; ready to execute | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
@@ -331,6 +403,6 @@ acceptance never authorizes live provider calls or stock activation.
 
 **Roadmap status:** APPROVED by the owner on 2026-11-14.
 Milestone setup is complete and the planning record may be committed locally.
-Next: `$gsd-discuss-phase 12` or `$gsd-plan-phase 12`. This approval does not
+Phase12 is complete and Phase13 planning is checked. Next: `$gsd-execute-phase 13`. This approval does not
 itself start implementation, install dependencies, authorize push/merge,
 operate providers, activate stocks or deploy production.
