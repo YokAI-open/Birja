@@ -300,6 +300,22 @@ def test_baseline_is_head() -> None:
     assert script.get_heads() == [EXPECTED_HEAD]
 
 
+async def test_current_fixture_installs_exact_restricted_authority(engine, migrated) -> None:
+    from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL
+    from app.db.schema_contract import require_schema
+
+    async with engine.connect() as conn:
+        assert await require_schema(conn) == "0020"
+        assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0020_SHA256
+        roles = (await conn.execute(text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,
+            rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles
+            WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator')
+            ORDER BY rolname"""))).all()
+        assert len(roles) == 3
+        assert all(row[1] and not any(row[2:]) for row in roles)
+        assert not (await conn.execute(text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'"))).scalar_one()
+
+
 async def test_populated_history_index_roundtrip(retained_migration_db) -> None:
     engine = retained_migration_db
     await asyncio.to_thread(run_test_migration, "0007")
