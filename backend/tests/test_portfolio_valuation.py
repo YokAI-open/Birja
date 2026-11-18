@@ -4,22 +4,213 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.models.trade import Holding
+from app.models.user import Account
 from app.schemas.portfolio import PortfolioOut
-from app.services.portfolio import get_portfolio
+from app.services.portfolio import get_portfolio, load_portfolio_snapshots
 from app.services.portfolios import OwnedActivePortfolio
+from tests.helpers import coin_id, put_price
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
-from tests.test_portfolio_crypto import crypto_books
-from tests.test_portfolio_stock_trading import execute, order, stock_books
+from tests.test_portfolio_creation import management_api
+from tests.test_portfolio_management_authority import authority
+from tests.test_portfolio_stock_trading import execute, order
 
 __all__ = ["crypto_books", "stock_books", "ownership", "status_case", "stock_trade_case"]
+
+
+@pytest_asyncio.fixture
+async def migrated(management_api):
+    """Explicit current0020 setup; retained global fixture remains untouched."""
+    yield
+
+
+__all__ += ["management_api", "authority"]
+
+
+async def _roots(factory, uid, other, now):
+    async with factory.begin() as db:
+        first = (await db.scalars(select(Account).where(Account.user_id == uid))).one()
+        first.cash = Decimal("1000")
+        sibling = Account(
+            user_id=uid,
+            name="Sibling",
+            name_key="sibling",
+            cash=Decimal("2000"),
+            starting_cash=Decimal("7654"),
+        )
+        closed = Account(
+            user_id=uid,
+            name="Closed",
+            name_key="closed",
+            cash=Decimal("55"),
+            starting_cash=Decimal("99"),
+            closed_at=now,
+        )
+        db.add_all([sibling, closed])
+        await db.flush()
+        foreign = (await db.scalars(select(Account).where(Account.user_id == other))).one()
+        return [OwnedActivePortfolio(a.id, uid) for a in (first, sibling, closed, foreign)]
+
+
+@pytest_asyncio.fixture
+async def crypto_books(engine, new_user, clean_prices):
+    uid, other = await new_user(), await new_user()
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    cid = await coin_id(engine, "BTC")
+    roots = await _roots(factory, uid, other, datetime.now(UTC))
+    async with factory.begin() as db:
+        for root, qty, basis in ((roots[0], "0.1", "123"), (roots[1], "0.2", "456")):
+            db.add(
+                Holding(
+                    portfolio_id=root.portfolio_id,
+                    user_id=uid,
+                    coin_id=cid,
+                    quantity=Decimal(qty),
+                    cost_basis=Decimal(basis),
+                )
+            )
+    await put_price(engine, "BTC", "100", datetime.now(UTC))
+    return factory, roots, cid
+
+
+@pytest_asyncio.fixture
+async def stock_books(stock_trade_case, new_user):
+    factory, cid, uid, now = stock_trade_case
+    roots = await _roots(factory, uid, await new_user(), now)
+    return factory, cid, roots, now
 
 
 async def statement(factory, root, settings, **kw):
     async with factory() as db:
         return await get_portfolio(db, portfolio=root, settings=settings, **kw)
+
+
+@pytest.mark.parametrize("count", [2, 10])
+async def test_shared_stock_proof_is_original_to_each_root(stock_books, settings, count):
+    """A sibling holding cannot borrow another root's original retention proof."""
+    from dataclasses import asdict
+
+    from sqlalchemy import event
+
+    factory, cid, (root, sibling, *_), _ = stock_books
+    await execute(factory, root, settings)
+    async with factory.begin() as db:
+        await db.execute(
+            text(
+                "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                "VALUES (:p,:u,:c,3,306)"
+            ),
+            {"p": sibling.portfolio_id, "u": sibling.user_id, "c": cid},
+        )
+        for i in range(count - 2):
+            extra_id = (
+                await db.execute(
+                    text(
+                        "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                        "VALUES (:u,:n,:n,1000,10000) RETURNING id"
+                    ),
+                    {"u": root.user_id, "n": f"extra-{i}"},
+                )
+            ).scalar_one()
+            crypto = (
+                await db.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))
+            ).scalar_one()
+            await db.execute(
+                text(
+                    "INSERT INTO prices(coin_id,mid,as_of,source) "
+                    "VALUES (:c,100,clock_timestamp(),'fake') ON CONFLICT(coin_id) "
+                    "DO UPDATE SET mid=100,as_of=excluded.as_of"
+                ),
+                {"c": crypto},
+            )
+            await db.execute(
+                text(
+                    "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,1,100),(:p,:u,:crypto,0.1,5)"
+                ),
+                {"p": extra_id, "u": root.user_id, "c": cid, "crypto": crypto},
+            )
+    now = datetime.now(UTC)
+    queries = []
+    engine = factory.kw["bind"].sync_engine
+
+    def capture(conn, cursor, statement, params, context, many):
+        queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        async with factory() as db:
+            p, q, *extra = await load_portfolio_snapshots(
+                db,
+                owner_id=root.user_id,
+                portfolio_ids=None,
+                settings=settings,
+                now=now,
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert len(queries) == 2
+    assert len(extra) == count - 2
+    assert all(p.known_value == 1010 and p.total_value is None for p in extra)
+    assert p.total_value == 998 and p.valuation_complete
+    assert q.known_value == 2000 and q.total_value is None
+    assert q.holdings[0].stock_mark.valuation_reason == "permission_unavailable"
+    assert q.holdings[0].quantity == 3 and q.holdings[0].stock_mark.units_safe
+    assert p.valued_at == q.valued_at == now
+    assert asdict(p) == asdict(await statement(factory, root, settings, now=now))
+    assert asdict(q) == asdict(await statement(factory, sibling, settings, now=now))
+
+
+@pytest.mark.parametrize("change", ["units", "safety", "expiry", "price"])
+async def test_shared_stock_recheck_never_renews_original_mark(
+    stock_books, settings, monkeypatch, change
+):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    factory, cid, (root, sibling, *_), _ = stock_books
+    await execute(factory, root, settings)
+    await execute(factory, sibling, settings, order(quantity="3"))
+    original = AsyncSession.execute
+    reads = 0
+
+    async def intercepted(db, stmt, *args, **kwargs):
+        nonlocal reads
+        result = await original(db, stmt, *args, **kwargs)
+        reads += 1
+        if reads == 1:
+            sql = {
+                "units": "UPDATE stock_action_state SET unit_epoch=unit_epoch+1 WHERE coin_id=:c",
+                "safety": ("UPDATE stock_action_state SET epoch=epoch+1 WHERE coin_id=:c"),
+                "expiry": (
+                    "UPDATE stock_data_admissions SET valid_until=clock_timestamp() "
+                    "WHERE product='quotes'"
+                ),
+                "price": "UPDATE stock_quotes SET bid=200,ask=202,mid=201 WHERE coin_id=:c",
+            }[change]
+            async with factory.begin() as writer:
+                await original(writer, text(sql), {"c": cid})
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", intercepted)
+    async with factory() as db:
+        p, q = await load_portfolio_snapshots(
+            db, owner_id=root.user_id, portfolio_ids=None, settings=settings
+        )
+    if change == "price":
+        assert p.total_value == 998 and q.total_value == 1997
+        assert p.holdings[0].mid == q.holdings[0].mid == 101
+    else:
+        assert p.total_value is q.total_value is None
+        assert p.known_value == 796 and q.known_value == 1694
+        if change in {"units", "safety"}:
+            assert not p.holdings[0].stock_mark.units_safe
+            assert not q.holdings[0].stock_mark.units_safe
+            assert p.holdings[0].average_cost is q.holdings[0].average_cost is None
 
 
 async def test_actual_unequal_baselines_and_same_symbol_siblings(crypto_books, settings):
@@ -44,6 +235,30 @@ async def test_actual_unequal_baselines_and_same_symbol_siblings(crypto_books, s
     wire = PortfolioOut.from_value(q).model_dump(mode="json")
     assert wire["portfolio_id"] == str(sibling.portfolio_id) and wire["name"] == "Sibling"
     assert wire["cash"] == "2000.00" and isinstance(wire["total_value"], str)
+
+
+async def test_shared_time_is_sampled_after_final_await(stock_books, settings, monkeypatch):
+    from app.services import portfolio
+
+    factory, _, (root, sibling, *_), _ = stock_books
+    await execute(factory, root, settings)
+    await execute(factory, sibling, settings)
+    captured = datetime.now(UTC)
+
+    class AdvancingClock(datetime):
+        calls = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            cls.calls += 1
+            return captured + timedelta(hours=2) if cls.calls >= 3 else captured
+
+    monkeypatch.setattr(portfolio, "datetime", AdvancingClock)
+    async with factory() as db:
+        p, q = await load_portfolio_snapshots(db, owner_id=root.user_id, settings=settings)
+    assert p.valued_at == q.valued_at == captured + timedelta(hours=2)
+    assert p.total_value is q.total_value is None
+    assert p.known_value == 796 and q.known_value == 1796
 
 
 @pytest.mark.parametrize("target", ["foreign", "closed", "unknown"])

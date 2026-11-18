@@ -1,8 +1,10 @@
 """A read-only statement for one explicitly owned active portfolio."""
 
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, select, true
@@ -20,10 +22,12 @@ from app.services.portfolio_math import (
     PositionValue,
     calculate_portfolio,
 )
-from app.services.portfolios import OwnedActivePortfolio
 from app.services.prices import age_seconds, freshness
 from app.services.stock_eligibility import execution_snapshot_query, executions_from_snapshot
 from app.services.stock_valuation import StockMark, value_stock
+
+if TYPE_CHECKING:
+    from app.services.portfolios import OwnedActivePortfolio
 
 PortfolioPriceStatus = Literal["fresh", "aging", "stale", "unpriced"]
 
@@ -39,6 +43,7 @@ class HoldingValue(PositionValue):
 class PortfolioSnapshot(PortfolioValue):
     portfolio_id: str
     name: str
+    description: str
     holdings: tuple[HoldingValue, ...]
     valued_at: datetime
     prices_as_of: datetime | None
@@ -53,29 +58,76 @@ async def get_portfolio(
     settings: Settings,
     now: datetime | None = None,
 ) -> PortfolioSnapshot:
+    return (
+        await load_portfolio_snapshots(
+            db,
+            owner_id=portfolio.user_id,
+            portfolio_ids=[portfolio.portfolio_id],
+            settings=settings,
+            now=now,
+        )
+    )[0]
+
+
+async def load_portfolio_snapshots(
+    db: AsyncSession,
+    *,
+    owner_id: int,
+    portfolio_ids: list[int] | None = None,
+    settings: Settings,
+    now: datetime | None = None,
+) -> tuple[PortfolioSnapshot, ...]:
+    """One financial snapshot and one shared final authority/ownership check.
+
+    None selects every active root; explicit IDs must all remain available.
+    Bounded root selection precedes the holding joins, including in corrupt
+    over-cap states. Never truncate a strategy or poll markets per strategy.
+    """
+    if (
+        type(owner_id) is not int
+        or not 0 < owner_id <= 9223372036854775807
+        or portfolio_ids is not None
+        and (
+            not isinstance(portfolio_ids, list)
+            or len(portfolio_ids) > 10
+            or any(type(p) is not int or not 0 < p <= 9223372036854775807 for p in portfolio_ids)
+            or len(set(portfolio_ids)) != len(portfolio_ids)
+        )
+    ):
+        raise HTTPException(422, detail={"code": "invalid_input"})
+    if portfolio_ids == []:
+        return ()
+    root_query = select(Account.id).where(
+        Account.user_id == owner_id,
+        Account.closed_at.is_(None),
+    )
+    if portfolio_ids is not None:
+        root_query = root_query.where(Account.id.in_(portfolio_ids))
+    roots = root_query.order_by(Account.id).limit(11).cte("selected_portfolios")
     # Scalar columns prevent identity-map reuse or lazy reads. The positive-quantity
     # predicate stays in ON so a cash-only account still produces one row.
-    authority = execution_snapshot_query(datetime.now(UTC)).cte("portfolio_market")
+    authority = execution_snapshot_query(now or datetime.now(UTC)).cte("portfolio_market")
     # Original quote-generation rights are authenticated by immutable accounting
     # evidence. They never supply a new cash/quantity/price financial snapshot.
     proof = (
         select(StockFillFacts.authority)
         .where(
-            StockFillFacts.portfolio_id == portfolio.portfolio_id,
-            StockFillFacts.user_id == portfolio.user_id,
+            StockFillFacts.portfolio_id == Account.id,
+            StockFillFacts.user_id == Account.user_id,
             StockFillFacts.coin_id == Coin.id,
             StockFillFacts.authority["quote"]["admission_generation"]
             == func.to_jsonb(StockQuote.admission_generation),
         )
         .order_by(StockFillFacts.trade_id)
         .limit(1)
-        .correlate(Coin, StockQuote)
+        .correlate(Account, Coin, StockQuote)
         .scalar_subquery()
     )
     result = await db.execute(
         select(
             Account.id.label("portfolio_id"),
             Account.name.label("portfolio_name"),
+            Account.description,
             Account.cash,
             Account.starting_cash,
             Coin.symbol,
@@ -92,6 +144,7 @@ async def get_portfolio(
             *authority.c,
         )
         .select_from(Account)
+        .join(roots, roots.c.id == Account.id)
         .outerjoin(
             Holding,
             and_(
@@ -106,24 +159,56 @@ async def get_portfolio(
         .outerjoin(StockQuote, StockQuote.coin_id == Coin.id)
         .join(authority, true())
         .where(
-            Account.id == portfolio.portfolio_id,
-            Account.user_id == portfolio.user_id,
+            Account.user_id == owner_id,
             Account.closed_at.is_(None),
         )
-        .order_by(Coin.symbol, Coin.id)
+        .order_by(Account.id, Coin.symbol, Coin.id)
     )
-    valued_at = now or datetime.now(UTC)  # Sample after the awaited statement.
     rows = result.all()
-    if not rows:
+    grouped: dict[int, list[Any]] = {}
+    for row in rows:
+        grouped.setdefault(row.portfolio_id, []).append(row)
+    if len(grouped) > 10:
+        raise HTTPException(409, detail={"code": "portfolio_limit"})
+    if portfolio_ids is not None and set(grouped) != set(portfolio_ids):
         raise HTTPException(status_code=404, detail={"code": "portfolio_unavailable"})
+    if not rows:
+        return ()
+    # Check membership again in the same statement as current market authority.
+    # READ COMMITTED gives this a fresh view after the financial await. Include
+    # every owner root for overview so a newly created/closed root cannot silently
+    # disappear from a supposedly complete comparison.
+    current_ids = root_query.order_by(Account.id).limit(11).subquery()
+    current_raw = (
+        await db.execute(
+            execution_snapshot_query(now or datetime.now(UTC)).add_columns(
+                select(func.array_agg(current_ids.c.id)).scalar_subquery().label("active_ids")
+            )
+        )
+    ).one()
+    valued_at = now or datetime.now(UTC)  # One advancing time after BOTH awaits.
+    if set(current_raw.active_ids or []) != set(grouped):
+        raise HTTPException(404, detail={"code": "portfolio_unavailable"})
+    original = executions_from_snapshot(rows[0], settings, now=valued_at)
+    current = executions_from_snapshot(current_raw, settings, now=valued_at)
+    return tuple(
+        _assemble_snapshot(book, original, current, current_raw, settings, valued_at)
+        for book in grouped.values()
+    )
+
+
+def _assemble_snapshot(
+    rows: list[Any],
+    original: dict[int, Any],
+    current: dict[int, Any],
+    current_raw: Any,
+    settings: Settings,
+    valued_at: datetime,
+) -> PortfolioSnapshot:
     positions = []
     marks = {}
     stock_rows = [r for r in rows if r.asset_class == "stock"]
     if stock_rows:
-        current_raw = (await db.execute(execution_snapshot_query(valued_at))).one()
-        valued_at = now or datetime.now(UTC)
-        original = executions_from_snapshot(rows[0], settings, now=valued_at)
-        current = executions_from_snapshot(current_raw, settings, now=valued_at)
         for row in stock_rows:
             result_mark = value_stock(
                 original.get(row.coin_id),
@@ -174,6 +259,7 @@ async def get_portfolio(
     return PortfolioSnapshot(
         portfolio_id=str(rows[0].portfolio_id),
         name=rows[0].portfolio_name,
+        description=rows[0].description,
         **{f.name: getattr(value, f.name) for f in fields(value) if f.name != "holdings"},
         holdings=tuple(holdings),
         valued_at=valued_at,

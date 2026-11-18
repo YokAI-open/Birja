@@ -46,24 +46,44 @@ async def test_bounded_batch_matches_detail_exactly(management_api, settings, co
         assert result.total_pl == result.total_pl_percent == 0
         async with async_sessionmaker(api.restricted)() as db:
             detail = await service.get_portfolio(
-                db, portfolio=OwnedActivePortfolio(int(result.portfolio_id), api.uid),
-                settings=settings, now=now,
+                db,
+                portfolio=OwnedActivePortfolio(int(result.portfolio_id), api.uid),
+                settings=settings,
+                now=now,
             )
         assert asdict(detail) == asdict(result)
 
 
 async def test_shared_symbols_custom_baseline_and_incomplete_are_per_book(management_api, settings):
     api = management_api
-    roots = [await create(api.restricted, api.uid, f"Book {n}") for n in range(3)]
+    roots = []
     now = datetime.now(UTC)
     async with api.migrator.begin() as conn:
         coin = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
         missing = (await conn.execute(text("SELECT id FROM coins WHERE symbol='ETH'"))).scalar_one()
         await conn.execute(text("DELETE FROM prices"))
-        await conn.execute(text("INSERT INTO prices(coin_id,mid,as_of) VALUES (:c,100,:t)"), {"c": coin, "t": now})
-        for i, root in enumerate(roots):
-            await conn.execute(text("UPDATE accounts SET cash=1000,starting_cash=7654 WHERE id=:p"), {"p": root.portfolio_id})
-            await conn.execute(text("INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) VALUES (:p,:u,:c,:q,5)"), {"p": root.portfolio_id, "u": api.uid, "c": missing if i == 2 else coin, "q": Decimal(i + 1)})
+        await conn.execute(
+            text("INSERT INTO prices(coin_id,mid,as_of,source) VALUES (:c,100,:t,'fake')"),
+            {"c": coin, "t": now},
+        )
+        for i in range(3):
+            root = (
+                await conn.execute(
+                    text(
+                        "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                        "VALUES (:u,:n,:n,1000,7654) RETURNING id"
+                    ),
+                    {"u": api.uid, "n": f"legacy-{i}"},
+                )
+            ).scalar_one()
+            roots.append(root)
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,:q,5)"
+                ),
+                {"p": root, "u": api.uid, "c": missing if i == 2 else coin, "q": Decimal(i + 1)},
+            )
     a, b, c = await load(api, settings, now=now)
     assert (a.total_value, b.total_value) == (1100, 1200)
     assert a.total_pl == -6554 and a.total_pl_percent == Decimal("-85.63")
@@ -74,16 +94,50 @@ async def test_shared_symbols_custom_baseline_and_incomplete_are_per_book(manage
 
 
 @pytest.mark.parametrize("target", ["foreign", "closed", "unknown"])
-async def test_explicit_batch_refuses_unavailable_without_partial_result(management_api, settings, target):
+async def test_explicit_batch_refuses_unavailable_without_partial_result(
+    management_api, settings, target
+):
     api = management_api
     own = await create(api.restricted, api.uid)
     other = await create(api.restricted, api.other_uid)
     if target == "closed":
         await close(api.migrator, own.portfolio_id)
-    ids = {"foreign": [own.portfolio_id, other.portfolio_id], "closed": [own.portfolio_id], "unknown": [9223372036854775807]}[target]
+    ids = {
+        "foreign": [own.portfolio_id, other.portfolio_id],
+        "closed": [own.portfolio_id],
+        "unknown": [9223372036854775807],
+    }[target]
     with pytest.raises(HTTPException) as exc:
         await load(api, settings, ids)
     assert exc.value.status_code == 404
+
+
+async def test_zero_baseline_and_corrupt_eleventh_root_refuse_total_only(management_api, settings):
+    api = management_api
+    async with api.migrator.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'Legacy','legacy',10000,0)"
+            ),
+            {"u": api.uid},
+        )
+    (result,) = await load(api, settings)
+    assert result.total_value == result.total_pl == 10000
+    assert result.total_pl_percent is None
+    # Privileged fixture corruption, never a public funding path.
+    async with api.migrator.begin() as conn:
+        for n in range(10):
+            await conn.execute(
+                text(
+                    "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                    "VALUES (:u,:n,:n,1,1)"
+                ),
+                {"u": api.uid, "n": f"corrupt-{n}"},
+            )
+    with pytest.raises(HTTPException) as exc:
+        await load(api, settings)
+    assert exc.value.status_code == 409
 
 
 @pytest.mark.parametrize("ids", [[0], [-1], [True], ["1"], [1, 1], list(range(1, 12))])
@@ -93,7 +147,9 @@ async def test_malformed_or_overlong_batch_refuses_before_sql(management_api, se
     assert exc.value.status_code == 422
 
 
-async def test_closure_between_financial_and_final_read_refuses(management_api, settings, monkeypatch):
+async def test_closure_between_financial_and_final_read_refuses(
+    management_api, settings, monkeypatch
+):
     from sqlalchemy.ext.asyncio import AsyncSession
 
     api = management_api
