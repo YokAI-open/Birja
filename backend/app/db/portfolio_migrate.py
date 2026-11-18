@@ -18,24 +18,19 @@ from app.db.portfolio_bootstrap import PREFLIGHT_SQL
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SOURCE = {
     "alembic/versions/0018_portfolio_management_expansion.py": (
-        "8e63586555c85b6f6495d0da1bad4b8a"
-        "455e5de71249a0f08e2c758e4b22b0b0"
+        "8e63586555c85b6f6495d0da1bad4b8a455e5de71249a0f08e2c758e4b22b0b0"
     ),
     "alembic/versions/0019_portfolio_management_backfill.py": (
-        "75f40d134e05ebdf06b15bff677d8664"
-        "74aa34ac64bdf66ec412bc8e0615f66d"
+        "75f40d134e05ebdf06b15bff677d866474aa34ac64bdf66ec412bc8e0615f66d"
     ),
     "alembic/versions/0020_portfolio_management_authority.py": (
-        "53df31be89835558ef7a3b72d2febdb3"
-        "e6a6130c26d27b961c282d7f9a0de860"
+        "53df31be89835558ef7a3b72d2febdb3e6a6130c26d27b961c282d7f9a0de860"
     ),
     "alembic/sql/0019_portfolio_metadata.sql": (
-        "a26d4230843f75af9202fce71a771818"
-        "d0bd7f041777a8a01a0d53a8df7a7c65"
+        "a26d4230843f75af9202fce71a771818d0bd7f041777a8a01a0d53a8df7a7c65"
     ),
     "alembic/sql/0020_portfolio_management.sql": (
-        "ff97c417260fd9ed80f70c3a51ddfe32"
-        "837b9b41c803bfcce4e7f37bc33be9d2"
+        "ff97c417260fd9ed80f70c3a51ddfe32837b9b41c803bfcce4e7f37bc33be9d2"
     ),
     "alembic/versions/0015_portfolio_expansion.py": (
         "9811795856a2fc96485cff103c0750622501535a480af39d916a3aaa1755ebb8"

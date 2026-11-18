@@ -38,6 +38,14 @@ async def test_current_refuses_every_retained_or_partial_before_writes(staged, r
 
 async def test_complete_current_and_actual_retained_source_refusal(staged):
     await asyncio.to_thread(run_test_migration, "0020")
+    from app.db.portfolio_bootstrap import GRANTS_SQL
+
+    async with staged.begin() as conn:
+        raw = await conn.get_raw_connection()
+        await raw.driver_connection.execute(GRANTS_SQL)
+        await conn.execute(
+            text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
+        )
     old_source = (
         await asyncio.to_thread(
             subprocess.run,

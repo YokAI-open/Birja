@@ -32,7 +32,7 @@ ECONOMIC_TABLES = ("users", "accounts", *OWNED_TABLES, "stock_split_applications
 
 
 async def migrate_to(revision: str, *, down: bool = False) -> None:
-    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 18))}
+    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 21))}
     await asyncio.to_thread(run_test_migration, revision, down=down)
 
 
@@ -77,7 +77,7 @@ async def economic_snapshot(conn: AsyncConnection) -> dict[str, tuple[tuple, ...
         rows = await conn.execute(
             text(  # noqa: S608 - fixed inventory above
                 f"SELECT {key},(to_jsonb(t)-'portfolio_id'-'name'-'closed_at'-'description'"  # noqa: S608
-                f"-'owner_digest_version')::text FROM public.{table} t ORDER BY {key}"
+                f"-'name_key'-'owner_digest_version')::text FROM public.{table} t ORDER BY {key}"
             )
         )
         result[table] = tuple(tuple(row) for row in rows)
@@ -302,14 +302,22 @@ async def seed_portfolio_world(conn: AsyncConnection) -> PortfolioWorld:
         roots.append(
             (
                 await conn.execute(
-                    text("""INSERT INTO accounts
-            (user_id,name,cash,starting_cash,closed_at)
-            VALUES (:u,:n,:cash,10000,CASE WHEN :closed THEN clock_timestamp() ELSE NULL END)
-            RETURNING id"""),
-                    {"u": owner, "n": name, "cash": Decimal(cash), "closed": closed},
+                    text("SELECT portfolio_id FROM public.create_portfolio(:u,:k,:n,'')"),
+                    {"u": owner, "n": name, "k": uuid4()},
                 )
             ).scalar_one()
         )
+        await conn.execute(
+            text(
+                "UPDATE accounts SET cash=:cash,closed_at=CASE WHEN :closed "
+                "THEN clock_timestamp() ELSE NULL END WHERE id=:p"
+            ),
+            {"p": roots[-1], "cash": Decimal(cash), "closed": closed},
+        )
+    await conn.execute(
+        text("INSERT INTO portfolio_initializations(user_id,origin) VALUES (:u,'legacy')"),
+        {"u": owners[0]},
+    )
     crypto = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
     for root, quantity, basis in ((roots[1], "0.1", "123.00"), (roots[2], "0.2", "456.00")):
         await conn.execute(

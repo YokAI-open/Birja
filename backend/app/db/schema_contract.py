@@ -6,6 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL, PREFLIGHT_SQL
+
 Consumer = Literal["portfolio", "retained0017", "retained0014", "retained0008"]
 SUPPORTED = {
     "portfolio": frozenset({"0020"}),
@@ -41,4 +43,11 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
         raise SchemaAdmissionError("migration_only")
     if consumer not in SUPPORTED or revision not in SUPPORTED[consumer]:
         raise SchemaAdmissionError("incompatible_schema")
+    if consumer == "portfolio":
+        try:
+            await conn.execute(text(PREFLIGHT_SQL))
+            if (await conn.execute(text(ACL_SQL))).scalar_one() != ACL_0020_SHA256:
+                raise SchemaAdmissionError("incompatible_authority")
+        except DBAPIError:
+            raise SchemaAdmissionError("incompatible_authority") from None
     return revision

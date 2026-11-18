@@ -10,7 +10,7 @@ from pathlib import Path
 import asyncpg  # type: ignore[import-untyped]  # Driver has no published typing marker.
 from sqlalchemy.engine import make_url
 
-from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL, GRANTS_SQL, PREFLIGHT_SQL
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -104,6 +104,8 @@ FUNCTION_SIGNATURES = frozenset(
 async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
     await conn.execute(PREFLIGHT_SQL)
     await conn.execute(GRANTS_SQL)
+    if await conn.fetchval(ACL_SQL) != ACL_0020_SHA256:
+        raise ValueError("Unexpected final management grants")
 
 
 async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:

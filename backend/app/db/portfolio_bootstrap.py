@@ -4,7 +4,10 @@ The SQL is source-owned, never generated from the database being authorized.
 Production bootstrap carries the same preflight/grants under its admin guard.
 """
 
-PREFLIGHT_SQL = r"""
+# ruff: noqa: S608
+# SQL composition below joins fixed, source-owned contract literals only.
+
+PREFLIGHT_0017_SQL = r"""
 DO $portfolio_identity$
 DECLARE expected record; actual record;
 BEGIN
@@ -124,7 +127,7 @@ BEGIN
 END $portfolio_identity$;
 """
 
-GRANTS_SQL = r"""
+GRANTS_0017_SQL = r"""
 GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler;
 GRANT SELECT,INSERT ON public.users TO birja_app;
 GRANT SELECT,INSERT,UPDATE ON public.auth_sessions,public.refresh_tokens TO birja_app;
@@ -182,3 +185,176 @@ REVOKE ALL ON FUNCTION public.stock_dividend_authority(bigint,bigint,text,text,b
 GRANT EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),
  public.record_stock_dividend_hold(bigint,text) TO birja_scheduler;
 """
+
+# Independently versioned0020 contract. Retained0017 literals above stay frozen.
+# These catalogue projections exclude mutable data/OIDs and include complete
+# routine definitions, owners, columns, constraints, indexes, triggers and
+# identity sequence definitions. Ordering and JSON encoding are fixed in SQL.
+CATALOGUE_SQL = r"""
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('relation',c.relname,c.relkind::text,
+  pg_get_userbyid(c.relowner),c.relrowsecurity,c.relforcerowsecurity) v
+ FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')
+ UNION ALL SELECT jsonb_build_array('column',c.relname,a.attnum,a.attname,
+  format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attidentity::text,
+  a.attgenerated::text,co.collname,pg_get_expr(d.adbin,d.adrelid))
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+ LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+ LEFT JOIN pg_collation co ON co.oid=a.attcollation
+ WHERE c.relnamespace='public'::regnamespace AND c.relkind='r'
+ AND a.attnum>0 AND NOT a.attisdropped
+ UNION ALL SELECT jsonb_build_array('constraint',c.relname,k.conname,
+  pg_get_constraintdef(k.oid),k.convalidated)
+ FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid
+ WHERE c.relnamespace='public'::regnamespace
+ UNION ALL SELECT jsonb_build_array('index',c.relname,pg_get_indexdef(i.indexrelid),
+  i.indisvalid,i.indisready,i.indislive)
+ FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid
+ WHERE c.relnamespace='public'::regnamespace
+ UNION ALL SELECT jsonb_build_array('trigger',c.relname,t.tgname,t.tgenabled::text,
+  pg_get_triggerdef(t.oid))
+ FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+ WHERE c.relnamespace='public'::regnamespace AND NOT t.tgisinternal
+ UNION ALL SELECT jsonb_build_array('routine',p.oid::regprocedure::text,
+  pg_get_userbyid(p.proowner),pg_get_functiondef(p.oid))
+ FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
+ UNION ALL SELECT jsonb_build_array('sequence',c.relname,format_type(s.seqtypid,NULL),
+  s.seqstart,s.seqincrement,s.seqmax,s.seqmin,s.seqcache,s.seqcycle,
+  t.relname,a.attname,d.deptype::text)
+ FROM pg_sequence s JOIN pg_class c ON c.oid=s.seqrelid
+ LEFT JOIN pg_depend d ON d.objid=c.oid AND d.classid='pg_class'::regclass
+  AND d.refclassid='pg_class'::regclass AND d.deptype='i'
+ LEFT JOIN pg_class t ON t.oid=d.refobjid
+ LEFT JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+ WHERE c.relnamespace='public'::regnamespace
+) catalogue
+"""
+
+# Explicit non-owner grants, including column grants. PUBLIC and unexpected
+# principals are recorded rather than filtered away. Database/schema ownership
+# belongs to the environment and is checked separately by the admin entrypoint.
+ACL_SQL = r"""
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('relation',c.relname,coalesce(r.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,
+  acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('column',c.relname,a.attname,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+ CROSS JOIN LATERAL aclexplode(a.attacl) x LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND a.attnum>0 AND NOT a.attisdropped
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('routine',p.oid::regprocedure::text,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
+) privileges
+"""
+
+CATALOGUE_0020_SHA256 = "d8f42ef33af7989badf342b5295d8d523cd6bf53839de6156a14e5251b5ee263"
+ACL_0020_SHA256 = "041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e"
+
+PREFLIGHT_SQL = r"""
+DO $management_identity$
+BEGIN
+ IF (SELECT count(*)<>1 OR NOT bool_and(version_num='0020') FROM public.alembic_version)
+ THEN RAISE EXCEPTION 'management final revision required'; END IF;
+ IF EXISTS(SELECT FROM pg_roles WHERE rolname IN
+  ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')
+  AND (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls))
+ OR (SELECT count(*) FROM pg_roles WHERE rolname IN
+  ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))<>4
+ OR EXISTS(SELECT FROM pg_auth_members m JOIN pg_roles r ON
+  r.oid=m.roleid OR r.oid=m.member WHERE r.rolname IN
+  ('birja_app','birja_scheduler','birja_migrator','birja_action_operator'))
+ OR EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator' AND rolcanlogin)
+ THEN RAISE EXCEPTION 'unsafe management roles'; END IF;
+ IF EXISTS(SELECT FROM pg_namespace n,
+  LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) x
+  WHERE n.nspname='public' AND x.privilege_type='CREATE' AND
+  x.grantee IN (0,'birja_app'::regrole,'birja_scheduler'::regrole))
+ THEN RAISE EXCEPTION 'unsafe management schema'; END IF;
+ IF (__CATALOGUE__) IS DISTINCT FROM '__EXPECTED__'
+ THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
+ IF EXISTS(SELECT FROM pg_proc p,
+  LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
+  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
+  AND (x.is_grantable OR x.privilege_type<>'EXECUTE' OR NOT (
+   (x.grantee='birja_app'::regrole AND p.oid::regprocedure::text IN
+    ('assert_stock_execution_current(bigint,bigint,jsonb)',
+     'create_portfolio(bigint,uuid,text,text)','initialize_portfolio(bigint)',
+     'update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)')) OR
+   (x.grantee='birja_scheduler'::regrole AND p.oid::regprocedure::text IN
+    ('apply_stock_dividend(bigint,bigint,text,text)','record_stock_dividend_hold(bigint,text)',
+     'lock_stock_portfolio_roots(bigint)')) OR
+   (x.grantee='birja_action_operator'::regrole AND p.proname='apply_stock_action_resolution'))))
+ THEN RAISE EXCEPTION 'management routine ACL mismatch'; END IF;
+END $management_identity$;
+""".replace("__CATALOGUE__", CATALOGUE_SQL).replace("__EXPECTED__", CATALOGUE_0020_SHA256)
+
+GRANTS_SQL = (
+    r"""
+DO $management_reset$
+DECLARE obj record; col record;
+BEGIN
+ FOR obj IN SELECT c.oid,c.relname,c.relkind FROM pg_class c
+  WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S') LOOP
+  IF obj.relkind='r' THEN
+   EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC,birja_app,'
+    'birja_scheduler,birja_action_operator',obj.relname);
+   FOR col IN SELECT attname FROM pg_attribute WHERE attrelid=obj.oid
+    AND attnum>0 AND NOT attisdropped LOOP
+    EXECUTE format('REVOKE ALL (%I) ON TABLE public.%I FROM PUBLIC,birja_app,'
+     'birja_scheduler,birja_action_operator',col.attname,obj.relname);
+   END LOOP;
+  ELSE
+   EXECUTE format('REVOKE ALL ON SEQUENCE public.%I FROM PUBLIC,birja_app,'
+    'birja_scheduler,birja_action_operator',obj.relname);
+  END IF;
+ END LOOP;
+ FOR obj IN SELECT p.oid::regprocedure::text AS signature FROM pg_proc p
+  WHERE p.pronamespace='public'::regnamespace LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,birja_app,'
+   'birja_scheduler,birja_action_operator',obj.signature);
+ END LOOP;
+END $management_reset$;
+"""
+    + GRANTS_0017_SQL
+    + r"""
+REVOKE ALL ON public.accounts,public.portfolio_creations,public.portfolio_initializations
+ FROM PUBLIC,birja_app,birja_scheduler;
+REVOKE UPDATE(id,user_id,cash,starting_cash,created_at,name,name_key,description,closed_at)
+ ON public.accounts FROM PUBLIC,birja_app,birja_scheduler;
+REVOKE UPDATE(id,email,created_at) ON public.users FROM PUBLIC,birja_app,birja_scheduler;
+REVOKE UPDATE ON public.users FROM PUBLIC,birja_app,birja_scheduler;
+REVOKE ALL ON SEQUENCE public.accounts_id_seq,public.portfolio_creations_id_seq,
+ public.portfolio_initializations_id_seq FROM PUBLIC,birja_app,birja_scheduler;
+GRANT SELECT ON public.accounts TO birja_app,birja_scheduler;
+GRANT UPDATE(cash) ON public.accounts TO birja_app;
+REVOKE ALL ON FUNCTION public.portfolio_display_name(text),public.portfolio_name_key(text),
+ public.portfolio_description(text),public.check_portfolio_management_metadata(),
+ public.create_portfolio(bigint,uuid,text,text),public.initialize_portfolio(bigint),
+ public.update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)
+ FROM PUBLIC,birja_app,birja_scheduler;
+GRANT EXECUTE ON FUNCTION public.create_portfolio(bigint,uuid,text,text),
+ public.initialize_portfolio(bigint),
+ public.update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean) TO birja_app;
+GRANT USAGE ON SCHEMA public TO birja_action_operator;
+GRANT SELECT ON public.stock_action_events,public.stock_action_sources,
+ public.stock_action_revisions,public.stock_action_observations,public.stock_action_state,
+ public.stock_ownership_movements,public.stock_split_applications,
+ public.stock_dividend_entitlements,public.stock_action_resolutions,
+ public.stock_instruments,public.stock_data_admissions,public.stock_quotes,public.stock_sessions
+ TO birja_action_operator;
+GRANT SELECT(id,symbol,asset_class,is_active,sort_order) ON public.coins TO birja_action_operator;
+GRANT EXECUTE ON FUNCTION public.apply_stock_action_resolution(
+ bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) TO birja_action_operator;
+"""
+)
