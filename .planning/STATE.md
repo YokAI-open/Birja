@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 13
-current_plan: 1
-status: ready_to_execute
-stopped_at: Phase13 planning checked; ready to execute Plan01, no automatic implementation
-last_updated: "2026-11-18T07:36:41.694607Z"
-last_activity: 2026-11-18 -- Phase 13 planning complete
+current_plan: 2
+status: executing
+stopped_at: Phase13 Plan01 complete/reviewed; starting Plan02 funding authority
+last_updated: "2026-11-18T07:43:38.262Z"
+last_activity: 2026-11-18 -- Phase 13 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 49
-  completed_plans: 31
+  completed_plans: 32
   percent: 25
 ---
 
@@ -22,18 +22,29 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 planning complete locally:18 plans,36 tasks,17 waves; independent revision1 check passed with0blockers/0warnings. All11assigned requirements and14saved decisions have substantive plan coverage. Implementation and tests have not started; next is `$gsd-execute-phase 13`. Phase12 remains complete31/31 with its exact owner-approved issue35 risk and qualified Python patch. Phase7 six live gaps remain separately deferred; keep the branch local.
+Current focus: Phase13 executing: Plan01 complete and independently reviewed clean (14 focused migration tests, lint/model typing). Next Plan02 installs once-only creation/initialization and metadata authority. No Phase13 requirement is marked complete; API/UI/current admission and full recovery/security remain pending. Phase12 remains complete31/31; issue35 exact accepted risk expires2026-12-17UTC. Phase7 six live gaps remain deferred. Keep local.
 
 ## Current Position
 
-Phase: 13
-Current Plan: 1 (not executed)
+Phase: 13 (Create and Compare Independent Strategies) — EXECUTING
+Current Plan: 2
 Total Plans in Phase: 18
-Plan: Phase12 completed31/31; Phase13 planned0/18
-Status: Ready to execute
-Last activity: 2026-11-18 -- Phase 13 planning complete
+Plan: 2 of 18 (01 complete)
+Status: Executing Phase 13
+Last activity: 2026-11-18 -- Phase 13 execution started
 
-Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;31/49 planned plans complete)
+Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;32/49 planned plans complete)
+
+## Phase13 Execution Progress
+
+Plan01:2/2tasks complete in commits14aa73b,d76d5a8,0cc6333,82c9214;
+summary06d643b. Actual14tests passed37.28s; focused lint/format/modelmypy
+and immutable0015–17 checks pass. Independent13-01-REVIEW is clean0/0.
+All-owned birja-p13-01 resources removed.0018/19 remain migration-only, with
+no normal-app partial-schema admission. PostgreSQL collation identifier typo
+and closed-root metadata-only migration guard documented as routine fixes.
+No provider/package/publication/production operation. Next02; requirements
+remain pending until integrated proof.
 
 ## Phase13 Planning Closeout — 2026-11-18
 

@@ -210,11 +210,11 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
   4. The user compares active strategies in a stable overview showing name, cash, exact total or known value and dollar/percentage return against each stored baseline; detail and overview agree on timestamps and incompleteness, without a pooled wealth total or making other strategies unavailable.
   5. Switching portfolios isolates cached pages, cursors, actionable previews, pending attempts and late responses instead of retargeting them; requests and jobs remain bounded, creation has appropriate resource controls, shared market polling does not multiply, and existing activation/backup-capacity guards remain effective.
 
-**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). No implementation has started.
+**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). Execution started;01complete,02next.
 
 **Wave 1**
 
-- [ ] 13-01-PLAN.md — Expand and backfill canonical metadata and durable provenance
+- [x] 13-01-PLAN.md — Expand and backfill canonical metadata and durable provenance
 
 **Wave 2** *(blocked on declared earlier-plan dependencies)*
 
@@ -377,7 +377,7 @@ Phase13 planning is checked; implementation has not started. Phases14–15 await
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
-| 13. Create and Compare Independent Strategies | v1.2 | 0/18 | Planned; ready to execute | - |
+| 13. Create and Compare Independent Strategies | v1.2 | 1/18 | Executing; Plan02 next | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
