@@ -77,13 +77,13 @@ function api({
           ? metadata()
           : path === "/api/v2/portfolios/overview"
             ? json([])
-          : path === "/api/v1/prices"
-            ? prices()
-            : path === "/api/v1/health"
-              ? json({ status: "ok", db: "ok", redis: "ok" })
-              : path === "/api/v1/auth/refresh"
-                ? unauthorized()
-                : json({}, 500),
+            : path === "/api/v1/prices"
+              ? prices()
+              : path === "/api/v1/health"
+                ? json({ status: "ok", db: "ok", redis: "ok" })
+                : path === "/api/v1/auth/refresh"
+                  ? unauthorized()
+                  : json({}, 500),
     ),
   );
   vi.stubGlobal("fetch", fetch);
@@ -122,7 +122,7 @@ afterEach(() => {
 });
 
 it("keeps public Markets, Account and three safe responsive primary destinations", async () => {
-  const fetch = api();
+  api();
   setup();
   const nav = await screen.findByRole("navigation", { name: "Main" });
   expect(nav.querySelectorAll("a")).toHaveLength(3);
@@ -135,7 +135,7 @@ it("keeps public Markets, Account and three safe responsive primary destinations
   }
   expect(await screen.findByText("$81,042.35")).toBeVisible();
   expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
-  expect(screen.getByRole("link", {name:"Portfolios"})).toHaveAttribute("href", "/portfolios");
+  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
 });
 it.each([
   ["/portfolios/1", "Portfolio page"],
@@ -161,7 +161,10 @@ it.each([
     path,
     expect.objectContaining({ owner: "alice@example.test", portfolioId: "1", name: first.name }),
   );
-  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
   expect(screen.getByRole("link", { name: "History" })).toHaveAttribute(
     "href",
     "/portfolios/1/history",
@@ -209,7 +212,10 @@ it("never substitutes a sole other strategy for an explicit unavailable root", a
   expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
   expect(probes.mounted).not.toHaveBeenCalled();
   expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/history");
-  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute("href", "/portfolios");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
 });
 it("retains verified root through nav, global Markets and trade links", async () => {
   api({ metadata: () => json([first, second]) });
@@ -221,7 +227,10 @@ it("retains verified root through nav, global Markets and trade links", async ()
     "href",
     "/portfolios/2/trade/BTC",
   );
-  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute("href", "/portfolios");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
   await user.click(screen.getByRole("link", { name: "Trade BTC" }));
   expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toBeVisible();
   expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
@@ -264,7 +273,10 @@ it("masks prior finance and nav memory on account switch", async () => {
     await client.invalidateQueries({ queryKey: ["me"] });
   });
   await waitFor(() =>
-    expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute("href", "/portfolios"),
+    expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+      "href",
+      "/portfolios",
+    ),
   );
   expect(screen.queryByText(/Private alice/)).toBeNull();
   await user.click(screen.getAllByRole("link", { name: "Portfolios" })[0]!);
@@ -370,12 +382,15 @@ it("keeps identity visible on logout failure", async () => {
   expect(screen.getByText("alice@example.test")).toBeVisible();
 });
 
-it.each([[], [first], [first, second]])("routes the real overview independently of target count %j", async values => {
-  const fetch = api({metadata:()=>json(values)});
-  setup("/portfolios");
-  expect(await screen.findByRole("heading", {name:"Portfolios", level:1})).toHaveFocus();
-  expect(await screen.findByRole("heading", {name:"No portfolios yet"})).toBeVisible();
-  expect(screen.getByRole("button", {name:"Create portfolio"})).toBeEnabled();
-  expect(probes.mounted).not.toHaveBeenCalled();
-  expect(fetch.mock.calls.some(([url])=>url==="/api/v2/portfolios/overview")).toBe(true);
-});
+it.each([{ values: [] }, { values: [first] }, { values: [first, second] }])(
+  "routes the real overview independently of target count $values.length",
+  async ({ values }) => {
+    const fetch = api({ metadata: () => json(values) });
+    setup("/portfolios");
+    expect(await screen.findByRole("heading", { name: "Portfolios", level: 1 })).toHaveFocus();
+    expect(await screen.findByRole("heading", { name: "No portfolios yet" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create portfolio" })).toBeEnabled();
+    expect(probes.mounted).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.some(([url]) => url === "/api/v2/portfolios/overview")).toBe(true);
+  },
+);

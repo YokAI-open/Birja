@@ -13,6 +13,8 @@ import SignInPage from "@/pages/SignInPage";
 import StockTradePage from "@/pages/StockTradePage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
+import PortfoliosPage from "@/pages/PortfoliosPage";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import HistoryPage from "@/pages/HistoryPage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
@@ -81,7 +83,6 @@ function SignedIn({ me }: { me: Me }) {
   const navigation = usePortfolioTarget(explicitId ?? openedId);
   const target = navigation.status === "ready" ? navigation.target : null;
   if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
-  const portfolioPath = target ? `/portfolios/${target.portfolioId}` : "/portfolio";
   const historyPath = target ? `/portfolios/${target.portfolioId}/history` : "/history";
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -117,9 +118,9 @@ function SignedIn({ me }: { me: Me }) {
             <ChartNoAxesCombined aria-hidden="true" className="size-5 md:hidden" />
             Markets
           </NavLink>
-          <NavLink to={portfolioPath} end className={navItem}>
+          <NavLink to="/portfolios" end className={navItem}>
             <Wallet aria-hidden="true" className="size-5 md:hidden" />
-            Portfolio
+            Portfolios
           </NavLink>
           <NavLink to={historyPath} className={navItem}>
             <History aria-hidden="true" className="size-5 md:hidden" />
@@ -131,6 +132,7 @@ function SignedIn({ me }: { me: Me }) {
         </NavLink>
       </div>
       <div ref={content}>
+        {explicitId && <PortfolioSwitcher portfolioId={explicitId} />}
         <Routes>
           <Route index element={<MarketsPage portfolioId={target?.portfolioId} />} />
           <Route path="portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
@@ -139,7 +141,7 @@ function SignedIn({ me }: { me: Me }) {
             <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
             <Route path="trade/:symbol" element={<TradePage />} />
           </Route>
-          <Route path="portfolios" element={<PortfolioTargetBoundary />} />
+          <Route path="portfolios" element={<PortfoliosPage />} />
           <Route
             path="portfolio"
             element={<PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}`} />}
