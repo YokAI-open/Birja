@@ -47,6 +47,68 @@ function deferred() {
   return { promise, resolve };
 }
 const clients: QueryClient[] = [];
+it.each(["removed", "owner", "logout", "switch"])(
+  "suppresses real-target pending crypto publication after %s",
+  async (change) => {
+    const { wrapper, client } = setup(),
+      late = deferred(),
+      success = vi.fn(),
+      failure = vi.fn();
+    let active = true;
+    const fetch = vi.fn((input: RequestInfo | URL) =>
+      String(input).endsWith("/portfolios")
+        ? Promise.resolve(
+            json(
+              active
+                ? [
+                    { id: "1", name: "Original" },
+                    { id: "2", name: "Other" },
+                  ]
+                : [{ id: "2", name: "Other" }],
+            ),
+          )
+        : late.promise,
+    );
+    vi.stubGlobal("fetch", fetch);
+    const h = renderHook(
+      ({ id }) => {
+        const p = usePortfolioTarget(id);
+        return { p, t: useTrade(p.target, "BTC") };
+      },
+      { wrapper, initialProps: { id: "1" } },
+    );
+    await waitFor(() => expect(h.result.current.p.status).toBe("ready"));
+    let pending!: Promise<unknown>;
+    const stale = h.result.current.t.mutateAsync;
+    act(() => {
+      pending = stale(variables(), { onSuccess: success, onError: failure }).catch(() => undefined);
+    });
+    await waitFor(() => expect(h.result.current.t.isPending).toBe(true));
+    if (change === "removed") {
+      active = false;
+      act(() => broadcastMetadataChange("1"));
+      await waitFor(() => expect(h.result.current.p.status).toBe("unavailable"));
+    } else if (change === "switch") h.rerender({ id: "2" });
+    else act(() => client.setQueryData(["me"], change === "owner" ? { email: bob } : null));
+    await act(async () => {
+      late.resolve(json(fill()));
+      await pending;
+    });
+    expect(success).not.toHaveBeenCalled();
+    expect(failure).not.toHaveBeenCalled();
+    expect(h.result.current.t.data).toBeUndefined();
+    await waitFor(() => expect(h.result.current.t.attempt).toBeNull());
+    await act(async () => {
+      await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
+    });
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith("/trades"))).toHaveLength(1);
+    if (change === "switch") {
+      h.rerender({ id: "1" });
+      await waitFor(() => expect(h.result.current.t.outcomeUnknown).toBe(true));
+      expect(h.result.current.t.originalName).toBe("Original");
+    }
+  },
+);
 it.each(["lost", "pending"])(
   "keeps the real-target crypto original across a %s rename and explicit replay",
   async (mode) => {
@@ -93,6 +155,9 @@ it.each(["lost", "pending"])(
       metadata.resolve(json([{ id: "1", name }]));
     });
     await waitFor(() => expect(h.result.current.p.target?.name).toBe(name));
+  await act(async () => {
+    await expect(stale(variables())).rejects.toThrow("Portfolio target changed");
+  });
     await act(async () => {
       if (mode === "pending") late.resolve(json(fill()));
       await pending;
