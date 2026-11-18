@@ -37,7 +37,7 @@ it("focuses a new linked server error summary", () => {
       attempt: null,
       error: new PortfolioManagementError("refused", "name_taken", 409),
     },
-  } as ReturnType<typeof usePortfolioManagement>);
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
   view.rerender(
     <QueryClientProvider client={new QueryClient()}>
       <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
@@ -61,6 +61,76 @@ it("discards an old definitive duplicate error when reopening a fresh draft", ()
     /already have an active/,
   );
   reopened.unmount();
+});
+it("does not refocus a stale refusal published after the fresh editor acquires its scope", () => {
+  const client = new QueryClient();
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: false,
+    creation: { phase: "editing", attempt: null, error: null },
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
+  const content = (
+    <QueryClientProvider client={client}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>
+  );
+  const view = render(content);
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
+    creation: {
+      phase: "editing",
+      attempt: null,
+      error: new PortfolioManagementError("refused", "name_taken", 409),
+    },
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Portfolio name")).toHaveFocus();
+});
+it("keeps a new definitive name refusal from a recovered original visible and focused", () => {
+  const client = new QueryClient();
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
+    creation: {
+      phase: "unknown",
+      attempt: {
+        key: "12345678-1234-4234-8234-123456789abc",
+        name: "Recovered original",
+        description: "Original description",
+      },
+      error: null,
+    },
+    retryCreation,
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
+  const view = render(
+    <QueryClientProvider client={client}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Retry creation" }));
+  expect(retryCreation).toHaveBeenCalledOnce();
+  vi.mocked(usePortfolioManagement).mockReturnValue({
+    ready: true,
+    creation: {
+      phase: "editing",
+      attempt: null,
+      error: new PortfolioManagementError("refused", "name_taken", 409),
+    },
+    submitCreation,
+    retryCreation,
+  } as unknown as ReturnType<typeof usePortfolioManagement>);
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <PortfolioCreateForm count={1} onClose={vi.fn()} onCreated={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("alert")).toHaveFocus();
+  expect(screen.getByRole("alert")).toHaveTextContent("You already have an active portfolio");
+  expect(screen.getByLabelText("Portfolio name")).toHaveValue("Recovered original");
+  expect(screen.getByLabelText("Description (optional)")).toHaveValue("Original description");
 });
 it.each([true, false])("publishes only a current captured receipt (%s)", (current) => {
   const onCreated = vi.fn();
