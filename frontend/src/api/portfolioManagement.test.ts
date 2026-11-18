@@ -198,6 +198,23 @@ it.each([500, 503, 502, 409])(
     });
   },
 );
+it("retains the known service code and wait while leaving the creation outcome unknown", async () => {
+  document.cookie = "bj_csrf=test";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      reply({ detail: { code: "service_unavailable", message: "private" } }, 503, {
+        "Retry-After": "5",
+      }),
+    ),
+  );
+  await expect(createPortfolio({ key, name: "ok" })).rejects.toMatchObject({
+    outcome: "unknown",
+    status: 503,
+    code: "service_unavailable",
+    retryAfter: 5,
+  });
+});
 it("keeps response loss/malformed success unknown and cancelled transports aborted", async () => {
   document.cookie = "bj_csrf=test";
   for (const response of [

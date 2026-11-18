@@ -76,6 +76,8 @@ const refusals: Record<number, readonly string[]> = {
   415: ["unsupported_media_type"],
   422: ["invalid_input", "invalid_creation_key"],
   429: ["creation_quota", "rate_limited"],
+  500: ["service_unavailable"],
+  503: ["service_unavailable"],
 };
 function failure(error: unknown): never {
   if (error instanceof Error && error.name === "AbortError") throw error;
@@ -83,7 +85,8 @@ function failure(error: unknown): never {
     const code =
       error.code !== null && refusals[error.status]?.includes(error.code) ? error.code : null;
     // Do not retain arbitrary server detail, messages or ownership/financial fields.
-    const refused = code !== null || error.status === 401 || error.status === 403;
+    const refused =
+      (code !== null && error.status < 500) || error.status === 401 || error.status === 403;
     const wait =
       error.retryAfter !== null && Number.isSafeInteger(error.retryAfter) && error.retryAfter >= 0
         ? error.retryAfter
