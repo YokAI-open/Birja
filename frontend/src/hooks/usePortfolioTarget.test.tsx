@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/client";
 import { fetchPortfolios, isPortfolioId, parsePortfolios } from "@/api/portfolios";
 import { usePortfolioTarget } from "./usePortfolioTarget";
+import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 
 const alice = "alice@example.test";
 const bob = "bob@example.test";
@@ -12,6 +13,30 @@ const first = { id: "1", name: "My portfolio" };
 const second = { id: "2", name: "Second strategy" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const clients: QueryClient[] = [];
+it("renews metadata authority from an identity-only event without reviving old handles", async () => {
+  let release!: (value: Response) => void;
+  const fetch = vi.fn().mockResolvedValueOnce(json([first])).mockImplementationOnce(
+    () => new Promise<Response>((resolve) => { release = resolve; }),
+  ).mockResolvedValueOnce(json([first]));
+  vi.stubGlobal("fetch", fetch);
+  const h = setup("1");
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  const original = h.result.current.target!;
+  act(() => broadcastMetadataChange("1"));
+  expect(original.isCurrent()).toBe(false);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  await act(async () => release(json([{ ...first, name: "Renamed" }])));
+  await waitFor(() => expect(h.result.current.target?.name).toBe("Renamed"));
+  expect(original.isOriginalCurrent?.()).toBe(true);
+  expect(original.isCurrent()).toBe(false);
+  const renamed = h.result.current.target!;
+  await act(async () => { await h.result.current.refetch(); });
+  expect(h.result.current.target?.name).toBe(first.name);
+  expect(original.isCurrent()).toBe(false);
+  expect(renamed.isCurrent()).toBe(false);
+  act(() => h.client.setQueryData(["me"], null));
+  expect(original.isOriginalCurrent?.()).toBe(false);
+});
 function setup(id: string | undefined, legacyEntry = false, email: string | null = alice) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   clients.push(client);
