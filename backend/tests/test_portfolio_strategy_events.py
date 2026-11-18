@@ -225,7 +225,11 @@ async def test_new_books_dividend_metadata_create_crypto_lock_order(strategy_eve
             trade(api, roots[0]),
         )
     assert paid.status == "ok" and paid.accepted == 2 and not paid.rejected
-    assert (renamed.status_code, created.status_code, filled.status_code) == (200, 201, 201)
+    assert (renamed.status_code, created.status_code, filled.status_code) == (200, 201, 201), (
+        renamed.text,
+        created.text,
+        filled.text,
+    )
     assert [(await ledger(api, root))[0][0] for root in roots] == [Decimal(9900), Decimal(10001)]
     assert (await ledger(api, created.json()["id"])) == ((Decimal(10000), Decimal(10000)), [])
 
@@ -401,3 +405,61 @@ async def test_active_split_gate_does_not_invert_management_or_waiting_stock_ord
         ((Decimal(10000), Decimal(10000)), [("AAPL", Decimal(8), Decimal(40))]),
     ]
     assert await evidence(api, "trades") == []
+
+
+async def test_dividend_user_fk_does_not_invert_waiting_metadata_owner_lock(strategy_events):
+    """Real root→user FK overlap must coexist with management owner→root order."""
+    api, roots, cid, _, _, _, _, engine = strategy_events
+    async with api.migrator.connect() as observer:
+        terms = (
+            await observer.execute(
+                text(
+                    "SELECT en.event_id,en.id,r.fingerprint,en.fingerprint "
+                    "FROM stock_dividend_entitlements en "
+                    "JOIN stock_action_revisions r ON r.id=en.revision_id "
+                    "WHERE en.portfolio_id=:root"
+                ),
+                {"root": int(roots[0])},
+            )
+        ).one()
+    pending = None
+    try:
+        async with scheduler(engine) as financial:
+            pid = (await financial.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+            await financial.execute(
+                text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": cid}
+            )
+            pending = asyncio.create_task(patch(api, roots[0], {"description": "Concurrent FK"}))
+            async with engine.connect() as observer, asyncio.timeout(5):
+                while True:
+                    blocked = (
+                        await observer.execute(
+                            text(
+                                "SELECT EXISTS(SELECT FROM pg_stat_activity "
+                                "WHERE datname=current_database() "
+                                "AND state='active' AND wait_event_type='Lock' "
+                                "AND :blocker=ANY(pg_blocking_pids(pid)) "
+                                "AND query LIKE '%update_portfolio_metadata%')"
+                            ),
+                            {"blocker": pid},
+                        )
+                    ).scalar_one()
+                    await observer.commit()
+                    if blocked:
+                        break
+                    await asyncio.sleep(0.01)
+            await financial.execute(
+                text(
+                    "SELECT * FROM public.apply_stock_dividend("
+                    ":event,:entitlement,:revision,:fingerprint)"
+                ),
+                dict(zip(("event", "entitlement", "revision", "fingerprint"), terms, strict=True)),
+            )
+            await financial.commit()
+        response = await asyncio.wait_for(pending, 5)
+        assert response.status_code == 200, response.text
+        assert (await ledger(api, roots[0]))[0][0] == Decimal("10000.50")
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
