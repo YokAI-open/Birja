@@ -182,12 +182,18 @@ async def test_bounded_retained_keyset_reaches_later_owners_and_wraps(dividend_c
                             text(f"DELETE FROM public.{table} WHERE user_id=ANY(:owners)"),  # noqa: S608 - fixed tuple
                             {"owners": owners},
                         )
-                await db.execute(
-                    text("DELETE FROM accounts WHERE user_id=ANY(:owners)"), {"owners": owners}
-                )
-                await db.execute(
-                    text("DELETE FROM users WHERE id=ANY(:owners)"), {"owners": owners}
-                )
+                # These owners were genuinely initialized through the grant
+                # authority. Keep immutable root/journal/latch evidence until
+                # the disposable database is removed; do not bypass its FKs.
+                assert (
+                    await db.scalar(
+                        text(
+                            "SELECT count(*) FROM portfolio_initializations "
+                            "WHERE user_id=ANY(:owners)"
+                        ),
+                        {"owners": owners},
+                    )
+                ) == len(owners)
 
 
 async def test_disabled_cycle_never_opens_database():

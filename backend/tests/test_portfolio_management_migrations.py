@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -32,9 +32,8 @@ async def staged(engine):
         yield migration_engine
     finally:
         await migration_engine.dispose()
-        # Drop only the guarded disposable schema. No shared head fixture: head
-        # is intentionally a migration-only revision during this plan.
-        await reset_disposable_schema(engine)
+        # Preserve staged behavior under test, then restore current supported head.
+        await restore_current_test_schema(engine)
 
 
 async def user(conn):
@@ -241,7 +240,7 @@ async def test_populated_legacy_and_zero_book_preserve_all_financial_evidence(st
         ).scalar_one() == 0
         from app.db.schema_contract import SchemaAdmissionError, require_schema
 
-        with pytest.raises(SchemaAdmissionError, match="incompatible_schema"):
+        with pytest.raises(SchemaAdmissionError, match="migration_only"):
             await require_schema(conn)
     with pytest.raises(RuntimeError, match="downgrade refused"):
         await migrate("0018", down=True)

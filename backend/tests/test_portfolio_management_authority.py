@@ -14,7 +14,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -49,7 +49,7 @@ async def authority(engine):
     finally:
         await app.dispose()
         await migrator.dispose()
-        await reset_disposable_schema(engine)
+        await restore_current_test_schema(engine)
 
 
 async def owner(migrator):

@@ -309,6 +309,7 @@ async def retained_migration_db(engine: AsyncEngine) -> AsyncIterator[AsyncEngin
     finally:
         await reset_disposable_schema(engine)
         await asyncio.to_thread(run_test_migration, "head")
+        await install_current_test_grants()
 
 
 async def test_retained_empty_roundtrip_and_final_upgrade(retained_migration_db) -> None:

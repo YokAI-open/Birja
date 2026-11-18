@@ -131,6 +131,10 @@ async def test_held_stock_remains_visible_but_cannot_reuse_crypto_price(
     assert held.stock_mark is not None and held.stock_mark.mark_mode == "unavailable"
     assert not held.stock_mark.units_safe and held.average_cost is None
     assert held.allocation_percent is snapshot.cash_allocation_percent is None
+    # End this read request before stock_id's independent immutable-fixture
+    # teardown writes holdings. Current valuation keeps its root proof locked
+    # until transaction end, just as production request cleanup does.
+    await db.rollback()
 
 
 async def financial_rows(engine: AsyncEngine, user_id: int) -> tuple:

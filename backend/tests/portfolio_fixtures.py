@@ -17,7 +17,12 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
-from tests.test_migrations import ensure_dividend_test_owner, run_test_migration, test_migration_url
+from tests.test_migrations import (
+    ensure_dividend_test_owner,
+    install_current_test_grants,
+    run_test_migration,
+    test_migration_url,
+)
 
 OWNED_TABLES = (
     "holdings",
@@ -63,6 +68,14 @@ async def portfolio_migration_db(engine: AsyncEngine) -> AsyncIterator[AsyncEngi
         # away this isolated schema, then restore the genuine migration head.
         await reset_disposable_schema(engine)
         await migrate_to("head")
+        await install_current_test_grants()
+
+
+async def restore_current_test_schema(engine: AsyncEngine) -> None:
+    """Restore the supported runtime AFTER a destructive staged test completes."""
+    await reset_disposable_schema(engine)
+    await migrate_to("head")
+    await install_current_test_grants()
 
 
 async def economic_snapshot(conn: AsyncConnection) -> dict[str, tuple[tuple, ...]]:

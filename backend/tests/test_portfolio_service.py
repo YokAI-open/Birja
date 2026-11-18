@@ -36,8 +36,11 @@ async def test_single_scalar_snapshot_includes_inactive_and_omits_zero(
         event.remove(engine.sync_engine, "before_cursor_execute", capture)
         async with engine.begin() as conn:
             await conn.execute(update(Coin).where(Coin.symbol == "BTC").values(is_active=True))
-    assert len(statements) == 1
-    assert "FOR UPDATE" not in statements[0].upper()
+    assert len(statements) == 2
+    assert all("FOR UPDATE" not in statement.upper() for statement in statements)
+    assert "HOLDINGS" in statements[0].upper() and "ACCOUNTS.CASH" in statements[0].upper()
+    assert "FOR SHARE OF ACCOUNTS" in statements[1].upper()
+    assert "ACCOUNTS.CASH" not in statements[1].upper()
     assert p.total_value == D("9999.50")
     assert p.prices_as_of == now - timedelta(seconds=120)
     assert len(p.holdings) == 1

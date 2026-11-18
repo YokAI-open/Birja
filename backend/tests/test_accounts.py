@@ -89,11 +89,15 @@ async def test_seeded_sibling_does_not_repeat_the_initial_grant(
         uid, _ = await get_or_create_user(db, email)
         await db.commit()
     async with sessions() as db:
-        # Actual0017 permits owned sibling roots. This isolated seed is not
+        # Current0020 permits canonical owned sibling roots. This isolated seed is not
         # a public creation endpoint or an additional onboarding grant.
         db.add(
             Account(
-                user_id=uid, name="Seeded strategy", cash=Decimal("1"), starting_cash=Decimal("1")
+                user_id=uid,
+                name="Seeded strategy",
+                name_key="seeded strategy",
+                cash=Decimal("1"),
+                starting_cash=Decimal("1"),
             )
         )
         await db.commit()

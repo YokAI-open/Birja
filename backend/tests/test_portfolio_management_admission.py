@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.db.portfolio_migrate import require_migrator, require_source
 from app.db.schema_contract import SchemaAdmissionError, require_schema
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
 
 
@@ -21,7 +21,7 @@ async def staged(engine):
     try:
         yield engine
     finally:
-        await reset_disposable_schema(engine)
+        await restore_current_test_schema(engine)
 
 
 @pytest.mark.parametrize(

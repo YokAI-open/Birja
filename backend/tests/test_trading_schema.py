@@ -31,14 +31,26 @@ async def ids(engine: AsyncEngine, migrated: None) -> AsyncIterator[dict[str, in
         root = (
             await conn.execute(
                 insert(Account)
-                .values(user_id=user_id, cash=Decimal("10000.00"), starting_cash=10000)
+                .values(
+                    user_id=user_id,
+                    name="My portfolio",
+                    name_key="my portfolio",
+                    cash=Decimal("10000.00"),
+                    starting_cash=10000,
+                )
                 .returning(Account.id)
             )
         ).scalar_one()
         other_root = (
             await conn.execute(
                 insert(Account)
-                .values(user_id=other_id, cash=10000, starting_cash=10000)
+                .values(
+                    user_id=other_id,
+                    name="My portfolio",
+                    name_key="my portfolio",
+                    cash=10000,
+                    starting_cash=10000,
+                )
                 .returning(Account.id)
             )
         ).scalar_one()

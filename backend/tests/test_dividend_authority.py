@@ -713,7 +713,14 @@ async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority
     ):
         async with conn.begin_nested() as outer:
             await conn.execute(text(statement))
-            with pytest.raises(DBAPIError, match="authority mismatch"):
+            with pytest.raises(
+                DBAPIError,
+                match=(
+                    "management routine ACL mismatch"
+                    if statement.startswith("GRANT ")
+                    else "management catalogue mismatch"
+                ),
+            ):
                 async with conn.begin_nested():
                     await conn.execute(text(guard))
             await outer.rollback()
@@ -876,6 +883,6 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
     from app.db.portfolio_bootstrap import PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
-    with pytest.raises(DBAPIError, match="authority mismatch"):
+    with pytest.raises(DBAPIError, match="management catalogue mismatch"):
         async with conn.begin_nested():
             await conn.execute(text(guard))

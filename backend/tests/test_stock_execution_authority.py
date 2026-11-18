@@ -250,9 +250,8 @@ async def test_bootstrap_and_upgrade_grants_have_exact_runtime_parity(engine, ru
         from app.db.portfolio_bootstrap import GRANTS_SQL
 
         await conn.execute(text(block))
-        for statement in GRANTS_SQL.split(";"):
-            if statement.strip():
-                await conn.execute(text(statement))
+        raw = await conn.get_raw_connection()
+        await raw.driver_connection.execute(GRANTS_SQL)
         assert (await conn.execute(query)).all() == before
         assert (
             await conn.execute(

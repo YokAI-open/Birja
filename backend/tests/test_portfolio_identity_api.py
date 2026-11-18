@@ -37,6 +37,7 @@ async def test_versioned_identity_has_no_finances_and_preserves_roots(
                 Account(
                     user_id=uid,
                     name=f"Retained {i}",
+                    name_key=f"retained {i}",
                     cash=Decimal("4521.09") + i,
                     starting_cash=Decimal("9321.01") + i,
                     closed_at=datetime.now(UTC) if closed else None,
@@ -161,7 +162,15 @@ async def test_legacy_me_never_returns_or_selects_portfolio(auth_client, outbox,
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     async with sessions() as db:
         uid = (await db.execute(select(User.id).where(User.email == email))).scalar_one()
-        db.add(Account(user_id=uid, name="Other", cash=Decimal("37"), starting_cash=Decimal("42")))
+        db.add(
+            Account(
+                user_id=uid,
+                name="Other",
+                name_key="other",
+                cash=Decimal("37"),
+                starting_cash=Decimal("42"),
+            )
+        )
         await db.commit()
     refused = await auth_client.get("/api/v1/me")
     assert refused.status_code == 409

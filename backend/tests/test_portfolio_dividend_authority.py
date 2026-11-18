@@ -43,7 +43,7 @@ async def dividend_portfolio_case(engine, migrated):
         try:
             assert (
                 await conn.execute(text("SELECT version_num FROM alembic_version"))
-            ).scalar_one() == "0017"
+            ).scalar_one() == "0020"
             now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
             owners = []
             for label in ("owner", "foreign"):
@@ -64,8 +64,9 @@ async def dividend_portfolio_case(engine, migrated):
                 roots.append(
                     (
                         await conn.execute(
-                            text("""INSERT INTO accounts(user_id,name,cash,starting_cash)
-                            VALUES (:u,:n,100,12345.67) RETURNING id"""),
+                            text("""INSERT INTO accounts(user_id,name,name_key,cash,starting_cash)
+                            VALUES (:u,:n,public.portfolio_name_key(:n),100,12345.67)
+                            RETURNING id"""),
                             {"u": uid, "n": label},
                         )
                     ).scalar_one()

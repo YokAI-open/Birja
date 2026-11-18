@@ -15,13 +15,25 @@ from app.services import history as trades
 from app.services.portfolios import OwnedActivePortfolio
 from tests.portfolio_fixtures import portfolio_migration_db
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
-from tests.test_portfolio_dividends import dividend_books, pay, revise
+from tests.test_portfolio_dividends import (
+    authority,
+    dividend_books,
+    management_api,
+    pay,
+    revise,
+    strategy_books,
+    strategy_events,
+)
 from tests.test_portfolio_splits import record_split, split_case
 from tests.test_portfolio_stock_authority import stock_authority_case
 from tests.test_portfolio_stock_ownership import journal_case
 from tests.test_portfolio_stock_trading import execute, stock_books
 
 __all__ = [
+    "authority",
+    "management_api",
+    "strategy_books",
+    "strategy_events",
     "portfolio_migration_db",
     "dividend_books",
     "stock_books",

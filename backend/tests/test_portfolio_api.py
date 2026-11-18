@@ -158,9 +158,12 @@ async def test_portfolio_api_one_financial_read_inactive_and_missing_isolation(
     financial = [s for s in statements if "FROM ACCOUNTS" in s and "HOLDINGS" in s]
     assert len(financial) == 1
     assert all(table in financial[0] for table in ("HOLDINGS", "COINS", "PRICES"))
-    # The separate owned-active target check reads metadata, not another
-    # cash/holdings snapshot. Neither query acquires a financial write lock.
-    assert len([s for s in statements if "FROM ACCOUNTS" in s]) == 2
+    # The dependency and final proof read only owner/active root identity;
+    # the financial inputs above still come from exactly one statement.
+    assert len([s for s in statements if "FROM ACCOUNTS" in s]) == 3
+    proof = [s for s in statements if "FOR SHARE OF ACCOUNTS" in s]
+    assert len(proof) == 1
+    assert all(field in proof[0] for field in ("ACCOUNTS.USER_ID", "ACCOUNTS.CLOSED_AT IS NULL"))
     assert all("FOR UPDATE" not in s for s in statements)
     assert any("FROM USERS" in s for s in statements)  # Existing authentication is separate.
     body = response.json()

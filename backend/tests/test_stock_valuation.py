@@ -386,6 +386,7 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
     stock_trade_case, settings, monkeypatch, change
 ):
     from sqlalchemy import func, select, text
+    from sqlalchemy.dialects import postgresql
 
     from app.services.stock_ownership import StockMovementInput, append_stock_movement
     from tests.stock_action_fixtures import synthetic_split
@@ -405,7 +406,7 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
 
         async def read_then_commit(statement, *args, **kwargs):
             result = await real(statement, *args, **kwargs)
-            queries.append(str(statement))
+            queries.append(str(statement.compile(dialect=postgresql.dialect())))
             if len(queries) == 1:
                 async with factory() as writer:
                     if change == "fill":
@@ -487,8 +488,11 @@ async def test_fresh_authority_can_only_suppress_original_financial_snapshot(
         monkeypatch.setattr(reader, "execute", read_then_commit)
         p = await get_portfolio(reader, portfolio=target, settings=settings)
         assert p.cash == 9796 and p.holdings[0].quantity == 2 and p.holdings[0].cost_basis == 204
-        assert sum("FROM accounts" in query for query in queries) == 1
         assert len(queries) == 2
+        financial = [query for query in queries if "accounts.cash" in query]
+        assert len(financial) == 1 and "holdings.quantity" in financial[0]
+        assert "FOR SHARE OF accounts" in queries[1]
+        assert "accounts.cash" not in queries[1]
         if change in ("units", "permission", "epoch", "mapping", "continuity"):
             assert p.total_value is None and p.known_value == 9796
             assert p.holdings[0].average_cost == (Decimal(102) if change == "continuity" else None)

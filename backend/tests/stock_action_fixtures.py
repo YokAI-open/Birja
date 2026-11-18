@@ -58,9 +58,11 @@ async def install_current_runtime_roles(conn):
         )
     ).one() == ("birja_test", "birja_test")
     await conn.execute(text(PREFLIGHT_SQL))
-    for statement in GRANTS_SQL.split(";"):
-        if statement.strip():
-            await conn.execute(text(statement))
+    # The current authority includes a dollar-quoted DO block. Use asyncpg's
+    # actual multi-statement protocol, as production bootstrap does; splitting
+    # on semicolons would truncate the block before any grants can be applied.
+    raw = await conn.get_raw_connection()
+    await raw.driver_connection.execute(GRANTS_SQL)
 
 
 @pytest_asyncio.fixture

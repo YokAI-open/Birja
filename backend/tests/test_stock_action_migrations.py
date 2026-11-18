@@ -126,7 +126,7 @@ async def event(conn: AsyncConnection, cid: int) -> tuple[int, int, int]:
 
 async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes: object) -> None:
     # These are deliberately original columns for authenticated pre-portfolio
-    # schemas; current0017 callers must use movement with an explicit owned root.
+    # schemas; current0020 callers must use movement with an explicit owned root.
     params: dict[str, object] = {
         "c": cid,
         "u": uid,
@@ -155,7 +155,7 @@ async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes
 async def current_root(conn, uid):
     assert (
         await conn.execute(text("SELECT version_num FROM alembic_version"))
-    ).scalar_one() == "0017"
+    ).scalar_one() == "0020"
     return (
         await conn.execute(
             text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}
@@ -217,7 +217,11 @@ async def movement(conn, cid, uid, **changes):
 async def test_movement_constraints(ledger, changes) -> None:
     conn, cid, uid = ledger
     await conn.execute(
-        text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,10000,10000)"), {"u": uid}
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
     )
     with pytest.raises(DBAPIError) as error:
         await movement(conn, cid, uid, **changes)
@@ -228,7 +232,11 @@ async def test_movement_constraints(ledger, changes) -> None:
 async def test_movement_economic_uniqueness(ledger, changes) -> None:
     conn, cid, uid = ledger
     await conn.execute(
-        text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,10000,10000)"), {"u": uid}
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
     )
     await movement(conn, cid, uid)
     with pytest.raises(DBAPIError) as error:
@@ -262,8 +270,8 @@ async def test_durable_event_duplicate_refused(ledger, target) -> None:
     root = (
         await conn.execute(
             text(
-                "INSERT INTO accounts(user_id,cash,starting_cash) "
-                "VALUES (:u,10000,10000) RETURNING id"
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',10000,10000) RETURNING id"
             ),
             {"u": uid},
         )
@@ -806,7 +814,10 @@ async def fill_cause(conn, cid, uid):
     )
     if not roots:
         await conn.execute(
-            text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,10000,10000)"),
+            text(
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+            ),
             {"u": uid},
         )
     root = await current_root(conn, uid)
@@ -825,7 +836,11 @@ async def fill_cause(conn, cid, uid):
 async def test_movement_rejects_foreign_fill_cause(ledger, mismatch: str) -> None:
     conn, cid, uid = ledger
     await conn.execute(
-        text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,10000,10000)"), {"u": uid}
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
     )
     foreign_cid = cid
     foreign_uid = uid
@@ -899,7 +914,11 @@ async def split_cause(conn, cid, *, declared_coin=None):
 async def test_movement_rejects_foreign_split_cause(ledger, mismatch: str) -> None:
     conn, cid, uid = ledger
     await conn.execute(
-        text("INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,10000,10000)"), {"u": uid}
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
     )
     source_coin = cid
     if mismatch == "coin":

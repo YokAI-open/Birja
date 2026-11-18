@@ -393,6 +393,19 @@ async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(
             )
         ).one()
     await migrate_to("0017")
+    async with engine.connect() as conn:
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT id,economic_event_id,before_digest,after_digest "
+                    "FROM stock_split_applications WHERE id=:a"
+                ),
+                {"a": aid},
+            )
+        ).one() == original
+    # Current ORM/service consumers require the current schema, not retained0017.
+    # Preserve the independent legacy bytes above before forwarding to0020.
+    await migrate_to("0020")
     async with AsyncSession(engine) as db:
         _, rows = await assert_ownership_consistent(db, cid)
         app = await db.get(StockSplitApplication, aid)
@@ -421,7 +434,11 @@ async def apply_later_mixed_split(db, cid, users, original):
     roots = list((await db.execute(select(Account).order_by(Account.id))).scalars())
     first, closed = [next(r for r in roots if r.user_id == u) for u in users]
     sibling = Account(
-        user_id=users[0], name="Later sibling", cash=Decimal(333), starting_cash=Decimal(1234)
+        user_id=users[0],
+        name="Later sibling",
+        name_key="later sibling",
+        cash=Decimal(333),
+        starting_cash=Decimal(1234),
     )
     db.add(sibling)
     await db.flush()

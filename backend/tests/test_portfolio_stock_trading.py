@@ -33,11 +33,16 @@ async def stock_books(stock_trade_case, new_user):
         first = (await db.scalars(select(Account).where(Account.user_id == uid))).one()
         first.cash = Decimal("1000")
         sibling = Account(
-            user_id=uid, name="Sibling", cash=Decimal("2000"), starting_cash=Decimal("7654")
+            user_id=uid,
+            name="Sibling",
+            name_key="sibling",
+            cash=Decimal("2000"),
+            starting_cash=Decimal("7654"),
         )
         closed = Account(
             user_id=uid,
             name="Closed",
+            name_key="closed",
             cash=Decimal("55"),
             starting_cash=Decimal("99"),
             closed_at=now,

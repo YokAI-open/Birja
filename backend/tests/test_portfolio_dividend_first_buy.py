@@ -104,6 +104,7 @@ async def test_never_owner_first_buy_after_paid_dividend_is_available_and_replay
             target = Account(
                 user_id=uid,
                 name="Never owned the dividend stock",
+                name_key="never owned the dividend stock",
                 cash=Decimal(1000),
                 starting_cash=Decimal(1000),
                 created_at=cutoff - timedelta(days=1),

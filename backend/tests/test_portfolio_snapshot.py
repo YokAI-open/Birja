@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 from decimal import Decimal as D
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.models.trade import Holding
@@ -53,31 +54,60 @@ async def write_position(session, portfolio):
     )
 
 
-async def test_locked_uncommitted_writer_does_not_block_whole_old_snapshot(
+async def test_locked_writer_waits_for_root_proof_but_preserves_whole_old_snapshot(
     engine, new_user, settings, clean_prices
 ):
     portfolio = await seed(engine, new_user)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     ready, release = asyncio.Event(), asyncio.Event()
+    writer_pid = None
+    read_task = None
 
     async def writer():
+        nonlocal writer_pid
         async with sessions() as session, session.begin():
+            writer_pid = (await session.execute(text("SELECT pg_backend_pid()"))).scalar_one()
             await write_position(session, portfolio)
             ready.set()
             await release.wait()
 
     task = asyncio.create_task(writer())
     try:
-        await asyncio.wait_for(ready.wait(), timeout=2)
+        await asyncio.wait_for(ready.wait(), timeout=5)
         async with sessions() as reader:
-            before = await asyncio.wait_for(
-                get_portfolio(reader, portfolio=portfolio, settings=settings), timeout=2
+            reader_pid = (await reader.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+            read_task = asyncio.create_task(
+                get_portfolio(reader, portfolio=portfolio, settings=settings)
             )
-        assert not task.done()
+            # The financial snapshot is nonlocking, but the final identity proof
+            # deliberately holds FOR SHARE until request transaction end. Prove
+            # the actual PostgreSQL wait, not merely a pending asyncio task.
+            async with sessions() as observer, asyncio.timeout(5):
+                while True:
+                    blocked = (
+                        await observer.execute(
+                            text(
+                                "SELECT :writer=ANY(pg_blocking_pids(:reader)) "
+                                "AND EXISTS(SELECT FROM pg_stat_activity WHERE pid=:reader "
+                                "AND state='active' AND wait_event_type='Lock')"
+                            ),
+                            {"writer": writer_pid, "reader": reader_pid},
+                        )
+                    ).scalar_one()
+                    await observer.commit()
+                    if blocked:
+                        break
+                    await asyncio.sleep(0.01)
+            assert not task.done() and not read_task.done()
+            release.set()
+            before = await asyncio.wait_for(read_task, timeout=5)
         assert financial_tuple(before) == OLD
     finally:
         release.set()
-        await asyncio.wait_for(task, timeout=2)
+        if read_task is not None and not read_task.done():
+            read_task.cancel()
+            await asyncio.gather(read_task, return_exceptions=True)
+        await asyncio.wait_for(task, timeout=5)
     async with sessions() as reader:
         after = await get_portfolio(reader, portfolio=portfolio, settings=settings)
     assert financial_tuple(after) == NEW
@@ -105,7 +135,7 @@ async def test_commit_between_input_reads_exposes_split_reader(
 
             async def execute_at_boundary(statement, *args, **kwargs):
                 result = await execute(statement, *args, **kwargs)
-                statements.append(str(statement))
+                statements.append(str(statement.compile(dialect=postgresql.dialect())))
                 if len(statements) == 1:
                     first_read.set()
                     await asyncio.wait_for(committed.wait(), timeout=2)
@@ -137,9 +167,11 @@ async def test_commit_between_input_reads_exposes_split_reader(
                 snapshot = await get_portfolio(reader, portfolio=portfolio, settings=settings)
                 assert_whole_snapshot(financial_tuple(snapshot))
                 assert financial_tuple(snapshot) == OLD
-                assert len(statements) == 1
+                assert len(statements) == 2
                 sql = statements[0].upper()
-                assert "FOR UPDATE" not in sql
+                assert all("FOR UPDATE" not in statement.upper() for statement in statements)
+                assert "FOR SHARE OF ACCOUNTS" in statements[1].upper()
+                assert "ACCOUNTS.CASH" not in statements[1].upper()
                 for table in ("ACCOUNTS", "HOLDINGS", "COINS", "PRICES"):
                     assert table in sql
     finally:
@@ -175,7 +207,7 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
 
         async def read_then_fill(statement, *args, **kwargs):
             result = await original(statement, *args, **kwargs)
-            statements.append(str(statement))
+            statements.append(str(statement.compile(dialect=postgresql.dialect())))
             if len(statements) == 1:
                 async with factory() as writer:
                     await stock_trading.execute(
@@ -194,7 +226,11 @@ async def test_actual_mixed_snapshot_never_combines_cash_and_positions_from_diff
         assert [h.quantity for h in before.holdings] == [D(2), D("0.99501246")]
         assert [h.mid for h in before.holdings] == [D(101), D(100)]
         assert before.class_values.stocks == 202 and before.class_values.crypto == D("99.50")
-        assert len(statements) == 2 and sum("FROM accounts" in sql for sql in statements) == 1
+        assert len(statements) == 2
+        financial = [sql for sql in statements if "accounts.cash" in sql]
+        assert len(financial) == 1 and "holdings.quantity" in financial[0]
+        assert "FOR SHARE OF accounts" in statements[1]
+        assert "accounts.cash" not in statements[1]
     async with factory() as reader:
         after = await get_portfolio(reader, portfolio=portfolio, settings=settings)
         assert after.cash == 9594 and after.total_value == D("10096.00")

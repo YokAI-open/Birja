@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
 from app.db.schema_contract import SchemaAdmissionError, require_schema
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
 
 
@@ -74,7 +74,7 @@ async def current(engine, request):
     finally:
         for db in roles.values():
             await db.dispose()
-        await reset_disposable_schema(engine)
+        await restore_current_test_schema(engine)
 
 
 async def test_bootstrap_preserves_money_and_exact_roles(current):

@@ -84,7 +84,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
     identity = AsyncMock(
         side_effect=ValueError("identity")
         if outcome == "identity"
-        else ["0014", "0016" if outcome == "revision" else "0017"]
+        else ["0014", "0016" if outcome == "revision" else "0020"]
     )
     if outcome == "preflight":
 
@@ -106,7 +106,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
             await migration.migrate(settings)
             assert (
                 capsys.readouterr().out
-                == "portfolio_migration_to_final=true source_revision=0014 final=0017\n"
+                == "portfolio_migration_to_final=true source_revision=0014 final=0020\n"
             )
             conn.rollback.assert_awaited_once()
         else:
@@ -124,7 +124,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
         assert statements[0] == "SELECT pg_advisory_lock(1026016017)"
         assert statements[-1] == "SELECT pg_advisory_unlock(1026016017)"
         assert conn.commit.await_count == 2
-        assert spawn.call_args.args[-2:] == ("upgrade", "0017")
+        assert spawn.call_args.args[-2:] == ("upgrade", "0020")
         assert spawn.call_args.kwargs["cwd"] == migration.BACKEND_DIR
     assert child.kill.call_count == (outcome == "timeout")
     assert child.wait.await_count == (outcome == "timeout")

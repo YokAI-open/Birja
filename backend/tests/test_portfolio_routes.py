@@ -12,9 +12,25 @@ from app.models.user import Account, User
 from tests.helpers import sign_in
 from tests.portfolio_fixtures import portfolio_migration_db
 from tests.test_portfolio_crypto import crypto_books, fill
-from tests.test_portfolio_dividends import dividend_books, pay, revise
+from tests.test_portfolio_dividends import (
+    authority,
+    dividend_books,
+    management_api,
+    pay,
+    revise,
+    strategy_books,
+    strategy_events,
+)
 
-__all__ = ["crypto_books", "portfolio_migration_db", "dividend_books"]
+__all__ = [
+    "authority",
+    "management_api",
+    "strategy_books",
+    "strategy_events",
+    "crypto_books",
+    "portfolio_migration_db",
+    "dividend_books",
+]
 
 
 def test_retired_history_imports_expose_only_the_refusal_adapter():
@@ -277,6 +293,10 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
         ("POST", "/api/v2/auth/verify-code"),
         ("GET", "/api/v2/me"),
         ("GET", "/api/v2/portfolios"),
+        ("POST", "/api/v2/portfolios"),
+        ("GET", "/api/v2/portfolios/overview"),
+        ("GET", base + "/metadata"),
+        ("PATCH", base),
         ("GET", base),
         ("GET", base + "/history"),
         ("GET", base + "/event-history"),
@@ -301,7 +321,7 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
         assert endpoint in schema
 
 
-async def test_production_routes_have_no_management_or_unscoped_v2_fallback(read_auth):
+async def test_production_routes_have_no_delete_or_unscoped_v2_fallback(read_auth):
     client, _, roots, _ = read_auth
     headers = {"X-CSRF-Token": client.cookies["bj_csrf"]}
     for url in ("/api/v2/trades", "/api/v2/history", "/api/v2/portfolio"):
@@ -309,9 +329,11 @@ async def test_production_routes_have_no_management_or_unscoped_v2_fallback(read
     for method, url in (
         ("POST", "/api/v2/portfolios"),
         ("PATCH", path(roots[0])),
-        ("DELETE", path(roots[0])),
     ):
-        assert (await client.request(method, url, headers=headers)).status_code == 405
+        # Management routes now exist, but strict empty payloads cannot create
+        # a strategy or edit metadata. DELETE remains a later phase.
+        assert (await client.request(method, url, headers=headers, json={})).status_code == 422
+    assert (await client.delete(path(roots[0]), headers=headers)).status_code == 405
 
 
 async def test_history_correction_original_is_owned_and_private_over_http(

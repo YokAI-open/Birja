@@ -42,7 +42,13 @@ async def test_synthetic_seeds_require_explicit_root_when_owner_has_siblings(own
     foreign = await new_user()
     async with factory() as db:
         original = await synthetic_portfolio_id(db, uid)
-        sibling = Account(user_id=uid, name="Fixture sibling", cash=10000, starting_cash=10000)
+        sibling = Account(
+            user_id=uid,
+            name="Fixture sibling",
+            name_key="fixture sibling",
+            cash=10000,
+            starting_cash=10000,
+        )
         db.add(sibling)
         await db.flush()
         with pytest.raises(AssertionError, match="Multi-root"):

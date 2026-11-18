@@ -38,7 +38,10 @@ def test_model_metadata_root_retains_identity_economics_and_owned_candidate_key(
     assert ("id", "user_id") in unique
     assert ("user_id",) not in unique
     assert any(tuple(index.columns.keys()) == ("user_id",) for index in table.indexes)
-    assert "description" not in table.c
+    assert isinstance(table.c.description.type, Text)
+    assert not table.c.description.nullable and table.c.description.server_default.arg == ""
+    assert isinstance(table.c.name_key.type, Text)
+    assert not table.c.name_key.nullable and table.c.name_key.type.collation == "C"
     for column in (table.c.cash, table.c.starting_cash):
         assert isinstance(column.type, Numeric)
         assert (column.type.precision, column.type.scale) == (20, 8)

@@ -176,8 +176,8 @@ async def test_mixed_tied_time_whole_tuple_owner_paging_and_rename(authority_cas
     other_root = (
         await conn.execute(
             text(
-                "INSERT INTO accounts(user_id,cash,starting_cash) "
-                "VALUES (:u,100,10000) RETURNING id"
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',100,10000) RETURNING id"
             ),
             {"u": other},
         )

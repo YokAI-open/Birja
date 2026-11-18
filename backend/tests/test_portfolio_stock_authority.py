@@ -40,7 +40,7 @@ async def stock_authority_case(engine, migrated):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0017"
+        ).scalar_one() == "0020"
         owners = []
         for label in ("owned", "foreign"):
             owners.append(
@@ -62,8 +62,9 @@ async def stock_authority_case(engine, migrated):
                 (
                     await conn.execute(
                         text("""INSERT INTO accounts
-              (user_id,name,cash,starting_cash,closed_at) VALUES
-              (:u,:name,9980,12000,CASE WHEN :closed THEN clock_timestamp() ELSE NULL END)
+              (user_id,name,name_key,cash,starting_cash,closed_at) VALUES
+              (:u,:name,public.portfolio_name_key(:name),9980,12000,
+               CASE WHEN :closed THEN clock_timestamp() ELSE NULL END)
               RETURNING id"""),
                         {"u": owner, "name": label, "closed": closed},
                     )

@@ -6,6 +6,7 @@ import pytest
 from app.db.schema_contract import SchemaAdmissionError, require_schema
 from app.main import create_app
 from tests.portfolio_fixtures import economic_snapshot, migrate_to, portfolio_migration_db
+from tests.test_migrations import install_current_test_grants
 
 __all__ = ["portfolio_migration_db"]
 
@@ -54,7 +55,7 @@ async def test_intermediate_request_write_gate_refuses_before_endpoint(
 
 
 @pytest.mark.parametrize(
-    "revision", ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
+    "revision", ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017"]
 )
 async def test_current_startup_refuses_retained_schema_without_repair(
     portfolio_migration_db, settings, revision
@@ -108,7 +109,8 @@ async def test_retained_lane_admits_only_its_reviewed_schema(
 async def test_final_startup_and_write_admission_accepts_actual_final_schema(
     portfolio_migration_db, settings
 ):
-    await migrate_to("0017")
+    await migrate_to("0020")
+    await install_current_test_grants()
     app = create_app(settings)
     reached = []
 
@@ -180,7 +182,7 @@ async def test_restricted_runtime_role_can_read_schema_admission(engine, migrate
 
     async with engine.connect() as conn, conn.begin():
         await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed role matrix
-        assert await require_schema(conn) == "0017"
+        assert await require_schema(conn) == "0020"
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege(current_user,'alembic_version','UPDATE')")
