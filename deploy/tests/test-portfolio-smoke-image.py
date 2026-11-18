@@ -59,7 +59,10 @@ class Sources:
     def git(self, *args):
         if args == ("rev-parse", "HEAD"):
             return self.head.encode()
-        if args in (("rev-parse", COMMIT + ":backend/app"), ("rev-parse", "HEAD:backend/app")):
+        if args in (
+            ("rev-parse", COMMIT + ":backend/app"),
+            ("rev-parse", "HEAD:backend/app"),
+        ):
             return APP_TREE.encode()
         if args[:2] == ("diff", "--name-only"):
             return b"backend/Dockerfile\n" if self.dirty else b""
@@ -72,9 +75,16 @@ class ImageCommands:
     def __init__(self, sources):
         self.sources = sources
         self.calls = []
-        self.image = [{"Id": IMAGE, "Config": {
-            "Labels": {"org.opencontainers.image.revision": COMMIT}, "User": "app"
-        }, "RootFS": {"Type": "layers", "Layers": ["sha256:" + "d" * 64]}}]
+        self.image = [
+            {
+                "Id": IMAGE,
+                "Config": {
+                    "Labels": {"org.opencontainers.image.revision": COMMIT},
+                    "User": "app",
+                },
+                "RootFS": {"Type": "layers", "Layers": ["sha256:" + "d" * 64]},
+            }
+        ]
         self.fail_build = False
         self.change_head = False
         self.mutate_context = False
@@ -91,7 +101,9 @@ class ImageCommands:
                 (Path(argv[-1]) / "app/__init__.py").write_text("substituted")
             return SimpleNamespace(returncode=0, stdout=b"build complete", stderr=b"")
         if argv[:3] == ["docker", "image", "inspect"]:
-            return SimpleNamespace(returncode=0, stdout=json.dumps(self.image).encode(), stderr=b"")
+            return SimpleNamespace(
+                returncode=0, stdout=json.dumps(self.image).encode(), stderr=b""
+            )
         raise AssertionError("unexpected Docker operation: " + repr(argv))
 
     def assert_build(self, argv, kwargs):
@@ -107,32 +119,75 @@ class ImageCommands:
 
 
 class CurrentImageContracts(unittest.TestCase):
+    def test_program_admits_schema_before_application_imports_and_wires_roles(self):
+        fixture = smoke.selected_fixture(sources_module, '0020')
+        for mode in ('create', 'verify', 'projection'):
+            code = fixture.program(mode=mode)
+            current = smoke.admitted_program(smoke.management_role_program(code), '0020')
+            compile(current, '<current0020-tls>', 'exec')
+            self.assertLess(current.index('asyncio.run(smoke_admit())'), current.rindex('from sqlalchemy.ext.asyncio import'))
+            self.assertIn("for role in ('app','scheduler')", current)
+            self.assertIn('replay.replayed', current)
+        retained = smoke.selected_fixture(sources_module, '0017')
+        code = smoke.admitted_program(retained.program(mode='verify'), '0017')
+        compile(code, '<retained0017-tls>', 'exec')
+        self.assertLess(code.index('asyncio.run(smoke_admit())'), code.rindex('from app.core.config import'))
+        self.assertNotIn('management_role', code)
+
     def test_selected_schema_source_refuses_unsupported_before_build(self):
-        for revision in ('0018', '0019', 'head', '0021'):
+        for revision in ("0018", "0019", "head", "0021"):
             command = ImageCommands(Sources())
             with self.subTest(revision=revision), self.assertRaises(ValueError):
-                smoke.build_selected_runtime(Sources(), {}, revision=revision, run=command)
+                smoke.build_selected_runtime(
+                    Sources(), {}, revision=revision, run=command
+                )
             self.assertEqual(command.calls, [])
 
     def test_retained_runtime_uses_the_complete_fixed_source(self):
         calls = []
-        profile = sources_module.profile_for('0017')
-        image = [{'Id': IMAGE, 'Config': {'Labels': {'org.opencontainers.image.revision': profile['commit']}, 'User': 'app'}, 'RootFS': {'Type': 'layers', 'Layers': ['fixed']}}]
+        profile = sources_module.profile_for("0017")
+        image = [
+            {
+                "Id": IMAGE,
+                "Config": {
+                    "Labels": {"org.opencontainers.image.revision": profile["commit"]},
+                    "User": "app",
+                },
+                "RootFS": {"Type": "layers", "Layers": ["fixed"]},
+            }
+        ]
+
         def command(argv, **kwargs):
             calls.append(argv)
-            if argv[:2] == ['docker', 'build']:
+            if argv[:2] == ["docker", "build"]:
                 context = Path(argv[-1])
-                self.assertEqual((context / 'app/db/portfolio_bootstrap.py').read_bytes(), sources_module.git('show', profile['commit'] + ':backend/app/db/portfolio_bootstrap.py'))
-                self.assertFalse((context / 'alembic/versions/0020_portfolio_management_authority.py').exists())
-            return subprocess.CompletedProcess(argv, 0, json.dumps(image).encode(), b'')
-        binding = smoke.build_selected_runtime(sources_module, {}, revision='0017', run=command)
-        self.assertEqual(binding['source_commit'], profile['commit'])
-        self.assertEqual(calls[0][:2], ['docker', 'build'])
+                self.assertEqual(
+                    (context / "app/db/portfolio_bootstrap.py").read_bytes(),
+                    sources_module.git(
+                        "show",
+                        profile["commit"] + ":backend/app/db/portfolio_bootstrap.py",
+                    ),
+                )
+                self.assertFalse(
+                    (
+                        context
+                        / "alembic/versions/0020_portfolio_management_authority.py"
+                    ).exists()
+                )
+            return subprocess.CompletedProcess(argv, 0, json.dumps(image).encode(), b"")
+
+        binding = smoke.build_selected_runtime(
+            sources_module, {}, revision="0017", run=command
+        )
+        self.assertEqual(binding["source_commit"], profile["commit"])
+        self.assertEqual(calls[0][:2], ["docker", "build"])
 
     def test_builds_declared_frozen_runtime_before_first_use_and_rechecks_id(self):
         source = Sources()
         command = ImageCommands(source)
-        binding = smoke.build_current_runtime(source, {"PATH": "/synthetic/bin"}, run=command)
+        binding = smoke.build_current_runtime(
+            source, {"PATH": "/synthetic/bin"}, run=command
+        )
         self.assertEqual(binding["id"], IMAGE)
         self.assertEqual(binding["source_commit"], COMMIT)
         self.assertEqual(binding["app_tree"], APP_TREE)
@@ -168,7 +223,9 @@ class CurrentImageContracts(unittest.TestCase):
             source = Sources()
             command = ImageCommands(source)
             if field == "revision":
-                command.image[0]["Config"]["Labels"]["org.opencontainers.image.revision"] = "f" * 40
+                command.image[0]["Config"]["Labels"][
+                    "org.opencontainers.image.revision"
+                ] = "f" * 40
             else:
                 original = command.__call__
                 changing_command = command
@@ -190,13 +247,33 @@ class CurrentImageContracts(unittest.TestCase):
             if argv[:2] == ["uv", "export"]:
                 return subprocess.CompletedProcess(argv, 0, b"approved==1.0\n", b"")
             if argv[:2] == ["docker", "run"]:
-                return subprocess.CompletedProcess(argv, 1, b"", b"local cached runtime absent")
+                return subprocess.CompletedProcess(
+                    argv, 1, b"", b"local cached runtime absent"
+                )
             return subprocess.CompletedProcess(argv, 0, b"", b"")
 
-        with mock.patch.object(smoke, "load", side_effect=lambda name: source if name == "portfolio-sources" else object()), \
-             mock.patch.object(smoke.subprocess, "run", side_effect=clean_runner), \
-             mock.patch.object(smoke, "build_current_runtime", side_effect=ready, create=True) as factory:
-            with self.assertRaisesRegex(RuntimeError, "image factory reached before database"):
+        with (
+            mock.patch.object(
+                smoke,
+                "load",
+                side_effect=lambda name: (
+                    source if name == "portfolio-sources" else object()
+                ),
+            ),
+            mock.patch.object(smoke, "selected_fixture", return_value=object()),
+            mock.patch.object(
+                smoke,
+                "build_selected_runtime",
+                side_effect=lambda *a, **k: smoke.build_current_runtime(*a),
+            ),
+            mock.patch.object(smoke.subprocess, "run", side_effect=clean_runner),
+            mock.patch.object(
+                smoke, "build_current_runtime", side_effect=ready, create=True
+            ) as factory,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "image factory reached before database"
+            ):
                 smoke.run()
         factory.assert_called_once()
 

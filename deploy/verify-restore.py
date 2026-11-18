@@ -450,6 +450,8 @@ def bundle_verify(archive, sha, required_profile=None):
             allowed.update(retained)
         if "portfolio_payload" in inventory:
             payload_files = portfolio_payload_files(inventory)
+            if inventory['portfolio_payload']['version'] == 2:
+                require(inventory.get('recovery_profile') == 'deploy-recovery-v3')
             require(set(inventory["portfolio_payload"]["sha256"]) == set(payload_files))
             allowed.update(payload_files)
         require(
@@ -526,6 +528,8 @@ def verify_contract_inventory(inventory, expected):
         legacy = ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
         supported = list(recovery_contract().SUPPORTED_REVISIONS)
         require(revisions in (legacy, supported, [r for r in supported if r != '0020']))
+        if '0020' in revisions:
+            require(inventory.get('portfolio_payload', {}).get('version') == 2)
         if "portfolio_payload" in inventory:
             supported = list(recovery_contract().SUPPORTED_REVISIONS)
             if inventory['portfolio_payload']['version'] == 1:

@@ -25,6 +25,17 @@ def load(name):
 
 
 class PortfolioRecoveryContracts(unittest.TestCase):
+    def test_v1_inventory_remains_explicit_and_cannot_inherit_current_revision(self):
+        consumer = load("verify-restore")
+        hashes = {name: "a" * 64 for name in consumer.PORTFOLIO_PAYLOAD_V1}
+        inventory = {"portfolio_payload": {"version": 1, "sha256": hashes}}
+        consumer.verify_portfolio_inventory(inventory, hashes)
+        for field, value in [("version", 2), ("revision", "0020")]:
+            damaged = copy.deepcopy(inventory)
+            damaged["portfolio_payload"][field] = value
+            with self.assertRaises((ValueError, KeyError)):
+                consumer.verify_portfolio_inventory(damaged, hashes)
+
     def test_final_columns_have_complete_owned_lineage_and_global_marker(self):
         producer = load("backup-snapshot")
         columns = producer.contract_columns("0017")

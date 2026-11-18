@@ -129,7 +129,8 @@ def postgres_proof():
         "EMAIL_BACKEND": "console",
     }
     code = r"""
-import asyncio,importlib.util,json,tempfile,subprocess
+import asyncio,importlib.util,json,tempfile,subprocess,io,tarfile,types,copy
+from unittest.mock import patch
 import tests.conftest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -152,9 +153,13 @@ async def main():
  migrator=None
  try:
   await reset_disposable_schema(admin)
-  await asyncio.to_thread(run_test_migration,'0017')
+  await asyncio.to_thread(run_test_migration,'0014')
   migrator=create_async_engine(test_migration_url())
-  async with migrator.begin() as conn:await fixture.seed_legacy(conn)
+  async with migrator.begin() as conn:
+   await conn.execute(text("INSERT INTO users(email) VALUES ('legacy@example.test'),('empty@example.test')"))
+   await conn.execute(text("INSERT INTO accounts(user_id,cash,starting_cash) SELECT id,123.45,7777 FROM users WHERE email='legacy@example.test'"))
+  await asyncio.to_thread(run_test_migration,'0017')
+  async with migrator.begin() as conn:await conn.execute(text("UPDATE accounts SET name='Legacy'"))
   await asyncio.to_thread(run_test_migration,'0020')
   async with admin.begin() as conn:
    await sql(conn,PREFLIGHT_SQL);await sql(conn,GRANTS_SQL)
@@ -203,7 +208,36 @@ async def main():
       assert message in str(error.orig);await conn.rollback()
      else:raise AssertionError('closed/conflicting creation replay admitted')
   finally:await app.dispose()
+  # Exact old schema consumer from the authenticated complete release, using
+  # an actual DB connection, must refuse0020 after its sole read and no writes.
+  sources=load('sources','deploy/tests/portfolio-sources.py')
+  payload=sources.source_archive('portfolio0017')
+  with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+   old=archive.extractfile('backend/app/db/schema_contract.py').read()
+  retained=types.ModuleType('immutable_schema0017');exec(compile(old,'<authenticated0017-schema>','exec'),retained.__dict__)
+  async with admin.connect() as conn:
+   try:await retained.require_schema(conn)
+   except retained.SchemaAdmissionError as error:assert error.reason=='incompatible_schema'
+   else:raise AssertionError('actual old source admitted0020')
+  try:await asyncio.to_thread(run_test_migration,'0019',down=True)
+  except Exception as error:assert 'downgrade refused before writes' in str(error)
+  else:raise AssertionError('populated downgrade succeeded')
   recovery=load('consumer','deploy/verify-restore.py');recovery.BOOT='birja_test'
+  for damage in ('journal','latch','sequence','schema','helper','acl','source','unsafe'):
+   changed=copy.deepcopy(noacl)
+   if damage=='journal':changed['tables'].pop('portfolio_creations')
+   elif damage=='latch':changed['management_state']['initializations']-=1
+   elif damage=='sequence':changed['identity_state'].pop()
+   elif damage=='schema':changed['schema']['constraints'].pop()
+   elif damage=='helper':changed['portfolio_authority']['functions'].pop()
+   elif damage=='acl':changed['management_contract']['acl']='0'*64
+   elif damage=='source':changed['management_contract']['catalogue']='0'*64
+   else:changed['management_contract']['unsafe']=1
+   with patch.object(recovery,'canonical',return_value=changed),patch.object(recovery,'sql',side_effect=AssertionError('pregrant write')) as write:
+    try:recovery.restore_management_authority([])
+    except ValueError:pass
+    else:raise AssertionError('damaged noACL state admitted: '+damage)
+    write.assert_not_called()
   dc=['docker','compose','--env-file','/dev/null','-p','birja-p13-04','-f',str(root/'docker-compose.test.yml')]
   dump=recovery.call(dc+['exec','-T','postgres','pg_dump','-U','birja_migrator','-d','birja_test','--format=custom','--no-owner','--no-acl'])
   recovery.call(dc+['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d','birja_test'],b'CREATE DATABASE birja_ops_test;')
@@ -230,6 +264,14 @@ async def main():
     path=Path(tmp)/'before.json';digest=fixture.save_snapshot(path,value)
     assert fixture.compare_snapshot(path,digest,after)==digest
    print(json.dumps({'manifest':manifest,'projection':value,'quarantined':quarantined,'noacl':noacl,'restored':True},sort_keys=True))
+  # Independent fresh source lane, without substituting a retained bootstrap.
+  await reset_disposable_schema(admin)
+  await asyncio.to_thread(run_test_migration,'0020')
+  async with admin.begin() as conn:
+   await sql(conn,PREFLIGHT_SQL);await sql(conn,GRANTS_SQL)
+   fresh=(await conn.execute(text(producer.manifest_sql('0020')))).scalar_one()
+   producer.validate_manifest(fresh)
+   assert fresh['tables']['portfolio_creations']['count']==fresh['tables']['portfolio_initializations']['count']==0
  finally:
   if migrator:await migrator.dispose()
   await reset_disposable_schema(admin);await admin.dispose()
@@ -330,6 +372,9 @@ class ManagementRecoveryContracts(unittest.TestCase):
         ):
             output = Path(tmp) / "recovery.tar"
             producer.bundle_package_v2(output, recovery=recovery)
+            recovery.bundle_verify(
+                output, recovery.digest(output), required_profile="deploy-recovery-v3"
+            )
             with tarfile.open(output, "r:") as archive:
                 names = recovery.tar_members(archive)
                 inventory = json.load(archive.extractfile("INVENTORY.json"))
@@ -357,6 +402,28 @@ class ManagementRecoveryContracts(unittest.TestCase):
                         hashlib.sha256(archive.extractfile(name).read()).hexdigest(),
                         digest,
                     )
+                members = {
+                    m.name: archive.extractfile(m).read()
+                    for m in archive.getmembers()
+                    if m.isfile()
+                }
+            for missing in (
+                *recovery.CORE,
+                *recovery.UNITS,
+                "images/postgres.tar",
+                "sources/portfolio0017.tar",
+            ):
+                damaged = Path(tmp) / "damaged.tar"
+                with tarfile.open(damaged, "w:") as archive:
+                    for name, data in members.items():
+                        if name == missing:
+                            continue
+                        member = tarfile.TarInfo(name)
+                        member.size = len(data)
+                        archive.addfile(member, io.BytesIO(data))
+                damaged.chmod(0o600)
+                with self.subTest(missing=missing), self.assertRaises(ValueError):
+                    recovery.bundle_verify(damaged, recovery.digest(damaged))
             with self.assertRaises(ValueError):
                 producer.bundle_package_v2(output, recovery=recovery)
 
