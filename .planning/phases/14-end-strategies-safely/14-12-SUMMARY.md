@@ -161,3 +161,16 @@ The initial repair run's two draft-observer assertions required waiting for TanS
 ### Repair self-check: PASSED
 
 RED/GREEN commits and all four owned source/test files exist. The original review and parent planning files remain untouched; only the authorized summary append accompanies source repair evidence.
+
+## Regression reliability repair — WR-01
+
+The re-review correctly noted that a globally deferred first digest could belong to creation recovery. The pending-recovery fixture now reads the seeded deletion envelope's exact nonce and holds only the digest input bytes for that nonce and owner. Creation hashing proceeds normally. Before and after invoking captured metadata edit/review/save handlers, the test explicitly asserts deletion readiness is false and original-root quarantine is still empty, with no PATCH or editor mutation. After releasing that exact gate, it proves readiness, restored unknown original ID, original quarantine, no automatic DELETE, and independent sibling metadata editing. The corrupt-storage/explicit safe retry variant remains covered. Production source and all exported contracts remain unchanged from `302a9de`.
+
+Validation of the final test-only changes:
+
+- Focused pending-digest and corrupt-storage variants: **2 passed**, 1.86s (`/tmp/birja-phase14-plan12/warning-focused.log`).
+- Complete management/deletion hook files: **61 passed**, 5.64s (`warning-hooks.log`).
+- Full frontend typecheck, scoped test-file ESLint and Prettier: **exit 0** (`warning-typecheck.log`, `warning-lint.log`, `warning-prettier.log`).
+- Whitespace check clean. Owned processes completed; hook/client/storage/mock cleanup ran. No production edits, package changes or external operations occurred. The prior 1,272-test qualification is retained as historical production-source evidence; a full suite was not rerun for this isolated fixture correction.
+
+The original review remains preserved for the parent's independent WR-01 recheck. Parent requirement-progress fields remain unchanged.

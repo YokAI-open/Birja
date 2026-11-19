@@ -8,7 +8,11 @@ import { usePortfolioManagement } from "./usePortfolioManagement";
 import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreationAttempt";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 import { usePortfolioTarget } from "./usePortfolioTarget";
-import { portfolioDeletionAuthorityReady, usePortfolioDeletion } from "./usePortfolioDeletion";
+import {
+  isPortfolioDeletionQuarantined,
+  portfolioDeletionAuthorityReady,
+  usePortfolioDeletion,
+} from "./usePortfolioDeletion";
 import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
 
 const clients: QueryClient[] = [];
@@ -709,6 +713,7 @@ it.each(["digest", "corrupt"])(
       intentKey: crypto.randomUUID(),
       policyVersion: "freeze_at_closure_v1",
     });
+    const deletionNonce = JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).nonce as string;
     let release!: () => void;
     let entered = false;
     const gate = new Promise<void>((resolve) => {
@@ -716,9 +721,12 @@ it.each(["digest", "corrupt"])(
     });
     if (failure === "digest") {
       const digest = webcrypto.subtle.digest.bind(webcrypto.subtle);
-      vi.spyOn(webcrypto.subtle, "digest").mockImplementationOnce(async (...args) => {
-        entered = true;
-        await gate;
+      vi.spyOn(webcrypto.subtle, "digest").mockImplementation(async (...args) => {
+        // Creation recovery has its own nonce and must continue independently.
+        if (new TextDecoder().decode(args[1]) === `${deletionNonce}\0alice@example.test`) {
+          entered = true;
+          await gate;
+        }
         return digest(...args);
       });
     } else sessionStorage.setItem(DELETION_STORAGE_KEY, "corrupt");
@@ -738,6 +746,11 @@ it.each(["digest", "corrupt"])(
     const save = hook.result.current.saveMetadata;
     const review = hook.result.current.reviewMetadata;
     try {
+      if (failure === "digest") {
+        await waitFor(() => expect(entered).toBe(true));
+        expect(portfolioDeletionAuthorityReady(hook.client, "alice@example.test")).toBe(false);
+        expect(isPortfolioDeletionQuarantined(hook.client, "alice@example.test", "2")).toBe(false);
+      }
       expect(hook.result.current.metadataBlocked).toBe(true);
       act(() => {
         edit({ name: "Unsafe" });
@@ -746,7 +759,10 @@ it.each(["digest", "corrupt"])(
       await act(async () => save());
       expect(hook.result.current.draft).toBeNull();
       expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
-      if (failure === "digest") expect(entered).toBe(true);
+      if (failure === "digest") {
+        expect(portfolioDeletionAuthorityReady(hook.client, "alice@example.test")).toBe(false);
+        expect(isPortfolioDeletionQuarantined(hook.client, "alice@example.test", "2")).toBe(false);
+      }
     } finally {
       await act(async () => {
         release();
@@ -758,6 +774,14 @@ it.each(["digest", "corrupt"])(
         expect(portfolioDeletionAuthorityReady(hook.client, "alice@example.test")).toBe(true),
       );
       expect(hook.result.current.metadataBlocked).toBe(true);
+      expect(isPortfolioDeletionQuarantined(hook.client, "alice@example.test", "2")).toBe(true);
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={hook.client}>{children}</QueryClientProvider>
+      );
+      const restored = renderHook(() => usePortfolioDeletion(), { wrapper });
+      expect(restored.result.current.deletion.phase).toBe("unknown");
+      expect(restored.result.current.deletion.attempt?.portfolioId).toBe("2");
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
       const sibling = setup("3", hook.client);
       await waitFor(() => expect(sibling.result.current.metadata?.id).toBe("3"));
       expect(sibling.result.current.metadataBlocked).toBe(false);
