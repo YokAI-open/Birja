@@ -82,7 +82,10 @@ it("persists the exact original before DELETE and restores unknown without autom
   expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt).toBeNull();
 });
 it("preserves the durable unknown marker when identity metadata is garbage-collected", async () => {
-  vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("lost"))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.reject(new TypeError("lost"))),
+  );
   const first = setup();
   await waitFor(() => expect(first.result.current.ready).toBe(true));
   act(() => first.result.current.reviewDeletion(metadata));

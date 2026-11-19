@@ -74,6 +74,9 @@ const empty = (): PortfolioDeletionState =>
 const storageError = () =>
   new Error("Deletion recovery storage unavailable. No new deletion was sent.");
 const sessions = new WeakMap<QueryClient, Session>();
+// A replaced provider's old cache can still emit removal/logout notifications.
+// It may revoke its own memory, never erase the current tab's recovery lease.
+let persistenceClient: WeakRef<QueryClient> | undefined;
 const activeScopes = new WeakSet<Scope>();
 const who = (client: QueryClient) =>
   client.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
@@ -135,7 +138,6 @@ function sessionFor(client: QueryClient): Session {
     releaseAfterReview: null,
   };
   sessions.set(client, session);
-  if (session.known && session.owner === null) clearDeletionRecovery(() => true);
   client.getQueryCache().subscribe((event) => {
     const owner = who(client);
     const known = client.getQueryData(["me"]) !== undefined;
@@ -160,7 +162,10 @@ function sessionFor(client: QueryClient): Session {
       session.loading = false;
       session.quarantined.clear();
       session.releaseAfterReview = null;
-      clearDeletionRecovery(() => who(client) === owner);
+      // Cache absence/GC revokes in-memory authority but is not an
+      // authenticated logout. Keep the original durable recovery marker.
+      if (known)
+        clearDeletionRecovery(() => persistenceClient?.deref() === client && who(client) === owner);
       publish(session, empty());
       return;
     }
@@ -282,6 +287,9 @@ export function usePortfolioDeletion(
     }
   };
   useLayoutEffect(() => {
+    persistenceClient = new WeakRef(client);
+    if (session.known && session.owner === null)
+      clearDeletionRecovery(() => persistenceClient?.deref() === client && who(client) === null);
     activeScopes.add(scope);
     publish(session);
     void restore();
