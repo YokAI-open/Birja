@@ -70,7 +70,8 @@ The current source-owned inventory includes29tables and22identity sequences.
 Comparison retains complete rows/schema/exact identity state, independent cash
 and baselines, holdings/basis, immutable financial/history/retry lineage, canonical
 names/descriptions, creation journal and initialization provenance. Restore does
-not rerun grants, reset cash, discard a zero-book latch or substitute a schema.
+not repeat starting-cash grants, reset cash, discard a zero-book latch or
+substitute a schema.
 
 Both genuine0017 and current0020 cold paths explicitly reported
 source_destroyed=true, immutable_before_oracle=true, quarantine=true, followed
