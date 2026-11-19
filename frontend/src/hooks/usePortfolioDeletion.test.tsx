@@ -97,6 +97,28 @@ it("preserves the durable unknown marker when identity metadata is garbage-colle
   expect(next.result.current.deletion.attempt).toEqual(original);
   expect(next.result.current.deletion.phase).toBe("unknown");
 });
+it("lets only the current client logout clear the newer durable original", async () => {
+  const fetch = vi.fn(() => Promise.reject(new TypeError("lost")));
+  vi.stubGlobal("fetch", fetch);
+  const old = setup();
+  await waitFor(() => expect(old.result.current.ready).toBe(true));
+  act(() => old.result.current.reviewDeletion(metadata));
+  const obsoleteConfirm = old.result.current.confirmDeletion;
+  old.unmount();
+  const current = setup();
+  await waitFor(() => expect(current.result.current.ready).toBe(true));
+  act(() => current.result.current.reviewDeletion(metadata));
+  await act(async () => current.result.current.confirmDeletion());
+  const stored = sessionStorage.getItem(DELETION_STORAGE_KEY);
+  expect(JSON.parse(stored!).attempt.portfolioId).toBe("2");
+  act(() => old.client.setQueryData(["me"], null));
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
+  await act(async () => obsoleteConfirm());
+  expect(fetch).toHaveBeenCalledTimes(1);
+  act(() => current.client.setQueryData(["me"], null));
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBeNull();
+  expect(current.result.current.deletion.attempt).toBeNull();
+});
 
 it("refuses before sending if original recovery persistence fails", async () => {
   const fetch = vi.fn();
