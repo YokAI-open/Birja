@@ -82,6 +82,7 @@ async def test_sold_out_multiple_stocks_successive_public_sibling_splits(strateg
                 )
             ).all()
         )
+        assert tails == {cid: 6, second: 2}
     for root, name in ((roots[0], "Patient"), (zero, "Sold out")):
         response = await delete(api, root, intent(name))
         assert response.status_code == 200, response.text
