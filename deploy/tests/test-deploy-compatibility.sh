@@ -135,7 +135,7 @@ done
 git -C "$APP_DIR" checkout -q --detach "$PORTFOLIO_TESTED"
 for name in backend/alembic/versions/0023_portfolio_closure_authority.py \
   backend/alembic/sql/0023_portfolio_closure.sql backend/app/db/portfolio_bootstrap.py \
-  backend/app/db/schema_contract.py; do
+  backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
   mkdir -p "$APP_DIR/$(dirname "$name")"
   cp "$HERE/../../$name" "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
@@ -167,4 +167,14 @@ run_case deploy 0023 "$CLOSURE_CORRUPT" no refuse
 ADMITTED_REVISION=0023
 if admit_application_source "$CLOSURE_CORRUPT"; then
   echo 'FAIL corrupted successor runtime admitted'; exit 1
+fi
+git -C "$APP_DIR" checkout -q --detach "$CLOSURE_TESTED"
+printf '\n# corrupted migration-entry authentication\n' >> "$APP_DIR/backend/app/db/portfolio_migrate.py"
+git -C "$APP_DIR" add backend/app/db/portfolio_migrate.py
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m migrator-corrupt
+CLOSURE_MIGRATOR_CORRUPT=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$CLOSURE_MIGRATOR_CORRUPT
+run_case deploy 0023 "$CLOSURE_MIGRATOR_CORRUPT" no refuse
+if admit_application_source "$CLOSURE_MIGRATOR_CORRUPT"; then
+  echo 'FAIL corrupted migration authentication admitted'; exit 1
 fi

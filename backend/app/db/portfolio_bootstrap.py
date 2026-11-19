@@ -392,6 +392,10 @@ ACL_0023_SHA256 = "71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f
 # A trusted no-ACL restore explicitly revokes every non-owner privilege before
 # regrant. This finite entry state admits bootstrap, never normal runtime.
 ACL_0023_QUARANTINE_SHA256 = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+# Exact post-migration authority inherited from a qualified0020 runtime. The
+# four lifecycle SELECT grants are deliberately absent until explicit bootstrap.
+# This is never a runtime-admission fingerprint.
+ACL_0023_FROM_0020_SHA256 = "f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425"
 
 # An absent global function-default row means PUBLIC EXECUTE; an absent
 # schema-local row adds nothing. Normalize effective, not merely explicit ACLs.
@@ -416,6 +420,41 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 """
 DEFAULT_ACL_0023_SHA256 = ACL_0023_QUARANTINE_SHA256
 
+# Current migration-entry recognizers; the retained0020/0017 literals above
+# remain unchanged. A missing global function-default row has the PostgreSQL
+# built-in PUBLIC EXECUTE default, which the final bootstrap removes explicitly.
+DEFAULT_ACL_0020_BUILTIN_SHA256 = "3c6c72d38f50b3150f0c849954fa0842a0711cfcbda15936e470bc648d436ebe"
+ACL_0020_INITIAL_SHA256 = "3358f6b32d6211d60c93516488ee5c6e7434c775c812c2fe0841b5011fe74a06"
+PRE_CLOSURE_CATALOGUES = {
+    "0020": CATALOGUE_0020_SHA256,
+    "0021": "748dc0f3a3a1eb63a3168cb7a21198d6ac3a59135f35d0700772b79394bed3b4",
+    "0022": "1e24357696abc34020f4fc2ce67f9ca327c7eed48477a5a484a7d2a9d4789b46",
+}
+_PRE_CLOSURE_AUTHORITY_SQL = (
+    r"""
+ IF (__ACL__) NOT IN ('__INITIAL__','__RUNTIME__')
+ OR (__DEFAULT__) NOT IN ('__BUILTIN__','__PRIVATE__')
+ OR EXISTS(SELECT FROM pg_default_acl d,
+  LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
+  AND x.grantee<>d.defaclrole) THEN
+  RAISE EXCEPTION 'unrecognized pre-closure migration authority'; END IF;
+""".replace("__ACL__", ACL_SQL)
+    .replace("__DEFAULT__", DEFAULT_ACL_0023_SQL)
+    .replace("__INITIAL__", ACL_0020_INITIAL_SHA256)
+    .replace("__RUNTIME__", ACL_0020_SHA256)
+    .replace("__BUILTIN__", DEFAULT_ACL_0020_BUILTIN_SHA256)
+    .replace("__PRIVATE__", DEFAULT_ACL_0023_SHA256)
+)
+PRE_CLOSURE_MIGRATION_SQL = {
+    revision: PREFLIGHT_SQL.replace("version_num='0020'", f"version_num='{revision}'")
+    .replace(CATALOGUE_0020_SHA256, catalogue)
+    .replace(
+        "END $management_identity$;",
+        _PRE_CLOSURE_AUTHORITY_SQL + "END $management_identity$;",
+    )
+    for revision, catalogue in PRE_CLOSURE_CATALOGUES.items()
+}
+
 # Preserve the same conservative role/schema checks as0020, with a distinct
 # authenticated catalogue and the one additional app-only closure signature.
 PREFLIGHT_0023_SQL = (
@@ -435,8 +474,11 @@ PREFLIGHT_0023_SQL = (
   LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
   AND x.grantee<>d.defaclrole) THEN
   RAISE EXCEPTION 'unexpected closure default privileges'; END IF;
- IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__','__QUARANTINE__') THEN
+ IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__','__QUARANTINE__','__FROM_0020__') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
+ IF (__ACL__)='__FROM_0020__'
+ AND (__DEFAULT__) NOT IN ('__BUILTIN__','__PRIVATE__') THEN
+  RAISE EXCEPTION 'unexpected migrated closure default privileges'; END IF;
  IF (__ACL__)='__FINAL__' AND (__DEFAULT__)<>'__PRIVATE__' THEN
   RAISE EXCEPTION 'unexpected effective closure default privileges'; END IF;
  IF EXISTS(SELECT FROM public.accounts a
@@ -477,6 +519,8 @@ PREFLIGHT_0023_SQL = (
  THEN RAISE EXCEPTION 'closure lifecycle evidence mismatch'; END IF;
 END $closure_identity$;
 """.replace("__ACL__", ACL_SQL)
+        .replace("__FROM_0020__", ACL_0023_FROM_0020_SHA256)
+        .replace("__BUILTIN__", DEFAULT_ACL_0020_BUILTIN_SHA256)
         .replace("__INITIAL__", ACL_0023_INITIAL_SHA256)
         .replace("__FINAL__", ACL_0023_SHA256)
         .replace("__QUARANTINE__", ACL_0023_QUARANTINE_SHA256)

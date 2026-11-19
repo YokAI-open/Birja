@@ -109,7 +109,8 @@ PORTFOLIO_PAYLOAD_V3 = PORTFOLIO_PAYLOAD_V2 + [
     'deploy/tests/fixtures/portfolio-recovery-0023.json',
 ]
 CLOSURE_SOURCE_SHA256 = {
-    'backend/app/db/portfolio_bootstrap.py': 'ef9badb168626dee827ee9ee4c9fcfce72a6961c4f15e79746007a171e883791',
+    'backend/app/db/portfolio_bootstrap.py': '504e6995f446cf5de97010fa15262988b660b0013bfc14d873a9c98bd946bd80',
+    'backend/app/db/portfolio_migrate.py': 'dabc03a7bbcf7efd74824472e6f35ad399cd43a966792aeac065806ce774aa3e',
     'backend/app/db/schema_contract.py': 'c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542',
     'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
     'backend/app/models/__init__.py': '6856ecbbdfe51305caf3ab0fa1061b08d9f105a6eb73beb4240510508232ae9d',
@@ -121,7 +122,7 @@ CLOSURE_SOURCE_SHA256 = {
     'backend/alembic/versions/0022_portfolio_closure_provenance.py': '0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb',
     'backend/alembic/versions/0023_portfolio_closure_authority.py': 'd62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5',
     'backend/alembic/sql/0023_portfolio_closure.sql': '59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920',
-    'deploy/db/bootstrap-roles.sql': 'acbe0cfc7b26c4c5ef013e57b634d6d368a4bd0af0a477f0e94fd2def12976a7',
+    'deploy/db/bootstrap-roles.sql': '3166dfa1def5ab13c37f975bd0f766fb40aa280d615fc20939af5dc7ee7f8ac9',
     'deploy/tests/portfolio-closure-recovery-fixture.py': '2f38dc99970fa40563b66d4d985398d7abc4480c3e9c21c525c32923191391ab',
     'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
 }

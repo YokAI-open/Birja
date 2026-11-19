@@ -25,6 +25,125 @@ async def authorize(engine):
         await sql(conn, GRANTS_0023_SQL)
 
 
+@pytest_asyncio.fixture(params=[False, True], ids=["builtin-default", "private-default"])
+async def granted20_transition(engine, request):
+    from tests.test_portfolio_migrate import prepare_pre_closure
+
+    await reset_disposable_schema(engine)
+    child, _ = await prepare_pre_closure(engine, "0020", private=request.param)
+    await asyncio.to_thread(run_test_migration, "0023")
+    try:
+        yield engine, child
+    finally:
+        await child.dispose()
+        await restore_current_test_schema(engine)
+
+
+async def transition_evidence(child):
+    from app.db.portfolio_bootstrap import ACL_SQL, CATALOGUE_0023_SQL, DEFAULT_ACL_0023_SQL
+
+    async with child.connect() as conn:
+        return (
+            await complete_snapshot(conn),
+            await conn.scalar(text(ACL_SQL)),
+            await conn.scalar(text(CATALOGUE_0023_SQL)),
+            await conn.scalar(text(DEFAULT_ACL_0023_SQL)),
+        )
+
+
+async def assert_transition_refusal(child):
+    from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL
+
+    before = await transition_evidence(child)
+    async with child.connect() as conn:
+        with pytest.raises(DBAPIError):
+            async with conn.begin_nested():
+                await conn.execute(text(PREFLIGHT_0023_SQL))
+    code, _ = await production_bootstrap()
+    assert code != 0
+    assert await transition_evidence(child) == before
+
+
+async def test_genuine_granted20_transition_requires_explicit_runtime_bootstrap(
+    granted20_transition,
+):
+    from app.db.portfolio_bootstrap import (
+        ACL_0023_FROM_0020_SHA256,
+        GRANTS_0023_SQL,
+        PREFLIGHT_0023_SQL,
+    )
+    from app.db.schema_contract import SchemaAdmissionError, require_schema
+
+    _, child = granted20_transition
+    before = await transition_evidence(child)
+    assert before[1] == ACL_0023_FROM_0020_SHA256
+    async with child.connect() as conn:
+        await conn.execute(text(PREFLIGHT_0023_SQL))
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            await require_schema(conn)
+    code, diagnostic = await production_bootstrap()
+    assert code == 0, diagnostic
+    async with child.begin() as conn:
+        assert await require_schema(conn) == "0023"
+        assert await complete_snapshot(conn) == before[0]
+        await sql(conn, GRANTS_0023_SQL)
+        assert await require_schema(conn) == "0023"
+        assert await complete_snapshot(conn) == before[0]
+
+
+async def test_every_partial_or_missing_lifecycle_read_refuses_both_bootstraps(
+    granted20_transition,
+):
+    _, child = granted20_transition
+    reads = [
+        (table, role)
+        for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents")
+        for role in ("birja_app", "birja_scheduler")
+    ]
+    # Each added read is an incomplete upgrade, never a finite entry profile.
+    for table, role in reads:
+        async with child.begin() as conn:
+            await sql(conn, f"GRANT SELECT ON {table} TO {role}")  # noqa: S608 - fixed matrix
+        await assert_transition_refusal(child)
+        async with child.begin() as conn:
+            await sql(conn, f"REVOKE SELECT ON {table} FROM {role}")  # noqa: S608
+    code, diagnostic = await production_bootstrap()
+    assert code == 0, diagnostic
+    # Each missing read from final authority also refuses without repair.
+    for table, role in reads:
+        async with child.begin() as conn:
+            await sql(conn, f"REVOKE SELECT ON {table} FROM {role}")  # noqa: S608
+        await assert_transition_refusal(child)
+        async with child.begin() as conn:
+            await sql(conn, f"GRANT SELECT ON {table} TO {role}")  # noqa: S608
+
+
+async def test_transition_extra_grant_and_unsafe_future_default_refuse(granted20_transition):
+    _, child = granted20_transition
+    for damage, undo in (
+        (
+            "GRANT UPDATE ON accounts TO birja_scheduler",
+            "REVOKE UPDATE ON accounts FROM birja_scheduler",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator GRANT SELECT ON TABLES TO birja_app",
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator "
+            "REVOKE SELECT ON TABLES FROM birja_app",
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public "
+            "GRANT EXECUTE ON FUNCTIONS TO PUBLIC",
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public "
+            "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC",
+        ),
+    ):
+        async with child.begin() as conn:
+            await sql(conn, damage)
+        await assert_transition_refusal(child)
+        async with child.begin() as conn:
+            await sql(conn, undo)
+
+
 async def closed_evidence_fixture(engine):
     """Synthetic SQL lifecycle fixture, not public API acceptance evidence."""
     async with engine.begin() as conn:

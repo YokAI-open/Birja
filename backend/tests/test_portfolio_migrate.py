@@ -5,6 +5,7 @@ checks are separately exercised against PostgreSQL, never a fabricated ledger.
 """
 
 import runpy
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,6 +20,135 @@ from tests.test_migrations import test_migration_url
 __all__ = ["portfolio_migration_db"]
 
 URL = "postgresql+asyncpg://birja_migrator:synthetic@postgres:5432/birja"
+
+
+async def prepare_pre_closure(engine, revision, *, runtime=True, private=True):
+    from uuid import uuid4
+
+    from app.db.portfolio_bootstrap import GRANTS_SQL
+    from tests.test_portfolio_management_grants import sql
+
+    await migrate_to("0020")
+    child = create_async_engine(test_migration_url())
+    async with engine.begin() as admin:
+        await admin.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+    async with child.begin() as conn:
+        await sql(
+            conn,
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator "
+            + ("REVOKE" if private else "GRANT")
+            + " EXECUTE ON FUNCTIONS "
+            + ("FROM" if private else "TO")
+            + " PUBLIC;",
+        )
+        if runtime:
+            await sql(conn, GRANTS_SQL)
+        uid = await conn.scalar(
+            text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+            {"e": f"migration-transition-{uuid4()}@example.test"},
+        )
+        root = await conn.scalar(text("SELECT initialize_portfolio(:u)"), {"u": uid})
+        await conn.execute(text("UPDATE accounts SET cash=123.45 WHERE id=:p"), {"p": root})
+    if revision != "0020":
+        await migrate_to(revision)
+    return child, root
+
+
+@pytest.mark.parametrize("revision", ["0020", "0021", "0022"])
+@pytest.mark.parametrize("runtime", [False, True], ids=["initial", "runtime"])
+@pytest.mark.parametrize("private", [False, True], ids=["builtin-default", "private-default"])
+async def test_exact_pre_closure_initial_runtime_and_resume_authentication(
+    portfolio_migration_db, revision, runtime, private
+):
+    from app.db.portfolio_bootstrap import GRANTS_0023_SQL, PREFLIGHT_0023_SQL
+    from app.db.schema_contract import SchemaAdmissionError, require_schema
+    from tests.test_portfolio_management_grants import sql
+
+    child, root = await prepare_pre_closure(
+        portfolio_migration_db, revision, runtime=runtime, private=private
+    )
+    try:
+        async with child.connect() as conn:
+            assert await migration.require_migrator(conn) == revision
+        await migrate_to("0023")
+        async with child.begin() as conn:
+            await conn.execute(text(PREFLIGHT_0023_SQL))
+            with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+                await require_schema(conn)
+            await sql(conn, GRANTS_0023_SQL)
+            assert await require_schema(conn) == "0023"
+            assert (
+                await conn.execute(
+                    text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
+                )
+            ).one() == (Decimal("123.45"), Decimal(10000))
+    finally:
+        await child.dispose()
+
+
+@pytest.mark.parametrize("revision", ["0020", "0021", "0022", "0023"])
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "CREATE INDEX unexpected_transition_index ON accounts(id)",
+        "REVOKE SELECT ON users FROM birja_app",
+        "GRANT UPDATE ON accounts TO birja_scheduler",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator GRANT SELECT ON TABLES TO birja_app",
+    ],
+    ids=["schema", "missing-grant", "extra-grant", "unsafe-default"],
+)
+async def test_prior_authority_drift_refuses_before_any_migration_child(
+    portfolio_migration_db, revision, damage
+):
+    from app.db.portfolio_bootstrap import ACL_SQL, DEFAULT_ACL_0023_SQL
+    from tests.test_portfolio_management_grants import sql
+
+    child, root = await prepare_pre_closure(portfolio_migration_db, revision)
+    try:
+        async with child.begin() as conn:
+            await sql(conn, damage)
+        async with child.connect() as conn:
+            before = (
+                await conn.scalar(text(ACL_SQL)),
+                await conn.scalar(text(DEFAULT_ACL_0023_SQL)),
+                (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one(),
+                (
+                    await conn.execute(
+                        text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
+                    )
+                ).one(),
+            )
+        with (
+            patch.object(migration, "create_async_engine", return_value=child),
+            patch.object(migration, "database_connect_args", return_value={}),
+            patch.object(migration.asyncio, "create_subprocess_exec", AsyncMock()) as spawn,
+        ):
+            with pytest.raises(ValueError, match="Unrecognized (?:pre-)?closure"):
+                await migration.migrate(SimpleNamespace(env="prod", database_url=URL))
+            spawn.assert_not_awaited()
+        async with child.connect() as conn:
+            after = (
+                await conn.scalar(text(ACL_SQL)),
+                await conn.scalar(text(DEFAULT_ACL_0023_SQL)),
+                (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one(),
+                (
+                    await conn.execute(
+                        text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
+                    )
+                ).one(),
+            )
+        assert after == before
+    finally:
+        if damage.startswith("ALTER DEFAULT"):
+            # This deliberately committed hostile default must be undone only
+            # after the no-mutation assertion, before shared fixture teardown.
+            async with portfolio_migration_db.begin() as admin:
+                await sql(
+                    admin,
+                    "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator "
+                    "REVOKE SELECT ON TABLES FROM birja_app",
+                )
+        await child.dispose()
 
 
 def test_successor_source_authentication_pins_every_closure_asset():

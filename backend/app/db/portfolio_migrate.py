@@ -8,11 +8,13 @@ from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from app.core.config import Settings, get_settings
 from app.db.connection import database_connect_args
 from app.db.dev_bootstrap import migration_objects, require_complete_migration_inventory
+from app.db.portfolio_bootstrap import PRE_CLOSURE_MIGRATION_SQL
 from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -147,6 +149,19 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         relations,
         {row[0].replace("public.", "").replace(" ", "") for row in rows},
     )
+    if revision in PRE_CLOSURE_MIGRATION_SQL:
+        # Authenticate prior authority before Alembic can mutate even one
+        # object. Initial and runtime-granted20, and exact21/22 resumes, are
+        # finite catalogue/ACL/default pairs, never a grant-repair fallback.
+        try:
+            await conn.execute(text(PRE_CLOSURE_MIGRATION_SQL[revision]))
+        except DBAPIError:
+            raise ValueError("Unrecognized pre-closure migration authority") from None
+    elif revision == "0023":
+        try:
+            await conn.execute(text(PREFLIGHT_SQL))
+        except DBAPIError:
+            raise ValueError("Unrecognized closure migration authority") from None
     return revision
 
 
