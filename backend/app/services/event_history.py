@@ -356,5 +356,5 @@ async def list_event_history(
         next_cursor = encode_cursor(
             EventHistoryCursor(last.recorded_at, last.kind_rank, last.source_id, portfolio_id)
         )
-    await validate_portfolio_read(db, portfolio)
+    await validate_portfolio_read(db, portfolio, final=True)
     return EventHistoryPage(items=items, next_cursor=next_cursor)

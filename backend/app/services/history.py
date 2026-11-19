@@ -14,7 +14,7 @@ from app.models.price import Coin
 from app.models.trade import Trade
 from app.models.user import Account
 from app.schemas.history import HistoryItem, HistoryPage
-from app.services.portfolios import OwnedActivePortfolio
+from app.services.portfolios import OwnedActivePortfolio, fence_owned_active_portfolios
 
 MAX_ID = 9223372036854775807
 TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z")
@@ -102,8 +102,13 @@ def encode_cursor(value: HistoryCursor) -> str:
     return encoded
 
 
-async def validate_portfolio_read(db: AsyncSession, portfolio: OwnedActivePortfolio) -> None:
+async def validate_portfolio_read(
+    db: AsyncSession, portfolio: OwnedActivePortfolio, *, final: bool = False
+) -> None:
     """Check lifecycle independently of cursor contents or prior resolution."""
+    if final:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
+        return
     found = await db.scalar(
         select(Account.id).where(
             Account.id == portfolio.portfolio_id,
@@ -158,5 +163,5 @@ async def list_history(
                 created_at=last.created_at, id=last.id, portfolio_id=portfolio.portfolio_id
             )
         )
-    await validate_portfolio_read(db, portfolio)
+    await validate_portfolio_read(db, portfolio, final=True)
     return HistoryPage(items=items, next_cursor=next_cursor)

@@ -47,7 +47,38 @@ async def list_active_portfolios(db: AsyncSession, user: User) -> list[Portfolio
         .where(Account.user_id == user.id, Account.closed_at.is_(None))
         .order_by(Account.id)
     )
-    return [PortfolioSummary(id=row.id, name=row.name) for row in rows]
+    result = [PortfolioSummary(id=row.id, name=row.name) for row in rows]
+    await fence_owned_active_portfolios(db, user.id, [row.id for row in result])
+    return result
+
+
+async def fence_owned_active_portfolios(
+    db: AsyncSession, user_id: int, portfolio_ids: list[int]
+) -> None:
+    """Final read authority, held until the response transaction closes.
+
+    This is deliberately separate from initial target resolution. In particular,
+    stock execution must acquire its instrument gate before any account lock.
+    Call only after financial hydration/operations, with no later instrument work.
+    """
+    if not portfolio_ids:
+        return
+    found = set(
+        (
+            await db.scalars(
+                select(Account.id)
+                .where(
+                    Account.id.in_(portfolio_ids),
+                    Account.user_id == user_id,
+                    Account.closed_at.is_(None),
+                )
+                .order_by(Account.id)
+                .with_for_update(read=True, of=Account)
+            )
+        ).all()
+    )
+    if found != set(portfolio_ids):
+        raise HTTPException(404, detail={"code": "portfolio_unavailable"})
 
 
 def _management_error(exc: DBAPIError) -> HTTPException | None:
@@ -140,4 +171,5 @@ async def get_portfolio_metadata(
     ).one_or_none()
     if row is None:
         raise HTTPException(404, detail={"code": "portfolio_unavailable"})
+    await fence_owned_active_portfolios(db, user.id, [portfolio_id])
     return PortfolioMetadata(id=row.id, name=row.name, description=row.description)
