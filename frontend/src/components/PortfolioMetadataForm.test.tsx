@@ -5,6 +5,7 @@ import { PortfolioMetadataForm } from "./PortfolioMetadataForm";
 import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { PortfolioManagementError } from "@/api/portfolioManagement";
 vi.mock("@/hooks/usePortfolioManagement");
+vi.mock("@/components/PortfolioDeleteForm", () => ({ PortfolioDeleteForm: () => null }));
 const editMetadata = vi.fn(),
   saveMetadata = vi.fn(),
   discardMetadata = vi.fn(),
@@ -106,6 +107,10 @@ it("freezes submitted drafts and blocks premature stale review while authoritati
   expect(screen.getByRole("button", { name: "I have reviewed the latest details" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Saving changes…" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Discard changes" })).toBeDisabled();
+});
+it("disables entering metadata editing while deletion owns the review lease", () => {
+  show({ metadataBlocked: true });
+  expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeDisabled();
 });
 it.each(["bad\u0001", "bad\ud800"])(
   "rejects unsupported description scalars without changing the draft",
