@@ -14,6 +14,7 @@ from datetime import datetime
 from decimal import Decimal
 from fractions import Fraction
 from typing import Literal, cast
+from uuid import UUID
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.models.corporate_action import (
     StockOwnershipMovement,
     StockSplitApplication,
 )
+from app.models.portfolio_lifecycle import PortfolioClosureIntent, PortfolioLifecycleClosure
 from app.models.stock import StockInstrument
 from app.models.trade import Holding, Trade
 from app.models.user import Account
@@ -392,6 +394,25 @@ async def assert_ownership_consistent(
     cannot exceed that tail. This works with the existing append-only app grants.
     """
     await acquire_stock_gate(db, coin_id)
+    return await _assert_locked_ownership_consistent(
+        db,
+        coin_id,
+        pending_application_id=pending_application_id,
+        pending_trade_id=pending_trade_id,
+    )
+
+
+async def _assert_locked_ownership_consistent(
+    db: AsyncSession,
+    coin_id: int,
+    *,
+    pending_application_id: int | None = None,
+    pending_trade_id: int | None = None,
+) -> tuple[StockActionState, list[StockOwnershipMovement]]:
+    """Complete proof, entered only through a gate-verifying wrapper.
+
+    Keep historical pre-backfill verification independent of successor schema.
+    """
     state = (
         await db.execute(
             select(StockActionState)
@@ -501,6 +522,155 @@ async def assert_ownership_consistent(
     ) or any(total != totals.get(uid, (Decimal(0), Decimal(0))) for uid, total in actual.items()):
         raise OwnershipHeld("holding_mismatch")
     return state, rows
+
+
+@dataclass(frozen=True)
+class _ClosureProofContext:
+    transaction: object
+    user_id: int
+    portfolio_id: int
+    intent_key: UUID
+    confirmation_name: str
+    policy_version: str
+    instruments: tuple[int, ...]
+
+
+async def _closure_instruments(db: AsyncSession, portfolio_id: int) -> tuple[int, ...]:
+    return tuple(
+        (
+            await db.execute(
+                text(
+                    "SELECT coin_id FROM stock_ownership_movements WHERE portfolio_id=:p "
+                    "UNION SELECT h.coin_id FROM holdings h JOIN stock_instruments s "
+                    "ON s.coin_id=h.coin_id WHERE h.portfolio_id=:p ORDER BY coin_id"
+                ),
+                {"p": portfolio_id},
+            )
+        ).scalars()
+    )
+
+
+async def _has_instrument_gate(db: AsyncSession, coin_id: int) -> bool:
+    # PostgreSQL documents bigint advisory keys as high/low32bit with objsubid1.
+    return bool(
+        (
+            await db.execute(
+                text(
+                    "SELECT EXISTS(SELECT FROM pg_catalog.pg_locks l "
+                    "WHERE l.pid=pg_backend_pid() AND l.locktype='advisory' "
+                    "AND l.granted AND l.mode='ExclusiveLock' AND l.objsubid=1 "
+                    "AND l.database=(SELECT oid FROM pg_catalog.pg_database "
+                    "WHERE datname=current_database()) "
+                    "AND ((l.classid::bigint << 32) | l.objid::bigint)="
+                    "hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"
+                ),
+                {"c": str(coin_id)},
+            )
+        ).scalar_one()
+    )
+
+
+async def assert_closure_ownership_consistent(db: AsyncSession) -> None:
+    """Verify a service-created SQL result in its originating transaction.
+
+    No caller boolean, coin list or stale returned receipt authorizes this path.
+    It never changes the financial one-instrument marker or permits an append.
+    """
+    proof = db.info.get("portfolio_closure_proof")
+    if not isinstance(proof, _ClosureProofContext) or proof.transaction is not db.get_transaction():
+        raise OwnershipHeld("invalid_closure")
+    if (await db.execute(text("SHOW transaction_isolation"))).scalar_one() != "read committed":
+        raise OwnershipHeld("read_committed_required")
+    account = (
+        await db.execute(
+            select(Account)
+            .where(
+                Account.id == proof.portfolio_id,
+                Account.user_id == proof.user_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    lifecycle = (
+        await db.execute(
+            select(PortfolioLifecycleClosure)
+            .where(
+                PortfolioLifecycleClosure.portfolio_id == proof.portfolio_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if (
+        account is None
+        or lifecycle is None
+        or account.closed_at is None
+        or account.closed_at > await _clock(db)
+        or (lifecycle.user_id, lifecycle.closed_at, lifecycle.policy_version)
+        != (proof.user_id, account.closed_at, proof.policy_version)
+    ):
+        raise OwnershipHeld("invalid_closure")
+    if lifecycle.provenance == "owner_confirmation":
+        original = await db.get(PortfolioClosureIntent, lifecycle.intent_id, populate_existing=True)
+        if original is None or (
+            original.user_id,
+            original.portfolio_id,
+            original.confirmation_name,
+            original.policy_version,
+            original.recorded_at,
+            original.outcome,
+        ) != (
+            proof.user_id,
+            proof.portfolio_id,
+            lifecycle.confirmation_name,
+            proof.policy_version,
+            account.closed_at,
+            "closed",
+        ):
+            raise OwnershipHeld("invalid_closure")
+    elif (
+        lifecycle.provenance != "retained_boundary"
+        or lifecycle.intent_id is not None
+        or lifecycle.confirmation_name is not None
+    ):
+        raise OwnershipHeld("invalid_closure")
+    request = (
+        await db.execute(
+            select(PortfolioClosureIntent).where(
+                PortfolioClosureIntent.user_id == proof.user_id,
+                PortfolioClosureIntent.intent_key == proof.intent_key,
+            )
+        )
+    ).scalar_one_or_none()
+    if request is not None and (
+        request.portfolio_id,
+        request.confirmation_name,
+        request.policy_version,
+        request.outcome,
+    ) != (proof.portfolio_id, proof.confirmation_name, proof.policy_version, "closed"):
+        raise OwnershipHeld("invalid_closure")
+    instruments = await _closure_instruments(db, proof.portfolio_id)
+    boundaries = (
+        (
+            await db.execute(
+                select(PortfolioStockClosure).where(
+                    PortfolioStockClosure.portfolio_id == proof.portfolio_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if (
+        instruments != proof.instruments
+        or len(instruments) > 20
+        or tuple(sorted(c.coin_id for c in boundaries)) != instruments
+        or any((c.user_id, c.closed_at) != (proof.user_id, account.closed_at) for c in boundaries)
+    ):
+        raise OwnershipHeld("invalid_closure")
+    for coin_id in instruments:
+        if not await _has_instrument_gate(db, coin_id):
+            raise OwnershipHeld("invalid_closure")
+        await _assert_locked_ownership_consistent(db, coin_id)
 
 
 def ownership_digest(value: object) -> str:
