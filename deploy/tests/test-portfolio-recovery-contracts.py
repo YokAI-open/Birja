@@ -25,6 +25,24 @@ def load(name):
 
 
 class PortfolioRecoveryContracts(unittest.TestCase):
+    def test_v3_consumer_requires_exact_revision_inventory_and_profile(self):
+        producer, consumer = load('backup-snapshot'), load('verify-restore')
+        payload = producer.closure_payload_inventory(ROOT)
+        inventory = {'portfolio_payload': payload}
+        self.assertEqual(consumer.portfolio_payload_files(inventory), producer.PORTFOLIO_PAYLOAD_V3)
+        consumer.verify_portfolio_inventory(inventory, payload['sha256'])
+        for field, value in (('version', True), ('version', 2), ('revision', '0020'),
+                             ('revision', '0022')):
+            changed = copy.deepcopy(inventory)
+            changed['portfolio_payload'][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                consumer.verify_portfolio_inventory(changed, payload['sha256'])
+        for name in producer.PORTFOLIO_PAYLOAD_V3:
+            changed = copy.deepcopy(inventory)
+            del changed['portfolio_payload']['sha256'][name]
+            with self.subTest(missing=name), self.assertRaises(ValueError):
+                consumer.verify_portfolio_inventory(changed, payload['sha256'])
+
     def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
         producer = load('backup-snapshot')
         inventory = producer.closure_payload_inventory(ROOT)
