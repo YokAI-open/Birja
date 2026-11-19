@@ -80,7 +80,11 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023")
+CLOSURE_COLUMNS = {
+    'portfolio_lifecycle_closures': 'id portfolio_id user_id closed_at policy_version provenance confirmation_name intent_id',
+    'portfolio_closure_intents': 'id user_id portfolio_id intent_key confirmation_name policy_version outcome recorded_at',
+}
 MANAGEMENT_COLUMNS = {
     'portfolio_creations': 'id user_id creation_key portfolio_id origin payload_version canonical_payload amount created_at',
     'portfolio_initializations': 'id user_id origin portfolio_id creation_id created_at',
@@ -423,8 +427,10 @@ def validate_resolution_authority(authority, revision='0012'):
 
 
 def identity_tables(revision):
-    if revision in ('0015', '0016', '0018', '0019'):
+    if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
+    if revision == '0023':
+        return sorted([*identity_tables('0020'), *CLOSURE_COLUMNS])
     if revision == '0020':
         return sorted([*identity_tables('0017'), *MANAGEMENT_COLUMNS])
     if revision == '0017':
@@ -461,8 +467,12 @@ def dump_identity_state(raw, revision="0011"):
 
 
 def contract_columns(revision):
-    if revision in ('0015', '0016', '0018', '0019'):
+    if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
+    if revision == '0023':
+        columns = contract_columns('0020')
+        columns.update({table: set(value.split()) for table, value in CLOSURE_COLUMNS.items()})
+        return columns
     if revision == '0020':
         columns = contract_columns('0017')
         columns['accounts'] |= {'name_key', 'description'}
@@ -497,6 +507,8 @@ def manifest_sql(revision):
     The standalone SQL remains the byte-identical legacy query plus comments.
     All substitutions are fixed repository fragments, never operator input.
     """
+    if revision == '0023':
+        return closure_manifest_sql()
     contract_columns(revision)
     if revision == '0020':
         return management_manifest_sql()
@@ -593,6 +605,8 @@ def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
     require(isinstance(manifest.get('tables'), dict) and set(manifest['tables']) == set(expected))
+    if manifest['revision'] == '0023':
+        validate_closure_manifest(manifest, quarantined=quarantined)
     if manifest['revision'] == '0020':
         validate_management_manifest(manifest, quarantined=quarantined)
     if manifest['revision'] == '0017':
@@ -917,8 +931,8 @@ def management_bootstrap():
     return module
 
 
-def management_manifest_sql():
-    bootstrap = management_bootstrap()
+def management_manifest_sql(*, bootstrap=None):
+    bootstrap = management_bootstrap() if bootstrap is None else bootstrap
     query = portfolio_manifest_sql()
     query = '\n'.join(line.replace(')::text FROM accounts', ',name_key,description)::text FROM accounts')
                       if "SELECT 'accounts'," in line else line for line in query.splitlines())
@@ -992,6 +1006,113 @@ def validate_management_manifest(manifest, *, quarantined=False):
     require(state['active']+state['closed'] == manifest['tables']['accounts']['count'])
     require(state['legacy_markers']+state['v2_markers'] == manifest['tables']['stock_split_applications']['count'])
     require(manifest['stock_invalid'] == 0)
+
+
+# Separately versioned successor. These pins authenticate reviewed authority
+# BEFORE importing executable source; V1/V2 literals above are not reinterpreted.
+CLOSURE_SOURCE_SHA256 = {
+    'backend/app/db/portfolio_bootstrap.py': '5a5039030974ad83061462d21e34a94aa3577dc30a7e44fc1d9a9aa4679d2173',
+    'backend/app/db/schema_contract.py': 'c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542',
+    'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
+    'backend/app/services/portfolio_closure.py': '6ee71f9f1521c183ad02ca9ab7071fa9388d84dc3f189b9ab8242be3effd2db1',
+    'backend/app/services/stock_ownership.py': 'fe4a317f806998a4804abcf0dbb53e5bd891227440abaa834f8a91b391ad052d',
+    'backend/app/services/corporate_actions.py': 'da69ac8e46daf54bb6751bd414248402931b4693b51ec2594ecc8a1aa2a95e2e',
+    'backend/alembic/versions/0021_portfolio_closure_schema.py': '737446365d1304dc3721ced552102cde4d386b07031823eaf33967961732c81c',
+    'backend/alembic/versions/0022_portfolio_closure_provenance.py': '0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb',
+    'backend/alembic/versions/0023_portfolio_closure_authority.py': '53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52',
+    'backend/alembic/sql/0023_portfolio_closure.sql': '1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949',
+    'deploy/db/bootstrap-roles.sql': 'e9441fb7d98c7143dbdfea71419abd9e43f1d8aac7dab3d9ff734d4c1730f41a',
+}
+CLOSURE_CATALOGUE_SHA256 = '3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec'
+CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
+CLOSURE_AUTHORITY_SHA256 = '0d9a2bfef268be0f226e02e7f1329961259fcabe015218cdb6a8149df60195b9'
+CLOSURE_QUARANTINE_AUTHORITY_SHA256 = 'dac8876fadcf8f8ee73af4ed41fbeb047882a6b8cb2674566edb09be00680a2f'
+CLOSURE_ACL_SHA256 = '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748'
+CLOSURE_EMPTY_ACL_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
+
+
+def require_closure_source(root=None):
+    root = HERE.parent if root is None else Path(root)
+    for name, expected in CLOSURE_SOURCE_SHA256.items():
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected)
+
+
+def closure_bootstrap():
+    require_closure_source()
+    path = HERE.parent / 'backend/app/db/portfolio_bootstrap.py'
+    spec = importlib.util.spec_from_file_location('authenticated_closure_bootstrap', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def closure_manifest_sql():
+    bootstrap = closure_bootstrap()
+    query = management_manifest_sql(bootstrap=bootstrap)
+    rows = []
+    for table, fields in CLOSURE_COLUMNS.items():
+        values = ["to_char("+c+",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
+                  if c in {'closed_at', 'recorded_at'} else c+'::text' for c in fields.split()]
+        rows.append(" UNION ALL SELECT '"+table+"',id,json_build_array("+','.join(values)+")::text FROM "+table)
+    query = query.replace('\n), names(name) AS (', '\n'+'\n'.join(rows)+'\n), names(name) AS (')
+    query = query.replace("('portfolio_initializations')\n", "('portfolio_initializations'),"+
+                          ','.join("('"+t+"')" for t in CLOSURE_COLUMNS)+'\n')
+    query = query.replace("SELECT 'users',last_value,is_called FROM users_id_seq",
+                          ' UNION ALL '.join("SELECT '"+t+"',last_value,is_called FROM "+t+'_id_seq'
+                                            for t in CLOSURE_COLUMNS)+
+                          " UNION ALL SELECT 'users',last_value,is_called FROM users_id_seq")
+    # The same independently pinned catalogue used by runtime admission covers
+    # every routine/body/owner, trigger, constraint, rule, policy and relation.
+    lifecycle = bootstrap.PREFLIGHT_0023_SQL.split(' IF EXISTS(SELECT FROM public.accounts a', 1)[1]
+    lifecycle = 'EXISTS(SELECT FROM public.accounts a'+lifecycle.split(" THEN RAISE EXCEPTION 'closure lifecycle evidence mismatch'",1)[0]
+    fields = " 'closure_contract',json_build_object('catalogue',("+bootstrap.CATALOGUE_0023_SQL+")," \
+             "'acl',("+bootstrap.ACL_SQL+"),'defaults',("+bootstrap.DEFAULT_ACL_0023_SQL+")),\n"
+    fields += " 'closure_state',json_build_object('closures',(SELECT count(*) FROM portfolio_lifecycle_closures)," \
+              "'intents',(SELECT count(*) FROM portfolio_closure_intents)," \
+              "'refused',(SELECT count(*) FROM portfolio_closure_intents WHERE outcome='confirmation_changed')," \
+              "'invalid',CASE WHEN "+lifecycle+" THEN 1 ELSE 0 END),\n"
+    return query.replace(" 'schema',json_build_object(", fields+" 'schema',json_build_object(")
+
+
+def validate_closure_manifest(manifest, *, quarantined=False):
+    require(canonical_hash(manifest['schema']) == CLOSURE_SCHEMA_SHA256)
+    require(canonical_hash(manifest['portfolio_authority']) ==
+            (CLOSURE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CLOSURE_AUTHORITY_SHA256))
+    contract = manifest['closure_contract']
+    require(set(contract) == {'catalogue', 'acl', 'defaults'})
+    require(contract['catalogue'] == CLOSURE_CATALOGUE_SHA256)
+    require(contract['acl'] == (CLOSURE_EMPTY_ACL_SHA256 if quarantined else CLOSURE_ACL_SHA256))
+    # A no-ACL clone is still required to carry private future defaults. Restore
+    # must explicitly establish those defaults before admitting the quarantine.
+    require(contract['defaults'] == CLOSURE_EMPTY_ACL_SHA256)
+    require(manifest['schema']['relations'] == [[t, 'r'] for t in sorted(contract_columns('0023'))])
+    require(len(manifest['schema']['sequences']) == 24)
+    for section in ('management_state', 'portfolio_state', 'closure_state'):
+        state = manifest[section]
+        expected = {'creations', 'initializations', 'invalid'} if section == 'management_state' else \
+                   {'active', 'closed', 'legacy_markers', 'v2_markers', 'invalid'} if section == 'portfolio_state' else \
+                   {'closures', 'intents', 'refused', 'invalid'}
+        require(set(state) == expected)
+        require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
+    management = manifest['management_contract']
+    require(set(management) == {'catalogue', 'acl', 'unsafe'})
+    require(management['catalogue'] == CLOSURE_CATALOGUE_SHA256 and management['acl'] == contract['acl'])
+    require(type(management['unsafe']) is int and management['unsafe'] == 0)
+    require(manifest['management_state']['creations'] == manifest['tables']['portfolio_creations']['count'])
+    require(manifest['management_state']['initializations'] == manifest['tables']['users']['count'] ==
+            manifest['tables']['portfolio_initializations']['count'])
+    state = manifest['closure_state']
+    require(state['closures'] == manifest['tables']['portfolio_lifecycle_closures']['count'] == manifest['portfolio_state']['closed'])
+    require(state['intents'] == manifest['tables']['portfolio_closure_intents']['count'])
+    require(state['refused'] <= state['intents'])
+    require(manifest['portfolio_state']['active']+state['closures'] == manifest['tables']['accounts']['count'])
+    require(manifest['stock_invalid'] == 0)
+    states = manifest['identity_state']
+    require(isinstance(states, list) and [r[0] for r in states] == identity_tables('0023'))
+    for _, value, called in states:
+        require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
 
 
 def strict_json(data):

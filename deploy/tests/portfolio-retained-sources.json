@@ -1,9 +1,9 @@
 {
   "format": 1,
   "current": {
-    "revision": "0020",
-    "payload_version": 2,
-    "program": "deploy/tests/portfolio-management-recovery-fixture.py"
+    "revision": "0023",
+    "payload_version": 3,
+    "program": "deploy/tests/portfolio-closure-recovery-fixture.py"
   },
   "retained": {
     "commit": "c2c7af17e2cb225fe196c5dbf843a65022a69e37",
@@ -33,5 +33,13 @@
     "archive_sha256": "361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248",
     "app_tree": "5c77a8dc0972861aa49d18be4fa8618e97557c30",
     "alembic_tree": "67791e54f8ddc2d9a1ab8ca55562ecf0d1608ac9"
+  },
+  "portfolio0020": {
+    "revision": "0020",
+    "payload_version": 2,
+    "commit": "9527e358bc6953cec7580043703324db194ba396",
+    "archive_sha256": "2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291",
+    "app_tree": "98b64d2ade4519aa566f4ad1832aac9b33485691",
+    "alembic_tree": "eb240860976eb6f3f04ad69cf9d169089c595e02"
   }
 }

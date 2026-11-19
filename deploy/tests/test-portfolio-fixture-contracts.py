@@ -36,6 +36,67 @@ def example():
 
 
 class PortfolioFixtureContracts(unittest.TestCase):
+    def test_lost_bound_campaign_image_never_rebuilds(self):
+        import json,hashlib
+        with tempfile.TemporaryDirectory(prefix='birja-lost-image-') as tmp:
+            campaign=Path(tmp);archive=campaign/'selected.tar';archive.write_bytes(b'private selected archive')
+            record=campaign/'portfolio0020-image-binding.json';record.write_text(json.dumps({'id':'sha256:'+'a'*64}));record.chmod(0o400)
+            payload=sources.source_archive('portfolio0020')
+            with mock.patch.object(sources,'source_archive',return_value=payload), \
+                 mock.patch.object(sources.subprocess,'run',return_value=__import__('subprocess').CompletedProcess([],1,b'',b'')) as run, \
+                 self.assertRaisesRegex(ValueError,'rebuilding is forbidden'):
+                sources.build_retained_image(campaign/'immutable-tree',archive=archive,
+                    archive_sha=hashlib.sha256(archive.read_bytes()).hexdigest(),lane='portfolio0020')
+            docker_calls=[call.args[0] for call in run.call_args_list if call.args[0][0]=='docker']
+            self.assertEqual(len(docker_calls),1)
+            self.assertEqual(docker_calls[0][:3],['docker','image','inspect'])
+
+    def test_current_closure_complete_oracle_and_every_evidence_mutation(self):
+        import json
+        spec = importlib.util.spec_from_file_location('closure_fixture', ROOT/'deploy/tests/portfolio-closure-recovery-fixture.py')
+        closure = importlib.util.module_from_spec(spec); spec.loader.exec_module(closure)
+        saved = json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())
+        self.assertEqual(saved['format'], 3)
+        original = saved['projection']
+        closure.require_projection(original)
+        self.assertEqual(len(original['tables']),31)
+        self.assertEqual(len(original['sequences']),24)
+        with tempfile.TemporaryDirectory(prefix='birja-closure-oracle-') as tmp:
+            path=Path(tmp)/'before.json'; digest=closure.save_snapshot(path,original)
+            self.assertEqual(closure.compare_snapshot(path,digest,original),digest)
+            for table, rows in original['tables'].items():
+                changed=copy.deepcopy(original)
+                if rows:
+                    field=next(iter(rows[0]));changed['tables'][table][0][field]='corrupted'
+                else:
+                    changed['tables'][table].append({'unexpected':'retained row'})
+                with self.subTest(table=table), self.assertRaises((ValueError,KeyError,TypeError)):
+                    closure.compare_snapshot(path,digest,changed)
+            for table in original['sequences']:
+                changed=copy.deepcopy(original);changed['sequences'][table][0]+=1
+                with self.subTest(sequence=table),self.assertRaises(ValueError):
+                    closure.compare_snapshot(path,digest,changed)
+        for table in closure.TABLE_NAMES:
+            changed=copy.deepcopy(original);del changed['tables'][table]
+            with self.subTest(omitted=table),self.assertRaises(ValueError):
+                closure.require_projection(changed)
+
+    def test_complete_qualified0020_program_uses_its_own_producer(self):
+        import tarfile,hashlib
+        with tempfile.TemporaryDirectory(prefix='birja-retained0020-contract-') as tmp:
+            path=Path(tmp)/'recovery.tar'
+            payload=sources.source_archive('portfolio0020')
+            with tarfile.open(path,'w') as archive:
+                info=tarfile.TarInfo('sources/portfolio0020.tar');info.size=len(payload)
+                archive.addfile(info,io.BytesIO(payload))
+            digest=hashlib.sha256(path.read_bytes()).hexdigest()
+            program=sources.retained_program('management',revision='0020',archive=path,archive_sha=digest,mode='projection')
+            self.assertIn('birja-retained-source=9527e358',program)
+            self.assertIn("'0020'",program)
+            compile(program,'<complete-retained0020-program>','exec')
+            with self.assertRaises(ValueError):
+                sources.retained_program('management',revision='0023',archive=path,archive_sha=digest,mode='projection')
+
     def test_qualified0020_is_complete_retained_and0023_is_current(self):
         current = sources.profile_for("0023")
         self.assertEqual(current, {"revision": "0023", "payload_version": 3,

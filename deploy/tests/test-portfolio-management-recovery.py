@@ -113,6 +113,112 @@ def independent_projection():
     }
 
 
+def closure_postgres_proof(*, write_fixture=False):
+    """Owned current producer/causal oracle proof, not encrypted/TLS restore."""
+    labels = json.loads(subprocess.check_output(
+        ['docker', 'inspect', 'birja-p14-05-postgres-1']))[0]['Config']['Labels']
+    if labels.get('com.docker.compose.project') != 'birja-p14-05':
+        raise ValueError('exclusive owned closure proof required')
+    env = {'PATH':os.environ['PATH'], 'HOME':'/tmp', 'ENV':'test',
+           'PRICE_SOURCE':'fake', 'EMAIL_BACKEND':'console',
+           'UV_NO_SYNC':'1', 'UV_OFFLINE':'1',
+           'CLOSURE_WRITE_FIXTURE':'1' if write_fixture else '0'}
+    code = r'''
+import asyncio,copy,importlib.util,json,os,secrets
+from pathlib import Path
+import tests.conftest
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from tests.portfolio_fixtures import reset_disposable_schema
+from tests.test_migrations import ensure_dividend_test_owner,run_test_migration,test_migration_url
+from app.core.config import Settings
+from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL,GRANTS_0023_SQL
+root=Path.cwd().parent
+def load(name,path):
+ spec=importlib.util.spec_from_file_location(name,root/path)
+ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+fixture=load('closure_fixture','deploy/tests/portfolio-closure-recovery-fixture.py')
+producer=load('closure_producer','deploy/backup-snapshot.py')
+async def sql(conn,statement):
+ raw=await conn.get_raw_connection();await raw.driver_connection.execute(statement)
+async def main():
+ await ensure_dividend_test_owner()
+ admin=create_async_engine(tests.conftest.TEST_DATABASE_URL)
+ migrator=app=scheduler=None
+ try:
+  await reset_disposable_schema(admin)
+  await asyncio.to_thread(run_test_migration,'0023')
+  passwords={r:secrets.token_hex(32) for r in ('birja_app','birja_scheduler')}
+  async with admin.begin() as conn:
+   await sql(conn,PREFLIGHT_0023_SQL);await sql(conn,GRANTS_0023_SQL)
+   for role,password in passwords.items():
+    await sql(conn,"ALTER ROLE "+role+" LOGIN PASSWORD '"+password+"'")
+  migrator=create_async_engine(test_migration_url())
+  app=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(username='birja_app',password=passwords['birja_app']))
+  scheduler=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(username='birja_scheduler',password=passwords['birja_scheduler']))
+  factory=async_sessionmaker(migrator,expire_on_commit=False)
+  helpers,_=fixture.historical_helpers()
+  await fixture.seed(factory,Settings(),app,scheduler,helpers)
+  async with factory() as db:
+   value=await fixture.project(db);fixture.require_projection(value)
+  async with admin.connect() as conn:
+   await conn.execute(text("SET TIME ZONE 'UTC'"))
+   manifest=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
+   producer.validate_manifest(manifest)
+   quarantine_tx=await conn.begin_nested()
+   try:
+    await sql(conn,'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator; REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;')
+    for table,columns in producer.contract_columns('0023').items():
+     await sql(conn,'REVOKE ALL('+','.join(sorted(columns))+') ON public.'+table+' FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator')
+    noacl=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
+    producer.validate_manifest(noacl,quarantined=True)
+   finally:await quarantine_tx.rollback()
+   before=fixture.canonical(value)
+   snapshot=Path('/tmp/birja-phase14-plan05/before-backup.json')
+   if snapshot.exists():snapshot.unlink()
+   digest=fixture.save_snapshot(snapshot,value)
+   assert fixture.compare_snapshot(snapshot,digest,value)==digest
+   for damage in ("ALTER ROLE birja_action_operator LOGIN",
+      "GRANT EXECUTE ON FUNCTION check_stock_terminal_clock() TO PUBLIC",
+      "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator GRANT EXECUTE ON FUNCTIONS TO PUBLIC",
+      "CREATE FUNCTION public.unreviewed_closure_helper() RETURNS int LANGUAGE sql AS 'SELECT 1'"):
+    tx=await conn.begin_nested()
+    try:
+     await sql(conn,damage)
+     actual=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
+     try:producer.validate_manifest(actual)
+     except ValueError:pass
+     else:raise AssertionError('producer admitted altered authority')
+    finally:await tx.rollback()
+   for table in ('portfolio_lifecycle_closures','portfolio_closure_intents'):
+    await sql(conn,'ALTER TABLE '+table+' DISABLE TRIGGER USER')
+    await conn.execute(text("UPDATE "+table+" SET confirmation_name='Joint corruption' WHERE portfolio_id=(SELECT min(portfolio_id) FROM portfolio_lifecycle_closures)"))
+    await sql(conn,'ALTER TABLE '+table+' ENABLE TRIGGER USER')
+   corrupted=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
+   try:producer.validate_manifest(corrupted)
+   except ValueError:pass
+   else:raise AssertionError('producer admitted corrupt terminal names')
+   await conn.rollback()
+  async with factory() as db:
+   after=await fixture.project(db)
+   assert fixture.canonical(after)==before
+  if os.environ['CLOSURE_WRITE_FIXTURE']=='1':
+   (root/'deploy/tests/fixtures/portfolio-recovery-0023.json').write_text(json.dumps({'format':3,'manifest':manifest,'quarantined':noacl,'projection':value},sort_keys=True,separators=(',',':'))+'\n')
+  print(json.dumps({'manifest':manifest,'quarantined':noacl,'projection':value,'oracle_sha256':digest,'actual_postgres':True,'encrypted_restore':False},sort_keys=True))
+ finally:
+  for engine in (app,scheduler,migrator):
+   if engine:await engine.dispose()
+  await reset_disposable_schema(admin);await admin.dispose()
+asyncio.run(main())
+'''
+    result = subprocess.run([str(ROOT/'backend/.venv/bin/python'), '-c', code],
+                            cwd=ROOT/'backend',env=env,capture_output=True,text=True,timeout=300)
+    if result.returncode:
+        raise AssertionError(result.stderr[-7000:])
+    return json.loads(result.stdout.splitlines()[-1])
+
+
 def postgres_proof():
     """Owned synthetic logical producer proof; not encrypted/cold/TLS proof."""
     labels = json.loads(
