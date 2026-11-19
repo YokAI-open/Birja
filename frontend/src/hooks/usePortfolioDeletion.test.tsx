@@ -81,6 +81,22 @@ it("persists the exact original before DELETE and restores unknown without autom
   expect(next.result.current.deletion.phase).toBe("closed");
   expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt).toBeNull();
 });
+it("preserves the durable unknown marker when identity metadata is garbage-collected", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("lost"))));
+  const first = setup();
+  await waitFor(() => expect(first.result.current.ready).toBe(true));
+  act(() => first.result.current.reviewDeletion(metadata));
+  await act(async () => first.result.current.confirmDeletion());
+  const original = first.result.current.deletion.attempt;
+  const stored = sessionStorage.getItem(DELETION_STORAGE_KEY);
+  first.unmount();
+  act(() => first.client.removeQueries({ queryKey: ["me"], exact: true }));
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
+  const next = setup(undefined);
+  await waitFor(() => expect(next.result.current.ready).toBe(true));
+  expect(next.result.current.deletion.attempt).toEqual(original);
+  expect(next.result.current.deletion.phase).toBe("unknown");
+});
 
 it("refuses before sending if original recovery persistence fails", async () => {
   const fetch = vi.fn();
