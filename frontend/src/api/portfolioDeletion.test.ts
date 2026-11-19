@@ -152,6 +152,14 @@ it("keeps network loss, cancellation and stale callbacks unknown without retries
   expect(fetch).not.toHaveBeenCalled();
 });
 
+it("keeps the actual schema-admission outage wait while redacting its server message", async () => {
+  document.cookie = "bj_csrf=test; path=/";
+  vi.stubGlobal("fetch", vi.fn(async () => json({detail: {code: "schema_unavailable", message: "Service private"}}, 503, {"Retry-After": "5"})));
+  const error = await deletePortfolio(intent).catch((error: unknown) => error);
+  expect(error).toMatchObject({outcome: "unknown", status: 503, retryAfter: 5, terminal: false});
+  expect(JSON.stringify(error)).not.toContain("private");
+});
+
 it("trusts only exact durable name-refusal shape, redacting arbitrary detail", async () => {
   document.cookie = "bj_csrf=test; path=/";
   vi.stubGlobal(
