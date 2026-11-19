@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 13
+current_plan: 14
 status: executing
-stopped_at: Phase14 Plan10 independently verified; next Plan13 in wave10
-last_updated: "2026-11-19T14:50:51.626982+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan10 and independent recheck complete; Plan13 next
+stopped_at: Phase14 Wave10 complete; next Plan14 then15 in wave11
+last_updated: "2026-11-19T15:47:39.232904+00:00"
+last_activity: 2026-11-19 -- Phase14 Wave10 complete; Plan14 then15 next
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 61
+  completed_plans: 62
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan13 in wave10;12/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan14 in wave11;13/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 13 (wave10;12/19 complete)
-Current Plan: 13
+Plan: 14 (wave11;13/19 complete)
+Current Plan: 14
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;61/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;62/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -993,3 +993,24 @@ ifreceiptnotverified; NEVERretryreplacementorclaimrollback. Closedboundary
 showsNOretainedfinance/receipt/retrybutton, onlyapprovedoriginalunresolvedbool.
 Preview404hasnoeconomiccommitandisdistinguished. Next13(wave10),12/19done;
 allsevenwholeREQpending, fullwholesecurity/coverage/recovery18stillrequired.
+
+
+Plan13completeinitialsource2834a95/summary231ec02,1285frontendpass.
+Target/overview/switcheracceptedprojection/identity-onlyadvisoryrevalidation/
+synchronouslocalquarantine andexecution404hiddenunknownoriginal proved.
+AuthorizedlifetimefixesdistinguishidentityGCfromlogout,current-clientgeneration
+retirementpreventsoldnull/non-nullcallbacks/ABAresurrection. Independent
+reviewCR01retiredstalequarantinemasksafterBterminalrefusal→A,CR02coldunknown
+→explicitnullno cleanup; REDc56beaf/GREEN311d613,qualifiedba9bba1/evidence
+e163089fixboth.88focus4.01s andfull1291frontend25.60s/staticpass; final
+14-13-REVIEW0remaining,preservesoriginal2findings. NoDB/newdeps/production.
+
+CurrentgenerationrestoreusesguardedQueryClientcancel/invalidate/fetchQuery
+FRESHownedlistBEFOREreadiness toreconcileretiredmasks; activeGETNEVERreleases
+CURRENTdurableunknown. Empty/neworiginal+freshactiveproof releasesoldresolved
+activeonly; closedwarmcachestaysmasked,prooferrorrequiresEXPLICITretry.
+13SUMMARYexact14contractsacceptedportfolios/membershipUncertain/readonly
+authoritygeneration/completionreceipt.isCurrent.14mustconsumeaccepteddata
+notrawcache andshowrecoveryerrors/retryinsteadforeverpending.
+Wave10done13/19actualplans; next14then15wave11,sequential. SevenwholeREQ
+pending; original15fixture+16critical+17browser+18wholegates+19humansrequired.
