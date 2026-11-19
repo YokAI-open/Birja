@@ -3,7 +3,10 @@ phase: 14-end-strategies-safely
 plan: "16"
 reviewed: 2026-11-19
 depth: deep
-source_commit: 6eaf391
+source_commit: d39775a
+initial_source_commit: 6eaf391
+re_reviewed: 2026-11-19T22:47:50Z
+repair_diff_base: ec0965c
 diff_base: 4c52d7a
 files_reviewed: 19
 files_reviewed_list:
@@ -27,18 +30,21 @@ files_reviewed_list:
   - deploy/tests/test-portfolio-validation-contracts.py
   - deploy/verify-restore.py
 findings:
-  critical: 1
-  warning: 1
+  critical: 0
+  warning: 0
   info: 0
-  total: 2
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase14 Plan16 — Independent Code Review
 
 ## Narrative Findings (AI reviewer)
 
-One **BLOCKER** and one **WARNING** remain in the new durable supervisor.
+The initial review found one **BLOCKER** and one **WARNING** in the new durable
+supervisor. Both are now **RESOLVED** by independent re-review at `d39775a`;
+there are **0 remaining blockers and 0 warnings**. Original findings and proofs
+are preserved below, followed by the repair disposition.
 The exact19-file4c52d7a→6eaf391 scope was reviewed through the runtime,
 administrative SQL, recovery transports, CI and negative test call chains.
 No structural pre-pass was supplied. Pending Plans17–19 and final whole
@@ -48,7 +54,7 @@ qualification are not treated as defects in this plan.
 
 ### CR-01: Interrupting preflight leaves its descendants outside the supervisor's reaper
 
-**Classification:** BLOCKER.
+**Original classification:** BLOCKER. **Disposition: RESOLVED** at `d39775a`.
 
 **Files:** `deploy/tests/run-portfolio-campaign.py:231`,
 `deploy/tests/run-portfolio-campaign.py:284`;
@@ -105,7 +111,7 @@ observed, and the long command never starts. Keep public status/resume read-only
 
 ### WR-01: Re-entering the internal worker overwrites an already-consumed run receipt
 
-**Classification:** WARNING.
+**Original classification:** WARNING. **Disposition: RESOLVED** at `d39775a`.
 
 **Files:** `deploy/tests/run-portfolio-campaign.py:200`,
 `deploy/tests/run-portfolio-campaign.py:216`,
@@ -147,6 +153,63 @@ identity; do not turn a stale claim into an automatic retry. Add completed,
 active and concurrent-worker replay tests proving preflight is not rerun,
 original status/log/PID/startticks remain unchanged, and no replacement child
 starts. Preserve the already-correct public launch/resume behavior.
+
+## Independent Repair Re-review — CR-01 and WR-01 Resolved
+
+**Source and scope:** `ec0965c`→`d39775a`, including RED `286611f`, GREEN
+`54c9120` and forced-cleanup disposition `3b2b24d`. The repair changes only
+`deploy/tests/run-portfolio-campaign.py`, its existing validation-contract test
+file, and the appended Plan16 summary. The original19-file review scope remains
+listed above. No application/runtime, administrativeSQL, source-pin, image or
+archive bytes change during this repair.
+
+**CR-01:** Preflight now runs in a separately owned session. A ready/work gate
+prevents it from starting qualification work before PID, startticks, phase and
+private log identity are durably recorded. The parent records the process before
+handling deferred cancellation; the long-command assignment boundary receives
+the same protection. Cancellation sends SIGINT to the original owned group,
+tracks every live group member and reaps the leader before a terminal receipt
+is published. The preflight wrapper records cancellation instead of throwing
+through `subprocess.run`, so nested direct-child finalizers have time to run.
+Unexpected surviving descendants after nominal phase completion also refuse
+instead of allowing a pass.
+
+The new real nested-wrapper/grandchild regression checks both finally markers,
+absence of live descendants, retained preflight PID/startticks and absence of a
+long command. The forced-cancellation regression separately checks bounded
+SIGKILL, no live work and an absent finally marker. In that escalation case the
+receipt explicitly says `group-killed;finalizers-unconfirmed` and resource
+cleanup is `not-attested`; process reaping is not presented as proof that Docker
+or other resource finalizers completed. Cleanup failure similarly requires manual
+inspection rather than reporting success. These paths address the original
+orphan/process-audit defect without widening permissions or adopting caller
+resources.
+
+**WR-01:** An fsynced `O_EXCL` claim consumes the original request before status
+publication or preflight. It binds request bytes, runID and original supervisor
+PID/startticks. A second worker, including a stale or concurrent replay, returns
+before changing original status/logs or running preflight. The claim remains
+consumed after the original process exits; it is not a restart lease. Claim and
+request identity are checked before phases, during the long command and by
+status/resume. The completed, concurrent and stale-replay tests assert one
+preflight, original receipt/log preservation, matching claim/status identities,
+one original child and refusal of request/identity mutation. The public
+launch-existing-directory refusal and read-only resume behavior remain intact.
+
+**Evidence assessed independently:** The final log records28 runner/supervisor
+tests in8.189s,22 image/source contracts in5.385s and88 CI contracts in23.050s,
+all OK. Source tracing confirms the original archive/source/image guards and
+finite prior migration authority are retained. The real detached preflight
+receipt is passed with `preflight_exit_code=0`, final exit0 and matching original
+claim/status identity. Its reported139-case preflight/41.947s diagnostic used
+the measured GREEN source; later changes only refine disposition/tests. It is
+not relabelled as a whole security/recovery qualification at the later commit.
+
+The reviewer did not rerun those suites or another DB/TLS campaign. The original
+bounded reproduction is retained above; this re-review inspected the repair,
+new behavioral assertions and recorded outputs. No additional proven defect
+was found. Plan17 browser work, Plan18 uninterrupted whole qualification and
+Plan19 owner/native200 acceptance remain required.
 
 ## Other Assessed Boundaries
 

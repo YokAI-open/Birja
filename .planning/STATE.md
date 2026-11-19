@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 16
+current_plan: 17
 status: executing
-stopped_at: Phase14 Plan15 independently verified; next Plan16 in wave12
-last_updated: "2026-11-19T20:13:41+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan15 and migration repair independently verified; Plan16 next
+stopped_at: Phase14 Plan16 independently verified; next Plan17 in wave13
+last_updated: "2026-11-19T22:48:42+00:00"
+last_activity: 2026-11-19 -- Phase14 Plan16 and supervisor repairs independently verified; Plan17 next
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 64
+  completed_plans: 65
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan16 in wave12;15/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan17 in wave13;16/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 16 (wave12;15/19 complete)
-Current Plan: 16
+Plan: 17 (wave13;16/19 complete)
+Current Plan: 17
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;64/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;65/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -1051,3 +1051,24 @@ Next16 runner V3/23/fixed20/17 graph, critical paths and guarded synthetic path;
 17 browser,18 uninterrupted expected3623/backend+security and seven-stage
 same-archive proof,19 actual ownerUI/native200 remain required. Seven whole
 Phase14 requirements remain pending. No package/provider/production/publication.
+
+Plan16 complete:7c321d1 critical64/runnergraph; REDe37de93/GREENaf8f3e8
+authenticate genuine0014 fullcatalogue/ACL/default beforeAlembic and finite
+bootstrap-only post14pair. Historical/finalfingerprints unchanged.202relevant
+tests1070.95s and133statements/36branches100% pass.2642c48 supervisor/preflight;
+11e9afc/159d6d8 narrow prepared14transport,8e1b150 regression,summary6eaf391.
+Actual139preflight,82CIops,23runner/22image and ordinarydevfresh14 pass.
+R3archive7a698a7667efc0c3ff6b7545dabd89e969d6f4d9adcd5fde5d93b9f5a19aceff
+at159d6d8 passesfresh15.884s/14upgrade20.257s/20upgrade15.690s/cold53.390s.
+These remain bounded diagnostics; final3653backend/security/sevenstage18 pending.
+Independent16review found CR01 preflight orphan descendants and WR01 worker
+replay overwriting receipt. RED286611f/GREEN54c9120 add gated separate owned
+preflight session withdurableidentity, wholegroup reaping, irreversibleO_EXCL
+requestclaimbeforestatus/work.3b2b24d explicitly marksforcedkill finalizers
+unconfirmed/resourcecleanupnotattested;evidenced39775a.28runner8.189s,
+22image5.385s,88CI23.050s pass. Actual detached139preflight33.26s/41.947stotal
+preservesoriginalsupervisor/preflightIDs across tools, reapsownedresources;
+onlyNOT_QUALIFICATION boundedchild follows. Finalindependentre-review0/0,
+originalfindingsretained. No runtime/pin/archive changes in supervisorrepair.
+Next17 realbrowser+sourceboundpacket,18fullqualification,19humanUI/native200.
+All7wholePhase14requirementsstillpending; no provider/package/production/push.
