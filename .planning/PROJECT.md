@@ -110,7 +110,7 @@ gated. The bounded approved manual campaign is preserved at its original path.
 
 ## Current State
 
-Local v1.2: Phases12and13 are verified complete; Phase14is planned and ready to execute.
+Local v1.2: Phases12and13 are verified complete; Phase14is executing locally (8/19plans complete).
 Phase13delivers18plans/11requirements with owner UI/native200acceptance, full
 security/critical coverage and uninterrupted7stage recovery at9527e35. The
 feature branch remains local; this completion does not change production.
@@ -253,7 +253,7 @@ freeze-at-deletion treatment of unpaid/future effects.
 Final9527e35 qualification passes3343backend tests,61critical modules100%,
 1194frontend tests,79browser passes/one retained skip, five image policies and
 uninterrupted7stage source-bound recovery. Security58/58closed and owner UI/native200
-outcomes pass. Phase14is planned and ready to execute; Phase15andtenrequirements remain.
+outcomes pass. Phase14is executing locally (8/19plans complete); Phase15andtenrequirements remain.
 Phase7's six live obligations stay separately deferred and activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
 zero accepted scanner findings are not a dependency remediation claim. No new
