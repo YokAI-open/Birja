@@ -6,16 +6,17 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL, PREFLIGHT_SQL
+from app.db.portfolio_bootstrap import ACL_0023_SHA256, ACL_SQL, PREFLIGHT_0023_SQL
 
-Consumer = Literal["portfolio", "retained0017", "retained0014", "retained0008"]
+Consumer = Literal["portfolio", "retained0020", "retained0017", "retained0014", "retained0008"]
 SUPPORTED = {
-    "portfolio": frozenset({"0020"}),
+    "portfolio": frozenset({"0023"}),
+    "retained0020": frozenset({"0020"}),
     "retained0017": frozenset({"0017"}),
     "retained0014": frozenset({"0013", "0014"}),
     "retained0008": frozenset({"0007", "0008"}),
 }
-MIGRATION_ONLY = frozenset({"0015", "0016", "0018", "0019"})
+MIGRATION_ONLY = frozenset({"0015", "0016", "0018", "0019", "0021", "0022"})
 
 
 class SchemaAdmissionError(RuntimeError):
@@ -45,8 +46,8 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
         raise SchemaAdmissionError("incompatible_schema")
     if consumer == "portfolio":
         try:
-            await conn.execute(text(PREFLIGHT_SQL))
-            if (await conn.execute(text(ACL_SQL))).scalar_one() != ACL_0020_SHA256:
+            await conn.execute(text(PREFLIGHT_0023_SQL))
+            if (await conn.execute(text(ACL_SQL))).scalar_one() != ACL_0023_SHA256:
                 raise SchemaAdmissionError("incompatible_authority")
         except DBAPIError:
             raise SchemaAdmissionError("incompatible_authority") from None

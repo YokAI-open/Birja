@@ -14,7 +14,12 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+from app.db.portfolio_bootstrap import (
+    GRANTS_0023_SQL as GRANTS_SQL,
+)
+from app.db.portfolio_bootstrap import (
+    PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+)
 from app.db.schema_contract import SchemaAdmissionError, require_schema
 from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
@@ -55,7 +60,7 @@ async def current(engine, request):
                 )
             )
         await migrator.dispose()
-    await asyncio.to_thread(run_test_migration, "0020")
+    await asyncio.to_thread(run_test_migration, "0023")
     passwords = {role: secrets.token_hex(32) for role in ("birja_app", "birja_scheduler")}
     async with engine.begin() as conn:
         await conn.execute(
@@ -80,7 +85,7 @@ async def current(engine, request):
 async def test_bootstrap_preserves_money_and_exact_roles(current):
     engine, roles = current
     async with roles["birja_app"].begin() as conn:
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"
         assert (await conn.execute(text("SELECT session_user,current_user"))).one() == (
             "birja_app",
             "birja_app",
@@ -138,7 +143,9 @@ async def test_bootstrap_preserves_money_and_exact_roles(current):
                 text("SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace")
             )
         ).scalar_one()
-        assert routines == 17
+        # Frozen0020's17 routines plus lifecycle/terminal-root/clock guards and
+        # the single narrow closure definer; no extra overload is admitted.
+        assert routines == 21
         assert (
             await conn.execute(
                 text(
@@ -147,7 +154,7 @@ async def test_bootstrap_preserves_money_and_exact_roles(current):
                 )
             )
         ).one() == (False, False)
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"
 
 
 @pytest.mark.parametrize(
@@ -237,6 +244,9 @@ async def test_missing_or_excess_grants_refuse_current_writes(current, drift):
 async def test_all_private_helpers_have_no_nonowner_execute(current):
     engine, _ = current
     private = {
+        "check_portfolio_lifecycle_integrity()",
+        "check_portfolio_terminal_root()",
+        "check_stock_terminal_clock()",
         "check_portfolio_financial_write()",
         "check_stock_fill_integrity()",
         "check_stock_split_digest_version()",
@@ -328,7 +338,7 @@ async def test_production_admin_bootstrap_agrees_with_current_grants(current):
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with engine.connect() as conn:
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"
 
 
 @pytest.mark.parametrize("disabled", [False, True])
@@ -396,4 +406,4 @@ async def test_valid_administrative_schema_ownership_is_admitted(current, schema
     async with engine.begin() as conn:
         await conn.execute(text(f"ALTER SCHEMA public OWNER TO {schema_owner}"))  # noqa: S608 - fixed owner matrix
     async with roles["birja_app"].connect() as conn:
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"

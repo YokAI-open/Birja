@@ -323,7 +323,12 @@ async def ensure_dividend_test_owner() -> None:
 
 async def install_current_test_grants() -> None:
     """Explicit test bootstrap after final migration; partial revisions never admit app."""
-    from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import (
+        GRANTS_0023_SQL as GRANTS_SQL,
+    )
+    from app.db.portfolio_bootstrap import (
+        PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+    )
 
     test_migration_url()
     engine = create_async_engine(os.environ["DATABASE_URL"])

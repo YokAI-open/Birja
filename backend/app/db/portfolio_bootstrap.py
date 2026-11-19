@@ -370,3 +370,104 @@ GRANT EXECUTE ON FUNCTION public.apply_stock_action_resolution(
  bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text) TO birja_action_operator;
 """
 )
+
+# Successor0023 is independent of the qualified0017/0020 contracts above.
+# The complete projection remains source-owned; no hash is learned at runtime.
+CATALOGUE_0023_SQL = CATALOGUE_SQL.replace(
+    ") catalogue",
+    r"""
+ UNION ALL SELECT jsonb_build_array('rule',c.relname,r.rulename,r.ev_enabled::text,
+  pg_get_ruledef(r.oid)) FROM pg_rewrite r JOIN pg_class c ON c.oid=r.ev_class
+  WHERE c.relnamespace='public'::regnamespace
+ UNION ALL SELECT jsonb_build_array('policy',schemaname,tablename,policyname,
+  permissive,roles,cmd,qual,with_check) FROM pg_policies WHERE schemaname='public'
+ UNION ALL SELECT jsonb_build_array('other_relation',c.relname,c.relkind::text,
+  pg_get_userbyid(c.relowner)) FROM pg_class c
+  WHERE c.relnamespace='public'::regnamespace AND c.relkind NOT IN ('r','S','i','I')
+) catalogue""",
+)
+CATALOGUE_0023_SHA256 = "3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec"
+ACL_0023_INITIAL_SHA256 = "6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76"
+ACL_0023_SHA256 = "71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748"
+
+# Preserve the same conservative role/schema checks as0020, with a distinct
+# authenticated catalogue and the one additional app-only closure signature.
+PREFLIGHT_0023_SQL = (
+    PREFLIGHT_SQL.replace("management_identity", "closure_identity")
+    .replace("version_num='0020'", "version_num='0023'")
+    .replace(CATALOGUE_SQL, CATALOGUE_0023_SQL)
+    .replace(CATALOGUE_0020_SHA256, CATALOGUE_0023_SHA256)
+    .replace(
+        "'assert_stock_execution_current(bigint,bigint,jsonb)',",
+        "'assert_stock_execution_current(bigint,bigint,jsonb)',"
+        "'close_portfolio(bigint,bigint,uuid,text,text)',",
+    )
+    .replace(
+        "END $closure_identity$;",
+        r"""
+ IF EXISTS(SELECT FROM pg_default_acl d,
+  LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
+  AND x.grantee<>d.defaclrole) THEN
+  RAISE EXCEPTION 'unexpected closure default privileges'; END IF;
+ IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__') THEN
+  RAISE EXCEPTION 'unexpected closure privileges'; END IF;
+ IF EXISTS(SELECT FROM public.accounts a
+  FULL JOIN public.portfolio_lifecycle_closures c ON c.portfolio_id=a.id
+  WHERE (a.closed_at IS NULL)<>(c.id IS NULL)
+   OR (c.id IS NOT NULL AND (c.user_id,c.closed_at) IS DISTINCT FROM
+      (a.user_id,a.closed_at)))
+ OR EXISTS(SELECT FROM public.portfolio_lifecycle_closures c
+  LEFT JOIN public.portfolio_closure_intents i ON i.id=c.intent_id
+  JOIN public.accounts a ON a.id=c.portfolio_id
+  WHERE c.policy_version<>'freeze_at_closure_v1'
+   OR (c.provenance='owner_confirmation' AND
+    (i.id IS NULL OR i.outcome<>'closed'
+     OR c.confirmation_name IS DISTINCT FROM a.name
+     OR (i.user_id,i.portfolio_id,i.confirmation_name,i.policy_version,i.recorded_at)
+      IS DISTINCT FROM
+      (c.user_id,c.portfolio_id,c.confirmation_name,c.policy_version,c.closed_at)))
+   OR (c.provenance='retained_boundary' AND
+      (c.intent_id IS NOT NULL OR c.confirmation_name IS NOT NULL)))
+ OR EXISTS(SELECT FROM public.portfolio_closure_intents i
+  LEFT JOIN public.portfolio_lifecycle_closures c ON c.intent_id=i.id
+  WHERE (i.outcome='closed')<>(c.id IS NOT NULL))
+ OR EXISTS(SELECT FROM public.portfolio_stock_closures s
+  LEFT JOIN public.portfolio_lifecycle_closures c ON c.portfolio_id=s.portfolio_id
+  WHERE c.id IS NULL OR (s.user_id,s.closed_at) IS DISTINCT FROM (c.user_id,c.closed_at)
+   OR s.closing_sequence<>coalesce((SELECT max(m.sequence)
+     FROM public.stock_ownership_movements m WHERE m.coin_id=s.coin_id
+      AND m.recorded_at<=s.closed_at),0)
+   OR s.unit_epoch<>(SELECT count(*) FROM public.stock_split_applications a
+     WHERE a.coin_id=s.coin_id AND a.processed_at<=s.closed_at))
+ OR EXISTS(SELECT FROM public.portfolio_lifecycle_closures c
+  CROSS JOIN LATERAL (SELECT m.coin_id FROM public.stock_ownership_movements m
+    WHERE m.portfolio_id=c.portfolio_id
+   UNION SELECT h.coin_id FROM public.holdings h JOIN public.coins i ON i.id=h.coin_id
+    WHERE h.portfolio_id=c.portfolio_id AND i.asset_class='stock') member
+  WHERE NOT EXISTS(SELECT FROM public.portfolio_stock_closures s
+    WHERE s.portfolio_id=c.portfolio_id AND s.coin_id=member.coin_id))
+ THEN RAISE EXCEPTION 'closure lifecycle evidence mismatch'; END IF;
+END $closure_identity$;
+""".replace("__ACL__", ACL_SQL)
+        .replace("__INITIAL__", ACL_0023_INITIAL_SHA256)
+        .replace("__FINAL__", ACL_0023_SHA256),
+    )
+)
+
+GRANTS_0023_SQL = (
+    GRANTS_SQL
+    + r"""
+REVOKE ALL ON public.portfolio_lifecycle_closures,public.portfolio_closure_intents
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+REVOKE ALL ON SEQUENCE public.portfolio_lifecycle_closures_id_seq,
+ public.portfolio_closure_intents_id_seq
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+GRANT SELECT ON public.portfolio_lifecycle_closures,public.portfolio_closure_intents
+ TO birja_app,birja_scheduler;
+REVOKE ALL ON FUNCTION public.check_portfolio_lifecycle_integrity(),
+ public.check_portfolio_terminal_root(),public.check_stock_terminal_clock(),
+ public.close_portfolio(bigint,bigint,uuid,text,text)
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+GRANT EXECUTE ON FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text) TO birja_app;
+"""
+)
