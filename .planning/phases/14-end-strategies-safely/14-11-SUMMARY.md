@@ -49,10 +49,11 @@ replacement.**
 |2 — bounded original recovery|a330a37|9ecca8f|15storage cases pass1.32s; final69focused cases pass1.50s|
 |1 follow-up — real admission outage shape|dcee0e3|bd5f9be|Actual schema503 response retains Retry-After5 while discarding its optional message; strict terminal409 shape remains code-only|
 
-The first transport RED at13:33:03UTC fails on the missing transport module,
-and storage RED at13:38:11UTC fails on the missing storage module. No existing
+The first transport RED at12:33:03UTC fails on the missing transport module,
+and storage RED at12:38:11UTC fails on the missing storage module. No existing
 passing behavior was manufactured into a failing test. The final complete
-frontend run at13:44:04UTC passes1239tests/57files in22.34s at9ecca8f.
+frontend run at12:44:04UTC passes1239tests/57files in22.34s at9ecca8f.
+Vitest's raw log clock is localUTC+1; timestamps above are converted toUTC.
 The measured first-RED-to-final-test interval is approximately12minutes and
 does not include initial mandatory context reading. Parent owns STATE/ROADMAP;
 no whole requirement is marked complete.
