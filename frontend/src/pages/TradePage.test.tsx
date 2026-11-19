@@ -5,6 +5,7 @@ import { renderWithClient } from "@/test/render";
 import TradePage from "./TradePage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import { cashPortfolio } from "@/test/portfolioFixtures";
+import { openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
 
 type Ctx = {
   mid: string;
@@ -179,12 +180,17 @@ async function previewReady(user: User, value = "100") {
 }
 
 let uuid = 0;
+const tradeKey = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-beforeEach(() => {
+beforeEach(async () => {
   document.cookie = "bj_csrf=tok; path=/";
+  sessionStorage.clear();
+  // Recovery has its own genuine nonce; deterministic valid UUIDs below
+  // identify financial attempts, independently of recovery initialization.
+  await openDeletionRecovery("a@example.com");
   uuid = 0;
   vi.spyOn(crypto, "randomUUID").mockImplementation(
-    () => `key-${++uuid}` as unknown as ReturnType<typeof crypto.randomUUID>,
+    () => tradeKey(++uuid) as ReturnType<typeof crypto.randomUUID>,
   );
   install();
 });
@@ -270,7 +276,7 @@ describe("TradePage", () => {
       side: "buy",
       amount_usd: "100",
       expected_mid: "100000.00000000",
-      idempotency_key: "key-1",
+      idempotency_key: tradeKey(1),
     });
     const card = within(screen.getByRole("region", { name: "Order filled" }));
     expect(card.getByText("0.00099501 BTC")).toBeVisible();
@@ -291,7 +297,7 @@ describe("TradePage", () => {
     await previewReady(user);
     await user.click(confirmButton());
     await screen.findByRole("heading", { name: "Order filled" });
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
   it("sends exactly one request on a double click", async () => {
@@ -325,7 +331,7 @@ describe("TradePage", () => {
     await previewReady(user, "50");
     await user.click(confirmButton());
     await screen.findByRole("heading", { name: "Order filled" });
-    expect(tradePosts()[3]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[3]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
   it("reuses the key when a quote refetch moves the mid between a failed attempt and the retry", async () => {
@@ -351,7 +357,7 @@ describe("TradePage", () => {
     await user.click(screen.getByRole("button", { name: "Check order result" }));
     await screen.findByRole("heading", { name: "Order filled" });
     expect(tradePosts()).toHaveLength(2);
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-1");
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(1));
     expect(tradePosts()[1]!.body.expected_mid).toBe("100000.00000000");
     expect(uuid).toBe(1);
   });
@@ -380,8 +386,8 @@ describe("TradePage", () => {
     await screen.findByRole("heading", { name: "Order filled" });
     expect(tradePosts()).toHaveLength(2);
     expect(tradePosts()[1]!.body.expected_mid).toBe("100100.00000000");
-    expect(tradePosts()[0]!.body.idempotency_key).toBe("key-1");
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[0]!.body.idempotency_key).toBe(tradeKey(1));
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
   it("keeps an invalid reprice response unknown instead of inventing a new quote or attempt", async () => {
@@ -418,8 +424,8 @@ describe("TradePage", () => {
       ctx.trade = (body) => json(fillBody(ctx.mid, body));
       await user.click(confirmButton());
       await screen.findByRole("heading", { name: "Order filled" });
-      expect(tradePosts()[0]!.body.idempotency_key).toBe("key-1");
-      expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+      expect(tradePosts()[0]!.body.idempotency_key).toBe(tradeKey(1));
+      expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
     },
   );
 
