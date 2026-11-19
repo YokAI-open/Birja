@@ -13,6 +13,7 @@ from app.models.trade import Trade
 from app.models.user import Account, User
 from app.schemas.trades import PortfolioFillOut
 from tests.helpers import sign_in
+from tests.portfolio_fixtures import delete_owned_test_root
 from tests.test_portfolio_crypto import crypto_books
 
 __all__ = ["crypto_books"]
@@ -167,16 +168,11 @@ async def test_global_retry_wrong_root_returns_conflict_without_foreign_receipt(
     private(response)
 
 
-async def test_closed_original_target_cannot_replay_or_retarget(crypto_auth, engine):
-    client, _, (root, sibling, *_), _ = crypto_auth
+async def test_closed_original_target_cannot_replay_or_retarget(crypto_auth):
+    client, factory, (root, sibling, *_), _ = crypto_auth
     body = trade_body()
     assert (await client.post(path(root), json=body, headers=headers(client))).status_code == 201
-    async with engine.begin() as conn:
-        await conn.execute(
-            update(Account)
-            .where(Account.id == root.portfolio_id)
-            .values(closed_at=datetime.now(UTC))
-        )
+    await delete_owned_test_root(client, factory, root.portfolio_id)
     refused = await client.post(path(root), json=body, headers=headers(client))
     assert refused.status_code == 404 and refused.json() == {
         "detail": {"code": "portfolio_unavailable"}

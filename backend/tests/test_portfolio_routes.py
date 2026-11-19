@@ -1,6 +1,5 @@
 """Actual financial read adapters; final production composition is verified below."""
 
-from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -10,7 +9,7 @@ from sqlalchemy import select, text, update
 
 from app.models.user import Account, User
 from tests.helpers import sign_in
-from tests.portfolio_fixtures import portfolio_migration_db
+from tests.portfolio_fixtures import delete_owned_test_root, portfolio_migration_db
 from tests.test_portfolio_crypto import crypto_books, fill
 from tests.test_portfolio_dividends import (
     authority,
@@ -86,12 +85,8 @@ async def test_metadata_lists_only_owned_active_identity_in_stable_order(read_au
 
 async def test_metadata_zero_active_does_not_recreate_or_fund(read_auth):
     client, factory, roots, _ = read_auth
-    async with factory.begin() as db:
-        await db.execute(
-            update(Account)
-            .where(Account.user_id == roots[0].user_id, Account.closed_at.is_(None))
-            .values(closed_at=datetime.now(UTC))
-        )
+    for root in roots[:2]:
+        await delete_owned_test_root(client, factory, root.portfolio_id)
     for _ in range(2):
         response = await client.get("/api/v2/portfolios")
         assert response.status_code == 200 and response.json() == []
@@ -187,12 +182,7 @@ async def test_valuation_root_lost_after_resolution_never_publishes(read_auth, m
     original = portfolios.get_portfolio
 
     async def close_before_read(db, **kwargs):
-        async with factory.begin() as conn:
-            await conn.execute(
-                update(Account)
-                .where(Account.id == roots[0].portfolio_id)
-                .values(closed_at=datetime.now(UTC))
-            )
+        await delete_owned_test_root(client, factory, roots[0].portfolio_id)
         return await original(db, **kwargs)
 
     monkeypatch.setattr(portfolios, "get_portfolio", close_before_read)
@@ -297,6 +287,7 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
         ("GET", "/api/v2/portfolios/overview"),
         ("GET", base + "/metadata"),
         ("PATCH", base),
+        ("DELETE", base),
         ("GET", base),
         ("GET", base + "/history"),
         ("GET", base + "/event-history"),
@@ -321,7 +312,7 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
         assert endpoint in schema
 
 
-async def test_production_routes_have_no_delete_or_unscoped_v2_fallback(read_auth):
+async def test_production_routes_require_delete_intent_and_have_no_unscoped_v2_fallback(read_auth):
     client, _, roots, _ = read_auth
     headers = {"X-CSRF-Token": client.cookies["bj_csrf"]}
     for url in ("/api/v2/trades", "/api/v2/history", "/api/v2/portfolio"):
@@ -331,9 +322,9 @@ async def test_production_routes_have_no_delete_or_unscoped_v2_fallback(read_aut
         ("PATCH", path(roots[0])),
     ):
         # Management routes now exist, but strict empty payloads cannot create
-        # a strategy or edit metadata. DELETE remains a later phase.
+        # a strategy or edit metadata. DELETE also requires its original intent.
         assert (await client.request(method, url, headers=headers, json={})).status_code == 422
-    assert (await client.delete(path(roots[0]), headers=headers)).status_code == 405
+    assert (await client.delete(path(roots[0]), headers=headers)).status_code == 415
 
 
 async def test_history_correction_original_is_owned_and_private_over_http(

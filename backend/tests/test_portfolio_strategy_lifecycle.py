@@ -18,8 +18,7 @@ from app.services.stock_eligibility import load_execution_evidence
 from app.services.stock_trading import _encoded
 from tests import stock_trade_fixtures
 from tests.helpers import put_price
-from tests.test_portfolio_creation import authority, management_api, patch, post
-from tests.test_portfolio_management_authority import close
+from tests.test_portfolio_creation import authority, close, management_api, patch, post
 
 __all__ = ["authority", "management_api"]
 
@@ -119,11 +118,11 @@ async def ledger(api, root):
 
 @pytest_asyncio.fixture
 async def current_stock_authority_case(strategy_books, engine):
-    """The retained accounting tests' contract, backed by actual current0020."""
+    """The retained accounting assertions, backed by actual current0023."""
     api, roots, cid, now = strategy_books
     closed = (await post(api, "Retained closed")).json()["id"]
     foreign = (await post(api, "Foreign", client=api.other)).json()["id"]
-    await close(api.migrator, int(closed))
+    await close(api, int(closed))
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         loaded = await load_execution_evidence(db, cid, api.app.state.settings)
@@ -133,7 +132,14 @@ async def current_stock_authority_case(strategy_books, engine):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0020"
+        ).scalar_one() == "0023"
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(cid)},
+        )
         await conn.execute(
             text("UPDATE stock_action_state SET admission_generation=1 WHERE coin_id=:c"),
             {"c": cid},

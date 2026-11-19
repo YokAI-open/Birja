@@ -21,6 +21,7 @@ from tests.helpers import put_price
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_corporate_actions import batch
 from tests.test_portfolio_creation import authority, management_api, post
+from tests.test_portfolio_creation import close as public_close
 from tests.test_portfolio_dividend_authority import successor
 from tests.test_portfolio_strategy_events import strategy_events
 from tests.test_portfolio_strategy_lifecycle import scheduler, strategy_books
@@ -30,7 +31,7 @@ __all__ = ["authority", "management_api", "strategy_books", "strategy_events"]
 
 @pytest_asyncio.fixture
 async def dividend_books(strategy_events):
-    """Retained payment oracles on current0020 publicly created financial roots."""
+    """Retained payment oracles on current0023 publicly created financial roots."""
     api, roots, cid, now, action, admission, event, engine = strategy_events
     response = await post(api, "Foreign dividend", client=api.other)
     assert response.status_code == 201, response.text
@@ -39,7 +40,14 @@ async def dividend_books(strategy_events):
     async with factory.begin() as db:
         assert (
             await db.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0020"
+        ).scalar_one() == "0023"
+        await db.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(cid)},
+        )
         await synthetic_opening(
             db,
             cid,
@@ -149,12 +157,8 @@ async def revise(factory, target, **changes):
         return changed
 
 
-async def close(factory, target):
-    async with factory.begin() as db:
-        await db.execute(
-            text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
-            {"p": target["portfolio_id"]},
-        )
+async def close(api, target):
+    await public_close(api, target["portfolio_id"])
 
 
 async def test_independent_sibling_payments_and_original_replay(dividend_books):
@@ -273,14 +277,14 @@ async def test_hold_target_cannot_use_sibling_payment_and_app_cannot_publish(div
 
 @pytest.mark.parametrize("paid", [False, True])
 async def test_closed_earned_or_correction_target_is_ignored_without_history_effect(
-    dividend_books, paid
+    dividend_books, paid, management_api
 ):
     engine, factory, targets = dividend_books
     target = targets[0]
     if paid:
         await pay(engine, target)
         target = await revise(factory, target)
-    await close(factory, target)
+    await close(management_api, target)
     before = await books(factory, targets)
     with pytest.raises(dividends.DividendRefused) as exc:
         await pay(engine, target)
@@ -316,10 +320,10 @@ async def test_unaffordable_negative_correction_never_uses_sibling_cash(dividend
     assert rows[1][1]["previous_decision_id"] == rows[1][0]["id"]
 
 
-async def test_uncertain_anchor_worker_is_active_root_scoped(dividend_books):
+async def test_uncertain_anchor_worker_is_active_root_scoped(dividend_books, management_api):
     engine, factory, targets = dividend_books
     first, sibling = await pay(engine, targets[0]), await pay(engine, targets[1])
-    await close(factory, targets[0])
+    await close(management_api, targets[0])
     await revise(factory, targets[1], classification="uncertain", eligible=False)
     for _ in range(2):
         result = await worker.run_dividend_cycle(

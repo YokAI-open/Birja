@@ -93,6 +93,8 @@ async def test_acl_bootstrap_accepts_exact_current_authority(engine, migrated):
         [
             "docker",
             "compose",
+            "--env-file",
+            "/dev/null",
             "-f",
             str(root / "docker-compose.test.yml"),
             "exec",
@@ -698,7 +700,7 @@ async def test_acl_function_identity_exact_and_public_cannot_execute(authority_c
 
 async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority_case):
     conn, _ = authority_case
-    from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     await conn.execute(text(guard))
@@ -880,7 +882,7 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
             "TO birja_scheduler"
         )
     )
-    from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     with pytest.raises(DBAPIError, match="management catalogue mismatch"):

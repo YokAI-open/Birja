@@ -109,7 +109,7 @@ async def test_retained_lane_admits_only_its_reviewed_schema(
 async def test_final_startup_and_write_admission_accepts_actual_final_schema(
     portfolio_migration_db, settings
 ):
-    await migrate_to("0020")
+    await migrate_to("0023")
     await install_current_test_grants()
     app = create_app(settings)
     reached = []
@@ -182,7 +182,7 @@ async def test_restricted_runtime_role_can_read_schema_admission(engine, migrate
 
     async with engine.connect() as conn, conn.begin():
         await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed role matrix
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege(current_user,'alembic_version','UPDATE')")

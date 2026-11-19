@@ -1,7 +1,6 @@
 """Real OTP/session and once-only funding with zero, one or many roots."""
 
 import asyncio
-from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -16,20 +15,20 @@ from app.models.user import Account, User
 from app.schemas.auth import IdentityOut
 from app.services import accounts, auth
 from app.services.otp import OtpStore
-from tests import test_portfolio_management_authority as authority_harness
+from tests.portfolio_fixtures import close_empty_test_root
+from tests.test_portfolio_creation import authority, management_api
 
-authority = authority_harness.authority
-
-
-@pytest.fixture
-def sessions(authority):
-    # Explicit0020 authority harness until Plan03 finalizes runtime admission.
-    return async_sessionmaker(authority[0], expire_on_commit=False)
+__all__ = ["authority", "management_api"]
 
 
 @pytest.fixture
-def legacy_sessions(authority):
-    return async_sessionmaker(authority[1], expire_on_commit=False)
+def sessions(management_api):
+    return async_sessionmaker(management_api.restricted, expire_on_commit=False)
+
+
+@pytest.fixture
+def legacy_sessions(management_api):
+    return async_sessionmaker(management_api.migrator, expire_on_commit=False)
 
 
 async def seed_identity(sessions, count, *, closed=False):
@@ -48,9 +47,12 @@ async def seed_identity(sessions, count, *, closed=False):
                     name_key=f"original {n}",
                     cash=Decimal("4321.09") + n,
                     starting_cash=Decimal("8765.43") + n,
-                    closed_at=datetime.now(UTC) if closed else None,
                 )
             )
+        await db.flush()
+        if closed:
+            root = (await db.scalars(select(Account).where(Account.user_id == uid))).one()
+            await close_empty_test_root(db, root.id)
         await db.commit()
     return uid, email
 

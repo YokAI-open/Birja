@@ -86,6 +86,13 @@ async def ledger(
 
 
 async def event(conn: AsyncConnection, cid: int) -> tuple[int, int, int]:
+    await conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(cid)},
+    )
     eid = (
         await conn.execute(
             text(
@@ -155,7 +162,7 @@ async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes
 async def current_root(conn, uid):
     assert (
         await conn.execute(text("SELECT version_num FROM alembic_version"))
-    ).scalar_one() == "0020"
+    ).scalar_one() == "0023"
     return (
         await conn.execute(
             text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}
@@ -164,6 +171,13 @@ async def current_root(conn, uid):
 
 
 async def movement(conn, cid, uid, **changes):
+    await conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(cid)},
+    )
     root = await current_root(conn, uid)
     # Explicit current-only adapter; retained0014 seeds use retained_movement.
     params = dict(
@@ -668,6 +682,8 @@ async def retained_bootstrap(*, script=None):
         [
             "docker",
             "compose",
+            "--env-file",
+            "/dev/null",
             "-f",
             str(root / "docker-compose.test.yml"),
             "exec",
@@ -727,6 +743,8 @@ async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
         [
             docker,
             "compose",
+            "--env-file",
+            "/dev/null",
             "-f",
             str(root / "docker-compose.test.yml"),
             "exec",
@@ -894,6 +912,14 @@ async def retained_split_cause(conn: AsyncConnection, cid: int) -> int:
 
 
 async def split_cause(conn, cid, *, declared_coin=None):
+    for coin in sorted({cid, cid if declared_coin is None else declared_coin}):
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(coin)},
+        )
     eid, _, rid = await event(conn, cid)
     return (
         await conn.execute(

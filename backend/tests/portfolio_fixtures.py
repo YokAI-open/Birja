@@ -37,7 +37,7 @@ ECONOMIC_TABLES = ("users", "accounts", *OWNED_TABLES, "stock_split_applications
 
 
 async def migrate_to(revision: str, *, down: bool = False) -> None:
-    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 21))}
+    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 24))}
     await asyncio.to_thread(run_test_migration, revision, down=down)
 
 
@@ -76,6 +76,53 @@ async def restore_current_test_schema(engine: AsyncEngine) -> None:
     await reset_disposable_schema(engine)
     await migrate_to("head")
     await install_current_test_grants()
+
+
+async def close_empty_test_root(conn, root: int) -> None:
+    """SQL-only negative fixtures: close a verified empty root with real authority.
+
+    Integrated lifecycle acceptance uses authenticated public DELETE instead.
+    Finish insertion constraints while the synthetic root is active, as real
+    creation and closure are separate operations. Never disable a guard.
+    """
+    assert not (
+        await conn.execute(
+            text(
+                "SELECT EXISTS(SELECT FROM stock_ownership_movements WHERE portfolio_id=:p) "
+                "OR EXISTS(SELECT FROM holdings WHERE portfolio_id=:p)"
+            ),
+            {"p": root},
+        )
+    ).scalar_one()
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+    uid, name = (
+        await conn.execute(text("SELECT user_id,name FROM accounts WHERE id=:p"), {"p": root})
+    ).one()
+    assert (
+        await conn.execute(
+            text("SELECT outcome FROM close_portfolio(:u,:p,:k,:n,'freeze_at_closure_v1')"),
+            {"u": uid, "p": root, "k": uuid4(), "n": name},
+        )
+    ).scalar_one() == "closed"
+
+
+async def delete_owned_test_root(client, factory, root: int) -> None:
+    """An already authenticated current browser confirms its exact named root."""
+    async with factory() as db:
+        name = await db.scalar(text("SELECT name FROM accounts WHERE id=:p"), {"p": root})
+    response = await client.request(
+        "DELETE",
+        f"/api/v2/portfolios/{root}",
+        json={
+            "intent_key": str(uuid4()),
+            "confirmation_name": name,
+            "policy_version": "freeze_at_closure_v1",
+        },
+        headers={"X-CSRF-Token": client.cookies["bj_csrf"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"portfolio_id": str(root), "state": "closed"}
 
 
 async def economic_snapshot(conn: AsyncConnection) -> dict[str, tuple[tuple, ...]]:
@@ -321,12 +368,11 @@ async def seed_portfolio_world(conn: AsyncConnection) -> PortfolioWorld:
             ).scalar_one()
         )
         await conn.execute(
-            text(
-                "UPDATE accounts SET cash=:cash,closed_at=CASE WHEN :closed "
-                "THEN clock_timestamp() ELSE NULL END WHERE id=:p"
-            ),
+            text("UPDATE accounts SET cash=:cash WHERE id=:p"),
             {"p": roots[-1], "cash": Decimal(cash), "closed": closed},
         )
+        if closed:
+            await close_empty_test_root(conn, roots[-1])
     await conn.execute(
         text("INSERT INTO portfolio_initializations(user_id,origin) VALUES (:u,'legacy')"),
         {"u": owners[0]},

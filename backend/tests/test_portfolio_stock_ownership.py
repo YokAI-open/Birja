@@ -140,22 +140,26 @@ async def test_closed_or_foreign_root_append_refused_before_replay(journal_case)
 
 
 async def close_root(db, conn, case, root):
-    """Exact disposable privileged fixture, never a public lifecycle service."""
+    """Complete closure proof inside the uncommitted SQL-negative fixture.
+
+    The outer disposable transaction remains rollback-only; integrated lifecycle
+    acceptance uses public DELETE in the dedicated closure tests.
+    """
     assert (await conn.execute(text("SELECT current_database(),session_user"))).one() == (
         "birja_test",
         "birja_test",
     )
     await db.flush()
-    at = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
-    await conn.execute(text("UPDATE accounts SET closed_at=:at WHERE id=:p"), {"at": at, "p": root})
-    await conn.execute(
-        text("""INSERT INTO portfolio_stock_closures
-       (portfolio_id,user_id,coin_id,closed_at,closing_sequence,unit_epoch)
-       SELECT :p,:u,coin_id,:at,(SELECT coalesce(max(sequence),0)
-       FROM stock_ownership_movements WHERE coin_id=:c),unit_epoch
-       FROM stock_action_state WHERE coin_id=:c"""),
-        {"p": root, "u": case["owner"], "c": case["coin"], "at": at},
-    )
+    from uuid import uuid4
+
+    from app.services.portfolio_closure import ClosureIntent, close_portfolio
+
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+    name = await conn.scalar(text("SELECT name FROM accounts WHERE id=:p"), {"p": root})
+    async with AsyncSession(bind=conn, join_transaction_mode="rollback_only") as closure:
+        result = await close_portfolio(closure, ClosureIntent(case["owner"], root, uuid4(), name))
+        assert result.outcome == "closed"
     db.expire_all()
 
 
@@ -404,8 +408,8 @@ async def test_real_two_user_legacy_digest_reload_preserves_original_bytes(
             )
         ).one() == original
     # Current ORM/service consumers require the current schema, not retained0017.
-    # Preserve the independent legacy bytes above before forwarding to0020.
-    await migrate_to("0020")
+    # Preserve the independent legacy bytes above before the explicit0023 upgrade.
+    await migrate_to("0023")
     async with AsyncSession(engine) as db:
         _, rows = await assert_ownership_consistent(db, cid)
         app = await db.get(StockSplitApplication, aid)

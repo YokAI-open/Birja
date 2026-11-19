@@ -13,17 +13,17 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.security import create_access_token
-from app.db.portfolio_bootstrap import GRANTS_SQL
+from app.db.portfolio_bootstrap import GRANTS_0023_SQL as GRANTS_SQL
 from app.main import create_app
-from tests import test_portfolio_management_authority as authority_harness
-from tests.test_portfolio_management_authority import close, create, owner
+from tests import test_portfolio_closure_authority as authority_harness
+from tests.test_portfolio_management_authority import create, owner
 
 authority = authority_harness.authority
 
 
 @pytest_asyncio.fixture
 async def management_api(authority, engine, settings):
-    restricted, migrator = authority
+    restricted, migrator, _ = authority
     async with engine.begin() as conn:
         raw = await conn.get_raw_connection()
         await raw.driver_connection.execute(GRANTS_SQL)
@@ -80,6 +80,23 @@ async def patch(api, root, payload, *, client=None):
     return await (client or api.client).patch(
         f"/api/v2/portfolios/{root}", json=payload, headers={"X-CSRF-Token": "test-csrf"}
     )
+
+
+async def close(api, root):
+    """Current integrated lifecycle uses the actual owner-authenticated DELETE."""
+    from tests.test_portfolio_closure_api import delete, intent
+
+    async with api.migrator.connect() as conn:
+        uid, name = (
+            await conn.execute(
+                text("SELECT user_id,name FROM accounts WHERE id=:p"), {"p": int(root)}
+            )
+        ).one()
+    client = api.client if uid == api.uid else api.other
+    assert uid in {api.uid, api.other_uid}
+    response = await delete(api, str(root), intent(name), client=client)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"portfolio_id": str(root), "state": "closed"}
 
 
 async def counts(api):
@@ -140,7 +157,7 @@ async def test_same_key_name_and_last_slot_races_replay_before_mutable_cap(manag
     )
     assert (await patch(api, root, {"name": "Updated"})).status_code == 200
     assert (await post(api, "Original", key=key)).status_code == 200
-    await close(api.migrator, int(root))
+    await close(api, int(root))
     reused = await post(api, "Original")
     assert reused.status_code == 201 and reused.json()["id"] != root
     unavailable = await post(api, "Original", key=key)
@@ -173,9 +190,14 @@ async def test_daily_sql_quota_is_durable_replay_exempt_and_rejections_leave_no_
     key = uuid4()
     first = await post(api, "Original", key=key)
     assert first.status_code == 201
+    api.app.state.settings = api.app.state.settings.model_copy(
+        # This case isolates the durable SQL100/day creation quota. HTTP
+        # attempt limits have separate unchanged tests, including deletion.
+        update={"portfolio_create_owner_limit": 200, "portfolio_create_ip_limit": 200}
+    )
     for n in range(99):
         row = await create(api.restricted, api.uid, f"Retired {n}")
-        await close(api.migrator, row.portfolio_id)
+        await close(api, row.portfolio_id)
     before = await counts(api)
     rejected = await post(api, "Beyond quota")
     assert rejected.status_code == 429 and rejected.json()["detail"]["code"] == "creation_quota"

@@ -171,6 +171,9 @@ async def test_keyset_exact_lookahead_and_refresh(db, engine, new_user, limit):
     uid, other = await new_user(), await new_user()
     portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     assert (await list_history(db, portfolio=portfolio, limit=limit)).items == []
+    # A service read now retains the final root fence through request cleanup.
+    # End this simulated request before its independent append transaction.
+    await db.rollback()
     ids = [await put_fill(engine, uid) for _ in range(limit + 1)]
     foreign = await put_fill(engine, other)
     first = await list_history(db, portfolio=portfolio, limit=limit)
@@ -178,10 +181,12 @@ async def test_keyset_exact_lookahead_and_refresh(db, engine, new_user, limit):
     assert decode_cursor(first.next_cursor, expected_portfolio_id=portfolio.portfolio_id).id == int(
         first.items[-1].id
     )
+    await db.rollback()
     second = await list_history(db, portfolio=portfolio, limit=limit, cursor=first.next_cursor)
     assert [int(i.id) for i in second.items] == [min(ids)]
     assert second.next_cursor is None
     assert foreign not in [int(i.id) for i in first.items + second.items]
+    await db.rollback()
     scoped = await list_history(
         db,
         portfolio=portfolio,
@@ -191,6 +196,7 @@ async def test_keyset_exact_lookahead_and_refresh(db, engine, new_user, limit):
         ),
     )
     assert all(int(i.id) in ids for i in scoped.items)
+    await db.rollback()
     newer = await put_fill(engine, uid, stamp=STAMP + timedelta(microseconds=1))
     assert int((await list_history(db, portfolio=portfolio, limit=limit)).items[0].id) == newer
 

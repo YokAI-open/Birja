@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.services import portfolio as service
 from app.services.portfolios import OwnedActivePortfolio
-from tests.test_portfolio_creation import management_api
-from tests.test_portfolio_management_authority import authority, close, create
+from tests.test_portfolio_creation import authority, close, management_api
+from tests.test_portfolio_management_authority import create
 from tests.test_portfolio_valuation import (
     migrated,
     ownership,
@@ -105,7 +105,7 @@ async def test_actual_overview_contract_and_constant_financial_queries(managemen
     ]
     foreign = await create(api.restricted, api.other_uid, "Private foreign")
     closed = await create(api.restricted, api.other_uid, "Private closed")
-    await close(api.migrator, closed.portfolio_id)
+    await close(api, closed.portfolio_id)
     queries = []
 
     def capture(conn, cursor, statement, params, context, many):
@@ -261,7 +261,7 @@ async def test_explicit_batch_refuses_unavailable_without_partial_result(
     own = await create(api.restricted, api.uid)
     other = await create(api.restricted, api.other_uid)
     if target == "closed":
-        await close(api.migrator, own.portfolio_id)
+        await close(api, own.portfolio_id)
     ids = {
         "foreign": [own.portfolio_id, other.portfolio_id],
         "closed": [own.portfolio_id],
@@ -322,7 +322,7 @@ async def test_closure_between_financial_and_final_read_refuses(
         result = await execute(db, stmt, *args, **kwargs)
         reads += 1
         if reads == 1:
-            await close(api.migrator, root.portfolio_id)
+            await close(api, root.portfolio_id)
         return result
 
     monkeypatch.setattr(AsyncSession, "execute", intercepted)
@@ -365,5 +365,5 @@ async def test_final_membership_protects_response_until_reader_releases(
     monkeypatch.setattr(AsyncSession, "execute", intercepted)
     (result,) = await load(api, settings)
     assert result.portfolio_id == str(root.portfolio_id) and protected
-    await close(api.migrator, root.portfolio_id)
+    await close(api, root.portfolio_id)
     assert await load(api, settings) == ()

@@ -3,19 +3,25 @@
 import asyncio
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.services.accounts import get_or_create_user
-from tests import test_portfolio_management_authority as authority_harness
+from tests.portfolio_fixtures import delete_owned_test_root
+from tests.test_portfolio_creation import authority, management_api
 from tests.test_portfolio_management_authority import (
-    close,
     create,
     owner,
     reject,
 )
 
-authority = authority_harness.authority
+__all__ = ["authority", "management_api"]
+
+
+@pytest.fixture
+def funding_authority(management_api):
+    return management_api.restricted, management_api.migrator
 
 
 async def evidence(migrator, uid):
@@ -50,8 +56,10 @@ async def evidence(migrator, uid):
         return roots, grants, latch
 
 
-async def test_signup_records_initial_provenance_and_explicit_create_is_separate(authority):
-    app, migrator = authority
+async def test_signup_records_initial_provenance_and_explicit_create_is_separate(
+    funding_authority, management_api
+):
+    app, migrator = funding_authority
     sessions = async_sessionmaker(app, expire_on_commit=False)
     email = f"funding-{uuid4()}@example.test"
     async with sessions() as db:
@@ -70,8 +78,17 @@ async def test_signup_records_initial_provenance_and_explicit_create_is_separate
         ).scalar_one() == initial
     extra = await create(app, uid, "Independent")
     assert extra.portfolio_id != initial
-    await close(migrator, initial)
-    await close(migrator, extra.portfolio_id)
+    from app.core.security import create_access_token
+
+    async with migrator.begin() as conn:
+        sid = await conn.scalar(
+            text("INSERT INTO auth_sessions(user_id) VALUES (:u) RETURNING id"), {"u": uid}
+        )
+    management_api.client.cookies.set(
+        "bj_access", create_access_token(uid, sid, management_api.app.state.settings.jwt_secret)
+    )
+    await delete_owned_test_root(management_api.client, sessions, initial)
+    await delete_owned_test_root(management_api.client, sessions, extra.portfolio_id)
     before = await evidence(migrator, uid)
     for _ in range(2):
         async with sessions() as db:
@@ -89,8 +106,8 @@ async def test_signup_records_initial_provenance_and_explicit_create_is_separate
     assert sum(row.amount for row in grants) == 30000
 
 
-async def test_concurrent_signup_commits_one_initial_journal_and_latch(authority):
-    app, migrator = authority
+async def test_concurrent_signup_commits_one_initial_journal_and_latch(funding_authority):
+    app, migrator = funding_authority
     sessions = async_sessionmaker(app, expire_on_commit=False)
     email = f"funding-race-{uuid4()}@example.test"
 
@@ -108,8 +125,8 @@ async def test_concurrent_signup_commits_one_initial_journal_and_latch(authority
     assert grants[0].amount == roots[0].cash == roots[0].starting_cash == 10000
 
 
-async def test_signup_rollback_removes_user_root_grant_and_latch_together(authority):
-    app, migrator = authority
+async def test_signup_rollback_removes_user_root_grant_and_latch_together(funding_authority):
+    app, migrator = funding_authority
     sessions = async_sessionmaker(app, expire_on_commit=False)
     email = f"funding-rollback-{uuid4()}@example.test"
     async with sessions() as db:
@@ -131,8 +148,10 @@ async def test_signup_rollback_removes_user_root_grant_and_latch_together(author
     assert len(roots) == len(grants) == len(latch) == 1
 
 
-async def test_legacy_empty_latch_cannot_be_initialized_but_can_explicitly_create(authority):
-    app, migrator = authority
+async def test_legacy_empty_latch_cannot_be_initialized_but_can_explicitly_create(
+    funding_authority,
+):
+    app, migrator = funding_authority
     uid = await owner(migrator)
     async with migrator.begin() as conn:
         await conn.execute(
@@ -152,8 +171,10 @@ async def test_legacy_empty_latch_cannot_be_initialized_but_can_explicitly_creat
     assert grants[0].origin == "explicit"
 
 
-async def test_concurrent_initializer_is_once_only_and_unlatched_existing_books_refuse(authority):
-    app, migrator = authority
+async def test_concurrent_initializer_is_once_only_and_unlatched_existing_books_refuse(
+    funding_authority,
+):
+    app, migrator = funding_authority
     uid = await owner(migrator)
 
     async def initialize():

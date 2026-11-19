@@ -16,7 +16,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from tests.portfolio_fixtures import portfolio_world
+from tests.portfolio_fixtures import close_empty_test_root, portfolio_world
 
 __all__ = ["portfolio_world"]
 
@@ -40,7 +40,7 @@ async def stock_authority_case(engine, migrated):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0020"
+        ).scalar_one() == "0023"
         owners = []
         for label in ("owned", "foreign"):
             owners.append(
@@ -62,15 +62,23 @@ async def stock_authority_case(engine, migrated):
                 (
                     await conn.execute(
                         text("""INSERT INTO accounts
-              (user_id,name,name_key,cash,starting_cash,closed_at) VALUES
-              (:u,:name,public.portfolio_name_key(:name),9980,12000,
-               CASE WHEN :closed THEN clock_timestamp() ELSE NULL END)
+              (user_id,name,name_key,cash,starting_cash) VALUES
+              (:u,:name,public.portfolio_name_key(:name),9980,12000)
               RETURNING id"""),
                         {"u": owner, "name": label, "closed": closed},
                     )
                 ).scalar_one()
             )
+            if closed:
+                await close_empty_test_root(conn, roots[-1])
         cid = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(cid)},
+        )
         now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
         await conn.execute(
             text("""UPDATE stock_instruments SET provider_asset_id='fixture-asset',
@@ -310,6 +318,10 @@ async def test_final_sql_stock_final_validator_rejects_changed_root_state(
             {"p": case["first"], "c": case["coin"]},
         )
     if change == "closed":
+        # Deliberately inconsistent UNCOMMITTED negative fixture. Retain the
+        # final-validator refusal independently of the new deferred root guard;
+        # the outer transaction always rolls back and never publishes it.
+        await conn.execute(text("SET CONSTRAINTS portfolio_terminal_root DEFERRED"))
         await conn.execute(
             text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
             {"p": case["first"]},

@@ -4,8 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
-from tests.test_portfolio_creation import authority, management_api, patch, post
-from tests.test_portfolio_management_authority import close
+from tests.test_portfolio_creation import authority, close, management_api, patch, post
 from tests.test_portfolio_strategy_lifecycle import ledger, strategy_books, trade
 
 __all__ = ["authority", "management_api", "strategy_books"]
@@ -99,7 +98,7 @@ async def economic_evidence(api):
         )
 
 
-async def test_owner_closed_unknown_privacy_and_no_public_delete(management_api):
+async def test_owner_closed_unknown_privacy_and_delete_requires_original_intent(management_api):
     api = management_api
     root = (await post(api)).json()["id"]
     for target, client in [(root, api.other), ("9223372036854775807", api.client)]:
@@ -111,13 +110,13 @@ async def test_owner_closed_unknown_privacy_and_no_public_delete(management_api)
                 "code": "portfolio_unavailable"
             }
             assert response.headers["cache-control"] == "no-store"
-    await close(api.migrator, int(root))
+    await close(api, int(root))
     assert (await api.client.get(f"/api/v2/portfolios/{root}/metadata")).status_code == 404
     assert (await patch(api, root, {"description": "closed"})).status_code == 404
     assert (await api.client.get("/api/v2/portfolios")).json() == []
     assert (
         await api.client.delete(f"/api/v2/portfolios/{root}", headers={"X-CSRF-Token": "test-csrf"})
-    ).status_code == 405
+    ).status_code == 415
 
 
 async def test_patch_shape_scalar_boundaries_csrf_and_name_conflict_leave_evidence(management_api):

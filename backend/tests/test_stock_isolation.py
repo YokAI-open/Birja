@@ -353,6 +353,15 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
     user_id = await new_user()
     key = uuid.uuid4()
     async with engine.begin() as conn:
+        from sqlalchemy import text
+
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(stock_id)},
+        )
         root = (
             await conn.execute(select(Account.id).where(Account.user_id == user_id))
         ).scalar_one()

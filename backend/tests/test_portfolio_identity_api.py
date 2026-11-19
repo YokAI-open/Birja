@@ -1,6 +1,5 @@
 """Identity HTTP against the actual production router composition."""
 
-from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.models.auth import AuthSession
 from app.models.user import Account, User
 from tests.helpers import csrf_headers, request_and_get_code, unique_email
+from tests.portfolio_fixtures import close_empty_test_root
 
 
 async def _verify(client, outbox, email):
@@ -40,9 +40,12 @@ async def test_versioned_identity_has_no_finances_and_preserves_roots(
                     name_key=f"retained {i}",
                     cash=Decimal("4521.09") + i,
                     starting_cash=Decimal("9321.01") + i,
-                    closed_at=datetime.now(UTC) if closed else None,
                 )
             )
+        await db.flush()
+        if closed:
+            root = (await db.scalars(select(Account).where(Account.user_id == uid))).one()
+            await close_empty_test_root(db, root.id)
         await db.commit()
 
     async def snapshot():

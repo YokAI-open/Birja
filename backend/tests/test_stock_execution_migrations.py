@@ -61,6 +61,16 @@ async def complete_receipt(conn, cid, uid, *, movement_changes=None, authority=N
 
 
 async def insert_trade(conn, cid, uid, **changes):
+    # These helpers seed the current runtime; explicit historical migration
+    # cases below use their own retained SQL. Take the real financial gate so
+    # negative receipt cases still reach the cross-row assertion they test.
+    await conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(cid)},
+    )
     root = (
         await conn.execute(
             text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}

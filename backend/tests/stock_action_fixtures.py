@@ -47,7 +47,12 @@ async def synthetic_owned_portfolio(db, user_id):
 
 async def install_current_runtime_roles(conn):
     """Install the exact final production contract on this guarded test DB."""
-    from app.db.portfolio_bootstrap import GRANTS_SQL, PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import (
+        GRANTS_0023_SQL as GRANTS_SQL,
+    )
+    from app.db.portfolio_bootstrap import (
+        PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+    )
 
     assert (
         await conn.execute(
@@ -267,6 +272,13 @@ async def synthetic_opening(
     portfolio_id=None,
 ):
     """Test-only prehistory; deliberately unavailable from production services."""
+    await db.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(coin_id)},
+    )
     portfolio_id = await synthetic_portfolio_id(db, user_id, portfolio_id)
     row = StockOwnershipMovement(
         portfolio_id=portfolio_id,
@@ -310,6 +322,16 @@ async def synthetic_split(
     applied=True,
 ):
     """Explicit matched event/revision/application; never false-causal shortcuts."""
+    # Pending announcements are nonfinancial and may arrive while a financial
+    # writer holds its gate. Only an applied fixture appends guarded economics.
+    if applied:
+        await db.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(coin_id)},
+        )
     event = StockActionEvent(coin_id=coin_id, economic_key=str(uuid4()), first_observed_at=cutoff)
     db.add(event)
     await db.flush()

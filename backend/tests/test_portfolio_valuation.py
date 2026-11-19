@@ -15,9 +15,9 @@ from app.schemas.portfolio import PortfolioOut
 from app.services.portfolio import get_portfolio, load_portfolio_snapshots
 from app.services.portfolios import OwnedActivePortfolio
 from tests.helpers import coin_id, put_price
+from tests.portfolio_fixtures import close_empty_test_root
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
-from tests.test_portfolio_creation import management_api
-from tests.test_portfolio_management_authority import authority
+from tests.test_portfolio_creation import authority, management_api
 from tests.test_portfolio_stock_trading import execute, order
 
 __all__ = ["crypto_books", "stock_books", "ownership", "status_case", "stock_trade_case"]
@@ -25,7 +25,7 @@ __all__ = ["crypto_books", "stock_books", "ownership", "status_case", "stock_tra
 
 @pytest_asyncio.fixture
 async def migrated(management_api):
-    """Explicit current0020 setup; retained global fixture remains untouched."""
+    """Explicit current0023 setup; retained global fixture remains untouched."""
     yield
 
 
@@ -49,10 +49,10 @@ async def _roots(factory, uid, other, now):
             name_key="closed",
             cash=Decimal("55"),
             starting_cash=Decimal("99"),
-            closed_at=now,
         )
         db.add_all([sibling, closed])
         await db.flush()
+        await close_empty_test_root(db, closed.id)
         foreign = (await db.scalars(select(Account).where(Account.user_id == other))).one()
         return [OwnedActivePortfolio(a.id, uid) for a in (first, sibling, closed, foreign)]
 

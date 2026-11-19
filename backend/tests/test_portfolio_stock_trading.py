@@ -20,6 +20,7 @@ from app.services import stock_trading, trading
 from app.services.portfolios import OwnedActivePortfolio
 from app.services.trade_math import TradeRefused
 from tests.helpers import put_price
+from tests.portfolio_fixtures import close_empty_test_root
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
 
 __all__ = ["ownership", "status_case", "stock_trade_case"]
@@ -45,10 +46,10 @@ async def stock_books(stock_trade_case, new_user):
             name_key="closed",
             cash=Decimal("55"),
             starting_cash=Decimal("99"),
-            closed_at=now,
         )
         db.add_all([sibling, closed])
         await db.flush()
+        await close_empty_test_root(db, closed.id)
         foreign = (await db.scalars(select(Account).where(Account.user_id == foreign_uid))).one()
         roots = [OwnedActivePortfolio(a.id, uid) for a in (first, sibling, closed, foreign)]
     return factory, cid, roots, now
@@ -376,12 +377,12 @@ async def test_closure_while_waiting_for_root_refuses_new_fill(stock_books, sett
         pending = asyncio.create_task(execute(factory, root, settings))
         async with asyncio.timeout(10):
             await waiting.wait()
-            await closer.execute(
-                update(Account)
-                .where(Account.id == root.portfolio_id)
-                .values(closed_at=datetime.now(UTC))
+            from app.services.portfolio_closure import ClosureIntent, close_portfolio
+
+            name = await closer.scalar(select(Account.name).where(Account.id == root.portfolio_id))
+            await close_portfolio(
+                closer, ClosureIntent(root.user_id, root.portfolio_id, uuid4(), name)
             )
-            await closer.commit()
             with pytest.raises(HTTPException) as exc:
                 await pending
         assert exc.value.status_code == 404

@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import event, func, select, text, update
 
 from app.models.corporate_action import StockActionRevision, StockDividendEntitlement
-from app.models.user import Account
+from app.models.user import Account, User
 from app.services import corporate_actions as actions
 from app.services import stock_trading
 from app.services.portfolios import OwnedActivePortfolio
@@ -23,6 +23,8 @@ from tests.dividend_fixtures import (
     status_case,
     stock_trade_case,
 )
+from tests.helpers import sign_in
+from tests.portfolio_fixtures import delete_owned_test_root
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_portfolio_stock_trading import order, snapshot
 
@@ -211,13 +213,17 @@ async def test_incomplete_historical_coverage_does_not_exempt_never_owner(
     assert await snapshot(factory, root) == before
 
 
-async def test_closed_never_owner_remains_unavailable(paid_historical_dividend, new_user, settings):
+async def test_closed_never_owner_remains_unavailable(
+    paid_historical_dividend, new_user, settings, auth_client, outbox
+):
     factory, _, _, _ = paid_historical_dividend
     uid = await new_user()
     async with factory.begin() as db:
         target = (await db.scalars(select(Account).where(Account.user_id == uid))).one()
         root = OwnedActivePortfolio(target.id, uid)
-        target.closed_at = await db.scalar(select(func.clock_timestamp()))
+        email = await db.scalar(select(User.email).where(User.id == uid))
+    await sign_in(auth_client, outbox, email)
+    await delete_owned_test_root(auth_client, factory, root.portfolio_id)
     before = await snapshot(factory, root)
     with pytest.raises(HTTPException) as unavailable:
         await restricted_buy(factory, root, settings, order(quantity="1"))

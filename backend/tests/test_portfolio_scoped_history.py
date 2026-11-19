@@ -15,6 +15,7 @@ from app.services import history as trades
 from app.services.portfolios import OwnedActivePortfolio
 from tests.portfolio_fixtures import portfolio_migration_db
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case
+from tests.test_portfolio_creation import close
 from tests.test_portfolio_dividends import (
     authority,
     dividend_books,
@@ -151,15 +152,13 @@ async def test_tied_trade_pagination_cross_root_cursor_and_append(dividend_books
 
 @pytest.mark.parametrize("module", [trades, mixed])
 @pytest.mark.parametrize("target", ["closed", "foreign", "missing"])
-async def test_private_unavailable_target_no_financial_rows(dividend_books, module, target):
+async def test_private_unavailable_target_no_financial_rows(
+    dividend_books, module, target, management_api
+):
     _, factory, targets = dividend_books
     bad = dict(targets[0])
     if target == "closed":
-        async with factory.begin() as db:
-            await db.execute(
-                text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
-                {"p": bad["portfolio_id"]},
-            )
+        await close(management_api, bad["portfolio_id"])
     elif target == "foreign":
         bad["portfolio_id"] = targets[2]["portfolio_id"]
     else:

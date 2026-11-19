@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import run_test_migration, test_migration_url
 from tests.test_portfolio_management_grants import production_bootstrap, sql
 
@@ -274,8 +274,7 @@ async def successor(engine, request):
         yield engine
     finally:
         await migrator.dispose()
-        await reset_disposable_schema(engine)
-        await asyncio.to_thread(run_test_migration, "0020")
+        await restore_current_test_schema(engine)
 
 
 async def test_fresh_upgraded_exact_successor_admission_and_sql_parity(successor):
@@ -393,8 +392,7 @@ async def test_partial_and_unknown_runtime_refuse_without_grants(engine, revisio
         async with engine.connect() as conn:
             assert (await conn.execute(text(ACL_SQL))).scalar_one() == before
     finally:
-        await reset_disposable_schema(engine)
-        await asyncio.to_thread(run_test_migration, "0020")
+        await restore_current_test_schema(engine)
 
 
 async def test_successor_downgrade_refuses_before_financial_or_lifecycle_loss(successor):

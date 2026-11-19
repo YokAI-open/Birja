@@ -43,7 +43,7 @@ async def dividend_portfolio_case(engine, migrated):
         try:
             assert (
                 await conn.execute(text("SELECT version_num FROM alembic_version"))
-            ).scalar_one() == "0020"
+            ).scalar_one() == "0023"
             now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
             owners = []
             for label in ("owner", "foreign"):
@@ -74,6 +74,13 @@ async def dividend_portfolio_case(engine, migrated):
             cid = (
                 await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))
             ).scalar_one()
+            await conn.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtextextended("
+                    "'birja.stock.instrument:' || CAST(:c AS text),0))"
+                ),
+                {"c": str(cid)},
+            )
             eid, _, rid = await event(conn, cid)
             cutoff = now - timedelta(days=3)
             terms = {
@@ -341,6 +348,10 @@ async def test_final_sql_dividend_closed_root_refuses_unpaid_and_corrected_effec
         await apply(conn, target)
         target = await successor(conn, target)
     before = await balances(conn, targets)
+    # This independent SQL negative remains uncommitted and rolls back. A paid
+    # operation sets constraints immediate; defer only the new root guard so
+    # the original dividend authority's closed-state refusal is still tested.
+    await conn.execute(text("SET CONSTRAINTS portfolio_terminal_root DEFERRED"))
     await conn.execute(
         text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:portfolio_id"), target
     )
@@ -422,6 +433,7 @@ async def test_final_sql_dividend_uncertain_hold_uses_original_root_and_freezes(
     assert result["outcome"] == "held_uncertain"
     assert await hold(conn, original["payment_id"], uncertain["revision_fingerprint"]) == result
     assert await balances(conn, targets) == [Decimal(101), Decimal(100), Decimal(100)]
+    await conn.execute(text("SET CONSTRAINTS portfolio_terminal_root DEFERRED"))
     await conn.execute(
         text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:portfolio_id"), targets[0]
     )

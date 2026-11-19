@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from tests.portfolio_fixtures import reset_disposable_schema
+from tests.portfolio_fixtures import reset_disposable_schema, restore_current_test_schema
 from tests.test_migrations import ensure_dividend_test_owner, run_test_migration, test_migration_url
 
 
@@ -29,8 +29,7 @@ async def staged(engine):
         yield migration
     finally:
         await migration.dispose()
-        await reset_disposable_schema(engine)
-        await migrate("0020")
+        await restore_current_test_schema(engine)
 
 
 async def root(conn, *, closed=False):

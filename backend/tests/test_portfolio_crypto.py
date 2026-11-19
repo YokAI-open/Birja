@@ -17,7 +17,8 @@ from app.models.user import Account
 from app.services import trading
 from app.services.portfolios import OwnedActivePortfolio
 from app.services.trade_math import TradeRefused
-from tests.helpers import coin_id, put_price
+from tests.helpers import coin_id, put_price, sign_in
+from tests.portfolio_fixtures import close_empty_test_root, delete_owned_test_root
 
 
 @pytest_asyncio.fixture
@@ -41,10 +42,10 @@ async def crypto_books(engine, new_user, clean_prices):
             name_key="closed",
             cash=Decimal("55"),
             starting_cash=Decimal("99"),
-            closed_at=datetime.now(UTC),
         )
         db.add_all([sibling, closed])
         await db.flush()
+        await close_empty_test_root(db, closed.id)
         foreign = (await db.execute(select(Account).where(Account.user_id == other))).scalar_one()
         for root, qty, basis in ((first, "0.1", "123"), (sibling, "0.2", "456")):
             db.add(
@@ -208,16 +209,18 @@ async def test_unavailable_target_rechecked_in_every_service(
     assert exc.value.status_code == 404 and exc.value.detail == {"code": "portfolio_unavailable"}
 
 
-async def test_stale_resolved_root_cannot_replay_after_closure(crypto_books, settings, engine):
+async def test_stale_resolved_root_cannot_replay_after_closure(
+    crypto_books, settings, auth_client, outbox
+):
     factory, (root, *_), _ = crypto_books
     key = uuid4()
     await fill(factory, root, settings, key=key)
-    async with engine.begin() as conn:
-        await conn.execute(
-            update(Account)
-            .where(Account.id == root.portfolio_id)
-            .values(closed_at=datetime.now(UTC))
-        )
+    from app.models.user import User
+
+    async with factory() as db:
+        email = await db.scalar(select(User.email).where(User.id == root.user_id))
+    await sign_in(auth_client, outbox, email)
+    await delete_owned_test_root(auth_client, factory, root.portfolio_id)
     with pytest.raises(HTTPException) as exc:
         await fill(factory, root, settings, key=key)
     assert exc.value.status_code == 404

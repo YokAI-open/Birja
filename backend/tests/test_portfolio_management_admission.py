@@ -25,7 +25,8 @@ async def staged(engine):
 
 
 @pytest.mark.parametrize(
-    "revision", ["0007", "0008", "0014", "0015", "0016", "0017", "0018", "0019"]
+    "revision",
+    ["0007", "0008", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022"],
 )
 async def test_current_refuses_every_retained_or_partial_before_writes(staged, revision):
     await asyncio.to_thread(run_test_migration, revision)
@@ -37,8 +38,8 @@ async def test_current_refuses_every_retained_or_partial_before_writes(staged, r
 
 
 async def test_complete_current_and_actual_retained_source_refusal(staged):
-    await asyncio.to_thread(run_test_migration, "0020")
-    from app.db.portfolio_bootstrap import GRANTS_SQL
+    await asyncio.to_thread(run_test_migration, "0023")
+    from app.db.portfolio_bootstrap import GRANTS_0023_SQL as GRANTS_SQL
 
     async with staged.begin() as conn:
         raw = await conn.get_raw_connection()
@@ -58,7 +59,7 @@ async def test_complete_current_and_actual_retained_source_refusal(staged):
     namespace = {}
     exec(compile(old_source, "retained0017/schema_contract.py", "exec"), namespace)  # noqa: S102 - pinned trusted git source
     async with staged.connect() as conn:
-        assert await require_schema(conn) == "0020"
+        assert await require_schema(conn) == "0023"
         with pytest.raises(namespace["SchemaAdmissionError"], match="incompatible_schema"):
             await namespace["require_schema"](conn)
 

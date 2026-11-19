@@ -24,6 +24,13 @@ async def guard_case(engine, migrated, new_user, request):
     async with engine.connect() as conn:
         tx = await conn.begin()
         cid = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(cid)},
+        )
         now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
         await conn.execute(
             text("""UPDATE stock_instruments SET provider_asset_id='fixture-asset',
@@ -247,7 +254,7 @@ async def test_bootstrap_and_upgrade_grants_have_exact_runtime_parity(engine, ru
         )
         # Current final portfolio grants supersede the retained execution-only
         # read policy: scheduler journal reconstruction requires receipt reads.
-        from app.db.portfolio_bootstrap import GRANTS_SQL
+        from app.db.portfolio_bootstrap import GRANTS_0023_SQL as GRANTS_SQL
 
         await conn.execute(text(block))
         raw = await conn.get_raw_connection()
