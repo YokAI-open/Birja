@@ -1,5 +1,5 @@
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
@@ -58,6 +58,20 @@ afterEach(() => {
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
   sessionStorage.clear();
+});
+function ExternallyHeadedBoundary() {
+  const heading = useRef<HTMLHeadingElement>(null);
+  return <><h1 ref={heading} tabIndex={-1}>Portfolio unavailable</h1><PortfolioTargetBoundary primaryHeading={heading} /></>;
+}
+it("uses a supplied primary heading for private refusal without duplicating it", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(json([])));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  clients.push(client);
+  client.setQueryData(["me"], { email: owner });
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/portfolios/1"]}><Routes><Route path="/portfolios/:portfolioId" element={<ExternallyHeadedBoundary />} /></Routes></MemoryRouter></QueryClientProvider>);
+  await screen.findByText("This portfolio is unavailable. Choose another portfolio from Portfolios.");
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(screen.getByRole("heading", { name: "Portfolio unavailable" })).toHaveFocus();
 });
 it("removes focused financial controls at confirmed submit and keeps only an unresolved-order boolean", async () => {
   document.cookie = "bj_csrf=test; path=/";
