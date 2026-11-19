@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 11
+current_plan: 9
 status: executing
-stopped_at: Phase14 Plan08 independently verified; next Plan11 in wave8
-last_updated: "2026-11-19T12:30:05.831401+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan08 and independent review complete; Plan11 next
+stopped_at: Phase14 Wave8 complete; next Plan09 then12 in wave9
+last_updated: "2026-11-19T12:51:12.146303+00:00"
+last_activity: 2026-11-19 -- Phase14 Wave8 complete; Plan09 then12 next
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 57
+  completed_plans: 58
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan11 in wave8;8/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan09 in wave9;9/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 11 (wave8;8/19 complete)
-Current Plan: 11
+Plan: 09 (wave9;9/19 complete)
+Current Plan: 9
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;57/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;58/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -919,3 +919,20 @@ actualpublicDELETE/blockedPIDcreditcorrectionbothorders/heldnegative/sibling
 splits/foreignuncertainty provefrozenbook andindependentactiveevents.
 Plan16mustaddservices/portfolio_lifecycle.py tocritical100%includeretaining61.
 NextPlan11(wave8) not09yet;8/19actualcomplete. AllsevenwholeREQpending.
+
+
+Plan11 complete:1c52fbb/e4c886f,a330a37/9ecca8f,dcee0e3/bd5f9be,
+b87c6be,summaryff46093.1239frontendtests22.34s,69focused andtypecheck/
+scopedlintformat pass. Independent14-11-REVIEWclean0/0; noDBresources.
+Opt-inapi/client.ts guardedJsonRequest prerequisite leavesoldcallersunchanged;
+strictimmutabledeletiontransportand boundedowner/tabrecoverymetadata implemented.
+Plan12contract:deletePortfolio(intent,signal|undefined,isCurrentMANDATORY),
+openDeletionRecovery(owner,isCurrent), persistreturnsfrozenoriginal. Resolve
+ONLYexactreceipt orerror.terminal=true(durableconfirmation_changed); generic
+refused/auth429latererror never clears earlierunknown. NoautomaticDELETE.
+
+Unresolved11observation for09/10:backendportfolio_closure.py rejectsowner/root
+IDs>9007199254740991 whileAPI/clientcanonicalbigintstringsallow9223372036854775807.
+Verifyandfixminimalactualcontractmismatch withrealregressionbeforecompletion;
+no silentclientnarrowing/acceptedwaiver. Wave8complete,9/19plansdone; next09
+then12wave9 sequential. AllsevenwholeREQpending.
