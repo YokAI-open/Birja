@@ -101,3 +101,41 @@ None. The recovery-only page intentionally has no metadata editor/refetch action
 ## Self-Check: PASSED
 
 All 12 listed source/test files and this summary exist. All four task commits resolve. The source bindings match the committed files, no tracked deletion occurred, all verification processes finished, and the only unrelated working-tree item is the preserved `.claude/` directory.
+
+## Independent-review repairs — WR-01, WR-02 and WR-03
+
+Read the complete parent-owned `14-14-REVIEW.md` and retained its original findings/history unchanged. Parent authorized repair of all three warnings before Plan15, including the exact additional `PortfolioTargetBoundary.tsx` and `.test.tsx` presentation prerequisite. No shared planning state was changed.
+
+### WR-01 — Preserve safe metadata recovery after a terminal refusal
+
+The deletion form now captures its validated same-root review ID before submission as well as its persisted original. A current terminal-refusal view remains visible even when active financial authority is unavailable and the original attempt has correctly been resolved. It exposes only a generic name-change explanation, sanitized metadata failure/loading status, guarded same-ID `Review latest portfolio` GET action and overview navigation. It does not display retained names, descriptions or finances, release quarantine from list membership, or send another DELETE.
+
+The actual App/real PortfolioPage regression returns the exact durable409, fails the following metadata proof read, observes the visible recovery action and financial masking, then explicitly retries while the read still fails. That failure retains quarantine, focuses the error and leaves the DELETE count at one. A subsequent explicit successful metadata GET restores fresh review eligibility; opening the latest-name review still leaves the count at one. Only a new intentional final confirmation sends DELETE number two, to the same original ID.
+
+### WR-02 — Match the router's detail index semantics
+
+App now uses React Router's end-matched detail pattern rather than literal pathname equality. Canonical and trailing-slash URLs receive the same persistent metadata/deletion host and page-heading ownership. Both actual real-page routes prove metadata controls, Cancel focus/restore, confirmed pending transport and unknown recovery. Nested History/crypto/stock routes retain their own headings and acquire no management host. An inaccessible trailing-slash route remains generic even if its metadata response contains stale private details.
+
+### WR-03 — Keep one primary h1 before management and recovery
+
+The detail layout owns a stable generic primary h1 before its metadata/deletion sections in loading, ready and unavailable states. The boundary accepts an optional external primary-heading ref; when supplied, it omits its duplicate h1 while preserving its current refusal and removed-financial-control focus behavior through that ref. Its default heading behavior remains unchanged for all other routes and callers. There is no portal, operation remount or altered keyboard order.
+
+Actual-page routed tests assert exactly one h1 and first-heading h1 order during pending, transport-unknown and restored-unknown detail states. The primary text contains no stale closed name. A boundary complement verifies that private refusal focuses the supplied primary heading and renders no duplicate; all original default-boundary cases remain passing.
+
+### Repair commits and qualification
+
+- `fcce369` — genuine RED regressions for all three warnings and the optional external-heading contract. The first canonical fixture needed an authoritative-readiness wait; `review-canonical-red.log` separately proves the original source still renders h2 before h1 after that correction. The trailing-slash, terminal-recovery and restored-unknown failures independently reproduce their stated defects.
+- `ee28364` — GREEN fixes plus the corrected readiness assertion and strengthened failed-retry, nested-route and private-metadata complements.
+
+Qualified repair source: **`ee28364b8983c2ea8db55c3691238c3c94502733`**.
+
+- Final whole frontend: **60 files / 1,330 tests passed in 24.76 seconds**, exit0; `/tmp/birja-phase14-plan14/review-full.log`.
+- Final affected App/boundary/deletion/metadata/retained-PortfolioPage group: **5 files / 146 tests passed in 10.27 seconds**, exit0; `review-affected.log`.
+- Whole frontend typecheck, lint and formatting: exit0; `review-typecheck.log`, `review-lint.log`, `review-format.log`. Typecheck initially identified an unused pathname after route-matching replacement; it was removed before these passing checks.
+- `git diff --check` and the touched production stub/XSS scan pass. No tracked file was deleted. `review-source-bindings.json` preserves SHA256 for all **14** changed source/test files at this repair commit; the original submitted-source binding remains separate and unchanged.
+
+All verification processes finished. No browser, service, database, provider, package, image, production or publication operation occurred. The original review and unrelated `.claude/` remain parent-owned and unstaged. No new stub or threat surface was introduced; issue35 and all later qualification gates remain unchanged. Actual browser/source-bound captures remain17, separate owner/native200 acceptance19, and independent re-review is still required before advancing to15.
+
+### Repair Self-Check: PASSED
+
+All14 source/test files and their hashes match the repair binding; both repair commits resolve, the summary exists, no tracked deletion occurred, and all test/static processes completed. Shared STATE/ROADMAP/requirements remain untouched by this executor.
