@@ -3,7 +3,10 @@ phase: 14-end-strategies-safely
 plan: "15"
 reviewed: 2026-11-19
 depth: deep
-source_commit: 24f716f
+source_commit: c4cd70f
+initial_source_commit: 24f716f
+repair_source_commit: ed4f96f5e6f44baee46243f78185243d14689f87
+re_review_diff_base: 24f716f
 diff_base: aac0897
 files_reviewed: 46
 files_reviewed_list:
@@ -54,28 +57,30 @@ files_reviewed_list:
   - deploy/tests/test-portfolio-smoke-image.py
   - deploy/verify-restore.py
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 14 Plan 15 — Independent Code Review
 
 ## Narrative Findings (AI reviewer)
 
-One proven **BLOCKER** remains in the newly added authentication of prior
-schemas. No additional proven warning was identified in the scoped fixture,
-source-pin, recovery-dispatch or TLS harness changes. No structural pre-pass
-was supplied. Review scope is the exact46-file aac0897→24f716f change set;
-this report does not certify the pending Plans16–19.
+The initial review identified one proven **BLOCKER** in authentication of prior
+schemas. Independent re-review of the repair resolves CR-01 below; current
+unresolved counts are **0 blockers, 0 warnings**. No additional proven finding
+was identified. The original46-file aac0897→24f716f scope and finding history
+remain below; the additional repair scope and evidence are recorded at the end.
+No structural pre-pass was supplied. This report does not certify Plans16–19.
 
 ## Critical Issues
 
 ### CR-01: Prior authentication misses policy drift until after Alembic mutates the schema
 
-**Classification:** BLOCKER.
+**Initial classification:** BLOCKER. **Current disposition:** resolved by
+ed4f96f; independently re-reviewed at c4cd70f as recorded below.
 
 **Files:** `backend/app/db/portfolio_bootstrap.py:448`;
 `backend/app/db/portfolio_migrate.py:152`.
@@ -167,3 +172,75 @@ this repair's additional regressions), browser proof, exact seven-stage
 same-archive recovery and owner/native200% acceptance remain pending. Planned
 Plan16 runner/profile/path integration was not relabelled as a Plan15 defect.
 No push, merge or deployment authorization follows from this review.
+
+## Independent CR-01 re-review — resolved
+
+**Repair:** ed4f96f5e6f44baee46243f78185243d14689f87.
+**Evidence/documentation source:** c4cd70f.
+**Re-review range:** 24f716f→c4cd70f, retaining the original finding and RED
+reproduction. The additional source/test scope comprises:
+
+- `backend/app/db/portfolio_bootstrap.py`
+- `backend/app/db/portfolio_migrate.py`
+- `backend/tests/test_portfolio_migrate.py`
+- `deploy/backup-snapshot.py`
+- `deploy/deploy.sh`
+- `deploy/verify-restore.py`
+
+The updated15SUMMARY/TRANSITION review and private bounded test/TLS receipts
+were also assessed. The reviewer made no additional source change, database
+operation or test rerun during re-review.
+
+### Resolution assessment
+
+The new current-only `MIGRATION_SUPPLEMENTAL_INVENTORY_SQL` is read-only and
+executes in `require_migrator` before any Alembic child can be created. It
+rejects policies even when RLS is disabled, rewrite rules, RLS/forced-RLS flags,
+unexpected relation kinds, nonpermanent storage and inheritance involving
+public relations. It also bounds public types, collations, conversions,
+operators, operator classes/families, extended statistics and extension
+namespace records. Expected row types and automatic array types must resolve
+through the actual permanent table/type catalogue links and owners; the gate
+does not trust a permissive name pattern. It neither drops unexpected objects
+nor changes their metadata to make them pass.
+
+The exact versioned catalogue, ACL/default pairs, role/ownership/configuration
+and source authentication remain mandatory after this supplemental inventory.
+Thus the previously accepted disabled-policy state now refuses before child
+creation and before schema mutation. The gate also applies on current23 and
+older supported migration entries; legitimate existing profiles remain covered
+by the complete affected regression group. It does not change ordinary runtime
+admission or the final catalogue/object/default authority triple.
+
+Read-only reviewer checks independently confirm that all eight protected
+retained assignment expressions are unchanged, no Alembic asset changed, and
+every current producer and consumer source pin matches the actual file bytes.
+The deployment current bootstrap/migrator pins contain the same new hashes.
+The administrative SQL and final authority fingerprints remain unchanged.
+
+### Repair evidence assessed
+
+- RED4ac8d54 reproduces the original policy gap on0020/21/22. The GREEN matrix
+  tests17 drift families across all three versions:51 actual PostgreSQL cases.
+  Each first establishes a legitimate baseline, then asserts both direct
+  admission and migration-entry refusal, no child, unchanged revision,
+  catalogue projections, financial rows and identity tails, and preservation
+  of the unexpected object for diagnosis. Privileged foreign/extension drift
+  setup is confined to the owned disposable fixture and cleaned only after
+  those assertions.
+- The complete relevant group passes172 tests in922.17s; its durable receipt
+  reports exit0 and unchanged source. Coverage reports124 statements and34
+  branches with zero misses across both changed runtime modules. Legitimate
+  initial/runtime/default and21/22 resume combinations remain positive tests.
+- The new R4 archive has SHA256
+  `161b8fa08eedd025b2100328e642d0928927561c6604e8d5839f3ca5130a3d9e`.
+  Its fresh TLS19.831s, genuine granted20→23 TLS15.707s and encrypted cold
+  restore53.765s receipts all report exit0 and unchanged source. The cold proof
+  retains the complete31-table/24-tail oracle and source-manifest-before-grant
+  checks. Cleanup records show zero owned containers/networks/volumes, and
+  prior archive hashes remain preserved.
+
+**Disposition:** CR-01 resolved. No additional proven BLOCKER or WARNING in
+the repair. These scoped results do not replace Plan18's fresh uninterrupted
+whole-security/backend run (now expected3623 tests), exact seven-stage campaign,
+browser proof or pending owner/native200% acceptance.
