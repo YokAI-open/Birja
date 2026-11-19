@@ -180,3 +180,36 @@ All8source/test artifacts exist; four task commits are present. Raw receipt
 records source/log hashes and empty owned cleanup. Scoped checks and actual
 results above are recorded without converting task progress into whole feature
 completion. Ready for independent Plan03 review before Plan04.
+
+## Independent Review Follow-up — CR-01
+
+The subsequent independent review found one BLOCKER: the owner-confirmation
+proof compared the lifecycle name with its original intent but omitted the
+existing0021 invariant that both match the frozen Account.name. A fresh-key
+acknowledgement could therefore accept jointly corrupted retained names. The
+original review finding remains unchanged in14-03-REVIEW; this section records
+its repair, not a claim that the initial review was clean.
+
+RED `3e30b5e` reproduced the missing refusal on an empty portfolio in6.58s.
+Regression coverage includes both empty and multi-stock books. Each variant
+first demonstrates that a valid fresh-key acknowledgement with a different
+incoming reviewed name still succeeds; only the retained lifecycle and intent
+names are then jointly corrupted through a declared privileged fixture.
+The required refusal preserves all financial/evidence rows and sequence states.
+
+GREEN `322e5d9` adds exactly the missing lifecycle confirmation-name equality
+against the frozen account. It does not compare the fresh request name with
+the retained name, change SQL/migrations, grant privileges or rewrite evidence.
+
+Actual repair evidence at `/tmp/birja-phase14-plan03-repair/receipt.json`:
+
+-4focused positive/corruption cases pass30.62s.
+-31affected cases pass240.60s: all11stock-proof, all10clock and10selected
+ retained/backfill migration cases. This is a new repair run; none is relabelled
+ as part of the original pre-fix53-case receipt.
+- Scoped Ruff/format and stock-ownership mypy pass.
+- Owned `birja-p14-03-repair` containers/networks/volumes are removed.
+
+No package/provider/publication/production operation occurred. Parent-owned
+STATE/ROADMAP and the original review were not changed. Independent recheck is
+still required before Plan04; whole requirements remain pending.
