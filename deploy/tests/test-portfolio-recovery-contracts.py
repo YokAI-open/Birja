@@ -70,6 +70,27 @@ class PortfolioRecoveryContracts(unittest.TestCase):
                  self.assertRaises(ValueError):
                 consumer.restore_closure_authority([],saved['manifest'])
             self.assertEqual(statement.call_count,1)
+
+    def test_retained_contract_import_uses_complete_authenticated_source(self):
+        consumer = load('verify-restore')
+        spec = importlib.util.spec_from_file_location('fixed_recovery_sources',ROOT/'deploy/tests/portfolio-sources.py')
+        sources = importlib.util.module_from_spec(spec);spec.loader.exec_module(sources)
+        with tempfile.TemporaryDirectory(prefix='birja-retained-consumer-') as tmp:
+            root=Path(tmp);(root/'deploy').mkdir();(root/'sources').mkdir()
+            with mock.patch.object(consumer,'HERE',root/'deploy'):
+                for revision in ('0017','0020'):
+                    lane='portfolio'+revision
+                    archive=root/'sources'/(lane+'.tar')
+                    archive.write_bytes(sources.source_archive(lane))
+                    contract=consumer.recovery_contract(revision)
+                    self.assertNotEqual(contract.HERE,ROOT/'deploy')
+                    self.assertTrue((contract.HERE.parent/'backend/app/db/portfolio_bootstrap.py').is_file())
+                    original=json.loads((contract.HERE.parent/('deploy/tests/fixtures/portfolio-recovery-'+revision+'.json')).read_text())
+                    contract.validate_manifest(original)
+                    self.assertNotIn('0023',contract.SUPPORTED_REVISIONS)
+                    archive.write_bytes(archive.read_bytes()+b'coherent alteration')
+                    with self.assertRaises(ValueError):consumer.recovery_contract(revision)
+        for contract in consumer._RETAINED_CONTRACTS.values():contract._retained_directory.cleanup()
     def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
         producer = load('backup-snapshot')
         inventory = producer.closure_payload_inventory(ROOT)

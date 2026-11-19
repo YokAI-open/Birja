@@ -975,8 +975,12 @@ def recovery_contract(revision=None):
                 directory = tempfile.TemporaryDirectory(prefix='birja-retained-contract-')
                 with tarfile.open(archive, 'r:') as source:
                     for member in source.getmembers():
-                        require(member.isfile() or member.isdir())
+                        require(member.isfile() or member.isdir() or member.issym())
                         require(not Path(member.name).is_absolute() and '..' not in Path(member.name).parts)
+                        if member.issym():
+                            target = Path(directory.name) / Path(member.name).parent / member.linkname
+                            require(not Path(member.linkname).is_absolute() and
+                                    target.resolve().is_relative_to(Path(directory.name)))
                     source.extractall(directory.name, filter='data')
                 path = Path(directory.name) / 'deploy/backup-snapshot.py'
                 spec = importlib.util.spec_from_file_location('fixed_' + lane + '_contract', path)

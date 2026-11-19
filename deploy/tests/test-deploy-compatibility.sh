@@ -157,8 +157,11 @@ done
 ADMITTED_REVISION=0023 admit_application_source "$CLOSURE_TESTED"
 for revision in 0020 0023; do
   run_case deploy "$revision" "$PORTFOLIO_TESTED" no refuse
-  run_case rollback "$revision" main yes refuse
+  run_case rollback "$revision" main no refuse
 done
+# Pending rollback selects the already-tested current source, not the older
+# previous log entry. It may retain0023 with the same exact compatible app.
+run_case rollback 0023 main yes pass
 BIRJA_TESTED_SOURCE=$CLOSURE_CORRUPT
 run_case deploy 0023 "$CLOSURE_CORRUPT" no refuse
 ADMITTED_REVISION=0023

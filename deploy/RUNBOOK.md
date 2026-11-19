@@ -1,5 +1,47 @@
 # Birja production runbook
 
+## Portfolio closure schema0023 recovery contract
+
+The current closure family is payload version3, revision0023 and recovery profile
+`deploy-recovery-v4`. Keep V1/0017 and V2/0020 as distinct retained families, using
+their complete authenticated source archives; never overlay current services on
+an older retained database. A current bundle also binds the fixed complete0020
+source9527e35, complete0017source4b4320b and older released source lanes.
+
+Before import, the consumer authenticates the approved archive checksum, exact
+members, image provenance, reviewed current source pins and retained archive
+identities. Missing lifecycle/intent members or coherently rewritten metadata
+must refuse. The current contract includes31tables,24identity tails and the
+explicit0023 catalogue/object/effective-default privilege fingerprints.
+
+Restore uses `--no-owner --no-acl` into an isolated private clone. Authenticate
+the finite no-ACL state and compare the source manifest's complete financial,
+lifecycle, stock and identity evidence **before** any runtime regrant. Only the
+built-in PUBLIC function default from a no-ACL restore may be removed; unexpected
+table/column grants, principals or explicit unsafe future defaults refuse.
+After fixed private-default normalization, authenticate quarantine again, then
+apply the exact source-owned0023 grants and require final runtime authority.
+Quarantine never satisfies ordinary runtime admission. Do not repair or invent
+closed records, confirmation names, timestamps, intents, payments or balances.
+
+The supported authenticated forward path from0020 proceeds through migration-only
+0021/22 to complete0023. Normal runtime refuses the intermediate revisions.
+Selected current source must match the retained tested commit and exact reviewed
+closure authority assets. Old application rollback on0023 refuses before checkout,
+service start, routing or state changes; schema downgrade cannot discard lifecycle
+evidence. A pending rollback to the same tested0023-compatible source can preserve
+the candidate's current data. No rollback transfers, liquidates or resurrects books.
+
+Local diagnostics are `python3 deploy/tests/test-portfolio-management-recovery.py
+--postgres` (owned Plan06 synthetic stack only),
+`bash deploy/tests/test-deploy-compatibility.sh` and
+`bash deploy/tests/test-rollback-db-security.sh --self-test-retained-install`.
+The first is a source-database-destroyed **logical** restore/oracle proof; it is
+not an encrypted, independent-server or verified-TLS campaign. Full same-archive
+security/recovery qualification remains required before release. These tooling
+contracts and diagnostics authorize no production restore, migration, rollout,
+credential change, provider operation or retained-tool installation.
+
 Production runs at https://birja.nist.one on one host. This file covers deploy, rollback, manual certificate renewal, manual Cloudflare IP refresh and how to undo each host change.
 
 ## Overview
