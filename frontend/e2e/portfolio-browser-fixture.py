@@ -18,12 +18,34 @@ helper = runpy.run_path('/e2e/stock-trade-fixture.py', run_name='private_browser
 
 async def main(mode, email=None):
     helper['guard']()
-    if mode not in {'legacy', 'inspect', 'economic', 'sibling', 'zero', 'close', 'name', 'price-tick'}:
+    if mode not in {'legacy', 'inspect', 'economic', 'lifecycle', 'sibling', 'name', 'price-tick'}:
         raise ValueError('Unknown synthetic portfolio operation')
     if mode != 'legacy' and (not email or re.fullmatch(r'e2e-[a-z0-9-]+@example\.com', email) is None):
         raise ValueError('Synthetic owner required')
     engine = create_async_engine(os.environ['DATABASE_URL'])
     try:
+        if mode == 'lifecycle':
+            # Process-only immutable before/after oracle. PostgreSQL itself
+            # rejects mutation throughout this separate read-only transaction.
+            async with engine.begin() as db:
+                await db.execute(text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'))
+                assert await db.scalar(text('SHOW transaction_read_only')) == 'on'
+                uid = await db.scalar(text('SELECT id FROM users WHERE email=:e'), {'e': email})
+                if uid is None:
+                    raise ValueError('Sign in with actual OTP first')
+                ids = (await db.execute(text('SELECT id FROM accounts WHERE user_id=:u ORDER BY id'), {'u': uid})).scalars().all()
+                financial_tables = ('holdings', 'trades', 'stock_fill_facts',
+                    'stock_ownership_movements', 'stock_dividend_entitlements',
+                    'stock_dividend_payments', 'stock_dividend_decisions')
+                roots = {}
+                for pid in ids:
+                    value = {'account': await db.scalar(text('SELECT to_jsonb(a)::text FROM accounts a WHERE id=:p AND user_id=:u'), {'p': pid, 'u': uid})}
+                    value['account_financial'] = await db.scalar(text("SELECT (to_jsonb(a) - 'closed_at' - 'name' - 'name_key' - 'description')::text FROM accounts a WHERE id=:p AND user_id=:u"), {'p': pid, 'u': uid})
+                    for table in financial_tables + ('portfolio_stock_closures', 'portfolio_lifecycle_closures', 'portfolio_closure_intents'):
+                        value[table] = (await db.execute(text(f'SELECT to_jsonb(t)::text FROM public.{table} t WHERE portfolio_id=:p ORDER BY to_jsonb(t)::text'), {'p': pid})).scalars().all()
+                    roots[str(pid)] = value
+                print(json.dumps({'read_only': True, 'roots': roots}, sort_keys=True))
+            return
         if mode == 'legacy':
             # Real old-schema input, then the qualified dev runner performs the
             # authenticated0015/16/17 migration during normal browser startup.
@@ -47,8 +69,6 @@ async def main(mode, email=None):
             if mode == 'sibling':
                 # Retained historical opening, never represented as a new grant.
                 await db.execute(text("INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) VALUES (:u,'Sibling strategy',public.portfolio_name_key('Sibling strategy'),2000,2000)"), {'u': uid})
-            elif mode in {'zero', 'close'}:
-                await db.execute(text('UPDATE accounts SET closed_at=clock_timestamp() WHERE user_id=:u AND closed_at IS NULL' + (' AND id=:p' if mode == 'close' else '')), {'u': uid, 'p': original})
             elif mode == 'name':
                 await db.execute(text('UPDATE accounts SET name=:n,name_key=public.portfolio_name_key(:n) WHERE id=:p AND closed_at IS NULL'), {'n': '<Strategy>& ' + 'UnbrokenPortfolioName' * 2, 'p': original})
             elif mode == 'price-tick':

@@ -9,7 +9,7 @@ import { stockFixture } from "./stock-trade-fixtures.js";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const api = "/api/v2/portfolios";
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
-function fixture(mode: "economic" | "zero" | "close" | "inspect", email: string) {
+function fixture(mode: "economic" | "inspect", email: string) {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return JSON.parse(
     execFileSync(
@@ -55,6 +55,20 @@ async function list(page: Page) {
   const response = await page.request.get(api);
   expect(response.status()).toBe(200);
   return response.json() as Promise<Array<{ id: string; name: string }>>;
+}
+async function closeAllThroughApi(page: Page) {
+  for (const book of await list(page)) {
+    const response = await page.request.delete(`${api}/${book.id}`, {
+      headers: await headers(page),
+      data: {
+        intent_key: crypto.randomUUID(),
+        confirmation_name: book.name,
+        policy_version: "freeze_at_closure_v1",
+      },
+    });
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ portfolio_id: book.id, state: "closed" });
+  }
 }
 async function overview(page: Page) {
   await page.goto("/portfolios");
@@ -248,7 +262,7 @@ test("Phase13 zero-book returning identity gets no implicit grant and closed nam
 }) => {
   const email = await signInNewUser(page);
   const old = await portfolioId(page);
-  fixture("zero", email);
+  await closeAllThroughApi(page);
   const before = fixture("economic", email);
   await overview(page);
   await expect(page.getByRole("heading", { name: "No portfolios yet", exact: true })).toBeVisible();
@@ -315,7 +329,7 @@ test("Phase13 closed committed original creation cannot be recreated by its lost
   await openCreate(page, "Closed original");
   await submitCreate(page);
   await expect(button(page, "Retry creation")).toBeVisible();
-  fixture("zero", email); // Cash-only retained fixture; no public deletion.
+  await closeAllThroughApi(page);
   const before = fixture("economic", email);
   await button(page, "Retry creation").click();
   await expect(page.getByRole("alert")).toContainText("The original portfolio is unavailable");
@@ -806,11 +820,11 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
     test.setTimeout(150_000);
     await page.setViewportSize({ width, height: 960 });
     await page.emulateMedia({ reducedMotion: "reduce" });
-    const email = await signInNewUser(page);
+    await signInNewUser(page);
     await portfolioId(page);
     // Capture a genuinely empty returning owner BEFORE opening any stock
     // holding. Never fabricate a terminal stock closure without its lineage.
-    fixture("zero", email);
+    await closeAllThroughApi(page);
     await overview(page);
     await expect(
       page.getByRole("heading", { name: "No portfolios yet", exact: true }),

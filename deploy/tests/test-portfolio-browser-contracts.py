@@ -73,6 +73,11 @@ class BrowserContracts(unittest.TestCase):
         self.assertIn('e2e/portfolio-deletion.spec.ts', browser)
         legacy = next(c for c in calls if '/e2e/portfolio-browser-fixture.py' in c)
         self.assertEqual(legacy[-1], 'legacy')
+        seed_roles = next(c[-1] for c in calls if 'CREATE ROLE birja_migrator' in c[-1])
+        self.assertNotIn('CREATE ROLE birja_scheduler', seed_roles)
+        # Immutable0011 requires the operator to exist for a restricted owner;
+        # ordinary app/scheduler roles must still be provisioned after0014.
+        self.assertIn('CREATE ROLE birja_action_operator', seed_roles)
         self.assertLess(calls.index(legacy), next(i for i, c in enumerate(calls) if '--wait-timeout' in c))
         self.assertTrue(any('down' in c and '--volumes' in c for c in calls))
 

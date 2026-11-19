@@ -22,10 +22,11 @@ PROJECT = "birja-phase09-e2e-test"
 def browser_specs(suite):
     retained = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
                 'stock-trades', 'stock-actions', 'dividends-history',
-                'portfolio-history', 'portfolio-ownership', 'portfolio-strategies')
+                'portfolio-history', 'portfolio-ownership', 'portfolio-strategies',
+                'portfolio-deletion')
     selections = {'all': retained, 'stocks': ('stock-trades',),
                   'actions': ('stock-actions',), 'dividends': ('dividends-history',),
-                  'portfolios': ('portfolio-ownership', 'portfolio-strategies')}
+                  'portfolios': ('portfolio-ownership', 'portfolio-strategies', 'portfolio-deletion')}
     if suite not in selections:
         raise ValueError('unsupported browser suite')
     return ['e2e/' + name + '.spec.ts' for name in selections[suite]]
@@ -275,7 +276,7 @@ def main():
                 "-v",
                 "ON_ERROR_STOP=1",
                 "-c",
-                "CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; CREATE ROLE birja_migrator LOGIN PASSWORD 'syntheticMigratorE2E' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; GRANT CREATE ON SCHEMA public TO birja_migrator; CREATE ROLE birja_scheduler NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS",
+                "CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; CREATE ROLE birja_migrator LOGIN PASSWORD 'syntheticMigratorE2E' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; GRANT CREATE ON SCHEMA public TO birja_migrator",
             ],
         )
         run('legacy-seed', dc + ['run', '--rm', '--no-deps', 'backend', 'python',
