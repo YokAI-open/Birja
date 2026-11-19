@@ -250,6 +250,21 @@ class CurrentImageContracts(unittest.TestCase):
             with self.subTest(revision=revision), self.assertRaises(ValueError):
                 smoke.admitted_program(wrong, revision, prepared_legacy14=True)
 
+    def test_prepared14_flag_is_only_forwarded_by_initial_upgrade_transport(self):
+        tree = ast.parse(Path(smoke.__file__).read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name) and node.func.id == 'transport']
+        flagged = [node for node in calls if any(k.arg == 'prepared_legacy14' for k in node.keywords)]
+        self.assertEqual(len(flagged), 1)
+        self.assertIsInstance(flagged[0].args[0], ast.Call)
+        self.assertEqual(flagged[0].args[0].func.id, 'fresh_authority_program')
+        self.assertEqual(ast.unparse(flagged[0].keywords[0].value), "upgraded_bootstrap and upgraded_from == '0014'")
+        final_probes = [node for node in calls if node.args and isinstance(node.args[0], ast.Call)
+                        and isinstance(node.args[0].func, ast.Name)
+                        and node.args[0].func.id == 'authority_probe_program']
+        self.assertEqual(len(final_probes), 2)
+        self.assertTrue(all(not node.keywords for node in final_probes))
+
     def test_program_admits_schema_before_application_imports_and_wires_roles(self):
         fixture = smoke.selected_fixture(sources_module, '0023')
         for mode in ('create', 'verify', 'projection'):
