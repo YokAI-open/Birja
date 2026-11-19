@@ -52,7 +52,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** Phases12–13 verified complete locally; Phase14 is executing (13/19plans complete) and Phase15 remains later. The v1.2 milestone remains open.
+**Status:** Phases12–13 verified complete locally; Phase14 is executing (14/19plans complete) and Phase15 remains later. The v1.2 milestone remains open.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
@@ -359,7 +359,7 @@ compatibility for every newly supported state as it ships.
 
 **Wave 11** *(blocked on declared earlier-plan dependencies)*
 
-- [ ] 14-14-PLAN.md — Build named inline deletion and signed-in recovery routes
+- [x] 14-14-PLAN.md — Build named inline deletion and signed-in recovery routes
 - [ ] 14-15-PLAN.md — Adapt revision-aware fixtures and restricted TLS compatibility
 
 **Wave 12** *(blocked on declared earlier-plan dependencies)*
