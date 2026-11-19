@@ -461,6 +461,8 @@ class Phase14EvidenceContracts(unittest.TestCase):
             positive.replace(policy, policy + policy),
             positive.replace(policy, "").replace("<body>", "<body>" + policy),
             positive.replace(policy, "<style>p {color: black}</style>" + policy),
+            positive.replace("<html>", '<html style="color: black">'),
+            positive.replace("<head>", '<head style="color: black">'),
             positive.replace(policy, "").replace("</head>", "</head>" + policy),
             positive.replace(
                 icon, '<svg><animate attributeName="opacity" values="0;1"/></svg>'

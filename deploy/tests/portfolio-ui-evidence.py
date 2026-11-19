@@ -501,7 +501,9 @@ class InertCaptureParser(HTMLParser):
                 ):
                     raise ValueError("Missing or altered project capture policy")
             elif not self.policies and not (
-                tag in {"html", "head"} or (tag == "meta" and set(attrs) == {"charset"})
+                (tag == "html" and set(attrs) <= {"lang"})
+                or (tag == "head" and not attributes)
+                or (tag == "meta" and set(attrs) == {"charset"})
             ):
                 raise ValueError("Capture policy must precede content")
         if tag == "svg":
