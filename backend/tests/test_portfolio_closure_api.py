@@ -125,6 +125,45 @@ async def test_confirmation_actual_delete_and_repeat_are_minimal_private(closure
         ).one() == (10000, 10000)
 
 
+@pytest.mark.parametrize("large_owner", [False, True])
+async def test_postgres_bigint_string_identity_can_close_without_rounding(closure_api, large_owner):
+    api = closure_api
+    first = 9007199254740993
+    async with api.migrator.begin() as conn:
+        await conn.execute(text("ALTER SEQUENCE accounts_id_seq RESTART WITH 9007199254740993"))
+        if large_owner:
+            uid = (
+                await conn.execute(
+                    text("INSERT INTO users(id,email) OVERRIDING SYSTEM VALUE VALUES (:u,:e) RETURNING id"),
+                    {"u": first + 2, "e": f"bigint-{uuid4().hex}@example.com"},
+                )
+            ).scalar_one()
+            sid = (
+                await conn.execute(
+                    text("INSERT INTO auth_sessions(user_id) VALUES (:u) RETURNING id"),
+                    {"u": uid},
+                )
+            ).scalar_one()
+            api.client.cookies.set(
+                "bj_access", create_access_token(uid, sid, api.app.state.settings.jwt_secret)
+            )
+    made = await create(api)
+    assert made.status_code == 201, made.text
+    assert made.json()["id"] == str(first)
+    original = intent()
+    response = await delete(api, str(first), original)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"portfolio_id": str(first), "state": "closed"}
+    assert (await delete(api, str(first), original)).json() == response.json()
+    async with api.migrator.connect() as conn:
+        assert (
+            await conn.execute(
+                text("SELECT cash,starting_cash,closed_at IS NOT NULL FROM accounts WHERE id=:p"),
+                {"p": first},
+            )
+        ).one() == (10000, 10000, True)
+
+
 async def state(api):
     async with api.migrator.connect() as conn:
         return (
