@@ -109,11 +109,17 @@ it("lets only the current client logout clear the newer durable original", async
   const obsoleteConfirm = old.result.current.confirmDeletion;
   const current = setup();
   await waitFor(() => expect(current.result.current.ready).toBe(true));
+  expect(old.result.current.ready).toBe(false);
   act(() => current.result.current.reviewDeletion(metadata));
   await act(async () => current.result.current.confirmDeletion());
   const stored = sessionStorage.getItem(DELETION_STORAGE_KEY);
   expect(JSON.parse(stored!).attempt.portfolioId).toBe("2");
   act(() => old.client.setQueryData(["me"], null));
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
+  await act(async () => {
+    old.client.setQueryData(["me"], { email: "bob@example.test" });
+  });
+  expect(old.result.current.ready).toBe(false);
   expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
   await act(async () => obsoleteConfirm());
   expect(fetch).toHaveBeenCalledTimes(1);
