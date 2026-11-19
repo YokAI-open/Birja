@@ -630,6 +630,8 @@ async def assert_closure_ownership_consistent(db: AsyncSession) -> None:
     ):
         raise OwnershipHeld("invalid_closure")
     if lifecycle.provenance == "owner_confirmation":
+        if lifecycle.confirmation_name != account.name:
+            raise OwnershipHeld("invalid_closure")
         original = await db.get(PortfolioClosureIntent, lifecycle.intent_id, populate_existing=True)
         if original is None or (
             original.user_id,
