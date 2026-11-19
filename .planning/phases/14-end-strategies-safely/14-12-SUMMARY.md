@@ -26,7 +26,8 @@ key-decisions:
   - Only an exact closure receipt or durable terminal confirmation-name refusal resolves the original marker.
   - Publish root quarantine synchronously after recovery persistence and before transport; sibling metadata remains independent.
   - Completion consumers must recheck receipt.isCurrent before navigation, focus, or announcements.
-requirements-completed: [PMGT-03, PMGT-04, PCTX-03, PSAFE-01]
+requirements-completed: []
+requirements-progress: [PMGT-03, PMGT-04, PCTX-03, PSAFE-01]
 duration: 16min measured between first RED commit and final source commit
 completed: 2026-11-19
 ---
@@ -119,3 +120,44 @@ No blocking stubs or new threat surface outside the plan's authenticated-browser
 ## Self-Check: PASSED
 
 All four source/test files exist; all four task commit hashes exist; source is committed and unchanged after passing checks. Only this summary and the pre-existing unrelated `.claude/` were untracked before the summary commit.
+
+## Independent review repair — CR-01 and CR-02
+
+The original review at `14-12-REVIEW.md` identified two valid blockers in the initial source: metadata writes were allowed before recovery initialization, and draft/editing state was not mutually exclusive with named deletion review. Its findings remain preserved as the original review record. The earlier passing test counts did not prove these interleavings.
+
+- **RED `bfc94ba`:** six deterministic cases failed: deferred recovery digest and corrupt recovery storage with a direct management consumer, open named review versus captured metadata handlers, unsaved name and description drafts, and unresolved metadata review state. Log: `/tmp/birja-phase14-plan12/review-red.log` (six failures, 1.93s).
+- **GREEN `302a9de`:** metadata actions now require known owner-bound recovery and no exact-root deletion review/quarantine. Management itself mounts the existing owner-only deletion hook lease, so direct consumers initialize and subscribe without depending on future UI placement. No new store, package, network endpoint, or file was needed.
+- `metadataBusy` now includes non-null drafts and `reviewRequired`, as well as pending/uncertain saves. Both entering deletion and captured confirmation recheck it. Named pre-submit review blocks original metadata editing separately from financial quarantine; Cancel releases that exclusion. A terminal original refusal releases metadata only after fresh same-root authority arrives. Sibling editing remains available after recovery readiness, including following a restored unknown original.
+- Corrected the earlier contradictory successful test that created an unsaved draft before confirming deletion. Pending-save coverage now begins metadata saving first and proves deletion refusal until reconciliation. Error-response fixtures now include the actual JSON content type required by the guarded transport; a terminal-refusal test initially lacked it and was corrected without changing production parsing.
+- Captured edit/review/save calls are refused during pending/corrupt recovery and named deletion review. Additional coverage exercises a draft appearing after captured confirmation, safe Cancel, explicit recovery retry after a synthetic storage repair, fresh metadata after terminal refusal, and recovered original/sibling isolation. Existing owner/route-return and obsolete callback cases still pass.
+
+### Updated exports and consumer contract
+
+New exact-root export from `@/hooks/usePortfolioDeletion`:
+
+```ts
+isPortfolioDeletionMetadataBlocked(client: QueryClient, owner: string, id: string): boolean
+```
+
+It returns true until recovery is ready, during this root's named review, or while this root is quarantined. Use it for metadata editing only; do not use it to quarantine pre-submit financial content. Existing Plan 13 financial readiness/quarantine exports are unchanged.
+
+`usePortfolioManagement` now also returns `deletionRecoveryError` and `retryDeletionRecovery()`. The latter is an explicit current-management-scope guarded storage retry, never a DELETE. Existing `metadataBlocked` and all edit/review/save action guards consume the stronger predicate. Legitimate direct management consumers initialize automatically and become writable after successful safe recovery; a recovery error remains fail-closed and has an explicit retry surface.
+
+### Repair qualification
+
+Tested source is `302a9de`; no source changes followed these checks:
+
+| Check | Actual result | Log under `/tmp/birja-phase14-plan12/` |
+| --- | --- | --- |
+| Management/deletion hooks before final explicit retry/sibling assertions | 61 passed, 5.42s | `review-green-hooks-final.log` |
+| Transport/storage/management/deletion/target/auth affected set | 160 passed in six files, 5.92s | `review-affected-final.log` |
+| Full frontend suite including final retry and restored-sibling assertions | 1,272 passed in 58 files, 24.79s | `review-full-unit-final.log` |
+| Full frontend typecheck | Exit 0 | `review-typecheck-final.log` |
+| Scoped ESLint / Prettier | Exit 0 / all matched files formatted | `review-lint-final.log`, `review-prettier-final.log` |
+| Whitespace / tracked deletion checks | Clean / no tracked deletions | Execution terminal evidence |
+
+The initial repair run's two draft-observer assertions required waiting for TanStack observer notification; those test assertions were corrected before the final runs. All owned test processes completed and standard hook/storage/mock cleanup ran. No DB/provider/production operations, installations, publication or gate changes occurred. Parent-owned requirement progress fields remain preserved; whole-phase requirements are not marked complete. Independent re-review of both original findings is still required before the next wave.
+
+### Repair self-check: PASSED
+
+RED/GREEN commits and all four owned source/test files exist. The original review and parent planning files remain untouched; only the authorized summary append accompanies source repair evidence.
