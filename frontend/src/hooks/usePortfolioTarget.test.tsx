@@ -1,7 +1,10 @@
+/// <reference types="node" />
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { webcrypto } from "node:crypto";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { usePortfolioDeletion } from "./usePortfolioDeletion";
 import { ApiError } from "@/api/client";
 import { fetchPortfolios, isPortfolioId, parsePortfolios } from "@/api/portfolios";
 import { usePortfolioTarget } from "./usePortfolioTarget";
@@ -13,6 +16,39 @@ const first = { id: "1", name: "My portfolio" };
 const second = { id: "2", name: "Second strategy" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const clients: QueryClient[] = [];
+beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+it("revokes captured authority before DELETE and never restores an unknown original from active discovery", async () => {
+  let captured!: NonNullable<ReturnType<typeof usePortfolioTarget>["target"]>;
+  let executableAtSend: boolean | undefined;
+  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => {
+    if (init?.method === "DELETE") {
+      executableAtSend = captured.isCurrent();
+      return Promise.reject(new TypeError("lost response"));
+    }
+    return Promise.resolve(json([first, second]));
+  }));
+  const h = setup("1");
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  captured = h.result.current.target!;
+  const metadata = { ...first, description: "Original description" };
+  h.client.setQueryData(["portfolioMetadata", alice, "1", 0], metadata);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={h.client}>{children}</QueryClientProvider>;
+  const deletion = renderHook(() => usePortfolioDeletion("1"), { wrapper });
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  act(() => deletion.result.current.reviewDeletion(metadata));
+  expect(captured.isCurrent()).toBe(true);
+  await act(async () => deletion.result.current.confirmDeletion());
+  expect(executableAtSend).toBe(false);
+  expect(captured.isCurrent()).toBe(false);
+  expect(h.result.current.status).toBe("unavailable");
+  await act(async () => { await h.result.current.refetch(); });
+  expect(h.result.current.target).toBeNull();
+  expect(deletion.result.current.deletion.phase).toBe("unknown");
+  h.rerender({ routeId: "2", legacy: false });
+  await waitFor(() => expect(h.result.current.target?.portfolioId).toBe("2"));
+  h.rerender({ routeId: "1", legacy: false });
+  expect(h.result.current.target).toBeNull();
+});
 it("renews metadata authority from an identity-only event without reviving old handles", async () => {
   let release!: (value: Response) => void;
   const fetch = vi
@@ -64,6 +100,7 @@ function setup(id: string | undefined, legacyEntry = false, email: string | null
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
+  sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

@@ -19,6 +19,20 @@ it("accepts only bounded identity-only events", () => {
   ])
     expect(metadataEvent(value)).toBeNull();
 });
+it("accepts the finite lifecycle hint while rejecting authority and private payloads", () => {
+  expect(metadataEvent({ scope, portfolioId: "2", kind: "lifecycle" })).toEqual({
+    scope,
+    portfolioId: "2",
+    kind: "lifecycle",
+  });
+  for (const extra of [
+    { kind: "closed" },
+    { kind: "lifecycle", closed: true },
+    { kind: "lifecycle", name: "Private" },
+    { kind: "lifecycle", key: scope },
+    { kind: "lifecycle", cash: "10000" },
+  ]) expect(metadataEvent({ scope, portfolioId: "2", ...extra })).toBeNull();
+});
 it("broadcasts only opaque source/root and cleans up listeners/channel", () => {
   const close = vi.fn();
   const postMessage = vi.fn();
