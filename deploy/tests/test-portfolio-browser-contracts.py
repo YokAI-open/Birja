@@ -70,6 +70,7 @@ class BrowserContracts(unittest.TestCase):
         browser = next(c for c in calls if c[0].endswith('/playwright'))
         self.assertIn('e2e/portfolio-ownership.spec.ts', browser)
         self.assertIn('e2e/portfolio-strategies.spec.ts', browser)
+        self.assertIn('e2e/portfolio-deletion.spec.ts', browser)
         legacy = next(c for c in calls if '/e2e/portfolio-browser-fixture.py' in c)
         self.assertEqual(legacy[-1], 'legacy')
         self.assertLess(calls.index(legacy), next(i for i, c in enumerate(calls) if '--wait-timeout' in c))
@@ -78,7 +79,8 @@ class BrowserContracts(unittest.TestCase):
     def test_default_command_explicitly_retains_every_financial_spec(self):
         expected = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
                     'stock-trades', 'stock-actions', 'dividends-history',
-                    'portfolio-history', 'portfolio-ownership', 'portfolio-strategies')
+                    'portfolio-history', 'portfolio-ownership', 'portfolio-strategies',
+                    'portfolio-deletion')
         self.assertEqual(runner.browser_specs('all'),
                          ['e2e/' + name + '.spec.ts' for name in expected])
         with self.assertRaises(ValueError):
