@@ -430,6 +430,45 @@ PRE_CLOSURE_CATALOGUES = {
     "0021": "748dc0f3a3a1eb63a3168cb7a21198d6ac3a59135f35d0700772b79394bed3b4",
     "0022": "1e24357696abc34020f4fc2ce67f9ca327c7eed48477a5a484a7d2a9d4789b46",
 }
+# Current entry-only supplement to the immutable historical projection. All
+# approved application relations are permanent ordinary tables, sequences and
+# indexes; their identities/definitions remain checked by the exact catalogue.
+# Only table row types and their catalogue-linked automatic arrays are expected.
+MIGRATION_SUPPLEMENTAL_INVENTORY_SQL = r"""
+DO $migration_supplemental_inventory$
+BEGIN
+ IF EXISTS(SELECT FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+    WHERE c.relnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_rewrite r JOIN pg_class c ON c.oid=r.ev_class
+    WHERE c.relnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_class c WHERE c.relnamespace='public'::regnamespace
+    AND (c.relkind NOT IN ('r','S','i') OR c.relpersistence<>'p'
+         OR c.relrowsecurity OR c.relforcerowsecurity))
+ OR EXISTS(SELECT FROM pg_inherits i
+    JOIN pg_class child ON child.oid=i.inhrelid
+    JOIN pg_class parent ON parent.oid=i.inhparent
+    WHERE child.relnamespace='public'::regnamespace
+       OR parent.relnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_type t WHERE t.typnamespace='public'::regnamespace
+    AND NOT (
+      (t.typtype='c' AND EXISTS(SELECT FROM pg_class c WHERE c.oid=t.typrelid
+        AND c.relnamespace='public'::regnamespace AND c.relkind='r'
+        AND t.typowner=c.relowner))
+      OR (t.typtype='b' AND t.typcategory='A' AND EXISTS(
+        SELECT FROM pg_type base JOIN pg_class c ON c.oid=base.typrelid
+        WHERE base.typarray=t.oid AND base.oid=t.typelem AND base.typtype='c'
+          AND c.relnamespace='public'::regnamespace AND c.relkind='r'
+          AND base.typowner=c.relowner AND t.typowner=c.relowner))))
+ OR EXISTS(SELECT FROM pg_collation WHERE collnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_conversion WHERE connamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_operator WHERE oprnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_opclass WHERE opcnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_opfamily WHERE opfnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_statistic_ext WHERE stxnamespace='public'::regnamespace)
+ OR EXISTS(SELECT FROM pg_extension WHERE extnamespace='public'::regnamespace)
+ THEN RAISE EXCEPTION 'unexpected migration supplemental catalogue'; END IF;
+END $migration_supplemental_inventory$;
+"""
 _PRE_CLOSURE_AUTHORITY_SQL = (
     r"""
  IF (__ACL__) NOT IN ('__INITIAL__','__RUNTIME__')

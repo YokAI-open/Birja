@@ -1041,8 +1041,8 @@ def validate_management_manifest(manifest, *, quarantined=False):
 # Separately versioned successor. These pins authenticate reviewed authority
 # BEFORE importing executable source; V1/V2 literals above are not reinterpreted.
 CLOSURE_SOURCE_SHA256 = {
-    'backend/app/db/portfolio_bootstrap.py': '504e6995f446cf5de97010fa15262988b660b0013bfc14d873a9c98bd946bd80',
-    'backend/app/db/portfolio_migrate.py': 'dabc03a7bbcf7efd74824472e6f35ad399cd43a966792aeac065806ce774aa3e',
+    'backend/app/db/portfolio_bootstrap.py': '7ef1a76af2284f065b17dc0baffa7c6e4c7f6a879e9ea72dbab54b9943b74f50',
+    'backend/app/db/portfolio_migrate.py': '02747095a00d6543f4156e0f9be025da4186eafa2e8412fae3b239fdd24af8de',
     'backend/app/db/schema_contract.py': 'c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542',
     'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
     'backend/app/models/__init__.py': '6856ecbbdfe51305caf3ab0fa1061b08d9f105a6eb73beb4240510508232ae9d',

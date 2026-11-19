@@ -165,6 +165,8 @@ async def test_unrecognized_prior_objects_refuse_without_child_or_mutation(
     child, _ = await prepare_pre_closure(portfolio_migration_db, revision)
     foreign_created = False
     try:
+        async with child.connect() as conn:
+            assert await migration.require_migrator(conn) == revision
         async with portfolio_migration_db.begin() as admin:
             if kind == "foreign":
                 assert not await admin.scalar(

@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from app.core.config import Settings, get_settings
 from app.db.connection import database_connect_args
 from app.db.dev_bootstrap import migration_objects, require_complete_migration_inventory
-from app.db.portfolio_bootstrap import PRE_CLOSURE_MIGRATION_SQL
+from app.db.portfolio_bootstrap import (
+    MIGRATION_SUPPLEMENTAL_INVENTORY_SQL,
+    PRE_CLOSURE_MIGRATION_SQL,
+)
 from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -149,6 +152,13 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         relations,
         {row[0].replace("public.", "").replace(" ", "") for row in rows},
     )
+    # The frozen historical fingerprints omit some catalogue families. Current
+    # entry must reject those objects even with disabled RLS, before any child
+    # can apply DDL. Do not remove or normalize an unrecognized object.
+    try:
+        await conn.execute(text(MIGRATION_SUPPLEMENTAL_INVENTORY_SQL))
+    except DBAPIError:
+        raise ValueError("Unrecognized migration supplemental catalogue") from None
     if revision in PRE_CLOSURE_MIGRATION_SQL:
         # Authenticate prior authority before Alembic can mutate even one
         # object. Initial and runtime-granted20, and exact21/22 resumes, are
