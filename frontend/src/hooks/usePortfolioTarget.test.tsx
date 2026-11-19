@@ -156,6 +156,15 @@ it.each(["terminal", "closed", "retry", "new"] as const)(
     expect(a.client.getQueryData(["portfolios", alice])).toEqual(
       outcome === "new" ? [first, second] : [first],
     );
+    // Even an ordinary stale-list refresh must not leave the retired unknown
+    // mask forever. Keep the old active bytes to test the pre-proof boundary.
+    await act(async () => {
+      await a.client.invalidateQueries({
+        queryKey: ["portfolios", alice],
+        exact: true,
+        refetchType: "none",
+      });
+    });
     holdProof = true;
     const returned = renderHook(() => usePortfolioTarget("1"), { wrapper: wrapperA });
     expect(returned.result.current.target).toBeNull();
