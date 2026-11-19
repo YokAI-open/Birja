@@ -8,7 +8,8 @@ import {
   type PortfolioDeletionIntent,
 } from "@/api/portfolioDeletion";
 import { type PortfolioMetadata } from "@/api/portfolioManagement";
-import { isPortfolioId } from "@/api/portfolios";
+import { fetchPortfolios, isPortfolioId } from "@/api/portfolios";
+import { ApiError } from "@/api/client";
 import {
   clearDeletionRecovery,
   openDeletionRecovery,
@@ -149,8 +150,9 @@ function sessionFor(client: QueryClient): Session {
       publish(session);
       return;
     }
+    const authenticatedSignOut = !session.known && known && owner === null;
     session.known = known;
-    if (owner !== session.owner) {
+    if (owner !== session.owner || authenticatedSignOut) {
       session.owner = owner;
       session.serial++;
       session.operation++;
@@ -282,17 +284,56 @@ export function usePortfolioDeletion(
     if (!ownerCurrent() || session.loading || session.recovery) return;
     update(session, { loading: true });
     publish(session);
+    let verifyingMembership = false;
     try {
       const recovery = await openDeletionRecovery(owner!, ownerCurrent);
       if (!ownerCurrent()) return;
       const attempt = recovery.attempt;
+      // A retired client's masks belong to its old generation. An empty
+      // durable marker does not say whether the original closed or refused.
+      // Fresh owned-active proof may release only former masks, never the
+      // still-persisted original (even when that original appears active).
+      const formerMasks = [...session.quarantined].filter((id) => id !== attempt?.portfolioId);
+      if (formerMasks.length) {
+        verifyingMembership = true;
+        const queryKey = ["portfolios", owner] as const;
+        await client.cancelQueries({ queryKey, exact: true });
+        if (!ownerCurrent()) return;
+        await client.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
+        if (!ownerCurrent()) return;
+        const active = await client.fetchQuery({
+          queryKey,
+          staleTime: 0,
+          retry: false,
+          queryFn: async ({ signal }) => {
+            if (!ownerCurrent()) throw new Error("Recovery session changed");
+            const rows = await fetchPortfolios(signal);
+            signal.throwIfAborted();
+            if (!ownerCurrent()) throw new Error("Recovery session changed");
+            return rows;
+          },
+        });
+        if (!ownerCurrent()) return;
+        formerMasks.forEach((id) => {
+          if (active.some((row) => row.id === id)) session.quarantined.delete(id);
+        });
+      }
       update(session, { recovery });
       if (attempt) {
         session.quarantined.add(attempt.portfolioId);
         publish(session, { ...empty(), phase: "unknown", attempt });
       }
-    } catch {
-      if (ownerCurrent()) publish(session, { ...session.state, error: storageError() });
+    } catch (error) {
+      if (ownerCurrent()) {
+        if (error instanceof ApiError && error.status === 401) client.setQueryData(["me"], null);
+        else
+          publish(session, {
+            ...session.state,
+            error: verifyingMembership
+              ? new Error("Can't verify portfolio availability. Try again.")
+              : storageError(),
+          });
+      }
     } finally {
       if (ownerCurrent()) {
         update(session, { loading: false });
@@ -315,6 +356,7 @@ export function usePortfolioDeletion(
           reviewScope: null,
           recovery: null,
           loading: false,
+          releaseAfterReview: null,
         });
         publish(retired, empty());
       }

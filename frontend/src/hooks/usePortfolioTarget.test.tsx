@@ -16,7 +16,8 @@ const alice = "alice@example.test";
 const bob = "bob@example.test";
 const first = { id: "1", name: "My portfolio" };
 const second = { id: "2", name: "Second strategy" };
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const clients: QueryClient[] = [];
 beforeEach(() => {
   vi.stubGlobal("crypto", webcrypto);
@@ -61,76 +62,149 @@ it("never revives an old financial handle after provider A to B to A with the sa
   expect(original.isCurrent()).toBe(false);
   expect(original.isOriginalCurrent?.()).toBe(false);
 });
-it.each(["terminal", "closed"] as const)("reconciles returning A from B's %s result only after fresh owned proof", async (outcome) => {
-  const originalMetadata = { ...first, description: "Original description" };
-  const latestMetadata = { ...originalMetadata, name: "Fresh strategy" };
-  let deletes = 0;
-  let rows = [first];
-  let holdProof = false;
-  let finishProof!: (response: Response) => void;
-  const fetch = vi.fn((path: string, init?: RequestInit) => {
-    if (init?.method === "DELETE") {
-      deletes++;
-      if (deletes === 1) return Promise.reject(new TypeError("lost"));
-      rows = outcome === "closed" ? [] : [{ id: "1", name: latestMetadata.name }];
-      return Promise.resolve(outcome === "closed" ? json({ portfolio_id: "1", state: "closed" }) : json({ detail: { code: "portfolio_confirmation_changed" } }, 409));
-    }
-    if (path.endsWith("/metadata")) return Promise.resolve(json(latestMetadata));
-    return holdProof ? new Promise<Response>((resolve) => { finishProof = resolve; }) : Promise.resolve(json(rows));
-  });
-  vi.stubGlobal("fetch", fetch);
-  const a = setup("1");
-  await waitFor(() => expect(a.result.current.status).toBe("ready"));
-  const oldTarget = a.result.current.target!;
-  const wrapperA = ({ children }: { children: ReactNode }) => <QueryClientProvider client={a.client}>{children}</QueryClientProvider>;
-  const deletionA = renderHook(() => usePortfolioDeletion("1"), { wrapper: wrapperA });
-  await waitFor(() => expect(deletionA.result.current.ready).toBe(true));
-  act(() => {
-    a.client.setQueryData(["portfolioMetadata", alice, "1", 0], originalMetadata);
-    expect(deletionA.result.current.reviewDeletion(originalMetadata)).toBe(true);
-  });
-  const oldConfirm = deletionA.result.current.confirmDeletion;
-  await act(async () => deletionA.result.current.confirmDeletion());
-  expect(deletionA.result.current.deletion.phase).toBe("unknown");
-  const clientB = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  clients.push(clientB);
-  clientB.setQueryData(["me"], { email: alice });
-  const wrapperB = ({ children }: { children: ReactNode }) => <QueryClientProvider client={clientB}>{children}</QueryClientProvider>;
-  const deletionB = renderHook(() => usePortfolioDeletion("1"), { wrapper: wrapperB });
-  await waitFor(() => expect(deletionB.result.current.deletion.phase).toBe("unknown"));
-  await waitFor(() => expect(deletionB.result.current.ready).toBe(true));
-  expect(deletes).toBe(1);
-  expect(deletionB.result.current.canCheck).toBe(true);
-  await act(async () => deletionB.result.current.checkDeletionResult());
-  expect(deletes).toBe(2);
-  expect(deletionB.result.current.deletion.phase).toBe(outcome === "closed" ? "closed" : "terminal_refusal");
-  if (outcome === "terminal") {
-    await act(async () => {
-      await clientB.fetchQuery({ queryKey: ["portfolioMetadata", alice, "1", 0], queryFn: () => fetchPortfolioMetadata("1"), staleTime: 0 });
+it.each(["terminal", "closed", "retry", "new"] as const)(
+  "reconciles returning A from B's %s result only after fresh owned proof",
+  async (outcome) => {
+    const originalMetadata = { ...first, description: "Original description" };
+    const latestMetadata = { ...originalMetadata, name: "Fresh strategy" };
+    let deletes = 0;
+    let rows = outcome === "new" ? [first, second] : [first];
+    let holdProof = false;
+    let finishProof!: (response: Response) => void;
+    const fetch = vi.fn((path: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        deletes++;
+        if (deletes === 1 || (outcome === "new" && deletes === 3))
+          return Promise.reject(new TypeError("lost"));
+        rows =
+          outcome === "closed"
+            ? []
+            : [{ id: "1", name: latestMetadata.name }, ...(outcome === "new" ? [second] : [])];
+        return Promise.resolve(
+          outcome === "closed"
+            ? json({ portfolio_id: "1", state: "closed" })
+            : json({ detail: { code: "portfolio_confirmation_changed" } }, 409),
+        );
+      }
+      if (path.endsWith("/metadata")) return Promise.resolve(json(latestMetadata));
+      return holdProof
+        ? new Promise<Response>((resolve) => {
+            finishProof = resolve;
+          })
+        : Promise.resolve(json(rows));
     });
-    expect(isPortfolioDeletionQuarantined(clientB, alice, "1")).toBe(false);
-  }
-  expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt).toBeNull();
-  expect(a.client.getQueryData(["portfolios", alice])).toEqual([first]);
-  holdProof = true;
-  const returned = renderHook(() => usePortfolioTarget("1"), { wrapper: wrapperA });
-  expect(returned.result.current.target).toBeNull();
-  await waitFor(() => expect(finishProof).toBeTypeOf("function"));
-  expect(returned.result.current.target).toBeNull();
-  expect(oldTarget.isCurrent()).toBe(false);
-  await act(async () => finishProof(json(rows)));
-  if (outcome === "terminal") {
-    await waitFor(() => expect(returned.result.current.target?.name).toBe(latestMetadata.name));
-    expect(returned.result.current.target?.isCurrent()).toBe(true);
-  } else {
-    await waitFor(() => expect(returned.result.current.status).toBe("unavailable"));
+    vi.stubGlobal("fetch", fetch);
+    const a = setup("1");
+    await waitFor(() => expect(a.result.current.status).toBe("ready"));
+    const oldTarget = a.result.current.target!;
+    const wrapperA = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={a.client}>{children}</QueryClientProvider>
+    );
+    const deletionA = renderHook(() => usePortfolioDeletion("1"), { wrapper: wrapperA });
+    await waitFor(() => expect(deletionA.result.current.ready).toBe(true));
+    act(() => {
+      a.client.setQueryData(["portfolioMetadata", alice, "1", 0], originalMetadata);
+      expect(deletionA.result.current.reviewDeletion(originalMetadata)).toBe(true);
+    });
+    const oldConfirm = deletionA.result.current.confirmDeletion;
+    await act(async () => deletionA.result.current.confirmDeletion());
+    expect(deletionA.result.current.deletion.phase).toBe("unknown");
+    const clientB = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    clients.push(clientB);
+    clientB.setQueryData(["me"], { email: alice });
+    const wrapperB = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={clientB}>{children}</QueryClientProvider>
+    );
+    const deletionB = renderHook(({ id }) => usePortfolioDeletion(id), {
+      wrapper: wrapperB,
+      initialProps: { id: "1" },
+    });
+    await waitFor(() => expect(deletionB.result.current.deletion.phase).toBe("unknown"));
+    await waitFor(() => expect(deletionB.result.current.ready).toBe(true));
+    expect(deletes).toBe(1);
+    expect(deletionB.result.current.canCheck).toBe(true);
+    await act(async () => deletionB.result.current.checkDeletionResult());
+    expect(deletes).toBe(2);
+    expect(deletionB.result.current.deletion.phase).toBe(
+      outcome === "closed" ? "closed" : "terminal_refusal",
+    );
+    if (outcome !== "closed") {
+      await act(async () => {
+        await clientB.fetchQuery({
+          queryKey: ["portfolioMetadata", alice, "1", 0],
+          queryFn: () => fetchPortfolioMetadata("1"),
+          staleTime: 0,
+        });
+      });
+      expect(isPortfolioDeletionQuarantined(clientB, alice, "1")).toBe(false);
+    }
+    expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt).toBeNull();
+    if (outcome === "new") {
+      deletionB.rerender({ id: "2" });
+      await waitFor(() => expect(deletionB.result.current.ready).toBe(true));
+      const next = { ...second, description: "Different strategy" };
+      act(() => {
+        clientB.setQueryData(["portfolioMetadata", alice, "2", 0], next);
+        expect(deletionB.result.current.reviewDeletion(next)).toBe(true);
+      });
+      await act(async () => deletionB.result.current.confirmDeletion());
+      expect(deletionB.result.current.deletion.phase).toBe("unknown");
+      expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt.portfolioId).toBe(
+        "2",
+      );
+    }
+    expect(a.client.getQueryData(["portfolios", alice])).toEqual(
+      outcome === "new" ? [first, second] : [first],
+    );
+    holdProof = true;
+    const returned = renderHook(() => usePortfolioTarget("1"), { wrapper: wrapperA });
     expect(returned.result.current.target).toBeNull();
-  }
-  expect(oldTarget.isCurrent()).toBe(false);
-  expect(oldTarget.isOriginalCurrent?.()).toBe(false);
-  await act(async () => oldConfirm());
-  expect(deletes).toBe(2);
-});
+    await waitFor(() => expect(finishProof).toBeTypeOf("function"));
+    expect(returned.result.current.target).toBeNull();
+    expect(oldTarget.isCurrent()).toBe(false);
+    if (outcome === "retry") {
+      await act(async () => finishProof(json({}, 503)));
+      await waitFor(() => expect(returned.result.current.status).toBe("error"));
+      expect(returned.result.current.target).toBeNull();
+      expect(isPortfolioDeletionQuarantined(a.client, alice, "1")).toBe(true);
+      const previous = finishProof;
+      let retry!: ReturnType<typeof returned.result.current.refetch>;
+      act(() => {
+        retry = returned.result.current.refetch();
+      });
+      await waitFor(() => expect(finishProof).not.toBe(previous));
+      expect(returned.result.current.target).toBeNull();
+      await act(async () => {
+        finishProof(json(rows));
+        await retry;
+      });
+    } else await act(async () => finishProof(json(rows)));
+    if (outcome !== "closed") {
+      await waitFor(() => expect(returned.result.current.target?.name).toBe(latestMetadata.name));
+      expect(returned.result.current.target?.isCurrent()).toBe(true);
+    } else {
+      await waitFor(() => expect(returned.result.current.status).toBe("unavailable"));
+      expect(returned.result.current.target).toBeNull();
+    }
+    expect(oldTarget.isCurrent()).toBe(false);
+    expect(oldTarget.isOriginalCurrent?.()).toBe(false);
+    if (outcome === "new") {
+      holdProof = false;
+      const stillUnknown = renderHook(() => usePortfolioTarget("2"), { wrapper: wrapperA });
+      await waitFor(() => expect(stillUnknown.result.current.status).toBe("unavailable"));
+      await act(async () => {
+        await stillUnknown.result.current.refetch();
+      });
+      expect(stillUnknown.result.current.target).toBeNull();
+      expect(isPortfolioDeletionQuarantined(a.client, alice, "2")).toBe(true);
+      expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt.portfolioId).toBe(
+        "2",
+      );
+    }
+    await act(async () => oldConfirm());
+    expect(deletes).toBe(outcome === "new" ? 3 : 2);
+  },
+);
 it("exposes an explicit guarded storage retry before any private target discovery", async () => {
   const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
     throw new Error("private browser storage detail");
