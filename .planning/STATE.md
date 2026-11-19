@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 7
+current_plan: 8
 status: executing
-stopped_at: Phase14 Plan06 independently verified; next Plan07
-last_updated: "2026-11-19T11:41:51.448877+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan06 and independent review complete
+stopped_at: Phase14 Plan07 independently verified; next Plan08 then11 in wave8
+last_updated: "2026-11-19T12:05:54.569655+00:00"
+last_activity: 2026-11-19 -- Phase14 Plan07 and independent review complete
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 55
+  completed_plans: 56
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan07;6/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan08;7/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 7 of 19
-Current Plan: 7
+Plan: 8 of 19
+Current Plan: 8
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;55/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;56/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -893,3 +893,18 @@ Later15/16/18 current calls restored(dc,dump) MUST supply manifest=source_manife
 CLI iswired; unownedops-fixtures.pystillcontainsv3-onlycampaignassertions requiring
 plannedcurrentV3adaptationbeforewholequalification. ActualpublicDELETEstarts07,
 then09/17mustexerciseAPI inintegratedfixtures. AllsevenwholeREQremainpending.
+
+
+Plan07 complete:ad060ea/0f970f8,a1dc80f,summary091606e.50currentAPI/
+identity/transportcases82.33s+2postcommit503/cancellationvariants13.03s pass;
+scopedlintformat/five-modulemypy pass. Independent14-07-REVIEWclean0/0;
+ownedresourcesremoved. DedicatedstrictprivateauthenticatedDELETE+bodylimits/
+ownerIPratelimits/canonicalreview, durableoriginalrecovery anddelete-lastactual
+OTP/refresh→zero→explicitnewgrant are proved. Narrowmain.pyprerequisiteadds
+PRIVATE/RetryAfter5 toexistingadmission503 withoutweakeningrules.
+
+Plan15MUSTadapt retainedtest_portfolio_creation.py::management_api0020fixture
+tocurrent23 (recorded indeferred-items.md). Combineddiagnostic50passed thenold
+fixturestartuprefused; clean50casecurrentgroupseparatelypasses. No oldfixture
+pass, skip, waiver orfullsuiteclaim. Wave8 executes08then11sequentially because
+use_worktrees=false; next09/12wave9. AllsevenwholeREQremainpending.
