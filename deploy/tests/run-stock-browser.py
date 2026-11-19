@@ -51,7 +51,7 @@ def source_snapshot():
             for p in sorted(set(paths))}
 
 
-def finish_review(directory, source, commit):
+def finish_review(directory, source, commit, phase=12):
     if source != source_snapshot():
         raise RuntimeError('Source drift during browser proof')
     files = sorted(directory.iterdir())
@@ -65,8 +65,8 @@ def finish_review(directory, source, commit):
     links = ''.join('<li><a href="' + html.escape(p.name, quote=True) + '">' +
                     html.escape(p.stem) + '</a></li>' for p in files if p.suffix == '.html')
     with (directory / 'index.html').open('x') as output:
-        output.write('<!doctype html><meta charset="utf-8"><title>Phase12 synthetic review</title>'
-                     '<h1>Phase12 portfolio ownership</h1><p>Read-only actual rendered synthetic pages. '
+        output.write(f'<!doctype html><meta charset="utf-8"><title>Phase{phase} synthetic review</title>'
+                     f'<h1>Phase{phase} portfolio review</h1><p>Read-only actual rendered synthetic pages. '
                      'Open each page and use your browser menu at 200% zoom; emulated reflow is not '
                      'native zoom acceptance. No action executes.</p><ul>' + links + '</ul>')
     for p in directory.iterdir():
@@ -95,7 +95,7 @@ def main():
     if args.review_dir is not None:
         target = args.review_dir
         if (not target.is_absolute() or target.parent != Path('/tmp')
-                or not target.name.startswith('birja-phase12-ui-review-') or target.exists()
+                or not target.name.startswith(('birja-phase12-ui-review-', 'birja-phase14-ui-capture-')) or target.exists()
                 or target.is_symlink()):
             parser.error('review-dir must be a new /tmp/birja-phase12-ui-review-* directory')
         target.mkdir(mode=0o700)
@@ -178,8 +178,12 @@ def main():
     )
     if args.review_dir is not None:
         env['BIRJA_PHASE12_REVIEW_DIR'] = str(args.review_dir)
+        if args.review_dir.name.startswith('birja-phase14-ui-capture-'):
+            env['BIRJA_PHASE14_REVIEW_DIR'] = str(args.review_dir)
     env['BIRJA_PHASE12_SOURCE'] = subprocess.check_output(
         ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    if 'BIRJA_PHASE14_REVIEW_DIR' in env:
+        env['BIRJA_PHASE14_SOURCE'] = env['BIRJA_PHASE12_SOURCE']
     dc = ["docker", "compose", "--env-file", str(envfile)]
     pw = [
         str(ROOT / "frontend/node_modules/.bin/playwright"),
@@ -288,7 +292,8 @@ def main():
         )
         run("browser-" + args.suite, pw, timeout=900)
         if args.review_dir is not None:
-            finish_review(args.review_dir, source, env['BIRJA_PHASE12_SOURCE'])
+            finish_review(args.review_dir, source, env['BIRJA_PHASE12_SOURCE'],
+                          phase=14 if 'BIRJA_PHASE14_REVIEW_DIR' in env else 12)
     except Exception:
         run(
             "startup-diagnostics",

@@ -10,12 +10,10 @@ async function reviewedLayout(page: Page, _state: string, width: number) {
   await page.evaluate("document.fonts.ready");
   const headings = page.locator("h1");
   await expect(headings).toHaveCount(1);
-  const actions = page
-    .getByRole("button")
-    .filter({
-      hasText:
-        /^(Cancel|Delete portfolio|Delete portfolio…|Check deletion result|Review latest portfolio)$/,
-    });
+  const actions = page.getByRole("button").filter({
+    hasText:
+      /^(Cancel|Delete portfolio|Delete portfolio…|Check deletion result|Review latest portfolio)$/,
+  });
   const boxes = [];
   for (const action of await actions.all()) {
     if (!(await action.isVisible())) continue;
@@ -47,9 +45,9 @@ async function reviewedLayout(page: Page, _state: string, width: number) {
 /** Freeze only the actual public DOM/styles/fonts; no cookies, storage or scripts. */
 export async function capturePhase14(page: Page, info: TestInfo, state: string, width: number) {
   await noOverflow(page);
-  const layout = await reviewedLayout(page, state, width);
+  const layout: Record<string, unknown> = await reviewedLayout(page, state, width);
   const name = `phase14-${state}-${width}`;
-  const destination = process.env.BIRJA_PHASE12_REVIEW_DIR;
+  const destination = process.env.BIRJA_PHASE14_REVIEW_DIR ?? process.env.BIRJA_PHASE12_REVIEW_DIR;
   const path = (suffix: string) =>
     destination ? `${destination}/${name}.${suffix}` : info.outputPath(`${name}.${suffix}`);
   await page.screenshot({ path: path("png"), fullPage: true });
@@ -93,18 +91,13 @@ export async function capturePhase14(page: Page, info: TestInfo, state: string, 
   let rendered = await render();
   if (width >= 768) {
     const viewport = page.viewportSize()!;
+    const responsiveTable = (await page.getByRole("table").count()) > 0;
     await page.setViewportSize({ width: Math.floor(width / 2), height: 480 });
     await expect.poll(() => page.evaluate("matchMedia('(min-width: 768px)').matches")).toBe(false);
     // Wait for the actual React conditional table-to-card render as well as CSS.
-    if (
-      state === "overview" ||
-      state === "incomplete" ||
-      state === "failed-refresh" ||
-      state === "cap"
-    )
-      await expect(page.getByRole("table")).toHaveCount(0);
+    if (responsiveTable) await expect(page.getByRole("table")).toHaveCount(0);
     await noOverflow(page);
-    await reviewedLayout(page, state, Math.floor(width / 2));
+    layout.reflow = await reviewedLayout(page, state, Math.floor(width / 2));
     const narrow = await render();
     await page.screenshot({ path: path("reflow.png"), fullPage: true });
     await page.setViewportSize(viewport);
@@ -135,8 +128,9 @@ export async function capturePhase14(page: Page, info: TestInfo, state: string, 
     browser: browser.browserType().name(),
     version: browser.version(),
     synthetic: true,
-    source: process.env.BIRJA_PHASE12_SOURCE,
+    source: process.env.BIRJA_PHASE14_SOURCE ?? process.env.BIRJA_PHASE12_SOURCE,
     native_200_percent_verified: false,
+    owner_accepted: false,
     layout,
     artifacts: {
       html: name + ".html",
