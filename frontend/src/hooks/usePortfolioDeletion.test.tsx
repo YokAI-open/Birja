@@ -5,7 +5,8 @@ import { webcrypto } from "node:crypto";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { isPortfolioDeletionQuarantined, usePortfolioDeletion } from "./usePortfolioDeletion";
-import { DELETION_STORAGE_KEY } from "@/lib/portfolioDeletionAttempt";
+import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
+import { capturePortfolioDeletionIntent, DELETION_POLICY } from "@/api/portfolioDeletion";
 
 const owner = "alice@example.test";
 const metadata = Object.freeze({ id: "2", name: "Original", description: "raw" });
@@ -131,6 +132,34 @@ it("lets only the current client logout clear the newer durable original", async
   act(() => returned.client.setQueryData(["me"], null));
   expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBeNull();
   expect(returned.result.current.deletion.attempt).toBeNull();
+});
+it("preserves a cold unknown identity's marker until the current identity request proves signed out", async () => {
+  const recovery = await openDeletionRecovery(owner);
+  recovery.persist(capturePortfolioDeletionIntent({ portfolioId: "2", confirmationName: "Private original", intentKey: crypto.randomUUID(), policyVersion: DELETION_POLICY }));
+  const stored = sessionStorage.getItem(DELETION_STORAGE_KEY);
+  let finish!: (response: Response) => void;
+  let held = false;
+  const fetch = vi.fn((path: string) => {
+    if (path === "/api/v2/me" && !held) {
+      held = true;
+      return new Promise<Response>((resolve) => { finish = resolve; });
+    }
+    return Promise.resolve(json({}, 401));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const hook = renderHook(() => usePortfolioDeletion(), { wrapper });
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  expect(client.getQueryData(["me"])).toBeUndefined();
+  expect(hook.result.current.ready).toBe(false);
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
+  await act(async () => finish(json({}, 401)));
+  await waitFor(() => expect(client.getQueryData(["me"])).toBeNull());
+  expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBeNull();
+  expect(hook.result.current.deletion.attempt).toBeNull();
+  expect(fetch.mock.calls.some(([path]) => String(path).includes("/portfolios"))).toBe(false);
 });
 
 it("refuses before sending if original recovery persistence fails", async () => {
