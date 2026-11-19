@@ -184,3 +184,75 @@ All four task commits exist. The new spec/helper, evidence document, summary,
 canonical manifest/ZIP and durable run receipts exist. The complete packet passed
 current-source/artifact/ZIP verification; its source binding remains current
 after documentation-only closeout. Human acceptance is explicitly pending.
+
+## Independent-review repair follow-up
+
+The parent review committed as `70342c2` identified two blockers in the packet
+boundary, not the application runtime: linked-directory inventory omission and
+unsupported SVG/missing-policy acceptance. The original review remains unchanged.
+This follow-up supersedes the earlier packet/current-verification identity while
+retaining the historical proof and its limits.
+
+Repair commits:
+
+- `8f36c8b` — RED: controlled linked-root/child/ancestor/font/configuration tests
+  and benign SVG/CSP regressions reproduced four refusal failures plus the absent
+  Phase 14 validation interface.
+- `470093b` — GREEN: no-follow descriptor traversal/read, static icon vocabulary,
+  exact early Phase 14 CSP, coherent hash-updated packet refusals; 25 methods pass.
+- `4a0ac10` — final benign pre-policy html/head style refinement; two additional
+  failing subcases reproduced before the minimal structural whitelist repair.
+
+No-follow traversal examines every relevant ancestor/entry before exclusions or
+file filtering. File reads reject links and nonregular types. Ordinary controlled
+source mutations change the snapshot; linked target mutations continue to refuse.
+Only the absent optional public root and ordinary `__pycache__` exclusions retain
+their existing meaning. Static SVG is limited to the four elements used by
+current icons. Both Phase 14 index and captures require one exact restrictive
+policy before content, with only inert html/head/charset scaffolding preceding
+it. Phase 13 defaults remain explicitly compatible. All tests are benign;
+no executable payload, browser dialog or external network test was run.
+
+Final contracts: **25/25 evidence methods, 4.012s**, preserving the original 21;
+**8/8 browser contracts, 0.290s**. Scoped Ruff retains only the already documented
+baseline findings. Diff checks pass. No runtime, API, migration, SQL authority,
+dependency or capture-helper change was needed. The eight behavior cases were
+not unnecessarily rerun.
+
+The original canonical R1 directory/ZIP was moved to exclusive
+`/tmp/birja-phase14-ui-review-r1-historical[.zip]`, preserving SHA256
+`3cb80b86097dd6a208da379ac89f4d58d4ed72c98ff9f17e68bdd0bf49fe6f51`.
+`canonical-r1-preservation.json` records its source/digest/hash. Intermediate R2
+was intentionally interrupted for the final scaffolding refinement at 60.591s,
+exit -2, source unchanged. It is explicitly **INCOMPLETE**, with no canonical
+packet created. Raw partial captures and supervision receipts remain preserved.
+The process-group interruption bypassed automatic cleanup, so exact owned-project
+cleanup and separate empty resource/process-group checks were completed before
+source edits. See `canonical-r2-cleanup.{json,log}`; this is not a passing run.
+
+Final R3 was generated after committing
+`4a0ac10d8bde309b74cf3c7d0ca95b67e4d111ff`, with tracked source frozen:
+
+- 6/6 actual capture cases pass; **220.327s total**, browser **182.2s**.
+- 365-input digest `6f6068c3f44b388e2ac3ade07764ac287dbbe19e0e84dfa876efaf32a2c20ea4`.
+- Canonical ZIP `/tmp/birja-phase14-ui-review.zip`, SHA256
+  `9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+- Full 114-capture/419-artifact matrix passes current source/artifact/ZIP checks.
+- All **190 actual offline layouts** pass with zero HTTP(S) requests, one visible
+  h1, no horizontal overflow, loaded fonts and no active forms/scripts/frames.
+- Both human acceptance flags remain false; the current mobile restored-unknown
+  screenshot was visually inspected without claiming owner acceptance.
+- Final source unchanged and all owned containers/networks/volumes removed.
+
+Final durable receipts are `/tmp/birja-phase14-plan17/canonical-r3.{json,log}` and
+`offline-r3.json`. Phase 13 UI archive remains unchanged at `724607e8…`; earlier
+recovery artifacts and the absent Plan 18 canonical recovery output are preserved.
+Parent independent re-review controls review disposition. Plans 18/19 remain
+pending; global state and requirement completion remain with the orchestrator.
+
+### Repair self-check: PASSED
+
+All three repair commits, corrected packet/manifest, historical packet and
+preservation/cleanup receipts exist. Strict current verification passes after
+append-only documentation changes. The original review is unchanged; unrelated
+`.claude/` remains untracked and preserved. No active owned test process remains.

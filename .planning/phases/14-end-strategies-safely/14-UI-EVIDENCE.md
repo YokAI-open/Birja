@@ -129,3 +129,65 @@ owner acceptance results remain outside this Plan 17 receipt.
 ```text
 python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --verify /tmp/birja-phase14-ui-review
 ```
+
+## Independent-review repair: current canonical packet R3
+
+This appendix supersedes the earlier canonical identity/current-verification
+claim while preserving its historical evidence. The original independent review
+`14-17-REVIEW.md` is unchanged; disposition belongs to the parent reviewer.
+
+CR-01 is repaired with directory-descriptor traversal and file reads using
+`O_NOFOLLOW`: every root, ancestor and child entry is inspected before file
+filtering, including font/configuration paths. Linked roots/directories/files
+and unsupported entries refuse without following their targets. Only normal
+`__pycache__` directories remain excluded; the absent optional `frontend/public`
+root remains supported. Regular-file reads are checked before consuming bytes.
+
+CR-02 is repaired by allowing only the static `svg/path/circle/line` vocabulary
+used by current icons, and requiring exactly one project-owned restrictive CSP
+before content in both Phase 14 captures and index. Missing, weakened, duplicate,
+late or overriding policies refuse. Before the policy, only html language,
+attribute-free head and charset scaffolding is accepted. Phase 13 retains its
+default interface without the new Phase 14 policy requirement.
+
+Benign controlled regressions reproduced the failures, then **25/25 evidence
+methods passed in 4.012s**, retaining the original 21 methods; **8/8 browser
+contracts passed in 0.290s**. Tests use controlled temporary links, ordinary
+source changes, nonexecuting SVG opacity/visibility markup and benign policy/style
+changes. Coherent index/capture mutations update their declared hashes and still
+refuse. No executable payload, dialog test or external network demonstration was
+used for this repair.
+
+- Final committed render source: `4a0ac10d8bde309b74cf3c7d0ca95b67e4d111ff`.
+- Canonical ZIP: `/tmp/birja-phase14-ui-review.zip`.
+- Corrected ZIP SHA256: `9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+- Current 365-input digest: `6f6068c3f44b388e2ac3ade07764ac287dbbe19e0e84dfa876efaf32a2c20ea4`.
+- Captured at `2026-11-19T23:57:09.941220+00:00` in Chromium `156.0.8078.4`.
+- Actual six-width recapture: **6/6 passed**, 220.327s total, browser 182.2s.
+- Same independently enumerated 114 captures/419 artifacts/190 PNGs.
+- Strict current-source/artifact/ZIP verification passes.
+- All 190 extracted offline layouts pass, with one visible h1, no horizontal
+  overflow, fonts loaded, no active forms/scripts/frames and **zero HTTP(S)**.
+- `owner_accepted=false` and `native_200_percent_verified=false` remain unchanged.
+
+Original R1 was moved, not overwritten, to
+`/tmp/birja-phase14-ui-review-r1-historical[.zip]`; its archive still hashes to
+`3cb80b86097dd6a208da379ac89f4d58d4ed72c98ff9f17e68bdd0bf49fe6f51`.
+`/tmp/birja-phase14-plan17/canonical-r1-preservation.json` records that identity.
+The intermediate R2 capture was intentionally interrupted after 60.591s before
+completion to tighten pre-policy scaffolding. It is **INCOMPLETE**, not a passing
+campaign or packet. Its source guard remained unchanged; partial raw captures
+remain at `/tmp/birja-phase14-ui-capture-eoib9mlb`. Because the group interruption
+bypassed the runner's cleanup, exact owned-project cleanup was performed and
+separate empty container/network/volume/process-group checks preceded edits.
+Receipts: `canonical-r2.{json,log}` and `canonical-r2-cleanup.{json,log}`.
+
+Final receipts: `/tmp/birja-phase14-plan17/canonical-r3.{json,log}` and
+`offline-r3.json`; browser log:
+`/tmp/birja-phase09-browser-x8avyu2e/browser-portfolios.log`.
+Final source was committed before launch and frozen throughout capture. All
+owned resources were removed. The corrected restored-unknown mobile screenshot
+was inspected: the original named check remains visible and financial content
+stays masked. Phase 13 UI bytes still match `724607e8…`; no prior recovery archive,
+runtime, migration, authority, dependency, provider or production configuration
+changed. Parent independent re-review and Plans 18/19 remain required.
