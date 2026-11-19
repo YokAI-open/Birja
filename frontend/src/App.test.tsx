@@ -7,6 +7,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { PortfolioContext } from "@/components/PortfolioContext";
 import App from "./App";
+import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
+import { capturePortfolioDeletionIntent, DELETION_POLICY } from "@/api/portfolioDeletion";
 
 // Real page migration belongs to24/25; these probes verify shell and boundary
 // wiring and captured target identity without claiming future page behavior.
@@ -120,6 +122,104 @@ afterEach(() => {
   probes.mounted.mockReset();
   document.cookie = "bj_csrf=; max-age=0; path=/";
   sessionStorage.clear();
+});
+
+const privateJson = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+function deletionApi({ result, listFailure = false }: { result?: () => Promise<Response>; listFailure?: boolean } = {}) {
+  let closed = false;
+  const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === "/api/v2/me") return privateJson({ email: "alice@example.test" });
+    if (path === "/api/v2/portfolios/1" && init?.method === "DELETE") {
+      const response = result ? await result() : privateJson({ portfolio_id: "1", state: "closed" });
+      if (response.ok) closed = true;
+      return response;
+    }
+    if (path === "/api/v2/portfolios/1") return closed ? privateJson({ detail: { code: "portfolio_unavailable" } }, 404) : privateJson({ ...first, description: "Keep this strategy" });
+    if (path === "/api/v2/portfolios") return closed && listFailure ? privateJson({}, 503) : privateJson(closed ? [] : [first]);
+    if (path === "/api/v2/portfolios/overview") return closed && listFailure ? privateJson({}, 503) : privateJson([]);
+    if (path === "/api/v1/prices") return prices();
+    if (path === "/api/v1/health") return privateJson({ status: "ok", db: "ok", redis: "ok" });
+    return privateJson({}, 500);
+  });
+  vi.stubGlobal("fetch", fetch);
+  document.cookie = "bj_csrf=test; path=/";
+  return fetch;
+}
+it("mounts static authenticated deletion recovery outside the dynamic financial route", async () => {
+  const fetch = deletionApi();
+  setup("/portfolios/deletion");
+  expect(await screen.findByText("No deletion request to check.")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Deletion request", level: 1 })).toHaveFocus();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.some(([path]) => path.includes("/deletion/"))).toBe(false);
+  expect(screen.getByRole("link", { name: "Account" })).toBeVisible();
+});
+it("keeps the deletion lease alive while quarantine removes the financial Outlet and then opens the empty overview", async () => {
+  let release!: (response: Response) => void;
+  const fetch = deletionApi({ result: () => new Promise((resolve) => { release = resolve; }) });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByText(/This is your last active portfolio/)).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(await screen.findByRole("heading", { name: "Deleting portfolio…" })).toBeVisible();
+  expect(screen.queryByText(/Private alice/)).toBeNull();
+  expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt.portfolioId).toBe("1");
+  await act(async () => release(privateJson({ portfolio_id: "1", state: "closed" })));
+  expect(await screen.findByText("No portfolios yet")).toBeVisible();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios$/);
+  expect(screen.getByRole("heading", { name: "Portfolios", level: 1 })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Create portfolio" })).toBeEnabled();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+});
+it("keeps a lost original named request in recovery without auto DELETE on navigation or reload", async () => {
+  const fetch = deletionApi({ result: () => Promise.reject(new TypeError("lost")) });
+  const { user, unmount } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  expect(await screen.findByRole("heading", { name: "Deletion result unconfirmed" })).toBeVisible();
+  await user.click(screen.getAllByRole("link", { name: "Portfolios" })[0]);
+  await user.click(await screen.findByRole("link", { name: "Review deletion request" }));
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/deletion$/);
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  unmount();
+  setup("/portfolios/deletion");
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+});
+it("does not navigate on a late closure after logout and replacement owner", async () => {
+  let release!: (response: Response) => void;
+  deletionApi({ result: () => new Promise((resolve) => { release = resolve; }) });
+  const { user, client } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  act(() => client.setQueryData(["me"], null));
+  expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+  await act(async () => release(privateJson({ portfolio_id: "1", state: "closed" })));
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/1$/);
+  expect(screen.queryByText("Portfolio deleted.")).toBeNull();
+});
+it("does not turn a failed post-ack overview read into an empty account", async () => {
+  deletionApi({ listFailure: true });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  expect(await screen.findByText("Can't load your portfolios right now. Try again.")).toBeVisible();
+  expect(screen.queryByText("No portfolios yet")).toBeNull();
+});
+it("restores only a validated same-tab original on the static recovery route", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(capturePortfolioDeletionIntent({ portfolioId: "1", confirmationName: first.name, intentKey: crypto.randomUUID(), policyVersion: DELETION_POLICY }));
+  const fetch = deletionApi();
+  const { user } = setup("/portfolios/deletion");
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Check deletion result" }));
+  expect(await screen.findByText("No portfolios yet")).toBeVisible();
 });
 
 it("keeps public Markets, Account and three safe responsive primary destinations", async () => {

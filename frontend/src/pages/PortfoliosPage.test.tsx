@@ -6,10 +6,13 @@ import { usePortfolioOverview } from "@/hooks/usePortfolioOverview";
 import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { cashPortfolio } from "@/test/portfolioFixtures";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
 vi.mock("@/hooks/usePortfolioOverview");
 vi.mock("@/hooks/usePortfolioManagement");
+vi.mock("@/hooks/usePortfolioDeletion");
 const refetch = vi.fn();
 function show(data: unknown, extra = {}) {
+  vi.mocked(usePortfolioDeletion).mockReturnValue({ ready: true, deletion: { phase: "idle", attempt: null } } as ReturnType<typeof usePortfolioDeletion>);
   vi.mocked(usePortfolioOverview).mockReturnValue({
     data,
     isPending: false,
@@ -33,6 +36,12 @@ function show(data: unknown, extra = {}) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+it("does not present uncertain masked membership as a zero count or grant capacity", () => {
+  show([], { membershipUncertain: true });
+  expect(screen.queryByText("No portfolios yet")).toBeNull();
+  expect(screen.queryByText("0 of 10 active portfolios")).toBeNull();
+  expect(screen.getByRole("button", { name: "Create portfolio" })).toBeDisabled();
 });
 it("shows genuine zero-book empty state and restores create trigger focus", () => {
   show([]);
