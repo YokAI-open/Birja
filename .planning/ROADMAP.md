@@ -52,7 +52,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** Phases12–13 verified complete locally; Phase14 is executing (5/19plans complete) and Phase15 remains later. The v1.2 milestone remains open.
+**Status:** Phases12–13 verified complete locally; Phase14 is executing (6/19plans complete) and Phase15 remains later. The v1.2 milestone remains open.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
@@ -336,7 +336,7 @@ compatibility for every newly supported state as it ships.
 
 **Wave 6** *(blocked on declared earlier-plan dependencies)*
 
-- [ ] 14-06-PLAN.md — Restore lifecycle evidence before grants and refuse losing rollback
+- [x] 14-06-PLAN.md — Restore lifecycle evidence before grants and refuse losing rollback
 
 **Wave 7** *(blocked on declared earlier-plan dependencies)*
 
@@ -447,7 +447,7 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
-| 14. End Strategies Safely | v1.2 | 5/19 | Executing; Plan06 next | - |
+| 14. End Strategies Safely | v1.2 | 6/19 | Executing; Plan07 next | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
 ## Deferred Follow-up
