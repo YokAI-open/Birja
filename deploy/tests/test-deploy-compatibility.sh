@@ -130,3 +130,38 @@ for revision in 0007 0008 0013; do
   run_case deploy "$revision" v0.3.1 no refuse
   run_case rollback "$revision" main no pass
 done
+# Current closure authority is a separate authenticated candidate family. A
+# familiar0017 marker alone cannot admit current0023 or migrate0020 safely.
+git -C "$APP_DIR" checkout -q --detach "$PORTFOLIO_TESTED"
+for name in backend/alembic/versions/0023_portfolio_closure_authority.py \
+  backend/alembic/sql/0023_portfolio_closure.sql backend/app/db/portfolio_bootstrap.py \
+  backend/app/db/schema_contract.py; do
+  mkdir -p "$APP_DIR/$(dirname "$name")"
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m closure-tested
+CLOSURE_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+printf '\n-- corrupted closure authority\n' >> "$APP_DIR/backend/alembic/sql/0023_portfolio_closure.sql"
+git -C "$APP_DIR" add backend/alembic/sql/0023_portfolio_closure.sql
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m closure-corrupt
+CLOSURE_CORRUPT=$(git -C "$APP_DIR" rev-parse HEAD)
+git -C "$APP_DIR" checkout -q --detach "$CLOSURE_TESTED"
+BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
+for revision in 0007 0008 0014 0017 0020 0023; do
+  run_case deploy "$revision" "$CLOSURE_TESTED" no pass
+done
+for revision in 0021 0022 invalid; do
+  run_case deploy "$revision" "$CLOSURE_TESTED" no refuse
+done
+ADMITTED_REVISION=0023 admit_application_source "$CLOSURE_TESTED"
+for revision in 0020 0023; do
+  run_case deploy "$revision" "$PORTFOLIO_TESTED" no refuse
+  run_case rollback "$revision" main yes refuse
+done
+BIRJA_TESTED_SOURCE=$CLOSURE_CORRUPT
+run_case deploy 0023 "$CLOSURE_CORRUPT" no refuse
+ADMITTED_REVISION=0023
+if admit_application_source "$CLOSURE_CORRUPT"; then
+  echo 'FAIL corrupted successor runtime admitted'; exit 1
+fi
