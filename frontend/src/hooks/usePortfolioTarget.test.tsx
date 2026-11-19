@@ -16,7 +16,25 @@ const first = { id: "1", name: "My portfolio" };
 const second = { id: "2", name: "Second strategy" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const clients: QueryClient[] = [];
-beforeEach(() => vi.stubGlobal("crypto", webcrypto));
+beforeEach(() => {
+  vi.stubGlobal("crypto", webcrypto);
+  document.cookie = "bj_csrf=test; path=/";
+});
+it("treats a forged lifecycle hint as temporary revocation, never a server tombstone", async () => {
+  let release!: (response: Response) => void;
+  const fetch = vi.fn().mockResolvedValueOnce(json([first, second])).mockImplementationOnce(() => new Promise<Response>((done) => { release = done; }));
+  vi.stubGlobal("fetch", fetch);
+  const h = setup("1");
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  const captured = h.result.current.target!;
+  act(() => broadcastMetadataChange("1", "lifecycle"));
+  expect(captured.isCurrent()).toBe(false);
+  await waitFor(() => expect(h.result.current.target).toBeNull());
+  await act(async () => release(json([first, second])));
+  await waitFor(() => expect(h.result.current.target?.isCurrent()).toBe(true));
+  expect(captured.isCurrent()).toBe(false);
+  expect(h.result.current.target?.portfolioId).toBe("1");
+});
 it("revokes captured authority before DELETE and never restores an unknown original from active discovery", async () => {
   let captured!: NonNullable<ReturnType<typeof usePortfolioTarget>["target"]>;
   let executableAtSend: boolean | undefined;
@@ -31,11 +49,13 @@ it("revokes captured authority before DELETE and never restores an unknown origi
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
   captured = h.result.current.target!;
   const metadata = { ...first, description: "Original description" };
-  h.client.setQueryData(["portfolioMetadata", alice, "1", 0], metadata);
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={h.client}>{children}</QueryClientProvider>;
   const deletion = renderHook(() => usePortfolioDeletion("1"), { wrapper });
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
-  act(() => deletion.result.current.reviewDeletion(metadata));
+  act(() => {
+    h.client.setQueryData(["portfolioMetadata", alice, "1", 0], metadata);
+    expect(deletion.result.current.reviewDeletion(metadata)).toBe(true);
+  });
   expect(captured.isCurrent()).toBe(true);
   await act(async () => deletion.result.current.confirmDeletion());
   expect(executableAtSend).toBe(false);
