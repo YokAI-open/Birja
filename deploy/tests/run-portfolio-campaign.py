@@ -137,6 +137,19 @@ def verify_integrity(runner, request, state):
     )
 
 
+def verify_claim(directory, request, state):
+    claim = read_json(directory / "claim.json")
+    digest = hashlib.sha256((directory / "request.json").read_bytes()).hexdigest()
+    if (
+        claim.get("request_sha256") != digest
+        or state.get("request_sha256") != digest
+        or claim.get("run_id") != request["run_id"]
+        or (claim.get("pid"), claim.get("start_ticks"))
+        != (state.get("pid"), state.get("start_ticks"))
+    ):
+        raise ValueError("claimed launch request/original identity mismatch")
+
+
 def inspect_status(directory):
     directory = private_directory(directory)
     request = read_json(directory / "request.json")
@@ -169,6 +182,8 @@ def inspect_status(directory):
     ):
         raise ValueError("campaign receipt outcome mismatch")
     runner = validation()
+    if "request_sha256" in state:
+        verify_claim(directory, request, state)
     artifacts = verify_integrity(runner, request, state)
     if state["state"] in {"starting", "preflight", "running"}:
         if process_identity(state["pid"]) != state["start_ticks"]:
@@ -178,29 +193,179 @@ def inspect_status(directory):
         child = state.get("child_pid")
         if child and process_identity(child) not in (None, state["child_start_ticks"]):
             raise ValueError("original child PID reused")
+        preflight = state.get("preflight_pid")
+        if preflight and process_identity(preflight) not in (
+            None,
+            state["preflight_start_ticks"],
+        ):
+            raise ValueError("original preflight PID reused")
     return {**state, "artifacts": artifacts}
 
 
-def stop_child(child):
-    if child.poll() is None:
+def group_members(pid):
+    """Only live members of this owned session/group; zombies do no work."""
+    members = []
+    for path in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            tail = path.read_text().rsplit(") ", 1)[1].split()
+            if tail[0] != "Z" and int(tail[2]) == pid and int(tail[3]) == pid:
+                members.append(int(path.parent.name))
+        except (OSError, ValueError, IndexError):
+            continue
+    return members
+
+
+def stop_child(child, ticks):
+    if process_identity(child.pid) not in (None, ticks):
+        raise ValueError("original phase PID reused; refusing signal")
+    if group_members(child.pid):
         try:
             os.killpg(child.pid, signal.SIGINT)
         except ProcessLookupError:
-            return child.wait()
+            pass
+    deadline = time.monotonic() + 60
+    while group_members(child.pid) and time.monotonic() < deadline:
+        child.poll()
+        time.sleep(0.05)
+    if group_members(child.pid):
         try:
-            return child.wait(timeout=60)
-        except subprocess.TimeoutExpired:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    code = child.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while group_members(child.pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if group_members(child.pid):
+        raise ValueError("owned phase group cleanup incomplete")
+    return code
+
+
+class PreflightProcess:
+    """A forked preflight preserves test injection without untracked subprocesses."""
+
+    def __init__(self, pid):
+        self.pid = pid
+        self.returncode = None
+
+    def poll(self):
+        if self.returncode is None:
+            observed, status = os.waitpid(self.pid, os.WNOHANG)
+            if observed:
+                self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+    def wait(self, timeout=None):
+        deadline = time.monotonic() + (timeout if timeout is not None else 60)
+        while self.poll() is None:
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired("owned-preflight", timeout)
+            time.sleep(0.02)
+        return self.returncode
+
+
+def claim_request(directory, request):
+    """O_EXCL is the irreversible consume boundary, including stale claims."""
+    claim = {
+        "format": 1,
+        "run_id": request["run_id"],
+        "pid": os.getpid(),
+        "start_ticks": process_identity(os.getpid()),
+        "request_sha256": hashlib.sha256(
+            (directory / "request.json").read_bytes()
+        ).hexdigest(),
+    }
+    fd = os.open(directory / "claim.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
+    with os.fdopen(fd, "w") as stream:
+        json.dump(claim, stream, sort_keys=True)
+        stream.flush()
+        os.fsync(stream.fileno())
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return claim
+
+
+def start_preflight(directory, runner, request, state):
+    """The child cannot begin work until its session identity is durable."""
+    log = os.open(
+        directory / "preflight.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+    )
+    read_gate, write_gate = os.pipe()
+    ready_read, ready_write = os.pipe()
+    child = None
+    try:
+        pid = os.fork()
+        if pid == 0:
             try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-    return child.wait()
+                os.close(write_gate)
+                os.close(ready_read)
+                os.setsid()
+                os.dup2(log, 1)
+                os.dup2(log, 2)
+                os.close(log)
+                os.write(ready_write, b"1")
+                os.close(ready_write)
+                if os.read(read_gate, 1) != b"1":
+                    os._exit(1)
+                os.close(read_gate)
+                cancelled = False
+
+                def cancel(signum, frame):
+                    # Throwing through subprocess.run would SIGKILL its direct
+                    # child before shell/Compose finalizers can finish. Every
+                    # descendant receives this group signal independently.
+                    nonlocal cancelled
+                    cancelled = True
+
+                signal.signal(signal.SIGINT, cancel)
+                signal.signal(signal.SIGTERM, cancel)
+                result = runner.preflight(request["suite"])
+                if cancelled:
+                    raise KeyboardInterrupt
+                write_json(directory / "preflight.json", result)
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(0)
+            except BaseException as exc:  # noqa: BLE001 - owned preflight exit boundary
+                print(type(exc).__name__, file=sys.stderr, flush=True)
+                os._exit(1)
+        child = PreflightProcess(pid)
+        os.close(read_gate)
+        os.close(ready_write)
+        if os.read(ready_read, 1) != b"1":
+            raise ValueError("preflight session did not initialize")
+        ticks = process_identity(pid, alive_only=False)
+        if ticks is None:
+            raise ValueError("preflight identity unavailable before work")
+        state.update(
+            phase="preflight",
+            preflight_pid=pid,
+            preflight_start_ticks=ticks,
+            preflight_log="preflight.log",
+        )
+        write_json(directory / "status.json", state)
+        os.write(write_gate, b"1")
+        return child
+    except BaseException:
+        if child is not None:
+            stop_child(child, process_identity(child.pid, alive_only=False))
+        raise
+    finally:
+        for fd in (log, write_gate, ready_read):
+            os.close(fd)
 
 
 def worker(directory, *, runner=None, command=None):
     """Internal worker; command injection is only for bounded stdlib tests."""
     directory = private_directory(directory)
     request = read_json(directory / "request.json")
+    try:
+        claim = claim_request(directory, request)
+    except FileExistsError:
+        return 1  # Never touch original status/logs, even if its process is gone.
     runner = validation() if runner is None else runner
     state = {
         "format": 1,
@@ -211,25 +376,45 @@ def worker(directory, *, runner=None, command=None):
         "state": "preflight",
         "started_at": time.time(),
         "artifacts": None,
+        "request_sha256": claim["request_sha256"],
     }
     started = time.monotonic()
     write_json(directory / "status.json", state)
     child = None
     interrupted = False
+    recording_child = False
 
     def interrupt(signum, frame):
         nonlocal interrupted
         interrupted = True
-        raise KeyboardInterrupt
+        if not recording_child:
+            raise KeyboardInterrupt
 
     old_handlers = {
         sig: signal.signal(sig, interrupt) for sig in (signal.SIGINT, signal.SIGTERM)
     }
     try:
+        verify_claim(directory, request, state)
         verify_integrity(runner, request, state)
         # Tools, current fixture tail and finite source pins precede the long command.
-        preflight = runner.preflight(request["suite"])
-        write_json(directory / "preflight.json", preflight)
+        recording_child = True
+        try:
+            child = start_preflight(directory, runner, request, state)
+        finally:
+            recording_child = False
+        if interrupted:
+            raise KeyboardInterrupt
+        while child.poll() is None:
+            time.sleep(0.05)
+        state["preflight_exit_code"] = child.returncode
+        if group_members(child.pid):
+            stop_child(child, state["preflight_start_ticks"])
+            raise ValueError("preflight returned with outstanding descendants")
+        if child.returncode != 0:
+            raise ValueError("preflight failed; see private preflight log")
+        read_json(directory / "preflight.json")
+        child = None
+        verify_claim(directory, request, state)
         verify_integrity(runner, request, state)
         argv = (
             command
@@ -245,30 +430,45 @@ def worker(directory, *, runner=None, command=None):
             directory / "command.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
         )
         with os.fdopen(fd, "wb", buffering=0) as log:
-            child = subprocess.Popen(
-                argv,
-                cwd=ROOT,
-                env=runner.environment(),
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-            ticks = process_identity(child.pid, alive_only=False)
-            if ticks is None:
-                child.wait()
-            state.update(
-                state="running", child_pid=child.pid, child_start_ticks=ticks, argv=argv
-            )
-            write_json(directory / "status.json", state)
+            recording_child = True
+            try:
+                child = subprocess.Popen(
+                    argv,
+                    cwd=ROOT,
+                    env=runner.environment(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                ticks = process_identity(child.pid, alive_only=False)
+                if ticks is None:
+                    child.wait()
+                state.update(
+                    state="running",
+                    phase="command",
+                    child_pid=child.pid,
+                    child_start_ticks=ticks,
+                    argv=argv,
+                )
+                write_json(directory / "status.json", state)
+            finally:
+                recording_child = False
+            if interrupted:
+                raise KeyboardInterrupt
             next_check = 0
             while child.poll() is None:
                 if time.monotonic() >= next_check:
+                    verify_claim(directory, request, state)
                     state["artifacts"] = verify_integrity(runner, request, state)
                     write_json(directory / "status.json", state)
                     next_check = time.monotonic() + 5
                 time.sleep(0.2)
+            verify_claim(directory, request, state)
             state["artifacts"] = verify_integrity(runner, request, state)
+            if group_members(child.pid):
+                stop_child(child, ticks)
+                raise ValueError("long command returned with outstanding descendants")
             state["exit_code"] = child.returncode
             state["state"] = "passed" if child.returncode == 0 else "failed"
             state["cleanup"] = (
@@ -282,11 +482,27 @@ def worker(directory, *, runner=None, command=None):
         for sig in old_handlers:
             signal.signal(sig, signal.SIG_IGN)
         if child is not None:
-            state["exit_code"] = stop_child(child)
+            try:
+                ticks = (
+                    state.get("preflight_start_ticks")
+                    if state.get("phase") == "preflight"
+                    else state.get("child_start_ticks")
+                )
+                state["exit_code"] = stop_child(child, ticks)
+                state["cleanup"] = (
+                    "preflight-group-reaped;long-command-not-started"
+                    if state.get("phase") == "preflight"
+                    else "command-group-reaped;see-command-log"
+                )
+            except Exception:  # noqa: BLE001 - report cleanup failure without false success
+                state["cleanup"] = (
+                    "owned-group-cleanup-incomplete;manual-inspection-required"
+                )
         state["state"] = "interrupted" if interrupted else "refused"
         # Do not serialize raw exception text, arguments or private environment.
         state["error_type"] = type(exc).__name__
-        state["cleanup"] = "see-command-log" if child else "long-command-not-started"
+        if child is None:
+            state["cleanup"] = "long-command-not-started"
     finally:
         state["finished_at"] = time.time()
         state["elapsed_seconds"] = round(time.monotonic() - started, 3)

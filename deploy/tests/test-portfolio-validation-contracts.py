@@ -281,9 +281,10 @@ class DurableCampaign(unittest.TestCase):
     def test_preflight_interrupt_reaps_nested_children_before_terminal_receipt(self):
         root, fixture, request = self.fixture()
         pidfile, marker = root/'nested.pid', root/'nested.finally'
+        wrapper_marker = root/'wrapper.finally'
         def preflight(suite):
             code = "import os,time\nfrom pathlib import Path\nPath("+repr(str(pidfile))+").write_text(str(os.getpid()))\ntry: time.sleep(20)\nfinally: Path("+repr(str(marker))+").write_text('clean')"
-            wrapper = 'import subprocess,sys\np=subprocess.Popen([sys.executable,"-u","-c",'+repr(code)+'])\ntry: p.wait()\nfinally: p.wait()'
+            wrapper = 'import subprocess,sys\nfrom pathlib import Path\np=subprocess.Popen([sys.executable,"-u","-c",'+repr(code)+'])\ntry: p.wait()\nfinally:\n p.wait()\n Path('+repr(str(wrapper_marker))+').write_text("clean")'
             subprocess.run([sys.executable,'-u','-c',wrapper], check=True, timeout=25)
             return {'ok':True}
         fixture.preflight = preflight
@@ -296,7 +297,7 @@ class DurableCampaign(unittest.TestCase):
             result = campaign.worker(root, runner=fixture,
                 command=[sys.executable,'-c',"raise AssertionError('long command forbidden')"])
             leaked = campaign.process_identity(int(pidfile.read_text())) is not None
-            finalized = marker.exists()
+            finalized = marker.exists() and wrapper_marker.exists()
         finally:
             timer.cancel(); timer.join()
             if pidfile.exists() and campaign.process_identity(int(pidfile.read_text())) is not None:
@@ -328,6 +329,21 @@ class DurableCampaign(unittest.TestCase):
         self.assertEqual(count.read_text(),'once\n')
         self.assertIn('claim.json',before)
         self.assertEqual(before,{name:(root/name).read_bytes() for name in before})
+
+    def test_claim_binds_request_bytes_and_original_process_identity(self):
+        root, fixture, request = self.fixture()
+        self.assertEqual(campaign.worker(root,runner=fixture,command=[sys.executable,'-c','pass']),0)
+        original = campaign.read_json(root/'status.json')
+        campaign.write_json(root/'status.json',{**original,'start_ticks':original['start_ticks']+1})
+        with self.assertRaisesRegex(ValueError,'claimed launch'):
+            campaign.inspect_status(root)
+        campaign.write_json(root/'status.json',original)
+        campaign.write_json(root/'request.json',{**request,'extra':'changed'})
+        with self.assertRaisesRegex(ValueError,'claimed launch'):
+            campaign.inspect_status(root)
+        before = (root/'status.json').read_bytes()
+        self.assertEqual(campaign.worker(root,runner=fixture,command=['false']),1)
+        self.assertEqual((root/'status.json').read_bytes(),before)
 
     def test_concurrent_and_stale_worker_claims_never_replace_original(self):
         root, fixture, request = self.fixture()
@@ -502,6 +518,7 @@ class DurableCampaign(unittest.TestCase):
         root, fixture, request = self.fixture()
         timer = threading.Timer(0.4, lambda: os.kill(os.getpid(), signal.SIGTERM))
         timer.start()
+        started = time.monotonic()
         try:
             result = campaign.worker(root, runner=fixture, command=[sys.executable, '-u', '-c',
                 "import time\ntry: time.sleep(20)\nfinally: print('original-child-finally')"])
@@ -509,9 +526,11 @@ class DurableCampaign(unittest.TestCase):
             timer.cancel()
             timer.join()
         self.assertEqual(result, 1)
+        self.assertLess(time.monotonic()-started, 5)
         state = campaign.read_json(root / 'status.json')
         self.assertEqual(state['state'], 'interrupted')
         self.assertIsNone(campaign.process_identity(state['child_pid']))
+        self.assertNotEqual(state['exit_code'], 0)
         self.assertIn('original-child-finally', (root / 'command.log').read_text())
 
     def test_archive_image_records_missing_or_mutated_are_never_rebuilt(self):
