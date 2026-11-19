@@ -1,6 +1,6 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-status: accepted_pending_automated_qualification
+status: passed
 owner_ui: accepted
 native_200: passed
 approved_packet_sha256: eac081810b48e9ddad875f3abc2a07510b3795c4b8d8aca7bec3ef29b8464c68
@@ -48,12 +48,11 @@ See13-UI-EVIDENCE and13-16-SUMMARY for raw receipts and exact source-map compari
 Both manifests retain their capture-time automated acceptance flags as false;
 this later human record is separate and does not rewrite signed/hash-bound artifacts.
 
-## Remaining prerequisite
+## Qualification prerequisite — resolved
 
-Plan17 complete current-source security and same-archive seven-stage recovery
-remain pending. Plan18 and global phase completion cannot be claimed from these
-human responses alone. Final goal verification must reconcile both actual
-qualification receipts with this accepted, unchanged management UI.
+The previously pending whole-security and seven-stage recovery prerequisite is
+resolved by actual campaign6 at9527e35. See the final receipt association below.
+Global phase completion still requires independent goal verification.
 
 ## Backend-only CR-02 repair and current binding
 
@@ -75,3 +74,29 @@ management surfaces remain byte-identical. Prior7e6d packet is preserved at
 `-before-cr02-lock-fix`; original owner-approvedeac081 packet remains unchanged.
 Owner approval is retained for the same management surfaces, without inventing a
 new human result or modifying capture-time flags. Final Plan17 remains pending.
+
+
+## Final qualified source association
+
+Actual uninterrupted campaign6 at frozen
+`9527e358bc6953cec7580043703324db194ba396` passed both complete commands:
+all-security3373.046s and seven-stage recovery2792.054s. Private receipt
+`/tmp/birja-phase13-plan17-campaign6-20261118-9527e35/receipt.json` reports ok,
+source/HEAD/preserved archives unchanged, all7passed-authenticated, exact fresh/
+upgraded TLS authority and all21owned resource checks empty. The new canonical
+archiveSHA is6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92.
+These are actual complete results, not the earlier failed/composite diagnostics.
+
+The final campaign separately verified the complete current UI packet and all
+340render inputs. The two later CR03/CR04 fixes concern deploy source admission
+and test image binding only, outside the render-input set. No accepted management
+UI changed. Both distinct owner responses therefore remain associated with the
+unchanged accepted surfaces and the current qualified source. No response was
+repeated, inferred or invented. Browser/version remains not supplied.
+
+Parent reran `python3 deploy/tests/test-portfolio-ui-evidence.py`:12tests PASS
+in0.949s, including source-drift, coherent omission, malformed metadata, active
+content and inherited-owner/native-approval refusals. The one execution checks
+the shared automated prerequisite of both18.1/18.2; it is not two different test
+runs or a substitute for either already supplied human response. Capture-time
+manifest flags remain false and unchanged. Both18human checkpoints are complete.
