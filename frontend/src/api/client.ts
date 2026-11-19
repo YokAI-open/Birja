@@ -180,7 +180,7 @@ function strictError(response: Response, value: unknown): ApiError {
     !Object.keys(detail).every(
       (key) =>
         key === "code" ||
-        ((response.status === 401 || response.status === 403) &&
+        ((response.status === 401 || response.status === 403 || response.status >= 500) &&
           key === "message" &&
           typeof detail.message === "string"),
     )

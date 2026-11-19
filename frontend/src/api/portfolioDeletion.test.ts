@@ -154,9 +154,16 @@ it("keeps network loss, cancellation and stale callbacks unknown without retries
 
 it("keeps the actual schema-admission outage wait while redacting its server message", async () => {
   document.cookie = "bj_csrf=test; path=/";
-  vi.stubGlobal("fetch", vi.fn(async () => json({detail: {code: "schema_unavailable", message: "Service private"}}, 503, {"Retry-After": "5"})));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json({ detail: { code: "schema_unavailable", message: "Service private" } }, 503, {
+        "Retry-After": "5",
+      }),
+    ),
+  );
   const error = await deletePortfolio(intent).catch((error: unknown) => error);
-  expect(error).toMatchObject({outcome: "unknown", status: 503, retryAfter: 5, terminal: false});
+  expect(error).toMatchObject({ outcome: "unknown", status: 503, retryAfter: 5, terminal: false });
   expect(JSON.stringify(error)).not.toContain("private");
 });
 
