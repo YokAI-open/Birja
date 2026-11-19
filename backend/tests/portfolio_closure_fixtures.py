@@ -6,6 +6,59 @@ from uuid import uuid4
 from sqlalchemy import text
 
 
+async def seed_public_stock_positions(api, coin_id, at, positions):
+    """Declared prehistory on public-created roots, never a closure shortcut.
+
+    Each tuple is(owner, root, quantity, basis); the existing global tail is
+    preserved and exact synthetic opening movements follow the same stock gate.
+    Trading/deletion acceptance still uses the production HTTP endpoints.
+    """
+    from decimal import Decimal
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from tests.stock_action_fixtures import synthetic_opening
+
+    async with api.migrator.begin() as conn:
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(coin_id)},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO stock_action_state(coin_id,admission_generation,"
+                "journal_start_at,complete_from) VALUES (:c,1,:at,:at) "
+                "ON CONFLICT(coin_id) DO NOTHING"
+            ),
+            {"c": coin_id, "at": at - timedelta(days=1)},
+        )
+        sequence = (
+            await conn.execute(
+                text(
+                    "SELECT coalesce(max(sequence),0) FROM stock_ownership_movements "
+                    "WHERE coin_id=:c"
+                ),
+                {"c": coin_id},
+            )
+        ).scalar_one()
+        async with AsyncSession(bind=conn, join_transaction_mode="create_savepoint") as db:
+            for index, (owner, root, quantity, basis) in enumerate(positions, 1):
+                await synthetic_opening(
+                    db,
+                    coin_id,
+                    owner,
+                    at,
+                    quantity=Decimal(quantity),
+                    basis=Decimal(basis),
+                    sequence=sequence + index,
+                    portfolio_id=int(root),
+                )
+            await db.commit()
+
+
 async def frozen_financial_snapshot(conn, portfolio_id):
     """Independent root-only oracle; shared market evidence/tails may advance."""
     result = {}

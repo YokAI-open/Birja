@@ -18,15 +18,87 @@ from app.services import corporate_actions as actions
 from app.services.stock_ownership import assert_ownership_consistent
 from tests.test_corporate_action_rules import dividend
 from tests.test_corporate_actions import batch, split_action
-from tests.test_portfolio_creation import authority, management_api
-from tests.test_portfolio_stock_ownership import close_root, journal_case
-from tests.test_portfolio_strategy_lifecycle import (
-    current_stock_authority_case as stock_authority_case,
+from tests.test_portfolio_stock_ownership import journal_case
+from tests.test_portfolio_strategy_events import (
+    authority,
+    closure_api,
+    management_api,
+    strategy_events,
 )
 from tests.test_portfolio_strategy_lifecycle import strategy_books
 from tests.test_stock_admission import action_admitted
 
-__all__ = ["authority", "management_api", "strategy_books", "stock_authority_case", "journal_case"]
+__all__ = [
+    "authority",
+    "strategy_events",
+    "closure_api",
+    "management_api",
+    "strategy_books",
+    "stock_authority_case",
+    "journal_case",
+]
+
+
+@pytest_asyncio.fixture
+async def stock_authority_case(strategy_books, engine):
+    """Retained split scenarios on current authority, with a real public closure."""
+    import json
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.services.stock_eligibility import load_execution_evidence
+    from app.services.stock_trading import _encoded
+    from tests.test_portfolio_closure_api import create, delete, intent
+
+    api, roots, cid, now = strategy_books
+    closed = (await create(api, "Retained closed")).json()["id"]
+    foreign = (await create(api, "Foreign", client=api.other)).json()["id"]
+    assert (await delete(api, closed, intent("Retained closed"))).status_code == 200
+    async with AsyncSession(engine) as db:
+        loaded = await load_execution_evidence(db, cid, api.app.state.settings)
+        snapshot = json.loads(json.dumps(asdict(loaded.evidence), default=_encoded))
+        snapshot["portfolio_id"] = int(roots[0])
+    async with engine.connect() as conn:
+        tx = await conn.begin()
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0023"
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(cid)},
+        )
+        await conn.execute(
+            text("UPDATE stock_action_state SET admission_generation=1 WHERE coin_id=:c"),
+            {"c": cid},
+        )
+        for root in roots:
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,2,20)"
+                ),
+                {"p": int(root), "u": api.uid, "c": cid},
+            )
+        try:
+            yield (
+                conn,
+                {
+                    "coin": cid,
+                    "owner": api.uid,
+                    "foreign_owner": api.other_uid,
+                    "first": int(roots[0]),
+                    "sibling": int(roots[1]),
+                    "closed": int(closed),
+                    "foreign": int(foreign),
+                    "now": now,
+                    "snapshot": snapshot,
+                },
+            )
+        finally:
+            await tx.rollback()
 
 
 @pytest_asyncio.fixture
@@ -156,41 +228,37 @@ async def test_scheduler_lock_rejects_unknown_instrument_without_writes(split_ca
     assert rejected.value.orig.sqlstate == "22023"
 
 
-async def test_closed_sibling_remains_exact_through_two_later_epochs(split_case):
-    db, conn, case, action, evidence = split_case
-    await close_root(db, conn, case, case["first"])
-    await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
-    before = (
-        await conn.execute(
-            text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": case["first"]}
+async def test_closed_sibling_remains_exact_through_two_later_epochs(strategy_events):
+    from tests.portfolio_closure_fixtures import frozen_financial_snapshot
+    from tests.test_portfolio_closure_api import delete, intent
+    from tests.test_portfolio_strategy_lifecycle import ledger, scheduler
+
+    api, roots, cid, now, action, evidence, _, engine = strategy_events
+    assert (await delete(api, roots[0], intent("Patient"))).status_code == 200
+    async with api.migrator.connect() as conn:
+        before = await frozen_financial_snapshot(conn, int(roots[0]))
+    for hours, quantity, epoch in ((24, 8, 1), (1, 16, 2)):
+        split = split_action(
+            replace(action, provider_event_id=str(uuid4()), payable_date=now.date()),
+            now - timedelta(hours=hours),
+            new_rate=Decimal(2),
         )
-    ).one()
-    first = await record_split(db, case, action, evidence)
-    second = await record_split(db, case, action, evidence, hours=1)
-    assert len(first) == 1 and len(second) == 2
-    db.expire_all()
-    holdings = {
-        r.portfolio_id: r
-        for r in (
-            await db.execute(select(Holding).where(Holding.coin_id == case["coin"]))
-        ).scalars()
-    }
-    assert (holdings[case["first"]].quantity, holdings[case["first"]].cost_basis) == (
-        Decimal(2),
-        Decimal(20),
-    )
-    assert (holdings[case["sibling"]].quantity, holdings[case["sibling"]].cost_basis) == (
-        Decimal(8),
-        Decimal(20),
-    )
-    assert (
-        await conn.execute(
-            text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": case["first"]}
+        async with scheduler(engine) as db:
+            await actions.persist_action_batch(db, batch(split), evidence)
+            applied = await actions.apply_due_actions(db, cid)
+            assert len(applied) == epoch
+            await db.commit()
+        async with scheduler(engine) as db:
+            assert await actions.apply_due_actions(db, cid) == applied
+            state, _ = await assert_ownership_consistent(db, cid)
+            assert state.unit_epoch == epoch
+            await db.commit()
+        assert await ledger(api, roots[1]) == (
+            (Decimal(10000), Decimal(10000)),
+            [("AAPL", Decimal(quantity), Decimal(40))],
         )
-    ).one() == before
-    state, rows = await assert_ownership_consistent(db, case["coin"])
-    assert state.unit_epoch == 2
-    assert len([r for r in rows if r.portfolio_id == case["first"]]) == 1
+        async with api.migrator.connect() as conn:
+            assert await frozen_financial_snapshot(conn, int(roots[0])) == before
 
 
 @pytest.mark.parametrize(

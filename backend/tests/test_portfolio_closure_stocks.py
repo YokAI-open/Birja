@@ -1,6 +1,9 @@
 """Real same-transaction closure proof; no public API/admission substitution."""
 
 import asyncio
+from dataclasses import replace
+from datetime import timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -8,8 +11,178 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.test_portfolio_closure_authority import authority, stock_authority
+from tests.test_portfolio_strategy_events import (
+    closure_api,
+    management_api,
+    strategy_books,
+    strategy_events,
+)
 
-__all__ = ["authority", "stock_authority"]
+__all__ = [
+    "authority",
+    "stock_authority",
+    "closure_api",
+    "management_api",
+    "strategy_books",
+    "strategy_events",
+]
+
+
+async def test_sold_out_multiple_stocks_successive_public_sibling_splits(strategy_events):
+    from app.services import corporate_actions as actions
+    from app.services.corporate_action_rules import CutoffEvidence
+    from app.services.stock_ownership import assert_ownership_consistent, reconstruct_stock_quantity
+    from tests.portfolio_closure_fixtures import (
+        frozen_financial_snapshot,
+        seed_public_stock_positions,
+    )
+    from tests.test_corporate_actions import batch, split_action
+    from tests.test_portfolio_closure_api import create, delete, intent
+    from tests.test_portfolio_strategy_lifecycle import ledger, scheduler, trade
+
+    api, roots, cid, now, action, admission, event_id, engine = strategy_events
+    foreign = (await create(api, "Independent", client=api.other)).json()["id"]
+    zero = (await create(api, "Sold out")).json()["id"]
+    async with api.migrator.connect() as conn:
+        second = (
+            await conn.execute(
+                text("SELECT min(coin_id) FROM stock_instruments WHERE coin_id<>:c"), {"c": cid}
+            )
+        ).scalar_one()
+    await seed_public_stock_positions(
+        api,
+        cid,
+        now - timedelta(days=10),
+        [
+            (api.other_uid, foreign, 3, 30),
+            (api.uid, zero, 1, 10),
+        ],
+    )
+    await seed_public_stock_positions(
+        api,
+        second,
+        now - timedelta(days=10),
+        [
+            (api.uid, roots[0], 3, 30),
+            (api.uid, roots[1], 5, 50),
+        ],
+    )
+    sold = await trade(api, roots[0], stock=True, side="sell", quantity="2")
+    assert sold.status_code == 201, sold.text
+    zero_sale = await trade(api, zero, stock=True, side="sell", quantity="1")
+    assert zero_sale.status_code == 201, zero_sale.text
+    async with api.migrator.connect() as conn:
+        tails = dict(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT coin_id,max(sequence) FROM stock_ownership_movements "
+                        "GROUP BY coin_id"
+                    )
+                )
+            ).all()
+        )
+    for root, name in ((roots[0], "Patient"), (zero, "Sold out")):
+        response = await delete(api, root, intent(name))
+        assert response.status_code == 200, response.text
+    async with api.migrator.connect() as conn:
+        frozen = await frozen_financial_snapshot(conn, int(roots[0]))
+        frozen_zero = await frozen_financial_snapshot(conn, int(zero))
+        closed_at = (
+            await conn.execute(
+                text("SELECT closed_at FROM accounts WHERE id=:p"), {"p": int(roots[0])}
+            )
+        ).scalar_one()
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT coin_id,closing_sequence,unit_epoch FROM portfolio_stock_closures "
+                    "WHERE portfolio_id=:p ORDER BY coin_id"
+                ),
+                {"p": int(roots[0])},
+            )
+        ).all() == [(c, tails[c], 0) for c in sorted((cid, second))]
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT closing_sequence,unit_epoch FROM portfolio_stock_closures "
+                    "WHERE portfolio_id=:p"
+                ),
+                {"p": int(zero)},
+            )
+        ).one() == (tails[cid], 0)
+    previous = ()
+    for expected in ((8, 6),):
+        async with api.migrator.connect() as conn:
+            split_at = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+        split = split_action(
+            replace(
+                action,
+                provider_event_id=str(uuid4()),
+                observed_at=split_at,
+                payable_date=split_at.date(),
+            ),
+            split_at,
+            new_rate=Decimal(2),
+        )
+        async with scheduler(engine) as db:
+            await actions.persist_action_batch(db, batch(split), admission)
+            applied = await actions.apply_due_actions(db, cid)
+            assert len(applied) == len(previous) + 1
+            await db.commit()
+        async with scheduler(engine) as db:
+            assert await actions.apply_due_actions(db, cid) == applied
+            state, _ = await assert_ownership_consistent(db, cid)
+            assert state.unit_epoch == len(applied)
+            cutoff = CutoffEvidence(closed_at, "NASDAQ", closed_at.date(), 1, "declared-synthetic")
+            frozen_quantity = await reconstruct_stock_quantity(db, int(roots[0]), cid, cutoff, 0)
+            assert frozen_quantity.quantity == 0
+            eligible = await actions.derive_dividend_entitlements(db, event_id)
+            assert [(e.portfolio_id, e.eligible_quantity) for e in eligible] == [
+                (int(roots[1]), Decimal(4)),
+                (int(foreign), Decimal(3)),
+            ]
+            await db.commit()
+        async with api.migrator.connect() as conn:
+            assert await frozen_financial_snapshot(conn, int(roots[0])) == frozen
+            assert await frozen_financial_snapshot(conn, int(zero)) == frozen_zero
+            positions = (
+                await conn.execute(
+                    text(
+                        "SELECT portfolio_id,quantity,cost_basis FROM holdings "
+                        "WHERE coin_id=:c AND portfolio_id IN (:p,:f) ORDER BY portfolio_id"
+                    ),
+                    {"c": cid, "p": int(roots[1]), "f": int(foreign)},
+                )
+            ).all()
+            assert positions == [
+                (int(roots[1]), Decimal(expected[0]), Decimal(40)),
+                (int(foreign), Decimal(expected[1]), Decimal(30)),
+            ]
+        previous = applied
+    assert (await ledger(api, roots[0]))[0] == (Decimal(10200), Decimal(10000))
+
+
+async def test_closed_market_stale_quote_and_uncertain_stock_do_not_block_deletion(strategy_events):
+    from tests.test_portfolio_closure_api import delete, intent
+
+    api, roots, cid, _, _, _, _, _ = strategy_events
+    async with api.migrator.begin() as conn:
+        await conn.execute(text("DELETE FROM stock_sessions WHERE exchange='NASDAQ'"))
+        await conn.execute(
+            text("UPDATE stock_quotes SET event_at=event_at-interval '3 days' WHERE coin_id=:c"),
+            {"c": cid},
+        )
+        await conn.execute(
+            text(
+                "UPDATE stock_action_state SET health='unknown', "
+                "checked_at=clock_timestamp()-interval '2 days', "
+                "valid_until=clock_timestamp()-interval '1 day' WHERE coin_id=:c"
+            ),
+            {"c": cid},
+        )
+    response = await delete(api, roots[0], intent("Patient"))
+    assert response.status_code == 200, response.text
 
 
 async def proof_grants(admin):
