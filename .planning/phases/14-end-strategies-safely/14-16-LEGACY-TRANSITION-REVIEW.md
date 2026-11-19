@@ -83,9 +83,39 @@ bytes, final catalogue/ACL/default fingerprints and qualified source identities
 are unchanged. Raw synthetic PID/start-tick/log/source receipts remain under
 `/tmp/birja-phase14-plan16/`; failed diagnostics are not passing qualifications.
 
+## New-source actual proof
+
+At source `159d6d87049d65463314b50ead94cde1bddda82b`, the new private R3
+archive `/tmp/birja-backup-test-p14-16-proof-r3/recovery.tar` has SHA256
+`7a698a7667efc0c3ff6b7545dabd89e969d6f4d9adcd5fde5d93b9f5a19aceff`.
+Its immutable backend image is
+`sha256:859be689c5d4077cd91aaff34f62e51b7b00c8d6e2163bf3aa0d9c672f796a33`.
+The same archive passed genuine14 upgrade (20.257s), empty-schema fresh
+(15.884s), genuine20 upgrade (15.690s), and encrypted cold restoration (53.390s).
+All four returned the unchanged final catalogue/object/default triple above;
+each receipt records unchanged source. Their durable private evidence is
+`/tmp/birja-phase14-plan16/proof-r3-{package,upgrade14,fresh,upgrade20,cold}.json`
+and corresponding logs. Cold recovery verifies original manifest evidence
+before grants and final nonquarantined23 authority afterward.
+
+The actual ordinary-dev fresh and populated14 paths also passed against that
+immutable image: 19.043s and22.109s,42.726s total, unchanged source. This covers
+exact money/baseline preservation, repeated initialization without a grant,
+and unsafe role/membership/object refusal. Every owned resource was removed.
+Receipt: `/tmp/birja-phase14-plan16/dev-r3.json`.
+
+R1 andR2 failed diagnostic archives/receipts remain preserved. Their harness
+errors were an empty-schema pre-import gate on deliberately prepared14, then
+passing that prepared flag to a subsequent final23 probe. The fix permits only
+the explicit initial current14 upgrade transport, verifies source and complete
+restricted-migrator14 authority before financial imports, and keeps later23
+probes on ordinary admission. Unsupported sources/modes refuse; an additional
+offline regression asserts the flag occurs only on the initial transport.
+No runtime/pin changes followed the202-test runtime qualification.
+
 ## Remaining validation
 
-New-archive exact fresh/14-upgraded/20-upgraded TLS and cold recovery are still
-required after the repair commit. Final Plan18 whole security/backend coverage
-and uninterrupted seven-stage same-archive proof remain mandatory. This record
-does not claim whole-phase completion or independent review approval.
+Final Plan18 whole security/backend coverage and uninterrupted seven-stage
+same-archive proof remain mandatory at its final source. These bounded proofs
+are not that whole qualification. Independent parent review, Plan17 browser
+integration and Plan19 owner UI/native200 acceptance remain separate.
