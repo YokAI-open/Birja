@@ -4,6 +4,7 @@ Subprocess/engine construction are isolated here. Authentication and catalogue
 checks are separately exercised against PostgreSQL, never a fabricated ledger.
 """
 
+import json
 import runpy
 from decimal import Decimal
 from types import SimpleNamespace
@@ -127,7 +128,10 @@ async def prior_object_evidence(admin, identity):
     from tests.portfolio_closure_fixtures import retained_snapshot
 
     async with admin.connect() as conn:
-        rows = await retained_snapshot(conn)
+        revision = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+        rows = (
+            await legacy14_snapshot(conn) if revision == "0014" else await retained_snapshot(conn)
+        )
         for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents"):
             if await conn.scalar(text("SELECT to_regclass(:t)"), {"t": "public." + table}):
                 rows[table] = tuple(
@@ -153,7 +157,7 @@ async def prior_object_evidence(admin, identity):
         )
 
 
-@pytest.mark.parametrize("revision", ["0020", "0021", "0022"])
+@pytest.mark.parametrize("revision", ["0014", "0020", "0021", "0022"])
 @pytest.mark.parametrize(
     "kind,damage,identity", PRIOR_OBJECT_DRIFT, ids=[case[0] for case in PRIOR_OBJECT_DRIFT]
 )
@@ -162,7 +166,11 @@ async def test_unrecognized_prior_objects_refuse_without_child_or_mutation(
 ):
     from tests.test_portfolio_management_grants import sql
 
-    child, _ = await prepare_pre_closure(portfolio_migration_db, revision)
+    child, _ = (
+        await prepare_legacy14(portfolio_migration_db)
+        if revision == "0014"
+        else await prepare_pre_closure(portfolio_migration_db, revision)
+    )
     foreign_created = False
     try:
         async with child.connect() as conn:
@@ -207,6 +215,162 @@ async def test_unrecognized_prior_objects_refuse_without_child_or_mutation(
                     "UPDATE pg_extension SET extnamespace='pg_catalog'::regnamespace "
                     "WHERE extname='plpgsql'",
                 )
+
+
+async def legacy14_snapshot(conn):
+    from tests.test_migrations import MIGRATION_TABLES
+
+    result = {}
+    for table in sorted(MIGRATION_TABLES - {"alembic_version"}):
+        if await conn.scalar(text("SELECT to_regclass(:t)"), {"t": "public." + table}):
+            result[table] = tuple(
+                (
+                    await conn.execute(
+                        text(
+                            f'SELECT to_jsonb(t)::text FROM "{table}" t ORDER BY to_jsonb(t)::text'  # noqa: S608
+                        )
+                    )
+                ).scalars()  # noqa: S608
+            )
+        sequence = table + "_id_seq"
+        if await conn.scalar(text("SELECT to_regclass(:t)"), {"t": "public." + sequence}):
+            result[sequence] = tuple(
+                (await conn.execute(text(f'SELECT last_value,is_called FROM "{sequence}"'))).one()  # noqa: S608
+            )
+    return result
+
+
+async def prepare_legacy14(engine, *, private=True):
+    """Reproduce dev's real14 source before runtime principals are provisioned."""
+    from tests.test_portfolio_management_grants import sql
+
+    async with engine.begin() as admin:
+        assert await admin.scalar(text("SELECT current_database()")) == "birja_test"
+        # This is an empty owned test schema. It models a genuine old dev DB,
+        # not a permission repair performed on an admitted application database.
+        await sql(
+            admin,
+            "DROP OWNED BY birja_app,birja_scheduler; "
+            "DROP ROLE birja_app; DROP ROLE birja_scheduler;",
+        )
+    await migrate_to("0014")
+    async with engine.begin() as admin:
+        await sql(
+            admin,
+            "CREATE ROLE birja_app NOLOGIN NOINHERIT; "
+            "CREATE ROLE birja_scheduler NOLOGIN NOINHERIT; "
+            "ALTER SCHEMA public OWNER TO pg_database_owner; "
+            "GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler;",
+        )
+    child = create_async_engine(test_migration_url())
+    async with child.begin() as conn:
+        await sql(
+            conn,
+            "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator "
+            + (
+                "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"
+                if private
+                else "GRANT EXECUTE ON FUNCTIONS TO PUBLIC"
+            ),
+        )
+        uid = await conn.scalar(
+            text("INSERT INTO users(email) VALUES ('legacy14@example.test') RETURNING id")
+        )
+        root = await conn.scalar(
+            text(
+                "INSERT INTO accounts(user_id,cash,starting_cash) "
+                "VALUES (:u,321.12,8765) RETURNING id"
+            ),
+            {"u": uid},
+        )
+    return child, root
+
+
+@pytest.mark.parametrize("private", [False, True], ids=["builtin-default", "private-default"])
+async def test_real_legacy14_entry_and_final_bootstrap_preserve_original_finances(
+    portfolio_migration_db, private
+):
+    from app.db.portfolio_bootstrap import (
+        ACL_SQL,
+        CATALOGUE_0023_SQL,
+        DEFAULT_ACL_0023_SQL,
+        PREFLIGHT_0023_SQL,
+    )
+
+    child, root = await prepare_legacy14(portfolio_migration_db, private=private)
+    try:
+        async with child.connect() as conn:
+            before = await legacy14_snapshot(conn)
+            state = {
+                key: await conn.scalar(text(query))
+                for key, query in (
+                    ("catalogue", CATALOGUE_0023_SQL),
+                    ("acl", ACL_SQL),
+                    ("defaults", DEFAULT_ACL_0023_SQL),
+                )
+            }
+            print("legacy14_entry=" + json.dumps(state, sort_keys=True))
+            assert await migration.require_migrator(conn) == "0014"
+        await migrate_to("0023")
+        async with child.connect() as conn:
+            state = {
+                key: await conn.scalar(text(query))
+                for key, query in (
+                    ("catalogue", CATALOGUE_0023_SQL),
+                    ("acl", ACL_SQL),
+                    ("defaults", DEFAULT_ACL_0023_SQL),
+                )
+            }
+            print("legacy14_after=" + json.dumps(state, sort_keys=True))
+            assert before["users"] == (await legacy14_snapshot(conn))["users"]
+            assert (
+                await conn.execute(
+                    text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
+                )
+            ).one() == (Decimal("321.12"), Decimal(8765))
+            await conn.execute(text(PREFLIGHT_0023_SQL))
+    finally:
+        await child.dispose()
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "CREATE INDEX unexpected_legacy14_index ON accounts(id)",
+        "REVOKE SELECT ON stock_instruments FROM birja_action_operator",
+        "GRANT UPDATE ON accounts TO birja_scheduler",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator GRANT SELECT ON TABLES TO birja_app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public "
+        "GRANT EXECUTE ON FUNCTIONS TO PUBLIC",
+    ],
+    ids=["catalogue", "missing-grant", "extra-grant", "table-default", "function-default"],
+)
+async def test_legacy14_authority_refuses_before_child_and_preserves_state(
+    portfolio_migration_db, damage
+):
+    from tests.test_portfolio_management_grants import sql
+
+    child, _ = await prepare_legacy14(portfolio_migration_db)
+    try:
+        async with child.connect() as conn:
+            assert await migration.require_migrator(conn) == "0014"
+        async with child.begin() as conn:
+            await sql(conn, damage)
+        before = await prior_object_evidence(portfolio_migration_db, "SELECT true")
+        with (
+            patch.object(migration, "create_async_engine", return_value=child),
+            patch.object(migration, "database_connect_args", return_value={}),
+            patch.object(migration.asyncio, "create_subprocess_exec", AsyncMock()) as spawn,
+        ):
+            with pytest.raises(ValueError, match="Unrecognized"):
+                await migration.migrate(SimpleNamespace(env="prod", database_url=URL))
+            spawn.assert_not_awaited()
+        assert await prior_object_evidence(portfolio_migration_db, "SELECT true") == before
+    finally:
+        if damage.startswith("ALTER DEFAULT"):
+            async with portfolio_migration_db.begin() as admin:
+                await sql(admin, damage.replace("GRANT", "REVOKE").replace(" TO ", " FROM "))
+        await child.dispose()
 
 
 async def prepare_pre_closure(engine, revision, *, runtime=True, private=True):
