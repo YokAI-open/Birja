@@ -104,6 +104,8 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
             "reject_stock_record_mutation()",
         }
         functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
+        if revision in {"0022", "0023"}:
+            functions |= {"check_portfolio_terminal_root()"}
         if revision == "0023":
             functions |= {"close_portfolio(bigint,bigint,uuid,text,text)"}
         return MIGRATION_TABLES | _CLOSURE_TABLES, frozenset(functions)
@@ -280,6 +282,18 @@ async def ensure_dividend_test_owner() -> None:
                     raise RuntimeError("incomplete disposable migration relation inventory")
                 if {sig.replace(" ", "") for sig, _ in functions} != allowed_functions:
                     raise RuntimeError("incomplete disposable migration function inventory")
+                nonidentity = {
+                    "alembic_version",
+                    "prices",
+                    "stock_instruments",
+                    "stock_quotes",
+                    "stock_action_state",
+                    "stock_fill_facts",
+                    "stock_status_evidence",
+                }
+                expected_sequences = {f"{t}_id_seq" for t in allowed_tables - nonidentity}
+                if {name for name, kind, _ in relations if kind == "S"} != expected_sequences:
+                    raise RuntimeError("unexpected disposable migration sequence inventory")
             await conn.execute(text("GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator"))
             await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler"))
             # Password is generated as hex and never emitted or persisted outside the disposable DB.

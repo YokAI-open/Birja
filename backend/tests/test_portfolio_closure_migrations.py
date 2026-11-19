@@ -225,13 +225,27 @@ async def test_backfill_preserves_retained_multistock_sold_out_and_empty_books(s
     await migrate("0022")
     async with staged.connect() as conn:
         assert await retained_snapshot(conn) == before
-        rows = (await conn.execute(text("""SELECT portfolio_id,provenance,confirmation_name,intent_id
-            FROM portfolio_lifecycle_closures ORDER BY portfolio_id"""))).all()
-        assert rows == [(p,"retained_boundary",None,None) for p in books["closed"]]
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))).scalar_one() == 0
-        boundaries = (await conn.execute(text("""SELECT closing_sequence FROM portfolio_stock_closures
-            ORDER BY coin_id"""))).scalars().all()
-        assert boundaries == [4,1]
+        rows = (
+            await conn.execute(
+                text("""SELECT portfolio_id,provenance,confirmation_name,intent_id
+            FROM portfolio_lifecycle_closures ORDER BY portfolio_id""")
+            )
+        ).all()
+        assert rows == [(p, "retained_boundary", None, None) for p in books["closed"]]
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 0
+        boundaries = (
+            (
+                await conn.execute(
+                    text("""SELECT closing_sequence FROM portfolio_stock_closures
+            ORDER BY coin_id""")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert boundaries == [4, 1]
     await ensure_dividend_test_owner()
 
 
@@ -242,25 +256,47 @@ async def test_corrupt_backfill_refuses_before_writing_any_lifecycle(staged, dam
     async with staged.begin() as conn:
         books = await seed_retained_books(conn, root)
         # Exact privileged corruption fixture; never an application repair path.
-        table = "stock_ownership_movements" if damage == "financial_chain" else "portfolio_stock_closures"
+        table = (
+            "stock_ownership_movements"
+            if damage == "financial_chain"
+            else "portfolio_stock_closures"
+        )
         await conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))  # noqa: S608
         if damage == "missing_boundary":
-            await conn.execute(text("DELETE FROM portfolio_stock_closures WHERE coin_id=:c"), {"c":books["stocks"][0]})
+            await conn.execute(
+                text("DELETE FROM portfolio_stock_closures WHERE coin_id=:c"),
+                {"c": books["stocks"][0]},
+            )
         elif damage == "global_tail":
-            await conn.execute(text("UPDATE portfolio_stock_closures SET closing_sequence=3 WHERE coin_id=:c"), {"c":books["stocks"][0]})
+            await conn.execute(
+                text("UPDATE portfolio_stock_closures SET closing_sequence=3 WHERE coin_id=:c"),
+                {"c": books["stocks"][0]},
+            )
         elif damage == "units":
-            await conn.execute(text("UPDATE portfolio_stock_closures SET unit_epoch=1 WHERE coin_id=:c"), {"c":books["stocks"][0]})
+            await conn.execute(
+                text("UPDATE portfolio_stock_closures SET unit_epoch=1 WHERE coin_id=:c"),
+                {"c": books["stocks"][0]},
+            )
         else:
-            await conn.execute(text("UPDATE stock_ownership_movements SET recorded_at=economic_at-interval '1 hour' WHERE sequence=1"))
+            await conn.execute(
+                text(
+                    "UPDATE stock_ownership_movements SET "
+                    "recorded_at=economic_at-interval '1 hour' WHERE sequence=1"
+                )
+            )
         await conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))  # noqa: S608
         before = await retained_snapshot(conn)
     await migrate("0021")
-    with pytest.raises((RuntimeError,DBAPIError), match="retained closure"):
+    with pytest.raises((RuntimeError, DBAPIError), match="retained closure"):
         await migrate("0022")
     async with staged.connect() as conn:
         assert await retained_snapshot(conn) == before
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))).scalar_one() == 0
-        assert (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "0021"
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))
+        ).scalar_one() == 0
+        assert (
+            await conn.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one() == "0021"
 
 
 async def test_backfill_resumes_durable_batches_and_validates_boundary_fk(staged, monkeypatch):
@@ -287,20 +323,86 @@ async def test_backfill_resumes_durable_batches_and_validates_boundary_fk(staged
             raise RuntimeError("synthetic interrupted closure batch")
         return original()
 
-    monkeypatch.setattr(module,"BATCH_SIZE",1)
-    monkeypatch.setattr(module,"_backfill_batch",interrupted)
+    monkeypatch.setattr(module, "BATCH_SIZE", 1)
+    monkeypatch.setattr(module, "_backfill_batch", interrupted)
     async with staged.connect() as conn:
+
         def apply(sync):
-            with Operations.context(MigrationContext.configure(sync)):
+            context = MigrationContext.configure(sync, opts={"transaction_per_migration": True})
+            with Operations.context(context), context.begin_transaction(_per_migration=True):
                 module.upgrade()
-        with pytest.raises(RuntimeError,match="synthetic interrupted"):
+
+        with pytest.raises(RuntimeError, match="synthetic interrupted"):
             await conn.run_sync(apply)
     async with staged.connect() as conn:
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))).scalar_one() == 1
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))
+        ).scalar_one() == 1
     await migrate("0022")
     await ensure_dividend_test_owner()
     async with staged.connect() as conn:
-        assert (await conn.execute(text("SELECT portfolio_id FROM portfolio_lifecycle_closures ORDER BY portfolio_id"))).scalars().all() == [p for _,p in closed]
-        assert (await conn.execute(text("SELECT convalidated FROM pg_constraint WHERE conname='fk_portfolio_stock_closure_lifecycle'"))).scalar_one() is True
-    with pytest.raises(RuntimeError,match="downgrade refused"):
-        await migrate("0021",down=True)
+        assert (
+            await conn.execute(
+                text("SELECT portfolio_id FROM portfolio_lifecycle_closures ORDER BY portfolio_id")
+            )
+        ).scalars().all() == [p for _, p in closed]
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT convalidated FROM pg_constraint "
+                    "WHERE conname='fk_portfolio_stock_closure_lifecycle'"
+                )
+            )
+        ).scalar_one() is True
+    with pytest.raises(RuntimeError, match="downgrade refused"):
+        await migrate("0021", down=True)
+
+
+@pytest.mark.parametrize("damage", ["function", "sequence", "owner", "historical"])
+async def test_backfill_prerequisite_refuses_forged_catalogue(staged, engine, damage):
+    await migrate("0022")
+    async with engine.begin() as conn:
+        if damage == "function":
+            await conn.execute(
+                text(
+                    "CREATE FUNCTION public.closure_shadow() RETURNS int LANGUAGE sql AS 'SELECT 1'"
+                )
+            )
+        elif damage == "sequence":
+            await conn.execute(text("CREATE SEQUENCE public.stock_quotes_id_seq"))
+        elif damage == "owner":
+            await conn.execute(
+                text("ALTER TABLE public.portfolio_closure_intents OWNER TO birja_action_operator")
+            )
+        else:
+            await conn.execute(text("UPDATE alembic_version SET version_num='0020'"))
+    try:
+        with pytest.raises(RuntimeError, match="inventory"):
+            await ensure_dividend_test_owner()
+    finally:
+        async with engine.begin() as conn:
+            if damage == "function":
+                await conn.execute(text("DROP FUNCTION public.closure_shadow()"))
+            elif damage == "sequence":
+                await conn.execute(text("DROP SEQUENCE public.stock_quotes_id_seq"))
+            elif damage == "owner":
+                await conn.execute(
+                    text("ALTER TABLE public.portfolio_closure_intents OWNER TO birja_migrator")
+                )
+            else:
+                await conn.execute(text("UPDATE alembic_version SET version_num='0022'"))
+
+
+def test_registered_closure_models_match_immutable_lineage():
+    from app.models import PortfolioClosureIntent, PortfolioLifecycleClosure
+    from app.models.corporate_action import PortfolioStockClosure
+
+    for model in (PortfolioClosureIntent, PortfolioLifecycleClosure):
+        assert model.__table__.c.id.identity.always
+        assert all(fk.ondelete != "CASCADE" for fk in model.__table__.foreign_keys)
+    assert PortfolioClosureIntent.__table__.c.recorded_at.type.timezone
+    assert PortfolioLifecycleClosure.__table__.c.closed_at.type.timezone
+    assert any(
+        fk.name == "fk_portfolio_stock_closure_lifecycle" and fk.deferrable
+        for fk in PortfolioStockClosure.__table__.foreign_key_constraints
+    )

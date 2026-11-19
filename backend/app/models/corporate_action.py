@@ -481,6 +481,17 @@ class PortfolioStockClosure(Base):
     __table_args__ = (
         UniqueConstraint("portfolio_id", "coin_id", name="uq_portfolio_stock_closure_root_coin"),
         ForeignKeyConstraint(
+            ["portfolio_id", "user_id", "closed_at"],
+            [
+                "portfolio_lifecycle_closures.portfolio_id",
+                "portfolio_lifecycle_closures.user_id",
+                "portfolio_lifecycle_closures.closed_at",
+            ],
+            name="fk_portfolio_stock_closure_lifecycle",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["portfolio_id", "user_id"],
             ["accounts.id", "accounts.user_id"],
             name="fk_portfolio_stock_closure_owner",
