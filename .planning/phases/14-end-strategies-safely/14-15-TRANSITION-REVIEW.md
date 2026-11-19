@@ -1,7 +1,7 @@
 # Plan15: authenticated closure migration transition
 
-Status: local repair under verification; no release, deployment or whole-phase
-acceptance is claimed. Parent explicitly authorized this concrete runtime and
+Status: locally verified; independent parent review remains pending. No release,
+deployment or whole-phase acceptance is claimed. Parent authorized this runtime and
 current-source pin amendment after the real TLS upgrade refused.
 
 ## Observed failure
@@ -100,6 +100,9 @@ the real migration refused before child creation and preserved all evidence.
 All four20/21/22/23 unsafe-default cases then passed with cleanup. No runtime
 normalization or gate weakening was added for this test failure.
 
-Repaired-source TLS and cold proofs still require the new committed source and
-new private diagnostic archive; the earlier passing proofs are preserved as
-historical checkpoints and are not relabelled as repair acceptance.
+Repair commit352f650 passes fresh TLS20.70s, genuine runtime-granted20→23
+TLS15.84s and source-destroyed encrypted cold recovery55.30s, using new private
+archive58e225255e0e69279be0a7c86c40be4a55aac82aa63c93a4c388bf6fdb6e1ef4.
+Every31-table/24-tail oracle comparison and exact final authority check passes;
+the immutable old20 writer refuses before effects. All receipts report unchanged
+source. Earlier archives/proofs remain intact and are not relabelled.

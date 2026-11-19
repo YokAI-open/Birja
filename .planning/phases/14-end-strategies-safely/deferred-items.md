@@ -19,3 +19,12 @@ must also replace privileged historical `close()` shortcuts when used against
 the new lifecycle schema. Full phase qualification remains blocked until that
 planned adaptation and required whole gates pass. Plan07 does not claim that
 the legacy creation API test file passed.
+
+**Resolved by Plan15:** commit2522ecc gives current creation/API consumers the
+genuine0023 authority fixture and authenticated public DELETE, preserving the
+separate historical0020 SQL/source fixture. The creation module passes within
+the recorded3538-case diagnostic partitions. A real granted20→23 migration gap
+was additionally fixed in352f650 and verified by121 admission/migration cases
+with100% changed-module branch coverage and actual fresh/upgraded/cold TLS.
+See14-15-SUMMARY.md and14-15-TRANSITION-REVIEW.md. Final uninterrupted whole-source
+qualification, browser checks and human acceptance remain Plans16–19.
