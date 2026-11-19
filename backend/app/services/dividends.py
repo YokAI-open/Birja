@@ -12,6 +12,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.portfolio_lifecycle import (
+    LifecycleDisposition,
+    LifecycleEvidenceUnavailable,
+    lifecycle_effect_disposition,
+)
+
 DividendOutcome = Literal[
     "original", "applied", "held_uncertain", "held_unaffordable", "verified_no_change"
 ]
@@ -27,8 +33,9 @@ class DividendResult:
 class DividendRefused(ValueError):
     """Fixed operational code, never retained owner data or raw database text."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, disposition: LifecycleDisposition | None = None) -> None:
         self.code = code
+        self.disposition = disposition
         super().__init__("Dividend work is unavailable.")
 
 
@@ -59,18 +66,32 @@ async def _invoke(
             # cause and rechecks lifecycle after waits. Nothing reads business
             # state after its final validator; only transaction commit follows.
             identity_sql = (
-                "SELECT en.id FROM public.stock_dividend_entitlements en "
-                "JOIN public.accounts a ON (a.id,a.user_id)=(en.portfolio_id,en.user_id) "
-                "WHERE en.id=:entitlement_id AND a.id=:portfolio_id AND a.closed_at IS NULL"
+                "SELECT en.id,ac.closed_at,en.event_id FROM public.stock_dividend_entitlements en "
+                "JOIN public.accounts ac ON (ac.id,ac.user_id)=(en.portfolio_id,en.user_id) "
+                "WHERE en.id=:entitlement_id AND ac.id=:portfolio_id"
                 if cause == "entitlement"
-                else "SELECT p.id FROM public.stock_dividend_payments p "
-                "JOIN public.accounts a ON (a.id,a.user_id)=(p.portfolio_id,p.user_id) "
-                "WHERE p.id=:payment_id AND a.id=:portfolio_id AND a.closed_at IS NULL"
+                else "SELECT p.id,ac.closed_at,p.event_id FROM public.stock_dividend_payments p "
+                "JOIN public.accounts ac ON (ac.id,ac.user_id)=(p.portfolio_id,p.user_id) "
+                "WHERE p.id=:payment_id AND ac.id=:portfolio_id"
             )
-            if (
+            target = (
                 await db.execute(text(identity_sql), {**work, "portfolio_id": portfolio_id})
-            ).scalar_one_or_none() is None:
+            ).one_or_none()
+            if target is None:
                 raise DividendRefused("portfolio_unavailable")
+            if target.closed_at is not None:
+                try:
+                    disposition = await lifecycle_effect_disposition(
+                        db,
+                        portfolio_id=portfolio_id,
+                        event_id=target.event_id,
+                        revision_fingerprint=str(work["revision_fingerprint"]),
+                        entitlement_id=target.id if cause == "entitlement" else None,
+                        payment_id=target.id if cause == "payment" else None,
+                    )
+                except LifecycleEvidenceUnavailable:
+                    raise DividendRefused("authority_unavailable") from None
+                raise DividendRefused("portfolio_unavailable", disposition=disposition)
             row = (await db.execute(text(statement), work)).one()
             result = DividendResult(
                 row.payment_id, row.decision_id, cast(DividendOutcome, row.outcome)

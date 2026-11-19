@@ -49,7 +49,10 @@ async def strategy_events(strategy_books, engine):
         calendar = await actions._load_admission(db, "calendar")
         session = completed_entitlement_session(now, calendar, "NASDAQ")
         await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"),
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
             {"c": str(cid)},
         )
         for seq, (root, quantity) in enumerate(zip(roots, (2, 4), strict=True), 1):

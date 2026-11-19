@@ -140,6 +140,9 @@ async def run_dividend_cycle(
                                 )
                         accepted += 1
                     except DividendRefused:
+                        # A target may close after discovery. The service/SQL
+                        # rechecks it; retained lifecycle interpretation needs no
+                        # skip row and never appends to frozen financial History.
                         rejected += 1
         return CycleResult("ok", accepted, rejected)
     except Exception:
