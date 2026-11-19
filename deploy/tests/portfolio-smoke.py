@@ -82,6 +82,41 @@ def campaign_image_tag(tag, archive):
     return tag + "-" + namespace
 
 
+def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
+    """Recheck exact content IDs AND this private campaign's mutable aliases.
+
+    A missing alias/ID is refusal, never a reason to rebuild or retag an image.
+    The archived source builders still authenticate complete contexts before use.
+    """
+    sources = load("portfolio-sources")
+    sources.verify_archive_binding(archive, archive_sha)
+    if Path(archive).stat().st_uid != os.getuid() or Path(archive).stat().st_mode & 0o077:
+        raise ValueError("private campaign archive required")
+    directory = Path(archive).parent
+    if directory.is_symlink() or directory.stat().st_uid != os.getuid() or directory.stat().st_mode & 0o077:
+        raise ValueError("private campaign image directory required")
+    if inspect_image is None:
+        def inspect_image(ref):
+            return json.loads(subprocess.check_output(["docker", "image", "inspect", ref],
+                env={key: os.environ[key] for key in ("PATH", "HOME", "LANG") if key in os.environ}, timeout=30))
+    namespace = campaign_image_tag("", archive)
+    for record in directory.glob("*-image-binding.json"):
+        if record.is_symlink() or record.stat().st_uid != os.getuid() or record.stat().st_mode & 0o077:
+            raise ValueError("private campaign image record required")
+        binding = json.loads(record.read_text())
+        lane = record.name.removesuffix("-image-binding.json")
+        if lane in {"current0023", "current0020", "current0017", "retained0020-refusal", "retained0017-refusal"}:
+            prefix = "birja-portfolio-current:" if lane == "current0023" else "birja-portfolio-retained:"
+            alias = campaign_image_tag(prefix + binding["source_commit"][:12] + "-" + binding["context_sha256"][:20], archive)
+        elif lane in sources.FIXED_RELEASES:
+            alias = "birja-retained-portfolio:" + binding["source_commit"][:12] + "-" + archive_sha[:16] + namespace
+        else:
+            raise ValueError("unrecognized campaign image lane")
+        sources.verify_image(binding, inspect_image(binding["id"]))
+        sources.verify_image(binding, inspect_image(alias))
+    sources.verify_archive_binding(archive, archive_sha)
+
+
 def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=subprocess.run):
     """Build the actual declared runtime from one authenticated Git context.
 
@@ -416,16 +451,21 @@ def closure_role_program(code):
     return code.replace(marker, checks + "\n" + marker, 1)
 
 
-def fresh_authority_program(revision="0023", *, upgraded=False):
-    """Fresh current or populated0020→0023 TLS, preserving all original rows/tails."""
+def fresh_authority_program(revision="0023", *, upgraded=False, upgraded_from="0020"):
+    """Fresh current or genuine14/20→23 TLS, preserving old columns and tails."""
+    if upgraded_from not in {"0014", "0020"} or (not upgraded and upgraded_from != "0020"):
+        raise ValueError("explicit finite upgraded source required")
     if revision == "0020" and not upgraded:
         return management_fresh_authority_program()
     if revision != "0023":
         raise ValueError("unsupported fresh/upgraded authority family")
     producer = load("portfolio-closure-recovery-fixture").producer()
-    prelude = ("UPGRADED=" + repr(upgraded) + "\nOLD_TABLES="
-               + repr(sorted(producer.contract_columns("0020"))) + "\nOLD_IDENTITIES="
-               + repr(producer.identity_tables("0020")) + "\n")
+    old_columns = producer.contract_columns(upgraded_from)
+    current_columns = producer.contract_columns("0023")
+    extras = {table: sorted(current_columns[table] - columns) for table, columns in old_columns.items()}
+    prelude = ("UPGRADED=" + repr(upgraded) + "\nUPGRADED_FROM=" + repr(upgraded_from)
+               + "\nOLD_TABLES=" + repr(sorted(old_columns)) + "\nOLD_IDENTITIES="
+               + repr(producer.identity_tables(upgraded_from)) + "\nEXTRA_COLUMNS=" + repr(extras) + "\n")
     return prelude + r"""
 MODE='create'
 AUTHORITY_DIAGNOSTIC=True
@@ -439,7 +479,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
 from app.services.portfolio_closure import ClosureIntent,close_portfolio
 async def snapshot(conn):
- rows={table:(await conn.execute(text('SELECT to_jsonb(t)::text FROM public.'+table+' t ORDER BY to_jsonb(t)::text'))).scalars().all() for table in OLD_TABLES if table!='alembic_version'}
+ expression='to_jsonb(t)-CAST(:extra AS text[])'
+ rows={table:(await conn.execute(text('SELECT ('+expression+')::text FROM public.'+table+' t ORDER BY ('+expression+')::text'),{'extra':EXTRA_COLUMNS[table]})).scalars().all() for table in OLD_TABLES if table!='alembic_version'}
  tails={table:list((await conn.execute(text('SELECT last_value,is_called FROM public.'+table+'_id_seq'))).one()) for table in OLD_IDENTITIES}
  return rows,tails
 async def run():
@@ -450,20 +491,25 @@ async def run():
  scheduler=create_async_engine(url.set(username='birja_scheduler',password=os.environ['FIXTURE_SCHEDULER_PASSWORD']),connect_args=args)
  try:
   if UPGRADED:
-   await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),'0020')
-   from app.db.portfolio_bootstrap import PREFLIGHT_SQL,GRANTS_SQL
+   await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),UPGRADED_FROM)
    async with engine.begin() as conn:
-    raw=await conn.get_raw_connection()
-    await raw.driver_connection.execute(PREFLIGHT_SQL)
-    await raw.driver_connection.execute(GRANTS_SQL)
+    if UPGRADED_FROM=='0020':
+     from app.db.portfolio_bootstrap import PREFLIGHT_SQL,GRANTS_SQL
+     raw=await conn.get_raw_connection()
+     await raw.driver_connection.execute(PREFLIGHT_SQL)
+     await raw.driver_connection.execute(GRANTS_SQL)
     uid=(await conn.execute(text("INSERT INTO users(email) VALUES ('retained-before-upgrade@example.test') RETURNING id"))).scalar_one()
-    original=(await conn.execute(text('SELECT initialize_portfolio(:u)'),{'u':uid})).scalar_one()
-    await conn.execute(text('UPDATE accounts SET cash=123.45 WHERE id=:p'),{'p':original})
-    await conn.execute(text("INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) SELECT :p,:u,id,.001,12.34 FROM coins WHERE symbol='BTC'"),{'p':original,'u':uid})
+    if UPGRADED_FROM=='0014':
+     original=(await conn.execute(text('INSERT INTO accounts(user_id,cash,starting_cash) VALUES (:u,123.45,8765) RETURNING id'),{'u':uid})).scalar_one()
+     await conn.execute(text("INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) SELECT :u,id,.001,12.34 FROM coins WHERE symbol='BTC'"),{'u':uid})
+    else:
+     original=(await conn.execute(text('SELECT initialize_portfolio(:u)'),{'u':uid})).scalar_one()
+     await conn.execute(text('UPDATE accounts SET cash=123.45 WHERE id=:p'),{'p':original})
+     await conn.execute(text("INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) SELECT :p,:u,id,.001,12.34 FROM coins WHERE symbol='BTC'"),{'p':original,'u':uid})
    async with engine.connect() as conn:before=await snapshot(conn)
    from app.db.portfolio_migrate import require_migrator
    async with engine.connect() as conn:
-    assert await require_migrator(conn)=='0020'
+    assert await require_migrator(conn)==UPGRADED_FROM
   await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),'0023')
   from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL,GRANTS_0023_SQL
   async with engine.begin() as conn:
@@ -472,7 +518,12 @@ async def run():
    await raw.driver_connection.execute(GRANTS_0023_SQL)
    if UPGRADED:
     assert await snapshot(conn)==before
-    assert (await conn.execute(text('SELECT cash,starting_cash FROM accounts WHERE id=:p'),{'p':original})).one()==(Decimal('123.45'),Decimal('10000'))
+    assert (await conn.execute(text('SELECT cash,starting_cash FROM accounts WHERE id=:p'),{'p':original})).one()==(Decimal('123.45'),Decimal('8765') if UPGRADED_FROM=='0014' else Decimal('10000'))
+    if UPGRADED_FROM=='0014':
+     assert (await conn.execute(text('SELECT name,description,closed_at FROM accounts WHERE id=:p'),{'p':original})).one()==('My portfolio','',None)
+     assert (await conn.execute(text("SELECT origin FROM portfolio_initializations WHERE user_id=(SELECT user_id FROM accounts WHERE id=:p)"),{'p':original})).scalar_one()=='legacy'
+     assert (await conn.execute(text('SELECT count(*) FROM portfolio_creations WHERE portfolio_id=:p'),{'p':original})).scalar_one()==0
+     assert (await conn.execute(text('SELECT portfolio_id,user_id,quantity,cost_basis FROM holdings WHERE portfolio_id=:p'),{'p':original})).one()==(original,uid,Decimal('.001'),Decimal('12.34'))
    uid=(await conn.execute(text("INSERT INTO users(email) VALUES ('fresh-current@example.test') RETURNING id"))).scalar_one()
   key=uuid4()
   async with app.begin() as restricted:
@@ -485,9 +536,9 @@ async def run():
    assert (await close_portfolio(db,original_intent)).replayed
   async with engine.connect() as conn:
    assert (await conn.execute(text('SELECT count(*) FROM portfolio_closure_intents'))).scalar_one()==1
-   assert (await conn.execute(text('SELECT count(*) FROM portfolio_creations'))).scalar_one()==(2 if UPGRADED else 1)
+   assert (await conn.execute(text('SELECT count(*) FROM portfolio_creations'))).scalar_one()==(2 if UPGRADED and UPGRADED_FROM=='0020' else 1)
    assert (await conn.execute(text('SELECT cash,starting_cash FROM accounts WHERE id=:p'),{'p':created.portfolio_id})).one()==(Decimal('10000'),Decimal('10000'))
-   value={'revision':'0023','fresh':not UPGRADED,'upgraded':UPGRADED}
+   value={'revision':'0023','fresh':not UPGRADED,'upgraded':UPGRADED,'upgraded_from':UPGRADED_FROM if UPGRADED else None}
    print('portfolio_projection='+json.dumps(value))
    print('portfolio_verified_tls=true')
  finally:await app.dispose();await scheduler.dispose();await engine.dispose()
@@ -546,11 +597,13 @@ asyncio.run(run())
 
 
 def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bootstrap=False,
-        upgraded_bootstrap=False):
+        upgraded_bootstrap=False, upgraded_from="0020"):
     if fresh_bootstrap and (revision not in {"0020", "0023"} or cold or upgraded_bootstrap):
         raise ValueError("fresh authority requires an explicit supported non-cold lane")
     if upgraded_bootstrap and (revision != "0023" or cold):
         raise ValueError("upgraded authority requires current0023 non-cold lane")
+    if upgraded_from not in {"0014", "0020"} or (upgraded_from == "0014" and not upgraded_bootstrap):
+        raise ValueError("explicit finite upgraded source required")
     sources = load("portfolio-sources")
     fixture = selected_fixture(
         sources, revision, archive=archive, archive_sha=archive_sha
@@ -712,6 +765,8 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
             call(dc + ["up", "-d", "--wait"], timeout=120)
             setup = "REVOKE CREATE ON SCHEMA public FROM PUBLIC;\n"
             for role, password in passwords.items():
+                if upgraded_bootstrap and upgraded_from == "0014" and role in {"app", "scheduler"}:
+                    continue
                 setup += (
                     "CREATE ROLE birja_"
                     + role
@@ -751,6 +806,27 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                 "FIXTURE_APP_PASSWORD": passwords["app"],
                 "FIXTURE_SCHEDULER_PASSWORD": passwords["scheduler"],
             }
+
+            if upgraded_bootstrap and upgraded_from == "0014":
+                # Reproduce the genuine old dev role-creation order using only
+                # the explicit migrator. No current financial service runs14.
+                preparation = "from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0014')\nprint('legacy14_migration_prepared=true')\n"
+                argv = ["docker", "run", "--rm", "-i", "--network", client_network,
+                        "-v", str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro"]
+                for key, value in client_env.items():
+                    argv += ["-e", key + "=" + value]
+                argv += ["--entrypoint", "python", binding["id"], "-"]
+                sources.verify_image(binding, json.loads(call(["docker", "image", "inspect", binding["id"]])))
+                if archive is not None:
+                    sources.verify_archive_binding(archive, archive_sha)
+                if b"legacy14_migration_prepared=true" not in call(argv, data=preparation.encode()).splitlines():
+                    raise ValueError("legacy14 preparation refused")
+                setup = "".join("CREATE ROLE birja_" + role
+                    + " LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"
+                    + passwords[role] + "';\n" for role in ("app", "scheduler"))
+                setup += "GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler;\n"
+                call(dc + ["exec", "-T", "postgres", "psql", "-XqAt", "-v", "ON_ERROR_STOP=1",
+                           "-U", "birja_ops_bootstrap", "-d", "birja_source_test"], data=setup.encode())
 
             authorities = []
             def transport(code):
@@ -815,7 +891,8 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                 call(command, data=(prefix + (ROOT/'deploy/db/bootstrap-roles.sql').read_text()).encode())
 
             if fresh_bootstrap or upgraded_bootstrap:
-                transport(fresh_authority_program(revision, upgraded=upgraded_bootstrap))
+                transport(fresh_authority_program(revision, upgraded=upgraded_bootstrap,
+                                                  upgraded_from=upgraded_from))
                 if revision == '0023':
                     production_bootstrap()
                     transport(authority_probe_program())

@@ -71,6 +71,13 @@ bash deploy/tests/test-db-operations.sh --all
 bash deploy/tests/test-db-operations.sh --image-transition
 bash deploy/tests/test-rollback-db-security.sh
 
+# Whole local qualification: one detached supervisor per exclusive receipt path.
+# Status/resume inspect the original run; they never start it again.
+python3 deploy/tests/run-portfolio-campaign.py --suite all-security --receipt-dir /tmp/birja-phase14-campaign-security
+python3 deploy/tests/run-portfolio-campaign.py --status --receipt-dir /tmp/birja-phase14-campaign-security
+python3 deploy/tests/run-portfolio-campaign.py --suite recovery --receipt-dir /tmp/birja-phase14-campaign-recovery
+python3 deploy/tests/run-portfolio-campaign.py --resume --receipt-dir /tmp/birja-phase14-campaign-recovery
+
 # Production (on the server, as root). Details: deploy/RUNBOOK.md
 /srv/birja/deploy/deploy.sh                 # deploy main (DEPLOY_REF=<ref> for another ref)
 /srv/birja/deploy/deploy.sh --rollback      # back to the previous deploy

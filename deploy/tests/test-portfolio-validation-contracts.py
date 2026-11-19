@@ -4,6 +4,15 @@
 import importlib.util
 import json
 import unittest
+import hashlib
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,7 +36,7 @@ class CurrentCampaign(unittest.TestCase):
                     events.append(name)
                     if name == failed:
                         raise RuntimeError("stage failure")
-                    return "authority" if (name.startswith("tls-") or name == "current0023-cold") else None
+                    return ["a"*64,"b"*64,"c"*64] if (name.startswith("tls-") or name == "current0023-cold") else None
                 return execute
             operations = {name: operation(name) for name in runner.STAGES}
             if failed:
@@ -61,19 +70,54 @@ class CurrentCampaign(unittest.TestCase):
         self.assertTrue(modes[2]["cold"])
         self.assertTrue(modes[1]["cold"])
         self.assertTrue(modes[3]["upgraded_bootstrap"])
-        self.assertTrue(modes[4]["fresh_bootstrap"])
+        self.assertEqual(modes[3]["upgraded_from"], "0014")
+        self.assertTrue(modes[4]["upgraded_bootstrap"])
+        self.assertTrue(modes[5]["fresh_bootstrap"])
         for mode in modes:
             self.assertEqual(mode["archive"], runner.ARCHIVE)
             self.assertEqual(mode["archive_sha"], "a" * 64)
         self.assertEqual([mode["revision"] for mode in modes],
-                         ["0017", "0020", "0023", "0023", "0023"])
+                         ["0017", "0020", "0023", "0023", "0023", "0023"])
 
     def test_all_three_current_authority_results_must_match(self):
         for changed in ("current0023-cold", "tls-upgraded", "tls-fresh"):
-            operations = {name: (lambda name=name: "changed" if name == changed else "fixed")
+            operations = {name: (lambda name=name: ["f"*64]*3 if name == changed else ["a"*64,"b"*64,"c"*64])
                           for name in runner.STAGES}
             with self.assertRaisesRegex(ValueError, "authority differs"):
                 runner.execute_stages(operations, lambda: None)
+
+    def test_missing_or_malformed_authority_cannot_pass_by_equal_empty_results(self):
+        for value in (None, [], 'a'*64, ['a'*64]*2, ['x'*64]*3, [True,False,True]):
+            with self.assertRaisesRegex(ValueError, 'authority differs'):
+                runner.execute_stages({name:(lambda value=value:value) for name in runner.STAGES}, lambda:None)
+
+    def test_concurrent_status_reads_never_observe_a_partial_json_document(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-status-') as directory:
+            path=Path(directory)/'status.json'
+            runner.write_status(path,{'counter':0})
+            failures=[]
+            def writer():
+                try:
+                    for counter in range(40):
+                        runner.write_status(path,{'counter':counter,'padding':'x'*4096})
+                except Exception as exc:
+                    failures.append(exc)
+            thread=threading.Thread(target=writer)
+            thread.start()
+            try:
+                while thread.is_alive():
+                    self.assertIsInstance(json.loads(path.read_text())['counter'],int)
+            finally:
+                thread.join()
+            self.assertFalse(failures)
+            self.assertEqual(path.stat().st_mode & 0o077,0)
+            target=Path(directory)/'untouched'
+            target.write_text('original')
+            path.unlink()
+            path.symlink_to(target)
+            with self.assertRaisesRegex(ValueError,'symlink'):
+                runner.write_status(path,{'counter':999})
+            self.assertEqual(target.read_text(),'original')
 
     def test_preserved_archive_refuses_mutation_and_symlink(self):
         import hashlib
@@ -130,16 +174,268 @@ class CurrentCampaign(unittest.TestCase):
         self.assertNotIn(['bounded-probe'], calls)
         self.assertEqual(calls[-1], runner.STACK + ['down', '-v'])
 
+    def test_actual_file_hash_detects_in_command_source_edit_and_stops(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-') as directory:
+            root = Path(directory)
+            (root / 'input').write_text('original')
+            calls = []
+            def command(argv, **kwargs):
+                calls.append(argv)
+                if argv == ['bounded-probe']:
+                    (root / 'input').write_text('changed')
+                return SimpleNamespace(stdout=b'')
+            with patch.object(runner, 'ROOT', root), \
+                 patch.object(runner.subprocess, 'check_output', return_value=b'input\0'), \
+                 patch.object(runner, 'security_commands', return_value=[('.', ['bounded-probe']), ('.', ['never'])]):
+                with self.assertRaisesRegex(ValueError, 'source changed'):
+                    runner.execute_security(run=command)
+            self.assertNotIn(['never'], calls)
+            self.assertEqual(calls[-1], runner.STACK + ['down', '-v'])
+
     def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
         module = runner.load('test-dev-bootstrap')
         code = module.financial_program()
-        compile(code, '<dev0020>', 'exec')
-        self.assertIn("version_num FROM alembic_version\")=='0020'", code)
+        compile(code, '<dev0023>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0023'", code)
         self.assertIn("version_num='0018'", code)
-        self.assertIn("version_num='0020'", code)
+        self.assertIn("version_num='0023'", code)
         self.assertIn("D('124.45')", code)
         self.assertIn('7777', code)
         self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))
+        source = (ROOT / 'deploy/tests/test-dev-bootstrap.py').read_text()
+        self.assertIn('services[name]["volumes"] = "RESET"', source)
+
+    def test_preflight_uses_stripped_tools_and_exact_owned_fixture_tail(self):
+        from types import SimpleNamespace
+        calls = []
+        def command(argv, **kwargs):
+            calls.append((argv, kwargs))
+            value = b'v24.0.0' if argv[-1] == '--version' and 'node' in argv[0] else b'checked'
+            if argv[-1] == 'version':
+                value = b'restic 0.19.1 compiled with approved Go'
+            return SimpleNamespace(stdout=value, stderr=b'')
+        with patch.dict(os.environ, {'ALPACA_API_KEY':'private', 'DATABASE_URL':'production'}):
+            result = runner.preflight('all-security', run=command)
+        self.assertTrue(result['ok'])
+        self.assertIn('/usr/sbin', result['path'].split(os.pathsep))
+        self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
+        self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p14-16-preflight')
+        self.assertNotIn('ALPACA_API_KEY', calls[-1][1]['env'])
+        self.assertIn('@127.0.0.1:55432/birja_test', calls[-1][1]['env']['DATABASE_URL'])
+
+    def test_untracked_addition_rename_and_link_changes_are_real_source_drift(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-git-') as directory:
+            root=Path(directory)
+            env={**runner.environment(),'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null'}
+            subprocess.run(['git','init','-q',str(root)],env=env,check=True)
+            (root/'backend').mkdir()
+            (root/'.gitignore').write_text('*.env\n')
+            (root/'backend/tracked.py').write_text('original')
+            subprocess.run(['git','-C',str(root),'add','.gitignore','backend/tracked.py'],env=env,check=True)
+            (root/'backend/private.env').write_text('must-never-be-read')
+            with patch.object(runner,'ROOT',root):
+                first=runner.security_sources()
+                self.assertNotIn('backend/private.env',first)
+                (root/'backend/new.py').write_text('new-untracked')
+                second=runner.security_sources()
+                self.assertNotEqual(second,first)
+                self.assertIn('backend/new.py',second)
+                link=root/'backend/link.py'
+                link.symlink_to('tracked.py')
+                linked=runner.security_sources()
+                link.unlink()
+                link.symlink_to('new.py')
+                self.assertNotEqual(runner.security_sources(),linked)
+                link.unlink()
+                outside=root.parent/(root.name+'-outside')
+                outside.write_text('never-read-outside-source')
+                try:
+                    link.symlink_to(outside)
+                    with self.assertRaisesRegex(ValueError,'escapes'):
+                        runner.security_sources()
+                finally:
+                    link.unlink()
+                    outside.unlink()
+                (root/'backend/tracked.py').rename(root/'backend/renamed.py')
+                with self.assertRaisesRegex(ValueError,'disappeared'):
+                    runner.security_sources()
+
+
+campaign_spec = importlib.util.spec_from_file_location(
+    'durable_campaign', ROOT / 'deploy/tests/run-portfolio-campaign.py')
+campaign = importlib.util.module_from_spec(campaign_spec)
+campaign_spec.loader.exec_module(campaign)
+
+
+class DurableCampaign(unittest.TestCase):
+    def fixture(self):
+        directory = tempfile.TemporaryDirectory(prefix='birja-backup-test-durable-')
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        (root / 'input').write_text('original')
+        (root / 'deploy/tests').mkdir(parents=True)
+        (root / 'deploy/tests/run-portfolio-campaign.py').write_text('bounded-test-source')
+        class FixtureRunner:
+            ARCHIVE = root / 'recovery.tar'
+            @staticmethod
+            def security_sources():
+                return {'input': hashlib.sha256((root / 'input').read_bytes()).hexdigest()}
+            @staticmethod
+            def preserved_archive():
+                return None
+            @staticmethod
+            def environment():
+                return {'PATH':'/usr/sbin:/usr/bin:/bin'}
+            @staticmethod
+            def preflight(suite):
+                return {'ok':True, 'suite':suite}
+            load = staticmethod(runner.load)
+        fixture = FixtureRunner()
+        self.enterContext(patch.object(campaign, 'ROOT', root))
+        self.enterContext(patch.object(campaign, 'validation', return_value=fixture))
+        request = {'format':1, 'run_id':'bounded-original', 'suite':'all-security',
+                   'source_sha256':campaign.source_snapshot(fixture),
+                   'preserved_archive_sha256':None}
+        campaign.write_json(root / 'request.json', request)
+        (root / 'request.json').chmod(0o400)
+        return root, fixture, request
+
+    def test_actual_child_has_durable_log_exit_and_status_does_not_restart(self):
+        root, fixture, request = self.fixture()
+        self.assertEqual(campaign.worker(root, runner=fixture,
+            command=[sys.executable,'-c',"print('bounded-command-complete')"]), 0)
+        state = campaign.read_json(root / 'status.json')
+        self.assertEqual(state['state'], 'passed')
+        self.assertEqual(state['exit_code'], 0)
+        self.assertGreater(state['child_start_ticks'], 0)
+        self.assertIn('bounded-command-complete', (root / 'command.log').read_text())
+        with patch.object(campaign.subprocess, 'Popen', side_effect=AssertionError('replacement')):
+            self.assertEqual(campaign.inspect_status(root)['run_id'], request['run_id'])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(campaign.main(['--resume','--receipt-dir',str(root)]), 0)
+            self.assertEqual(json.loads(output.getvalue())['run_id'], request['run_id'])
+
+    def test_private_path_mode_and_symlink_are_not_accepted(self):
+        root, fixture, request = self.fixture()
+        root.chmod(0o755)
+        with self.assertRaisesRegex(ValueError, 'mode'):
+            campaign.private_directory(root)
+        root.chmod(0o700)
+        link = root.with_name(root.name + '-link')
+        link.symlink_to(root, target_is_directory=True)
+        try:
+            with self.assertRaises(ValueError):
+                campaign.private_directory(link)
+        finally:
+            link.unlink()
+        request_path = root / 'request.json'
+        request_path.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, 'mode'):
+            campaign.inspect_status(root)
+
+    def test_failed_original_exit_is_retained_and_resume_cannot_replace_it(self):
+        root, fixture, request = self.fixture()
+        self.assertEqual(campaign.worker(root, runner=fixture,
+            command=[sys.executable,'-c','raise SystemExit(7)']), 1)
+        state = campaign.inspect_status(root)
+        self.assertEqual(state['state'], 'failed')
+        self.assertEqual(state['exit_code'], 7)
+        with patch.object(campaign.subprocess, 'Popen', side_effect=AssertionError('replacement')):
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(campaign.main(['--resume','--receipt-dir',str(root)]), 1)
+
+    def test_source_change_during_child_stops_reaps_and_retains_refusal(self):
+        root, fixture, request = self.fixture()
+        timer = threading.Timer(0.4, lambda: (root / 'input').write_text('changed'))
+        timer.start()
+        try:
+            self.assertEqual(campaign.worker(root, runner=fixture,
+                command=[sys.executable,'-u','-c',
+                         "import time\ntry: time.sleep(20)\nfinally: print('drift-child-finally')"]), 1)
+        finally:
+            timer.cancel()
+            timer.join()
+        state = campaign.read_json(root / 'status.json')
+        self.assertEqual(state['state'], 'refused')
+        self.assertIsNone(campaign.process_identity(state['child_pid']))
+        self.assertIn('drift-child-finally', (root / 'command.log').read_text())
+
+    def test_reused_pid_and_existing_receipt_cannot_be_resumed_by_launching(self):
+        root, fixture, request = self.fixture()
+        state = {'format':1, 'suite':'all-security', 'run_id':request['run_id'], 'state':'running', 'pid':os.getpid(),
+                 'start_ticks':campaign.process_identity(os.getpid()) + 1, 'artifacts':None}
+        campaign.write_json(root / 'status.json', state)
+        with self.assertRaisesRegex(ValueError, 'PID reused'):
+            campaign.inspect_status(root)
+        with self.assertRaises(FileExistsError):
+            campaign.start('all-security', root)
+
+    def test_terminal_receipt_cannot_claim_pass_with_a_failed_exit(self):
+        root, fixture, request = self.fixture()
+        campaign.write_json(root/'status.json',{'format':1,'suite':'all-security',
+            'run_id':request['run_id'],'state':'passed','exit_code':7})
+        with self.assertRaisesRegex(ValueError,'outcome mismatch'):
+            campaign.inspect_status(root)
+
+    def test_source_change_during_preflight_refuses_before_child(self):
+        root, fixture, request = self.fixture()
+        def changed(suite):
+            (root / 'input').write_text('changed')
+            return {'ok':True}
+        with patch.object(fixture, 'preflight', side_effect=changed), \
+             patch.object(campaign.subprocess, 'Popen', side_effect=AssertionError('child')):
+            self.assertEqual(campaign.worker(root, runner=fixture), 1)
+        state = campaign.read_json(root / 'status.json')
+        self.assertEqual(state['state'], 'refused')
+        self.assertEqual(state['cleanup'], 'long-command-not-started')
+
+    def test_interrupt_reaps_original_child_and_preserves_interrupted_receipt(self):
+        root, fixture, request = self.fixture()
+        timer = threading.Timer(0.4, lambda: os.kill(os.getpid(), signal.SIGTERM))
+        timer.start()
+        try:
+            result = campaign.worker(root, runner=fixture, command=[sys.executable, '-u', '-c',
+                "import time\ntry: time.sleep(20)\nfinally: print('original-child-finally')"])
+        finally:
+            timer.cancel()
+            timer.join()
+        self.assertEqual(result, 1)
+        state = campaign.read_json(root / 'status.json')
+        self.assertEqual(state['state'], 'interrupted')
+        self.assertIsNone(campaign.process_identity(state['child_pid']))
+        self.assertIn('original-child-finally', (root / 'command.log').read_text())
+
+    def test_archive_image_records_missing_or_mutated_are_never_rebuilt(self):
+        root, fixture, request = self.fixture()
+        archive = fixture.ARCHIVE
+        archive.write_bytes(b'qualified-archive')
+        archive.chmod(0o600)
+        campaign.write_json(root / 'status.json', {'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest()})
+        sources = fixture.load('portfolio-sources')
+        image = [{'Id':'sha256:'+'a'*64, 'Config':{'Labels':{'org.opencontainers.image.revision':'b'*40}},
+                  'RootFS':{'Type':'layers','Layers':['sha256:'+'c'*64]}}]
+        binding = sources.image_binding(image, source_commit='b'*40, app_tree='d'*40, context_sha256='e'*64)
+        record = root / 'current0023-image-binding.json'
+        campaign.write_json(record, binding)
+        with patch.object(campaign.subprocess, 'check_output', return_value=json.dumps(image).encode()):
+            before = campaign.artifact_snapshot(fixture, None)
+            record.unlink()
+            with self.assertRaisesRegex(ValueError, 'disappeared'):
+                campaign.artifact_snapshot(fixture, before)
+            campaign.write_json(record, binding)
+            archive.write_bytes(b'substituted')
+            with self.assertRaisesRegex(ValueError, 'archive'):
+                campaign.artifact_snapshot(fixture, before)
+        archive.write_bytes(b'qualified-archive')
+        changed = [{**image[0], 'Id':'sha256:'+'f'*64}]
+        with patch.object(campaign.subprocess, 'check_output', return_value=json.dumps(changed).encode()):
+            with self.assertRaisesRegex(ValueError, 'identity|mismatch'):
+                campaign.artifact_snapshot(fixture, before)
+        with patch.object(campaign.subprocess, 'check_output', side_effect=subprocess.CalledProcessError(1, ['docker'])):
+            with self.assertRaises(subprocess.CalledProcessError):
+                campaign.artifact_snapshot(fixture, before)
 
 
 if __name__ == "__main__":

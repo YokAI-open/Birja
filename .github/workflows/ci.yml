@@ -312,6 +312,11 @@ jobs:
           PY
       - name: Ordinary dev financial authority on fresh and upgraded schemas
         run: python3 deploy/tests/test-dev-bootstrap.py --image birja-backend-test:phase05-07
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Bounded current-source recovery preflight
+        run: python3 deploy/tests/run-portfolio-validation.py --suite recovery --preflight
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
         run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery
       - name: Clean fixed synthetic projects

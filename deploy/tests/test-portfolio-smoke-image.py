@@ -33,6 +33,38 @@ DOCKERFILE = b"FROM approved-pinned-base AS runtime\nCOPY app /app/app\nUSER app
 
 
 class FreshAuthority(unittest.TestCase):
+    def test_campaign_alias_and_id_both_bind_exact_image_without_rebuild(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-alias-') as temporary:
+            root = Path(temporary)
+            archive = root / 'recovery.tar'
+            archive.write_bytes(b'qualified')
+            archive.chmod(0o600)
+            sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+            image = [{'Id':IMAGE, 'Config':{'Labels':{'org.opencontainers.image.revision':COMMIT}},
+                      'RootFS':{'Type':'layers','Layers':['sha256:'+'d'*64]}}]
+            binding = sources_module.image_binding(image, source_commit=COMMIT,
+                app_tree=APP_TREE, context_sha256='e'*64)
+            record = root / 'current0023-image-binding.json'
+            record.write_text(json.dumps(binding))
+            record.chmod(0o400)
+            alias = smoke.campaign_image_tag('birja-portfolio-current:'+COMMIT[:12]+'-'+'e'*20, archive)
+            calls = []
+            def inspect(ref):
+                calls.append(ref)
+                return image
+            smoke.authenticate_campaign_images(archive, sha, inspect_image=inspect)
+            self.assertEqual(calls, [IMAGE, alias])
+            def substituted(ref):
+                return image if ref == IMAGE else [{**image[0], 'Id':'sha256:'+'f'*64}]
+            with self.assertRaisesRegex(ValueError, 'mismatch'):
+                smoke.authenticate_campaign_images(archive, sha, inspect_image=substituted)
+            def missing(ref):
+                if ref == alias:
+                    raise subprocess.CalledProcessError(1, ['docker','image','inspect'])
+                return image
+            with self.assertRaises(subprocess.CalledProcessError):
+                smoke.authenticate_campaign_images(archive, sha, inspect_image=missing)
+
     def test_retained_writer_uses_its_own_consumer_and_refuses_current_before_writes(self):
         code = smoke.retained_writer_refusal_program()
         compile(code, '<retained-writer>', 'exec')
@@ -70,7 +102,7 @@ class FreshAuthority(unittest.TestCase):
         self.assertIn('UPGRADED=True', code)
         self.assertIn('assert await snapshot(conn)==before', code)
         self.assertLess(
-            code.index("assert await require_migrator(conn)=='0020'"),
+            code.index("assert await require_migrator(conn)==UPGRADED_FROM"),
             code.index("command.upgrade,Config('/app/alembic.ini'),'0023'"),
         )
         self.assertIn('last_value,is_called', code)
@@ -78,6 +110,31 @@ class FreshAuthority(unittest.TestCase):
         retained = smoke.fresh_authority_program('0020')
         self.assertIn("command.upgrade,Config('/app/alembic.ini'),'0020'", retained)
         self.assertNotIn('0023', retained)
+
+    def test_legacy14_oracle_retains_every_old_financial_column_and_tail(self):
+        code = smoke.fresh_authority_program(upgraded=True, upgraded_from='0014')
+        compile(code, '<legacy14-to23>', 'exec')
+        values = {node.targets[0].id:ast.literal_eval(node.value) for node in ast.parse(code).body
+                  if isinstance(node,ast.Assign) and isinstance(node.targets[0],ast.Name)
+                  and node.targets[0].id in {'OLD_TABLES','OLD_IDENTITIES','EXTRA_COLUMNS','UPGRADED_FROM'}}
+        producer = smoke.load('portfolio-closure-recovery-fixture').producer()
+        old = producer.contract_columns('0014')
+        current = producer.contract_columns('0023')
+        self.assertEqual(values['OLD_TABLES'],sorted(old))
+        self.assertEqual(values['OLD_IDENTITIES'],producer.identity_tables('0014'))
+        for table, columns in old.items():
+            extras = set(values['EXTRA_COLUMNS'][table])
+            self.assertFalse(extras & columns)
+            self.assertEqual(columns | extras,current[table])
+        self.assertIn("==before",code)
+        self.assertIn("=='legacy'",code)
+        self.assertIn("portfolio_creations WHERE portfolio_id=:p",code)
+        self.assertIn("Decimal('8765')",code)
+        self.assertIn("Decimal('.001'),Decimal('12.34')",code)
+        for kwargs in ({'upgraded':False,'upgraded_from':'0014'},
+                       {'upgraded':True,'upgraded_from':'0017'}):
+            with self.assertRaises(ValueError):
+                smoke.fresh_authority_program(**kwargs)
 
     def test_selected_fresh_refuses_retained_before_build(self):
         with mock.patch.object(smoke, 'build_selected_runtime', side_effect=AssertionError('build')):

@@ -901,7 +901,12 @@ class PortfolioValidation(unittest.TestCase):
                 expected[failed] = commands[-1][1].copy()
                 for flag in ("--runtime", "--builder", "--node"):
                     expected[failed][expected[failed].index(flag) + 1] = "sha256:" + "a" * 64
-            with self.assertRaises(subprocess.CalledProcessError):
+            # This finite command-failure matrix tests orchestration, not a
+            # repeated multi-megabyte filesystem hash for every mocked command.
+            # Real source mutation is checked independently below and in the
+            # validation contracts; production source guards stay unchanged.
+            with patch.object(runner, "security_sources", return_value={"fixed": "a"}), \
+                 self.assertRaises(subprocess.CalledProcessError):
                 runner.execute_security(run=run)
             self.assertEqual(calls[-1], runner.STACK + ["down", "-v"])
         calls = []
@@ -921,7 +926,7 @@ class PortfolioValidation(unittest.TestCase):
                     events.append(name)
                     if name == failed:
                         raise RuntimeError(name)
-                    return "fixed-authority" if (name.startswith("tls-") or name == "current0023-cold") else None
+                    return ["a"*64,"b"*64,"c"*64] if (name.startswith("tls-") or name == "current0023-cold") else None
                 return call
             def guard():
                 events.append("authenticate")
@@ -965,8 +970,8 @@ class PortfolioValidation(unittest.TestCase):
             inspect = [{"Id": "sha256:" + "a" * 64, "Config": {"Labels": {"org.opencontainers.image.revision": "b" * 40}},
                         "RootFS": {"Type": "layers", "Layers": ["sha256:" + "c" * 64]}}]
             binding = sources.image_binding(inspect, source_commit="b" * 40, app_tree="d" * 40, context_sha256="e" * 64)
-            (root / "current-image-binding.json").write_text(json.dumps(binding))
-            (root / "current-image-binding.json").chmod(0o400)
+            (root / "current0023-image-binding.json").write_text(json.dumps(binding))
+            (root / "current0023-image-binding.json").chmod(0o400)
             for mutation in (None, "outer", "source", "packaged", "retained", "inventory", "image"):
                 (root / "current.py").write_bytes(b"current-app")
                 content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
@@ -977,6 +982,7 @@ class PortfolioValidation(unittest.TestCase):
                         info = tarfile.TarInfo(name)
                         info.size = len(data)
                         tar.addfile(info, io.BytesIO(data))
+                archive.chmod(0o600)
                 expected = r.digest(archive)
                 source = {"current.py": r.digest(root / "current.py")}
                 if mutation == "outer":
@@ -995,7 +1001,7 @@ class PortfolioValidation(unittest.TestCase):
                     else:
                         known = {}
                         runner.authenticate(ops, archive, expected, source, known)
-                        record = root / "current-image-binding.json"
+                        record = root / "current0023-image-binding.json"
                         original = record.read_bytes()
                         record.chmod(0o600)
                         record.write_text(json.dumps({**binding, "context_sha256": "f" * 64}))
