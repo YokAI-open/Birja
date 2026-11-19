@@ -386,7 +386,7 @@ CATALOGUE_0023_SQL = CATALOGUE_SQL.replace(
   WHERE c.relnamespace='public'::regnamespace AND c.relkind NOT IN ('r','S','i','I')
 ) catalogue""",
 )
-CATALOGUE_0023_SHA256 = "3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec"
+CATALOGUE_0023_SHA256 = "59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e"
 ACL_0023_INITIAL_SHA256 = "6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76"
 ACL_0023_SHA256 = "71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748"
 # A trusted no-ACL restore explicitly revokes every non-owner privilege before

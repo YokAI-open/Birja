@@ -97,9 +97,9 @@ closure_source_supported() {
     actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
     [ "$actual" = "$expected" ] || return 1
   done <<'CLOSURE_PINS'
-backend/alembic/versions/0023_portfolio_closure_authority.py 53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52
-backend/alembic/sql/0023_portfolio_closure.sql 1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949
-backend/app/db/portfolio_bootstrap.py 5a5039030974ad83061462d21e34a94aa3577dc30a7e44fc1d9a9aa4679d2173
+backend/alembic/versions/0023_portfolio_closure_authority.py d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5
+backend/alembic/sql/0023_portfolio_closure.sql 59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920
+backend/app/db/portfolio_bootstrap.py ef9badb168626dee827ee9ee4c9fcfce72a6961c4f15e79746007a171e883791
 backend/app/db/schema_contract.py c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542
 CLOSURE_PINS
 }

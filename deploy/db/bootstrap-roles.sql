@@ -393,7 +393,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
   pg_get_userbyid(c.relowner)) FROM pg_class c
   WHERE c.relnamespace='public'::regnamespace AND c.relkind NOT IN ('r','S','i','I')
 ) catalogue
-) IS DISTINCT FROM '3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec'
+) IS DISTINCT FROM '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
  THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
  IF EXISTS(SELECT FROM pg_proc p,
   LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x

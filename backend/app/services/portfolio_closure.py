@@ -79,7 +79,7 @@ async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureR
     if (
         not isinstance(original, ClosureIntent)
         or any(
-            type(v) is not int or not 0 < v <= 9007199254740991
+            type(v) is not int or not 0 < v <= 9223372036854775807
             for v in (original.user_id, original.portfolio_id)
         )
         or not isinstance(original.intent_key, UUID)

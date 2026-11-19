@@ -24,10 +24,10 @@ SOURCE = {
         "0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb"
     ),
     "alembic/versions/0023_portfolio_closure_authority.py": (
-        "53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52"
+        "d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5"
     ),
     "alembic/sql/0023_portfolio_closure.sql": (
-        "1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949"
+        "59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920"
     ),
     "alembic/versions/0018_portfolio_management_expansion.py": (
         "8e63586555c85b6f6495d0da1bad4b8a455e5de71249a0f08e2c758e4b22b0b0"

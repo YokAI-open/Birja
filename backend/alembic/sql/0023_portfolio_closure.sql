@@ -19,8 +19,8 @@ DECLARE
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN
    RAISE EXCEPTION 'read_committed_required' USING ERRCODE='22023'; END IF;
- IF p_user IS NULL OR p_user<=0 OR p_user>9007199254740991
-   OR p_portfolio IS NULL OR p_portfolio<=0 OR p_portfolio>9007199254740991
+ IF p_user IS NULL OR p_user<=0
+   OR p_portfolio IS NULL OR p_portfolio<=0
    OR p_key IS NULL
    OR p_key::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
    OR p_policy IS DISTINCT FROM 'freeze_at_closure_v1'

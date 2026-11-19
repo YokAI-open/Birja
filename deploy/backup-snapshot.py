@@ -1041,26 +1041,26 @@ def validate_management_manifest(manifest, *, quarantined=False):
 # Separately versioned successor. These pins authenticate reviewed authority
 # BEFORE importing executable source; V1/V2 literals above are not reinterpreted.
 CLOSURE_SOURCE_SHA256 = {
-    'backend/app/db/portfolio_bootstrap.py': '5a5039030974ad83061462d21e34a94aa3577dc30a7e44fc1d9a9aa4679d2173',
+    'backend/app/db/portfolio_bootstrap.py': 'ef9badb168626dee827ee9ee4c9fcfce72a6961c4f15e79746007a171e883791',
     'backend/app/db/schema_contract.py': 'c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542',
     'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
     'backend/app/models/__init__.py': '6856ecbbdfe51305caf3ab0fa1061b08d9f105a6eb73beb4240510508232ae9d',
     'backend/app/models/corporate_action.py': 'ec268ad87ef8b1df2509da3513932c50a6b9f007786298694f97377a23eb8077',
-    'backend/app/services/portfolio_closure.py': '6ee71f9f1521c183ad02ca9ab7071fa9388d84dc3f189b9ab8242be3effd2db1',
+    'backend/app/services/portfolio_closure.py': 'f4875839baaf1379d392c285e7c20d85bd71d6c6cb12521ecefd9bda7b6abedd',
     'backend/app/services/stock_ownership.py': 'fe4a317f806998a4804abcf0dbb53e5bd891227440abaa834f8a91b391ad052d',
     'backend/app/services/corporate_actions.py': 'da69ac8e46daf54bb6751bd414248402931b4693b51ec2594ecc8a1aa2a95e2e',
     'backend/alembic/versions/0021_portfolio_closure_schema.py': '737446365d1304dc3721ced552102cde4d386b07031823eaf33967961732c81c',
     'backend/alembic/versions/0022_portfolio_closure_provenance.py': '0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb',
-    'backend/alembic/versions/0023_portfolio_closure_authority.py': '53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52',
-    'backend/alembic/sql/0023_portfolio_closure.sql': '1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949',
-    'deploy/db/bootstrap-roles.sql': 'e9441fb7d98c7143dbdfea71419abd9e43f1d8aac7dab3d9ff734d4c1730f41a',
+    'backend/alembic/versions/0023_portfolio_closure_authority.py': 'd62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5',
+    'backend/alembic/sql/0023_portfolio_closure.sql': '59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920',
+    'deploy/db/bootstrap-roles.sql': 'acbe0cfc7b26c4c5ef013e57b634d6d368a4bd0af0a477f0e94fd2def12976a7',
     'deploy/tests/portfolio-closure-recovery-fixture.py': '2f38dc99970fa40563b66d4d985398d7abc4480c3e9c21c525c32923191391ab',
     'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
 }
-CLOSURE_CATALOGUE_SHA256 = '3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec'
+CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
-CLOSURE_AUTHORITY_SHA256 = '0d9a2bfef268be0f226e02e7f1329961259fcabe015218cdb6a8149df60195b9'
-CLOSURE_QUARANTINE_AUTHORITY_SHA256 = 'dac8876fadcf8f8ee73af4ed41fbeb047882a6b8cb2674566edb09be00680a2f'
+CLOSURE_AUTHORITY_SHA256 = '62e3776654a98a62bf605355e209884b32ff1247fec463d6b923f48a76f42492'
+CLOSURE_QUARANTINE_AUTHORITY_SHA256 = '19c82c874e5f6362500ca4b37df367795ffc6db3cc617502b59bd20057dee399'
 CLOSURE_ACL_SHA256 = '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748'
 CLOSURE_EMPTY_ACL_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
 

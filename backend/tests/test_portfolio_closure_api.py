@@ -125,16 +125,23 @@ async def test_confirmation_actual_delete_and_repeat_are_minimal_private(closure
         ).one() == (10000, 10000)
 
 
-@pytest.mark.parametrize("large_owner", [False, True])
-async def test_postgres_bigint_string_identity_can_close_without_rounding(closure_api, large_owner):
+@pytest.mark.parametrize(
+    "first,large_owner",
+    [(9007199254740993, False), (9007199254740993, True), (9223372036854775807, False)],
+)
+async def test_postgres_bigint_string_identity_can_close_without_rounding(
+    closure_api, first, large_owner
+):
     api = closure_api
-    first = 9007199254740993
     async with api.migrator.begin() as conn:
-        await conn.execute(text("ALTER SEQUENCE accounts_id_seq RESTART WITH 9007199254740993"))
+        await conn.execute(text("SELECT setval('accounts_id_seq',:n,false)"), {"n": first})
         if large_owner:
             uid = (
                 await conn.execute(
-                    text("INSERT INTO users(id,email) OVERRIDING SYSTEM VALUE VALUES (:u,:e) RETURNING id"),
+                    text(
+                        "INSERT INTO users(id,email) OVERRIDING SYSTEM VALUE "
+                        "VALUES (:u,:e) RETURNING id"
+                    ),
                     {"u": first + 2, "e": f"bigint-{uuid4().hex}@example.com"},
                 )
             ).scalar_one()

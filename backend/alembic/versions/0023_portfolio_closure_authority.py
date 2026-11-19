@@ -16,7 +16,7 @@ revision: str = "0023"
 down_revision: str | Sequence[str] | None = "0022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-SQL_SHA256 = "1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949"
+SQL_SHA256 = "59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920"
 
 
 def upgrade() -> None:
