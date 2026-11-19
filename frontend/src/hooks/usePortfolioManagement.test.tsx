@@ -8,6 +8,7 @@ import { usePortfolioManagement } from "./usePortfolioManagement";
 import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreationAttempt";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 import { usePortfolioTarget } from "./usePortfolioTarget";
+import { usePortfolioDeletion } from "./usePortfolioDeletion";
 
 const clients: QueryClient[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -603,3 +604,29 @@ it.each([
     expect(server).toEqual({ id: "2", name: "Draft", description: "" });
   },
 );
+
+it("refuses captured metadata edits and saves while the same original deletion is unknown", async () => {
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "DELETE") return Promise.reject(new TypeError("lost response"));
+    return Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Draft" } : receipt));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  act(() => management.result.current.editMetadata({ name: "Draft" }));
+  const staleEdit = management.result.current.editMetadata;
+  const staleSave = management.result.current.saveMetadata;
+  act(() => deletion.result.current.reviewDeletion(management.result.current.metadata!));
+  await act(async () => deletion.result.current.confirmDeletion());
+  expect(deletion.result.current.deletion.phase).toBe("unknown");
+  act(() => staleEdit({ description: "Should not be edited" }));
+  await act(async () => staleSave());
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  expect(management.result.current.draft).toEqual({ name: "Draft" });
+  expect(deletion.result.current.deletion.phase).toBe("unknown");
+});
