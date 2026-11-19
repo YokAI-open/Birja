@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import secrets
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -42,6 +43,30 @@ async def authority(engine):
         await asyncio.to_thread(run_test_migration, "0020")
 
 
+@pytest_asyncio.fixture
+async def stock_authority(authority):
+    from tests.portfolio_closure_fixtures import seed_retained_books
+
+    app, migrator, admin = authority
+    await reset_disposable_schema(admin)
+    await asyncio.to_thread(run_test_migration, "0020")
+    async with migrator.begin() as conn:
+        books = await seed_retained_books(conn, root)
+        # Declared privileged HISTORICAL fixture: make the retained fixture's
+        # sold-out/multi-stock book active before the new lifecycle schema.
+        for table in ("accounts", "portfolio_stock_closures"):
+            await conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))  # noqa: S608
+        portfolio = books["roots"][0][1]
+        await conn.execute(
+            text("DELETE FROM portfolio_stock_closures WHERE portfolio_id=:p"), {"p": portfolio}
+        )
+        await conn.execute(text("UPDATE accounts SET closed_at=NULL WHERE id=:p"), {"p": portfolio})
+        for table in ("accounts", "portfolio_stock_closures"):
+            await conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))  # noqa: S608
+    await asyncio.to_thread(run_test_migration, "0023")
+    return app, migrator, admin, books
+
+
 def intent(owner, portfolio, name="Strategy", key=None):
     return {"u": owner, "p": portfolio, "k": key or uuid4(), "n": name, "policy": POLICY}
 
@@ -63,20 +88,29 @@ async def test_named_closure_is_atomic_immutable_and_preserves_finances(authorit
     app, migrator, _ = authority
     async with migrator.begin() as conn:
         owner, portfolio = await root(conn)
-        before = (await conn.execute(text("SELECT cash,starting_cash FROM accounts WHERE id=:p"),
-                                     {"p": portfolio})).one()
+        before = (
+            await conn.execute(
+                text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": portfolio}
+            )
+        ).one()
     result = await call(app, intent(owner, portfolio))
     assert tuple(result) == (portfolio, "closed", False)
     async with migrator.connect() as conn:
-        after = (await conn.execute(text("SELECT cash,starting_cash FROM accounts WHERE id=:p"),
-                                    {"p": portfolio})).one()
+        after = (
+            await conn.execute(
+                text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": portfolio}
+            )
+        ).one()
         assert before == after
-        assert (await conn.execute(text("""SELECT a.closed_at=c.closed_at,
+        assert (
+            await conn.execute(
+                text("""SELECT a.closed_at=c.closed_at,
             c.provenance,c.confirmation_name,c.closed_at=i.recorded_at,i.outcome
             FROM accounts a JOIN portfolio_lifecycle_closures c ON c.portfolio_id=a.id
             JOIN portfolio_closure_intents i ON i.id=c.intent_id WHERE a.id=:p"""),
-                                   {"p": portfolio})).one() == (
-                                       True, "owner_confirmation", "Strategy", True, "closed")
+                {"p": portfolio},
+            )
+        ).one() == (True, "owner_confirmation", "Strategy", True, "closed")
         for table in ("trades", "stock_dividend_payments", "stock_ownership_movements"):
             assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0  # noqa: S608
 
@@ -88,15 +122,23 @@ async def test_replay_original_never_retargets_reused_name(authority):
     payload = intent(owner, portfolio)
     await call(app, payload)
     async with app.begin() as conn:
-        replacement = (await conn.execute(text(
-            "SELECT portfolio_id FROM create_portfolio(:u,:k,'Strategy','')"),
-            {"u": owner, "k": uuid4()})).scalar_one()
+        replacement = (
+            await conn.execute(
+                text("SELECT portfolio_id FROM create_portfolio(:u,:k,'Strategy','')"),
+                {"u": owner, "k": uuid4()},
+            )
+        ).scalar_one()
     assert tuple(await call(app, payload)) == (portfolio, "closed", True)
     await reject(app, {**payload, "p": replacement}, "23505", "closure_intent_conflict")
     async with migrator.connect() as conn:
-        assert (await conn.execute(text("SELECT closed_at,cash FROM accounts WHERE id=:p"),
-                                   {"p": replacement})).one() == (None, 10000)
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))).scalar_one() == 1
+        assert (
+            await conn.execute(
+                text("SELECT closed_at,cash FROM accounts WHERE id=:p"), {"p": replacement}
+            )
+        ).one() == (None, 10000)
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
 
 
 async def test_replay_key_body_and_foreign_input_refusals(authority):
@@ -121,8 +163,9 @@ async def test_rollback_leaves_no_boundary_or_outcome(authority):
         await conn.execute(text(CLOSE), intent(owner, portfolio))
         await conn.rollback()
     async with migrator.connect() as conn:
-        assert (await conn.execute(text("SELECT closed_at FROM accounts WHERE id=:p"),
-                                   {"p": portfolio})).scalar_one() is None
+        assert (
+            await conn.execute(text("SELECT closed_at FROM accounts WHERE id=:p"), {"p": portfolio})
+        ).scalar_one() is None
         for table in ("portfolio_closure_intents", "portfolio_lifecycle_closures"):
             assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0  # noqa: S608
 
@@ -133,14 +176,22 @@ async def test_named_only_exact_app_signature_has_authority(authority):
         owner, portfolio = await root(conn)
     async with admin.begin() as conn:
         for role in ("birja_app", "birja_scheduler"):
-            assert (await conn.execute(text("SELECT has_function_privilege(:r,"
-                "'public.close_portfolio(bigint,bigint,uuid,text,text)','EXECUTE')"),
-                {"r": role})).scalar_one() is (role == "birja_app")
+            assert (
+                await conn.execute(
+                    text(
+                        "SELECT has_function_privilege(:r,"
+                        "'public.close_portfolio(bigint,bigint,uuid,text,text)','EXECUTE')"
+                    ),
+                    {"r": role},
+                )
+            ).scalar_one() is (role == "birja_app")
             await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608
             with pytest.raises(DBAPIError) as error:
                 async with conn.begin_nested():
-                    await conn.execute(text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
-                                       {"p": portfolio})
+                    await conn.execute(
+                        text("UPDATE accounts SET closed_at=clock_timestamp() WHERE id=:p"),
+                        {"p": portfolio},
+                    )
             assert error.value.orig.sqlstate == "42501"
             await conn.execute(text("RESET ROLE"))
     assert tuple(await call(app, intent(owner, portfolio))) == (portfolio, "closed", False)
@@ -154,7 +205,165 @@ async def test_replay_concurrent_original_has_one_outcome(authority):
     results = await asyncio.gather(call(app, payload), call(app, payload))
     assert sorted(r.replayed for r in results) == [False, True]
     async with migrator.connect() as conn:
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))).scalar_one() == 1
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
+
+
+async def test_named_sold_out_multistock_uses_global_tail_and_preserves_finance(stock_authority):
+    from tests.portfolio_closure_fixtures import retained_snapshot
+
+    app, migrator, _, books = stock_authority
+    owner, portfolio = books["roots"][0]
+    async with migrator.connect() as conn:
+        before = await retained_snapshot(conn)
+    assert tuple(await call(app, intent(owner, portfolio))) == (portfolio, "closed", False)
+    async with migrator.connect() as conn:
+        after = await retained_snapshot(conn)
+        # Only account lifecycle state and per-stock terminal evidence change.
+        for key in before.keys() - {
+            "accounts",
+            "portfolio_stock_closures",
+            "portfolio_stock_closures_id_seq",
+        }:
+            assert before[key] == after[key], key
+        assert (
+            await conn.execute(
+                text("""SELECT coin_id,closing_sequence,unit_epoch
+            FROM portfolio_stock_closures WHERE portfolio_id=:p ORDER BY coin_id"""),
+                {"p": portfolio},
+            )
+        ).all() == [(books["stocks"][0], 4, 0), (books["stocks"][1], 1, 0)]
+        assert (
+            await conn.execute(
+                text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": portfolio}
+            )
+        ).one() == (Decimal("8785.43"), Decimal("12500"))
+    assert tuple(await call(app, intent(owner, portfolio))) == (portfolio, "closed", True)
+
+
+async def test_replay_corrupted_boundary_refuses_without_mutation(stock_authority):
+    app, migrator, _, books = stock_authority
+    owner, portfolio = books["roots"][0]
+    payload = intent(owner, portfolio)
+    await call(app, payload)
+    async with migrator.begin() as conn:
+        await conn.execute(text("ALTER TABLE portfolio_stock_closures DISABLE TRIGGER USER"))
+        await conn.execute(
+            text("""UPDATE portfolio_stock_closures SET closing_sequence=3
+            WHERE portfolio_id=:p AND coin_id=:c"""),
+            {"p": portfolio, "c": books["stocks"][0]},
+        )
+        await conn.execute(text("ALTER TABLE portfolio_stock_closures ENABLE TRIGGER USER"))
+    await reject(app, payload, "23514", "invalid closure stock boundary")
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
+
+
+async def test_named_orphan_holding_refuses_atomically(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+        coin = (
+            await conn.execute(
+                text("SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 1")
+            )
+        ).scalar_one()
+        await conn.execute(
+            text("""INSERT INTO stock_action_state
+            (coin_id,admission_generation,journal_start_at,complete_from)
+            VALUES (:c,1,clock_timestamp()-interval '1 day',
+                    clock_timestamp()-interval '1 hour')"""),
+            {"c": coin},
+        )
+        await conn.execute(
+            text("""INSERT INTO holdings
+            (user_id,portfolio_id,coin_id,quantity,cost_basis) VALUES (:u,:p,:c,1,10)"""),
+            {"u": owner, "p": portfolio, "c": coin},
+        )
+    await reject(app, intent(owner, portfolio), "23514", "invalid closure holding history")
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT closed_at FROM accounts WHERE id=:p"), {"p": portfolio})
+        ).scalar_one() is None
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 0
+
+
+async def test_named_first_buy_while_root_waits_requires_transaction_retry(authority):
+    """Observe an actual lock wait; no sleep is used as proof of concurrency."""
+    app, migrator, admin = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+        coin = (
+            await conn.execute(
+                text("SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 1")
+            )
+        ).scalar_one()
+        await conn.execute(
+            text("""INSERT INTO stock_action_state
+            (coin_id,admission_generation,journal_start_at,complete_from)
+            VALUES (:c,1,clock_timestamp()-interval '1 day',
+                    clock_timestamp()-interval '1 hour')"""),
+            {"c": coin},
+        )
+    async with migrator.connect() as writer, app.connect() as closer:
+        await writer.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(coin)},
+        )
+        await writer.execute(
+            text("SELECT id FROM accounts WHERE id=:p FOR UPDATE"), {"p": portfolio}
+        )
+        pid = (await closer.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        task = asyncio.create_task(closer.execute(text(CLOSE), intent(owner, portfolio)))
+        try:
+            async with asyncio.timeout(1.5):
+                while True:
+                    async with admin.connect() as observer:
+                        waiting = (
+                            await observer.execute(
+                                text("""SELECT wait_event_type='Lock'
+                            AND cardinality(pg_blocking_pids(pid))>0
+                            FROM pg_stat_activity WHERE pid=:p"""),
+                                {"p": pid},
+                            )
+                        ).scalar_one()
+                    if waiting:
+                        break
+                    await asyncio.sleep(0)
+            # Declared synthetic first ownership: a real journal/root-lock race,
+            # not market admission acceptance (that remains Plan09).
+            await writer.execute(
+                text("""INSERT INTO holdings
+                (user_id,portfolio_id,coin_id,quantity,cost_basis) VALUES (:u,:p,:c,1,10)"""),
+                {"u": owner, "p": portfolio, "c": coin},
+            )
+            await writer.execute(
+                text("""INSERT INTO stock_ownership_movements
+                (user_id,portfolio_id,coin_id,sequence,economic_at,recorded_at,quantity,
+                before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key)
+                SELECT :u,:p,:c,1,stamp,stamp,1,0,1,0,10,0,'opening','opening:first-buy'
+                FROM (SELECT clock_timestamp() AS stamp) clock"""),
+                {"u": owner, "p": portfolio, "c": coin},
+            )
+            await writer.commit()
+            with pytest.raises(DBAPIError) as error:
+                await task
+            assert error.value.orig.sqlstate == "40001"
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            await closer.rollback()
+            await writer.rollback()
+    assert tuple(await call(app, intent(owner, portfolio))) == (portfolio, "closed", False)
 
 
 async def test_migration_checksum_and_authenticated_owner_are_required(authority):
@@ -165,10 +374,25 @@ async def test_migration_checksum_and_authenticated_owner_are_required(authority
     spec = spec_from_file_location("closure_authority", path)
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert hashlib.sha256((BACKEND / "alembic/sql/0023_portfolio_closure.sql").read_bytes()).hexdigest() == module.SQL_SHA256
+    assert (
+        hashlib.sha256(
+            (BACKEND / "alembic/sql/0023_portfolio_closure.sql").read_bytes()
+        ).hexdigest()
+        == module.SQL_SHA256
+    )
     async with app.connect() as conn:
-        settings = (await conn.execute(text("SELECT proconfig FROM pg_proc WHERE oid="
-            "'public.close_portfolio(bigint,bigint,uuid,text,text)'::regprocedure"))).scalar_one()
-        assert {"search_path=pg_catalog, public, pg_temp", "lock_timeout=2s",
-                "statement_timeout=10s", "idle_in_transaction_session_timeout=30s"} <= set(settings)
+        settings = (
+            await conn.execute(
+                text(
+                    "SELECT proconfig FROM pg_proc WHERE oid="
+                    "'public.close_portfolio(bigint,bigint,uuid,text,text)'::regprocedure"
+                )
+            )
+        ).scalar_one()
+        assert {
+            "search_path=pg_catalog, public, pg_temp",
+            "lock_timeout=2s",
+            "statement_timeout=10s",
+            "idle_in_transaction_session_timeout=30s",
+        } <= set(settings)
     await ensure_dividend_test_owner()
