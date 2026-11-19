@@ -25,6 +25,72 @@ def load(name):
 
 
 class PortfolioRecoveryContracts(unittest.TestCase):
+    def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
+        producer = load('backup-snapshot')
+        inventory = producer.closure_payload_inventory(ROOT)
+        self.assertEqual((inventory['version'],inventory['revision']), (3,'0023'))
+        producer.verify_closure_inventory(ROOT,inventory)
+        self.assertEqual(len(producer.contract_columns('0023')),31)
+        self.assertEqual(len(producer.identity_tables('0023')),24)
+        for table in producer.CLOSURE_COLUMNS:
+            self.assertIn(table,producer.contract_columns('0023'))
+        for name in producer.PORTFOLIO_PAYLOAD_V3:
+            damaged=copy.deepcopy(inventory);del damaged['sha256'][name]
+            with self.subTest(omitted=name),self.assertRaises(ValueError):
+                producer.verify_closure_inventory(ROOT,damaged)
+            damaged=copy.deepcopy(inventory);damaged['sha256'][name]='0'*64
+            with self.subTest(changed=name),self.assertRaises(ValueError):
+                producer.verify_closure_inventory(ROOT,damaged)
+        for key,value in (('version',True),('version',2),('revision','0020'),('revision','0022')):
+            damaged=copy.deepcopy(inventory);damaged[key]=value
+            with self.assertRaises(ValueError):producer.verify_closure_inventory(ROOT,damaged)
+        for revision in ('0021','0022'):
+            for command in (producer.contract_columns,producer.identity_tables,producer.manifest_sql):
+                with self.assertRaisesRegex(ValueError,'migration_only'):command(revision)
+
+    def test_current_closure_exact_manifest_and_coherent_mutations_refuse(self):
+        producer=load('backup-snapshot')
+        saved=json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())
+        producer.validate_manifest(saved['manifest'])
+        producer.validate_manifest(saved['quarantined'],quarantined=True)
+        with self.assertRaises(ValueError):producer.validate_manifest(saved['quarantined'])
+        mutations=[
+            lambda m:m['tables'].pop('portfolio_lifecycle_closures'),
+            lambda m:m['tables'].pop('portfolio_closure_intents'),
+            lambda m:m['identity_state'].pop(),
+            lambda m:m['schema']['constraints'].pop(),
+            lambda m:m['schema']['indexes'].pop(),
+            lambda m:m['portfolio_authority']['functions'].pop(),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('definition','SELECT true'),
+            lambda m:m['portfolio_authority']['roles'][0].__setitem__(2,True),
+            lambda m:m['closure_contract'].__setitem__('catalogue','0'*64),
+            lambda m:m['closure_contract'].__setitem__('acl','0'*64),
+            lambda m:m['closure_contract'].__setitem__('defaults','0'*64),
+            lambda m:m['closure_state'].__setitem__('invalid',1),
+            lambda m:m['closure_state'].__setitem__('closures',0),
+            lambda m:m['management_state'].__setitem__('initializations',0),
+        ]
+        for original,quarantined in ((saved['manifest'],False),(saved['quarantined'],True)):
+            for mutate in mutations:
+                changed=copy.deepcopy(original);mutate(changed)
+                with self.assertRaises((ValueError,KeyError)):
+                    producer.validate_manifest(changed,quarantined=quarantined)
+
+    def test_current_source_tampering_refuses_before_authority_import(self):
+        producer=load('backup-snapshot')
+        with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
+            root=Path(tmp)
+            for name in producer.CLOSURE_SOURCE_SHA256:
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes((ROOT/name).read_bytes())
+            producer.require_closure_source(root)
+            for name in producer.CLOSURE_SOURCE_SHA256:
+                p=root/name;original=p.read_bytes();p.write_bytes(original+b'\nraise RuntimeError("untrusted import")\n')
+                with self.subTest(name=name),mock.patch.object(producer,'HERE',root/'deploy'), \
+                     mock.patch.object(producer.importlib.util,'spec_from_file_location',side_effect=AssertionError('unsafe import')), \
+                     self.assertRaises(ValueError):
+                    producer.closure_bootstrap()
+                p.write_bytes(original)
+
     def test_v1_inventory_remains_explicit_and_cannot_inherit_current_revision(self):
         consumer = load("verify-restore")
         hashes = {name: "a" * 64 for name in consumer.PORTFOLIO_PAYLOAD_V1}

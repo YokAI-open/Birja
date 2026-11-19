@@ -124,7 +124,7 @@ def closure_postgres_proof(*, write_fixture=False):
            'UV_NO_SYNC':'1', 'UV_OFFLINE':'1',
            'CLOSURE_WRITE_FIXTURE':'1' if write_fixture else '0'}
     code = r'''
-import asyncio,copy,importlib.util,json,os,secrets
+import asyncio,copy,importlib.util,json,os,secrets,subprocess
 from pathlib import Path
 import tests.conftest
 from sqlalchemy import text
@@ -162,6 +162,11 @@ async def main():
   await fixture.seed(factory,Settings(),app,scheduler,helpers)
   async with factory() as db:
    value=await fixture.project(db);fixture.require_projection(value)
+  dc=['docker','compose','--env-file','/dev/null','-p','birja-p14-05','-f',str(root/'docker-compose.test.yml'),'exec','-T','postgres']
+  selection=['--table='+table+'_id_seq' for table in producer.identity_tables('0023')]
+  logical_dump=subprocess.check_output(dc+['pg_dump','-U','birja_migrator','-d','birja_test','-Fc','--compress=none'])
+  dump_sequences=subprocess.check_output(dc+['pg_restore','--data-only','--file=-',*selection],input=logical_dump)
+  assert producer.dump_identity_state(dump_sequences,'0023')==[[name,*value['sequences'][name]] for name in sorted(value['sequences'])]
   async with admin.connect() as conn:
    await conn.execute(text("SET TIME ZONE 'UTC'"))
    manifest=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
@@ -397,7 +402,86 @@ asyncio.run(main())
     return json.loads(result.stdout.splitlines()[-1])
 
 
+class ClosureProducerContracts(unittest.TestCase):
+    def test_v3_package_binds_current_lifecycle_and_complete_retained_sources(self):
+        recovery=load('current_package_transport','deploy/verify-restore.py')
+        original_run=subprocess.run
+        def external(argv,**kwargs):
+            if argv[:3]==['docker','image','save']:
+                kwargs['stdout'].write(b'synthetic-image-transport')
+                return subprocess.CompletedProcess(argv,0)
+            return original_run(argv,**kwargs)
+        def saved(stream,index,manifest):
+            self.assertEqual(stream.read(),b'synthetic-image-transport')
+            self.assertEqual((index,manifest),(b'index',b'manifest'))
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-p14-package-') as tmp, \
+             mock.patch.object(recovery,'runtime',return_value={'synthetic':True}), \
+             mock.patch.object(recovery,'image_inspect'), \
+             mock.patch.object(recovery,'registry_manifests',return_value=(b'index',b'manifest')), \
+             mock.patch.object(recovery,'verify_saved_image',side_effect=saved), \
+             mock.patch.object(subprocess,'run',side_effect=external):
+            output=Path(tmp)/'closure.tar'
+            producer.bundle_package_v3(output,recovery=recovery)
+            with tarfile.open(output,'r:') as archive:
+                metadata=json.load(archive.extractfile('INVENTORY.json'))
+                self.assertEqual(metadata['recovery_profile'],'deploy-recovery-v4')
+                self.assertEqual((metadata['portfolio_payload']['version'],metadata['portfolio_payload']['revision']),(3,'0023'))
+                self.assertEqual(metadata['schema_contract']['revisions'][-1],'0023')
+                self.assertEqual(set(metadata['portfolio_payload']['sha256']),set(producer.PORTFOLIO_PAYLOAD_V3))
+                for name in producer.PORTFOLIO_PAYLOAD_V3:
+                    data=archive.extractfile(name).read()
+                    self.assertEqual(hashlib.sha256(data).hexdigest(),metadata['portfolio_payload']['sha256'][name])
+                    self.assertEqual(data,(ROOT/name).read_bytes())
+                source=archive.extractfile('sources/portfolio0020.tar').read()
+                self.assertEqual(hashlib.sha256(source).hexdigest(),'2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291')
+                self.assertEqual(set(metadata['retained_source_payloads']),{
+                    'sources/portfolio0020.tar','sources/portfolio0017.tar',
+                    'sources/retained.tar','sources/legacy0007.tar','sources/legacy0008.tar'})
+                stage=Path(tmp)/'stage';stage.mkdir()
+                archive.extractall(stage,filter='data')
+            producer.verify_closure_inventory(stage,metadata['portfolio_payload'])
+            for name in ('backend/app/models/portfolio_lifecycle.py','backend/alembic/sql/0023_portfolio_closure.sql'):
+                path=stage/name;original=path.read_bytes();path.write_bytes(original+b'\n')
+                coherent=copy.deepcopy(metadata['portfolio_payload'])
+                coherent['sha256'][name]=hashlib.sha256(path.read_bytes()).hexdigest()
+                with self.assertRaises(ValueError):producer.verify_closure_inventory(stage,coherent)
+                path.write_bytes(original)
+
+
 class ManagementRecoveryContracts(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Historical producer/consumer contracts run against the authenticated
+        # COMPLETE qualified tree, never a current bootstrap/service overlay.
+        global ROOT, producer
+        cls.original_root,cls.original_producer=ROOT,producer
+        source=load('qualified_source_dispatch','deploy/tests/portfolio-sources.py')
+        payload=source.source_archive('portfolio0020')
+        cls.retained=tempfile.TemporaryDirectory(prefix='birja-qualified0020-contract-')
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            archive.extractall(cls.retained.name,filter='data')
+        source.verify_source_tree(cls.retained.name,payload)
+        ROOT=Path(cls.retained.name)
+        producer=load('qualified0020_producer','deploy/backup-snapshot.py')
+        check_output=subprocess.check_output
+        def git_objects(argv,*args,**kwargs):
+            # The extracted immutable source has no .git directory. Serve its
+            # fixed object queries from the actual repository object database;
+            # all executable/source files still come from the verified tree.
+            if isinstance(argv,list) and argv and argv[0]=='git' and '-C' in argv:
+                argv=argv.copy();index=argv.index('-C')+1
+                if argv[index]==str(ROOT):argv[index]=str(cls.original_root)
+            return check_output(argv,*args,**kwargs)
+        cls.git_objects=mock.patch.object(subprocess,'check_output',side_effect=git_objects)
+        cls.git_objects.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        global ROOT,producer
+        cls.git_objects.stop()
+        ROOT,producer=cls.original_root,cls.original_producer
+        cls.retained.cleanup()
+
     def test_consumer_version_dispatch_and_exact_management_equality(self):
         recovery = load("consumer", "deploy/verify-restore.py")
         inventory = producer.portfolio_payload_inventory(ROOT)

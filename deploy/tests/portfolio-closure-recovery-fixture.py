@@ -18,99 +18,185 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TABLE_NAMES = frozenset({
-    'users', 'accounts', 'auth_sessions', 'refresh_tokens', 'coins', 'prices',
-    'holdings', 'trades', 'alembic_version', 'stock_instruments', 'stock_quotes',
-    'stock_sessions', 'stock_data_admissions', 'stock_action_events',
-    'stock_action_state', 'stock_action_sources', 'stock_action_revisions',
-    'stock_action_observations', 'stock_action_resolutions',
-    'stock_dividend_entitlements', 'stock_split_applications',
-    'stock_ownership_movements', 'stock_fill_facts', 'stock_status_evidence',
-    'stock_dividend_payments', 'stock_dividend_decisions', 'portfolio_stock_closures',
-    'portfolio_creations', 'portfolio_initializations', 'portfolio_lifecycle_closures',
-    'portfolio_closure_intents',
-})
-IDENTITY_NAMES = TABLE_NAMES - {'alembic_version', 'prices', 'stock_instruments',
-    'stock_quotes', 'stock_action_state', 'stock_fill_facts', 'stock_status_evidence'}
+TABLE_NAMES = frozenset(
+    {
+        "users",
+        "accounts",
+        "auth_sessions",
+        "refresh_tokens",
+        "coins",
+        "prices",
+        "holdings",
+        "trades",
+        "alembic_version",
+        "stock_instruments",
+        "stock_quotes",
+        "stock_sessions",
+        "stock_data_admissions",
+        "stock_action_events",
+        "stock_action_state",
+        "stock_action_sources",
+        "stock_action_revisions",
+        "stock_action_observations",
+        "stock_action_resolutions",
+        "stock_dividend_entitlements",
+        "stock_split_applications",
+        "stock_ownership_movements",
+        "stock_fill_facts",
+        "stock_status_evidence",
+        "stock_dividend_payments",
+        "stock_dividend_decisions",
+        "portfolio_stock_closures",
+        "portfolio_creations",
+        "portfolio_initializations",
+        "portfolio_lifecycle_closures",
+        "portfolio_closure_intents",
+    }
+)
+IDENTITY_NAMES = TABLE_NAMES - {
+    "alembic_version",
+    "prices",
+    "stock_instruments",
+    "stock_quotes",
+    "stock_action_state",
+    "stock_fill_facts",
+    "stock_status_evidence",
+}
 
 
 def canonical(value):
-    return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
 
 
 def producer():
-    spec = importlib.util.spec_from_file_location('closure_fixture_producer', ROOT / 'deploy/backup-snapshot.py')
+    spec = importlib.util.spec_from_file_location(
+        "closure_fixture_producer", ROOT / "deploy/backup-snapshot.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.require_closure_source(ROOT)
     return module
 
 
-def historical_helpers():
-    spec = importlib.util.spec_from_file_location('closure_event_helpers', ROOT / 'deploy/tests/portfolio-execution-fixture.py')
+def historical_helpers(*, load_backend=True):
+    spec = importlib.util.spec_from_file_location(
+        "closure_event_helpers", ROOT / "deploy/tests/portfolio-execution-fixture.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     namespace = {}
-    exec(compile(module.COMMON, '<source-owned-synthetic-event-helpers>', 'exec'), namespace)
+    if load_backend:
+        exec(
+            compile(module.COMMON, "<source-owned-synthetic-event-helpers>", "exec"),
+            namespace,
+        )
     return namespace, module.COMMON
 
 
 def require_projection(value):
-    if not isinstance(value, dict) or set(value) != {'revision', 'tables', 'sequences'} or value['revision'] != '0023':
-        raise ValueError('0023 projection shape')
-    tables = value['tables']
-    if set(tables) != TABLE_NAMES or set(value['sequences']) != IDENTITY_NAMES:
-        raise ValueError('complete31-table24-identity oracle required')
-    for last, called in value['sequences'].values():
-        if type(last) is not int or not 1 <= last <= 9223372036854775807 or type(called) is not bool:
-            raise ValueError('identity state invalid')
-    roots = {r['name']: r for r in tables['accounts']}
-    if set(roots) != {'Mixed', 'Active', 'Crypto', 'Blank', 'Zero'}:
-        raise ValueError('independent strategy inventory')
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"revision", "tables", "sequences"}
+        or value["revision"] != "0023"
+    ):
+        raise ValueError("0023 projection shape")
+    tables = value["tables"]
+    if set(tables) != TABLE_NAMES or set(value["sequences"]) != IDENTITY_NAMES:
+        raise ValueError("complete31-table24-identity oracle required")
+    for last, called in value["sequences"].values():
+        if (
+            type(last) is not int
+            or not 1 <= last <= 9223372036854775807
+            or type(called) is not bool
+        ):
+            raise ValueError("identity state invalid")
+    roots = {r["name"]: r for r in tables["accounts"]}
+    if set(roots) != {"Mixed", "Active", "Crypto", "Blank", "Zero"}:
+        raise ValueError("independent strategy inventory")
     # Independent expected economics, not recomputed by the seed or restore.
-    expected = {'Mixed': ('9880.50000000', True), 'Active': ('9960.25000000', False),
-                'Crypto': ('9900.00000000', True), 'Blank': ('10000.00000000', True),
-                'Zero': ('10000.00000000', True)}
+    expected = {
+        "Mixed": ("9880.50000000", True),
+        "Active": ("9960.25000000", False),
+        "Crypto": ("9900.00000000", True),
+        "Blank": ("10000.00000000", True),
+        "Zero": ("10000.00000000", True),
+    }
     for name, (cash, closed) in expected.items():
         row = roots[name]
-        if row['cash'] != cash or row['starting_cash'] != '10000.00000000' or (row['closed_at'] is not None) != closed:
-            raise ValueError('independent cash/baseline/closure oracle')
-    if len(tables['portfolio_creations']) != 5 or len(tables['portfolio_initializations']) != 2:
-        raise ValueError('once-only grant/latch lineage')
-    closed = {r['portfolio_id']: r for r in tables['portfolio_lifecycle_closures']}
-    if len(closed) != 4 or set(closed) != {r['id'] for r in roots.values() if r['closed_at']}:
-        raise ValueError('terminal lifecycle inventory')
-    by_intent = {r['id']: r for r in tables['portfolio_closure_intents']}
-    if len(by_intent) != 5 or sum(r['outcome'] == 'confirmation_changed' for r in by_intent.values()) != 1:
-        raise ValueError('closed/refused immutable outcome oracle')
+        if (
+            row["cash"] != cash
+            or row["starting_cash"] != "10000.00000000"
+            or (row["closed_at"] is not None) != closed
+        ):
+            raise ValueError("independent cash/baseline/closure oracle")
+    if (
+        len(tables["portfolio_creations"]) != 5
+        or len(tables["portfolio_initializations"]) != 2
+    ):
+        raise ValueError("once-only grant/latch lineage")
+    closed = {r["portfolio_id"]: r for r in tables["portfolio_lifecycle_closures"]}
+    if len(closed) != 4 or set(closed) != {
+        r["id"] for r in roots.values() if r["closed_at"]
+    }:
+        raise ValueError("terminal lifecycle inventory")
+    by_intent = {r["id"]: r for r in tables["portfolio_closure_intents"]}
+    if (
+        len(by_intent) != 5
+        or sum(r["outcome"] == "confirmation_changed" for r in by_intent.values()) != 1
+    ):
+        raise ValueError("closed/refused immutable outcome oracle")
     for name, root in roots.items():
-        if root['id'] not in closed:
+        if root["id"] not in closed:
             continue
-        record = closed[root['id']]
-        intent = by_intent[record['intent_id']]
-        if (record['provenance'], record['confirmation_name'], record['user_id'], record['closed_at']) != (
-                'owner_confirmation', name, root['user_id'], root['closed_at']):
-            raise ValueError('closure confirmation/time/owner oracle')
-        if (intent['portfolio_id'], intent['user_id'], intent['outcome'], intent['confirmation_name']) != (
-                root['id'], root['user_id'], 'closed', name):
-            raise ValueError('closure intent lineage oracle')
-    stocks = {r['symbol']: r['id'] for r in tables['coins'] if r['asset_class'] == 'stock'}
+        record = closed[root["id"]]
+        intent = by_intent[record["intent_id"]]
+        if (
+            record["provenance"],
+            record["confirmation_name"],
+            record["user_id"],
+            record["closed_at"],
+        ) != ("owner_confirmation", name, root["user_id"], root["closed_at"]):
+            raise ValueError("closure confirmation/time/owner oracle")
+        if (
+            intent["portfolio_id"],
+            intent["user_id"],
+            intent["outcome"],
+            intent["confirmation_name"],
+        ) != (root["id"], root["user_id"], "closed", name):
+            raise ValueError("closure intent lineage oracle")
+    stocks = {
+        r["symbol"]: r["id"] for r in tables["coins"] if r["asset_class"] == "stock"
+    }
     a, b = sorted(stocks.values())[:2]
-    held = {(r['portfolio_id'], r['coin_id']): (r['quantity'], r['cost_basis']) for r in tables['holdings']}
-    if held[roots['Mixed']['id'], a] != ('0.00000000', '0.00000000') or held[roots['Mixed']['id'], b] != ('2.00000000', '20.00000000'):
-        raise ValueError('sold-out and held stock oracle')
-    boundaries = tables['portfolio_stock_closures']
-    if len(boundaries) != 2 or {(r['coin_id'], r['closing_sequence'], r['unit_epoch']) for r in boundaries} != {(a, 3, 0), (b, 2, 0)}:
-        raise ValueError('global sold-out stock boundary oracle')
-    if not all(r['portfolio_id'] == roots['Mixed']['id'] for r in boundaries):
-        raise ValueError('stock closure moved into sibling')
-    if len(tables['trades']) != 3 or len(tables['stock_fill_facts']) != 1:
-        raise ValueError('immutable stock sale and crypto fill oracle')
-    if len(tables['stock_dividend_payments']) != 2 or not any(r['outcome'] == 'held_uncertain' for r in tables['stock_dividend_decisions']):
-        raise ValueError('retained paid/held dividend evidence required')
-    paid = {r['event_id'] for r in tables['stock_dividend_payments']}
-    if not any(r['event_id'] not in paid and r['state'] == 'eligible' for r in tables['stock_dividend_entitlements']):
-        raise ValueError('earned unpaid dividend causal evidence required')
+    held = {
+        (r["portfolio_id"], r["coin_id"]): (r["quantity"], r["cost_basis"])
+        for r in tables["holdings"]
+    }
+    if held[roots["Mixed"]["id"], a] != ("0.00000000", "0.00000000") or held[
+        roots["Mixed"]["id"], b
+    ] != ("2.00000000", "20.00000000"):
+        raise ValueError("sold-out and held stock oracle")
+    boundaries = tables["portfolio_stock_closures"]
+    if len(boundaries) != 2 or {
+        (r["coin_id"], r["closing_sequence"], r["unit_epoch"]) for r in boundaries
+    } != {(a, 3, 0), (b, 2, 0)}:
+        raise ValueError("global sold-out stock boundary oracle")
+    if not all(r["portfolio_id"] == roots["Mixed"]["id"] for r in boundaries):
+        raise ValueError("stock closure moved into sibling")
+    if len(tables["trades"]) != 3 or len(tables["stock_fill_facts"]) != 1:
+        raise ValueError("immutable stock sale and crypto fill oracle")
+    if len(tables["stock_dividend_payments"]) != 2 or not any(
+        r["outcome"] == "held_uncertain" for r in tables["stock_dividend_decisions"]
+    ):
+        raise ValueError("retained paid/held dividend evidence required")
+    paid = {r["event_id"] for r in tables["stock_dividend_payments"]}
+    if not any(
+        r["event_id"] not in paid and r["state"] == "eligible"
+        for r in tables["stock_dividend_entitlements"]
+    ):
+        raise ValueError("earned unpaid dividend causal evidence required")
     return value
 
 
@@ -128,62 +214,191 @@ async def seed(factory, settings, app_engine, scheduler_engine, helpers):
 
     ids = {}
     async with factory.begin() as db:
-        if (await db.execute(text('SELECT count(*) FROM users'))).scalar_one():
-            raise ValueError('empty synthetic identity space required')
-        coins = list((await db.execute(text('SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 2'))).scalars())
+        if (await db.execute(text("SELECT count(*) FROM users"))).scalar_one():
+            raise ValueError("empty synthetic identity space required")
+        coins = list(
+            (
+                await db.execute(
+                    text(
+                        "SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 2"
+                    )
+                )
+            ).scalars()
+        )
         # Declared fixture opening rows still obey the successor trigger's
         # instrument-first lock contract; no financial guard is bypassed.
         for coin in coins:
-            await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"), {'c':str(coin)})
-        owner = (await db.execute(text("INSERT INTO users(email) VALUES ('strategy@closure-fixture.invalid') RETURNING id"))).scalar_one()
-        zero = (await db.execute(text("INSERT INTO users(email) VALUES ('zero@closure-fixture.invalid') RETURNING id"))).scalar_one()
-        for uid, name in ((owner, 'Mixed'), (zero, 'Zero')):
-            pid = (await db.execute(text('SELECT initialize_portfolio(:u)'), {'u': uid})).scalar_one()
-            await db.execute(text("SELECT * FROM update_portfolio_metadata(:u,:p,:n,'',true,true)"), {'u': uid, 'p': pid, 'n': name})
+            await db.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"
+                ),
+                {"c": str(coin)},
+            )
+        owner = (
+            await db.execute(
+                text(
+                    "INSERT INTO users(email) VALUES ('strategy@closure-fixture.invalid') RETURNING id"
+                )
+            )
+        ).scalar_one()
+        zero = (
+            await db.execute(
+                text(
+                    "INSERT INTO users(email) VALUES ('zero@closure-fixture.invalid') RETURNING id"
+                )
+            )
+        ).scalar_one()
+        for uid, name in ((owner, "Mixed"), (zero, "Zero")):
+            pid = (
+                await db.execute(text("SELECT initialize_portfolio(:u)"), {"u": uid})
+            ).scalar_one()
+            await db.execute(
+                text("SELECT * FROM update_portfolio_metadata(:u,:p,:n,'',true,true)"),
+                {"u": uid, "p": pid, "n": name},
+            )
             ids[name] = (uid, pid)
-        for n, name in enumerate(('Active', 'Crypto', 'Blank'), 1):
-            pid = (await db.execute(text("SELECT portfolio_id FROM create_portfolio(:u,:k,:n,'fixture strategy')"),
-                                    {'u': owner, 'k': UUID(int=n, version=4), 'n': name})).scalar_one()
+        for n, name in enumerate(("Active", "Crypto", "Blank"), 1):
+            pid = (
+                await db.execute(
+                    text(
+                        "SELECT portfolio_id FROM create_portfolio(:u,:k,:n,'fixture strategy')"
+                    ),
+                    {"u": owner, "k": UUID(int=n, version=4), "n": name},
+                )
+            ).scalar_one()
             ids[name] = (owner, pid)
-        now = (await db.execute(text('SELECT clock_timestamp()'))).scalar_one()
+        now = (await db.execute(text("SELECT clock_timestamp()"))).scalar_one()
         at = now - timedelta(days=10)
         for coin in coins:
-            await db.execute(text("INSERT INTO stock_action_state(coin_id,health,admission_generation,journal_start_at,complete_from) VALUES (:c,'current',1,:at,:at)"), {'c': coin, 'at': at-timedelta(days=1)})
+            await db.execute(
+                text(
+                    "INSERT INTO stock_action_state(coin_id,health,admission_generation,journal_start_at,complete_from) VALUES (:c,'current',1,:at,:at)"
+                ),
+                {"c": coin, "at": at - timedelta(days=1)},
+            )
         # Declared historical opening quantities/basis. The sold-out stock also
         # carries the immutable fill/facts/movement for its later actual sale.
-        for coin, rows in ((coins[0], [('Mixed', 1, 2), ('Active', 3, 3)]),
-                           (coins[1], [('Mixed', 1, 2), ('Active', 2, 1)])):
+        for coin, rows in (
+            (coins[0], [("Mixed", 1, 2), ("Active", 3, 3)]),
+            (coins[1], [("Mixed", 1, 2), ("Active", 2, 1)]),
+        ):
             for name, seq, qty in rows:
                 uid, pid = ids[name]
-                when = at if name == 'Mixed' else at+timedelta(days=2)
-                await db.execute(text('INSERT INTO holdings(user_id,portfolio_id,coin_id,quantity,cost_basis) VALUES (:u,:p,:c,:q,:b)'), {'u': uid, 'p': pid, 'c': coin, 'q': qty, 'b': qty*10})
-                await db.execute(text("INSERT INTO stock_ownership_movements(user_id,portfolio_id,coin_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) VALUES (:u,:p,:c,:s,:at,:at,:q,0,:q,0,:b,0,'opening',:k)"), {'u': uid, 'p': pid, 'c': coin, 's': seq, 'at': when, 'q': qty, 'b': qty*10, 'k': f'opening:{pid}:{coin}'})
-        uid, pid = ids['Mixed']; sale_at = at+timedelta(days=1)
-        trade = (await db.execute(text("INSERT INTO trades(user_id,portfolio_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key,created_at) VALUES (:u,:p,:c,'sell','quantity',2,2,10,:at,10,0,20,9980,:k,:at) RETURNING id"), {'u': uid, 'p': pid, 'c': coins[0], 'at': sale_at, 'k': UUID('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')})).scalar_one()
-        await db.execute(text("INSERT INTO stock_fill_facts(trade_id,portfolio_id,coin_id,user_id,provider_asset_id,symbol,company_name,listing_exchange,source,feed,bid,ask,exact_mid,held_after,event_at,collected_at,observed_at,session_date,opens_at,closes_at,authority) SELECT t.id,t.portfolio_id,t.coin_id,t.user_id,'fixture-asset',c.symbol,c.name,i.listing_exchange,'alpaca','iex',10,10,10,0,:at,:at,:at,CAST(:at AS timestamptz)::date,CAST(:at AS timestamptz)-interval '1 hour',CAST(:at AS timestamptz)+interval '1 hour','{}'::jsonb FROM trades t JOIN coins c ON c.id=t.coin_id JOIN stock_instruments i ON i.coin_id=t.coin_id WHERE t.id=:t"), {'t': trade, 'at': sale_at})
-        await db.execute(text("INSERT INTO stock_ownership_movements(user_id,portfolio_id,coin_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key,trade_id) VALUES (:u,:p,:c,2,:at,:at,-2,2,0,20,0,0,'fill',:k,:t)"), {'u': uid, 'p': pid, 'c': coins[0], 'at': sale_at, 'k': f'fill:{trade}', 't': trade})
-        await db.execute(text('UPDATE holdings SET quantity=0,cost_basis=0 WHERE portfolio_id=:p AND coin_id=:c'), {'p': pid, 'c': coins[0]})
-        for name, cash in (('Mixed', Decimal('9980')), ('Active', Decimal('9960'))):
-            await db.execute(text('UPDATE accounts SET cash=:cash WHERE id=:p'), {'cash': cash, 'p': ids[name][1]})
-        btc = (await db.execute(text("SELECT id FROM coins WHERE symbol='BTC' AND asset_class='crypto'"))).scalar_one()
-        await db.execute(text("INSERT INTO prices(coin_id,mid,as_of,source) VALUES (:c,10000,clock_timestamp(),'fake')"), {'c': btc})
+                when = at if name == "Mixed" else at + timedelta(days=2)
+                await db.execute(
+                    text(
+                        "INSERT INTO holdings(user_id,portfolio_id,coin_id,quantity,cost_basis) VALUES (:u,:p,:c,:q,:b)"
+                    ),
+                    {"u": uid, "p": pid, "c": coin, "q": qty, "b": qty * 10},
+                )
+                await db.execute(
+                    text(
+                        "INSERT INTO stock_ownership_movements(user_id,portfolio_id,coin_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key) VALUES (:u,:p,:c,:s,:at,:at,:q,0,:q,0,:b,0,'opening',:k)"
+                    ),
+                    {
+                        "u": uid,
+                        "p": pid,
+                        "c": coin,
+                        "s": seq,
+                        "at": when,
+                        "q": qty,
+                        "b": qty * 10,
+                        "k": f"opening:{pid}:{coin}",
+                    },
+                )
+        uid, pid = ids["Mixed"]
+        sale_at = at + timedelta(days=1)
+        trade = (
+            await db.execute(
+                text(
+                    "INSERT INTO trades(user_id,portfolio_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key,created_at) VALUES (:u,:p,:c,'sell','quantity',2,2,10,:at,10,0,20,9980,:k,:at) RETURNING id"
+                ),
+                {
+                    "u": uid,
+                    "p": pid,
+                    "c": coins[0],
+                    "at": sale_at,
+                    "k": UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                },
+            )
+        ).scalar_one()
+        await db.execute(
+            text(
+                "INSERT INTO stock_fill_facts(trade_id,portfolio_id,coin_id,user_id,provider_asset_id,symbol,company_name,listing_exchange,source,feed,bid,ask,exact_mid,held_after,event_at,collected_at,observed_at,session_date,opens_at,closes_at,authority) SELECT t.id,t.portfolio_id,t.coin_id,t.user_id,'fixture-asset',c.symbol,c.name,i.listing_exchange,'alpaca','iex',10,10,10,0,:at,:at,:at,CAST(:at AS timestamptz)::date,CAST(:at AS timestamptz)-interval '1 hour',CAST(:at AS timestamptz)+interval '1 hour','{}'::jsonb FROM trades t JOIN coins c ON c.id=t.coin_id JOIN stock_instruments i ON i.coin_id=t.coin_id WHERE t.id=:t"
+            ),
+            {"t": trade, "at": sale_at},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO stock_ownership_movements(user_id,portfolio_id,coin_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,causal_key,trade_id) VALUES (:u,:p,:c,2,:at,:at,-2,2,0,20,0,0,'fill',:k,:t)"
+            ),
+            {
+                "u": uid,
+                "p": pid,
+                "c": coins[0],
+                "at": sale_at,
+                "k": f"fill:{trade}",
+                "t": trade,
+            },
+        )
+        await db.execute(
+            text(
+                "UPDATE holdings SET quantity=0,cost_basis=0 WHERE portfolio_id=:p AND coin_id=:c"
+            ),
+            {"p": pid, "c": coins[0]},
+        )
+        for name, cash in (("Mixed", Decimal("9980")), ("Active", Decimal("9960"))):
+            await db.execute(
+                text("UPDATE accounts SET cash=:cash WHERE id=:p"),
+                {"cash": cash, "p": ids[name][1]},
+            )
+        btc = (
+            await db.execute(
+                text("SELECT id FROM coins WHERE symbol='BTC' AND asset_class='crypto'")
+            )
+        ).scalar_one()
+        await db.execute(
+            text(
+                "INSERT INTO prices(coin_id,mid,as_of,source) VALUES (:c,10000,clock_timestamp(),'fake')"
+            ),
+            {"c": btc},
+        )
     app_factory = async_sessionmaker(app_engine, expire_on_commit=False)
-    for index, name in enumerate(('Mixed', 'Crypto'), 1):
+    for index, name in enumerate(("Mixed", "Crypto"), 1):
         async with app_factory() as db:
-            result, new = await execute(db, portfolio=OwnedActivePortfolio(ids[name][1], ids[name][0]), order=Order('BTC','buy','usd',Decimal('100')), expected_mid=Decimal('10000'), idempotency_key=UUID(int=100+index,version=4), settings=settings)
-            if not new or result.cash_after != (Decimal('9880') if name == 'Mixed' else Decimal('9900')):
-                raise ValueError('actual crypto execution oracle')
+            result, new = await execute(
+                db,
+                portfolio=OwnedActivePortfolio(ids[name][1], ids[name][0]),
+                order=Order("BTC", "buy", "usd", Decimal("100")),
+                expected_mid=Decimal("10000"),
+                idempotency_key=UUID(int=100 + index, version=4),
+                settings=settings,
+            )
+            if not new or result.cash_after != (
+                Decimal("9880") if name == "Mixed" else Decimal("9900")
+            ):
+                raise ValueError("actual crypto execution oracle")
             await db.commit()
     await dividend_seed(factory, scheduler_engine, ids, coins[1], now, helpers)
     async with app_factory() as db:
-        refused = await close_portfolio(db, ClosureIntent(owner, ids['Active'][1], UUID(int=200,version=4), 'Old reviewed name'))
-        if refused.outcome != 'confirmation_changed':
-            raise ValueError('terminal refused intent required')
-    for index, name in enumerate(('Mixed', 'Crypto', 'Blank', 'Zero'), 201):
+        refused = await close_portfolio(
+            db,
+            ClosureIntent(
+                owner, ids["Active"][1], UUID(int=200, version=4), "Old reviewed name"
+            ),
+        )
+        if refused.outcome != "confirmation_changed":
+            raise ValueError("terminal refused intent required")
+    for index, name in enumerate(("Mixed", "Crypto", "Blank", "Zero"), 201):
         async with app_factory() as db:
-            outcome = await close_portfolio(db, ClosureIntent(ids[name][0], ids[name][1], UUID(int=index,version=4), name))
-            if outcome.outcome != 'closed':
-                raise ValueError('real same-transaction closure proof required')
+            outcome = await close_portfolio(
+                db,
+                ClosureIntent(
+                    ids[name][0], ids[name][1], UUID(int=index, version=4), name
+                ),
+            )
+            if outcome.outcome != "closed":
+                raise ValueError("real same-transaction closure proof required")
     for coin in coins:
         async with factory() as db:
             await assert_ownership_consistent(db, coin)
@@ -201,105 +416,316 @@ async def dividend_seed(factory, scheduler_engine, ids, coin, now, helpers):
     from app.services.dividends import process_dividend, record_dividend_hold
 
     async with factory.begin() as db:
-        base = helpers['admission'](now)
-        calendar = replace(base, product='calendar', scope={**base.scope,'feed':'iex'}, quota={**base.quota,'retention_seconds':86400}, allowed_fields=['exchange','session_date','opens_at','closes_at'], calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/synthetic-fixture','sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],'review_valid_until':(now+timedelta(hours=2)).isoformat(),'coverage_start':(now.date()-timedelta(days=45)).isoformat(),'coverage_end':(now.date()+timedelta(days=90)).isoformat(),'overrides':[]})
-        reference = replace(base, product='reference', scope={**base.scope,'feed':'iex'}, quota={**base.quota,'retention_seconds':86400}, allowed_fields=['symbol','name','exchange','provider_asset_id'])
-        db.add_all([StockDataAdmission(**asdict(item)) for item in (base, calendar, reference)])
-        await db.execute(text("UPDATE stock_instruments SET provider_asset_id='closure-synthetic-asset',provider_verified_at=:n WHERE coin_id=:c"), {'n':now,'c':coin})
-        await db.execute(text('UPDATE stock_action_state SET checked_at=:n,coverage_start=:start,covered_until=:n,valid_until=:end WHERE coin_id=:c'), {'n':now,'start':now-timedelta(days=15),'end':now+timedelta(hours=1),'c':coin})
-        exchange = (await db.execute(text('SELECT listing_exchange FROM stock_instruments WHERE coin_id=:c'), {'c':coin})).scalar_one()
-        session = max((s for s in build_sessions(now,calendar) if s.exchange==exchange and s.opens_at and s.opens_at<now),key=lambda s:s.opens_at)
+        base = helpers["admission"](now)
+        calendar = replace(
+            base,
+            product="calendar",
+            scope={**base.scope, "feed": "iex"},
+            quota={**base.quota, "retention_seconds": 86400},
+            allowed_fields=["exchange", "session_date", "opens_at", "closes_at"],
+            calendar={
+                "exchanges": ["XNYS", "XNAS"],
+                "version": "exchange-calendars-4.13.2/synthetic-fixture",
+                "sources": [
+                    "https://www.nyse.com/trade/hours-calendars",
+                    "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
+                ],
+                "review_valid_until": (now + timedelta(hours=2)).isoformat(),
+                "coverage_start": (now.date() - timedelta(days=45)).isoformat(),
+                "coverage_end": (now.date() + timedelta(days=90)).isoformat(),
+                "overrides": [],
+            },
+        )
+        reference = replace(
+            base,
+            product="reference",
+            scope={**base.scope, "feed": "iex"},
+            quota={**base.quota, "retention_seconds": 86400},
+            allowed_fields=["symbol", "name", "exchange", "provider_asset_id"],
+        )
+        db.add_all(
+            [StockDataAdmission(**asdict(item)) for item in (base, calendar, reference)]
+        )
+        await db.execute(
+            text(
+                "UPDATE stock_instruments SET provider_asset_id='closure-synthetic-asset',provider_verified_at=:n WHERE coin_id=:c"
+            ),
+            {"n": now, "c": coin},
+        )
+        await db.execute(
+            text(
+                "UPDATE stock_action_state SET checked_at=:n,coverage_start=:start,covered_until=:n,valid_until=:end WHERE coin_id=:c"
+            ),
+            {
+                "n": now,
+                "start": now - timedelta(days=15),
+                "end": now + timedelta(hours=1),
+                "c": coin,
+            },
+        )
+        exchange = (
+            await db.execute(
+                text("SELECT listing_exchange FROM stock_instruments WHERE coin_id=:c"),
+                {"c": coin},
+            )
+        ).scalar_one()
+        session = max(
+            (
+                s
+                for s in build_sessions(now, calendar)
+                if s.exchange == exchange and s.opens_at and s.opens_at < now
+            ),
+            key=lambda s: s.opens_at,
+        )
         cutoff = session.opens_at
-        await db.execute(text('INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation) VALUES (:e,:d,:o,:cl,:d,:d,1)'), {'e':exchange,'d':session.session_date,'o':cutoff,'cl':session.closes_at})
+        await db.execute(
+            text(
+                "INSERT INTO stock_sessions(exchange,session_date,opens_at,closes_at,coverage_start,coverage_end,calendar_admission_generation) VALUES (:e,:d,:o,:cl,:d,:d,1)"
+            ),
+            {
+                "e": exchange,
+                "d": session.session_date,
+                "o": cutoff,
+                "cl": session.closes_at,
+            },
+        )
         targets = []
-        for key, paid in (('closure-paid-dividend',True), ('closure-earned-unpaid',False)):
-            eid, rid = await helpers['event'](db, coin, key, now)
-            terms = {'event_type':'cash_dividend','currency':'USD','subtype':'ordinary','foreign':False,'special':False,'due_bills':False,'identity_verified':True,'dates_verified':True,'cancelled':False,'identity_changed':False,'rate':'0.25','ex_date':str(cutoff.date()),'record_date':str(cutoff.date()),'payable_date':str(cutoff.date() if paid else (now+timedelta(days=1)).date())}
-            fp = helpers['digest']([key])
-            await db.execute(text("UPDATE stock_action_revisions SET classification='supported_dividend',normalized_terms=CAST(:t AS jsonb),verified_cutoff=:cut WHERE id=:r"), {'t':json.dumps(terms),'cut':cutoff,'r':rid})
-            for name, quantity in (('Mixed',2),('Active',1)):
-                uid,pid = ids[name]; efp = helpers['digest']([key,pid])
-                ent = (await db.execute(text("INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,fingerprint) VALUES (:e,:p,:u,:r,:cut,'exclusive-regular-session-open',1,'unit_epoch:0',0,2,:q,'eligible',:fp) RETURNING id"), {'e':eid,'p':pid,'u':uid,'r':rid,'cut':cutoff,'q':quantity,'fp':efp})).scalar_one()
+        for key, paid in (
+            ("closure-paid-dividend", True),
+            ("closure-earned-unpaid", False),
+        ):
+            eid, rid = await helpers["event"](db, coin, key, now)
+            terms = {
+                "event_type": "cash_dividend",
+                "currency": "USD",
+                "subtype": "ordinary",
+                "foreign": False,
+                "special": False,
+                "due_bills": False,
+                "identity_verified": True,
+                "dates_verified": True,
+                "cancelled": False,
+                "identity_changed": False,
+                "rate": "0.25",
+                "ex_date": str(cutoff.date()),
+                "record_date": str(cutoff.date()),
+                "payable_date": str(
+                    cutoff.date() if paid else (now + timedelta(days=1)).date()
+                ),
+            }
+            fp = helpers["digest"]([key])
+            await db.execute(
+                text(
+                    "UPDATE stock_action_revisions SET classification='supported_dividend',normalized_terms=CAST(:t AS jsonb),verified_cutoff=:cut WHERE id=:r"
+                ),
+                {"t": json.dumps(terms), "cut": cutoff, "r": rid},
+            )
+            for name, quantity in (("Mixed", 2), ("Active", 1)):
+                uid, pid = ids[name]
+                efp = helpers["digest"]([key, pid])
+                ent = (
+                    await db.execute(
+                        text(
+                            "INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,fingerprint) VALUES (:e,:p,:u,:r,:cut,'exclusive-regular-session-open',1,'unit_epoch:0',0,2,:q,'eligible',:fp) RETURNING id"
+                        ),
+                        {
+                            "e": eid,
+                            "p": pid,
+                            "u": uid,
+                            "r": rid,
+                            "cut": cutoff,
+                            "q": quantity,
+                            "fp": efp,
+                        },
+                    )
+                ).scalar_one()
                 if paid:
-                    targets.append({'portfolio_id':pid,'event_id':eid,'entitlement_id':ent,'expected_revision_fingerprint':fp,'expected_entitlement_fingerprint':efp})
-    scheduled = async_sessionmaker(scheduler_engine,expire_on_commit=False)
+                    targets.append(
+                        {
+                            "portfolio_id": pid,
+                            "event_id": eid,
+                            "entitlement_id": ent,
+                            "expected_revision_fingerprint": fp,
+                            "expected_entitlement_fingerprint": efp,
+                        }
+                    )
+    scheduled = async_sessionmaker(scheduler_engine, expire_on_commit=False)
     payments = []
     for target in targets:
         async with scheduled() as db:
-            payments.append(await process_dividend(db,**target))
+            payments.append(await process_dividend(db, **target))
     async with factory.begin() as db:
-        eid = targets[0]['event_id']
-        sid = (await db.execute(text('SELECT source_id FROM stock_action_revisions WHERE event_id=:e'), {'e':eid})).scalar_one()
-        fp = helpers['digest'](['closure-uncertain-correction'])
-        rid = (await db.execute(text("INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason) VALUES (:e,:s,2,:fp,'update',clock_timestamp(),1,'{}','uncertain','source_gap') RETURNING id"), {'e':eid,'s':sid,'fp':fp})).scalar_one()
-        await db.execute(text('UPDATE stock_action_events SET current_revision_id=:r WHERE id=:e'), {'r':rid,'e':eid})
+        eid = targets[0]["event_id"]
+        sid = (
+            await db.execute(
+                text("SELECT source_id FROM stock_action_revisions WHERE event_id=:e"),
+                {"e": eid},
+            )
+        ).scalar_one()
+        fp = helpers["digest"](["closure-uncertain-correction"])
+        rid = (
+            await db.execute(
+                text(
+                    "INSERT INTO stock_action_revisions(event_id,source_id,ordinal,fingerprint,mutation_kind,observed_at,admission_generation,normalized_terms,classification,reason) VALUES (:e,:s,2,:fp,'update',clock_timestamp(),1,'{}','uncertain','source_gap') RETURNING id"
+                ),
+                {"e": eid, "s": sid, "fp": fp},
+            )
+        ).scalar_one()
+        await db.execute(
+            text("UPDATE stock_action_events SET current_revision_id=:r WHERE id=:e"),
+            {"r": rid, "e": eid},
+        )
     async with scheduled() as db:
-        held = await record_dividend_hold(db,portfolio_id=ids['Mixed'][1],payment_id=payments[0].payment_id,expected_revision_fingerprint=fp)
-        if held.outcome != 'held_uncertain':
-            raise ValueError('actual held correction required')
+        held = await record_dividend_hold(
+            db,
+            portfolio_id=ids["Mixed"][1],
+            payment_id=payments[0].payment_id,
+            expected_revision_fingerprint=fp,
+        )
+        if held.outcome != "held_uncertain":
+            raise ValueError("actual held correction required")
 
 
 async def project(db, *, columns=None, identities=None):
     from sqlalchemy import text
     from app.services.stock_ownership import assert_ownership_consistent
+
     if columns is None:
-        contract = producer(); columns = contract.contract_columns('0023'); identities = contract.identity_tables('0023')
-    if (await db.execute(text('SELECT version_num FROM alembic_version'))).scalar_one() != '0023':
-        raise ValueError('0023 schema before projection')
-    coins = list((await db.execute(text('SELECT DISTINCT coin_id FROM stock_ownership_movements ORDER BY coin_id'))).scalars())
+        contract = producer()
+        columns = contract.contract_columns("0023")
+        identities = contract.identity_tables("0023")
+    if (
+        await db.execute(text("SELECT version_num FROM alembic_version"))
+    ).scalar_one() != "0023":
+        raise ValueError("0023 schema before projection")
+    coins = list(
+        (
+            await db.execute(
+                text(
+                    "SELECT DISTINCT coin_id FROM stock_ownership_movements ORDER BY coin_id"
+                )
+            )
+        ).scalars()
+    )
     # The caller provides a business session. Each single-instrument proof keeps
     # its guard; separate completed read transactions never clear db.info.
     for coin in coins:
-        await assert_ownership_consistent(db,coin)
+        await assert_ownership_consistent(db, coin)
         await db.rollback()
     tables = {}
     for table in sorted(columns):
         fields = columns[table]
-        key = 'id' if 'id' in fields else 'trade_id' if 'trade_id' in fields else 'coin_id' if 'coin_id' in fields else 'version_num'
-        raw = (await db.execute(text("SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY "+key+"),'[]'::jsonb)::text FROM public."+table+' t'))).scalar_one()
-        tables[table] = json.loads(raw,parse_float=str)
+        key = (
+            "id"
+            if "id" in fields
+            else "trade_id"
+            if "trade_id" in fields
+            else "coin_id"
+            if "coin_id" in fields
+            else "version_num"
+        )
+        raw = (
+            await db.execute(
+                text(
+                    "SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY "
+                    + key
+                    + "),'[]'::jsonb)::text FROM public."
+                    + table
+                    + " t"
+                )
+            )
+        ).scalar_one()
+        tables[table] = json.loads(raw, parse_float=str)
     tails = {}
     for table in identities:
-        tails[table] = list((await db.execute(text('SELECT last_value,is_called FROM public.'+table+'_id_seq'))).one())
-    return {'revision':'0023','tables':tables,'sequences':tails}
+        tails[table] = list(
+            (
+                await db.execute(
+                    text("SELECT last_value,is_called FROM public." + table + "_id_seq")
+                )
+            ).one()
+        )
+    return {"revision": "0023", "tables": tables, "sequences": tails}
 
 
 def private_snapshot(path, existing):
     path = Path(path)
-    if not path.is_absolute() or path.is_symlink() or path.resolve()!=path or not str(path).startswith('/tmp/birja-') or path.exists()!=existing:
-        raise ValueError('owned private snapshot required')
-    if existing and (not path.is_file() or path.stat().st_mode & 0o077 or path.stat().st_uid != os.getuid()):
-        raise ValueError('private immutable snapshot required')
+    if (
+        not path.is_absolute()
+        or path.is_symlink()
+        or path.resolve() != path
+        or not str(path).startswith("/tmp/birja-")
+        or path.exists() != existing
+    ):
+        raise ValueError("owned private snapshot required")
+    if existing and (
+        not path.is_file()
+        or path.stat().st_mode & 0o077
+        or path.stat().st_uid != os.getuid()
+    ):
+        raise ValueError("private immutable snapshot required")
     return path
 
 
-def save_snapshot(path,value):
-    require_projection(value); path=private_snapshot(path,False)
-    with path.open('xb') as stream:
-        os.chmod(path,0o600);stream.write(canonical(value))
+def save_snapshot(path, value):
+    require_projection(value)
+    path = private_snapshot(path, False)
+    with path.open("xb") as stream:
+        os.chmod(path, 0o600)
+        stream.write(canonical(value))
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def compare_snapshot(path,digest,value):
-    path=private_snapshot(path,True)
-    if not isinstance(digest,str) or not re.fullmatch('[0-9a-f]{64}',digest) or hashlib.sha256(path.read_bytes()).hexdigest()!=digest:
-        raise ValueError('before-backup snapshot hash required')
-    require_projection(value);expected=require_projection(json.loads(path.read_bytes()))
-    if canonical(value)!=canonical(expected):
-        raise ValueError('restored lifecycle/finance/sequence evidence changed')
+def compare_snapshot(path, digest, value):
+    path = private_snapshot(path, True)
+    if (
+        not isinstance(digest, str)
+        or not re.fullmatch("[0-9a-f]{64}", digest)
+        or hashlib.sha256(path.read_bytes()).hexdigest() != digest
+    ):
+        raise ValueError("before-backup snapshot hash required")
+    require_projection(value)
+    expected = require_projection(json.loads(path.read_bytes()))
+    if canonical(value) != canonical(expected):
+        raise ValueError("restored lifecycle/finance/sequence evidence changed")
     return digest
 
 
-def program(*,mode,database=None,expected=None):
-    if mode not in {'create','projection','verify','compare'} or database not in {None,'birja_restore_test'} or (mode=='create' and database):
-        raise ValueError('unsafe closure fixture mode/database')
-    if mode=='compare' and (not isinstance(expected,str) or not re.fullmatch('[0-9a-f]{64}',expected)):
-        raise ValueError('before-backup snapshot hash required')
-    contract=producer();_,common=historical_helpers()
-    pins={name.removeprefix('backend/'):sha for name,sha in contract.CLOSURE_SOURCE_SHA256.items() if name.startswith('backend/')}
-    code='DATABASE='+repr(database)+'\nMODE='+repr(mode)+'\nSOURCE_SHA256='+repr(pins)+'\n'
-    code+='TABLE_COLUMNS='+repr({k:sorted(v) for k,v in contract.contract_columns('0023').items()})+'\nIDENTITY_TABLES='+repr(contract.identity_tables('0023'))+'\n'
-    code+=r'''
+def program(*, mode, database=None, expected=None):
+    if (
+        mode not in {"create", "projection", "verify", "compare"}
+        or database not in {None, "birja_restore_test"}
+        or (mode == "create" and database)
+    ):
+        raise ValueError("unsafe closure fixture mode/database")
+    if mode == "compare" and (
+        not isinstance(expected, str) or not re.fullmatch("[0-9a-f]{64}", expected)
+    ):
+        raise ValueError("before-backup snapshot hash required")
+    contract = producer()
+    _, common = historical_helpers(load_backend=False)
+    pins = {
+        name.removeprefix("backend/"): sha
+        for name, sha in contract.CLOSURE_SOURCE_SHA256.items()
+        if name.startswith("backend/")
+    }
+    code = (
+        "DATABASE="
+        + repr(database)
+        + "\nMODE="
+        + repr(mode)
+        + "\nSOURCE_SHA256="
+        + repr(pins)
+        + "\n"
+    )
+    code += (
+        "TABLE_COLUMNS="
+        + repr({k: sorted(v) for k, v in contract.contract_columns("0023").items()})
+        + "\nIDENTITY_TABLES="
+        + repr(contract.identity_tables("0023"))
+        + "\n"
+    )
+    code += r"""
 import asyncio,hashlib,json,os,ssl
 from pathlib import Path
 for name,expected in SOURCE_SHA256.items():
@@ -324,9 +750,13 @@ async def declared():
    raise ValueError('0023 only before import')
  finally:await c.close()
 asyncio.run(declared())
-'''
-    code+=common+'\n'+'\n'.join(inspect.getsource(fn) for fn in (seed,dividend_seed,project))
-    code+=r'''
+"""
+    code += (
+        common
+        + "\n"
+        + "\n".join(inspect.getsource(fn) for fn in (seed, dividend_seed, project))
+    )
+    code += r"""
 async def run():
  settings,engine,factory,args=setup()
  app=create_async_engine(engine.url.set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD']),connect_args=args)
@@ -348,33 +778,55 @@ async def run():
    print('portfolio_verified_tls=true')
  finally:await app.dispose();await scheduler.dispose();await engine.dispose()
 asyncio.run(run())
-'''
+"""
     return code
 
 
-def main(argv=None,*,transport=None):
-    parser=argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument('mode',choices=['create','projection','verify','compare'])
-    parser.add_argument('--database',choices=['birja_restore_test'])
-    parser.add_argument('--snapshot');parser.add_argument('--expected-sha256')
-    args=parser.parse_args(argv)
-    code=program(mode=args.mode,database=args.database,expected=args.expected_sha256)
+def main(argv=None, *, transport=None):
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument("mode", choices=["create", "projection", "verify", "compare"])
+    parser.add_argument("--database", choices=["birja_restore_test"])
+    parser.add_argument("--snapshot")
+    parser.add_argument("--expected-sha256")
+    args = parser.parse_args(argv)
+    code = program(
+        mode=args.mode, database=args.database, expected=args.expected_sha256
+    )
     if transport:
-        value=transport(code)
+        value = transport(code)
     else:
-        command=json.loads(os.environ['BIRJA_PORTFOLIO_FIXTURE_TRANSPORT'])
-        if not isinstance(command,list) or not command or not all(isinstance(v,str) and v for v in command):
-            raise ValueError('explicit owned argv required')
-        result=subprocess.run(command,input=code.encode(),capture_output=True,timeout=300,check=True)
-        rows=[r.split(b'=',1)[1] for r in result.stdout.splitlines() if r.startswith(b'portfolio_projection=')]
-        if len(rows)!=1 or b'portfolio_verified_tls=true' not in result.stdout.splitlines():
-            raise ValueError('exact TLS projection required')
-        value=json.loads(rows[0])
+        command = json.loads(os.environ["BIRJA_PORTFOLIO_FIXTURE_TRANSPORT"])
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(v, str) and v for v in command)
+        ):
+            raise ValueError("explicit owned argv required")
+        result = subprocess.run(
+            command, input=code.encode(), capture_output=True, timeout=300, check=True
+        )
+        rows = [
+            r.split(b"=", 1)[1]
+            for r in result.stdout.splitlines()
+            if r.startswith(b"portfolio_projection=")
+        ]
+        if (
+            len(rows) != 1
+            or b"portfolio_verified_tls=true" not in result.stdout.splitlines()
+        ):
+            raise ValueError("exact TLS projection required")
+        value = json.loads(rows[0])
     require_projection(value)
-    digest=save_snapshot(args.snapshot,value) if args.mode=='projection' else compare_snapshot(args.snapshot,args.expected_sha256,value) if args.mode=='compare' else hashlib.sha256(canonical(value)).hexdigest()
-    print('portfolio_fixture_sha256='+digest)
+    digest = (
+        save_snapshot(args.snapshot, value)
+        if args.mode == "projection"
+        else compare_snapshot(args.snapshot, args.expected_sha256, value)
+        if args.mode == "compare"
+        else hashlib.sha256(canonical(value)).hexdigest()
+    )
+    print("portfolio_fixture_sha256=" + digest)
     return digest
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     main()

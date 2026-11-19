@@ -61,6 +61,11 @@ class PortfolioFixtureContracts(unittest.TestCase):
         closure.require_projection(original)
         self.assertEqual(len(original['tables']),31)
         self.assertEqual(len(original['sequences']),24)
+        code=closure.program(mode='projection')
+        compile(code,'<source-bound-current0023-projection>','exec')
+        self.assertLess(code.index('0023 source mismatch before import'),code.index('from app.core.config import Settings'))
+        for mode,database in (('unknown',None),('create','birja_restore_test'),('verify','production')):
+            with self.assertRaises(ValueError):closure.program(mode=mode,database=database)
         with tempfile.TemporaryDirectory(prefix='birja-closure-oracle-') as tmp:
             path=Path(tmp)/'before.json'; digest=closure.save_snapshot(path,original)
             self.assertEqual(closure.compare_snapshot(path,digest,original),digest)
