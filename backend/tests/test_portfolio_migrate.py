@@ -68,6 +68,42 @@ async def test_successor_authenticated_migrator_accepts_complete_closure_revisio
         await child.dispose()
 
 
+@pytest.mark.parametrize("damage", ["relation", "substitution", "function_owner", "operator"])
+async def test_successor_migrator_refuses_unknown_or_substituted_inventory(
+    portfolio_migration_db, damage
+):
+    import asyncio
+
+    from tests.test_migrations import run_test_migration
+
+    await asyncio.to_thread(run_test_migration, "0020" if damage == "substitution" else "0023")
+    async with portfolio_migration_db.begin() as conn:
+        await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+        if damage == "relation":
+            await conn.execute(text("CREATE TABLE unexpected_successor(id bigint)"))
+        elif damage == "substitution":
+            await conn.execute(text("UPDATE alembic_version SET version_num='0023'"))
+        elif damage == "function_owner":
+            await conn.execute(
+                text(
+                    "ALTER FUNCTION close_portfolio(bigint,bigint,uuid,text,text) "
+                    "OWNER TO birja_test"
+                )
+            )
+        else:
+            await conn.execute(text("ALTER ROLE birja_action_operator LOGIN"))
+    child = create_async_engine(test_migration_url())
+    try:
+        async with child.connect() as conn:
+            with pytest.raises(ValueError):
+                await migration.require_migrator(conn)
+    finally:
+        await child.dispose()
+        if damage == "operator":
+            async with portfolio_migration_db.begin() as conn:
+                await conn.execute(text("ALTER ROLE birja_action_operator NOLOGIN"))
+
+
 def test_trusted_source_requires_exact_regular_files(tmp_path):
     migration.require_source()
     for name in migration.SOURCE:
@@ -131,7 +167,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
     identity = AsyncMock(
         side_effect=ValueError("identity")
         if outcome == "identity"
-        else ["0014", "0016" if outcome == "revision" else "0020"]
+        else ["0014", "0016" if outcome == "revision" else "0023"]
     )
     if outcome == "preflight":
 
@@ -153,7 +189,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
             await migration.migrate(settings)
             assert (
                 capsys.readouterr().out
-                == "portfolio_migration_to_final=true source_revision=0014 final=0020\n"
+                == "portfolio_migration_to_final=true source_revision=0014 final=0023\n"
             )
             conn.rollback.assert_awaited_once()
         else:
@@ -171,7 +207,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
         assert statements[0] == "SELECT pg_advisory_lock(1026016017)"
         assert statements[-1] == "SELECT pg_advisory_unlock(1026016017)"
         assert conn.commit.await_count == 2
-        assert spawn.call_args.args[-2:] == ("upgrade", "0020")
+        assert spawn.call_args.args[-2:] == ("upgrade", "0023")
         assert spawn.call_args.kwargs["cwd"] == migration.BACKEND_DIR
     assert child.kill.call_count == (outcome == "timeout")
     assert child.wait.await_count == (outcome == "timeout")

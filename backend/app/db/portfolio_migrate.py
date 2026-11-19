@@ -12,11 +12,23 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from app.core.config import Settings, get_settings
 from app.db.connection import database_connect_args
-from app.db.dev_bootstrap import FUNCTION_SIGNATURES, TABLES
-from app.db.portfolio_bootstrap import PREFLIGHT_SQL
+from app.db.dev_bootstrap import migration_objects, require_complete_migration_inventory
+from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SOURCE = {
+    "alembic/versions/0021_portfolio_closure_schema.py": (
+        "737446365d1304dc3721ced552102cde4d386b07031823eaf33967961732c81c"
+    ),
+    "alembic/versions/0022_portfolio_closure_provenance.py": (
+        "0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb"
+    ),
+    "alembic/versions/0023_portfolio_closure_authority.py": (
+        "53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52"
+    ),
+    "alembic/sql/0023_portfolio_closure.sql": (
+        "1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949"
+    ),
     "alembic/versions/0018_portfolio_management_expansion.py": (
         "8e63586555c85b6f6495d0da1bad4b8a455e5de71249a0f08e2c758e4b22b0b0"
     ),
@@ -79,12 +91,17 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
        LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) x
        WHERE n.nspname='public' AND x.privilege_type='CREATE' AND x.grantee IN
         (0,'birja_app'::regrole,'birja_scheduler'::regrole))
-      AND NOT EXISTS(SELECT FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
+      AND NOT EXISTS(SELECT FROM pg_roles WHERE rolname IN
+       ('birja_app','birja_scheduler','birja_action_operator')
        AND (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
         OR rolreplication OR rolbypassrls))
+      AND NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator'
+       AND rolcanlogin)
       AND NOT EXISTS(SELECT FROM pg_auth_members WHERE roleid IN
-       (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler'))
-       OR member IN (SELECT oid FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')))
+       (SELECT oid FROM pg_roles WHERE rolname IN
+        ('birja_app','birja_scheduler','birja_action_operator'))
+       OR member IN (SELECT oid FROM pg_roles WHERE rolname IN
+        ('birja_app','birja_scheduler','birja_action_operator')))
       """)
         )
     ).scalar_one():
@@ -94,7 +111,7 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         versions = (
             (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
         )
-        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 21)}:
+        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 24)}:
             raise ValueError("Unsupported portfolio migration revision")
         revision = versions[0]
     elif not fresh:
@@ -106,8 +123,10 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
       WHERE n.nspname='public' AND c.relkind IN ('r','S')""")
         )
     ).all()
-    for name, kind, owner in rows:
-        allowed = TABLES if kind == "r" else {t + "_id_seq" for t in TABLES}
+    relations = [tuple(row) for row in rows]
+    allowed_tables, allowed_functions = migration_objects(revision)
+    for name, kind, owner in relations:
+        allowed = allowed_tables if kind == "r" else {t + "_id_seq" for t in allowed_tables}
         if name not in allowed or owner != "birja_migrator":
             raise ValueError("Unexpected migration relation ownership")
     rows = (
@@ -118,11 +137,16 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         )
     ).all()
     if any(
-        signature.replace("public.", "").replace(" ", "") not in FUNCTION_SIGNATURES
+        signature.replace("public.", "").replace(" ", "") not in allowed_functions
         or owner != "birja_migrator"
         for signature, owner in rows
     ):
         raise ValueError("Unexpected migration routine ownership")
+    require_complete_migration_inventory(
+        revision,
+        relations,
+        {row[0].replace("public.", "").replace(" ", "") for row in rows},
+    )
     return revision
 
 
@@ -152,7 +176,7 @@ async def migrate(settings: Settings) -> None:
                     "-m",
                     "alembic",
                     "upgrade",
-                    "0020",
+                    "0023",
                     cwd=BACKEND_DIR,
                     env=dict(os.environ),
                     stdout=asyncio.subprocess.PIPE,
@@ -168,7 +192,7 @@ async def migrate(settings: Settings) -> None:
                     ) from None
                 if child.returncode:
                     raise ValueError("Portfolio finalization failed; diagnostics withheld")
-                if await require_migrator(conn) != "0020":
+                if await require_migrator(conn) != "0023":
                     raise ValueError("Final portfolio revision absent")
                 await conn.execute(text(PREFLIGHT_SQL))
                 await conn.rollback()
@@ -176,7 +200,7 @@ async def migrate(settings: Settings) -> None:
                 await conn.execute(text("SELECT pg_advisory_unlock(1026016017)"))
                 await conn.commit()
             print(
-                "portfolio_migration_to_final=true source_revision=" + str(revision) + " final=0020"
+                "portfolio_migration_to_final=true source_revision=" + str(revision) + " final=0023"
             )
     finally:
         await engine.dispose()

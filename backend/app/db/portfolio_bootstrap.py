@@ -389,6 +389,32 @@ CATALOGUE_0023_SQL = CATALOGUE_SQL.replace(
 CATALOGUE_0023_SHA256 = "3a7e0dbe6a908890a1e0e493aa025938b8f03dbd84cf5f799ea0a1895dc164ec"
 ACL_0023_INITIAL_SHA256 = "6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76"
 ACL_0023_SHA256 = "71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748"
+# A trusted no-ACL restore explicitly revokes every non-owner privilege before
+# regrant. This finite entry state admits bootstrap, never normal runtime.
+ACL_0023_QUARANTINE_SHA256 = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+
+# An absent global function-default row means PUBLIC EXECUTE; an absent
+# schema-local row adds nothing. Normalize effective, not merely explicit ACLs.
+DEFAULT_ACL_0023_SQL = r"""
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'
+  ELSE 'public' END,scope.kind,coalesce(grantee.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM (VALUES (0::oid,'r'),(0::oid,'S'),(0::oid,'f'),
+  ('public'::regnamespace::oid,'r'),('public'::regnamespace::oid,'S'),
+  ('public'::regnamespace::oid,'f')) scope(namespace,kind)
+ CROSS JOIN pg_roles creator
+ LEFT JOIN pg_default_acl d ON d.defaclrole=creator.oid
+  AND d.defaclnamespace=scope.namespace AND d.defaclobjtype=scope.kind::"char"
+ CROSS JOIN LATERAL unnest(coalesce(d.defaclacl,CASE WHEN scope.namespace=0
+  THEN acldefault(scope.kind::"char",creator.oid) ELSE '{}'::aclitem[] END)) item(value)
+ CROSS JOIN LATERAL aclexplode(ARRAY[item.value]) x
+ LEFT JOIN pg_roles grantee ON grantee.oid=x.grantee
+ WHERE creator.rolname='birja_migrator' AND x.grantee<>creator.oid
+) defaults
+"""
+DEFAULT_ACL_0023_SHA256 = ACL_0023_QUARANTINE_SHA256
 
 # Preserve the same conservative role/schema checks as0020, with a distinct
 # authenticated catalogue and the one additional app-only closure signature.
@@ -409,8 +435,10 @@ PREFLIGHT_0023_SQL = (
   LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
   AND x.grantee<>d.defaclrole) THEN
   RAISE EXCEPTION 'unexpected closure default privileges'; END IF;
- IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__') THEN
+ IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__','__QUARANTINE__') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
+ IF (__ACL__)='__FINAL__' AND (__DEFAULT__)<>'__PRIVATE__' THEN
+  RAISE EXCEPTION 'unexpected effective closure default privileges'; END IF;
  IF EXISTS(SELECT FROM public.accounts a
   FULL JOIN public.portfolio_lifecycle_closures c ON c.portfolio_id=a.id
   WHERE (a.closed_at IS NULL)<>(c.id IS NULL)
@@ -450,7 +478,10 @@ PREFLIGHT_0023_SQL = (
 END $closure_identity$;
 """.replace("__ACL__", ACL_SQL)
         .replace("__INITIAL__", ACL_0023_INITIAL_SHA256)
-        .replace("__FINAL__", ACL_0023_SHA256),
+        .replace("__FINAL__", ACL_0023_SHA256)
+        .replace("__QUARANTINE__", ACL_0023_QUARANTINE_SHA256)
+        .replace("__DEFAULT__", DEFAULT_ACL_0023_SQL)
+        .replace("__PRIVATE__", DEFAULT_ACL_0023_SHA256),
     )
 )
 
@@ -469,5 +500,17 @@ REVOKE ALL ON FUNCTION public.check_portfolio_lifecycle_integrity(),
  public.close_portfolio(bigint,bigint,uuid,text,text)
  FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 GRANT EXECUTE ON FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text) TO birja_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON TABLES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON TABLES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON SEQUENCES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON SEQUENCES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON FUNCTIONS
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON FUNCTIONS
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 """
 )

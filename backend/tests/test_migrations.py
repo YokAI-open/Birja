@@ -395,12 +395,12 @@ def test_baseline_is_head() -> None:
 
 
 async def test_current_fixture_installs_exact_restricted_authority(engine, migrated) -> None:
-    from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL
+    from app.db.portfolio_bootstrap import ACL_0023_SHA256, ACL_SQL
     from app.db.schema_contract import require_schema
 
     async with engine.connect() as conn:
-        assert await require_schema(conn) == "0020"
-        assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0020_SHA256
+        assert await require_schema(conn) == "0023"
+        assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0023_SHA256
         roles = (
             await conn.execute(
                 text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,

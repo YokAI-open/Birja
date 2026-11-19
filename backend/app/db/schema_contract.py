@@ -6,7 +6,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.db.portfolio_bootstrap import ACL_0023_SHA256, ACL_SQL, PREFLIGHT_0023_SQL
+from app.db.portfolio_bootstrap import (
+    ACL_0023_SHA256,
+    ACL_SQL,
+    DEFAULT_ACL_0023_SHA256,
+    DEFAULT_ACL_0023_SQL,
+    PREFLIGHT_0023_SQL,
+)
 
 Consumer = Literal["portfolio", "retained0020", "retained0017", "retained0014", "retained0008"]
 SUPPORTED = {
@@ -48,6 +54,10 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
         try:
             await conn.execute(text(PREFLIGHT_0023_SQL))
             if (await conn.execute(text(ACL_SQL))).scalar_one() != ACL_0023_SHA256:
+                raise SchemaAdmissionError("incompatible_authority")
+            if (
+                await conn.execute(text(DEFAULT_ACL_0023_SQL))
+            ).scalar_one() != DEFAULT_ACL_0023_SHA256:
                 raise SchemaAdmissionError("incompatible_authority")
         except DBAPIError:
             raise SchemaAdmissionError("incompatible_authority") from None

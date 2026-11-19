@@ -435,8 +435,50 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748') THEN
+) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
+ IF (
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('relation',c.relname,coalesce(r.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,
+  acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('column',c.relname,a.attname,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+ CROSS JOIN LATERAL aclexplode(a.attacl) x LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND a.attnum>0 AND NOT a.attisdropped
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('routine',p.oid::regprocedure::text,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
+) privileges
+)='71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' AND (
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'
+  ELSE 'public' END,scope.kind,coalesce(grantee.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM (VALUES (0::oid,'r'),(0::oid,'S'),(0::oid,'f'),
+  ('public'::regnamespace::oid,'r'),('public'::regnamespace::oid,'S'),
+  ('public'::regnamespace::oid,'f')) scope(namespace,kind)
+ CROSS JOIN pg_roles creator
+ LEFT JOIN pg_default_acl d ON d.defaclrole=creator.oid
+  AND d.defaclnamespace=scope.namespace AND d.defaclobjtype=scope.kind::"char"
+ CROSS JOIN LATERAL unnest(coalesce(d.defaclacl,CASE WHEN scope.namespace=0
+  THEN acldefault(scope.kind::"char",creator.oid) ELSE '{}'::aclitem[] END)) item(value)
+ CROSS JOIN LATERAL aclexplode(ARRAY[item.value]) x
+ LEFT JOIN pg_roles grantee ON grantee.oid=x.grantee
+ WHERE creator.rolname='birja_migrator' AND x.grantee<>creator.oid
+) defaults
+)<>'4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' THEN
+  RAISE EXCEPTION 'unexpected effective closure default privileges'; END IF;
  IF EXISTS(SELECT FROM public.accounts a
   FULL JOIN public.portfolio_lifecycle_closures c ON c.portfolio_id=a.id
   WHERE (a.closed_at IS NULL)<>(c.id IS NULL)
@@ -976,6 +1018,18 @@ REVOKE ALL ON FUNCTION public.check_portfolio_lifecycle_integrity(),
  public.close_portfolio(bigint,bigint,uuid,text,text)
  FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 GRANT EXECUTE ON FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text) TO birja_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON TABLES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON TABLES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON SEQUENCES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON SEQUENCES
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON FUNCTIONS
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
+ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON FUNCTIONS
+ FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
@@ -1000,6 +1054,25 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
 ) IS DISTINCT FROM '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' THEN RAISE EXCEPTION 'closure final ACL mismatch'; END IF;
+ IF (
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'
+  ELSE 'public' END,scope.kind,coalesce(grantee.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM (VALUES (0::oid,'r'),(0::oid,'S'),(0::oid,'f'),
+  ('public'::regnamespace::oid,'r'),('public'::regnamespace::oid,'S'),
+  ('public'::regnamespace::oid,'f')) scope(namespace,kind)
+ CROSS JOIN pg_roles creator
+ LEFT JOIN pg_default_acl d ON d.defaclrole=creator.oid
+  AND d.defaclnamespace=scope.namespace AND d.defaclobjtype=scope.kind::"char"
+ CROSS JOIN LATERAL unnest(coalesce(d.defaclacl,CASE WHEN scope.namespace=0
+  THEN acldefault(scope.kind::"char",creator.oid) ELSE '{}'::aclitem[] END)) item(value)
+ CROSS JOIN LATERAL aclexplode(ARRAY[item.value]) x
+ LEFT JOIN pg_roles grantee ON grantee.oid=x.grantee
+ WHERE creator.rolname='birja_migrator' AND x.grantee<>creator.oid
+) defaults
+) IS DISTINCT FROM '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' THEN RAISE EXCEPTION 'closure final default ACL mismatch'; END IF;
 END $closure_grants$;
 -- New tables stay private until a migration deliberately grants access.
 -- Both global and schema defaults are reset, for the actual creator only.

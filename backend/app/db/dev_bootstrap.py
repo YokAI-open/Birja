@@ -10,7 +10,14 @@ from pathlib import Path
 import asyncpg  # type: ignore[import-untyped]  # Driver has no published typing marker.
 from sqlalchemy.engine import make_url
 
-from app.db.portfolio_bootstrap import ACL_0020_SHA256, ACL_SQL, GRANTS_SQL, PREFLIGHT_SQL
+from app.db.portfolio_bootstrap import (
+    ACL_0023_SHA256,
+    ACL_SQL,
+    DEFAULT_ACL_0023_SHA256,
+    DEFAULT_ACL_0023_SQL,
+    GRANTS_0023_SQL,
+    PREFLIGHT_0023_SQL,
+)
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -101,11 +108,63 @@ FUNCTION_SIGNATURES = frozenset(
 )
 
 
+def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
+    """Finite migration-only inventories, distinct from runtime admission."""
+    if revision is not None and revision not in {f"{n:04}" for n in range(7, 24)}:
+        raise ValueError("Unsupported migration revision inventory")
+    if revision not in {"0021", "0022", "0023"}:
+        return TABLES, FUNCTION_SIGNATURES
+    tables = TABLES | {"portfolio_lifecycle_closures", "portfolio_closure_intents"}
+    signatures = FUNCTION_SIGNATURES - {
+        "reject_stock_action_mutation()",
+        "reject_stock_record_mutation()",
+        "associate_legacy_portfolio_only()",
+        "associate_portfolio_metadata_only()",
+    }
+    signatures |= {"check_portfolio_lifecycle_integrity()"}
+    if revision in {"0022", "0023"}:
+        signatures |= {"check_portfolio_terminal_root()"}
+    if revision == "0023":
+        signatures |= {
+            "close_portfolio(bigint,bigint,uuid,text,text)",
+            "check_stock_terminal_clock()",
+        }
+    return frozenset(tables), frozenset(signatures)
+
+
+def require_complete_migration_inventory(
+    revision: str | None,
+    relations: list[tuple[str, str, str]],
+    signatures: set[str],
+) -> None:
+    if revision not in {"0021", "0022", "0023"}:
+        return
+    tables, functions = migration_objects(revision)
+    nonidentity = {
+        "alembic_version",
+        "prices",
+        "stock_instruments",
+        "stock_quotes",
+        "stock_action_state",
+        "stock_fill_facts",
+        "stock_status_evidence",
+    }
+    if (
+        {name for name, kind, _ in relations if kind == "r"} != tables
+        or {name for name, kind, _ in relations if kind == "S"}
+        != {f"{t}_id_seq" for t in tables - nonidentity}
+        or signatures != functions
+    ):
+        raise ValueError("Incomplete successor migration inventory")
+
+
 async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
-    await conn.execute(PREFLIGHT_SQL)
-    await conn.execute(GRANTS_SQL)
-    if await conn.fetchval(ACL_SQL) != ACL_0020_SHA256:
+    await conn.execute(PREFLIGHT_0023_SQL)
+    await conn.execute(GRANTS_0023_SQL)
+    if await conn.fetchval(ACL_SQL) != ACL_0023_SHA256:
         raise ValueError("Unexpected final management grants")
+    if await conn.fetchval(DEFAULT_ACL_0023_SQL) != DEFAULT_ACL_0023_SHA256:
+        raise ValueError("Unexpected final closure default privileges")
 
 
 async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
@@ -113,7 +172,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 21)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 24)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")
@@ -141,8 +200,9 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
                 "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' "
                 "AND c.relkind IN ('r','S')"
             )
+            allowed_tables, allowed_functions = migration_objects(revision)
             for name, kind, owner in relations:
-                allowed = TABLES if kind == "r" else {t + "_id_seq" for t in TABLES}
+                allowed = allowed_tables if kind == "r" else {t + "_id_seq" for t in allowed_tables}
                 if name not in allowed or owner not in {"birja", "birja_migrator"}:
                     raise ValueError("Unexpected dev relation; refusing transfer")
             functions = await conn.fetch(
@@ -150,13 +210,16 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
                 "FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
                 "WHERE n.nspname='public'"
             )
-            for signature, name, owner in functions:
-                if (
-                    name not in FUNCTIONS
-                    or signature.replace("public.", "").replace(" ", "") not in FUNCTION_SIGNATURES
-                    or owner not in {"birja", "birja_migrator"}
-                ):
+            for signature, _name, owner in functions:
+                if signature.replace("public.", "").replace(
+                    " ", ""
+                ) not in allowed_functions or owner not in {"birja", "birja_migrator"}:
                     raise ValueError("Unexpected dev routine; refusing transfer")
+            require_complete_migration_inventory(
+                revision,
+                [tuple(row) for row in relations],
+                {row[0].replace("public.", "").replace(" ", "") for row in functions},
+            )
             for name, kind, _ in relations:
                 if kind == "r":
                     await conn.execute(f'ALTER TABLE public."{name}" OWNER TO birja_migrator')
@@ -199,7 +262,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
             await conn.execute("ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL")
         async with conn.transaction():
             await _authorize_portfolios(conn)
-        print("dev_final_migration=true source_revision=" + str(revision) + " final=0020")
+        print("dev_final_migration=true source_revision=" + str(revision) + " final=0023")
     finally:
         await conn.execute("SELECT pg_advisory_unlock(1026016001)")
 
@@ -319,11 +382,11 @@ async def bootstrap(
                 raise ValueError("Unsafe existing dev migration owner; refusing repair")
             if after_migrations:
                 revision = await conn.fetchval("SELECT version_num FROM public.alembic_version")
-                if revision in {"0015", "0016", "0018", "0019"}:
+                if revision in {"0015", "0016", "0018", "0019", "0021", "0022"}:
                     raise ValueError("migration_only; refusing normal dev bootstrap")
-                if revision == "0020":
+                if revision == "0023":
                     await _authorize_portfolios(conn)
-                elif revision == "0017":
+                elif revision in {"0017", "0020"}:
                     raise ValueError("Retained schema requires explicit forward migration")
                 else:
                     await _authorize_dividends(conn)
