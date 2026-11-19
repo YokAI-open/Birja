@@ -102,8 +102,15 @@ function metadataBusy(client: QueryClient, owner: string, id: string) {
     .getQueryCache()
     .findAll({ queryKey: ["portfolioMetadataDraft", owner, id] })
     .some((query) => {
-      const state = query.state.data as { pending?: unknown; awaitingFetch?: unknown } | undefined;
-      return state?.pending === true || state?.awaitingFetch === true;
+      const state = query.state.data as
+        | { pending?: unknown; awaitingFetch?: unknown; draft?: unknown; reviewRequired?: unknown }
+        | undefined;
+      return (
+        state?.pending === true ||
+        state?.awaitingFetch === true ||
+        state?.draft != null ||
+        state?.reviewRequired === true
+      );
     });
 }
 function sessionFor(client: QueryClient): Session {
@@ -210,6 +217,17 @@ export function portfolioDeletionAuthorityReady(client: QueryClient, owner: stri
 export function isPortfolioDeletionQuarantined(client: QueryClient, owner: string, id: string) {
   const session = sessionFor(client);
   return session.owner === owner && session.quarantined.has(id);
+}
+/** Metadata review exclusion is distinct from post-submit financial quarantine. */
+export function isPortfolioDeletionMetadataBlocked(client: QueryClient, owner: string, id: string) {
+  const session = sessionFor(client);
+  return (
+    !portfolioDeletionAuthorityReady(client, owner) ||
+    isPortfolioDeletionQuarantined(client, owner, id) ||
+    (session.owner === owner &&
+      session.state.phase === "review" &&
+      session.state.review?.portfolioId === id)
+  );
 }
 
 /** Mount outside the financial Outlet. Storage restoration never submits DELETE. */

@@ -290,6 +290,25 @@ it("preserves a named review through a description-only change and safe cancel s
   expect(fetch).not.toHaveBeenCalled();
 });
 
+it("a captured confirmation refuses metadata work appearing after named review", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const hook = setup();
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+  act(() => hook.result.current.reviewDeletion(metadata));
+  const confirm = hook.result.current.confirmDeletion;
+  act(() =>
+    hook.client.setQueryData(["portfolioMetadataDraft", owner, "2", 0], {
+      draft: { description: "Unresolved" },
+      reviewRequired: true,
+    }),
+  );
+  expect(hook.result.current.canConfirm).toBe(false);
+  await act(async () => confirm());
+  expect(fetch).not.toHaveBeenCalled();
+  expect(hook.result.current.deletion.phase).toBe("review");
+});
+
 it("honors server Retry-After without automatically retrying the original", async () => {
   const fetch = vi
     .fn()

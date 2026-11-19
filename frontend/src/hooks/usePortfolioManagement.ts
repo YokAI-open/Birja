@@ -17,11 +17,7 @@ import {
 import { useMe } from "./useMe";
 import { isPortfolioId } from "@/api/portfolios";
 import { broadcastMetadataChange, subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
-import {
-  isPortfolioDeletionQuarantined,
-  portfolioDeletionRevision,
-  subscribePortfolioDeletion,
-} from "./usePortfolioDeletion";
+import { isPortfolioDeletionMetadataBlocked, usePortfolioDeletion } from "./usePortfolioDeletion";
 
 type Receipt = Readonly<{ metadata: PortfolioMetadata; isCurrent: () => boolean }>;
 type CreationState = {
@@ -189,10 +185,9 @@ export function usePortfolioManagement(portfolioId?: string) {
   const me = useMe();
   const session = sessionFor(client);
   const owner = me.data?.email ?? null;
-  useSyncExternalStore(
-    (notify) => subscribePortfolioDeletion(client, notify),
-    () => portfolioDeletionRevision(client),
-  );
+  // Direct management consumers also establish recovery before permitting writes.
+  // This owner-only lease never submits and does not own a target's review scope.
+  const deletionRecovery = usePortfolioDeletion();
   const serial = session.serial;
   const scope = useMemo(
     () => ({
@@ -209,7 +204,7 @@ export function usePortfolioManagement(portfolioId?: string) {
   const metadataWritable = () =>
     owner !== null &&
     isPortfolioId(portfolioId) &&
-    !isPortfolioDeletionQuarantined(client, owner, portfolioId);
+    !isPortfolioDeletionMetadataBlocked(client, owner, portfolioId);
   const metadataKey = ["portfolioMetadata", owner, portfolioId, serial] as const;
   const editorKey = ["portfolioMetadataDraft", owner, portfolioId, serial] as const;
   const editorQuery = useQuery({
@@ -626,6 +621,10 @@ export function usePortfolioManagement(portfolioId?: string) {
     metadataError: current() ? (metadataQuery.error ?? editorQuery.data.error) : null,
     metadataPending: current() && (metadataQuery.isFetching || editorQuery.data.pending),
     metadataBlocked: current() && !metadataWritable(),
+    deletionRecoveryError:
+      current() && !deletionRecovery.ready ? deletionRecovery.deletion.error : null,
+    retryDeletionRecovery: () =>
+      current() ? deletionRecovery.retryRecoveryStorage() : Promise.resolve(),
     draft: current() ? editorQuery.data.draft : null,
     reviewRequired: current() && editorQuery.data.reviewRequired,
     metadataSaved: current() && editorQuery.data.saved,

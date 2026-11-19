@@ -8,11 +8,12 @@ import { usePortfolioManagement } from "./usePortfolioManagement";
 import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreationAttempt";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 import { usePortfolioTarget } from "./usePortfolioTarget";
-import { usePortfolioDeletion } from "./usePortfolioDeletion";
+import { portfolioDeletionAuthorityReady, usePortfolioDeletion } from "./usePortfolioDeletion";
 import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
 
 const clients: QueryClient[] = [];
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const receipt = { id: "2", name: "Original", description: "raw" };
 it("preserves a newer dirty-draft review arriving during financial cancellation", async () => {
   let server = receipt;
@@ -698,41 +699,93 @@ it("excludes deletion while a metadata save is pending and revokes a renamed rev
   expect(deletion.result.current.canConfirm).toBe(true);
 });
 
-it.each(["digest", "corrupt"])("fails metadata closed during %s recovery even without a deletion UI", async (failure) => {
-  const recovery = await openDeletionRecovery("alice@example.test");
-  recovery.persist({ portfolioId: "2", confirmationName: "Original", intentKey: crypto.randomUUID(), policyVersion: "freeze_at_closure_v1" });
-  let release!: () => void;
-  let entered = false;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
-  if (failure === "digest") {
-    const digest = webcrypto.subtle.digest.bind(webcrypto.subtle);
-    vi.spyOn(webcrypto.subtle, "digest").mockImplementationOnce(async (...args) => { entered = true; await gate; return digest(...args); });
-  } else sessionStorage.setItem(DELETION_STORAGE_KEY, "corrupt");
-  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Unsafe" } : receipt)));
-  vi.stubGlobal("fetch", fetch);
-  const hook = setup("2");
-  await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
-  const edit = hook.result.current.editMetadata;
-  const save = hook.result.current.saveMetadata;
-  const review = hook.result.current.reviewMetadata;
-  try {
-    expect(hook.result.current.metadataBlocked).toBe(true);
-    act(() => { edit({ name: "Unsafe" }); review(); });
-    await act(async () => save());
-    expect(hook.result.current.draft).toBeNull();
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
-    if (failure === "digest") expect(entered).toBe(true);
-  } finally {
-    await act(async () => { release(); await Promise.resolve(); });
-  }
-  if (failure === "digest") await waitFor(() => expect(hook.result.current.metadataBlocked).toBe(true));
-});
+it.each(["digest", "corrupt"])(
+  "fails metadata closed during %s recovery even without a deletion UI",
+  async (failure) => {
+    const recovery = await openDeletionRecovery("alice@example.test");
+    recovery.persist({
+      portfolioId: "2",
+      confirmationName: "Original",
+      intentKey: crypto.randomUUID(),
+      policyVersion: "freeze_at_closure_v1",
+    });
+    let release!: () => void;
+    let entered = false;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    if (failure === "digest") {
+      const digest = webcrypto.subtle.digest.bind(webcrypto.subtle);
+      vi.spyOn(webcrypto.subtle, "digest").mockImplementationOnce(async (...args) => {
+        entered = true;
+        await gate;
+        return digest(...args);
+      });
+    } else sessionStorage.setItem(DELETION_STORAGE_KEY, "corrupt");
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        json({
+          ...receipt,
+          id: String(input).includes("/3") ? "3" : "2",
+          ...(init?.method === "PATCH" ? { name: "Unsafe" } : {}),
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const hook = setup("2");
+    await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
+    const edit = hook.result.current.editMetadata;
+    const save = hook.result.current.saveMetadata;
+    const review = hook.result.current.reviewMetadata;
+    try {
+      expect(hook.result.current.metadataBlocked).toBe(true);
+      act(() => {
+        edit({ name: "Unsafe" });
+        review();
+      });
+      await act(async () => save());
+      expect(hook.result.current.draft).toBeNull();
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+      if (failure === "digest") expect(entered).toBe(true);
+    } finally {
+      await act(async () => {
+        release();
+        await Promise.resolve();
+      });
+    }
+    if (failure === "digest") {
+      await waitFor(() =>
+        expect(portfolioDeletionAuthorityReady(hook.client, "alice@example.test")).toBe(true),
+      );
+      expect(hook.result.current.metadataBlocked).toBe(true);
+      const sibling = setup("3", hook.client);
+      await waitFor(() => expect(sibling.result.current.metadata?.id).toBe("3"));
+      expect(sibling.result.current.metadataBlocked).toBe(false);
+      act(() => sibling.result.current.editMetadata({ description: "Independent" }));
+      await waitFor(() =>
+        expect(sibling.result.current.draft).toEqual({ description: "Independent" }),
+      );
+    } else {
+      await waitFor(() => expect(hook.result.current.deletionRecoveryError).not.toBeNull());
+      sessionStorage.removeItem(DELETION_STORAGE_KEY);
+      await act(async () => hook.result.current.retryDeletionRecovery());
+      expect(hook.result.current.metadataBlocked).toBe(false);
+      act(() => hook.result.current.editMetadata({ name: "Unsafe" }));
+      await act(async () => hook.result.current.saveMetadata());
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
+    }
+  },
+);
 
 it("excludes captured metadata handlers during named deletion review and releases them on Cancel", async () => {
-  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Safe edit" } : receipt)));
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Safe edit" } : receipt)),
+  );
   vi.stubGlobal("fetch", fetch);
   const management = setup("2");
-  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={management.client}>{children}</QueryClientProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
   const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
   await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
@@ -741,7 +794,10 @@ it("excludes captured metadata handlers during named deletion review and release
   const review = management.result.current.reviewMetadata;
   act(() => deletion.result.current.reviewDeletion(receipt));
   expect(management.result.current.metadataBlocked).toBe(true);
-  act(() => { edit({ name: "Unsafe edit" }); review(); });
+  act(() => {
+    edit({ name: "Unsafe edit" });
+    review();
+  });
   await act(async () => save());
   expect(management.result.current.draft).toBeNull();
   expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
@@ -752,16 +808,62 @@ it("excludes captured metadata handlers during named deletion review and release
   expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
 });
 
-it.each([{ draft: { name: "Unsaved" } }, { draft: { description: "Unsaved" } }, { draft: null, reviewRequired: true }])("refuses deletion over unresolved metadata $draft $reviewRequired", async (editor) => {
+it.each([
+  { draft: { name: "Unsaved" } },
+  { draft: { description: "Unsaved" } },
+  { draft: null, reviewRequired: true },
+])("refuses deletion over unresolved metadata $draft $reviewRequired", async (editor) => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(receipt)));
   const management = setup("2");
-  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={management.client}>{children}</QueryClientProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
   const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
   await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
   const key = ["portfolioMetadataDraft", "alice@example.test", "2", 0];
-  act(() => management.client.setQueryData(key, { ...management.client.getQueryData<object>(key), ...editor }));
-  act(() => { expect(deletion.result.current.reviewDeletion(receipt)).toBe(false); });
+  act(() =>
+    management.client.setQueryData(key, {
+      ...management.client.getQueryData<object>(key),
+      ...editor,
+    }),
+  );
+  await waitFor(() => expect(management.result.current.draft).toEqual(editor.draft));
+  act(() => {
+    expect(deletion.result.current.reviewDeletion(receipt)).toBe(false);
+  });
   expect(deletion.result.current.canConfirm).toBe(false);
   expect(management.result.current.draft).toEqual(editor.draft);
+});
+
+it("releases metadata only after terminal original resolution and fresh same-root authority", async () => {
+  let server = receipt;
+  let deletes = 0;
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "DELETE") {
+      deletes++;
+      if (deletes === 1) return Promise.reject(new TypeError("lost"));
+      server = { ...receipt, name: "Renamed elsewhere" };
+      return Promise.resolve(json({ detail: { code: "portfolio_confirmation_changed" } }, 409));
+    }
+    return Promise.resolve(json(server));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(management.result.current.metadataBlocked).toBe(false));
+  act(() => deletion.result.current.reviewDeletion(receipt));
+  await act(async () => deletion.result.current.confirmDeletion());
+  expect(management.result.current.metadataBlocked).toBe(true);
+  await act(async () => deletion.result.current.checkDeletionResult());
+  await waitFor(() => expect(management.result.current.metadata?.name).toBe("Renamed elsewhere"));
+  expect(management.result.current.metadataBlocked).toBe(false);
+  act(() => management.result.current.editMetadata({ description: "Safe after reconciliation" }));
+  await waitFor(() =>
+    expect(management.result.current.draft).toEqual({ description: "Safe after reconciliation" }),
+  );
 });
