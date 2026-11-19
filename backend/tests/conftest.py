@@ -76,7 +76,11 @@ def dividend_owner_prerequisite() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def provision_test_migration_owner(dividend_owner_prerequisite: None) -> None:
-    pass
+    """Finite revision-aware owner validation precedes EVERY test session.
+
+    This supports migration-only0021/22 setup, not partial runtime admission;
+    only the separately qualified current bootstrap can grant runtime authority.
+    """
 
 
 @pytest.fixture(scope="session")

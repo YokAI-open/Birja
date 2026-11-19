@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0020"
+EXPECTED_HEAD = "0023"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -86,6 +86,31 @@ MIGRATION_FUNCTIONS = frozenset(
     }
 )
 _MIGRATOR_PASSWORD = secrets.token_hex(32)
+
+# Successor migration-only ownership profiles are finite and revision indexed.
+# The historical allowlist above remains unchanged; never admit new objects
+# merely because another revision eventually knows their names.
+_CLOSURE_TABLES = frozenset({"portfolio_lifecycle_closures", "portfolio_closure_intents"})
+_CLOSURE_FUNCTIONS = frozenset({"check_portfolio_lifecycle_integrity()"})
+
+
+def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
+    if revision in {"0021", "0022", "0023"}:
+        # The qualified0020 catalogue already dropped these historical helpers;
+        # its old permissive union cannot serve as an exact successor profile.
+        retired = {
+            "associate_legacy_portfolio_only()",
+            "reject_stock_action_mutation()",
+            "reject_stock_record_mutation()",
+        }
+        functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
+        if revision == "0023":
+            functions |= {"close_portfolio(bigint,bigint,uuid,text,text)"}
+        return MIGRATION_TABLES | _CLOSURE_TABLES, frozenset(functions)
+    if revision is not None and revision not in {f"{n:04}" for n in range(1, 21)}:
+        raise RuntimeError("unexpected disposable migration revision inventory")
+    return MIGRATION_TABLES, MIGRATION_FUNCTIONS
+
 
 _MIGRATION_CHILD = """
 import json, sys
@@ -220,10 +245,20 @@ async def ensure_dividend_test_owner() -> None:
                 ORDER BY c.relkind,c.relname""")
                 )
             ).all()
+            revisions = (
+                (await conn.execute(text("SELECT version_num FROM alembic_version")))
+                .scalars()
+                .all()
+                if any(name == "alembic_version" and kind == "r" for name, kind, _ in relations)
+                else []
+            )
+            if len(revisions) > 1:
+                raise RuntimeError("unexpected disposable migration revision inventory")
+            allowed_tables, allowed_functions = migration_inventory(
+                revisions[0] if revisions else None
+            )
             for name, kind, owner in relations:
-                allowed = (
-                    MIGRATION_TABLES if kind == "r" else {f"{t}_id_seq" for t in MIGRATION_TABLES}
-                )
+                allowed = allowed_tables if kind == "r" else {f"{t}_id_seq" for t in allowed_tables}
                 if name not in allowed or owner not in {"birja_test", "birja_migrator"}:
                     raise RuntimeError("unexpected disposable migration relation inventory")
             functions = (
@@ -234,11 +269,17 @@ async def ensure_dividend_test_owner() -> None:
                 )
             ).all()
             for signature, owner in functions:
-                if signature.replace(" ", "") not in MIGRATION_FUNCTIONS or owner not in {
+                if signature.replace(" ", "") not in allowed_functions or owner not in {
                     "birja_test",
                     "birja_migrator",
                 }:
                     raise RuntimeError("unexpected disposable migration function inventory")
+            if revisions and revisions[0] in {"0021", "0022", "0023"}:
+                # A stamped historical schema is not a current migration profile.
+                if {name for name, kind, _ in relations if kind == "r"} != allowed_tables:
+                    raise RuntimeError("incomplete disposable migration relation inventory")
+                if {sig.replace(" ", "") for sig, _ in functions} != allowed_functions:
+                    raise RuntimeError("incomplete disposable migration function inventory")
             await conn.execute(text("GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator"))
             await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler"))
             # Password is generated as hex and never emitted or persisted outside the disposable DB.
