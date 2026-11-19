@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
+import pytest
 import pytest_asyncio
 from sqlalchemy import text
 
@@ -40,6 +41,12 @@ async def closure_api(authority, settings):
         for _ in range(2):
             uid = await owner(migrator)
             async with migrator.begin() as conn:
+                # Real email input validation rejects reserved .test domains;
+                # use a unique non-deliverable fixture address accepted by OTP.
+                await conn.execute(
+                    text("UPDATE users SET email=:e WHERE id=:u"),
+                    {"u": uid, "e": f"closure-{uuid4().hex}@example.com"},
+                )
                 sid = (
                     await conn.execute(
                         text("INSERT INTO auth_sessions(user_id) VALUES (:u) RETURNING id"),
@@ -70,10 +77,14 @@ async def closure_api(authority, settings):
 
 
 async def create(api, name="Strategy", *, key=None, client=None):
-    return await (client or api.client).post(
+    browser = client or api.client
+    return await browser.post(
         "/api/v2/portfolios",
         json={"name": name},
-        headers={**CSRF, "Idempotency-Key": str(key or uuid4())},
+        headers={
+            "X-CSRF-Token": browser.cookies["bj_csrf"],
+            "Idempotency-Key": str(key or uuid4()),
+        },
     )
 
 
@@ -143,6 +154,17 @@ async def test_csrf_and_identity_precede_untrusted_body(closure_api):
     assert r.status_code == 401 and not consumed
     r = await api.client.request("DELETE", f"/api/v2/portfolios/{root}", content=dangerous())
     assert r.status_code == 403 and not consumed
+    assert r.headers["cache-control"] == "no-store"
+    assert await state(api) == before
+    async with api.migrator.begin() as conn:
+        await conn.execute(
+            text("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE user_id=:u"),
+            {"u": api.uid},
+        )
+    r = await api.client.request(
+        "DELETE", f"/api/v2/portfolios/{root}", content=dangerous(), headers=CSRF
+    )
+    assert r.status_code == 401 and not consumed
     assert r.headers["cache-control"] == "no-store"
     assert await state(api) == before
 
@@ -269,6 +291,23 @@ async def test_attempt_limits_have_ttl_and_replays_cannot_rotate_keys(closure_ap
     assert len(keys) == 2
     assert all([0 < await redis.ttl(k) <= 60 for k in keys])
     assert (await state(api))[1] == 1
+
+
+async def test_attempt_ip_limit_cannot_be_evaded_by_owner_rotation(redis_client, settings):
+    from fastapi import HTTPException
+
+    from app.api.v2.portfolio_management import enforce_closure_attempt
+
+    limits = settings.model_copy(
+        update={"portfolio_create_owner_limit": 2, "portfolio_create_ip_limit": 4}
+    )
+    for uid in (11, 11, 12, 13):
+        await enforce_closure_attempt(redis_client, uid, "192.0.2.7", limits)
+    with pytest.raises(HTTPException) as error:
+        await enforce_closure_attempt(redis_client, 14, "192.0.2.7", limits)
+    assert error.value.status_code == 429 and int(error.value.headers["Retry-After"]) > 0
+    keys = [k async for k in redis_client.scan_iter(match="sim:rl:portfolio_close:*")]
+    assert len(keys) == 4 and all([0 < await redis_client.ttl(k) <= 60 for k in keys])
 
 
 async def test_real_owner_lock_timeout_refuses_then_retry_can_finish(closure_api):
