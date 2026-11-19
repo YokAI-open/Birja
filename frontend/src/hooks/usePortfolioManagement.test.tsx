@@ -9,6 +9,7 @@ import { CREATION_STORAGE_KEY, openCreationRecovery } from "@/lib/portfolioCreat
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 import { usePortfolioTarget } from "./usePortfolioTarget";
 import { usePortfolioDeletion } from "./usePortfolioDeletion";
+import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
 
 const clients: QueryClient[] = [];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -620,7 +621,6 @@ it("refuses captured metadata edits and saves while the same original deletion i
   const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
   await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
-  act(() => management.result.current.editMetadata({ name: "Draft" }));
   const staleEdit = management.result.current.editMetadata;
   const staleSave = management.result.current.saveMetadata;
   act(() => deletion.result.current.reviewDeletion(management.result.current.metadata!));
@@ -629,7 +629,7 @@ it("refuses captured metadata edits and saves while the same original deletion i
   act(() => staleEdit({ description: "Should not be edited" }));
   await act(async () => staleSave());
   expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
-  expect(management.result.current.draft).toEqual({ name: "Draft" });
+  expect(management.result.current.draft).toBeNull();
   expect(deletion.result.current.deletion.phase).toBe("unknown");
 });
 
@@ -679,7 +679,6 @@ it("excludes deletion while a metadata save is pending and revokes a renamed rev
   const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
   await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
-  act(() => deletion.result.current.reviewDeletion(receipt));
   act(() => management.result.current.editMetadata({ name: "Renamed" }));
   let pending!: Promise<void>;
   act(() => {
@@ -694,8 +693,75 @@ it("excludes deletion while a metadata save is pending and revokes a renamed rev
     release(json(server));
     await pending;
   });
-  expect(deletion.result.current.deletion.reviewRequired).toBe(true);
   expect(deletion.result.current.canConfirm).toBe(false);
   act(() => deletion.result.current.reviewDeletion(server));
   expect(deletion.result.current.canConfirm).toBe(true);
+});
+
+it.each(["digest", "corrupt"])("fails metadata closed during %s recovery even without a deletion UI", async (failure) => {
+  const recovery = await openDeletionRecovery("alice@example.test");
+  recovery.persist({ portfolioId: "2", confirmationName: "Original", intentKey: crypto.randomUUID(), policyVersion: "freeze_at_closure_v1" });
+  let release!: () => void;
+  let entered = false;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  if (failure === "digest") {
+    const digest = webcrypto.subtle.digest.bind(webcrypto.subtle);
+    vi.spyOn(webcrypto.subtle, "digest").mockImplementationOnce(async (...args) => { entered = true; await gate; return digest(...args); });
+  } else sessionStorage.setItem(DELETION_STORAGE_KEY, "corrupt");
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Unsafe" } : receipt)));
+  vi.stubGlobal("fetch", fetch);
+  const hook = setup("2");
+  await waitFor(() => expect(hook.result.current.metadata).toEqual(receipt));
+  const edit = hook.result.current.editMetadata;
+  const save = hook.result.current.saveMetadata;
+  const review = hook.result.current.reviewMetadata;
+  try {
+    expect(hook.result.current.metadataBlocked).toBe(true);
+    act(() => { edit({ name: "Unsafe" }); review(); });
+    await act(async () => save());
+    expect(hook.result.current.draft).toBeNull();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+    if (failure === "digest") expect(entered).toBe(true);
+  } finally {
+    await act(async () => { release(); await Promise.resolve(); });
+  }
+  if (failure === "digest") await waitFor(() => expect(hook.result.current.metadataBlocked).toBe(true));
+});
+
+it("excludes captured metadata handlers during named deletion review and releases them on Cancel", async () => {
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Safe edit" } : receipt)));
+  vi.stubGlobal("fetch", fetch);
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={management.client}>{children}</QueryClientProvider>;
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  const edit = management.result.current.editMetadata;
+  const save = management.result.current.saveMetadata;
+  const review = management.result.current.reviewMetadata;
+  act(() => deletion.result.current.reviewDeletion(receipt));
+  expect(management.result.current.metadataBlocked).toBe(true);
+  act(() => { edit({ name: "Unsafe edit" }); review(); });
+  await act(async () => save());
+  expect(management.result.current.draft).toBeNull();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
+  act(() => deletion.result.current.cancelReview());
+  expect(management.result.current.metadataBlocked).toBe(false);
+  act(() => management.result.current.editMetadata({ name: "Safe edit" }));
+  await act(async () => management.result.current.saveMetadata());
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
+});
+
+it.each([{ draft: { name: "Unsaved" } }, { draft: { description: "Unsaved" } }, { draft: null, reviewRequired: true }])("refuses deletion over unresolved metadata $draft $reviewRequired", async (editor) => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(receipt)));
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={management.client}>{children}</QueryClientProvider>;
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  const key = ["portfolioMetadataDraft", "alice@example.test", "2", 0];
+  act(() => management.client.setQueryData(key, { ...management.client.getQueryData<object>(key), ...editor }));
+  act(() => { expect(deletion.result.current.reviewDeletion(receipt)).toBe(false); });
+  expect(deletion.result.current.canConfirm).toBe(false);
+  expect(management.result.current.draft).toEqual(editor.draft);
 });
