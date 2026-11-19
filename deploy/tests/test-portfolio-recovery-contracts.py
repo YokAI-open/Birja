@@ -43,6 +43,33 @@ class PortfolioRecoveryContracts(unittest.TestCase):
             with self.subTest(missing=name), self.assertRaises(ValueError):
                 consumer.verify_portfolio_inventory(changed, payload['sha256'])
 
+    def test_v3_consumer_checks_every_source_projection_before_regrant(self):
+        consumer = load('verify-restore')
+        saved = json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())
+        for section in ('tables','identity_state','financial','schema','portfolio_state',
+                        'management_state','closure_state','stock_invalid'):
+            changed = copy.deepcopy(saved['quarantined'])
+            if section == 'tables': changed[section]['accounts']['sha256'] = '0'*64
+            elif section == 'identity_state': changed[section][0][1] += 1
+            elif section == 'stock_invalid': changed[section] = 1
+            else: changed[section] = {}
+            with self.subTest(section=section), \
+                 mock.patch.object(consumer,'canonical',return_value=changed), \
+                 mock.patch.object(consumer,'sql',return_value=b'[]') as statement, \
+                 self.assertRaises((ValueError,KeyError)):
+                consumer.restore_closure_authority([],saved['manifest'])
+            self.assertTrue(all('GRANT ' not in call.args[1] for call in statement.call_args_list))
+        with mock.patch.object(consumer,'canonical',side_effect=[saved['quarantined'],saved['quarantined'],saved['manifest']]), \
+             mock.patch.object(consumer,'sql',side_effect=[b'[]',b'0',b'',b'']) as statement:
+            consumer.restore_closure_authority([],saved['manifest'])
+            self.assertIn('GRANT EXECUTE ON FUNCTION public.close_portfolio',statement.call_args_list[-1].args[1])
+        for grants in ([['relation','accounts','birja_app','UPDATE',False]],
+                       [['routine','close_portfolio(bigint,bigint,uuid,text,text)','birja_app','EXECUTE',False]]):
+            with mock.patch.object(consumer,'canonical',return_value=saved['quarantined']), \
+                 mock.patch.object(consumer,'sql',return_value=json.dumps(grants).encode()) as statement, \
+                 self.assertRaises(ValueError):
+                consumer.restore_closure_authority([],saved['manifest'])
+            self.assertEqual(statement.call_count,1)
     def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
         producer = load('backup-snapshot')
         inventory = producer.closure_payload_inventory(ROOT)

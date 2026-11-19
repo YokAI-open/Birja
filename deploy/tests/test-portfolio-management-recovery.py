@@ -224,6 +224,125 @@ asyncio.run(main())
     return json.loads(result.stdout.splitlines()[-1])
 
 
+def closure_restore_postgres_proof():
+    """Source-destroyed logical0023 restore; no encrypted/TLS claim."""
+    labels = json.loads(subprocess.check_output(
+        ['docker','inspect','birja-p14-06-postgres-1']))[0]['Config']['Labels']
+    if labels.get('com.docker.compose.project') != 'birja-p14-06':
+        raise ValueError('exclusive Plan06 test stack required')
+    env = {'PATH':os.environ['PATH'],'HOME':'/tmp','ENV':'test','PRICE_SOURCE':'fake',
+           'EMAIL_BACKEND':'console','UV_NO_SYNC':'1','UV_OFFLINE':'1'}
+    code = r'''
+import asyncio,copy,importlib.util,json,secrets,subprocess,tempfile
+from pathlib import Path
+from unittest.mock import patch
+from uuid import UUID,uuid4
+import tests.conftest
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from tests.portfolio_fixtures import reset_disposable_schema
+from tests.test_migrations import ensure_dividend_test_owner,run_test_migration,test_migration_url
+from app.core.config import Settings
+from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL,GRANTS_0023_SQL
+from app.services.portfolio_closure import ClosureIntent,close_portfolio
+root=Path.cwd().parent
+def load(name,path):
+ spec=importlib.util.spec_from_file_location(name,root/path)
+ module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+fixture=load('closure_fixture','deploy/tests/portfolio-closure-recovery-fixture.py')
+producer=load('closure_producer','deploy/backup-snapshot.py')
+recovery=load('closure_consumer','deploy/verify-restore.py');recovery.BOOT='birja_test'
+dc=['docker','compose','--env-file','/dev/null','-p','birja-p14-06','-f',str(root/'docker-compose.test.yml')]
+def command(argv,data=None):
+ return recovery.call(dc+['exec','-T','postgres',*argv],data)
+def query(statement,db='birja_test'):
+ return command(['psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d',db],statement.encode())
+async def sql(conn,statement):
+ raw=await conn.get_raw_connection();await raw.driver_connection.execute(statement)
+async def main():
+ await ensure_dividend_test_owner()
+ admin=create_async_engine(tests.conftest.TEST_DATABASE_URL)
+ migrator=app=scheduler=None
+ source_destroyed=False
+ try:
+  await reset_disposable_schema(admin)
+  await asyncio.to_thread(run_test_migration,'0023')
+  passwords={r:secrets.token_hex(32) for r in ('birja_app','birja_scheduler')}
+  async with admin.begin() as conn:
+   await sql(conn,PREFLIGHT_0023_SQL);await sql(conn,GRANTS_0023_SQL)
+   for role,password in passwords.items():await sql(conn,"ALTER ROLE "+role+" LOGIN PASSWORD '"+password+"'")
+  migrator=create_async_engine(test_migration_url())
+  app=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(username='birja_app',password=passwords['birja_app']))
+  scheduler=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(username='birja_scheduler',password=passwords['birja_scheduler']))
+  factory=async_sessionmaker(migrator,expire_on_commit=False)
+  helpers,_=fixture.historical_helpers()
+  await fixture.seed(factory,Settings(),app,scheduler,helpers)
+  async with factory() as db:before=await fixture.project(db)
+  async with admin.connect() as conn:
+   await conn.execute(text("SET TIME ZONE 'UTC'"))
+   manifest=(await conn.execute(text(producer.manifest_sql('0023')))).scalar_one()
+   producer.validate_manifest(manifest)
+  dump=command(['pg_dump','-U','birja_migrator','-d','birja_test','-Fc','--compress=none'])
+  with tempfile.TemporaryDirectory(prefix='birja-phase14-plan06-oracle-') as directory:
+   snapshot=Path(directory)/'before.json';oracle_sha=fixture.save_snapshot(snapshot,before)
+   for engine in (app,scheduler,migrator,admin):await engine.dispose()
+   query('CREATE DATABASE birja_ops_test;','postgres')
+   query('DROP DATABASE birja_test WITH (FORCE);','postgres');source_destroyed=True
+   assert query("SELECT count(*) FROM pg_database WHERE datname='birja_test'",'postgres').strip()==b'0'
+   # Each failure uses a newly restored clone; assert no regrant call occurs.
+   authentic=recovery.restore_closure_authority
+   for damage in ('cash','terminal_name','intent_missing','sequence'):
+    observed=[]
+    def damaged(_dc,expected):
+     if damage=='cash':query('ALTER TABLE accounts DISABLE TRIGGER USER; UPDATE accounts SET cash=cash+1 WHERE id=(SELECT min(id) FROM accounts); ALTER TABLE accounts ENABLE TRIGGER USER;',recovery.CLONE)
+     elif damage=='terminal_name':
+      for table in ('portfolio_lifecycle_closures','portfolio_closure_intents'):
+       query('ALTER TABLE '+table+" DISABLE TRIGGER USER; UPDATE "+table+" SET confirmation_name='Joint corrupt' WHERE confirmation_name IS NOT NULL; ALTER TABLE "+table+' ENABLE TRIGGER USER;',recovery.CLONE)
+     elif damage=='intent_missing':query("SET session_replication_role=replica; DELETE FROM portfolio_closure_intents WHERE id=(SELECT min(id) FROM portfolio_closure_intents); SET session_replication_role=origin;",recovery.CLONE)
+     else:query("SELECT setval('portfolio_closure_intents_id_seq',400,true)",recovery.CLONE)
+     original_sql=recovery.sql
+     def audited(*args,**kwargs):
+      observed.append(args[1]);return original_sql(*args,**kwargs)
+     with patch.object(recovery,'sql',side_effect=audited):authentic(_dc,expected)
+    with patch.object(recovery,'restore_closure_authority',side_effect=damaged):
+     try:
+      with recovery.restored(dc,dump,manifest=manifest):raise AssertionError('damaged restore admitted '+damage)
+     except ValueError:pass
+    assert not any('GRANT ' in statement for statement in observed),damage
+    assert query("SELECT count(*) FROM pg_database WHERE datname='birja_restore_test'",'postgres').strip()==b'0'
+   with recovery.restored(dc,dump,manifest=manifest):
+    recovery.verify(dc,manifest,quarantined=False)
+    clone=create_async_engine(make_url(tests.conftest.TEST_DATABASE_URL).set(database=recovery.CLONE))
+    try:
+     clone_factory=async_sessionmaker(clone,expire_on_commit=False)
+     async with clone_factory() as db:
+      after=await fixture.project(db)
+      assert fixture.compare_snapshot(snapshot,oracle_sha,after)==oracle_sha
+     # Exactly retained original outcomes, including refused intents, replay.
+     async with clone_factory() as db:
+      originals=(await db.execute(text('SELECT user_id,portfolio_id,intent_key,confirmation_name,policy_version,outcome FROM portfolio_closure_intents ORDER BY id'))).all()
+      await db.rollback()
+      for original in originals:
+       result=await close_portfolio(db,ClosureIntent(original.user_id,original.portfolio_id,original.intent_key,original.confirmation_name,original.policy_version))
+       assert result.outcome==original.outcome and result.replayed
+      assert fixture.compare_snapshot(snapshot,oracle_sha,await fixture.project(db))==oracle_sha
+      assert (await db.execute(text("SELECT count(*) FROM accounts WHERE user_id=(SELECT max(id) FROM users) AND closed_at IS NULL"))).scalar_one()==0
+    finally:await clone.dispose()
+   print(json.dumps({'actual_postgres':True,'source_database_destroyed':True,'restored':True,'tables':31,'identity_tails':24,'negative_pregrant_cases':4,'oracle_sha256':oracle_sha,'encrypted_restore':False,'verified_tls_restore':False},sort_keys=True))
+ finally:
+  for engine in (app,scheduler,migrator,admin):
+   if engine:await engine.dispose()
+  if source_destroyed:query('CREATE DATABASE birja_test OWNER birja_test;','postgres')
+  query('DROP DATABASE IF EXISTS birja_ops_test WITH (FORCE);','postgres')
+asyncio.run(main())
+'''
+    result = subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',code],
+                            cwd=ROOT/'backend',env=env,capture_output=True,text=True,timeout=300)
+    if result.returncode:raise AssertionError(result.stderr[-7000:])
+    return json.loads(result.stdout.splitlines()[-1])
+
+
 def postgres_proof():
     """Owned synthetic logical producer proof; not encrypted/cold/TLS proof."""
     labels = json.loads(
@@ -422,6 +541,7 @@ class ClosureProducerContracts(unittest.TestCase):
              mock.patch.object(subprocess,'run',side_effect=external):
             output=Path(tmp)/'closure.tar'
             producer.bundle_package_v3(output,recovery=recovery)
+            recovery.bundle_verify(output,recovery.digest(output),required_profile='deploy-recovery-v4')
             with tarfile.open(output,'r:') as archive:
                 metadata=json.load(archive.extractfile('INVENTORY.json'))
                 self.assertEqual(metadata['recovery_profile'],'deploy-recovery-v4')
@@ -440,6 +560,37 @@ class ClosureProducerContracts(unittest.TestCase):
                 stage=Path(tmp)/'stage';stage.mkdir()
                 archive.extractall(stage,filter='data')
             producer.verify_closure_inventory(stage,metadata['portfolio_payload'])
+            # Authenticate coherent omissions and critical source tampering
+            # BEFORE any image/runtime import. Recompute all outer checksums.
+            with tarfile.open(output,'r:') as archive:
+                members={m.name:archive.extractfile(m).read() for m in archive.getmembers() if m.isfile()}
+            for damage in ('sources','schema','lifecycle','source','profile'):
+                content=dict(members);doc=copy.deepcopy(metadata)
+                if damage=='sources':
+                    del doc['retained_source_payloads']
+                    content={n:b for n,b in content.items() if not n.startswith('sources/')}
+                elif damage=='schema':del doc['schema_contract']
+                elif damage=='lifecycle':
+                    name='backend/app/models/portfolio_lifecycle.py'
+                    content.pop(name);doc['portfolio_payload']['sha256'].pop(name)
+                elif damage=='source':
+                    name='backend/app/services/portfolio_closure.py'
+                    content[name]+=b'\n# coherent altered source\n'
+                    doc['portfolio_payload']['sha256'][name]=hashlib.sha256(content[name]).hexdigest()
+                else:doc['recovery_profile']='deploy-recovery-v3'
+                content.pop('SHA256SUMS')
+                doc['files']=sorted(set(content)-{'INVENTORY.json'})
+                content['INVENTORY.json']=json.dumps(doc,sort_keys=True).encode()
+                content['SHA256SUMS']=''.join(hashlib.sha256(b).hexdigest()+'  '+n+'\n' for n,b in sorted(content.items())).encode()
+                damaged=Path(tmp)/(damage+'.tar')
+                with tarfile.open(damaged,'w:') as archive:
+                    for n,b in content.items():
+                        item=tarfile.TarInfo(n);item.size=len(b);archive.addfile(item,io.BytesIO(b))
+                damaged.chmod(0o600)
+                with self.subTest(damage=damage),mock.patch.object(recovery,'verify_saved_image') as image, \
+                     mock.patch.object(recovery,'runtime') as runtime,self.assertRaises(ValueError):
+                    recovery.bundle_verify(damaged,recovery.digest(damaged),required_profile='deploy-recovery-v4')
+                image.assert_not_called();runtime.assert_not_called()
             for name in ('backend/app/models/portfolio_lifecycle.py','backend/alembic/sql/0023_portfolio_closure.sql'):
                 path=stage/name;original=path.read_bytes();path.write_bytes(original+b'\n')
                 coherent=copy.deepcopy(metadata['portfolio_payload'])
@@ -884,7 +1035,9 @@ class ManagementRecoveryContracts(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] in (["--postgres"], ["--postgres-operator-login"]):
+    if sys.argv[1:] == ['--postgres']:
+        print(json.dumps(closure_restore_postgres_proof(),sort_keys=True))
+    elif sys.argv[1:] == ["--postgres-operator-login"]:
         result = postgres_proof()
         producer.validate_manifest(result["manifest"])
         producer.validate_manifest(result["quarantined"], quarantined=True)
