@@ -157,6 +157,8 @@ it.each([
   setup(path);
   expect(await screen.findByRole("status", { name: "Loading portfolio" })).toBeVisible();
   expect(probes.mounted).not.toHaveBeenCalled();
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(probes.mounted).not.toHaveBeenCalled();
   await act(async () => {
     release(json([first, second]));
   });

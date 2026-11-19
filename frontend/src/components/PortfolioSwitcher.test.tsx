@@ -4,6 +4,8 @@ import { MemoryRouter, useLocation } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { PortfolioSwitcher } from "./PortfolioSwitcher";
+import { openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
+import { capturePortfolioDeletionIntent, DELETION_POLICY } from "@/api/portfolioDeletion";
 
 const clients: QueryClient[] = [];
 const json = (value: unknown) => new Response(JSON.stringify(value));
@@ -31,6 +33,36 @@ afterEach(() => {
   cleanup();
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
+  sessionStorage.clear();
+});
+it("omits an original unknown root from choices without selecting or opening its sibling", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test");
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: "Original private",
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const { user } = setup(
+    [
+      { id: "1", name: "Original private" },
+      { id: "2", name: "Sibling" },
+    ],
+    "1",
+  );
+  const select = await screen.findByRole("combobox");
+  await screen.findByRole("option", { name: "Sibling · #2" });
+  await waitFor(() => expect(select).toBeEnabled());
+  expect(screen.queryByText(/Original private/)).toBeNull();
+  expect(screen.getByRole("option", { name: "Sibling · #2" })).toHaveValue("2");
+  expect(select).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
+  await user.selectOptions(select, "2");
+  await user.click(screen.getByRole("button", { name: "Open selected portfolio" }));
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
 });
 
 it.each([0, 1, 10])(
@@ -149,7 +181,9 @@ it("discards late old-owner discovery and never restores its draft in a replacem
   });
   await waitFor(() => expect(release).toBeTypeOf("function"));
   act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
-  expect(await screen.findByRole("option", { name: "Bob strategy · #2" })).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole("option", { name: "Bob strategy · #2" })).toBeVisible(),
+  );
   await act(async () => {
     release(json([{ id: "1", name: "Alice private" }]));
     await pending;

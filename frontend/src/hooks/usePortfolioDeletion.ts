@@ -215,10 +215,19 @@ export function subscribePortfolioDeletion(client: QueryClient, changed: () => v
 export function portfolioDeletionRevision(client: QueryClient) {
   return sessionFor(client).version;
 }
+/** Captured authority cannot revive after a replacement provider returns. */
+export function portfolioDeletionAuthorityGeneration(client: QueryClient) {
+  return sessionFor(client).serial;
+}
 /** Restore the owner-bound marker before rendering private financial authority. */
 export function portfolioDeletionAuthorityReady(client: QueryClient, owner: string) {
   const session = sessionFor(client);
-  return session.owner === owner && session.recovery !== null && !session.loading;
+  return (
+    persistenceClient?.deref() === client &&
+    session.owner === owner &&
+    session.recovery !== null &&
+    !session.loading
+  );
 }
 export function isPortfolioDeletionQuarantined(client: QueryClient, owner: string, id: string) {
   const session = sessionFor(client);
@@ -257,12 +266,17 @@ export function usePortfolioDeletion(
   );
   const current = () =>
     activeScopes.has(scope) &&
+    persistenceClient?.deref() === client &&
     owner !== null &&
     who(client) === owner &&
     session.owner === owner &&
     session.serial === serial;
   const ownerCurrent = () =>
-    owner !== null && who(client) === owner && session.owner === owner && session.serial === serial;
+    persistenceClient?.deref() === client &&
+    owner !== null &&
+    who(client) === owner &&
+    session.owner === owner &&
+    session.serial === serial;
   const view = session.state;
   const restore = async () => {
     if (!ownerCurrent() || session.loading || session.recovery) return;
@@ -287,9 +301,28 @@ export function usePortfolioDeletion(
     }
   };
   useLayoutEffect(() => {
+    const previous = persistenceClient?.deref();
     persistenceClient = new WeakRef(client);
+    if (previous && previous !== client) {
+      const retired = sessions.get(previous);
+      if (retired) {
+        retired.serial++;
+        retired.operation++;
+        retired.controller?.abort();
+        update(retired, {
+          controller: null,
+          operationScope: null,
+          reviewScope: null,
+          recovery: null,
+          loading: false,
+        });
+        publish(retired, empty());
+      }
+    }
     if (session.known && session.owner === null)
       clearDeletionRecovery(() => persistenceClient?.deref() === client && who(client) === null);
+  }, [client, session]);
+  useLayoutEffect(() => {
     activeScopes.add(scope);
     publish(session);
     void restore();

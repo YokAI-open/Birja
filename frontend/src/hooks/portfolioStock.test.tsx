@@ -562,6 +562,7 @@ it("revokes unavailable portfolio before retrying an unknown attempt", async () 
     await h.result.current.confirm();
   });
   await waitFor(() => expect(h.result.current.phase).toBe("unknown"));
+  const original = h.result.current.attempt;
   unavailable = true;
   await act(async () => {
     await h.result.current.checkResult();
@@ -573,6 +574,17 @@ it("revokes unavailable portfolio before retrying an unknown attempt", async () 
   expect(h.fetch.mock.calls).toHaveLength(count);
   expect(h.result.current.fill).toBeNull();
   expect(h.result.current.context).toBeUndefined();
+  const hidden = h.client.getQueryData<{ phase: string; attempt: unknown }>([
+    "stockTradeState",
+    alice,
+    "1",
+    0,
+  ]);
+  expect(hidden?.phase).toBe("unknown");
+  expect(hidden?.attempt).toBe(original);
+  const submissions = h.fetch.mock.calls.filter(([path]) => String(path).endsWith("/stock-trades"));
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1][1]?.body).toBe(submissions[0][1]?.body);
 });
 it("invalidates only the filled root's financial views", async () => {
   const h = setup();

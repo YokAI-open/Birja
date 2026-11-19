@@ -7,6 +7,7 @@ import { subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
 import {
   isPortfolioDeletionQuarantined,
   portfolioDeletionAuthorityReady,
+  portfolioDeletionAuthorityGeneration,
   portfolioDeletionRevision,
   subscribePortfolioDeletion,
   usePortfolioDeletion,
@@ -73,13 +74,14 @@ export function usePortfolioTarget(
   const identity = useMe();
   // This lease remains mounted when the financial Outlet is removed.
   const recovery = usePortfolioDeletion();
-  const deletionRevision = useSyncExternalStore(
+  useSyncExternalStore(
     useCallback((notify) => subscribePortfolioDeletion(client, notify), [client]),
     useCallback(() => portfolioDeletionRevision(client), [client]),
   );
   const owner = identity.data?.email ?? null;
   const guard = guardFor(client);
   const session = guard.session;
+  const deletionGeneration = portfolioDeletionAuthorityGeneration(client);
   const explicit = routePortfolioId !== undefined;
   const valid = explicit ? isPortfolioId(routePortfolioId) : legacyEntry;
   const key = useMemo(() => ["portfolios", owner] as const, [owner]);
@@ -120,19 +122,26 @@ export function usePortfolioTarget(
     useCallback(() => activeScopes.has(scope), [scope]),
   );
   const current = useCallback(
-    () => activeScopes.has(scope) && who(client) === owner && session === guardFor(client).session,
-    [scope, client, owner, session],
+    () =>
+      activeScopes.has(scope) &&
+      who(client) === owner &&
+      session === guardFor(client).session &&
+      portfolioDeletionAuthorityGeneration(client) === deletionGeneration &&
+      owner !== null &&
+      portfolioDeletionAuthorityReady(client, owner),
+    [scope, client, owner, session, deletionGeneration],
   );
 
   const metadata = useQuery({
     queryKey: key,
-    enabled: owner !== null && valid,
+    enabled: owner !== null && valid && recovery.ready,
     retry: false,
     staleTime: 10_000,
     gcTime: 0,
     refetchOnWindowFocus: true,
     queryFn: async ({ signal }) => {
       const capturedSession = guard.session;
+      const capturedDeletionGeneration = portfolioDeletionAuthorityGeneration(client);
       const serial = ++guard.serial;
       const query = client.getQueryCache().find({ queryKey: key, exact: true });
       try {
@@ -141,6 +150,7 @@ export function usePortfolioTarget(
         if (
           who(client) !== owner ||
           capturedSession !== guard.session ||
+          capturedDeletionGeneration !== portfolioDeletionAuthorityGeneration(client) ||
           serial !== guard.serial ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== query
         )
@@ -174,12 +184,17 @@ export function usePortfolioTarget(
 
   const selected =
     valid && explicit ? metadata.data?.find((p) => p.id === routePortfolioId) : undefined;
+  const authorityReady = owner !== null && portfolioDeletionAuthorityReady(client, owner);
+  const quarantined =
+    owner !== null &&
+    selected !== undefined &&
+    isPortfolioDeletionQuarantined(client, owner, selected.id);
   const target = useMemo<PortfolioTarget | null>(() => {
     if (
       !owner ||
       !selected ||
-      !portfolioDeletionAuthorityReady(client, owner) ||
-      isPortfolioDeletionQuarantined(client, owner, selected.id) ||
+      !authorityReady ||
+      quarantined ||
       metadata.isError ||
       (metadata.isFetching && client.getQueryState(key)?.isInvalidated)
     )
@@ -193,6 +208,7 @@ export function usePortfolioTarget(
         activeScopes.has(scope) &&
         who(client) === owner &&
         guard.session === session &&
+        portfolioDeletionAuthorityGeneration(client) === deletionGeneration &&
         portfolioDeletionAuthorityReady(client, owner) &&
         !isPortfolioDeletionQuarantined(client, owner, selected.id) &&
         query?.state.status === "success" &&
@@ -226,13 +242,18 @@ export function usePortfolioTarget(
     key,
     scope,
     guard,
-    deletionRevision,
+    authorityReady,
+    quarantined,
+    deletionGeneration,
   ]);
 
-  const portfolios =
+  const acceptedPortfolios =
     owner && portfolioDeletionAuthorityReady(client, owner)
       ? metadata.data?.filter((row) => !isPortfolioDeletionQuarantined(client, owner, row.id))
       : undefined;
+  // Masking the only uncertain root is not proof of an empty account.
+  const portfolios =
+    acceptedPortfolios?.length === 0 && metadata.data?.length ? undefined : acceptedPortfolios;
 
   let status: PortfolioTargetStatus;
   let redirectPortfolioId: string | null = null;
@@ -251,6 +272,7 @@ export function usePortfolioTarget(
   )
     status = "loading";
   else if (explicit) status = target ? "ready" : "unavailable";
+  else if (acceptedPortfolios?.length !== metadata.data?.length) status = "ambiguous";
   else if (portfolios?.length === 0) status = "empty";
   else if (portfolios?.length === 1) {
     status = "redirect";
@@ -266,7 +288,12 @@ export function usePortfolioTarget(
     isFetching: metadata.isFetching,
     /** A stale rendered recovery action cannot fetch as a new owner/target. */
     refetch: () =>
-      valid && owner !== null && current()
+      valid &&
+      owner !== null &&
+      activeScopes.has(scope) &&
+      who(client) === owner &&
+      session === guardFor(client).session &&
+      deletionGeneration === portfolioDeletionAuthorityGeneration(client)
         ? !recovery.ready
           ? recovery.retryRecoveryStorage()
           : metadata.refetch()

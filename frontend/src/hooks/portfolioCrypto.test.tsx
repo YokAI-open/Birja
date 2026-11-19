@@ -581,4 +581,13 @@ it("revokes a server-unavailable root while preserving only its hidden unknown a
   expect(client.getQueryData(["portfolios", alice])).toEqual([{ id: "2", name: "Strategy 2" }]);
   expect(result.current.isPending).toBe(false);
   expect(result.current.attempt).toBeNull();
+  expect(client.getQueryData(["cryptoTradeState", alice, "1", 0, "BTC"])).toMatchObject({
+    phase: "unknown",
+    attempt: {
+      portfolio_id: "1",
+      idempotency_key: "original-key",
+      expected_mid: "10000",
+      order,
+    },
+  });
 });

@@ -46,8 +46,29 @@ export function PortfolioTargetBoundary({
   });
   const heading = useRef<HTMLHeadingElement>(null);
   const entered = useRef(false);
+  const financial = useRef<HTMLDivElement>(null);
+  const financialFocus = useRef<Element | null>(null);
   useEffect(() => {
-    if (entered.current || result.status === "loading" || result.status === "redirect") return;
+    const remember = (event: FocusEvent) => {
+      const node = event.target;
+      financialFocus.current =
+        node instanceof Element && financial.current?.contains(node) ? node : null;
+    };
+    document.addEventListener("focusin", remember);
+    return () => document.removeEventListener("focusin", remember);
+  }, []);
+  useEffect(() => {
+    if (result.status === "loading" || result.status === "redirect") return;
+    if (entered.current) {
+      if (
+        financialFocus.current &&
+        !financialFocus.current.isConnected &&
+        result.status !== "ready" &&
+        document.activeElement === document.body
+      )
+        heading.current?.focus();
+      return;
+    }
     entered.current = true;
     // Initial refusal replaces the page. Background failures announce without
     // stealing focus from a user who was already interacting with that page.
@@ -55,7 +76,11 @@ export function PortfolioTargetBoundary({
   }, [result.status]);
 
   if (result.status === "ready" && result.target)
-    return children ? children(result.target) : <Outlet context={result.target} />;
+    return (
+      <div className="contents" ref={financial}>
+        {children ? children(result.target) : <Outlet context={result.target} />}
+      </div>
+    );
   if (result.status === "signed_out") return null;
   if (result.status === "redirect" && result.redirectPortfolioId && legacyDestination)
     return <Navigate replace to={legacyDestination(result.redirectPortfolioId)} />;

@@ -59,6 +59,14 @@ it("broadcasts only opaque source/root and cleans up listeners/channel", () => {
     scope: expect.stringMatching(/^[a-f0-9-]{36}$/),
     portfolioId: "2",
   });
+  changed.mockClear();
+  broadcastMetadataChange("2", "lifecycle");
+  expect(changed).toHaveBeenCalledExactlyOnceWith("2", "lifecycle");
+  expect(postMessage).toHaveBeenLastCalledWith({
+    scope: expect.stringMatching(/^[a-f0-9-]{36}$/),
+    portfolioId: "2",
+    kind: "lifecycle",
+  });
   dispose();
-  expect(close).toHaveBeenCalledTimes(2);
+  expect(close).toHaveBeenCalledTimes(3);
 });

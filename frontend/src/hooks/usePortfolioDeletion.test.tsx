@@ -123,9 +123,14 @@ it("lets only the current client logout clear the newer durable original", async
   expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBe(stored);
   await act(async () => obsoleteConfirm());
   expect(fetch).toHaveBeenCalledTimes(1);
-  act(() => current.client.setQueryData(["me"], null));
+  const returned = setup(undefined, old.client);
+  await waitFor(() => expect(returned.result.current.ready).toBe(true));
+  expect(returned.result.current.deletion.attempt).toEqual(JSON.parse(stored!).attempt);
+  await act(async () => obsoleteConfirm());
+  expect(fetch).toHaveBeenCalledTimes(1);
+  act(() => returned.client.setQueryData(["me"], null));
   expect(sessionStorage.getItem(DELETION_STORAGE_KEY)).toBeNull();
-  expect(current.result.current.deletion.attempt).toBeNull();
+  expect(returned.result.current.deletion.attempt).toBeNull();
 });
 
 it("refuses before sending if original recovery persistence fails", async () => {

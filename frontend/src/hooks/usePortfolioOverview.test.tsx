@@ -116,7 +116,9 @@ it("never turns masking the final hinted row and a failed refresh into known zer
   expect(hook.result.current.membershipUncertain).toBe(true);
 });
 it("surfaces failed recovery initialization as an error with an explicit safe retry", async () => {
-  const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("private storage detail"); });
+  const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("private storage detail");
+  });
   const { wrapper } = setup();
   const fetch = vi.fn(() => Promise.resolve(json([row("1")])));
   vi.stubGlobal("fetch", fetch);
@@ -126,7 +128,9 @@ it("surfaces failed recovery initialization as an error with an explicit safe re
   expect(hook.result.current.data).toBeUndefined();
   expect(fetch).not.toHaveBeenCalled();
   get.mockRestore();
-  await act(async () => { await hook.result.current.refetch(); });
+  await act(async () => {
+    await hook.result.current.refetch();
+  });
   await waitFor(() => expect(hook.result.current.data).toHaveLength(1));
   expect(hook.result.current.isError).toBe(false);
 });

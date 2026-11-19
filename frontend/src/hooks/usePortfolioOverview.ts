@@ -14,6 +14,14 @@ import { eventHistorySession } from "./useEventHistory";
 import { portfolioGuardFor, projectPortfolio, type TimedPortfolio } from "./usePortfolio";
 import { subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
 import { stockInstant } from "@/api/stocks";
+import {
+  isPortfolioDeletionQuarantined,
+  portfolioDeletionAuthorityReady,
+  portfolioDeletionAuthorityGeneration,
+  portfolioDeletionRevision,
+  subscribePortfolioDeletion,
+  usePortfolioDeletion,
+} from "./usePortfolioDeletion";
 
 type TimedOverview = readonly (PortfolioOverview & Pick<TimedPortfolio, "transport">)[];
 const activeScopes = new WeakSet<object>();
@@ -22,23 +30,42 @@ const activeScopes = new WeakSet<object>();
 export function usePortfolioOverview() {
   const client = useQueryClient();
   const me = useMe();
+  const recovery = usePortfolioDeletion();
+  const deletionRevision = useSyncExternalStore(
+    useCallback((notify) => subscribePortfolioDeletion(client, notify), [client]),
+    useCallback(() => portfolioDeletionRevision(client), [client]),
+  );
+  const [, tick] = useReducer((value: number) => value + 1, 0);
   const subscribe = useCallback(
     (notify: () => void) => client.getQueryCache().subscribe(notify),
     [client],
   );
   const epoch = useSyncExternalStore(subscribe, () => eventHistorySession(client).epoch);
   const owner = me.data?.email ?? null;
+  const deletionGeneration = portfolioDeletionAuthorityGeneration(client);
   const key = useMemo(() => ["portfolioOverview", owner, epoch] as const, [owner, epoch]);
-  const scope = useMemo(() => ({ owner, epoch }), [owner, epoch]);
+  const scope = useMemo(
+    () => ({
+      owner,
+      epoch,
+      deletionGeneration,
+      revision: 0,
+      hints: new Set<string>(),
+      masked: new Set<string>(),
+    }),
+    [owner, epoch, deletionGeneration],
+  );
   const current = useCallback(() => {
     const session = eventHistorySession(client);
     return (
       activeScopes.has(scope) &&
       owner !== null &&
       session.email === owner &&
-      session.epoch === epoch
+      session.epoch === epoch &&
+      portfolioDeletionAuthorityGeneration(client) === deletionGeneration &&
+      portfolioDeletionAuthorityReady(client, owner)
     );
-  }, [client, scope, owner, epoch]);
+  }, [client, scope, owner, epoch, deletionGeneration]);
   useLayoutEffect(() => {
     activeScopes.add(scope);
     return () => {
@@ -48,25 +75,36 @@ export function usePortfolioOverview() {
   const project = useCallback(
     (rows: TimedOverview): TimedOverview => {
       let changed = false;
-      const safe = rows.map((row) => {
-        const { id, description, ...statement } = row;
-        const detail: TimedPortfolio = { ...statement, portfolio_id: id };
-        const guarded = projectPortfolio(
-          client,
-          portfolioGuardFor(client, owner, id, epoch),
-          detail,
-          "overview",
-        );
-        // Preserve authenticated current metadata even if an older financial snapshot is refused.
-        if (guarded === detail) return row;
-        changed = true;
-        const { portfolio_id: _id, ...values } = guarded;
-        void _id;
-        return { ...values, id, name: row.name, description };
-      });
+      const safe = rows
+        .filter((row) => {
+          const hidden =
+            scope.hints.has(row.id) ||
+            (owner !== null && isPortfolioDeletionQuarantined(client, owner, row.id));
+          if (hidden) {
+            changed = true;
+            scope.masked.add(row.id);
+          }
+          return !hidden;
+        })
+        .map((row) => {
+          const { id, description, ...statement } = row;
+          const detail: TimedPortfolio = { ...statement, portfolio_id: id };
+          const guarded = projectPortfolio(
+            client,
+            portfolioGuardFor(client, owner, id, epoch),
+            detail,
+            "overview",
+          );
+          // Preserve authenticated current metadata even if an older financial snapshot is refused.
+          if (guarded === detail) return row;
+          changed = true;
+          const { portfolio_id: _id, ...values } = guarded;
+          void _id;
+          return { ...values, id, name: row.name, description };
+        });
       return changed ? safe : rows;
     },
-    [client, owner, epoch],
+    [client, owner, epoch, scope],
   );
   const query = useQuery({
     queryKey: key,
@@ -79,11 +117,16 @@ export function usePortfolioOverview() {
     queryFn: async ({ signal }) => {
       if (!current()) throw new Error("Overview session changed");
       const captured = client.getQueryCache().find({ queryKey: key, exact: true });
+      const revision = scope.revision;
       const started = performance.now();
       try {
         const rows = await fetchPortfolioOverview(signal);
         signal.throwIfAborted();
-        if (!current() || client.getQueryCache().find({ queryKey: key, exact: true }) !== captured)
+        if (
+          !current() ||
+          scope.revision !== revision ||
+          client.getQueryCache().find({ queryKey: key, exact: true }) !== captured
+        )
           throw new Error("Overview session changed");
         // Membership and the common statement time belong to one response.
         // Never splice a retained book into an older comparison response.
@@ -96,6 +139,10 @@ export function usePortfolioOverview() {
           throw new Error("Overview snapshot moved backwards");
         const received_at = performance.now();
         const transport = { received_at, round_trip_ms: Math.max(0, received_at - started) };
+        // Only this fresh authenticated response resolves advisory hints. The
+        // independent local unknown deletion remains quarantined by its lease.
+        scope.hints.clear();
+        scope.masked.clear();
         return project(rows.map((row) => ({ ...row, transport })));
       } catch (error) {
         if (current() && error instanceof ApiError && error.status === 401)
@@ -104,7 +151,6 @@ export function usePortfolioOverview() {
       }
     },
   });
-  const [, tick] = useReducer((value: number) => value + 1, 0);
   useLayoutEffect(() => {
     let writing = false;
     let deadline: ReturnType<typeof setTimeout> | undefined;
@@ -164,22 +210,38 @@ export function usePortfolioOverview() {
       window.removeEventListener("focus", update);
       window.removeEventListener("visibilitychange", update);
     };
-  }, [client, key, owner, epoch, current, project]);
+  }, [client, key, owner, epoch, current, project, deletionRevision]);
   useEffect(
     () =>
-      subscribeMetadataEvents(() => {
+      subscribeMetadataEvents((id, kind) => {
         if (!current()) return;
+        if (kind === "lifecycle") {
+          scope.revision++;
+          scope.hints.add(id);
+          tick();
+        }
         void client.invalidateQueries({ queryKey: ["portfolios", owner], exact: true });
         void client.invalidateQueries({ queryKey: key, exact: true });
       }),
-    [client, owner, key, current],
+    [client, owner, key, current, scope],
   );
   const cached = client.getQueryData<TimedOverview>(key);
+  const visible = current() && cached ? project(cached) : undefined;
+  const membershipUncertain =
+    scope.hints.size > 0 || scope.masked.size > 0 || recovery.deletion.attempt !== null;
   return {
     ...query,
+    isPending: query.isPending && (recovery.ready || recovery.deletion.error === null),
+    isError: query.isError || (!recovery.ready && recovery.deletion.error !== null),
+    error: query.error ?? recovery.deletion.error,
     // Recheck before render as well as on cache notifications, focus and time.
-    data: current() && cached ? project(cached) : undefined,
+    data: visible?.length === 0 && membershipUncertain ? undefined : visible,
+    membershipUncertain,
     refetch: (options?: Parameters<typeof query.refetch>[0]) =>
-      current() ? query.refetch(options) : Promise.reject(new Error("Overview session changed")),
+      owner !== null && eventHistorySession(client).email === owner && !recovery.ready
+        ? recovery.retryRecoveryStorage()
+        : current()
+          ? query.refetch(options)
+          : Promise.reject(new Error("Overview session changed")),
   };
 }

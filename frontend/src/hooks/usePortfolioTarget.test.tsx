@@ -43,8 +43,41 @@ it("treats a forged lifecycle hint as temporary revocation, never a server tombs
   expect(captured.isCurrent()).toBe(false);
   expect(h.result.current.target?.portfolioId).toBe("1");
 });
+it("never revives an old financial handle after provider A to B to A with the same owner", async () => {
+  vi.stubGlobal("fetch", () => Promise.resolve(json([first])));
+  const firstClient = setup("1");
+  await waitFor(() => expect(firstClient.result.current.status).toBe("ready"));
+  const original = firstClient.result.current.target!;
+  const replacement = setup("1");
+  await waitFor(() => expect(replacement.result.current.status).toBe("ready"));
+  expect(original.isCurrent()).toBe(false);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={firstClient.client}>{children}</QueryClientProvider>
+  );
+  const returned = renderHook(() => usePortfolioTarget("1"), { wrapper });
+  await waitFor(() => expect(returned.result.current.target?.isCurrent()).toBe(true));
+  expect(original.isCurrent()).toBe(false);
+  expect(original.isOriginalCurrent?.()).toBe(false);
+});
+it("exposes an explicit guarded storage retry before any private target discovery", async () => {
+  const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("private browser storage detail");
+  });
+  const fetch = vi.fn(() => Promise.resolve(json([first])));
+  vi.stubGlobal("fetch", fetch);
+  const h = setup("1");
+  await waitFor(() => expect(h.result.current.status).toBe("error"));
+  expect(h.result.current.target).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(h.result.current.error?.message).not.toContain("private browser");
+  get.mockRestore();
+  await act(async () => {
+    await h.result.current.refetch();
+  });
+  await waitFor(() => expect(h.result.current.target?.isCurrent()).toBe(true));
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
 it("revokes captured authority before DELETE and never restores an unknown original from active discovery", async () => {
-  let captured!: NonNullable<ReturnType<typeof usePortfolioTarget>["target"]>;
   let executableAtSend: boolean | undefined;
   vi.stubGlobal(
     "fetch",
@@ -58,7 +91,7 @@ it("revokes captured authority before DELETE and never restores an unknown origi
   );
   const h = setup("1");
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
-  captured = h.result.current.target!;
+  const captured = h.result.current.target!;
   const metadata = { ...first, description: "Original description" };
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={h.client}>{children}</QueryClientProvider>
@@ -79,6 +112,9 @@ it("revokes captured authority before DELETE and never restores an unknown origi
   });
   expect(h.result.current.target).toBeNull();
   expect(deletion.result.current.deletion.phase).toBe("unknown");
+  h.rerender({ routeId: undefined, legacy: true });
+  await waitFor(() => expect(h.result.current.status).toBe("ambiguous"));
+  expect(h.result.current.redirectPortfolioId).toBeNull();
   h.rerender({ routeId: "2", legacy: false });
   await waitFor(() => expect(h.result.current.target?.portfolioId).toBe("2"));
   h.rerender({ routeId: "1", legacy: false });

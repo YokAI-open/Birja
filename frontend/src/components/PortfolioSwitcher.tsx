@@ -17,19 +17,17 @@ export function PortfolioSwitcher({ portfolioId }: { portfolioId?: string }) {
   return (
     <Choices
       key={`${identity.data.email}:${session.epoch}:${pathname}:${portfolioId ?? ""}`}
-      owner={identity.data.email}
       portfolioId={portfolioId}
     />
   );
 }
 
-function Choices({ owner, portfolioId }: { owner: string; portfolioId?: string }) {
+function Choices({ portfolioId }: { portfolioId?: string }) {
   const [draft, setDraft] = useState(portfolioId ?? "");
   const id = useId();
   const navigate = useNavigate();
   const result = usePortfolioTarget(draft || undefined, { legacyEntry: true });
   // Only the accepted, lifecycle-filtered projection supplies choices.
-  void owner;
   const known = !["loading", "error", "signed_out"].includes(result.status);
   const rows = known ? result.portfolios : undefined;
   const current = rows?.find((row) => row.id === portfolioId);

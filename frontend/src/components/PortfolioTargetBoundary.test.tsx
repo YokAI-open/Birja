@@ -61,14 +61,22 @@ afterEach(() => {
 });
 it("removes focused financial controls at confirmed submit and keeps only an unresolved-order boolean", async () => {
   document.cookie = "bj_csrf=test; path=/";
-  vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => init?.method === "DELETE"
-    ? Promise.reject(new TypeError("lost response"))
-    : Promise.resolve(json([first])));
+  vi.stubGlobal("fetch", (_url: string, init?: RequestInit) =>
+    init?.method === "DELETE"
+      ? Promise.reject(new TypeError("lost response"))
+      : Promise.resolve(json([first])),
+  );
   const { client } = setup();
   const confirm = await screen.findByRole("button", { name: "Confirm order" });
   confirm.focus();
-  client.setQueryData(["cryptoTradeState", owner, "1", 0, "BTC"], { phase: "unknown", attempt: { idempotency_key: "private-original-key", order: { amount_usd: "8123.45" } } });
-  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  client.setQueryDefaults(["cryptoTradeState"], { gcTime: Infinity });
+  client.setQueryData(["cryptoTradeState", owner, "1", 0, "BTC"], {
+    phase: "unknown",
+    attempt: { idempotency_key: "private-original-key", order: { amount_usd: "8123.45" } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
   const deletion = renderHook(() => usePortfolioDeletion("1"), { wrapper });
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
   act(() => {
@@ -79,7 +87,9 @@ it("removes focused financial controls at confirmed submit and keeps only an unr
   await act(async () => deletion.result.current.confirmDeletion());
   const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
   expect(heading).toHaveFocus();
-  expect(screen.queryByText(/Private cash|My portfolio|Private description|private-original-key/)).toBeNull();
+  expect(
+    screen.queryByText(/Private cash|My portfolio|Private description|private-original-key/),
+  ).toBeNull();
   expect(screen.queryByRole("button", { name: /Confirm order|retry/i })).toBeNull();
   expect(screen.getByText(/earlier order's result is unconfirmed/)).toBeVisible();
   expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
@@ -189,11 +199,13 @@ it("retries metadata failures at the same target without exposing old finance", 
   expect(await screen.findByText(/Private cash/)).toBeVisible();
   expect(fetch.mock.calls.every(([url]) => url === "/api/v2/portfolios")).toBe(true);
 });
-it("removes finance on root loss and announces without background heading focus theft", async () => {
+it("removes finance on root loss without stealing focus from a persistent external control", async () => {
   let values = [first];
   vi.stubGlobal("fetch", () => Promise.resolve(json(values)));
   const { client } = setup();
-  const action = await screen.findByRole("button", { name: "Confirm order" });
+  await screen.findByRole("button", { name: "Confirm order" });
+  const action = document.createElement("button");
+  document.body.append(action);
   action.focus();
   values = [];
   await act(async () => {
@@ -201,6 +213,8 @@ it("removes finance on root loss and announces without background heading focus 
   });
   const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
   expect(heading).not.toHaveFocus();
+  expect(action).toHaveFocus();
+  action.remove();
   expect(heading.closest("section")).toHaveAttribute("aria-live", "polite");
   expect(screen.queryByText(/Private cash/)).toBeNull();
   expect(screen.queryByRole("button", { name: "Confirm order" })).toBeNull();
