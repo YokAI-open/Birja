@@ -183,3 +183,68 @@ covered by the plan's tampering/repudiation/DoS threat controls.
 All listed implementation/provenance files and seven task/fix commits exist;
 actual R3 receipts are passed and source unchanged. Global state updates are
 owned by the parent orchestrator and were intentionally not performed here.
+
+## Independent Review Repairs: CR-01 and WR-01
+
+The independent review at `ec0965c` found two genuine supervisor defects:
+interrupting synchronous preflight could leave an unrecorded descendant alive,
+and replaying the internal worker could overwrite original status and rerun
+preflight even though exclusive command.log prevented a second long command.
+The original findings remain unchanged in14-16-REVIEW.md; this implementation
+record does not substitute for independent re-review.
+
+**RED:** `286611f` adds actual stdlib-process regressions. Both findings reproduce
+in0.579s: nested preflight work remains alive at terminal publication, and a
+completed worker replay runs preflight twice. The test explicitly cleans the
+old implementation's leaked synthetic descendant afterward. RED log:
+`/tmp/birja-phase14-plan16/supervisor-repair-red.log`.
+
+**GREEN:** `54c9120` makes preflight a separate owned session, gated until its
+PID/startticks/phase/private log are durable. Cancellation signals the original
+group and waits for every live descendant before terminal publication; a reused
+identity refuses signalling. The preflight wrapper avoids throwing through
+subprocess.run on group cancellation, allowing its direct child's shell/Compose
+finalizers to finish. The real nested regression checks both wrapper and
+grandchild finalizers, no live descendant, retained preflight identity, and no
+long command. Long-child interruption also checks prompt cancellation/nonzero
+exit rather than merely waiting for a normal child to finish.
+
+An atomic O_EXCL claim consumes the private request before status/preflight.
+The claim binds immutable request bytes, runID and original PID/startticks and
+is fsynced before work. Completed, active, concurrent and stale replays refuse
+without changing original logs/status/identities or rerunning preflight. Claim
+identity/request mutation negatives refuse, and status/resume remain read-only.
+
+**Honest escalation:** `3b2b24d` retains a group-killed/finalizers-unconfirmed
+disposition after bounded SIGKILL escalation, with resource cleanup explicitly
+not attested. Its actual bounded forced-preflight case proves the finally marker
+is absent, all work is gone, and no long command started. Process reaping is
+never presented as evidence of successful resource finalization.
+
+Final focused results:28 runner/supervisor cases passed8.189s;22 image/source
+cases passed5.385s;88 CI ops cases passed23.050s. The CI block discovers the
+new contract cases. Scoped Ruff/format and git diff checks pass. Raw logs remain
+under `/tmp/birja-phase14-plan16/supervisor-repair-{final,image,ci}.log`.
+The last disposition-only change was followed by the28-case runner block;
+image/CI results are from54c9120's unchanged source/image guard implementation.
+The existing202-case runtime qualification and R3 TLS/archive proofs were not
+rerun because no runtime, administrativeSQL, pin, fixture image or archive bytes
+changed during this review repair.
+
+**Actual detached mechanism check:** At54c9120, the real139-case preflight ran
+under the new supervisor and passed33.26s; the whole bounded diagnostic took
+41.947s. Separate tool calls observed the same supervisor1114247/startticks
+2912888888 and preflight1114250/startticks2912888932 while active and after
+completion. The retained claim matches the terminal original identity;
+preflight_exit_code=0. Only a NOT_QUALIFICATION print followed preflight;
+no long security/recovery campaign ran. Private receipt directory:
+`/tmp/birja-backup-test-p14-16-repair-preflight`. Its owned containers, volumes
+and network were independently checked absent. Later disposition/test changes
+do not change the measured preflight process mechanism; the receipt preserves
+its original source rather than claiming a rerun at the later commit.
+
+No runtime/ACL/pin changes, package installation, provider/production access,
+new archive, publication, global state updates or human acceptance occurred.
+Original review findings remain open pending parent independent re-review.
+Self-check confirms286611f,54c9120,3b2b24d and their files/evidence exist;
+preexisting untracked.claude remains untouched.
