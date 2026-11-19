@@ -172,3 +172,47 @@ was performed or newly authorized.
 All created artifacts and all four task commits were verified present. Scoped
 diff checks pass; no tracked deletion or unresolved owned change remains outside
 this summary. Parent-owned planning state is intentionally unchanged.
+
+## WR-01 review follow-up — stock first-buy response ordering
+
+The independent `14-10-REVIEW.md` warning remains preserved as originally
+written. Parent authorized a test-only follow-up in
+`test_portfolio_closure_races.py`; no production source change was required.
+
+The original first-buy omission case now accepts only an original201 receipt
+with exact root/coin/AAPL/buy/IEX identity and independent bid100, ask102,
+midpoint101, quantity1, execution/notional102, zero fee, cash10000→9898 and
+holdings0→1; or exact private404 `portfolio_unavailable` with no receipt/quote
+fields and no-store/Vary headers. It still observes the real original closer
+blocked behind the stock writer and requires exactly two actual closure SQL
+invocations after the genuine whole-transaction40001 retry.
+
+A second deterministic variant pauses the stock route immediately before its
+final shared read, after the real fill commits. It waits for the actual public
+closer to complete both attempts and return200 before releasing the final read,
+then requires404. Events and observed PostgreSQL blockers establish the ordering;
+there is no mocked financial outcome, fabricated SQL retry or timing sleep.
+
+Both variants independently verify the stored journal's original root/owner/coin,
+sequence1/epoch0, fill cause, quantity0→1 and basis0→102, global tail1, retained
+trade/execution/cash, two grants totaling20000, exact original book and untouched
+sibling. A subsequent normal closed trade is refused and the complete frozen
+financial snapshot remains identical. The existing stock read-first privacy test
+remains unchanged and still requires201 while the actual closer is blocked.
+
+Targeted original/forced cases and the unchanged crypto/stock read-first tests
+passed4 cases in27.870s. The final full affected race/privacy run then passed
+all38 cases in238.708s (236.60s pytest time), including the additional independent
+stored journal/frozen-state assertions. Scoped Ruff passed in0.040s; the unchanged
+stock route's mypy contract passed in0.446s; final test format check passed
+in0.048s. Actual receipts/logs are `/tmp/birja-phase14-plan10/wr01-*.json` and
+matching `.log` files. Both owned test containers and their network were removed
+again with the same explicit project-scoped cleanup command. No app/runtime,
+dependency, authority, provider, production or parent planning-state change occurred.
+
+**Plan13 financial uncertainty handoff:** Execution404 may follow a committed
+fill whose later receipt became private. If the receipt cannot be verified,
+preserve the original immutable attempt identity, original portfolio ID, request
+body/idempotency key and unresolved-outcome state; never discard that uncertainty,
+assert an economic rollback, or retry the attempt against a replacement root.
+A preview404 alone does not imply an unknown economic execution outcome.

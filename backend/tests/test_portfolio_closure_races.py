@@ -182,14 +182,18 @@ async def test_split_writer_real_instrument_gate_both_orders(strategy_events, cl
         await finish(*tasks)
 
 
+@pytest.mark.parametrize("close_before_final_read", [False, True])
 async def test_first_buy_omitted_discovery_retries_entire_public_closure(
-    strategy_books, monkeypatch
+    strategy_books, monkeypatch, close_before_final_read
 ):
+    from app.api.v2 import stock_trades
     from app.services import stock_trading
 
     api, roots, cid, _ = strategy_books
     ready, release = asyncio.Event(), asyncio.Event()
     original = stock_trading.append_stock_movement
+    final_ready, final_release = asyncio.Event(), asyncio.Event()
+    original_fence = stock_trades.fence_owned_active_portfolios
     writer_pid = None
     calls = []
 
@@ -201,11 +205,20 @@ async def test_first_buy_omitted_discovery_retries_entire_public_closure(
         await release.wait()
         return result
 
+    async def hold_final_read(db, owner, identifiers):
+        # This route seam follows the genuine economic commit. Pause only the
+        # final read, allowing the real queued closer's whole retry to finish.
+        final_ready.set()
+        await final_release.wait()
+        await original_fence(db, owner, identifiers)
+
     def observe(conn, cursor, statement, parameters, context, executemany):
         if "SELECT * FROM public.close_portfolio(" in statement:
             calls.append(statement)
 
     monkeypatch.setattr(stock_trading, "append_stock_movement", hold_actual_writer)
+    if close_before_final_read:
+        monkeypatch.setattr(stock_trades, "fence_owned_active_portfolios", hold_final_read)
     event.listen(api.app.state.engine.sync_engine, "before_cursor_execute", observe)
     tasks = []
     try:
@@ -216,8 +229,65 @@ async def test_first_buy_omitted_discovery_retries_entire_public_closure(
         tasks.append(closing)
         await blocked(api, writer_pid, "close_portfolio")
         release.set()
-        bought, closed = await asyncio.wait_for(asyncio.gather(*tasks), 8)
-        assert bought.status_code == 201, bought.text
+        if close_before_final_read:
+            await asyncio.wait_for(final_ready.wait(), 5)
+            closed = await asyncio.wait_for(closing, 8)
+            assert closed.status_code == 200, closed.text
+            assert len(calls) == 2
+            assert not buy.done()
+            final_release.set()
+            bought = await asyncio.wait_for(buy, 5)
+            assert bought.status_code == 404, bought.text
+        else:
+            bought, closed = await asyncio.wait_for(asyncio.gather(*tasks), 8)
+        if bought.status_code == 404:
+            assert bought.json() == {"detail": {"code": "portfolio_unavailable"}}
+            assert bought.headers["cache-control"] == "no-store"
+            assert bought.headers["vary"] == "Cookie, Authorization"
+        else:
+            assert bought.status_code == 201, bought.text
+            receipt = bought.json()
+            assert {
+                key: receipt[key]
+                for key in ("portfolio_id", "coin_id", "symbol", "side", "feed", "source")
+            } == {
+                "portfolio_id": roots[0],
+                "coin_id": str(cid),
+                "symbol": "AAPL",
+                "side": "buy",
+                "feed": "iex",
+                "source": "alpaca",
+            }
+            assert {
+                key: Decimal(receipt[key])
+                for key in (
+                    "quantity",
+                    "bid",
+                    "ask",
+                    "exact_mid",
+                    "exec_price",
+                    "notional",
+                    "fee",
+                    "cash_delta",
+                    "cash_before",
+                    "cash_after",
+                    "held_before",
+                    "held_after",
+                )
+            } == {
+                "quantity": Decimal(1),
+                "bid": Decimal(100),
+                "ask": Decimal(102),
+                "exact_mid": Decimal(101),
+                "exec_price": Decimal(102),
+                "notional": Decimal(102),
+                "fee": Decimal(0),
+                "cash_delta": Decimal(-102),
+                "cash_before": Decimal(10000),
+                "cash_after": Decimal(9898),
+                "held_before": Decimal(0),
+                "held_after": Decimal(1),
+            }
         assert closed.status_code == 200, closed.text
         assert len(calls) == 2  # real 40001 rollback and complete rediscovery
         assert (await ledger(api, roots[0])) == (
@@ -226,6 +296,41 @@ async def test_first_buy_omitted_discovery_retries_entire_public_closure(
         )
         assert await counts(api) == (2, 2, 20000, 1)
         async with api.migrator.connect() as conn:
+            movement = (
+                await conn.execute(
+                    text(
+                        "SELECT m.portfolio_id,m.user_id,m.coin_id,m.sequence,m.unit_epoch,"
+                        "m.cause_kind,m.quantity,m.before_quantity,m.after_quantity,"
+                        "m.before_basis,m.after_basis,t.id,t.exec_price,t.cash_after "
+                        "FROM stock_ownership_movements m JOIN trades t ON t.id=m.trade_id "
+                        "WHERE m.portfolio_id=:p"
+                    ),
+                    {"p": int(roots[0])},
+                )
+            ).one()
+            assert tuple(movement[:11]) == (
+                int(roots[0]),
+                api.uid,
+                cid,
+                1,
+                0,
+                "fill",
+                Decimal(1),
+                Decimal(0),
+                Decimal(1),
+                Decimal(0),
+                Decimal(102),
+            )
+            assert tuple(movement[12:]) == (Decimal(102), Decimal(9898))
+            if bought.status_code == 201:
+                assert bought.json()["trade_id"] == str(movement[11])
+            assert (
+                await conn.scalar(
+                    text("SELECT max(sequence) FROM stock_ownership_movements WHERE coin_id=:c"),
+                    {"c": cid},
+                )
+                == 1
+            )
             assert (
                 await conn.execute(
                     text(
@@ -235,10 +340,14 @@ async def test_first_buy_omitted_discovery_retries_entire_public_closure(
                     {"p": int(roots[0]), "c": cid},
                 )
             ).one() == (1, 0)
+            frozen = await frozen_financial_snapshot(conn, int(roots[0]))
         assert (await trade(api, roots[0], stock=True)).status_code == 404
+        async with api.migrator.connect() as conn:
+            assert await frozen_financial_snapshot(conn, int(roots[0])) == frozen
         assert (await ledger(api, roots[1])) == ((Decimal(10000), Decimal(10000)), [])
     finally:
         release.set()
+        final_release.set()
         await finish(*tasks)
         event.remove(api.app.state.engine.sync_engine, "before_cursor_execute", observe)
 
