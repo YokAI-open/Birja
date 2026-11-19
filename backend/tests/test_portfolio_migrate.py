@@ -21,6 +21,53 @@ __all__ = ["portfolio_migration_db"]
 URL = "postgresql+asyncpg://birja_migrator:synthetic@postgres:5432/birja"
 
 
+def test_successor_source_authentication_pins_every_closure_asset():
+    required = {
+        "alembic/versions/0021_portfolio_closure_schema.py",
+        "alembic/versions/0022_portfolio_closure_provenance.py",
+        "alembic/versions/0023_portfolio_closure_authority.py",
+        "alembic/sql/0023_portfolio_closure.sql",
+    }
+    assert required <= migration.SOURCE.keys()
+    migration.require_source()
+
+
+async def test_successor_authenticated_migrator_accepts_complete_closure_revision(
+    portfolio_migration_db,
+):
+    """Migration authentication supports the declared successor, not arbitrary head."""
+    import asyncio
+
+    from tests.test_migrations import run_test_migration
+
+    for revision in ("0020", "0021", "0022", "0023"):
+        await asyncio.to_thread(run_test_migration, revision)
+        async with portfolio_migration_db.begin() as conn:
+            await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+        child = create_async_engine(test_migration_url())
+        try:
+            async with child.connect() as conn:
+                assert await migration.require_migrator(conn) == revision
+        finally:
+            await child.dispose()
+    # A familiar name on an unexpected function or table is not an admitted
+    # revision, and a historical schema stamp cannot masquerade as successor.
+    child = create_async_engine(test_migration_url())
+    try:
+        async with child.connect() as conn:
+            with pytest.raises(ValueError, match="Unexpected migration routine"):
+                async with conn.begin_nested():
+                    await conn.execute(
+                        text(
+                            "CREATE FUNCTION public.close_portfolio(text) RETURNS bigint "
+                            "LANGUAGE sql AS $$SELECT 1::bigint$$"
+                        )
+                    )
+                    await migration.require_migrator(conn)
+    finally:
+        await child.dispose()
+
+
 def test_trusted_source_requires_exact_regular_files(tmp_path):
     migration.require_source()
     for name in migration.SOURCE:
