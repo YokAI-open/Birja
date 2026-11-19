@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import io
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -269,6 +270,112 @@ campaign_spec.loader.exec_module(campaign)
 
 
 class DurableCampaign(unittest.TestCase):
+    def wait_for(self, predicate, timeout=5):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            time.sleep(.02)
+        self.fail('bounded child did not reach expected phase')
+
+    def test_preflight_interrupt_reaps_nested_children_before_terminal_receipt(self):
+        root, fixture, request = self.fixture()
+        pidfile, marker = root/'nested.pid', root/'nested.finally'
+        def preflight(suite):
+            code = "import os,time\nfrom pathlib import Path\nPath("+repr(str(pidfile))+").write_text(str(os.getpid()))\ntry: time.sleep(20)\nfinally: Path("+repr(str(marker))+").write_text('clean')"
+            wrapper = 'import subprocess,sys\np=subprocess.Popen([sys.executable,"-u","-c",'+repr(code)+'])\ntry: p.wait()\nfinally: p.wait()'
+            subprocess.run([sys.executable,'-u','-c',wrapper], check=True, timeout=25)
+            return {'ok':True}
+        fixture.preflight = preflight
+        def interrupt():
+            self.wait_for(pidfile.exists)
+            os.kill(os.getpid(), signal.SIGTERM)
+        timer = threading.Timer(.05, interrupt)
+        timer.start()
+        try:
+            result = campaign.worker(root, runner=fixture,
+                command=[sys.executable,'-c',"raise AssertionError('long command forbidden')"])
+            leaked = campaign.process_identity(int(pidfile.read_text())) is not None
+            finalized = marker.exists()
+        finally:
+            timer.cancel(); timer.join()
+            if pidfile.exists() and campaign.process_identity(int(pidfile.read_text())) is not None:
+                os.kill(int(pidfile.read_text()), signal.SIGINT)
+                self.wait_for(lambda: campaign.process_identity(int(pidfile.read_text())) is None)
+        self.assertEqual(result, 1)
+        self.assertFalse(leaked, 'terminal receipt published while nested child remains alive')
+        self.assertTrue(finalized, 'nested child finalizer missing at terminal receipt')
+        state = campaign.read_json(root/'status.json')
+        self.assertEqual(state['state'], 'interrupted')
+        self.assertEqual(state['phase'], 'preflight')
+        self.assertGreater(state['preflight_start_ticks'], 0)
+        self.assertIsNone(campaign.process_identity(state['preflight_pid']))
+        self.assertIsNone(campaign.process_identity(int(pidfile.read_text())))
+        self.assertEqual(marker.read_text(), 'clean')
+        self.assertFalse((root/'command.log').exists())
+        self.assertEqual(state['cleanup'], 'preflight-group-reaped;long-command-not-started')
+
+    def test_completed_worker_replay_preserves_original_claim_status_and_log(self):
+        root, fixture, request = self.fixture()
+        count = root/'preflight-count'
+        def preflight(suite):
+            with count.open('a') as stream: stream.write('once\n')
+            return {'ok':True}
+        fixture.preflight = preflight
+        self.assertEqual(campaign.worker(root,runner=fixture,command=[sys.executable,'-c',"print('original')"]),0)
+        before = {p.name:p.read_bytes() for p in root.iterdir() if p.name in {'status.json','claim.json','command.log','preflight.log'}}
+        self.assertEqual(campaign.worker(root,runner=fixture,command=[sys.executable,'-c',"print('replacement')"]),1)
+        self.assertEqual(count.read_text(),'once\n')
+        self.assertIn('claim.json',before)
+        self.assertEqual(before,{name:(root/name).read_bytes() for name in before})
+
+    def test_concurrent_and_stale_worker_claims_never_replace_original(self):
+        root, fixture, request = self.fixture()
+        release, entered = root/'release', root/'entered'
+        def preflight(suite):
+            with entered.open('a') as stream: stream.write('once\n')
+            while not release.exists(): time.sleep(.02)
+            return {'ok':True}
+        fixture.preflight = preflight
+        children = []
+        try:
+            for _ in range(2):
+                pid = os.fork()
+                if pid == 0:
+                    os._exit(campaign.worker(root,runner=fixture,command=[sys.executable,'-c',"print('original')"]))
+                children.append(pid)
+            self.wait_for(entered.exists)
+            before = (root/'status.json').read_bytes()
+            # The losing concurrent worker must already refuse without preflight.
+            outcomes = []
+            for pid in children:
+                observed, status = os.waitpid(pid, os.WNOHANG)
+                if observed: outcomes.append((pid,os.waitstatus_to_exitcode(status)))
+            replay = os.fork()
+            if replay == 0:
+                os._exit(campaign.worker(root,runner=fixture,command=[sys.executable,'-c','raise SystemExit(99)']))
+            self.assertEqual(os.waitstatus_to_exitcode(os.waitpid(replay,0)[1]),1)
+            self.assertEqual((root/'status.json').read_bytes(),before)
+            self.assertEqual(entered.read_text(),'once\n')
+            release.touch()
+            outcomes += [(pid,os.waitstatus_to_exitcode(os.waitpid(pid,0)[1])) for pid in children if pid not in {p for p,_ in outcomes}]
+            children.clear()
+            self.assertEqual(sorted(code for _,code in outcomes),[0,1])
+            claim = campaign.read_json(root/'claim.json')
+            state = campaign.read_json(root/'status.json')
+            self.assertEqual((claim['pid'],claim['start_ticks']),(state['pid'],state['start_ticks']))
+            self.assertEqual(claim['run_id'],request['run_id'])
+            original = (root/'status.json').read_bytes()
+            # A consumed claim remains consumed after the original process exits.
+            self.assertEqual(campaign.worker(root,runner=fixture,command=['false']),1)
+            self.assertEqual((root/'status.json').read_bytes(),original)
+        finally:
+            release.touch()
+            for pid in children:
+                try: os.kill(pid,signal.SIGTERM)
+                except ProcessLookupError: pass
+                os.waitpid(pid,0)
+
     def fixture(self):
         directory = tempfile.TemporaryDirectory(prefix='birja-backup-test-durable-')
         self.addCleanup(directory.cleanup)
