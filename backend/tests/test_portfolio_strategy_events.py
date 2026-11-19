@@ -25,12 +25,19 @@ from app.tasks import scheduler as price_worker
 from tests.stock_action_fixtures import synthetic_opening
 from tests.test_corporate_action_rules import dividend
 from tests.test_corporate_actions import batch, split_action
-from tests.test_portfolio_creation import authority, management_api, patch, post
+from tests.test_portfolio_closure_api import authority, closure_api
+from tests.test_portfolio_creation import patch, post
 from tests.test_portfolio_entitlements import completed_entitlement_session
 from tests.test_portfolio_strategy_lifecycle import ledger, scheduler, strategy_books, trade
 
-__all__ = ["authority", "management_api", "strategy_books"]
+__all__ = ["authority", "closure_api", "management_api", "strategy_books"]
 BACKUP_PATH = Path(__file__).resolve().parents[2] / "deploy/backup-snapshot.py"
+
+
+@pytest_asyncio.fixture
+async def management_api(closure_api):
+    """Current0023 API; retained0020 creation fixtures remain separate."""
+    return closure_api
 
 
 @pytest_asyncio.fixture
@@ -41,6 +48,10 @@ async def strategy_events(strategy_books, engine):
         admission = await actions._load_admission(db, "actions")
         calendar = await actions._load_admission(db, "calendar")
         session = completed_entitlement_session(now, calendar, "NASDAQ")
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"),
+            {"c": str(cid)},
+        )
         for seq, (root, quantity) in enumerate(zip(roots, (2, 4), strict=True), 1):
             await synthetic_opening(
                 db,

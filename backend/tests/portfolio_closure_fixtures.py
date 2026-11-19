@@ -6,6 +6,27 @@ from uuid import uuid4
 from sqlalchemy import text
 
 
+async def frozen_financial_snapshot(conn, portfolio_id):
+    """Independent root-only oracle; shared market evidence/tails may advance."""
+    result = {}
+    tables = (
+        "accounts", "holdings", "trades", "portfolio_creations",
+        "stock_ownership_movements", "stock_dividend_entitlements",
+        "stock_dividend_payments", "stock_dividend_decisions",
+        "portfolio_stock_closures", "portfolio_lifecycle_closures", "portfolio_closure_intents",
+    )
+    for table in tables:
+        key = "id" if table == "accounts" else "portfolio_id"
+        result[table] = tuple((await conn.execute(text(
+            f'SELECT to_jsonb(t)::text FROM public."{table}" t WHERE {key}=:p ORDER BY to_jsonb(t)::text'  # noqa: S608 - fixed inventory
+        ), {"p": portfolio_id})).scalars())
+    result["stock_fill_facts"] = tuple((await conn.execute(text(
+        "SELECT to_jsonb(f)::text FROM stock_fill_facts f JOIN trades t ON t.id=f.trade_id "
+        "WHERE t.portfolio_id=:p ORDER BY f.trade_id"
+    ), {"p": portfolio_id})).scalars())
+    return result
+
+
 async def retained_snapshot(conn):
     """All original rows and sequence states, including lifecycle cutoff metadata."""
     from tests.test_migrations import MIGRATION_TABLES
