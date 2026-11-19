@@ -36,6 +36,23 @@ def example():
 
 
 class PortfolioFixtureContracts(unittest.TestCase):
+    def test_qualified0020_is_complete_retained_and0023_is_current(self):
+        current = sources.profile_for("0023")
+        self.assertEqual(current, {"revision": "0023", "payload_version": 3,
+                                  "program": "deploy/tests/portfolio-closure-recovery-fixture.py"})
+        retained = sources.profile_for("0020")
+        self.assertEqual(retained["commit"], "9527e358bc6953cec7580043703324db194ba396")
+        payload = sources.source_archive("portfolio0020")
+        import tarfile
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            self.assertEqual(archive.extractfile("backend/app/db/portfolio_bootstrap.py").read(),
+                             sources.git("show", retained["commit"] + ":backend/app/db/portfolio_bootstrap.py"))
+        for field in ("commit", "archive_sha256", "app_tree", "alembic_tree"):
+            changed = copy.deepcopy(sources.MATRIX)
+            changed["portfolio0020"][field] = "substituted"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                sources.validate_matrix(changed)
+
     def test_complete_retained0017_and_current0020_profiles(self):
         self.assertEqual(sources.profile_for("0020")["revision"], "0020")
         profile = sources.profile_for("0017")
