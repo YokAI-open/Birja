@@ -106,3 +106,70 @@ archive58e225255e0e69279be0a7c86c40be4a55aac82aa63c93a4c388bf6fdb6e1ef4.
 Every31-table/24-tail oracle comparison and exact final authority check passes;
 the immutable old20 writer refuses before effects. All receipts report unchanged
 source. Earlier archives/proofs remain intact and are not relabelled.
+
+## CR-01 supplemental migration-entry repair
+
+Independent review at24f716f proved that a disabled-RLS policy could evade the
+immutable prior catalogue projection and permit Alembic to mutate the schema
+before final admission refused. RED commit4ac8d54 reproduces the bypass against
+genuine0020,0021 and0022; all three fail before the repair. The original review
+finding remains unchanged for independent re-review.
+
+The current migration entry now runs an additional read-only inventory before
+any child. It refuses public policies, rewrite rules, RLS flags, nonordinary
+relation kinds, nonpermanent storage, inheritance, and unexpected public types,
+collations, conversions, operators, operator classes/families, extended statistics
+or extensions. Expected table row/array types are recognized by their actual
+catalogue identities and owners, rather than name patterns. Unknown objects are
+never dropped or normalized. Existing finite catalogue/ACL/effective-default,
+role, configuration and source authentication remains mandatory afterward.
+
+The eight immutable prior/current SQL exports, migration bytes and final
+catalogue/ACL/default fingerprints are unchanged. This is a current-entry
+supplement; retained0020/0017 authorities are not rewritten. Current producer,
+consumer and deployment source pins bind the revised bootstrap and migrator.
+
+The regression matrix covers17 distinct object/storage drift families across
+all three prior revisions. Each case first verifies its genuine baseline is
+admitted, commits the hostile change, then checks both direct admission and the
+actual migration entry refuse before child creation. Revision, both catalogue
+projections, all retained rows and sequence tails stay byte-equivalent, and the
+hostile object remains present. Package-free foreign/extension fixtures use
+only the owned disposable database; their own cleanup follows preservation
+assertions. Twelve legitimate initial/runtime and builtin/private-default
+initial/resume paths passed separately before the complete relevant group.
+
+CR-01 GREEN commit`ed4f96f5e6f44baee46243f78185243d14689f87` passes172
+relevant migration/admission tests in922.17s (durable receipt923.664s), with100%
+coverage of both changed runtime modules:124 statements and34 branches, zero
+misses. All source bytes remained unchanged during the run. Scoped Ruff/format
+and mypy pass;46 offline producer/consumer/image contracts and63 deployment
+compatibility cases pass. The complete relevant group includes the51 new drift
+cases, legitimate prior initial/resume paths, exact final bootstrap parity,
+current runtime refusals and retained literal equality.
+
+Current source SHA256s after CR-01:
+
+- bootstrap:`7ef1a76af2284f065b17dc0baffa7c6e4c7f6a879e9ea72dbab54b9943b74f50`
+- migrator:`02747095a00d6543f4156e0f9be025da4186eafa2e8412fae3b239fdd24af8de`
+- administrative SQL remains:`3166dfa1def5ab13c37f975bd0f766fb40aa280d615fc20939af5dc7ee7f8ac9`
+
+New private R4 archive SHA256 is
+`161b8fa08eedd025b2100328e642d0928927561c6604e8d5839f3ca5130a3d9e`,
+packaged from that exact committed source with authenticated current image/source
+bindings. Real fresh restricted-TLS proof passes19.831s; genuine runtime-granted
+0020→0023 TLS passes15.707s; encrypted source-destroyed cold recovery passes53.765s.
+All three return unchanged catalogue59aeeee…/ACL71896f…/private-default4f53…;
+source-manifest validation precedes regrant and full31-table/24-tail immutable
+before-oracle equality passes. Each receipt records source_unchanged=true.
+
+Private `cr01-cleanup.json` confirms all four owned projects have zero remaining
+containers/networks/volumes. `cr01-archive-integrity.json` rechecks R1–R4 and the
+protected Phase13 archive; canonical Phase14 proof remains absent. Previous
+historical0020/0017 evidence and archive bytes are retained, not relabelled as
+new-source proof. The expected backend collection is now3623 cases; the earlier
+partitioned evidence remains supplemental and Plan18 still owes uninterrupted
+whole-suite/security and seven-stage same-archive proof at final source.
+
+Independent CR-01 re-review remains the parent's next gate; this executor's
+passing checks do not replace that review.

@@ -198,3 +198,45 @@ threat surface were introduced; this work enforces planned T-14-15 boundaries.
 The three implementation commits and review artifact exist; all listed private
 passing receipts and integrity/cleanup records were checked. Parent must still
 perform independent review and its owned state updates.
+
+## CR-01 follow-up — before-child supplemental catalogue authentication
+
+Independent review committed1f305ab proved that disabled-RLS policy drift could
+pass the immutable prior projection and trigger Alembic before final refusal.
+The parent authorized a current-only supplemental migration inventory. RED
+commit`4ac8d54` reproduces this on genuine0020/21/22. GREEN commit`ed4f96f`
+adds read-only refusal of omitted policy/rule/RLS, relation/storage/inheritance,
+type and other public catalogue families before any migration child. Expected
+table/array types use actual catalogue identity and ownership. No unknown
+object is removed or repaired; retained authorities, migration/SQL bytes, final
+catalogue/ACL/default fingerprints and finite prior-state checks stay unchanged.
+
+Scope: bootstrap and migrator entry, matching current producer/consumer/deploy
+pins, and genuine PostgreSQL migration-entry tests. The17-family ×3-revision
+matrix verifies baseline admission, no child creation, unchanged revision,
+catalogues, financial rows and sequence tails, and preservation of each hostile
+object. Complete relevant regression passes172/172 in922.17s,100% statement and
+branch coverage of both changed runtime modules; source bytes stayed frozen.
+Scoped mypy/Ruff/format,46 offline contracts and63 compatibility cases pass.
+
+New immutable R4 archive SHA
+`161b8fa08eedd025b2100328e642d0928927561c6604e8d5839f3ca5130a3d9e`
+binds exact GREEN source. Actual fresh TLS19.831s, genuine granted20→23 upgrade
+TLS15.707s and encrypted source-destroyed cold restore53.765s all pass with the
+same final authority triple and source_unchanged=true. Cold comparison includes
+all31 tables/24 tails and validates source evidence before regrant. Prior R1–R3
+and protected Phase13 hashes remain intact. Fresh cleanup receipt confirms zero
+owned containers/networks/volumes; `.claude/` remains untouched.
+
+Full CR-01 provenance and source hashes are appended to
+`14-15-TRANSITION-REVIEW.md`; the original independent finding is preserved for
+re-review. Expected backend collection becomes3623, without representing the
+earlier partitioned evidence as a final uninterrupted pass. Plans16–19 and
+the final18 campaign remain as handed off above. No production/provider,
+dependency, publication or global planning-state changes occurred.
+
+### CR-01 self-check: PASSED
+
+RED/GREEN commits,172-case100%-coverage receipt, new-source TLS/cold receipts,
+five-archive integrity and owned-resource cleanup records exist. Parent-owned
+independent re-review remains required before accepting the repair.
