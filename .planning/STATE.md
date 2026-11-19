@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 13
-current_plan: 17
-status: executing
-stopped_at: Phase13 Plans01–16 complete; integrated review repaired/clean; owner UI/native200 accepted; Plan17 full campaigns next
-last_updated: "2026-11-18T16:40:43.952541+00:00"
-last_activity: 2026-11-18 -- Plans01–16 complete; pre-freeze final review
+current_plan: 18
+status: verifying
+stopped_at: All 18 Phase 13 plans complete; final independent goal verification pending
+last_updated: "2026-11-19T00:12:57.593931+00:00"
+last_activity: 2026-11-19 -- Complete final qualification and owner acceptance; verify phase goal
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 49
-  completed_plans: 47
+  completed_plans: 49
   percent: 25
 ---
 
@@ -22,18 +22,32 @@ progress:
 
 See PROJECT.md (updated 2026-11-14).
 Core value: correct virtual trade and valuation money.
-Current focus: Phase13 Plans01–16 complete;17 final fresh qualification next. Actualcampaign4 completeALLsecurityPASS535a5b7:3343backend/61critical100/frontend1194/browser79+1/all5imagepolicies,3374.206s. RecoveryFAILEDimage-IDguardpostcurrentcold; retained0017/current0020colddata/TLSoraclespassed buthelperrebuilttag. CR04fixed/reviewed312d8c9(privateexactIDreuse,17image+26contracts+realDockerseparateprocessproof), noapp/dep/migration/UIchange. Remainingroles+bothTLSdiagnosticsPASS; selectedrollbackinterruptedthenresumedone-shotPASS950.707s; all6bindingrecordsunchanged/TLSauthorityexactequal/all21resourcesempty. DiagnosticsNOTwholequalification. Failedcanonicalarchive2d182...preservedunder/tmp/birja-phase13-proof-campaign4-failed-535a5b7; newcanonicalpathabsent. MustrunactualFULLsecurity5 THENnewwhole7recoveryatonefrozenfinalsource (durableone-shot tosurviveuserstatusinterrupts), noassembledpass. OwnerUI/native200acceptedunchangedcurrentpacket724607. Keep local, Phase7livegaps/issue35riskretained.
+Current focus: Phase 13 implementation, all 18 plans, owner acceptance and final
+qualification are complete. Independent goal verification is pending before
+advancing to Phase 14. Changes stay local.
+
+The final whole security command and uninterrupted seven-stage recovery both
+passed at frozen9527e35. Evidence includes3,343backend tests, all61critical modules
+at100%,1,194frontend tests,79browser passes/one retained skip and all five image
+policies. The same authenticated archive passed every recovery stage, exact TLS
+authority parity and cold restore; all21owned resource checks are empty.
+
+Both owner UI and actual native200% responses are recorded. Independent code/UI
+reviews are clean; security has58closed/zero open threats; validation covers all
+11primary requirements with no gap. Failed/interrupted/composite attempts remain
+historical. Phase7live obligations and the existing issue35expiry remain tracked.
 
 ## Current Position
 
-Phase: 13 (Create and Compare Independent Strategies) — EXECUTING
-Current Plan: 17 (actual frozen-source security/recovery)
+Phase: 13 (Create and Compare Independent Strategies) — VERIFYING
+Current Plan: 18 (all plan tasks complete; final goal verification pending)
 Total Plans in Phase: 18
-Plan: 16/18 complete (01–16); 17 in progress;18 acceptance received, final qualification pending
-Status: Executing Phase 13
-Last activity: 2026-11-18 -- Plan16 repaired/reviewed; final review before17
+Plan: 18/18 complete
+Status: Final independent goal verification
+Last activity: 2026-11-19 -- Both complete commands pass; acceptance and audits recorded
 
-Progress: [███░░░░░░░] 25% milestone (1/4 phases complete;47/49 planned plans complete)
+Progress: [███░░░░░░░] 25% milestone (1/4 phases verified complete;49/49 currently planned plans complete)
+
 
 ## Phase13 Execution Progress
 
@@ -741,3 +755,17 @@ Resume file: .planning/ROADMAP.md — Phase13
 ## Plan26 Completed Continuation
 
 2026-11-16: The owner approved continued local automated validation, including further tested repairs without repeating procedural retry-limit questions. Task01 b71a162 passes10 actual ownership journeys and6 guards; the final102-artifact packet's248 source hashes bind committed browser bytes. Task02 71e2d6f adds the version1 exact successor archive inventory, strict60-module critical gate retaining all47 originals, a synthetic all-security runner and seven guarded serial recovery stages. All28 CI/runner,15 image,10 recovery,5 independent fixture,8 selected-source and3 critical-list contracts pass. Actual local restic encryption/source-destruction/separate-server current0017 recovery and immutable pre-backup oracle comparison pass. See12-26-SUMMARY.md for hashes and source-drift limits. The earlier focused fixed archive must be preserved/moved before a fresh exclusive Plan27 final campaign; never overwrite/rebuild between serial stages. Full coverage,47 retained frontend typing failures/legacy backend fixtures, strict actual-image scans, full serial qualification and native200%/owner acceptance remain27–28. No whole requirement is marked complete; keep all work local and live stock admissions OFF.
+
+
+## Final Plan 17/18 Qualification
+
+Plan17 final proof is committed5acdae8/f4ec214/3275757; Plan18 owner acceptance is
+committed514a50b. Final campaign6 at9527e35: security3373.046s, recovery2792.054s,
+all7passed-authenticated and same_archive_final_ci=true. New canonical archive
+SHA6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92;
+all source/image/preserved-archive guards pass and all21owned resources are empty.
+Raw final receipts: /tmp/birja-phase13-plan17-campaign6-20261118-9527e35/.
+The original failed archive is preserved separately; no diagnostic composite is
+reported as final qualification. The accepted UI packet remains current.
+Security final audit closes all58threats; validation covers11requirements. Global
+requirement checkboxes/phase completion await the independent goal verifier.

@@ -1,15 +1,87 @@
 ---
 phase: 13
 slug: create-and-compare-independent-strategies
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-18
 ---
 
 # Phase 13 — Validation Strategy
 
-Planning contract only; no Phase13 implementation/test pass or framework installation is claimed.
+## Final Execution Validation Audit
+
+All11primary Phase13 requirements have actual passing behavioral verification.
+No test gap was found; per validate-phase Step3 the no-gap path records evidence
+without generating speculative new tests. The planner's task/wave/creator map is
+retained below as provenance, superseded by this measured execution status.
+
+Actual complete campaign6 at frozen9527e358bc6953cec7580043703324db194ba396:
+
+- all-security exit0,3373.046s:3343backend tests,99.86%overall;61critical modules
+  5287statements/1668branches100%;1194frontend tests;79browser passes/one retained
+  deployed-CSP skip across all12specs/new20cases; complete infrastructure and all
+  five immutable image policies. Raw Python/npm audits are retained, no new waiver.
+- recovery exit0,2792.054s:all7passed-authenticated and same_archive_final_ci=true;
+  current0020 and complete retained0017/older profiles, destroyed-source cold
+  restore/immutable-before oracle/quarantine, exact fresh/upgraded TLS authority,
+  supported rollback or safe refusal, unchanged source/archive/image identities.
+- New exclusive canonical archive219289600bytes SHA
+  6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92. Equal bytes
+  to an earlier diagnostic are deterministic generation, not reuse; distinct
+  inode/fresh producer receipt is retained. All21owned resource checks are empty.
+- Raw command/source/log/image/coverage/cleanup receipts:
+  `/tmp/birja-phase13-plan17-campaign6-20261118-9527e35/`. See13-LOCAL-VERIFICATION,
+  13-RECOVERY-PROOF and13-17-SUMMARY for the committed readable evidence.
+- Both distinct actual owner responses are in13-UAT/13-18-SUMMARY. Final340-input
+  packet/source verification passes. Parent reran12strict evidence contracts in
+  0.949s; capture flags are unchanged, not invented human outcomes.
+
+Each test anchor below exists and its file SHA matches the frozen actual campaign
+source receipt. Assertions were inspected for the stated behavior; full backend/
+frontend/browser execution provides green evidence, not filename existence alone.
+Companion API/authority/SQL/concurrency and browser tests in the original map below
+supply the remaining boundaries. All36tasks retain assigned automated commands;
+the two human outcomes are additionally manual by design.
+
+| Requirement | Actual frozen test anchor | Behavioral evidence | Status |
+|---|---|---|---|
+| PMGT-01 | `backend/tests/test_portfolio_creation.py` | Same-key/name/last-slot races, owner cap10, closed identity/name reuse | COVERED — actual campaign6 PASS |
+| PMGT-02 | `backend/tests/test_portfolio_metadata.py` | Actual name/description patch, owner uniqueness and unchanged financial originals | COVERED — actual campaign6 PASS |
+| PMGT-06 | `frontend/src/hooks/usePortfolioManagement.test.tsx` | Description empty/default/edit/clear; strict metadata lifetime/recovery | COVERED — actual campaign6 PASS |
+| PFUND-01 | `backend/tests/test_portfolio_funding.py` | Once-only signup/init under concurrency, legacy zero-book latch, fixed grant/baseline | COVERED — actual campaign6 PASS |
+| PFUND-02 | `backend/tests/test_portfolio_creation.py` | Lost-response original replay before mutable limits; closed original never regrants | COVERED — actual campaign6 PASS |
+| PFIN-01 | `backend/tests/test_portfolio_strategy_lifecycle.py` | New API-created same-asset sibling books, isolated money/basis, cross-asset races | COVERED — actual campaign6 PASS |
+| PFIN-04 | `backend/tests/test_portfolio_strategy_events.py` | Historical per-book ownership/corrections, duplicate workers and real lock-overlap regressions | COVERED — actual campaign6 PASS |
+| PCTX-02 | `frontend/src/hooks/usePortfolioTarget.test.tsx` | Explicit root/owner/session epochs, late replies, logout, root removal and identity events | COVERED — actual campaign6 PASS |
+| PVIEW-01 | `backend/tests/test_portfolio_overview.py` | Stable0/1/10 books, stored custom baseline, no pooled total and strict privacy | COVERED — actual campaign6 PASS |
+| PVIEW-02 | `frontend/src/hooks/usePortfolioOverview.test.tsx` | Shared-time detail parity, per-book expiry/incomplete semantics and backward-proof refusal | COVERED — actual campaign6 PASS |
+| PSAFE-07 | `backend/tests/test_portfolio_strategy_events.py` | Real2/10-books one shared HTTP poll, bounded worker paging and actual capacity refusal | COVERED — actual campaign6 PASS |
+
+### Audit totals and sign-off
+
+| Metric | Count |
+|---|---|
+| Requirements COVERED |11|
+| Partial/missing automated gaps |0/0|
+| New tests generated in this audit |0|
+| Manual acceptance outcomes |2/2explicitly passed|
+| Implementation tasks with feedback |All assigned tasks; no unowned test prerequisite|
+| Overall/critical gates |80%minimum retained;100%critical attained|
+
+- [x] Independent13-PLAN-CHECK revision1 passed0blockers/0warnings.
+- [x] Wave0 and feature tests were authored meaningfully by owners and executed.
+- [x] Real SQL/authz/money/concurrency/browser/current-retained recovery executed.
+- [x] Owner UI and actual native200 responses are separate and source-associated.
+- [x] No new watch command, dependency install or guard/risk waiver introduced.
+- [x] Failed/interrupted/composite attempts retained as history, not final passes.
+
+Nyquist compliance records verification coverage, not global phase completion.
+Independent goal verification and requirement tracking closure follow separately.
+
+## Preserved Planning Strategy (superseded by execution audit above)
+
+
 
 ## Test Infrastructure
 
@@ -71,20 +143,20 @@ Issue35 picomatch exception remains exact/hash/path/expiry bound through2026-12-
 
 ## Validation Sign-Off
 
-- [ ] Final task IDs/waves/threat IDs mapped by planner
-- [ ] Every implementation task has automated verification and created-test dependency
-- [ ] No three consecutive implementation tasks lack feedback
-- [ ] All missing files have concrete creation owners
-- [ ] No watch commands or invented test pass
-- [ ] Critical100/full security/current-retained recovery/reviews/UI-native200 gates retained
+- [x] Final task IDs/waves/threat IDs mapped by planner
+- [x] Every implementation task has automated verification and created-test dependency
+- [x] No three consecutive implementation tasks lack feedback
+- [x] All missing files have concrete creation owners
+- [x] No watch commands or invented test pass
+- [x] Critical100/full security/current-retained recovery/reviews/UI-native200 gates retained
 
-Approval: pending plan check. Wave0 remains incomplete until execution supplies actual tests; final Nyquist status reflects checked sampling coverage, not test execution.
+Historical planning sign-off is superseded by the actual execution audit above. Independent plan check and Wave0 execution are now recorded; no framework was installed.
 
 ## Final executable plan/task/wave and threat map
 
 Revision1: threat register rows01/02 (and03 where applicable) now denote each plan’s concrete attacker/invariant/negative-test scenarios rather than uniform grouped threats. The scenario-to-test mapping in each PLAN is authoritative; SC remains the exact unchanged issue35 entry. Underlying proof targets:17.1 verifies02/06/15 funding/authz/resource/inventory threats,17.2 verifies04/05/15 archive/source/ACL/immutable-state threats,18.1–2 verify16’s current-source and distinct actual human outcomes. No implementation proof is credited by this map.
 
-This table supersedes the initial proposed verification map above. Status remains planned: Wave0 is not executed, no tests or runtime operations ran during planning, and Nyquist approval awaits independent plan check. Every new test/command file below is created meaningfully before implementation by its owning task; existing files are extended there. No MISSING command relies on an unassigned creator.
+At planning time, this table superseded the initial proposed map. Its pending execution status is now superseded by the final actual audit above; no runtime pass was claimed during planning. Every new test/command file below is created meaningfully before implementation by its owning task; existing files are extended there. No MISSING command relies on an unassigned creator.
 
 | Plan/tasks | Wave | Test creator / commands (serial when DB-bearing) | Threat IDs | Requirements |
 |---|---|---|---|---|
@@ -127,8 +199,8 @@ Backend pytest ALWAYS acquires the exclusive owned isolated test lane, including
 - [x] Every task has automated verification; no three implementation tasks lack feedback
 - [x] Exclusive backend/DB resource lane retained and same-wave files disjoint
 - [x] Critical100/full security/current-retained exact recovery/reviews/UI-native200 gates retained
-- [ ] Independent plan checker approval
-- [ ] Actual Wave0 tests authored and executed during implementation
-- [ ] Final implementation, full campaigns and both owner outcomes passed
+- [x] Independent plan checker approval
+- [x] Actual Wave0 tests authored and executed during implementation
+- [x] Final implementation, full campaigns and both owner outcomes passed
 
-Planning-map completeness is not execution or phase completion. Leave wave_0_complete false and nyquist_compliant false until independent check/execution policy records evidence; do not mark Phase13 complete.
+Planning-map completeness alone was not execution. The final audit above now supplies actual independent-check/execution evidence for both flags. Overall Phase13 completion still requires independent goal verification.

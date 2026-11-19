@@ -1,31 +1,32 @@
 ---
 phase: 13-create-and-compare-independent-strategies
-audited: 2026-11-18
-reviewed_runtime_head: 99166d9
+audited: 2026-11-19
+reviewed_runtime_head: 9527e358bc6953cec7580043703324db194ba396
 register_authored_at_plan_time: true
-status: qualification_pending
+status: secured
 asvs_level: 1
 threats_total: 58
-threats_closed: 56
-threats_open: 2
+threats_closed: 58
+threats_open: 0
 implementation_gaps: 0
-qualification_pending: 2
-current_packet_binding: recapture_pending
+qualification_pending: 0
+current_packet_binding: verified
 unregistered_flags: 0
 ---
 
 # Phase 13 security mitigation verification
 
-Independent declared-threat review before Plan17. All18plan-time threat models
-are parsed:40mitigate dispositions and18references to the same accepted risk.
-The36delivered implementation mitigations are present at the cited enforcement
-points. Two further human-response mitigations are now verified from13-UAT.md.
-No implementation gap remains demonstrated after CR-02 repair at99166d9. Two
-evidence gates remain OPEN pending actual Plan17completion; this report does **not** mark
-Phase13 threat-secure or approve advancement. Completing the already planned
-qualification is the required next action, not accepting a new risk.
+Final independent declared-threat verification at tested source
+`9527e358bc6953cec7580043703324db194ba396`: **58/58 CLOSED, zero OPEN**.
+All18authored plan registers remain individually represented below:40mitigation
+rows (36implementation,2actual whole-campaign evidence,2actual human-response
+records) and18references to the same existing accepted risk. Final raw command,
+coverage, audit/image, source/archive and UAT evidence has been independently
+checked. This is local Phase13 threat verification; global phase completion
+still requires the separate goal verifier. No production or provider activation
+is implied, and no new risk exception was accepted.
 
-## Scope and method
+## Initial audit scope and method (historical)
 
 Read AGENTS.md, full CLAUDE.md, Codex adapter/secure-phase workflow and role,
 PROJECT/REQUIREMENTS/ROADMAP/STATE/config, all18plan threat registers,
@@ -100,11 +101,11 @@ this is threat-register verification, not a comprehensive ASVS certification.
 | T-13-16-01 | Tampering/Information disclosure | mitigate | CLOSED — implementation verified | `frontend/e2e/portfolio-strategies.spec.ts:159` — Real protected HTTP writes then lost transport, reload/same-key/rename/cap/cross-tab/sibling/owner/late callback scenarios and exact-text before-oracle; no mocked core successes. Regression: `frontend/e2e/portfolio-strategies.spec.ts:510`. |
 | T-13-16-02 | Repudiation | mitigate | CLOSED — implementation verified | `deploy/tests/portfolio-ui-evidence.py:74` — Complete source-owned72-state265-artifact matrix with exact source/browser/state/path/HTML/trace correspondences; flagsfalse disallow inferred native/owner approval; drift/coherent omissions refused. Regression: `deploy/tests/test-portfolio-ui-evidence.py:112`. |
 | T-13-16-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
-| T-13-17-01 | Tampering/Repudiation | mitigate | OPEN — qualification pending | Runner control present at `deploy/tests/run-portfolio-validation.py:87`; actual complete final-source all-security/coverage/raw audits/five image receipts not yet produced. Do not substitute focused passes or Phase12 proof. |
-| T-13-17-02 | Tampering/Elevation of privilege | mitigate | OPEN — qualification pending | Seven-stage source/archive/image guards present at `deploy/tests/run-portfolio-validation.py:127`; new full same-archive0020/retained/cold/TLS/rollback receipts not yet produced. |
+| T-13-17-01 | Tampering/Repudiation | mitigate | CLOSED — actual whole qualification verified | `deploy/tests/run-portfolio-validation.py:87` retains source guards and the full CI command inventory. Final campaign6 actual all-security exits0 at9527e35 in3373.046s, with3343backend tests, all61critical modules100%,1194frontend tests,79browser passes/one existing deployed-CSPskip and all5immutable-image policies. Raw log SHA9ee807da… and exact command/result/coverage/image receipts independently verified; see final audit below. |
+| T-13-17-02 | Tampering/Elevation of privilege | mitigate | CLOSED — actual whole qualification verified | `deploy/tests/run-portfolio-validation.py:127` authenticates archive/currentCORE/units/payload/source/image records before and after every stage, including failure; :156 compares TLS authority. Final campaign6 recovery exits0 in2792.054s at the SAME9527e35, all7passed-authenticated and same_archive_final_ci=true. Fresh canonical archiveSHA6fb79a45… is independently measured, with distinct producer-created inode, source-destroyed0017/0020 cold oracles, exact authority parity, supported rollback/refusal and empty21resource checks. |
 | T-13-17-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
-| T-13-18-01 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the actual separate “Accept the Phase 13 UI” response against preserved approved SHAeac08181… packet and the unchanged management inputs after CR-01. Subsequent backend-only CR-02/source-pin changes do not alter those surfaces; refreshed current packet binding remains separately pending. |
-| T-13-18-02 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the separate actual “Native 200% zoom passes” response, not emulation or inherited Phase12 approval. Browser/version was not supplied and is not invented. Automated captureflags remain false; refreshed source-bound packet is separately pending. |
+| T-13-18-01 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the actual separate “Accept the Phase 13 UI” response against preserved approved SHAeac08181… packet and the unchanged management inputs after CR-01. Later repairs do not alter those management surfaces; final source-map comparison and packet verification at9527e35 reconcile the current340-input SHA724607… packet without rewriting capture-time flags. |
+| T-13-18-02 | Repudiation | mitigate | CLOSED — human response verified | `13-UAT.md` records the separate actual “Native 200% zoom passes” response, not emulation or inherited Phase12 approval. Browser/version was not supplied and is not invented. Automated captureflags remain false; final source-bound packet SHA724607… and actual campaign6 verification now match the unchanged management inputs. |
 | T-13-18-SC | Tampering | accept | CLOSED — accepted risk | Exact common accepted-risk entry AR-01 below; no package-wide exception. |
 
 ## Accepted risks
@@ -129,7 +130,28 @@ failure remain blocking. The18SCrows reference this one accepted scope; they are
 not18independent exceptions. Plan17 must still measure fresh raw audit/image
 results against this policy; the prior Phase12campaign cannot supply those passes.
 
-## Qualification blockers and disposition
+## Qualification disposition — final
+
+- **T-13-17-01 CLOSED:** actual complete all-security at9527e35 passed; raw log,
+  exact literal command and exit0,61critical statement/branch records, full current
+  browser inventory, raw dependency audits and all five immutable-image policies
+  are independently checked. Earlier failures remain failed history.
+- **T-13-17-02 CLOSED:** actual uninterrupted seven-stage recovery followed that
+  security pass at the same source, using a newly producer-created exclusive
+  canonical archive. Every post-stage source/archive/image guard passed; exact
+  fresh/upgraded TLS authority and owned cleanup are verified.
+- **T-13-18-01/02 CLOSED:**13-UAT.md and13-18-SUMMARY.md preserve the two explicit
+  owner responses and final unchanged-management source association. Current
+  packet SHA724607… matches all340render inputs in the final campaign receipt.
+  Browser/version was not supplied and is not invented; automated manifest
+  owner/native flags remain false rather than being relabeled human outcomes.
+
+No unresolved qualification or implementation threat remains. This does not
+close separate Phase7live work, issue35, or the milestone's future public deletion
+and whole-lifecycle phases. It adds no risk waiver and authorizes no publication,
+production change or provider operation.
+
+### Earlier qualification disposition (historical, superseded)
 
 - **T-13-17-01:** produce complete current-source all-security receipt with actual
  61critical statement/branch coverage, raw dependency audit, full current browser
@@ -283,3 +305,97 @@ the same two evidence threats remain OPEN. Failed archiveSHA2d182e0b91488138cf4a
 is preserved under`/tmp/birja-phase13-proof-campaign4-failed-535a5b7/` for the
 new canonical campaign directory to be created exclusively. No new waiver,
 provider/production operation or UI render change occurred.
+
+
+## Final Security Audit — 2026-11-19
+
+**Result: SECURED.**58registered rows,58CLOSED,0OPEN,0implementation gaps,
+0qualification pending and0unregistered summary flags. All18plan-time threat
+models were cross-checked against the individual register; no row was dropped.
+Read current implementation enforcement points and their named negative tests;
+followed the final runner and exact-ID reuse path in source rather than treating
+summary assertions as execution evidence. Plans17/18, actual UAT, clean code/
+fixture review,24/24UI review and final source-map associations were reconciled.
+Plan17's local/recovery records were available during final verification; their
+raw underlying receipts, not document existence, support the closures.
+
+### Independently checked actual whole results
+
+- Frozen tested HEAD:`9527e358bc6953cec7580043703324db194ba396`.
+- Actual literal all-security command exit0,3373.046358s. Raw log SHA256:
+  `9ee807da3bcc03f8d062a2da9c46b80df5cf8b84fa4becafc61d9e085a3e56bb`.
+- Actual literal recovery command exit0,2792.053910s, launched only after the
+  complete security command's successful exit at that same source. Raw log SHA256:
+  `1d08f0b14d96e4e2bb8d9fdca6d1afa863653665961a298b40dc8054b327a896`.
+- Supervisor receipt SHA256:
+  `09909cf5b6874c2304b34d6908db90db3408a3778e53612e17b52b1850e8c9b1`;
+  reports ok=true, source/HEAD/preserved archives unchanged and all21owned
+  container/network/volume checks empty. Both result JSONs' exact argv, source,
+  return codes, timestamps and raw-log hashes were read and checked.
+-3343backend tests pass; exported overall combined coverage99.8599767%. The
+  actual CI include list contains exactly61critical modules, and each exported
+  coverage record has zero missing statements and branches:5287statements and
+ 1668branches at100%.1194frontend tests and79actual browser passes plus one
+  existing deployed-CSPskip are recorded in the same full command. All12explicit
+  browser specifications and20new management cases remain required.
+- Python audit clean; raw npm audit retains14moderate findings and0HIGH/CRITICAL.
+  All five final immutable-image targets report0qualifying,0accepted and0blocking
+  findings under the final database metadata. Every raw image-report file and
+  six campaign image-binding-record hashes were independently recomputed.
+  Accepted-risk count0 is not a dependency fix or closure of issue35: package,
+  lock and narrow expiry-bound exception remain unchanged and tracked.
+
+Actual files live under
+`/tmp/birja-phase13-plan17-campaign6-20261118-9527e35/`:
+`receipt.json`, `all-security-result.json`, `recovery-result.json`, raw logs,
+`backend-coverage.json`, `image-reports/`, `fresh-archive-identity.json` and
+`ui-final-source-verify.json`. No new tests or database/image operations were
+performed by this auditor; these are independently checked executor receipts.
+
+### Exact archive/source and image evidence
+
+The new canonical archive is219289600bytes, SHA256
+`6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92`.
+Independent hashing matches both actual command receipts and the final
+same_archive_final_ci line. `fresh-archive-identity.json` proves the canonical
+path was absent before producer execution and the actual producer created a
+new inode700678, distinct from diagnostic867057. Deterministic matching content
+is not copying or reusing an earlier proof. Previous failed and diagnostic
+archives remain preserved; none is substituted for final qualification.
+
+All seven statuses are passed-authenticated: image-transition, retained-roundtrip,
+current0020-cold, roles, tls-upgraded, tls-fresh and selected-rollback. Raw log
+lines116/124 independently record genuine0017/current0020 encrypted cold restore,
+source_destroyed=true, immutable_before_oracle=true and quarantine=true. TLS
+transport negatives, restricted authority, exact fresh/upgraded parity and
+supported rollback or explicit refusal are present in the same actual log.
+The authenticated tooling archive itself is strict USTAR; actual database
+backup/restore uses encrypted restic snapshots within these operations. Those
+artifact roles are not conflated into a claim that the tooling tar is encrypted.
+
+Read `authenticate` and `execute_stages`: exact archive/currentCORE/unit/source/
+fixed-retained/image bytes are checked before/after every stage including failure,
+then authority objects must compare equal. CR04's private first-use image binding
+reuses only exact IDs with matching source commit, app tree, context, config and
+RootFS; absent/mutated recorded IDs refuse without build. No equivalence waiver
+or record replacement is used to clear the earlier failed image guard. Current
+runtime/config/test bytes independently match the frozen source snapshot; later
+commits are planning records only. Retained0017 source/profile is unchanged.
+
+### Human/source association and preserved boundaries
+
+The final manifest's340source entries exactly equal the campaign's render map,
+render digest `e082f97d9aaa758fa17a6060877328ed6f6dd39c31f2d66942c00bb7dba47a47`,
+ZIP SHA256 `724607e83592bd1bda5e86a0b92217478aba93b53127b7cdf5f2d04f0142c361`.
+Actual final packet verification exits0. Compared with the original owner-approved
+packeteac081…, the only seven changed render-map entries are the two trade
+consumers/their regression and four backend authority inputs; no management
+surface input changed. The accepted overview/create/edit/switch UI and separate
+actual native200% response remain valid under the recorded association.
+
+Existing AR01 remains one narrow owner-accepted issue35 scope repeated by18SCrows,
+with current manifest/lock hashes independently matching the approved values and
+expiry2026-12-17T00:00:00Z unchanged. No new acceptance, package/image pin change,
+provider call, production access, implementation edit or commit was made here.
+Global requirement checkboxes and phase completion belong to the parent after
+separate goal verification; this audit does not modify them.

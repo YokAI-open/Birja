@@ -210,7 +210,7 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
   4. The user compares active strategies in a stable overview showing name, cash, exact total or known value and dollar/percentage return against each stored baseline; detail and overview agree on timestamps and incompleteness, without a pooled wealth total or making other strategies unavailable.
   5. Switching portfolios isolates cached pages, cursors, actionable previews, pending attempts and late responses instead of retargeting them; requests and jobs remain bounded, creation has appropriate resource controls, shared market polling does not multiply, and existing activation/backup-capacity guards remain effective.
 
-**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). Execution started;01–16complete,finalreviewthenwave16Plan17qualification.
+**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). All18plans executed; actual full security/recovery and owner acceptance pass. Independent phase-goal verification pending.
 
 **Wave 1**
 
@@ -275,11 +275,11 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
 
 **Wave 16** *(blocked on declared earlier-plan dependencies)*
 
-- [ ] 13-17-PLAN.md — Qualify complete frozen-source security and exact recovery
+- [x] 13-17-PLAN.md — Qualify complete frozen-source security and exact recovery
 
 **Wave 17** *(blocked on declared earlier-plan dependencies)*
 
-- [ ] 13-18-PLAN.md — Obtain separate implemented UI and genuine native200 acceptance
+- [x] 13-18-PLAN.md — Obtain separate implemented UI and genuine native200 acceptance
 
 **Cross-cutting constraints:** All DB-bearing tests, browser stacks and ops proofs use one serial disposable lane; wave8 frontend08 may run alongside DB14 only with disjoint ownership. Retain exact owner/key/payload funding retries, all-existing-user initialization, immutable0018+ migrations, restricted grants/TLS and source-bound current/retained recovery. Preserve original critical60 plus new critical paths at100%, all security/image gates and the exact issue35 scoped exception/expiry. Actual new UI and native200 acceptance remain separate blocking checks after implementation. Keep provider activation, public deletion/freeze and publication outside this planning authorization.
 
@@ -372,12 +372,12 @@ the phase structure was approved on2026-11-14 and only Phase12 is implemented an
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phase13 planning is checked; implementation has not started. Phases14–15 await planning.
+Phase13 implementation, all18plans and final qualification are complete; independent goal verification is pending. Phases14–15 await planning.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
-| 13. Create and Compare Independent Strategies | v1.2 | 16/18 | Executing; final review then Plan17 | - |
+| 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Verifying; complete campaigns, acceptance and audits pass | - |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
