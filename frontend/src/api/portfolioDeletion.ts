@@ -84,8 +84,8 @@ const codes: Record<number, readonly string[]> = {
 
 export async function deletePortfolio(
   input: PortfolioDeletionIntent,
-  signal?: AbortSignal,
-  isCurrent: () => boolean = () => true,
+  signal: AbortSignal | undefined,
+  isCurrent: () => boolean,
 ): Promise<PortfolioDeletionReceipt> {
   // Capture before CSRF, authentication, network or JSON awaits.
   const original = capturePortfolioDeletionIntent(input);

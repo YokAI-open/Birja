@@ -1,5 +1,14 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { deletePortfolio, PortfolioDeletionError } from "./portfolioDeletion";
+import {
+  deletePortfolio as guardedDeletePortfolio,
+  PortfolioDeletionError,
+  type PortfolioDeletionIntent,
+} from "./portfolioDeletion";
+const deletePortfolio = (
+  input: PortfolioDeletionIntent,
+  signal?: AbortSignal,
+  isCurrent = () => true,
+) => guardedDeletePortfolio(input, signal, isCurrent);
 
 const intent = {
   portfolioId: "9007199254740993",
