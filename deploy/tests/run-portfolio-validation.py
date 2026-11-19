@@ -17,8 +17,10 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
-STAGES = ("image-transition", "retained-roundtrip", "current0020-cold",
+ARCHIVE = Path("/tmp/birja-phase14-proof/recovery.tar.gz")
+PRESERVED_ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
+PRESERVED_SHA256 = "6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92"
+STAGES = ("image-transition", "retained-roundtrip", "current0023-cold",
           "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
 STACK = ["docker", "compose", "--env-file", "/dev/null", "-f", "docker-compose.test.yml"]
 PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
@@ -118,10 +120,22 @@ def security_sources():
 
 
 def campaign_sources(ops):
-    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V2
+    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V3
     # Complete current application input, separate from fixed retained sources.
     tracked = subprocess.check_output(["git", "ls-files", "backend", "deploy", "docker-compose.ops-test.yml"], cwd=ROOT).decode().splitlines()
     return {name: ops.r.digest(ROOT / name) for name in sorted(set(names + tracked))}
+
+
+def preserved_archive():
+    """A fresh CI host may lack prior proof; existing proof is never replaced."""
+    if PRESERVED_ARCHIVE.is_symlink() or PRESERVED_ARCHIVE.parent.is_symlink():
+        raise ValueError("preserved archive symlink")
+    if not PRESERVED_ARCHIVE.exists():
+        return None
+    value = hashlib.sha256(PRESERVED_ARCHIVE.read_bytes()).hexdigest()
+    if value != PRESERVED_SHA256:
+        raise ValueError("preserved Phase13 archive changed")
+    return value
 
 
 def authenticate(ops, archive, expected, source, image_records=None):
@@ -130,12 +144,14 @@ def authenticate(ops, archive, expected, source, image_records=None):
         raise ValueError("current campaign source changed")
     with tarfile.open(archive, "r:") as retained:
         inventory = json.load(retained.extractfile("INVENTORY.json"))
-        if inventory.get("portfolio_payload", {}).get("version") != 2:
+        payload = inventory.get("portfolio_payload", {})
+        if (inventory.get("recovery_profile"), payload.get("version"), payload.get("revision")) != (
+                "deploy-recovery-v4", 3, "0023"):
             raise ValueError("current campaign requires successor inventory")
-        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V2:
+        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V3:
             if retained.extractfile(name).read() != (ROOT / name).read_bytes():
                 raise ValueError("packaged/current source substitution")
-        for name, digest in ops.r.RETAINED_SOURCE_PAYLOADS.items():
+        for name, digest in ops.r.RETAINED_CLOSURE_SOURCE_PAYLOADS.items():
             if ops.r.sha_bytes(retained.extractfile(name).read()) != "sha256:" + digest:
                 raise ValueError("fixed retained payload substitution")
     ops.portfolio_sources().validate_matrix()
@@ -161,8 +177,8 @@ def execute_stages(operations, guard):
             results[name] = operations[name]()
         finally:
             guard()
-    if results["tls-upgraded"] != results["tls-fresh"]:
-        raise ValueError("fresh/upgraded TLS authority differs")
+    if not (results["current0023-cold"] == results["tls-upgraded"] == results["tls-fresh"]):
+        raise ValueError("cold/fresh/upgraded TLS authority differs")
 
 
 def recovery_operations(ops, archive, expected):
@@ -172,29 +188,30 @@ def recovery_operations(ops, archive, expected):
         ops.roundtrip(archive)
         # Complete immutable0017 is a real source/image/TLS lane, never HEAD.
         smoke.run(archive=archive, archive_sha=expected, revision="0017", cold=True)
+        smoke.run(archive=archive, archive_sha=expected, revision="0020", cold=True)
 
     def tls(fresh):
         # Preserve every legacy transport/role refusal before current authority.
         ops.tls(fresh_bootstrap=fresh)
-        return smoke.run(archive=archive, archive_sha=expected, revision="0020",
-                         fresh_bootstrap=fresh)
+        return smoke.run(archive=archive, archive_sha=expected, revision="0023",
+                         fresh_bootstrap=fresh, upgraded_bootstrap=not fresh)
 
     def roles():
         ops.roles()
-        smoke.run(archive=archive, archive_sha=expected, revision="0020")
+        smoke.run(archive=archive, archive_sha=expected, revision="0023")
 
     def rollback():
         subprocess.run(["bash", str(ROOT / "deploy/tests/test-rollback-db-security.sh"),
             "--recovery-bundle", str(archive)], cwd=ROOT, env=environment(), check=True)
         # New-schema unsupported old writers must refuse against an actual
         # current server using the authenticated immutable0017 image/consumer.
-        smoke.run(archive=archive, archive_sha=expected, revision="0020")
+        smoke.run(archive=archive, archive_sha=expected, revision="0023")
 
     return {
         "image-transition": ops.image_transition,
         "retained-roundtrip": retained,
-        "current0020-cold": lambda: smoke.run(archive=archive, archive_sha=expected,
-                                               revision="0020", cold=True),
+        "current0023-cold": lambda: smoke.run(archive=archive, archive_sha=expected,
+                                               revision="0023", cold=True),
         "roles": roles,
         "tls-upgraded": lambda: tls(False),
         "tls-fresh": lambda: tls(True),
@@ -204,12 +221,13 @@ def recovery_operations(ops, archive, expected):
 
 def execute_recovery():
     ops = load("ops-fixtures")
+    prior_archive = preserved_archive()
     # Exclusive directory ownership prevents silently reusing an earlier run.
     ARCHIVE.parent.mkdir(mode=0o700)
     ops.r.private(ARCHIVE.parent, True)
     ops.package_current_archive(ARCHIVE)
     expected = ops.r.digest(ARCHIVE)
-    ops.r.bundle_verify(ARCHIVE, expected, required_profile="deploy-recovery-v3")
+    ops.r.bundle_verify(ARCHIVE, expected, required_profile="deploy-recovery-v4")
     source = campaign_sources(ops)
     image_records = {}
     ops.bind_source_archive(ARCHIVE, expected)
@@ -224,9 +242,13 @@ def execute_recovery():
             status["stages"][name] = "operation-returned"
             return result
         return execute
+    def guard():
+        if preserved_archive() != prior_archive:
+            raise ValueError("preserved archive presence changed")
+        authenticate(ops, ARCHIVE, expected, source, image_records)
     try:
         execute_stages({name: recorded(name) for name in STAGES},
-                       lambda: authenticate(ops, ARCHIVE, expected, source, image_records))
+                       guard)
         status["ok"] = True
         status["stages"] = dict.fromkeys(STAGES, "passed-authenticated")
     finally:

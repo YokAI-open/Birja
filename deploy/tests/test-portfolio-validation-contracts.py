@@ -15,8 +15,8 @@ spec.loader.exec_module(runner)
 
 class CurrentCampaign(unittest.TestCase):
     def test_exact_successor_path_and_seven_stages(self):
-        self.assertEqual(str(runner.ARCHIVE), "/tmp/birja-phase13-proof/recovery.tar.gz")
-        self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0020-cold",
+        self.assertEqual(str(runner.ARCHIVE), "/tmp/birja-phase14-proof/recovery.tar.gz")
+        self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0023-cold",
                                        "roles", "tls-upgraded", "tls-fresh", "selected-rollback"))
 
     def test_every_stage_including_failed_stage_authenticates_afterward(self):
@@ -27,7 +27,7 @@ class CurrentCampaign(unittest.TestCase):
                     events.append(name)
                     if name == failed:
                         raise RuntimeError("stage failure")
-                    return "authority" if name.startswith("tls-") else None
+                    return "authority" if (name.startswith("tls-") or name == "current0023-cold") else None
                 return execute
             operations = {name: operation(name) for name in runner.STAGES}
             if failed:
@@ -50,19 +50,48 @@ class CurrentCampaign(unittest.TestCase):
         with patch.object(runner, "load", return_value=smoke):
             graph = runner.recovery_operations(ops, runner.ARCHIVE, "a" * 64)
             graph["retained-roundtrip"]()
-            graph["current0020-cold"]()
+            graph["current0023-cold"]()
             graph["tls-upgraded"]()
             graph["tls-fresh"]()
         modes = [call[1] for call in calls if call[0] == "smoke"]
         self.assertEqual(modes[0]["revision"], "0017")
         self.assertTrue(modes[0]["cold"])
         self.assertEqual(modes[1]["revision"], "0020")
+        self.assertEqual(modes[2]["revision"], "0023")
+        self.assertTrue(modes[2]["cold"])
         self.assertTrue(modes[1]["cold"])
-        self.assertFalse(modes[2]["fresh_bootstrap"])
-        self.assertTrue(modes[3]["fresh_bootstrap"])
+        self.assertTrue(modes[3]["upgraded_bootstrap"])
+        self.assertTrue(modes[4]["fresh_bootstrap"])
         for mode in modes:
             self.assertEqual(mode["archive"], runner.ARCHIVE)
             self.assertEqual(mode["archive_sha"], "a" * 64)
+        self.assertEqual([mode["revision"] for mode in modes],
+                         ["0017", "0020", "0023", "0023", "0023"])
+
+    def test_all_three_current_authority_results_must_match(self):
+        for changed in ("current0023-cold", "tls-upgraded", "tls-fresh"):
+            operations = {name: (lambda name=name: "changed" if name == changed else "fixed")
+                          for name in runner.STAGES}
+            with self.assertRaisesRegex(ValueError, "authority differs"):
+                runner.execute_stages(operations, lambda: None)
+
+    def test_preserved_archive_refuses_mutation_and_symlink(self):
+        import hashlib
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-preserved-") as directory:
+            archive = Path(directory) / "prior.tar"
+            with patch.object(runner, "PRESERVED_ARCHIVE", archive), \
+                 patch.object(runner, "PRESERVED_SHA256", hashlib.sha256(b"qualified").hexdigest()):
+                self.assertIsNone(runner.preserved_archive())
+                archive.write_bytes(b"qualified")
+                self.assertIsNotNone(runner.preserved_archive())
+                archive.write_bytes(b"substituted")
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    runner.preserved_archive()
+                archive.unlink()
+                archive.symlink_to(Path(directory) / "missing")
+                with self.assertRaisesRegex(ValueError, "symlink"):
+                    runner.preserved_archive()
 
     def test_raw_audits_full_tests_builds_and_five_images_remain_required(self):
         commands = runner.security_commands()

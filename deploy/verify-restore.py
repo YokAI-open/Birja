@@ -183,7 +183,8 @@ def synthetic_path(path, exists=True):
         and p.parts[1] == "tmp"
         and (p.parts[2].startswith("birja-backup-test-")
              or p in (Path("/tmp/birja-phase12-proof/recovery.tar.gz"),
-                      Path("/tmp/birja-phase13-proof/recovery.tar.gz")))
+                      Path("/tmp/birja-phase13-proof/recovery.tar.gz"),
+                      Path("/tmp/birja-phase14-proof/recovery.tar.gz")))
     )
     private(Path(*p.parts[:3]), True)
     for component in [p, *list(p.parents)[:-1]]:

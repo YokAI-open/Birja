@@ -65,6 +65,9 @@ CRITICAL_MODULES = (
     "app/api/v2/router.py",
     "app/api/v1/legacy_finance.py",
     "app/api/v2/portfolio_management.py",
+    "app/services/portfolio_closure.py",
+    "app/services/portfolio_lifecycle.py",
+    "app/schemas/portfolio_closure.py",
 )
 
 

@@ -81,7 +81,7 @@ def recovery_policy(ops, runner_source=None):
     tree = ast.parse(source)
     constants = {node.targets[0].id: node.value for node in tree.body
                  if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)}
-    expected = ("image-transition", "retained-roundtrip", "current0020-cold", "roles",
+    expected = ("image-transition", "retained-roundtrip", "current0023-cold", "roles",
                 "tls-upgraded", "tls-fresh", "selected-rollback")
     if ast.literal_eval(constants["STAGES"]) != expected:
         raise ValueError("missing or reordered serial stage")
@@ -92,8 +92,8 @@ def recovery_policy(ops, runner_source=None):
         "authenticate(ops, ARCHIVE, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V2", "RETAINED_SOURCE_PAYLOADS",
-        "Path(\"/tmp/birja-phase13-proof/recovery.tar.gz\")",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V3", "RETAINED_CLOSURE_SOURCE_PAYLOADS",
+        "Path(\"/tmp/birja-phase14-proof/recovery.tar.gz\")",
     ):
         if required not in source:
             raise ValueError("missing source-frozen graph: " + required)
@@ -876,10 +876,10 @@ class PortfolioValidation(unittest.TestCase):
         scan = commands[-1][1]
         self.assertEqual(scan[0:4], ["python3", "deploy/scan-images.py", "--output", "image-reports"])
         self.assertEqual(scan[4::2], ["--runtime", "--builder", "--postgres", "--redis", "--node"])
-        self.assertEqual(len(backend[4][4].split(",")), 61)
+        self.assertEqual(len(backend[4][4].split(",")), 64)
         recovery = json.loads(subprocess.check_output([sys.executable, str(ROOT / "deploy/tests/run-portfolio-validation.py"),
             "--suite", "recovery", "--dry-run"]))
-        self.assertEqual(recovery, {"archive": "/tmp/birja-phase13-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
+        self.assertEqual(recovery, {"archive": "/tmp/birja-phase14-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
 
     def test_security_failures_propagate_and_owned_stack_always_cleans(self):
         runner = self.runner()
@@ -921,7 +921,7 @@ class PortfolioValidation(unittest.TestCase):
                     events.append(name)
                     if name == failed:
                         raise RuntimeError(name)
-                    return "fixed-authority" if name.startswith("tls-") else None
+                    return "fixed-authority" if (name.startswith("tls-") or name == "current0023-cold") else None
                 return call
             def guard():
                 events.append("authenticate")
@@ -971,7 +971,7 @@ class PortfolioValidation(unittest.TestCase):
                 (root / "current.py").write_bytes(b"current-app")
                 content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
                            "sources/retained.tar": b"changed" if mutation == "retained" else b"fixed-retained",
-                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 1 if mutation == "inventory" else 2}}).encode()}
+                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 2 if mutation == "inventory" else 3, "revision": "0023"}, "recovery_profile": "deploy-recovery-v4"}).encode()}
                 with tarfile.open(archive, "w") as tar:
                     for name, data in content.items():
                         info = tarfile.TarInfo(name)
@@ -984,8 +984,8 @@ class PortfolioValidation(unittest.TestCase):
                 if mutation == "source":
                     (root / "current.py").write_bytes(b"changed")
                 actual_image = inspect if mutation != "image" else [{**inspect[0], "RootFS": {"Type": "layers", "Layers": []}}]
-                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V2=[],
-                    RETAINED_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
+                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V3=[],
+                    RETAINED_CLOSURE_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
                     digest=r.digest, sha_bytes=r.sha_bytes, private=r.private, call=lambda argv: json.dumps(actual_image))
                 ops = SimpleNamespace(r=fake_r, portfolio_sources=lambda: sources)
                 with patch.object(runner, "ROOT", root), patch.object(sources, "validate_matrix"):
