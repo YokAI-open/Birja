@@ -109,6 +109,37 @@ invent later timestamps or rewrite old rows. Test pending split/application
 assembly so a transaction's own uncommitted effects remain valid. Existing
 writers already resample after locks; do not claim a demonstrated old bug.
 
+### Implemented0023 handoff to Plan03
+
+The actual SQL result has exactly `portfolio_id`, `outcome`, `replayed`.
+`outcome` is either `closed` or `confirmation_changed`. A caller consumes that
+result only within the originating READ COMMITTED transaction and against its
+captured original owner/root/key/name/policy. SQLSTATE40001 means rollback the
+whole transaction and rediscover the instrument set, at most three attempts;
+no root-locked missing-gate acquisition or new target/body is permitted.
+
+Plan03's service must execute this exact definer itself, capture its transaction
+identity/result in private in-memory context, then query the sorted union of
+ALL target ownership-movement instruments and stock holdings on the SAME
+connection. For `closed`, require exact lifecycle/root/intent and complete
+stock-boundary membership, validate actual granted instrument advisory locks
+held by this backend in the existing namespace, and run the complete shared
+read-only stock verifier core for each member before commit. This includes an
+already-closed acknowledgement, regardless of `replayed` or whether its incoming
+key is the original terminal key. Crypto-only/empty roots still require complete
+universal lifecycle integrity. No boolean/client argument or a previously
+returned tuple authorizes the proof entrypoint; only the current service-owned
+transaction context does. Do not clear or bypass the financial stock-gate marker.
+
+`confirmation_changed` is a nonfinancial terminal outcome: commit its journal
+before exposing the definitive name conflict. An exact original replay may
+return this outcome before acquiring stock gates; do not require a successful
+financial proof for a result that cannot mutate finances. Other SQL errors roll
+back. A proof failure rolls back every newly inserted outcome and closure row.
+A commit/response failure remains transport-unknown; an active GET is never
+evidence that a previously submitted original cannot still commit. Plan02
+contains no HTTP route, application service or temporary successful proof stub.
+
 ## API and browser transport
 
 Add `DELETE /api/v2/portfolios/{portfolio_id}`. Authenticated CurrentUser and

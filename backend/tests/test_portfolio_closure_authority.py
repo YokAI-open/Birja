@@ -396,3 +396,196 @@ async def test_migration_checksum_and_authenticated_owner_are_required(authority
             "idle_in_transaction_session_timeout=30s",
         } <= set(settings)
     await ensure_dividend_test_owner()
+
+
+async def test_refusal_is_permanent_after_rename_back_and_delayed_original(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+    payload = intent(owner, portfolio)
+    async with app.begin() as conn:
+        await conn.execute(
+            text("SELECT * FROM update_portfolio_metadata(:u,:p,'New strategy','',true,false)"),
+            {"u": owner, "p": portfolio},
+        )
+    assert tuple(await call(app, payload)) == (portfolio, "confirmation_changed", False)
+    async with app.begin() as conn:
+        await conn.execute(
+            text("SELECT * FROM update_portfolio_metadata(:u,:p,'Strategy','',true,false)"),
+            {"u": owner, "p": portfolio},
+        )
+    # Even after the original name returns, a delayed concurrent copy cannot
+    # commit a deletion the browser now knows was definitively refused.
+    results = await asyncio.gather(call(app, payload), call(app, payload))
+    assert all(tuple(r) == (portfolio, "confirmation_changed", True) for r in results)
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT closed_at FROM accounts WHERE id=:p"), {"p": portfolio})
+        ).scalar_one() is None
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
+    assert tuple(await call(app, intent(owner, portfolio))) == (portfolio, "closed", False)
+
+
+async def seed_refusals(conn, owner, portfolio, count):
+    # Privileged bounded quota fixture, not an application journal-write path.
+    await conn.execute(
+        text("""INSERT INTO portfolio_closure_intents
+        (user_id,portfolio_id,intent_key,confirmation_name,policy_version,outcome,recorded_at)
+        SELECT :u,:p,gen_random_uuid(),'Prior review','freeze_at_closure_v1',
+          'confirmation_changed',clock_timestamp() FROM generate_series(1,:count)"""),
+        {"u": owner, "p": portfolio, "count": count},
+    )
+
+
+async def same_owner_root(app, owner, name):
+    async with app.begin() as conn:
+        return (
+            await conn.execute(
+                text("SELECT portfolio_id FROM create_portfolio(:u,:k,:n,'')"),
+                {"u": owner, "k": uuid4(), "n": name},
+            )
+        ).scalar_one()
+
+
+async def test_quota_concurrent_edge_is_serialized_and_closed_replay_still_works(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+        await seed_refusals(conn, owner, portfolio, 199)
+    sibling = await same_owner_root(app, owner, "Sibling")
+    first, second = intent(owner, portfolio), intent(owner, sibling, "Sibling")
+    results = await asyncio.gather(call(app, first), call(app, second), return_exceptions=True)
+    successes = [
+        (payload, result)
+        for payload, result in zip((first, second), results, strict=True)
+        if not isinstance(result, BaseException)
+    ]
+    failures = [r for r in results if isinstance(r, DBAPIError)]
+    assert len(successes) == len(failures) == 1
+    assert failures[0].orig.sqlstate == "P0001"
+    assert "closure_quota" in str(failures[0].orig)
+    original, closed = successes[0]
+    assert closed.outcome == "closed"
+    assert tuple(await call(app, original)) == (closed.portfolio_id, "closed", True)
+    # A fresh key for an already-closed owned target adds no journal row and
+    # acknowledges its immutable boundary even when the new-intent cap is full.
+    assert tuple(await call(app, {**original, "k": uuid4()})) == (
+        closed.portfolio_id,
+        "closed",
+        True,
+    )
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 200
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))
+        ).scalar_one() == 1
+        assert (
+            await conn.execute(text("SELECT count(*) FROM accounts WHERE closed_at IS NULL"))
+        ).scalar_one() == 1
+
+
+async def test_quota_counts_only_current_utc_day_and_refusal_replays_precede_cap(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+        await conn.execute(
+            text("""INSERT INTO portfolio_closure_intents
+            (user_id,portfolio_id,intent_key,confirmation_name,policy_version,outcome,recorded_at)
+            SELECT :u,:p,gen_random_uuid(),'Prior review','freeze_at_closure_v1',
+              'confirmation_changed',
+              (date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+                 -interval '1 second' FROM generate_series(1,200)"""),
+            {"u": owner, "p": portfolio},
+        )
+    payload = intent(owner, portfolio, "Stale review")
+    assert tuple(await call(app, payload)) == (portfolio, "confirmation_changed", False)
+    async with migrator.begin() as conn:
+        await seed_refusals(conn, owner, portfolio, 199)
+    assert tuple(await call(app, payload)) == (portfolio, "confirmation_changed", True)
+    await reject(app, intent(owner, portfolio), "P0001", "closure_quota")
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 400
+        assert (
+            await conn.execute(text("SELECT closed_at FROM accounts WHERE id=:p"), {"p": portfolio})
+        ).scalar_one() is None
+
+
+async def test_replay_concurrent_conflicting_body_cannot_change_original(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+    payload = intent(owner, portfolio)
+    results = await asyncio.gather(
+        call(app, payload), call(app, {**payload, "n": "Other"}), return_exceptions=True
+    )
+    assert sum(isinstance(result, DBAPIError) for result in results) == 1
+    failure = next(r for r in results if isinstance(r, DBAPIError))
+    assert failure.orig.sqlstate == "23505"
+    winner = next(r for r in results if not isinstance(r, BaseException))
+    assert winner.outcome in {"closed", "confirmation_changed"}
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
+
+
+async def test_rollback_of_refusal_does_not_manufacture_terminal_resolution(authority):
+    app, migrator, _ = authority
+    async with migrator.begin() as conn:
+        owner, portfolio = await root(conn)
+    payload = intent(owner, portfolio, "Wrong review")
+    async with app.connect() as conn:
+        assert (await conn.execute(text(CLOSE), payload)).one().outcome == "confirmation_changed"
+        await conn.rollback()
+    async with migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 0
+    assert tuple(await call(app, payload)) == (portfolio, "confirmation_changed", False)
+
+
+@pytest.mark.parametrize("failure", ["checksum", "principal"])
+async def test_authority_migration_refuses_tamper_or_unauthenticated_principal(authority, failure):
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    app, migrator, _ = authority
+    path = BACKEND / "alembic/versions/0023_portfolio_closure_authority.py"
+    spec = spec_from_file_location("closure_authority_negative", path)
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if failure == "checksum":
+        module.SQL_SHA256 = "0" * 64
+    target = migrator if failure == "checksum" else app
+    async with target.connect() as conn:
+        before = (
+            await conn.execute(
+                text(
+                    "SELECT pg_get_functiondef("
+                    "'public.close_portfolio(bigint,bigint,uuid,text,text)'::regprocedure)"
+                )
+            )
+        ).scalar_one()
+
+        def apply(sync):
+            with Operations.context(MigrationContext.configure(sync)):
+                module.upgrade()
+
+        with pytest.raises(RuntimeError, match="checksum mismatch|authenticated birja_migrator"):
+            await conn.run_sync(apply)
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT pg_get_functiondef("
+                    "'public.close_portfolio(bigint,bigint,uuid,text,text)'::regprocedure)"
+                )
+            )
+        ).scalar_one() == before
