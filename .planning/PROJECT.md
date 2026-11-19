@@ -59,15 +59,25 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   original finances/no regrant, target-bound execution/retries, named financial
   surfaces/private History, zero/one/many identity and restricted verified-TLS
   recovery — Phase12, seven assigned requirements verified locally. Creation,
-  descriptions/comparison and public deletion remain Phases13–15.
+  descriptions/comparison are now validated in Phase13; public deletion remains Phase14.
+
+- [x] Up to ten private named strategy portfolios, editable/clearable optional
+  descriptions, one independent$10,000grant/baseline per genuinely new portfolio,
+  My portfolio onboarding and permanent original creation replay — Phase13.
+- [x] Independent active-book trading, same-asset positions/basis, historical
+  dividends/corrections and active splits, explicit switching with isolated
+  browser authority, receipts and cursors — Phase13.
+- [x] Stable strategy overview with cash/value/return against original baselines,
+  shared exact detail valuation and per-book incomplete semantics; bounded
+  polling/capacity and exact current0020/retained0017cold recovery — Phase13,
+  independently verified11/11requirements and both owner acceptance outcomes.
 
 ### Active
 
-- [ ] Create and name up to ten active strategy portfolios per user, each with its own $10,000 initial virtual cash and an optional editable description that can be empty.
-- [ ] Keep cash, holdings, trades, History, dividends, splits and performance scoped to the selected portfolio.
-- [ ] Compare portfolio cash, total value and return in an overview, then open one portfolio to trade.
 - [ ] Delete any owned portfolio after explicit confirmation, including portfolios with holdings and the last portfolio; retain financial records outside normal portfolio screens.
-- [ ] Preserve each existing user's actual balances, holdings and immutable history in their first portfolio.
+
+- [ ] Freeze deleted strategies at the committed closure boundary and prevent future financial effects while preserving other active books — Phase14.
+- [ ] Qualify the complete active/deleted multi-portfolio lifecycle, recovery and acceptance — Phase15.
 
 ### Carried Deferred Work
 
@@ -99,6 +109,11 @@ gated. The bounded approved manual campaign is preserved at its original path.
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
 ## Current State
+
+Local v1.2: Phases12and13 are verified complete; Phase14is ready for planning.
+Phase13delivers18plans/11requirements with owner UI/native200acceptance, full
+security/critical coverage and uninterrupted7stage recovery at9527e35. The
+feature branch remains local; this completion does not change production.
 
 The v1.0 MVP milestone is shipped and archived (2026-11-10): all 7 phases,
 69 plans and 31 requirements validated. Software release v0.4.0 is live at
@@ -232,17 +247,17 @@ optional-description amendment (PMGT-06, Phase 13), rename,
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Progress:** Research, the original27requirements and four-phase roadmap
-were approved on2026-11-14; optional descriptions in Phase13 bring the total
-to28. Phase12 is now complete locally:31plans, both owner checks, independent
-8/8verification with one explicit owner-approved advisory override and all
-seven assigned requirements satisfied. Actual full security and fresh
-seven-stage source-bound recovery pass at4b4320b; the approved official
-Python image repair is qualified. Picomatch remains unresolved accepted risk
-in issue35, with narrow fail-closed audit/image reporting and review expiry
-2026-12-17UTC. This is not a vulnerability remediation claim. Phases13–15
-and21requirements remain pending; Phase7live outcomes stay separately
-deferred. Local completion does not publish or deploy the feature branch.
+**Progress:** Phases12and13 are verified complete locally (31+18plans,
+18of28requirements). Phase13 independent verification passes all5roadmap criteria,
+45plan truths and11assigned requirements with no blocker or pending human item.
+Final9527e35 qualification passes3343backend tests,61critical modules100%,
+1194frontend tests,79browser passes/one retained skip, five image policies and
+uninterrupted7stage source-bound recovery. Security58/58closed and owner UI/native200
+outcomes pass. Phase14is ready for planning; Phase15andtenrequirements remain.
+Phase7's six live obligations stay separately deferred and activation remains gated.
+Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
+zero accepted scanner findings are not a dependency remediation claim. No new
+publication or production deployment occurred, and the v1.2milestone stays open.
 No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio
@@ -302,4 +317,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after owner-confirmed v1.2 scope and research-first decision; production unchanged.*
+*Last updated: 2026-11-19 after independently verified Phase13local completion; Phase14ready for planning; production unchanged.*

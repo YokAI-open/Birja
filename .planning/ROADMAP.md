@@ -52,10 +52,10 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** Phase12 verified complete locally; Phase13 planned and ready to execute; Phases14–15 await planning. The v1.2 milestone remains open.
+**Status:** Phases12–13 verified complete locally; Phase14 is ready for planning and Phase15 remains later. The v1.2 milestone remains open.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
-- [ ] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity.
+- [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
 - [ ] **Phase 14: End Strategies Safely** — confirm terminal deletion, freeze records, support zero active portfolios and refuse stale or unauthorized targets.
 - [ ] **Phase 15: Verify Exact Portfolio Recovery and Acceptance** — qualify the complete active/deleted lifecycle through exact recovery, compatibility and protected user journeys.
 
@@ -210,7 +210,7 @@ refusal behavior in this phase. Do not defer these protections to Phase 15.
   4. The user compares active strategies in a stable overview showing name, cash, exact total or known value and dollar/percentage return against each stored baseline; detail and overview agree on timestamps and incompleteness, without a pooled wealth total or making other strategies unavailable.
   5. Switching portfolios isolates cached pages, cursors, actionable previews, pending attempts and late responses instead of retargeting them; requests and jobs remain bounded, creation has appropriate resource controls, shared market polling does not multiply, and existing activation/backup-capacity guards remain effective.
 
-**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). All18plans executed; actual full security/recovery and owner acceptance pass. Independent phase-goal verification pending.
+**Plans**: 18 checked plans (36 tasks,17 dependency waves; revision1 independent check passed with0blockers/0warnings). All18plans executed; actual full security/recovery, owner acceptance and independent phase-goal verification pass (5/5criteria,11/11requirements).
 
 **Wave 1**
 
@@ -372,12 +372,12 @@ the phase structure was approved on2026-11-14 and only Phase12 is implemented an
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phase13 implementation, all18plans and final qualification are complete; independent goal verification is pending. Phases14–15 await planning.
+Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is ready for planning; Phase15 follows it.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
-| 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Verifying; complete campaigns, acceptance and audits pass | - |
+| 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
