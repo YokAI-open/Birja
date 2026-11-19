@@ -846,13 +846,12 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                            "-U", "birja_ops_bootstrap", "-d", "birja_source_test"], data=setup.encode())
 
             authorities = []
-            def transport(code):
+            def transport(code, *, prepared_legacy14=False):
                 if revision == "0020" and not fresh_bootstrap:
                     code = management_role_program(code)
                 if revision == "0023":
                     code = closure_role_program(code)
-                code = admitted_program(code, revision, prepared_legacy14=(
-                    upgraded_bootstrap and upgraded_from == "0014"))
+                code = admitted_program(code, revision, prepared_legacy14=prepared_legacy14)
                 sources.verify_image(
                     binding,
                     json.loads(call(["docker", "image", "inspect", binding["id"]])),
@@ -910,7 +909,8 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
 
             if fresh_bootstrap or upgraded_bootstrap:
                 transport(fresh_authority_program(revision, upgraded=upgraded_bootstrap,
-                                                  upgraded_from=upgraded_from))
+                                                  upgraded_from=upgraded_from),
+                          prepared_legacy14=(upgraded_bootstrap and upgraded_from == "0014"))
                 if revision == '0023':
                     production_bootstrap()
                     transport(authority_probe_program())
