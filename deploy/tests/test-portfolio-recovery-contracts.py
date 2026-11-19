@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Offline exact0017 producer/consumer contracts; no provider operations."""
 
+import ast
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +28,31 @@ def load(name):
 
 
 class PortfolioRecoveryContracts(unittest.TestCase):
+    def test_ops_archive_family_is_authenticated_and_finite(self):
+        spec=importlib.util.spec_from_file_location('ops_contracts',ROOT/'deploy/tests/ops-fixtures.py')
+        ops=importlib.util.module_from_spec(spec);spec.loader.exec_module(ops)
+        for profile,version,revision in (('deploy-recovery-v3',2,'0020'),('deploy-recovery-v4',3,'0023')):
+            inventory={'recovery_profile':profile,'portfolio_payload':{'version':version,'revision':revision}}
+            with mock.patch.object(ops.r,'bundle_verify',return_value=inventory) as authenticate:
+                self.assertEqual(ops.archive_profile(Path('/synthetic/archive'),'digest'),profile)
+                authenticate.assert_called_once_with(Path('/synthetic/archive'),'digest')
+            for field,value in (('version',1),('revision','0022')):
+                changed=copy.deepcopy(inventory);changed['portfolio_payload'][field]=value
+                with mock.patch.object(ops.r,'bundle_verify',return_value=changed),self.assertRaises(ValueError):
+                    ops.archive_profile(Path('/synthetic/archive'),'digest')
+        with mock.patch.object(ops.r,'bundle_verify',side_effect=ValueError('integrity')), \
+             self.assertRaisesRegex(ValueError,'integrity'):
+            ops.archive_profile(Path('/synthetic/archive'),'digest')
+
+    def test_ops_restore_always_supplies_the_saved_source_manifest(self):
+        for name in ('ops-fixtures.py','portfolio-smoke.py'):
+            tree=ast.parse((ROOT/'deploy/tests'/name).read_text())
+            calls=[node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                   and isinstance(node.func,ast.Attribute) and node.func.attr=='restored']
+            self.assertTrue(calls,name)
+            for call in calls:
+                self.assertTrue(any(keyword.arg=='manifest' for keyword in call.keywords),(name,call.lineno))
+
     def test_v3_consumer_requires_exact_revision_inventory_and_profile(self):
         producer, consumer = load('backup-snapshot'), load('verify-restore')
         payload = producer.closure_payload_inventory(ROOT)
@@ -350,12 +378,29 @@ class PortfolioRecoveryContracts(unittest.TestCase):
 
 
 def postgres_proof():
+    """Use the complete authenticated 0017 test/application tree for old readers."""
+    spec = importlib.util.spec_from_file_location('proof_sources', ROOT/'deploy/tests/portfolio-sources.py')
+    sources = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sources)
+    data = sources.source_archive('portfolio0017')
+    with tempfile.TemporaryDirectory(prefix='birja-p14-15-retained-proof-') as tmp:
+        historical = Path(tmp)
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
+            archive.extractall(historical, filter='data')
+        sources.verify_source_tree(historical,data)
+        _postgres_proof(historical)
+
+
+def _postgres_proof(historical):
     """Actual mixed NULL/2 no-owner/no-ACL restore on the guarded test server.
 
     This is a logical-contract proof, not the encrypted same-archive/TLS image
     campaign in18/27. Every writer targets the exact throwaway birja-test stack.
     """
-    dc=['docker','compose','-f',str(ROOT/'docker-compose.test.yml')]
+    project=os.environ.get('COMPOSE_PROJECT_NAME','birja-test')
+    if project not in ('birja-test','birja-p14-15'):
+        raise ValueError('owned test project required')
+    dc=['docker','compose','--env-file','/dev/null','-p',project,'-f',str(ROOT/'docker-compose.test.yml')]
     def command(args,data=None):
         result=subprocess.run(dc+['exec','-T','postgres',*args],input=data,
                               capture_output=True,timeout=180)
@@ -369,7 +414,8 @@ def postgres_proof():
     if query("SELECT 1 FROM pg_database WHERE datname='birja_restore_test';").strip():
         raise AssertionError('clone must not preexist')
     env={k:os.environ[k] for k in ('PATH','HOME','LANG') if k in os.environ}
-    env['PYTHONPATH']=str(ROOT/'backend')
+    env.update(COMPOSE_PROJECT_NAME=project,COMPOSE_DISABLE_ENV_FILE='1')
+    env['PYTHONPATH']=str(historical/'backend')
     seed="""
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -384,10 +430,16 @@ async def main():
  finally:await engine.dispose()
 asyncio.run(main())
 """
-    result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',seed],cwd=ROOT,
+    result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',seed],cwd=historical/'backend',
                           env=env,capture_output=True,timeout=180)
     if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
-    producer,restore=load('backup-snapshot'),load('verify-restore')
+    # Both the retained application and its authority contract come from the
+    # same complete, hash-authenticated source; no current-source overlay.
+    spec=importlib.util.spec_from_file_location('fixed0017_producer',historical/'deploy/backup-snapshot.py')
+    producer=importlib.util.module_from_spec(spec);spec.loader.exec_module(producer)
+    restore=load('verify-restore')
+    current_contract=restore.recovery_contract
+    restore.recovery_contract=lambda revision=None: producer if revision=='0017' else current_contract(revision)
     # Fixed source-owned grants; no manifest-selected SQL is executed.
     query(producer.PORTFOLIO_RESTORE_GRANTS)
     source=json.loads(query("SET TIME ZONE 'UTC';\n"+producer.schema_guard_sql('0017')+producer.manifest_sql('0017')))
@@ -448,22 +500,24 @@ async def main():
  finally:await engine.dispose()
 asyncio.run(main())
 """
-        result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',reader],cwd=ROOT,
+        result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',reader],cwd=historical/'backend',
                               env=env,capture_output=True,timeout=30)
         if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
         print('actual mixed0017 logical restore, marker refusal and reader interpretation PASS')
     finally:
         if created:query('DROP DATABASE birja_restore_test WITH (FORCE);')
+        # Return the exclusive shared test lane to its current source, rather
+        # than leaving a historical revision for the next current consumer.
+        env['PYTHONPATH']=str(ROOT/'backend')
         cleanup="""
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 import tests.conftest
-from tests.portfolio_fixtures import reset_disposable_schema,migrate_to
+from tests.portfolio_fixtures import restore_current_test_schema
 async def main():
  engine=create_async_engine(tests.conftest.TEST_DATABASE_URL)
  try:
-  await reset_disposable_schema(engine)
-  await migrate_to('0017')
+  await restore_current_test_schema(engine)
  finally:await engine.dispose()
 asyncio.run(main())
 """

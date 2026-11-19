@@ -37,7 +37,18 @@ def package_current_archive(archive):
     spec = importlib.util.spec_from_file_location('current_bundle_producer', ROOT / 'deploy/backup-snapshot.py')
     producer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(producer)
-    producer.bundle_package_v2(archive, recovery=r)
+    producer.bundle_package_v3(archive, recovery=r)
+
+
+def archive_profile(archive, sha):
+    """Authenticate the entire archive before selecting its finite family."""
+    inventory = r.bundle_verify(archive, sha)
+    payload = inventory.get('portfolio_payload', {})
+    family = (inventory.get('recovery_profile'), payload.get('version'), payload.get('revision'))
+    if family not in {('deploy-recovery-v3', 2, '0020'),
+                      ('deploy-recovery-v4', 3, '0023')}:
+        raise ValueError('unsupported authenticated campaign family')
+    return family[0]
 
 
 SEED = r"""
@@ -188,7 +199,7 @@ def options(args):
     if a.recovery_bundle:
         archive = r.synthetic_path(a.recovery_bundle)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v3")
+        archive_profile(archive, sha)
     return a
 
 
@@ -369,7 +380,7 @@ def installed_recovery(archive_arg=None):
         if not archive_arg:
             package_current_archive(archive)
         sha = r.private(str(archive) + ".sha256").read_text().strip()
-        r.bundle_verify(archive, sha, required_profile="deploy-recovery-v3")
+        profile = archive_profile(archive, sha)
         bind_source_archive(archive, sha)
         old = root / "old"
         old.mkdir(mode=0o700)
@@ -408,7 +419,7 @@ def installed_recovery(archive_arg=None):
                 "--sha",
                 sha,
                 "--require-profile",
-                "deploy-recovery-v3",
+                profile,
                 "--synthetic-root",
                 str(root / "host"),
             ],
@@ -560,7 +571,7 @@ def selected_source_archive():
         archive = Path(_STANDALONE_ARCHIVE.name) / 'recovery.tar'
         package_current_archive(archive)
         sha = r.private(str(archive)+'.sha256').read_text().strip()
-        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v3')
+        archive_profile(archive, sha)
         bind_source_archive(archive, sha)
     archive, sha = _SELECTED_ARCHIVE
     portfolio_sources().verify_archive_binding(archive, sha)
@@ -704,7 +715,7 @@ SELECT coin_id,100.00000001,100.00000003,100.00000002,'alpaca','iex','2026-11-10
             assert next(row for row in manifest['identity_state'] if row[0]=='users')[1:] == [int(sequences['users'].decode().split('|')[0]), True]
             before['identity_state'] = manifest['identity_state']
         assert all(manifest[key] == before[key] for key in ('tables','financial','revision','schema'))
-        with r.restored(dc, (directory / 'database.dump').read_bytes()):
+        with r.restored(dc, (directory / 'database.dump').read_bytes(), manifest=manifest):
             r.verify(dc, manifest)
             assert identity_state(dc, r.CLONE) == sequences
             if revision == '0011':
@@ -972,7 +983,7 @@ def roundtrip(archive_arg=None):
                 manifest["tables"] == before["tables"]
                 and manifest["financial"] == before["financial"]
             )
-            with r.restored(dc, dump):
+            with r.restored(dc, dump, manifest=manifest):
                 r.verify(dc, manifest)
                 negative_controls(dc, manifest)
                 generated_inserts(dc)
@@ -1012,7 +1023,7 @@ def roundtrip(archive_arg=None):
             print("encrypted_checksum_and_manifest_negatives=true")
             for bad in [dump[:100], dump[:-100]]:
                 try:
-                    with r.restored(dc, bad):
+                    with r.restored(dc, bad, manifest=manifest):
                         r.verify(dc, manifest)
                 except (ValueError, OSError):
                     pass
@@ -2981,7 +2992,7 @@ def dividend_sql():
             manifest = r.canonical(dc,'birja_source_test')
             dump = r.call(dc+['exec','-T','postgres','pg_dump','-U',r.BOOT,'-d',
                 'birja_source_test','--format=custom','--no-owner','--no-acl'])
-            with r.restored(dc,dump):
+            with r.restored(dc,dump,manifest=manifest):
                 r.verify(dc,manifest)
                 r.sql(dc,'GRANT CONNECT ON DATABASE birja_restore_test TO birja_app,birja_scheduler,birja_migrator','birja_ops_test')
                 role_python(dividend_program(mode='verify',database='birja_restore_test',expected=expected,revision='0014'),'birja_migrator')

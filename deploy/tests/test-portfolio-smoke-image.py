@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline current-image provenance regressions; no database or Docker daemon."""
 
+import ast
 import hashlib
 import importlib.util
 import os
@@ -43,14 +44,40 @@ class FreshAuthority(unittest.TestCase):
 
     def test_fresh_program_migrates_directly_to_current_and_uses_real_roles(self):
         code = smoke.fresh_authority_program()
-        compile(code, '<fresh0020>', 'exec')
-        self.assertIn("command.upgrade,Config('/app/alembic.ini'),'0020'", code)
+        compile(code, '<fresh0023>', 'exec')
+        self.assertIn("command.upgrade,Config('/app/alembic.ini'),'0023'", code)
         self.assertNotIn("'0017'", code)
-        self.assertIn('GRANTS_SQL', code)
-        self.assertIn('require_schema(restricted)', code)
+        self.assertIn('GRANTS_0023_SQL', code)
         self.assertIn('create_portfolio', code)
-        self.assertIn('portfolio_authority=', code)
+        checked = smoke.closure_role_program(code)
+        compile(checked, '<fresh0023-role-checks>', 'exec')
+        function = next(node for node in ast.parse(checked).body
+                        if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        local_imports = {alias.asname or alias.name for node in ast.walk(function)
+                         if isinstance(node, ast.ImportFrom) for alias in node.names}
+        self.assertNotIn('ClosureIntent', local_imports)
+        self.assertNotIn('close_portfolio', local_imports)
+        self.assertNotIn('AsyncSession', local_imports)
+        self.assertIn('require_schema(restricted)', checked)
+        self.assertIn('portfolio_authority=', checked)
+        self.assertIn('DEFAULT_ACL_0023_SHA256', checked)
+        self.assertIn('implicit public function defaults admitted', checked)
         self.assertIn('portfolio_verified_tls=true', code)
+
+    def test_upgraded_program_preserves_complete_before_rows_and_identity_tails(self):
+        code = smoke.closure_role_program(smoke.fresh_authority_program(upgraded=True))
+        compile(code, '<populated0020-to0023-tls>', 'exec')
+        self.assertIn('UPGRADED=True', code)
+        self.assertIn('assert await snapshot(conn)==before', code)
+        self.assertLess(
+            code.index("assert await require_migrator(conn)=='0020'"),
+            code.index("command.upgrade,Config('/app/alembic.ini'),'0023'"),
+        )
+        self.assertIn('last_value,is_called', code)
+        self.assertIn('close_portfolio(db,original_intent)', code)
+        retained = smoke.fresh_authority_program('0020')
+        self.assertIn("command.upgrade,Config('/app/alembic.ini'),'0020'", retained)
+        self.assertNotIn('0023', retained)
 
     def test_selected_fresh_refuses_retained_before_build(self):
         with mock.patch.object(smoke, 'build_selected_runtime', side_effect=AssertionError('build')):
@@ -152,15 +179,23 @@ class ImageCommands:
 
 class CurrentImageContracts(unittest.TestCase):
     def test_program_admits_schema_before_application_imports_and_wires_roles(self):
-        fixture = smoke.selected_fixture(sources_module, '0020')
+        fixture = smoke.selected_fixture(sources_module, '0023')
         for mode in ('create', 'verify', 'projection'):
             code = fixture.program(mode=mode)
-            current = smoke.admitted_program(smoke.management_role_program(code), '0020')
-            compile(current, '<current0020-tls>', 'exec')
+            current = smoke.admitted_program(smoke.closure_role_program(code), '0023')
+            compile(current, '<current0023-tls>', 'exec')
             self.assertLess(current.index('asyncio.run(smoke_admit())'), current.rindex('from sqlalchemy.ext.asyncio import'))
-            self.assertIn("for role in ('app','scheduler')", current)
-            self.assertIn('replay.replayed', current)
+            self.assertIn("for role,client in (('app',app),('scheduler',scheduler))", current)
+            self.assertIn('result.replayed', current)
+            self.assertIn('DEFAULT_ACL_0023_SQL', current)
+        management = smoke.selected_fixture(sources_module, '0020')
+        self.addCleanup(management._source_directory.cleanup)
+        code = management.program(mode='verify')
+        self.assertIn('0020 source mismatch before import', code)
+        self.assertNotIn('0023', management.SOURCE_SHA256)
+        self.assertNotEqual(management.ROOT, smoke.ROOT)
         retained = smoke.selected_fixture(sources_module, '0017')
+        self.addCleanup(retained._source_directory.cleanup)
         code = smoke.admitted_program(retained.program(mode='verify'), '0017')
         compile(code, '<retained0017-tls>', 'exec')
         self.assertLess(code.index('asyncio.run(smoke_admit())'), code.rindex('from app.core.config import'))
@@ -325,7 +360,7 @@ class CampaignImageContracts(unittest.TestCase):
             or source.payload
         )
         command = ImageCommands(source)
-        if revision == "0017":
+        if revision != "0023":
             command.image[0]["Config"]["Labels"]["org.opencontainers.image.revision"] = source.profile_for(revision)["commit"]
         return archive, sha, source, command
 
@@ -337,7 +372,7 @@ class CampaignImageContracts(unittest.TestCase):
         )
 
     def test_repeated_current_and_retained_use_original_id_without_rebuild(self):
-        for revision in ("0017", "0020"):
+        for revision in ("0017", "0020", "0023"):
             with self.subTest(revision=revision):
                 archive, sha, source, command = self.campaign(revision)
                 first = self.invoke(revision, archive, sha, source, command)
@@ -352,7 +387,7 @@ class CampaignImageContracts(unittest.TestCase):
                 self.assertEqual(command.calls[-1], ["docker", "image", "inspect", first["id"]])
 
     def test_recorded_missing_or_reindexed_same_content_image_never_rebuilds(self):
-        for revision in ("0017", "0020"):
+        for revision in ("0017", "0020", "0023"):
             for mutation in ("missing", "id", "config", "rootfs"):
                 with self.subTest(revision=revision, mutation=mutation):
                     archive, sha, source, command = self.campaign(revision)
@@ -378,9 +413,9 @@ class CampaignImageContracts(unittest.TestCase):
     def test_unsafe_or_wrong_campaign_record_refuses_before_docker(self):
         for mutation in ("mode", "symlink", "source_commit", "app_tree", "context_sha256", "id", "json"):
             with self.subTest(mutation=mutation):
-                archive, sha, source, command = self.campaign("0020")
-                self.invoke("0020", archive, sha, source, command)
-                record = archive.parent / "current0020-image-binding.json"
+                archive, sha, source, command = self.campaign("0023")
+                self.invoke("0023", archive, sha, source, command)
+                record = archive.parent / "current0023-image-binding.json"
                 if mutation == "mode":
                     record.chmod(0o644)
                 elif mutation == "symlink":
@@ -398,14 +433,14 @@ class CampaignImageContracts(unittest.TestCase):
                     record.chmod(0o400)
                 command.calls.clear()
                 with self.assertRaises(ValueError):
-                    self.invoke("0020", archive, sha, source, command)
+                    self.invoke("0023", archive, sha, source, command)
                 self.assertEqual(command.calls, [])
 
     def test_changed_archive_dirty_source_or_unsafe_parent_never_reuses(self):
         for mutation in ("archive", "dirty", "parent", "owner"):
             with self.subTest(mutation=mutation):
-                archive, sha, source, command = self.campaign("0020")
-                self.invoke("0020", archive, sha, source, command)
+                archive, sha, source, command = self.campaign("0023")
+                self.invoke("0023", archive, sha, source, command)
                 if mutation == "archive":
                     archive.chmod(0o600)
                     archive.write_bytes(b"changed")
@@ -418,17 +453,17 @@ class CampaignImageContracts(unittest.TestCase):
                     with mock.patch.object(smoke.os, "getuid", return_value=os.getuid() + 1):
                         with self.assertRaises(ValueError):
                             # Use the patched module specifically for ownership.
-                            smoke.build_selected_runtime(source, {}, revision="0020", archive=archive, archive_sha=sha, run=command)
+                            smoke.build_selected_runtime(source, {}, revision="0023", archive=archive, archive_sha=sha, run=command)
                 else:
                     with self.assertRaises(ValueError):
-                        self.invoke("0020", archive, sha, source, command)
+                        self.invoke("0023", archive, sha, source, command)
                 self.assertEqual(command.calls, [])
 
     def test_new_campaign_does_not_adopt_another_campaign_tag(self):
-        archive, sha, source, command = self.campaign("0020")
-        self.invoke("0020", archive, sha, source, command)
-        archive2, sha2, source2, command2 = self.campaign("0020")
-        self.invoke("0020", archive2, sha2, source2, command2)
+        archive, sha, source, command = self.campaign("0023")
+        self.invoke("0023", archive, sha, source, command)
+        archive2, sha2, source2, command2 = self.campaign("0023")
+        self.invoke("0023", archive2, sha2, source2, command2)
         first_tag = next(argv[argv.index("-t") + 1] for argv in command.calls if argv[:2] == ["docker", "build"])
         second_tag = next(argv[argv.index("-t") + 1] for argv in command2.calls if argv[:2] == ["docker", "build"])
         self.assertNotEqual(first_tag, second_tag)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owned current0020 and immutable retained0017 verified-TLS smoke."""
+"""Owned current0023 and complete immutable0020/0017 verified-TLS smoke."""
 
 import hashlib
 import importlib.util
@@ -96,7 +96,7 @@ def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=s
     payload = sources.git("archive", commit, "backend")
     context = hashlib.sha256(payload).hexdigest()
     binding = campaign_image_binding(
-        sources, env, archive=archive, archive_sha=archive_sha, revision="0020",
+        sources, env, archive=archive, archive_sha=archive_sha, revision="0023",
         source_commit=commit, app_tree=app_tree, context_sha256=context, run=run,
     )
     if binding is not None:
@@ -160,7 +160,7 @@ def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=s
     sources.verify_image(binding, json.loads(result.stdout))
     if archive is not None:
         sources.verify_archive_binding(archive, archive_sha)
-        sources.record_image_binding(archive, "current0020", binding)
+        sources.record_image_binding(archive, "current0023", binding)
     return binding
 
 
@@ -168,16 +168,16 @@ def build_selected_runtime(
     sources, env, *, revision, archive=None, archive_sha=None, run=subprocess.run
 ):
     profile = sources.profile_for(revision)
-    if revision == "0020":
+    if revision == "0023":
         return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha, run=run)
-    if revision != "0017":
+    if revision not in {"0017", "0020"}:
         raise ValueError("unsupported portfolio smoke schema")
     payload = sources.source_archive(
-        "portfolio0017", archive=archive, archive_sha=archive_sha
+        "portfolio" + revision, archive=archive, archive_sha=archive_sha
     )
     context = hashlib.sha256(payload).hexdigest()
     binding = campaign_image_binding(
-        sources, env, archive=archive, archive_sha=archive_sha, revision="0017",
+        sources, env, archive=archive, archive_sha=archive_sha, revision=revision,
         source_commit=profile["commit"], app_tree=profile["app_tree"],
         context_sha256=context, run=run,
     )
@@ -230,30 +230,37 @@ def build_selected_runtime(
     sources.verify_image(binding, json.loads(result.stdout))
     if archive is not None:
         sources.verify_archive_binding(archive, archive_sha)
-        sources.record_image_binding(archive, "current0017", binding)
+        sources.record_image_binding(archive, "current" + revision, binding)
     return binding
 
 
 def selected_fixture(sources, revision, *, archive=None, archive_sha=None):
     sources.profile_for(revision)
-    if revision == "0020":
-        return load("portfolio-management-recovery-fixture")
-    if revision != "0017":
+    if revision == "0023":
+        return load("portfolio-closure-recovery-fixture")
+    if revision not in {"0017", "0020"}:
         raise ValueError("unsupported portfolio fixture schema")
     payload = sources.source_archive(
-        "portfolio0017", archive=archive, archive_sha=archive_sha
+        "portfolio" + revision, archive=archive, archive_sha=archive_sha
     )
+    name = "portfolio-management-recovery-fixture.py" if revision == "0020" else "portfolio-execution-fixture.py"
+    # The0020 generator imports its producer at generation time. Its complete
+    # authenticated source tree must remain present, never the current overlay.
+    directory = tempfile.TemporaryDirectory(prefix="birja-retained-smoke-" + revision + "-")
     with tarfile.open(fileobj=io.BytesIO(payload)) as source:
-        code = source.extractfile("deploy/tests/portfolio-execution-fixture.py").read()
-    fixture = types.ModuleType("immutable_portfolio0017_fixture")
-    fixture.__file__ = str(Path(__file__).with_name("portfolio-execution-fixture.py"))
-    exec(compile(code, "<authenticated0017-fixture>", "exec"), fixture.__dict__)  # noqa: S102 - fixed archive hash authenticated before imports
+        source.extractall(directory.name, filter="data")
+    sources.verify_source_tree(directory.name, payload)
+    path = Path(directory.name) / "deploy/tests" / name
+    fixture = types.ModuleType("immutable_portfolio" + revision + "_fixture")
+    fixture.__file__ = str(path)
+    fixture._source_directory = directory
+    exec(compile(path.read_bytes(), str(path), "exec"), fixture.__dict__)  # noqa: S102 - fixed archive hash authenticated before imports
     return fixture
 
 
 def admitted_program(code, revision):
     """Read exact schema through verified TLS before application imports."""
-    if revision not in ("0017", "0020"):
+    if revision not in ("0017", "0020", "0023"):
         raise ValueError("unsupported smoke source/schema")
     create = bool(re.search(r"^MODE\s*=\s*['\"]create['\"]", code, re.MULTILINE))
     prelude = (
@@ -312,7 +319,7 @@ def management_role_program(code):
     return code.replace(marker, checks + "\n" + marker, 1)
 
 
-def fresh_authority_program():
+def management_fresh_authority_program():
     """Genuine empty-schema0020 migration and restricted TLS clients, no staged reset."""
     return r"""
 MODE='create'
@@ -365,8 +372,156 @@ asyncio.run(run())
 """
 
 
-def retained_writer_refusal_program():
+def closure_role_program(code):
+    """Measure final object/effective-default authority through real TLS roles."""
+    checks = r"""
+   if MODE=='verify' or globals().get('AUTHORITY_DIAGNOSTIC',False):
+    from app.db.portfolio_bootstrap import CATALOGUE_0023_SQL,CATALOGUE_0023_SHA256,ACL_SQL,ACL_0023_SHA256,DEFAULT_ACL_0023_SQL,DEFAULT_ACL_0023_SHA256
+    from app.db.schema_contract import require_schema,SchemaAdmissionError
+    from app.services.portfolio_closure import ClosureIntent as ReplayClosureIntent,close_portfolio as replay_close_portfolio
+    from sqlalchemy.ext.asyncio import AsyncSession as ReplaySession
+    from uuid import UUID
+    async with engine.connect() as authority:
+     measured=[(await authority.execute(text(query))).scalar_one() for query in (CATALOGUE_0023_SQL,ACL_SQL,DEFAULT_ACL_0023_SQL)]
+     assert measured==[CATALOGUE_0023_SHA256,ACL_0023_SHA256,DEFAULT_ACL_0023_SHA256]
+     assert (await authority.execute(text("SELECT count(*) FROM pg_tables WHERE schemaname='public'"))).scalar_one()==31
+     assert (await authority.execute(text("SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='S'"))).scalar_one()==24
+     print('portfolio_authority='+json.dumps(measured))
+     # Missing global function defaults mean implicit PUBLIC EXECUTE. Runtime
+     # must reject that state, even with unchanged final object ACLs.
+     nested=await authority.begin_nested()
+     try:
+      await authority.execute(text('ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator GRANT EXECUTE ON FUNCTIONS TO PUBLIC'))
+      try:await require_schema(authority)
+      except SchemaAdmissionError:pass
+      else:raise AssertionError('implicit public function defaults admitted')
+     finally:await nested.rollback()
+    for role,client in (('app',app),('scheduler',scheduler)):
+     async with client.connect() as restricted:
+      assert (await restricted.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+      assert (await restricted.execute(text('SELECT session_user'))).scalar_one()=='birja_'+role
+      assert await require_schema(restricted)=='0023'
+      assert (await restricted.execute(text("SELECT has_function_privilege(current_user,'close_portfolio(bigint,bigint,uuid,text,text)','EXECUTE')"))).scalar_one()==(role=='app')
+      for table in ('portfolio_lifecycle_closures','portfolio_closure_intents'):
+       assert not (await restricted.execute(text("SELECT has_table_privilege(current_user,:t,'INSERT,UPDATE,DELETE')"),{'t':table})).scalar_one()
+       assert not (await restricted.execute(text("SELECT has_sequence_privilege(current_user,:s,'USAGE')"),{'s':table+'_id_seq'})).scalar_one()
+    for original in value.get('tables',{}).get('portfolio_closure_intents',[]):
+     async with ReplaySession(app) as replay:
+      result=await replay_close_portfolio(replay,ReplayClosureIntent(original['user_id'],original['portfolio_id'],UUID(original['intent_key']),original['confirmation_name'],original['policy_version']))
+      assert result.replayed and result.outcome==original['outcome']
+"""
+    marker = "   print('portfolio_projection='"
+    if marker not in code:
+        raise ValueError("closure projection boundary changed")
+    return code.replace(marker, checks + "\n" + marker, 1)
+
+
+def fresh_authority_program(revision="0023", *, upgraded=False):
+    """Fresh current or populated0020→0023 TLS, preserving all original rows/tails."""
+    if revision == "0020" and not upgraded:
+        return management_fresh_authority_program()
+    if revision != "0023":
+        raise ValueError("unsupported fresh/upgraded authority family")
+    producer = load("portfolio-closure-recovery-fixture").producer()
+    prelude = ("UPGRADED=" + repr(upgraded) + "\nOLD_TABLES="
+               + repr(sorted(producer.contract_columns("0020"))) + "\nOLD_IDENTITIES="
+               + repr(producer.identity_tables("0020")) + "\n")
+    return prelude + r"""
+MODE='create'
+AUTHORITY_DIAGNOSTIC=True
+import asyncio,json,os,ssl
+from uuid import uuid4
+from decimal import Decimal
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+from app.services.portfolio_closure import ClosureIntent,close_portfolio
+async def snapshot(conn):
+ rows={table:(await conn.execute(text('SELECT to_jsonb(t)::text FROM public.'+table+' t ORDER BY to_jsonb(t)::text'))).scalars().all() for table in OLD_TABLES if table!='alembic_version'}
+ tails={table:list((await conn.execute(text('SELECT last_value,is_called FROM public.'+table+'_id_seq'))).one()) for table in OLD_IDENTITIES}
+ return rows,tails
+async def run():
+ url=make_url(os.environ['DATABASE_URL'])
+ args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])}
+ engine=create_async_engine(url,connect_args=args)
+ app=create_async_engine(url.set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD']),connect_args=args)
+ scheduler=create_async_engine(url.set(username='birja_scheduler',password=os.environ['FIXTURE_SCHEDULER_PASSWORD']),connect_args=args)
+ try:
+  if UPGRADED:
+   await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),'0020')
+   from app.db.portfolio_bootstrap import PREFLIGHT_SQL,GRANTS_SQL
+   async with engine.begin() as conn:
+    raw=await conn.get_raw_connection()
+    await raw.driver_connection.execute(PREFLIGHT_SQL)
+    await raw.driver_connection.execute(GRANTS_SQL)
+    uid=(await conn.execute(text("INSERT INTO users(email) VALUES ('retained-before-upgrade@example.test') RETURNING id"))).scalar_one()
+    original=(await conn.execute(text('SELECT initialize_portfolio(:u)'),{'u':uid})).scalar_one()
+    await conn.execute(text('UPDATE accounts SET cash=123.45 WHERE id=:p'),{'p':original})
+    await conn.execute(text("INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) SELECT :p,:u,id,.001,12.34 FROM coins WHERE symbol='BTC'"),{'p':original,'u':uid})
+   async with engine.connect() as conn:before=await snapshot(conn)
+   from app.db.portfolio_migrate import require_migrator
+   async with engine.connect() as conn:
+    assert await require_migrator(conn)=='0020'
+  await asyncio.to_thread(command.upgrade,Config('/app/alembic.ini'),'0023')
+  from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL,GRANTS_0023_SQL
+  async with engine.begin() as conn:
+   raw=await conn.get_raw_connection()
+   await raw.driver_connection.execute(PREFLIGHT_0023_SQL)
+   await raw.driver_connection.execute(GRANTS_0023_SQL)
+   if UPGRADED:
+    assert await snapshot(conn)==before
+    assert (await conn.execute(text('SELECT cash,starting_cash FROM accounts WHERE id=:p'),{'p':original})).one()==(Decimal('123.45'),Decimal('10000'))
+   uid=(await conn.execute(text("INSERT INTO users(email) VALUES ('fresh-current@example.test') RETURNING id"))).scalar_one()
+  key=uuid4()
+  async with app.begin() as restricted:
+   created=(await restricted.execute(text("SELECT * FROM create_portfolio(:u,:k,'Fresh strategy','')"),{'u':uid,'k':key})).one()
+   replay=(await restricted.execute(text("SELECT * FROM create_portfolio(:u,:k,'Fresh strategy','')"),{'u':uid,'k':key})).one()
+   assert not created.replayed and replay.replayed and created.portfolio_id==replay.portfolio_id
+  async with async_sessionmaker(app)() as db:
+   original_intent=ClosureIntent(uid,created.portfolio_id,uuid4(),'Fresh strategy')
+   assert (await close_portfolio(db,original_intent)).outcome=='closed'
+   assert (await close_portfolio(db,original_intent)).replayed
+  async with engine.connect() as conn:
+   assert (await conn.execute(text('SELECT count(*) FROM portfolio_closure_intents'))).scalar_one()==1
+   assert (await conn.execute(text('SELECT count(*) FROM portfolio_creations'))).scalar_one()==(2 if UPGRADED else 1)
+   assert (await conn.execute(text('SELECT cash,starting_cash FROM accounts WHERE id=:p'),{'p':created.portfolio_id})).one()==(Decimal('10000'),Decimal('10000'))
+   value={'revision':'0023','fresh':not UPGRADED,'upgraded':UPGRADED}
+   print('portfolio_projection='+json.dumps(value))
+   print('portfolio_verified_tls=true')
+ finally:await app.dispose();await scheduler.dispose();await engine.dispose()
+asyncio.run(run())
+"""
+
+
+def authority_probe_program():
     return r"""
+MODE='verify'
+import asyncio,json,os,ssl
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import create_async_engine
+async def run():
+ url=make_url(os.environ['DATABASE_URL'])
+ args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])}
+ engine=create_async_engine(url,connect_args=args)
+ app=create_async_engine(url.set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD']),connect_args=args)
+ scheduler=create_async_engine(url.set(username='birja_scheduler',password=os.environ['FIXTURE_SCHEDULER_PASSWORD']),connect_args=args)
+ try:
+  async with engine.connect() as conn:
+   value={'revision':'0023','authority_probe':True}
+   print('portfolio_projection='+json.dumps(value))
+   print('portfolio_verified_tls=true')
+ finally:await app.dispose();await scheduler.dispose();await engine.dispose()
+asyncio.run(run())
+"""
+
+
+def retained_writer_refusal_program(revision="0023", retained="0020"):
+    if (revision, retained) not in {("0023", "0020"), ("0020", "0017")}:
+        raise ValueError("unsupported retained writer refusal")
+    return (r"""
 import asyncio,os,ssl
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -387,12 +542,15 @@ async def run():
    print('retained0017_current0020_write_refused=true')
  finally:await engine.dispose()
 asyncio.run(run())
-"""
+""").replace("0020", revision).replace("retained0017", "retained" + retained)
 
 
-def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bootstrap=False):
-    if fresh_bootstrap and (revision != "0020" or cold):
-        raise ValueError("fresh authority requires current0020 non-cold lane")
+def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bootstrap=False,
+        upgraded_bootstrap=False):
+    if fresh_bootstrap and (revision not in {"0020", "0023"} or cold or upgraded_bootstrap):
+        raise ValueError("fresh authority requires an explicit supported non-cold lane")
+    if upgraded_bootstrap and (revision != "0023" or cold):
+        raise ValueError("upgraded authority requires current0023 non-cold lane")
     sources = load("portfolio-sources")
     fixture = selected_fixture(
         sources, revision, archive=archive, archive_sha=archive_sha
@@ -484,6 +642,7 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                             "volumes": [
                                 str(root / "db-tls/server")
                                 + ":/run/birja/db-server:ro",
+                                str(root / "db-tls/ca.crt") + ":/run/birja/db-ca.crt:ro",
                                 str(hba) + ":/run/birja/db-hba:ro",
                             ],
                             "command": [
@@ -597,12 +756,14 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
             def transport(code):
                 if revision == "0020" and not fresh_bootstrap:
                     code = management_role_program(code)
+                if revision == "0023":
+                    code = closure_role_program(code)
                 code = admitted_program(code, revision)
                 sources.verify_image(
                     binding,
                     json.loads(call(["docker", "image", "inspect", binding["id"]])),
                 )
-                if revision == "0020" and (
+                if revision == "0023" and (
                     sources.git("rev-parse", "HEAD").decode().strip() != commit
                     or sources.git(
                         "diff", "--name-only", "HEAD", "--", "backend"
@@ -640,11 +801,27 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                     raise AssertionError("missing actual verified TLS projection")
                 return json.loads(rows[0])
 
-            if fresh_bootstrap:
-                transport(fresh_authority_program())
-                if len(authorities) != 1:
+            def production_bootstrap():
+                # Invoke the independent source-owned SQL over verified TLS;
+                # these are private synthetic credentials, never host config.
+                variables = {'apply':'true','bootstrap':'birja_ops_bootstrap',
+                             'db_name':'birja_source_test',
+                             **{role + '_password':password for role,password in passwords.items()}}
+                prefix = ''.join('\\set ' + key + ' ' + value + '\n' for key,value in variables.items())
+                command = dc + ['exec','-T','-e','PGPASSWORD=synthetic-only-ops',
+                                '-e','PGSSLMODE=verify-full','-e','PGSSLROOTCERT=/run/birja/db-ca.crt',
+                                'postgres','psql','-XqAt','-v','ON_ERROR_STOP=1',
+                                '-h','postgres','-U','birja_ops_bootstrap','-d','birja_source_test']
+                call(command, data=(prefix + (ROOT/'deploy/db/bootstrap-roles.sql').read_text()).encode())
+
+            if fresh_bootstrap or upgraded_bootstrap:
+                transport(fresh_authority_program(revision, upgraded=upgraded_bootstrap))
+                if revision == '0023':
+                    production_bootstrap()
+                    transport(authority_probe_program())
+                if len(authorities) != (2 if revision == '0023' else 1) or any(value != authorities[0] for value in authorities):
                     raise ValueError('missing measured fresh authority')
-                print('actual_current0020_fresh_tls_restricted_roles=true', flush=True)
+                print('actual_current' + revision + ('_upgraded' if upgraded_bootstrap else '_fresh') + '_tls_restricted_roles=true', flush=True)
                 return authorities[0]
             fixture.main(["create"], transport=transport)
             expected = root / "immutable-before.json"
@@ -652,11 +829,15 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                 ["projection", "--snapshot", str(expected)], transport=transport
             )
             expected.chmod(0o400)
+            if revision == '0023':
+                transport(authority_probe_program())
+                production_bootstrap()
             fixture.main(["verify"], transport=transport)
-            if revision == "0020" and archive is not None:
-                old_binding = build_selected_runtime(sources, env, revision="0017",
+            if revision in {"0020", "0023"} and archive is not None:
+                old_revision = "0020" if revision == "0023" else "0017"
+                old_binding = build_selected_runtime(sources, env, revision=old_revision,
                     archive=archive, archive_sha=archive_sha)
-                sources.record_image_binding(archive, 'retained0017-refusal', old_binding)
+                sources.record_image_binding(archive, 'retained' + old_revision + '-refusal', old_binding)
                 sources.verify_archive_binding(archive, archive_sha)
                 sources.verify_image(old_binding, json.loads(call(['docker', 'image', 'inspect', old_binding['id']])))
                 old_argv = ['docker', 'run', '--rm', '-i', '--network', client_network,
@@ -664,8 +845,8 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                 for key, value in client_env.items():
                     old_argv += ['-e', key + '=' + value]
                 old_argv += ['--entrypoint', 'python', old_binding['id'], '-']
-                refusal = call(old_argv, data=retained_writer_refusal_program().encode())
-                if b'retained0017_current0020_write_refused=true' not in refusal.splitlines():
+                refusal = call(old_argv, data=retained_writer_refusal_program(revision, old_revision).encode())
+                if ('retained' + old_revision + '_current' + revision + '_write_refused=true').encode() not in refusal.splitlines():
                     raise AssertionError('missing genuine retained writer refusal')
             fixture.main(
                 ["compare", "--snapshot", str(expected), "--expected-sha256", digest],
@@ -748,12 +929,14 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                 sources.verify_archive_binding(recovered / "recovery.tar", archive_sha)
                 call(clone_dc + ["up", "-d", "--wait"])
                 r.sql(clone_dc, "CREATE DATABASE birja_ops_test;", "birja_source_test")
-                with r.restored(clone_dc, (recovered / "database.dump").read_bytes()):
+                source_manifest = json.loads((recovered / "manifest.json").read_text())
+                with r.restored(clone_dc, (recovered / "database.dump").read_bytes(), manifest=source_manifest):
                     r.verify(
-                        clone_dc, json.loads((recovered / "manifest.json").read_text())
+                        clone_dc, source_manifest, quarantined=revision != "0023"
                     )
-                    # Only the authenticated migration reader receives a login;
-                    # application/scheduler/definer ACLs remain quarantined.
+                    # Source evidence is checked before finite regrant. The
+                    # current closure family now has its exact runtime ACL;
+                    # historical families retain their original contract.
                     r.sql(
                         clone_dc,
                         "ALTER ROLE birja_migrator LOGIN PASSWORD '"
@@ -787,11 +970,13 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0020", fresh_bo
                 + "_portfolio_tls_restricted_roles=true immutable_snapshot_compare=true",
                 flush=True,
             )
-            if revision == "0020":
-                if len(authorities) != 1:
+            if revision in {"0020", "0023"}:
+                if len(authorities) != (2 if revision == '0023' else 1) or any(value != authorities[0] for value in authorities):
                     raise ValueError('missing measured upgraded authority')
                 return authorities[0]
         finally:
+            if hasattr(fixture, '_source_directory'):
+                fixture._source_directory.cleanup()
             call(dc + ["down", "-v", "--remove-orphans"], timeout=120)
             call(clone_dc + ["down", "-v", "--remove-orphans"], timeout=120)
             for kind in ("container", "network", "volume"):
