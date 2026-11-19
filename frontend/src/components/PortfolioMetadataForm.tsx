@@ -10,8 +10,17 @@ import {
   PortfolioManagementError,
 } from "@/api/portfolioManagement";
 import { useNow } from "@/hooks/useNow";
+import { PortfolioDeleteForm } from "@/components/PortfolioDeleteForm";
 
-export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) {
+export function PortfolioMetadataForm({
+  portfolioId,
+  available = true,
+  lastPortfolio = false,
+}: {
+  portfolioId: string;
+  available?: boolean;
+  lastPortfolio?: boolean;
+}) {
   const management = usePortfolioManagement(portfolioId);
   const [editing, setEditing] = useState(false);
   const [announcement, setAnnouncement] = useState(
@@ -75,140 +84,166 @@ export function PortfolioMetadataForm({ portfolioId }: { portfolioId: string }) 
     setAnnouncement("Portfolio updated.");
     setRestore(true);
   }
+  const deletion = (
+    <PortfolioDeleteForm
+      portfolioId={portfolioId}
+      metadata={metadata}
+      metadataBusy={expanded || metadataPending || reviewRequired}
+      available={available}
+      lastPortfolio={lastPortfolio}
+      refreshMetadata={management.refreshMetadata}
+    />
+  );
   return (
-    <Card className="min-w-0 p-4 md:p-6">
-      <CardContent className="min-w-0 text-base leading-6 wrap-anywhere">
-        <Link to="/portfolios" className="flex min-h-11 items-center underline">
-          Back to Portfolios
-        </Link>
-        <p role={announcement ? "status" : undefined} aria-live="polite">
-          {announcement}
-        </p>
-        {!metadata ? (
-          <div>
-            {metadataError ? (
-              <>
-                <p role="alert">Can&apos;t load portfolio metadata right now. Try again.</p>
-                <Button
-                  className="mt-2 min-h-11 text-base"
-                  variant="secondary"
-                  onClick={() => void management.refreshMetadata()}
-                  disabled={metadataPending}
-                >
-                  Try again
-                </Button>
-              </>
+    <>
+      {available && (
+        <Card className="min-w-0 p-4 md:p-6">
+          <CardContent className="min-w-0 text-base leading-6 wrap-anywhere">
+            <Link to="/portfolios" className="flex min-h-11 items-center underline">
+              Back to Portfolios
+            </Link>
+            <p role={announcement ? "status" : undefined} aria-live="polite">
+              {announcement}
+            </p>
+            {!metadata ? (
+              <div>
+                {metadataError ? (
+                  <>
+                    <p role="alert">Can&apos;t load portfolio metadata right now. Try again.</p>
+                    <Button
+                      className="mt-2 min-h-11 text-base"
+                      variant="secondary"
+                      onClick={() => void management.refreshMetadata()}
+                      disabled={metadataPending}
+                    >
+                      Try again
+                    </Button>
+                  </>
+                ) : (
+                  <p role="status">Loading portfolio details…</p>
+                )}
+              </div>
+            ) : expanded ? (
+              <form
+                className="flex max-w-[640px] min-w-0 flex-col gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (valid && draft && !metadataPending && !reviewRequired && !waiting) {
+                    setSubmitted(true);
+                    void save();
+                  }
+                }}
+              >
+                <h2 className="text-xl leading-7 font-medium">Edit portfolio</h2>
+                <p>
+                  Changes to the name or description do not change cash, investments or History.
+                </p>
+                {errorMessage && (
+                  <FormError
+                    message={errorMessage}
+                    prefix="metadata"
+                    nameError={
+                      portfolioNameDisplay(name) === null ||
+                      (metadataError instanceof PortfolioManagementError &&
+                        metadataError.code === "name_taken")
+                    }
+                    descriptionError={normalizePortfolioDescription(description) === null}
+                  />
+                )}
+                {reviewRequired && (
+                  <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
+                    <p role="status">
+                      This portfolio changed. Your draft is kept below. Review the latest details
+                      before saving.
+                    </p>
+                    <p>Latest portfolio name: {metadata.name}</p>
+                    <p className="whitespace-pre-wrap">
+                      Latest description: {metadata.description || "No description."}
+                    </p>
+                    <Button
+                      className="min-h-11 h-auto py-3 text-base whitespace-normal"
+                      variant="secondary"
+                      disabled={metadataPending || (!!metadataError && !metadata)}
+                      onClick={() => management.reviewMetadata()}
+                    >
+                      I have reviewed the latest details
+                    </Button>
+                  </div>
+                )}
+                <MetadataFields
+                  prefix="metadata"
+                  name={name}
+                  description={description}
+                  readOnly={metadataPending || management.metadataBlocked}
+                  nameIssue={
+                    metadataError instanceof PortfolioManagementError &&
+                    metadataError.code === "name_taken"
+                      ? "You already have an active portfolio with this name. Choose another name."
+                      : undefined
+                  }
+                  onChange={(field, value) => management.editMetadata({ [field]: value })}
+                />
+                {waiting && (
+                  <p role="status">
+                    Try again in {Math.ceil((timing.until - now) / 1000)} seconds.
+                  </p>
+                )}
+                <div className="flex flex-col gap-2 min-[375px]:flex-row min-[375px]:flex-wrap">
+                  <Button
+                    type="submit"
+                    className="min-h-11 text-base"
+                    disabled={
+                      !valid ||
+                      !draft ||
+                      metadataPending ||
+                      management.metadataBlocked ||
+                      reviewRequired ||
+                      waiting
+                    }
+                  >
+                    {metadataPending ? "Saving changes…" : "Save changes"}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="min-h-11 text-base"
+                    variant="secondary"
+                    disabled={metadataPending}
+                    onClick={() => {
+                      management.discardMetadata();
+                      setRestore(true);
+                      restored.current = false;
+                      setEditing(false);
+                      setSubmitted(false);
+                    }}
+                  >
+                    Discard changes
+                  </Button>
+                </div>
+              </form>
             ) : (
-              <p role="status">Loading portfolio details…</p>
-            )}
-          </div>
-        ) : expanded ? (
-          <form
-            className="flex max-w-[640px] min-w-0 flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (valid && draft && !metadataPending && !reviewRequired && !waiting) {
-                setSubmitted(true);
-                void save();
-              }
-            }}
-          >
-            <h2 className="text-xl leading-7 font-medium">Edit portfolio</h2>
-            <p>Changes to the name or description do not change cash, investments or History.</p>
-            {errorMessage && (
-              <FormError
-                message={errorMessage}
-                prefix="metadata"
-                nameError={
-                  portfolioNameDisplay(name) === null ||
-                  (metadataError instanceof PortfolioManagementError &&
-                    metadataError.code === "name_taken")
-                }
-                descriptionError={normalizePortfolioDescription(description) === null}
-              />
-            )}
-            {reviewRequired && (
-              <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
-                <p role="status">
-                  This portfolio changed. Your draft is kept below. Review the latest details before
-                  saving.
-                </p>
-                <p>Latest portfolio name: {metadata.name}</p>
-                <p className="whitespace-pre-wrap">
-                  Latest description: {metadata.description || "No description."}
-                </p>
+              <div className="flex min-w-0 flex-col gap-3">
+                <h2 className="text-xl leading-7 font-medium">{metadata.name}</h2>
+                <p className="whitespace-pre-wrap">{metadata.description || "No description."}</p>
                 <Button
-                  className="min-h-11 h-auto py-3 text-base whitespace-normal"
+                  ref={trigger}
                   variant="secondary"
-                  disabled={metadataPending || (!!metadataError && !metadata)}
-                  onClick={() => management.reviewMetadata()}
+                  className="min-h-11 self-start text-base"
+                  disabled={metadataPending || management.metadataBlocked}
+                  onClick={() => {
+                    setAnnouncement("");
+                    setRestore(false);
+                    restored.current = false;
+                    setEditing(true);
+                  }}
                 >
-                  I have reviewed the latest details
+                  Edit portfolio
                 </Button>
               </div>
             )}
-            <MetadataFields
-              prefix="metadata"
-              name={name}
-              description={description}
-              readOnly={metadataPending}
-              nameIssue={
-                metadataError instanceof PortfolioManagementError &&
-                metadataError.code === "name_taken"
-                  ? "You already have an active portfolio with this name. Choose another name."
-                  : undefined
-              }
-              onChange={(field, value) => management.editMetadata({ [field]: value })}
-            />
-            {waiting && (
-              <p role="status">Try again in {Math.ceil((timing.until - now) / 1000)} seconds.</p>
-            )}
-            <div className="flex flex-col gap-2 min-[375px]:flex-row min-[375px]:flex-wrap">
-              <Button
-                type="submit"
-                className="min-h-11 text-base"
-                disabled={!valid || !draft || metadataPending || reviewRequired || waiting}
-              >
-                {metadataPending ? "Saving changes…" : "Save changes"}
-              </Button>
-              <Button
-                type="button"
-                className="min-h-11 text-base"
-                variant="secondary"
-                disabled={metadataPending}
-                onClick={() => {
-                  management.discardMetadata();
-                  setRestore(true);
-                  restored.current = false;
-                  setEditing(false);
-                  setSubmitted(false);
-                }}
-              >
-                Discard changes
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex min-w-0 flex-col gap-3">
-            <h2 className="text-xl leading-7 font-medium">{metadata.name}</h2>
-            <p className="whitespace-pre-wrap">{metadata.description || "No description."}</p>
-            <Button
-              ref={trigger}
-              variant="secondary"
-              className="min-h-11 self-start text-base"
-              disabled={metadataPending}
-              onClick={() => {
-                setAnnouncement("");
-                setRestore(false);
-                restored.current = false;
-                setEditing(true);
-              }}
-            >
-              Edit portfolio
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      )}
+      {deletion}
+    </>
   );
 }
