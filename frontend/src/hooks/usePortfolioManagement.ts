@@ -17,6 +17,11 @@ import {
 import { useMe } from "./useMe";
 import { isPortfolioId } from "@/api/portfolios";
 import { broadcastMetadataChange, subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
+import {
+  isPortfolioDeletionQuarantined,
+  portfolioDeletionRevision,
+  subscribePortfolioDeletion,
+} from "./usePortfolioDeletion";
 
 type Receipt = Readonly<{ metadata: PortfolioMetadata; isCurrent: () => boolean }>;
 type CreationState = {
@@ -184,6 +189,10 @@ export function usePortfolioManagement(portfolioId?: string) {
   const me = useMe();
   const session = sessionFor(client);
   const owner = me.data?.email ?? null;
+  useSyncExternalStore(
+    (notify) => subscribePortfolioDeletion(client, notify),
+    () => portfolioDeletionRevision(client),
+  );
   const serial = session.serial;
   const scope = useMemo(
     () => ({
@@ -197,6 +206,10 @@ export function usePortfolioManagement(portfolioId?: string) {
   );
   const current = () =>
     activeScopes.has(scope) && owner !== null && who(client) === owner && session.serial === serial;
+  const metadataWritable = () =>
+    owner !== null &&
+    isPortfolioId(portfolioId) &&
+    !isPortfolioDeletionQuarantined(client, owner, portfolioId);
   const metadataKey = ["portfolioMetadata", owner, portfolioId, serial] as const;
   const editorKey = ["portfolioMetadataDraft", owner, portfolioId, serial] as const;
   const editorQuery = useQuery({
@@ -487,7 +500,14 @@ export function usePortfolioManagement(portfolioId?: string) {
     }
   }
   function editMetadata(patch: PortfolioMetadataPatch) {
-    if (!current() || !metadataQuery.data || metadataQuery.isError || editor().pending) return;
+    if (
+      !current() ||
+      !metadataWritable() ||
+      !metadataQuery.data ||
+      metadataQuery.isError ||
+      editor().pending
+    )
+      return;
     setEditor({
       ...editor(),
       operation: null,
@@ -498,6 +518,7 @@ export function usePortfolioManagement(portfolioId?: string) {
   function reviewMetadata() {
     if (
       current() &&
+      metadataWritable() &&
       metadataQuery.data &&
       !metadataQuery.isError &&
       !metadataQuery.isFetching &&
@@ -513,6 +534,7 @@ export function usePortfolioManagement(portfolioId?: string) {
     const completionLease = session.editorLease;
     if (
       !current() ||
+      !metadataWritable() ||
       !isPortfolioId(portfolioId) ||
       !metadataQuery.data ||
       metadataQuery.isError ||
@@ -603,6 +625,7 @@ export function usePortfolioManagement(portfolioId?: string) {
     metadata: current() && !metadataQuery.isError ? metadataQuery.data : undefined,
     metadataError: current() ? (metadataQuery.error ?? editorQuery.data.error) : null,
     metadataPending: current() && (metadataQuery.isFetching || editorQuery.data.pending),
+    metadataBlocked: current() && !metadataWritable(),
     draft: current() ? editorQuery.data.draft : null,
     reviewRequired: current() && editorQuery.data.reviewRequired,
     metadataSaved: current() && editorQuery.data.saved,

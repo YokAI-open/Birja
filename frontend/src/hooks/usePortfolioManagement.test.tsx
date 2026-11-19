@@ -608,7 +608,9 @@ it.each([
 it("refuses captured metadata edits and saves while the same original deletion is unknown", async () => {
   const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === "DELETE") return Promise.reject(new TypeError("lost response"));
-    return Promise.resolve(json(init?.method === "PATCH" ? { ...receipt, name: "Draft" } : receipt));
+    return Promise.resolve(
+      json(init?.method === "PATCH" ? { ...receipt, name: "Draft" } : receipt),
+    );
   });
   vi.stubGlobal("fetch", fetch);
   const management = setup("2");
@@ -629,4 +631,71 @@ it("refuses captured metadata edits and saves while the same original deletion i
   expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(0);
   expect(management.result.current.draft).toEqual({ name: "Draft" });
   expect(deletion.result.current.deletion.phase).toBe("unknown");
+});
+
+it("keeps sibling metadata edits independent of another portfolio's unknown deletion", async () => {
+  const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "DELETE") return Promise.reject(new TypeError("lost response"));
+    const id = String(input).includes("/3") ? "3" : "2";
+    return Promise.resolve(
+      json({ ...receipt, id, ...(init?.method === "PATCH" ? { name: "Sibling strategy" } : {}) }),
+    );
+  });
+  vi.stubGlobal("fetch", fetch);
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  const sibling = renderHook(() => usePortfolioManagement("3"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(sibling.result.current.metadata?.id).toBe("3"));
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  act(() => deletion.result.current.reviewDeletion(management.result.current.metadata!));
+  await act(async () => deletion.result.current.confirmDeletion());
+  expect(management.result.current.metadataBlocked).toBe(true);
+  expect(sibling.result.current.metadataBlocked).toBe(false);
+  act(() => sibling.result.current.editMetadata({ name: "Sibling strategy" }));
+  await act(async () => sibling.result.current.saveMetadata());
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
+  expect(deletion.result.current.deletion.phase).toBe("unknown");
+});
+
+it("excludes deletion while a metadata save is pending and revokes a renamed review", async () => {
+  let release!: (response: Response) => void;
+  let server = receipt;
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "PATCH")
+      return new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+    return Promise.resolve(json(server));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const management = setup("2");
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={management.client}>{children}</QueryClientProvider>
+  );
+  const deletion = renderHook(() => usePortfolioDeletion("2"), { wrapper });
+  await waitFor(() => expect(management.result.current.metadata).toEqual(receipt));
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  act(() => deletion.result.current.reviewDeletion(receipt));
+  act(() => management.result.current.editMetadata({ name: "Renamed" }));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = management.result.current.saveMetadata();
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(deletion.result.current.canConfirm).toBe(false);
+  await act(async () => deletion.result.current.confirmDeletion());
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
+  await act(async () => {
+    server = { ...receipt, name: "Renamed" };
+    release(json(server));
+    await pending;
+  });
+  expect(deletion.result.current.deletion.reviewRequired).toBe(true);
+  expect(deletion.result.current.canConfirm).toBe(false);
+  act(() => deletion.result.current.reviewDeletion(server));
+  expect(deletion.result.current.canConfirm).toBe(true);
 });

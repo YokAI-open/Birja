@@ -156,6 +156,9 @@ function sessionFor(client: QueryClient): Session {
       publish(session, empty());
       return;
     }
+    // Observer option notifications are render bookkeeping, not authority changes.
+    // Publishing them would feed a subscribed metadata editor back into itself.
+    if (event.type !== "updated" && event.type !== "removed") return;
     const [prefix, email, id] = event.query.queryKey;
     if (email !== owner || typeof id !== "string" || owner === null) return;
     if (prefix !== "portfolioMetadata" && prefix !== "portfolioMetadataDraft") return;

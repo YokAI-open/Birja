@@ -414,3 +414,61 @@ it("does not let a cached closed target become a new deletion review", async () 
   });
   expect(hook.result.current.deletion.phase).toBe("closed");
 });
+
+it.each(["owner", "route"])(
+  "does not navigate after %s changes during closed-list discovery",
+  async (change) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ portfolio_id: "2", state: "closed" })));
+    const base = setup();
+    base.unmount();
+    const onClosed = vi.fn();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={base.client}>{children}</QueryClientProvider>
+    );
+    const hook = renderHook(({ route }) => usePortfolioDeletion("2", { route, onClosed }), {
+      wrapper,
+      initialProps: { route: "first" },
+    });
+    await waitFor(() => expect(hook.result.current.ready).toBe(true));
+    let release!: () => void;
+    const pendingDiscovery = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(base.client, "invalidateQueries").mockImplementationOnce(() => pendingDiscovery);
+    act(() => hook.result.current.reviewDeletion(metadata));
+    let pending!: ReturnType<typeof hook.result.current.confirmDeletion>;
+    act(() => {
+      pending = hook.result.current.confirmDeletion();
+    });
+    await waitFor(() => expect(hook.result.current.deletion.phase).toBe("closed"));
+    act(() => {
+      if (change === "owner") base.client.setQueryData(["me"], { email: "bob@example.test" });
+      else hook.rerender({ route: "second" });
+    });
+    await act(async () => {
+      release();
+      await pending;
+    });
+    expect(onClosed).not.toHaveBeenCalled();
+  },
+);
+
+it("retains known closure when list discovery fails and invokes only a current receipt callback", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ portfolio_id: "2", state: "closed" })));
+  const base = setup();
+  base.unmount();
+  const onClosed = vi.fn();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={base.client}>{children}</QueryClientProvider>
+  );
+  const hook = renderHook(() => usePortfolioDeletion("2", { onClosed }), { wrapper });
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+  vi.spyOn(base.client, "invalidateQueries").mockRejectedValueOnce(new Error("discovery failed"));
+  act(() => hook.result.current.reviewDeletion(metadata));
+  await act(async () => hook.result.current.confirmDeletion());
+  expect(hook.result.current.deletion.phase).toBe("closed");
+  expect(hook.result.current.deletion.error?.message).toMatch(/list unavailable/i);
+  expect(onClosed).toHaveBeenCalledTimes(1);
+  expect(onClosed.mock.calls[0][0].isCurrent()).toBe(true);
+  expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt).toBeNull();
+});
