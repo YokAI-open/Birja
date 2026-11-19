@@ -134,6 +134,87 @@ async def test_corrupt_closed_replay_is_never_acknowledged(stock_authority):
             await close_portfolio(db, ClosureIntent(user, portfolio, uuid4(), "Different name"))
 
 
+async def assert_joint_confirmation_corruption_refused(app, migrator, admin, user, portfolio):
+    from app.services.portfolio_closure import ClosureIntent, close_portfolio
+    from app.services.stock_ownership import OwnershipHeld
+    from tests.portfolio_closure_fixtures import retained_snapshot
+
+    await proof_grants(admin)
+    async with AsyncSession(app) as db:
+        await close_portfolio(db, ClosureIntent(user, portfolio, uuid4(), "Strategy"))
+        # A valid owned already-closed acknowledgement may use a fresh key and
+        # another incoming reviewed name; retained evidence stays authoritative.
+        assert (
+            await close_portfolio(
+                db, ClosureIntent(user, portfolio, uuid4(), "Different incoming review")
+            )
+        ).replayed is True
+    async with migrator.begin() as conn:
+        # Declared privileged retained-corruption fixture, never runtime DML.
+        for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents"):
+            await conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))  # noqa: S608
+            await conn.execute(
+                text(
+                    f"UPDATE {table} SET confirmation_name='Corrupt retained name' "  # noqa: S608
+                    "WHERE portfolio_id=:p"
+                ),
+                {"p": portfolio},
+            )
+            await conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))  # noqa: S608
+        assert (
+            await conn.execute(text("SELECT name FROM accounts WHERE id=:p"), {"p": portfolio})
+        ).scalar_one() == "Strategy"
+
+    async def snapshot(conn):
+        result = await retained_snapshot(conn)
+        for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents"):
+            result[table] = tuple(
+                (
+                    await conn.execute(
+                        text(  # noqa: S608
+                            f"SELECT to_jsonb(t)::text FROM {table} t ORDER BY id"  # noqa: S608
+                        )
+                    )
+                ).scalars()
+            )
+            result[table + "_id_seq"] = tuple(
+                (
+                    await conn.execute(
+                        text(  # noqa: S608
+                            f"SELECT last_value,is_called FROM {table}_id_seq"  # noqa: S608
+                        )
+                    )
+                ).one()
+            )
+        return result
+
+    async with admin.connect() as conn:
+        before = await snapshot(conn)
+    async with AsyncSession(app) as db:
+        with pytest.raises(OwnershipHeld, match="invalid_closure"):
+            await close_portfolio(
+                db, ClosureIntent(user, portfolio, uuid4(), "Different incoming review")
+            )
+        assert not db.in_transaction()
+    async with admin.connect() as conn:
+        assert await snapshot(conn) == before
+
+
+async def test_joint_confirmation_corruption_refuses_empty_fresh_key_ack(authority):
+    from tests.test_portfolio_closure_migrations import root
+
+    app, migrator, admin = authority
+    async with migrator.begin() as conn:
+        user, portfolio = await root(conn)
+    await assert_joint_confirmation_corruption_refused(app, migrator, admin, user, portfolio)
+
+
+async def test_joint_confirmation_corruption_refuses_stock_fresh_key_ack(stock_authority):
+    app, migrator, admin, books = stock_authority
+    user, portfolio = books["roots"][0]
+    await assert_joint_confirmation_corruption_refused(app, migrator, admin, user, portfolio)
+
+
 async def test_multi_empty_proof_and_durable_refusal_commit(authority):
     from app.services.portfolio_closure import ClosureIntent, close_portfolio
     from tests.test_portfolio_closure_migrations import root
