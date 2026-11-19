@@ -349,7 +349,36 @@ SQL definer creation must use fixed safe search_path, trusted object ownership a
 
 No training-only package/capability facts are used. New schema/function/interface names, targeted multi-instrument protocol, exact confirmation transport and minimal lifecycle-ledger interpretation are explicitly recommendations requiring implementation/review/testing, not owner-locked facts or completed proof. No permission, provider access, live service availability, new UI acceptance or current test pass is assumed. [VERIFIED: provenance throughout; research-only task]
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+The original research questions below are retained for provenance. Technical
+planning resolves all five through14-INTERFACES; these resolutions are not
+claims of completed implementation or new owner decisions.
+
+- **RESOLVED — authority decomposition (question1):** One derived-input
+  close_portfolio definer takes sorted historical instrument gates before the
+  root; complete shared read-only stock verification occurs before service
+  commit. The financial single-instrument guard stays intact. Plans02/03 and
+ 14-INTERFACES, Successor lifecycle and intent authority, own the implementation.
+- **RESOLVED — clock fences (question2):** Successor movement.recorded_at and
+  split-application.processed_at guards require strict advancement past prior
+  terminal clocks under the instrument gate; closure samples fresh wall time
+  after locks. Queued/equal/backward cases refuse rather than synthesize times.
+  Plans02/03/09 own guards and deterministic real-DB proofs.
+- **RESOLVED — lifecycle audit (question3):** One universal immutable lifecycle
+  policy plus immutable bounded intent outcomes; retained causal records support
+  deterministic not_applied_portfolio_closed disposition. No frozen financial
+  History append or unbounded future-event×closed-book job. Plans01/02/08 and
+ 14-INTERFACES specify this representation and its recovery inventory.
+- **RESOLVED — confirmation/retry statuses (question4):** Strict original
+  ID/key/name/policy DELETE, exact minimal200closed acknowledgement and durable
+ 409 portfolio_confirmation_changed; original-body conflict is separate.
+  Unknown transport errors remain unknown; active GET cannot cancel an original.
+  Plans02/07/11/12 and14-INTERFACES API/browser transport lock these contracts.
+- **RESOLVED — retained closed provenance (question5):**0022 backfills only
+  verified retained_boundary evidence at original closed_at with null confirmed
+  name/intent; no invented owner confirmation. Corrupt/missing historical bounds
+  refuse. Plans01/04–06 qualify fixed0020/0017 sources and successor recovery.
 
 1. **Exact closure authority decomposition:** Choose a single definer that locks/checks/persists, or private lock/preparation plus final definer; preserve immutable helper inventory and no client-authorized lock/closure forgery. The proposed sorted-gate/recheck algorithm needs real first-buy/deadlock proof. This is technical planning work, not a missing product decision. [VERIFIED: one-instrument helper and current grant model]
 2. **Clock fence placement:** Establish successor application/movement guard sites and deterministic queued/equal/backward-clock tests before locking final SQL fingerprints. Existing post-lock wall-clock sampling is verified; strict across-closure ordering is not yet proven. [VERIFIED: clock trace above]

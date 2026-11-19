@@ -52,7 +52,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 ## Phases
 
-**Status:** Phases12–13 verified complete locally; Phase14 is ready for planning and Phase15 remains later. The v1.2 milestone remains open.
+**Status:** Phases12–13 verified complete locally; Phase14 is planned and ready to execute and Phase15 remains later. The v1.2 milestone remains open.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
@@ -312,7 +312,74 @@ compatibility for every newly supported state as it ships.
   4. Deleting the last portfolio leaves a signed-in empty overview with a Create portfolio action; login, refresh and ordinary reads do not recreate it, and explicit replacement creation receives a new identity without violating the ten-active limit.
   5. Direct IDs, stale links, cursors, original-event references and retry requests cannot reveal another owner's or deleted portfolio's finances; stale tabs explain unavailability and offer the overview without redirecting an order, while delete/trade/job races cannot overspend, duplicate effects or mutate a closed target.
 
-**Plans**: TBD
+**Plans**: 19 plans (38 tasks,15 dependency waves), independently checked; ready to execute.
+
+**Wave 1**
+
+- [ ] 14-01-PLAN.md — Prepare finite successor test-owner harness, expand lifecycle evidence and backfill provenance
+
+**Wave 2** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-02-PLAN.md — Install atomic named closure and permanent intent outcomes
+
+**Wave 3** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-03-PLAN.md — Verify closure stock integrity and enforce terminal clock ordering
+
+**Wave 4** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-04-PLAN.md — Admit complete closure schema with exact SQL/Python authority parity and repeated test bootstrap
+
+**Wave 5** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-05-PLAN.md — Retain qualified0020 and produce complete lifecycle recovery
+
+**Wave 6** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-06-PLAN.md — Restore lifecycle evidence before grants and refuse losing rollback
+
+**Wave 7** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-07-PLAN.md — Expose strict original-intent private deletion API
+
+**Wave 8** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-08-PLAN.md — Keep unpaid and future financial effects outside frozen strategies
+- [ ] 14-11-PLAN.md — Define strict deletion transport and durable browser original
+
+**Wave 9** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-09-PLAN.md — Prove stock continuity and management/trade closure races
+- [ ] 14-12-PLAN.md — Keep deletion state outside financial target lifetime
+
+**Wave 10** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-10-PLAN.md — Fence every normal financial read and original retry at closure
+- [ ] 14-13-PLAN.md — Revoke closed browser authority across reads, actions and tabs
+
+**Wave 11** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-14-PLAN.md — Build named inline deletion and signed-in recovery routes
+- [ ] 14-15-PLAN.md — Adapt revision-aware fixtures and restricted TLS compatibility
+
+**Wave 12** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-16-PLAN.md — Extend critical gates and durable seven-stage qualification runner
+
+**Wave 13** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-17-PLAN.md — Exercise real deletion journeys and package source-bound UI evidence
+
+**Wave 14** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-18-PLAN.md — Qualify frozen-source security and exact lifecycle recovery
+
+**Wave 15** *(blocked on declared earlier-plan dependencies)*
+
+- [ ] 14-19-PLAN.md — Obtain separate owner UI and genuine native200 acceptance
+
+**Cross-cutting constraints:** Dedicated sorted historical-stock gates before root; immutable original intent/policy and terminal freeze; strict owner/active/private reads; existing one-instrument financial guard;31-table/24-sequence successor0023 and immutable qualified0020/0017/older recovery. All DB-bearing tests/browser/ops use one serial disposable lane; disjoint frontend11–14 may overlap backend08–10/15 only. Preserve61critical modules plus new paths at100%, strict security/image gates and unchanged issue35. Source-frozen whole security then fresh seven-stage same-archive recovery; preserve prior qualified archives. Actual new owner UI and native200 outcomes remain separate execution checkpoints. Keep local; Phase7 activation/provider work, new packages, push/merge and production remain outside scope.
+
 **UI hint**: yes
 
 **Delivery boundary**: Complete the confirmed end-the-experiment policy through
@@ -363,8 +430,10 @@ above preserve integrated behavior without duplicating primary ownership.
 | 15 | 3 | 4 |
 | **Total** | **28/28** | **19** |
 
-Mapping alone completes no requirement. Seven Phase12 requirements are verified complete; the other21 remain pending;
-the phase structure was approved on2026-11-14 and only Phase12 is implemented and verified.
+Mapping alone completes no requirement. Eighteen requirements are verified complete
+(seven Phase12 and eleven Phase13); ten Phase14–15 requirements remain pending.
+The phase structure was approved on2026-11-14. Phase14 planning is independently
+checked; no Phase14 implementation or completion is claimed.
 
 ## Progress
 
@@ -372,13 +441,13 @@ the phase structure was approved on2026-11-14 and only Phase12 is implemented an
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is ready for planning; Phase15 follows it.
+Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is planned and ready to execute; Phase15 follows it.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
-| 14. End Strategies Safely | v1.2 | 0/TBD | Not started | - |
+| 14. End Strategies Safely | v1.2 | 0/19 | Planned; ready to execute | - |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
 ## Deferred Follow-up
@@ -403,6 +472,7 @@ acceptance never authorizes live provider calls or stock activation.
 
 **Roadmap status:** APPROVED by the owner on 2026-11-14.
 Milestone setup is complete and the planning record may be committed locally.
-Phase12 is complete and Phase13 planning is checked. Next: `$gsd-execute-phase 13`. This approval does not
+Phases12–13 are complete locally. Phase14 planning is checked (19plans,38tasks,
+15waves). Next: `$gsd-execute-phase 14`. This planning approval does not
 itself start implementation, install dependencies, authorize push/merge,
 operate providers, activate stocks or deploy production.

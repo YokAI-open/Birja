@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** Phase12 complete locally:31plans, independent8/8verification with one owner-approved advisory override, all5functional criteria and7/7assigned requirements satisfied. The other21requirements and Phases13–15 remain pending.
+**Status:** Phases12–13 verified complete locally:18/28 requirements. Phase14 planning is checked (19plans/38tasks); its seven requirements and Phase15's three remain pending. Planning does not complete feature requirements.
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
