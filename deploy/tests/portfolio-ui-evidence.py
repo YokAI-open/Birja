@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import stat
 import struct
 import subprocess
 import tempfile
@@ -68,6 +69,81 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
+def source_directory(path):
+    """Open every ancestor without following links, including the render root."""
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.absolute().parts[1:]:
+            child = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except OSError as error:
+        os.close(descriptor)
+        raise ValueError("Unsafe render directory") from error
+
+
+def source_files(path, recursive=False, optional=False):
+    """Inspect links before exclusions/filtering; never traverse a linked target."""
+    result = []
+
+    def visit(descriptor, directory):
+        for entry in sorted(os.scandir(descriptor), key=lambda item: item.name):
+            mode = entry.stat(follow_symlinks=False).st_mode
+            if stat.S_ISLNK(mode):
+                raise ValueError("Linked render input")
+            current = directory / entry.name
+            if stat.S_ISDIR(mode):
+                if recursive and entry.name != "__pycache__":
+                    child = os.open(
+                        entry.name,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=descriptor,
+                    )
+                    try:
+                        visit(child, current)
+                    finally:
+                        os.close(child)
+            elif stat.S_ISREG(mode):
+                result.append(current)
+            else:
+                raise ValueError("Unsupported render input")
+
+    try:
+        descriptor = source_directory(path)
+    except ValueError as error:
+        if optional and isinstance(error.__cause__, FileNotFoundError):
+            return []
+        raise
+    try:
+        visit(descriptor, path)
+    except OSError as error:
+        raise ValueError("Unsafe render traversal") from error
+    finally:
+        os.close(descriptor)
+    return result
+
+
+def source_bytes(path):
+    descriptor = source_directory(path.parent)
+    try:
+        child = os.open(
+            path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor
+        )
+        with os.fdopen(child, "rb") as source:
+            if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+                raise ValueError("Nonregular render input")
+            return source.read()
+    except OSError as error:
+        raise ValueError("Unsafe render file") from error
+    finally:
+        os.close(descriptor)
+
+
 def source_snapshot():
     paths = set()
     for name in (
@@ -78,19 +154,27 @@ def source_snapshot():
         "backend/alembic",
     ):
         paths.update(
-            p
-            for p in (ROOT / name).rglob("*")
-            if p.is_file() and "__pycache__" not in p.parts
+            source_files(
+                ROOT / name, recursive=True, optional=name == "frontend/public"
+            )
         )
     paths.update(
-        (ROOT / "frontend/node_modules/@fontsource-variable/inter/files").glob(
-            "*.woff2"
+        p
+        for p in source_files(
+            ROOT / "frontend/node_modules/@fontsource-variable/inter/files"
         )
+        if p.suffix == ".woff2"
     )
     paths.update(
-        (ROOT / "frontend/node_modules/@fontsource-variable/inter").glob("*.css")
+        p
+        for p in source_files(ROOT / "frontend/node_modules/@fontsource-variable/inter")
+        if p.suffix == ".css"
     )
-    paths.update((ROOT / "frontend").glob("tsconfig*.json"))
+    paths.update(
+        p
+        for p in source_files(ROOT / "frontend")
+        if p.name.startswith("tsconfig") and p.suffix == ".json"
+    )
     for name in (
         "frontend/index.html",
         "frontend/package.json",
@@ -112,10 +196,8 @@ def source_snapshot():
         "deploy/tests/test-portfolio-ui-evidence.py",
     ):
         paths.add(ROOT / name)
-    if any(p.is_symlink() or not p.is_file() for p in paths):
-        raise ValueError("Unsafe render input")
     return {
-        p.relative_to(ROOT).as_posix(): digest(p.read_bytes()) for p in sorted(paths)
+        p.relative_to(ROOT).as_posix(): digest(source_bytes(p)) for p in sorted(paths)
     }
 
 
@@ -311,11 +393,11 @@ def verify_artifacts(directory, hashes, phase=13):
             or digest((directory / name).read_bytes()) != expected
         ):
             raise ValueError("Missing/unsafe/tampered artifact: " + name)
-    validate_html((directory / "index.html").read_text())
+    validate_html((directory / "index.html").read_text(), phase=phase)
     for capture in manifest["captures"]:
         paths = capture_artifacts(capture["width"], capture["state"], phase)
         content = (directory / paths["html"]).read_text()
-        validate_html(content)
+        validate_html(content, phase=phase)
         metadata = capture_metadata(content)
         verify_capture_metadata(metadata, capture, manifest["git_commit"], phase)
         if phase == 14:
@@ -380,7 +462,54 @@ def verify_capture_metadata(metadata, capture, commit, phase=13):
 
 
 class InertCaptureParser(HTMLParser):
+    def __init__(self, phase=13):
+        super().__init__(convert_charrefs=True)
+        self.phase = phase
+        self.policies = 0
+        self.svg_depth = 0
+        self.head_closed = False
+
     def handle_starttag(self, tag, attributes):
+        attrs = dict(attributes)
+        policy = (
+            tag == "meta"
+            and attrs.get("http-equiv", "").lower() == "content-security-policy"
+        )
+        if self.phase == 14:
+            if policy:
+                self.policies += 1
+                directives = [
+                    item.split()
+                    for item in attrs.get("content", "").split(";")
+                    if item.strip()
+                ]
+                required = {
+                    "default-src": ["'none'"],
+                    "style-src": ["'unsafe-inline'"],
+                    "font-src": ["data:"],
+                    "img-src": ["data:"],
+                    "base-uri": ["'none'"],
+                    "form-action": ["'none'"],
+                }
+                if (
+                    self.head_closed
+                    or self.policies != 1
+                    or len(directives) != len(required)
+                    or {item[0]: item[1:] for item in directives} != required
+                    or len(attributes) != 2
+                    or set(attrs) != {"http-equiv", "content"}
+                ):
+                    raise ValueError("Missing or altered project capture policy")
+            elif not self.policies and not (
+                tag in {"html", "head"} or (tag == "meta" and set(attrs) == {"charset"})
+            ):
+                raise ValueError("Capture policy must precede content")
+        if tag == "svg":
+            self.svg_depth += 1
+        if (
+            self.svg_depth and tag not in {"svg", "path", "circle", "line"}
+        ) or ":" in tag:
+            raise ValueError("Unsupported SVG vocabulary")
         if tag in {
             "script",
             "form",
@@ -426,13 +555,26 @@ class InertCaptureParser(HTMLParser):
                 ) or re.search(r",(?:https?:|//)", normalized):
                     raise ValueError("External or active capture resource")
 
+    def handle_endtag(self, tag):
+        if tag == "head":
+            self.head_closed = True
+        if tag == "svg":
+            self.svg_depth = max(0, self.svg_depth - 1)
 
-def validate_html(content):
+    def handle_data(self, data):
+        if self.phase == 14 and not self.policies and data.strip():
+            raise ValueError("Capture policy must precede document text")
+
+
+def validate_html(content, phase=13):
+    phase_states(phase)
     if re.search(r"bj_(?:access|refresh|csrf)\s*=", content, re.IGNORECASE):
         raise ValueError("Private capture")
-    parser = InertCaptureParser(convert_charrefs=True)
+    parser = InertCaptureParser(phase)
     parser.feed(content)
     parser.close()
+    if phase == 14 and parser.policies != 1:
+        raise ValueError("Missing project capture policy")
 
 
 def validate_layout(layout, width):
@@ -471,7 +613,7 @@ def package(captured, destination, source, commit, phase=13):
         for state in phase_states(phase):
             stem = f"phase{phase}-{state}-{width}"
             text = (captured / (stem + ".html")).read_text()
-            validate_html(text)
+            validate_html(text, phase=phase)
             metadata = capture_metadata(text)
             capture = {
                 "state": state,

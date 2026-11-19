@@ -12,6 +12,11 @@ from pathlib import Path
 
 PATH = Path(__file__).with_name("portfolio-ui-evidence.py")
 EXPECTED_WIDTHS = (320, 375, 768, 1024, 1280, 1440)
+PHASE14_POLICY = (
+    '<meta http-equiv="Content-Security-Policy" content="'
+    "default-src 'none'; style-src 'unsafe-inline'; font-src data:; "
+    "img-src data:; base-uri 'none'; form-action 'none'\">"
+)
 EXPECTED_STATES = (
     "overview",
     "create-long-astral",
@@ -364,36 +369,48 @@ class Phase14EvidenceContracts(unittest.TestCase):
         from unittest.mock import patch
 
         original = self.module.source_snapshot()
-        for linked in ('frontend/src', 'frontend/src/linked', 'frontend',
-                       'frontend/node_modules/@fontsource-variable/inter',
-                       'frontend/vite.config.ts'):
-            with self.subTest(linked=linked), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary) / 'checkout'
+        for linked in (
+            "frontend/src",
+            "frontend/src/linked",
+            "frontend/public",
+            "frontend",
+            "frontend/node_modules/@fontsource-variable/inter",
+            "frontend/node_modules/@fontsource-variable/inter/files/linked",
+            "frontend/vite.config.ts",
+        ):
+            with (
+                self.subTest(linked=linked),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary) / "checkout"
                 for name in original:
                     target = root / name
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text('ordinary controlled render input')
+                    target.write_text("ordinary controlled render input")
                 target = root / linked
-                outside = Path(temporary) / 'controlled-target'
+                outside = Path(temporary) / "controlled-target"
                 if target.is_file():
-                    outside.write_text('controlled config')
+                    outside.write_text("controlled config")
                     target.unlink()
                 else:
                     import shutil
+
                     if target.exists():
                         shutil.move(str(target), str(outside))
                     else:
                         outside.mkdir()
-                        (outside / 'render.tsx').write_text('controlled render')
+                        (outside / "render.tsx").write_text("controlled render")
                 target.symlink_to(outside, target_is_directory=outside.is_dir())
-                with patch.object(self.module, 'ROOT', root):
+                with patch.object(self.module, "ROOT", root):
                     for _ in range(2):
                         with self.assertRaises(ValueError):
                             self.module.source_snapshot()
                         if outside.is_dir():
-                            (outside / 'render.tsx').write_text('changed controlled render')
+                            (outside / "render.tsx").write_text(
+                                "changed controlled render"
+                            )
                         else:
-                            outside.write_text('changed controlled config')
+                            outside.write_text("changed controlled config")
 
     def test_ordinary_render_target_mutation_changes_inventory(self):
         from unittest.mock import patch
@@ -403,36 +420,89 @@ class Phase14EvidenceContracts(unittest.TestCase):
             for name in self.module.source_snapshot():
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text('ordinary input')
-            with patch.object(self.module, 'ROOT', root):
+                target.write_text("ordinary input")
+            with patch.object(self.module, "ROOT", root):
                 before = self.module.source_snapshot()
-                target = root / 'frontend/src/ordinary.tsx'
-                target.write_text('ordinary first')
+                target = root / "frontend/src/ordinary.tsx"
+                target.write_text("ordinary first")
                 first = self.module.source_snapshot()
-                target.write_text('ordinary second')
+                target.write_text("ordinary second")
                 self.assertNotEqual(before, first)
                 self.assertNotEqual(first, self.module.source_snapshot())
+            alias = Path(temporary).with_name(Path(temporary).name + "-controlled-link")
+            try:
+                alias.symlink_to(root, target_is_directory=True)
+                with (
+                    patch.object(self.module, "ROOT", alias),
+                    self.assertRaises(ValueError),
+                ):
+                    self.module.source_snapshot()
+            finally:
+                alias.unlink(missing_ok=True)
 
     def test_static_svg_and_early_owned_policy_only(self):
-        policy = ('<meta http-equiv="Content-Security-Policy" content="'
-                  "default-src 'none'; style-src 'unsafe-inline'; font-src data:; "
-                  "img-src data:; base-uri 'none'; form-action 'none'\">")
+        policy = (
+            '<meta http-equiv="Content-Security-Policy" content="'
+            "default-src 'none'; style-src 'unsafe-inline'; font-src data:; "
+            "img-src data:; base-uri 'none'; form-action 'none'\">"
+        )
         icon = '<svg viewBox="0 0 24 24"><path d="M1 1L2 2"></path><circle cx="2" cy="2" r="1"/></svg>'
-        positive = '<!doctype html><html><head>' + policy + '</head><body>' + icon + '</body></html>'
+        positive = (
+            "<!doctype html><html><head>"
+            + policy
+            + "</head><body>"
+            + icon
+            + "</body></html>"
+        )
         self.module.validate_html(positive, phase=14)
         for content in (
-            positive.replace(policy, ''),
+            positive.replace(policy, ""),
             positive.replace("default-src 'none'", "default-src 'self'"),
             positive.replace(policy, policy + policy),
-            positive.replace(policy, '').replace('<body>', '<body>' + policy),
-            positive.replace(policy, '<style>p {color: black}</style>' + policy),
-            positive.replace(icon, '<svg><animate attributeName="opacity" values="0;1"/></svg>'),
-            positive.replace(icon, '<svg><set attributeName="visibility" to="hidden"/></svg>'),
-            positive.replace(icon, '<svg><foreignObject><p>ordinary text</p></foreignObject></svg>'),
+            positive.replace(policy, "").replace("<body>", "<body>" + policy),
+            positive.replace(policy, "<style>p {color: black}</style>" + policy),
+            positive.replace(policy, "").replace("</head>", "</head>" + policy),
+            positive.replace(
+                icon, '<svg><animate attributeName="opacity" values="0;1"/></svg>'
+            ),
+            positive.replace(
+                icon, '<svg><set attributeName="visibility" to="hidden"/></svg>'
+            ),
+            positive.replace(
+                icon, "<svg><foreignObject><p>ordinary text</p></foreignObject></svg>"
+            ),
         ):
             with self.subTest(content=content), self.assertRaises(ValueError):
                 self.module.validate_html(content, phase=14)
-        self.module.validate_html('<!doctype html><p>Phase 13 compatibility</p>')
+        self.module.validate_html("<!doctype html><p>Phase 13 compatibility</p>")
+
+    def test_coherent_index_and_capture_policy_mutations_refuse(self):
+        for name in ("index.html", "phase14-collapsed-320.html"):
+            for mutation in ("missing", "weakened", "duplicate", "unsupported-svg"):
+                with (
+                    self.subTest(name=name, mutation=mutation),
+                    tempfile.TemporaryDirectory() as temporary,
+                ):
+                    directory = Path(temporary)
+                    value = self.packet(directory)
+                    target = directory / name
+                    content = target.read_text()
+                    if mutation == "missing":
+                        content = content.replace(PHASE14_POLICY, "")
+                    elif mutation == "weakened":
+                        content = content.replace(
+                            "default-src 'none'", "default-src 'self'"
+                        )
+                    elif mutation == "duplicate":
+                        content = content.replace(PHASE14_POLICY, PHASE14_POLICY * 2)
+                    else:
+                        content += (
+                            '<svg><animate attributeName="opacity" values="0;1"/></svg>'
+                        )
+                    target.write_text(content)
+                    self.checksum(directory, value, name)
+                    with self.assertRaises(ValueError):
+                        self.module.verify_artifacts(directory, value["artifacts"], 14)
 
     def screenshot(self, width):
         import struct
@@ -476,7 +546,9 @@ class Phase14EvidenceContracts(unittest.TestCase):
                 "trace": [{"path": "/synthetic", "start": 1, "duration": 2}],
             }
             content = (
-                '<!doctype html><meta name="birja-evidence" content="'
+                "<!doctype html>"
+                + PHASE14_POLICY
+                + '<meta name="birja-evidence" content="'
                 + html.escape(json.dumps(metadata), quote=True)
                 + '">'
             )
@@ -491,7 +563,7 @@ class Phase14EvidenceContracts(unittest.TestCase):
                         self.screenshot(width // 2 if kind == "reflow_png" else width)
                     )
         (directory / "index.html").write_text(
-            "<!doctype html><p>Offline test specimen</p>"
+            "<!doctype html>" + PHASE14_POLICY + "<p>Offline test specimen</p>"
         )
         value["artifacts"] = {
             name: hashlib.sha256((directory / name).read_bytes()).hexdigest()
