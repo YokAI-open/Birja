@@ -127,3 +127,48 @@ None. Generic unavailable/error/loading states are intentional safety states, no
 ## Self-Check: PASSED
 
 The summary and all 17 modified source/test files exist. All 12 recorded source/test commits resolve as Git commits. The qualified source is committed; the working tree contains only this summary and the pre-existing unrelated `.claude/`. No global planning state was changed by this executor.
+
+## Independent-review blocker repairs — CR-01 and CR-02
+
+Completed locally on 2026-11-19 after reading the complete parent-owned `14-13-REVIEW.md`. The original review and finding history remain intact for independent re-review.
+
+### CR-01 — Reconcile former masks against the current durable original
+
+A retired client's old quarantine is now reconciled before its restored generation receives financial readiness. The current owner-bound durable attempt remains quarantined regardless of active GET/list results. Other former masks require a forced fresh authenticated owned list: cancel any old list request, invalidate its cache, then use the existing QueryClient `fetchQuery` with retries disabled. Owner/generation guards apply before and after every await and inside the query function. Only IDs present in that fresh active list can release former masks. Missing/closed roots remain masked, including while old cached membership is still present.
+
+Retirement also discards `releaseAfterReview`, which belongs to the retired generation. This prevents an obsolete terminal-review release from resolving a newer unknown original. A failed proof read keeps readiness false and masks intact; explicit recovery retry obtains metadata proof without sending DELETE.
+
+Real-marker regressions cover:
+
+- A unknown → B exact durable `portfolio_confirmation_changed` refusal and fresh detail metadata → A returning with an empty marker; A obtains a new ready target only after fresh list proof, while the original target and confirmation stay revoked.
+- B verified closure → A returning with its old active list; no target becomes available before or after the fresh closed/missing proof.
+- B resolves A's first original and starts a **different** unknown original; returning A releases the former active root while the new original stays masked even when repeated fresh lists include it as active.
+- A proof-read failure and explicit retry; the original mask persists through failure, and neither initialization nor retry submits DELETE.
+
+The additional metadata proof GET is part of restoration only when former masks exist outside the current durable original. Consumers must retain the readiness gate while it runs. It is not provider access, mutation authority, proof from a broadcast, or automatic deletion recovery.
+
+### CR-02 — Clean up authenticated null after unknown identity
+
+The session now detects an unknown-to-known-null transition even when both identities map to `owner: null`. Current authenticated sign-out revokes private memory and clears persistent recovery under the existing current-client guard. Undefined/removed identity still revokes memory without erasing the durable original; obsolete clients still cannot clear or reopen a newer lease.
+
+Two real stored-marker cases exercise cold undefined identity and identity-cache removal after restoration. Both preserve the marker while identity remains unknown, then resolve an actual bounded authentication-refusal flow to null and verify current-client cleanup. Existing GC, obsolete-client null/non-null, current logout and generation-return cases remain passing.
+
+### Repair commits and qualification
+
+- `c56beaf` — genuine RED regressions for both blockers. The valid terminal/closure fixtures use application/json, and B's explicit original check is asserted to reach transport and its durable result.
+- `311d613` — production GREEN repair in the existing deletion hook plus the cold/removed, closure, retry and different-original complements.
+- `ba9bba1` — strengthen the ordinary stale-list refresh path. An isolated source replay of pre-repair `231ec02` fails after fresh active proof: both empty-marker and different-original cases leave A unavailable. The verified-closed complement remains unavailable as required.
+
+Qualified repair tree: **`ba9bba15860abe7b68d0dcf3321dd1094a2395f9`**; production repair: `311d61313da89b25130b7da0f32bb7895829f95f`.
+
+- Final whole frontend: **58 files / 1,291 tests passed in 25.60 seconds**, exit 0.
+- Final whole frontend typecheck, lint and formatting: all exit 0. `git diff --check` also passes.
+- Deletion/target complements: 88 tests passed in 4.01 seconds before the last strengthened stale-list assertion; the complete final suite includes that assertion.
+- Earlier focused deletion/target/overview/management/boundary/switcher/protocol/storage/API group: 231 tests passed in 6.25 seconds before the different-original complement; the final suite includes the complement.
+- Receipts: `/tmp/birja-phase14-plan13-repair/full-final.log`, `format-final.log`, `blockers-red.log`, `all-complements.log` and `old-source-fresh-proof-red.log`.
+
+The old-source replay used a synthetic source-only copy under `/tmp` and the already installed Node modules; it did not alter the working source or install packages. All test invocations completed. No database, browser, provider, production or publication operation was performed. Only the existing deletion hook, its tests, target tests and this summary changed during repair. Global planning state and requirements remain parent-owned; independent re-review is still required before Plans 14/15 proceed.
+
+### Repair Self-Check: PASSED
+
+All three repaired source/test files and this summary exist. All three repair commits resolve. No tracked files were deleted. The parent-owned untracked review and pre-existing `.claude/` directory are preserved.
