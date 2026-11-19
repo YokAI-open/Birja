@@ -214,3 +214,93 @@ async def test_expansion_downgrade_refuses_before_data_loss(staged):
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
         ).scalar_one() == "0021"
+
+
+async def test_backfill_preserves_retained_multistock_sold_out_and_empty_books(staged):
+    from tests.portfolio_closure_fixtures import retained_snapshot, seed_retained_books
+
+    async with staged.begin() as conn:
+        books = await seed_retained_books(conn, root)
+        before = await retained_snapshot(conn)
+    await migrate("0022")
+    async with staged.connect() as conn:
+        assert await retained_snapshot(conn) == before
+        rows = (await conn.execute(text("""SELECT portfolio_id,provenance,confirmation_name,intent_id
+            FROM portfolio_lifecycle_closures ORDER BY portfolio_id"""))).all()
+        assert rows == [(p,"retained_boundary",None,None) for p in books["closed"]]
+        assert (await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))).scalar_one() == 0
+        boundaries = (await conn.execute(text("""SELECT closing_sequence FROM portfolio_stock_closures
+            ORDER BY coin_id"""))).scalars().all()
+        assert boundaries == [4,1]
+    await ensure_dividend_test_owner()
+
+
+@pytest.mark.parametrize("damage", ["missing_boundary", "global_tail", "units", "financial_chain"])
+async def test_corrupt_backfill_refuses_before_writing_any_lifecycle(staged, damage):
+    from tests.portfolio_closure_fixtures import retained_snapshot, seed_retained_books
+
+    async with staged.begin() as conn:
+        books = await seed_retained_books(conn, root)
+        # Exact privileged corruption fixture; never an application repair path.
+        table = "stock_ownership_movements" if damage == "financial_chain" else "portfolio_stock_closures"
+        await conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))  # noqa: S608
+        if damage == "missing_boundary":
+            await conn.execute(text("DELETE FROM portfolio_stock_closures WHERE coin_id=:c"), {"c":books["stocks"][0]})
+        elif damage == "global_tail":
+            await conn.execute(text("UPDATE portfolio_stock_closures SET closing_sequence=3 WHERE coin_id=:c"), {"c":books["stocks"][0]})
+        elif damage == "units":
+            await conn.execute(text("UPDATE portfolio_stock_closures SET unit_epoch=1 WHERE coin_id=:c"), {"c":books["stocks"][0]})
+        else:
+            await conn.execute(text("UPDATE stock_ownership_movements SET recorded_at=economic_at-interval '1 hour' WHERE sequence=1"))
+        await conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))  # noqa: S608
+        before = await retained_snapshot(conn)
+    await migrate("0021")
+    with pytest.raises((RuntimeError,DBAPIError), match="retained closure"):
+        await migrate("0022")
+    async with staged.connect() as conn:
+        assert await retained_snapshot(conn) == before
+        assert (await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))).scalar_one() == 0
+        assert (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one() == "0021"
+
+
+async def test_backfill_resumes_durable_batches_and_validates_boundary_fk(staged, monkeypatch):
+    from importlib.util import module_from_spec, spec_from_file_location
+    from pathlib import Path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    async with staged.begin() as conn:
+        closed = [await root(conn, closed=True) for _ in range(3)]
+    await migrate("0021")
+    path = Path(__file__).parents[1] / "alembic/versions/0022_portfolio_closure_provenance.py"
+    spec = spec_from_file_location("closure_backfill", path)
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original = module._backfill_batch
+    calls = 0
+
+    def interrupted():
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("synthetic interrupted closure batch")
+        return original()
+
+    monkeypatch.setattr(module,"BATCH_SIZE",1)
+    monkeypatch.setattr(module,"_backfill_batch",interrupted)
+    async with staged.connect() as conn:
+        def apply(sync):
+            with Operations.context(MigrationContext.configure(sync)):
+                module.upgrade()
+        with pytest.raises(RuntimeError,match="synthetic interrupted"):
+            await conn.run_sync(apply)
+    async with staged.connect() as conn:
+        assert (await conn.execute(text("SELECT count(*) FROM portfolio_lifecycle_closures"))).scalar_one() == 1
+    await migrate("0022")
+    await ensure_dividend_test_owner()
+    async with staged.connect() as conn:
+        assert (await conn.execute(text("SELECT portfolio_id FROM portfolio_lifecycle_closures ORDER BY portfolio_id"))).scalars().all() == [p for _,p in closed]
+        assert (await conn.execute(text("SELECT convalidated FROM pg_constraint WHERE conname='fk_portfolio_stock_closure_lifecycle'"))).scalar_one() is True
+    with pytest.raises(RuntimeError,match="downgrade refused"):
+        await migrate("0021",down=True)
