@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Phase14 Plan03 repair independently verified; next Plan04
-last_updated: "2026-11-19T09:48:39.577998+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan03 repair and independent recheck complete
+stopped_at: Phase14 Plan04 independently verified; next Plan05
+last_updated: "2026-11-19T10:43:23.843832+00:00"
+last_activity: 2026-11-19 -- Phase14 Plan04 and independent review complete
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 52
+  completed_plans: 53
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan04;3/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan05;4/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 4 of 19
-Current Plan: 4
+Plan: 5 of 19
+Current Plan: 5
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;52/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;53/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -854,3 +854,15 @@ closedack, withactualexclusiveadvisorylocks and strictglobalclockfences.
 Plan04mustinclude newclockguardfunction/triggers in EXACTadmission/bootstrap
 inventories and preserve0021prebackfillcompatibility. No API/stockactivation/
 provider/dependency/productionoperation; allsevenwholerequirements pending.
+
+
+Plan04 complete:b1732e4/e2fa0ba,dcf2684/a2ed33c,summary44e48d8.
+Final85affectedcases342.99s and4stateful24.62s pass; twoindependent14case
+reentryruns71.35s/71.90s,75retainedmanagement438.83s, scopedlintformat and
+four-modulemypy pass. Independent14-04-REVIEW clean0/0,ownedstackremoved.
+Exact0023runtimeadmission/currentmigration/testgrantwiring nowestablished,
+withseparateSQL/Pythonbootstrapparity and effectivefuturedefaultACLs.
+Plans05/06 MUST use explicit0023catalogue/object/defaultACLexports; generic
+legacyexportsremain0020. FiniteemptyACLquarantineentry is bootstrap-only,
+ordinaryruntime requires exactfinalauthority. No producer/consumerV3yet.
+AllsevenwholeREQpending; nextPlan05retainedsource/currentproducer.
