@@ -39,6 +39,20 @@ async def granted20_transition(engine, request):
         await restore_current_test_schema(engine)
 
 
+@pytest_asyncio.fixture(params=[False, True], ids=["builtin-default", "private-default"])
+async def legacy14_transition(engine, request):
+    from tests.test_portfolio_migrate import prepare_legacy14
+
+    await reset_disposable_schema(engine)
+    child, _ = await prepare_legacy14(engine, private=request.param)
+    await asyncio.to_thread(run_test_migration, "0023")
+    try:
+        yield engine, child
+    finally:
+        await child.dispose()
+        await restore_current_test_schema(engine)
+
+
 async def transition_evidence(child):
     from app.db.portfolio_bootstrap import ACL_SQL, CATALOGUE_0023_SQL, DEFAULT_ACL_0023_SQL
 
@@ -91,6 +105,31 @@ async def test_genuine_granted20_transition_requires_explicit_runtime_bootstrap(
         assert await complete_snapshot(conn) == before[0]
 
 
+async def test_genuine_legacy14_transition_requires_explicit_runtime_bootstrap(legacy14_transition):
+    from app.db.portfolio_bootstrap import (
+        ACL_0023_FROM_0014_SHA256,
+        GRANTS_0023_SQL,
+        PREFLIGHT_0023_SQL,
+    )
+    from app.db.schema_contract import SchemaAdmissionError, require_schema
+
+    _, child = legacy14_transition
+    before = await transition_evidence(child)
+    assert before[1] == ACL_0023_FROM_0014_SHA256
+    async with child.connect() as conn:
+        await conn.execute(text(PREFLIGHT_0023_SQL))
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            await require_schema(conn)
+    code, diagnostic = await production_bootstrap()
+    assert code == 0, diagnostic
+    async with child.begin() as conn:
+        assert await require_schema(conn) == "0023"
+        assert await complete_snapshot(conn) == before[0]
+        await sql(conn, GRANTS_0023_SQL)
+        assert await require_schema(conn) == "0023"
+        assert await complete_snapshot(conn) == before[0]
+
+
 async def test_every_partial_or_missing_lifecycle_read_refuses_both_bootstraps(
     granted20_transition,
 ):
@@ -118,6 +157,12 @@ async def test_every_partial_or_missing_lifecycle_read_refuses_both_bootstraps(
             await sql(conn, f"GRANT SELECT ON {table} TO {role}")  # noqa: S608
 
 
+async def test_legacy14_partial_or_missing_lifecycle_read_refuses_both_bootstraps(
+    legacy14_transition,
+):
+    await test_every_partial_or_missing_lifecycle_read_refuses_both_bootstraps(legacy14_transition)
+
+
 async def test_transition_extra_grant_and_unsafe_future_default_refuse(granted20_transition):
     _, child = granted20_transition
     for damage, undo in (
@@ -142,6 +187,10 @@ async def test_transition_extra_grant_and_unsafe_future_default_refuse(granted20
         await assert_transition_refusal(child)
         async with child.begin() as conn:
             await sql(conn, undo)
+
+
+async def test_legacy14_extra_grant_and_unsafe_future_default_refuse(legacy14_transition):
+    await test_transition_extra_grant_and_unsafe_future_default_refuse(legacy14_transition)
 
 
 async def closed_evidence_fixture(engine):

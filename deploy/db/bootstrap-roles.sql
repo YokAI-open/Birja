@@ -435,7 +435,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425') THEN
+) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
@@ -459,7 +459,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-)='f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425' AND (
+) IN ('f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06') AND (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
  'UTF8')),'hex') FROM (
  SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'

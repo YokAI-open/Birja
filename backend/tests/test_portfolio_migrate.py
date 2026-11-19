@@ -124,7 +124,12 @@ PRIOR_OBJECT_DRIFT = [
 
 
 async def prior_object_evidence(admin, identity):
-    from app.db.portfolio_bootstrap import CATALOGUE_0023_SQL, CATALOGUE_SQL
+    from app.db.portfolio_bootstrap import (
+        ACL_SQL,
+        CATALOGUE_0023_SQL,
+        CATALOGUE_SQL,
+        DEFAULT_ACL_0023_SQL,
+    )
     from tests.portfolio_closure_fixtures import retained_snapshot
 
     async with admin.connect() as conn:
@@ -153,6 +158,8 @@ async def prior_object_evidence(admin, identity):
             await conn.scalar(text(CATALOGUE_SQL)),
             await conn.scalar(text(CATALOGUE_0023_SQL)),
             rows,
+            await conn.scalar(text(ACL_SQL)),
+            await conn.scalar(text(DEFAULT_ACL_0023_SQL)),
             await conn.scalar(text(identity)),
         )
 

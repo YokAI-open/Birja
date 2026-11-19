@@ -396,6 +396,7 @@ ACL_0023_QUARANTINE_SHA256 = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c
 # four lifecycle SELECT grants are deliberately absent until explicit bootstrap.
 # This is never a runtime-admission fingerprint.
 ACL_0023_FROM_0020_SHA256 = "f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425"
+ACL_0023_FROM_0014_SHA256 = "8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06"
 
 # An absent global function-default row means PUBLIC EXECUTE; an absent
 # schema-local row adds nothing. Normalize effective, not merely explicit ACLs.
@@ -424,6 +425,31 @@ DEFAULT_ACL_0023_SHA256 = ACL_0023_QUARANTINE_SHA256
 # remain unchanged. A missing global function-default row has the PostgreSQL
 # built-in PUBLIC EXECUTE default, which the final bootstrap removes explicitly.
 DEFAULT_ACL_0020_BUILTIN_SHA256 = "3c6c72d38f50b3150f0c849954fa0842a0711cfcbda15936e470bc648d436ebe"
+CATALOGUE_0014_MIGRATION_SHA256 = "5dac40c397dc206186f940befc95e353352bd806f3cc3167c165095211b8ee91"
+ACL_0014_MIGRATION_SHA256 = "2363d5540c0ce80684e3d8135f088a32994477b4b43fc58541530cddcc74231d"
+# This is a current migration-entry recognizer, not a change to the immutable
+# historical14 projection. Use the COMPLETE current catalogue on actual14.
+PREFLIGHT_0014_MIGRATION_SQL = (
+    r"""
+DO $legacy14_migration_identity$
+BEGIN
+ IF session_user<>'birja_migrator' OR current_user<>'birja_migrator'
+ OR NOT(SELECT count(*)=1 AND bool_and(version_num='0014') FROM public.alembic_version)
+ OR (__CATALOGUE__)<>'__EXPECTED__' OR (__ACL__)<>'__PRIOR_ACL__'
+ OR (__DEFAULT__) NOT IN ('__BUILTIN__','__PRIVATE__')
+ OR EXISTS(SELECT FROM pg_default_acl d,
+  LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
+  AND x.grantee<>d.defaclrole) THEN
+  RAISE EXCEPTION 'unrecognized legacy14 migration authority'; END IF;
+END $legacy14_migration_identity$;
+""".replace("__CATALOGUE__", CATALOGUE_0023_SQL)
+    .replace("__EXPECTED__", CATALOGUE_0014_MIGRATION_SHA256)
+    .replace("__ACL__", ACL_SQL)
+    .replace("__PRIOR_ACL__", ACL_0014_MIGRATION_SHA256)
+    .replace("__DEFAULT__", DEFAULT_ACL_0023_SQL)
+    .replace("__BUILTIN__", DEFAULT_ACL_0020_BUILTIN_SHA256)
+    .replace("__PRIVATE__", DEFAULT_ACL_0023_SHA256)
+)
 ACL_0020_INITIAL_SHA256 = "3358f6b32d6211d60c93516488ee5c6e7434c775c812c2fe0841b5011fe74a06"
 PRE_CLOSURE_CATALOGUES = {
     "0020": CATALOGUE_0020_SHA256,
@@ -513,9 +539,10 @@ PREFLIGHT_0023_SQL = (
   LATERAL aclexplode(d.defaclacl) x WHERE d.defaclrole='birja_migrator'::regrole
   AND x.grantee<>d.defaclrole) THEN
   RAISE EXCEPTION 'unexpected closure default privileges'; END IF;
- IF (__ACL__) NOT IN ('__INITIAL__','__FINAL__','__QUARANTINE__','__FROM_0020__') THEN
+ IF (__ACL__) NOT IN
+  ('__INITIAL__','__FINAL__','__QUARANTINE__','__FROM_0020__','__FROM_0014__') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
- IF (__ACL__)='__FROM_0020__'
+ IF (__ACL__) IN ('__FROM_0020__','__FROM_0014__')
  AND (__DEFAULT__) NOT IN ('__BUILTIN__','__PRIVATE__') THEN
   RAISE EXCEPTION 'unexpected migrated closure default privileges'; END IF;
  IF (__ACL__)='__FINAL__' AND (__DEFAULT__)<>'__PRIVATE__' THEN
@@ -559,6 +586,7 @@ PREFLIGHT_0023_SQL = (
 END $closure_identity$;
 """.replace("__ACL__", ACL_SQL)
         .replace("__FROM_0020__", ACL_0023_FROM_0020_SHA256)
+        .replace("__FROM_0014__", ACL_0023_FROM_0014_SHA256)
         .replace("__BUILTIN__", DEFAULT_ACL_0020_BUILTIN_SHA256)
         .replace("__INITIAL__", ACL_0023_INITIAL_SHA256)
         .replace("__FINAL__", ACL_0023_SHA256)

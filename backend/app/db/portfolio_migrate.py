@@ -17,6 +17,7 @@ from app.db.dev_bootstrap import migration_objects, require_complete_migration_i
 from app.db.portfolio_bootstrap import (
     MIGRATION_SUPPLEMENTAL_INVENTORY_SQL,
     PRE_CLOSURE_MIGRATION_SQL,
+    PREFLIGHT_0014_MIGRATION_SQL,
 )
 from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
 
@@ -159,7 +160,12 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         await conn.execute(text(MIGRATION_SUPPLEMENTAL_INVENTORY_SQL))
     except DBAPIError:
         raise ValueError("Unrecognized migration supplemental catalogue") from None
-    if revision in PRE_CLOSURE_MIGRATION_SQL:
+    if revision == "0014":
+        try:
+            await conn.execute(text(PREFLIGHT_0014_MIGRATION_SQL))
+        except DBAPIError:
+            raise ValueError("Unrecognized legacy migration authority") from None
+    elif revision in PRE_CLOSURE_MIGRATION_SQL:
         # Authenticate prior authority before Alembic can mutate even one
         # object. Initial and runtime-granted20, and exact21/22 resumes, are
         # finite catalogue/ACL/default pairs, never a grant-repair fallback.
