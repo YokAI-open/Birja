@@ -107,7 +107,6 @@ it("lets only the current client logout clear the newer durable original", async
   await waitFor(() => expect(old.result.current.ready).toBe(true));
   act(() => old.result.current.reviewDeletion(metadata));
   const obsoleteConfirm = old.result.current.confirmDeletion;
-  old.unmount();
   const current = setup();
   await waitFor(() => expect(current.result.current.ready).toBe(true));
   act(() => current.result.current.reviewDeletion(metadata));
