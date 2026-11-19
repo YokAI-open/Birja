@@ -11,6 +11,7 @@ import type { Portfolio } from "@/api/portfolio";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
+import { PortfolioRoute } from "@/App";
 const clients: QueryClient[] = [];
 it.each(["reject-abort", "late-response", "late-response-new-save", "late-response-logout"])(
   "interrupts a routed pending PATCH for review without accepting its obsolete outcome (%s)",
@@ -446,7 +447,7 @@ function mount({
           <Link to="/portfolios/2">Open sibling</Link>
           <Link to="/portfolios/1/history">Open History route</Link>
           <Routes>
-            <Route path="/portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+            <Route path="/portfolios/:portfolioId" element={<PortfolioRoute />}>
               <Route index element={<PortfolioPage />} />
               <Route path="history" element={<h1>History route</h1>} />
             </Route>

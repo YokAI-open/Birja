@@ -12,7 +12,10 @@ vi.mock("@/hooks/usePortfolioManagement");
 vi.mock("@/hooks/usePortfolioDeletion");
 const refetch = vi.fn();
 function show(data: unknown, extra = {}) {
-  vi.mocked(usePortfolioDeletion).mockReturnValue({ ready: true, deletion: { phase: "idle", attempt: null } } as ReturnType<typeof usePortfolioDeletion>);
+  vi.mocked(usePortfolioDeletion).mockReturnValue({
+    ready: true,
+    deletion: { phase: "idle", attempt: null },
+  } as ReturnType<typeof usePortfolioDeletion>);
   vi.mocked(usePortfolioOverview).mockReturnValue({
     data,
     isPending: false,

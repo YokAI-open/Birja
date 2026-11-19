@@ -11,7 +11,6 @@ import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { formatUsd } from "@/lib/money";
 import { PortfolioContext } from "@/components/PortfolioContext";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { PortfolioMetadataForm } from "@/components/PortfolioMetadataForm";
 
 export default function PortfolioPage() {
   const target = useOutletContext<PortfolioTarget>();
@@ -32,10 +31,7 @@ export default function PortfolioPage() {
   }
   return (
     <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-          Portfolio
-        </h1>
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <Button
           ref={refreshButton}
           variant="secondary"
@@ -52,10 +48,6 @@ export default function PortfolioPage() {
           {state.creationResult.replay ? "Original portfolio confirmed." : "Portfolio created."}
         </p>
       )}
-      <PortfolioMetadataForm
-        key={`${target.owner}:${target.portfolioId}:${target.epoch.session}`}
-        portfolioId={target.portfolioId}
-      />
       {isPending ? (
         <div
           role="status"

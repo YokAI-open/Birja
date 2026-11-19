@@ -6,7 +6,12 @@ import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
 import { DELETION_POLICY } from "@/api/portfolioDeletion";
 
 vi.mock("@/hooks/usePortfolioDeletion");
-const metadata = { id: "1", name: "<b>策略</b>" + "🚀".repeat(40), description: "" };
+const namePrefix = "<b>策略</b>";
+const metadata = {
+  id: "1",
+  name: namePrefix + "🚀".repeat(60 - [...namePrefix].length),
+  description: "",
+};
 const intent = {
   portfolioId: "1",
   confirmationName: metadata.name,
@@ -80,6 +85,10 @@ it("opens only a named review; Cancel is first and focused, Escape and Enter nev
   expect(screen.getByRole("heading", { name: `Delete “${metadata.name}”?` })).toBeVisible();
   expect(document.querySelector("b")).toBeNull();
   expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
   fireEvent.keyDown(screen.getByRole("region", { name: `Delete “${metadata.name}”?` }), {
     key: "Enter",
   });

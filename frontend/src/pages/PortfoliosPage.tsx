@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PortfolioCreateForm } from "@/components/PortfolioCreateForm";
 import { PortfolioOutcome } from "@/components/PortfolioHoldings";
@@ -8,6 +8,7 @@ import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { formatUsd } from "@/lib/money";
 import type { PortfolioOverview } from "@/api/portfolioOverview";
 import { fullLocalTimestamp } from "@/lib/financialDisplay";
+import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
 const subscribe = (notify: () => void) => {
   const media = window.matchMedia?.("(min-width: 768px)");
   media?.addEventListener("change", notify);
@@ -76,6 +77,7 @@ function Outcome({ row }: { row: PortfolioOverview }) {
 export default function PortfoliosPage() {
   const query = usePortfolioOverview();
   const management = usePortfolioManagement();
+  const deletion = usePortfolioDeletion();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const restoring = useRef(false);
@@ -87,6 +89,13 @@ export default function PortfoliosPage() {
   }, [open]);
   const desktop = useSyncExternalStore(subscribe, wide, () => false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [acknowledgement] = useState(() => location.state?.deletionConfirmed === true);
+  useLayoutEffect(() => {
+    if (location.state?.deletionConfirmed === true) {
+      void navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, navigate]);
   const created = useCallback(
     (metadata: { id: string }, replay: boolean) =>
       navigate(`/portfolios/${metadata.id}`, {
@@ -95,7 +104,7 @@ export default function PortfoliosPage() {
     [navigate],
   );
   const rows = query.data;
-  const capKnown = rows !== undefined;
+  const capKnown = rows !== undefined && !query.membershipUncertain;
   const limit = capKnown && rows.length >= 10;
   const original =
     management.creation.phase === "unknown" || management.creation.phase === "submitting";
@@ -111,7 +120,9 @@ export default function PortfoliosPage() {
       <div className="flex min-w-0 flex-col justify-between gap-4 md:flex-row md:flex-wrap md:items-center">
         <div>
           <h1 className="text-[32px] leading-10 font-medium">Portfolios</h1>
-          {rows && <p className="text-sm tabular-nums">{rows.length} of 10 active portfolios</p>}
+          {capKnown && (
+            <p className="text-sm tabular-nums">{rows.length} of 10 active portfolios</p>
+          )}
         </div>
         <div className="flex flex-col gap-2 min-[375px]:flex-row min-[375px]:flex-wrap">
           <Button
@@ -136,6 +147,21 @@ export default function PortfoliosPage() {
       <p>
         Compare each portfolio with its own starting cash. Returns are since each portfolio began.
       </p>
+      {acknowledgement && <p role="status">Portfolio deleted.</p>}
+      {deletion.deletion.attempt && (
+        <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
+          <p>
+            A portfolio deletion result is unconfirmed. Review the original request to check its
+            result.
+          </p>
+          <Link
+            className="flex min-h-11 min-w-11 items-center underline focus-visible:ring-2 focus-visible:ring-ring"
+            to="/portfolios/deletion"
+          >
+            Review deletion request
+          </Link>
+        </div>
+      )}
       {limit && (
         <p id="portfolio-cap">
           You have 10 active portfolios. You can&apos;t create another right now.
@@ -193,7 +219,12 @@ export default function PortfoliosPage() {
               </Button>
             </div>
           )}
-          {rows.length === 0 ? (
+          {rows.length === 0 && query.membershipUncertain ? (
+            <p>
+              Checking portfolio membership. Review any original deletion request before using an
+              unavailable portfolio.
+            </p>
+          ) : rows.length === 0 ? (
             <div className="rounded-card bg-card p-4 md:p-6">
               <h2 className="text-xl font-medium">No portfolios yet</h2>
               <p>

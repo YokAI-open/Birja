@@ -18,6 +18,55 @@ import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import HistoryPage from "@/pages/HistoryPage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { isPortfolioId } from "@/api/portfolios";
+import { PortfolioMetadataForm } from "@/components/PortfolioMetadataForm";
+import PortfolioDeletionPage from "@/pages/PortfolioDeletionPage";
+import { useQueryClient } from "@tanstack/react-query";
+import { portfolioDeletionAuthorityGeneration } from "@/hooks/usePortfolioDeletion";
+
+/** Keep the management operation mounted when financial authority is revoked. */
+export function PortfolioRoute() {
+  const { portfolioId } = useParams();
+  const { pathname } = useLocation();
+  const target = usePortfolioTarget(portfolioId);
+  const client = useQueryClient();
+  const owner = useMe().data?.email;
+  const root = useRef<HTMLDivElement>(null);
+  const managementFocus = useRef<Element | null>(null);
+  const detail = isPortfolioId(portfolioId) && pathname === `/portfolios/${portfolioId}`;
+  useEffect(() => {
+    if (target.status === "loading" || target.status === "ready") return;
+    if (
+      managementFocus.current &&
+      !managementFocus.current.isConnected &&
+      document.activeElement === document.body
+    )
+      root.current?.querySelector<HTMLHeadingElement>("h1")?.focus();
+  }, [target.status]);
+  return (
+    <div className="contents" ref={root}>
+      {detail && target.status === "ready" && (
+        <h1 className="mt-8 mb-4 text-[32px] leading-10 font-medium">Portfolio</h1>
+      )}
+      {detail && owner && (
+        <div
+          className="contents"
+          onFocusCapture={(event) => {
+            managementFocus.current = event.target;
+          }}
+        >
+          <PortfolioMetadataForm
+            key={`${owner}:${portfolioId}:${portfolioDeletionAuthorityGeneration(client)}`}
+            portfolioId={portfolioId}
+            available={target.status === "ready"}
+            lastPortfolio={target.portfolios?.length === 1}
+          />
+        </div>
+      )}
+      <PortfolioTargetBoundary />
+    </div>
+  );
+}
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -79,7 +128,8 @@ function SignedIn({ me }: { me: Me }) {
   // This memory belongs to this mounted signed-in identity only. Explicit
   // routes take priority, including their refusal; never fall back from one.
   const [openedId, setOpenedId] = useState<string>();
-  const explicitId = matchPath("/portfolios/:portfolioId/*", pathname)?.params.portfolioId;
+  const matchedId = matchPath("/portfolios/:portfolioId/*", pathname)?.params.portfolioId;
+  const explicitId = isPortfolioId(matchedId) ? matchedId : undefined;
   const navigation = usePortfolioTarget(explicitId ?? openedId);
   const target = navigation.status === "ready" ? navigation.target : null;
   if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
@@ -135,7 +185,8 @@ function SignedIn({ me }: { me: Me }) {
         {explicitId && <PortfolioSwitcher portfolioId={explicitId} />}
         <Routes>
           <Route index element={<MarketsPage authenticated portfolioId={target?.portfolioId} />} />
-          <Route path="portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+          <Route path="portfolios/deletion" element={<PortfolioDeletionPage />} />
+          <Route path="portfolios/:portfolioId" element={<PortfolioRoute />}>
             <Route index element={<PortfolioPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
