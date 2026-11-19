@@ -1,4 +1,6 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation, useOutletContext } from "react-router";
@@ -55,6 +57,32 @@ afterEach(() => {
   cleanup();
   clients.splice(0).forEach((c) => c.clear());
   vi.unstubAllGlobals();
+  sessionStorage.clear();
+});
+it("removes focused financial controls at confirmed submit and keeps only an unresolved-order boolean", async () => {
+  document.cookie = "bj_csrf=test; path=/";
+  vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => init?.method === "DELETE"
+    ? Promise.reject(new TypeError("lost response"))
+    : Promise.resolve(json([first])));
+  const { client } = setup();
+  const confirm = await screen.findByRole("button", { name: "Confirm order" });
+  confirm.focus();
+  client.setQueryData(["cryptoTradeState", owner, "1", 0, "BTC"], { phase: "unknown", attempt: { idempotency_key: "private-original-key", order: { amount_usd: "8123.45" } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const deletion = renderHook(() => usePortfolioDeletion("1"), { wrapper });
+  await waitFor(() => expect(deletion.result.current.ready).toBe(true));
+  act(() => {
+    const metadata = { ...first, description: "Private description" };
+    client.setQueryData(["portfolioMetadata", owner, "1", 0], metadata);
+    expect(deletion.result.current.reviewDeletion(metadata)).toBe(true);
+  });
+  await act(async () => deletion.result.current.confirmDeletion());
+  const heading = await screen.findByRole("heading", { name: "Portfolio unavailable" });
+  expect(heading).toHaveFocus();
+  expect(screen.queryByText(/Private cash|My portfolio|Private description|private-original-key/)).toBeNull();
+  expect(screen.queryByRole("button", { name: /Confirm order|retry/i })).toBeNull();
+  expect(screen.getByText(/earlier order's result is unconfirmed/)).toBeVisible();
+  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
 });
 
 it("renders full escaped names with natural narrow-screen wrapping and no chooser", async () => {

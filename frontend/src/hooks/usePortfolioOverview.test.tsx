@@ -8,6 +8,7 @@ import { usePortfolioOverview } from "./usePortfolioOverview";
 import { usePortfolio } from "./usePortfolio";
 import { usePortfolioTarget } from "./usePortfolioTarget";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
+import { usePortfolioDeletion } from "./usePortfolioDeletion";
 
 const alice = "alice@example.test",
   bob = "bob@example.test";
@@ -42,6 +43,45 @@ afterEach(() => {
   clients.splice(0).forEach((client) => client.clear());
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
+});
+it("omits only the original unknown deletion despite repeated active server rows and failed refresh", async () => {
+  document.cookie = "bj_csrf=test; path=/";
+  const { client, wrapper } = setup();
+  const rows = [row("1"), row("2")];
+  const fetch = vi.fn((_url: string, init?: RequestInit) => init?.method === "DELETE"
+    ? Promise.reject(new TypeError("lost closure response"))
+    : Promise.resolve(json(rows)));
+  vi.stubGlobal("fetch", fetch);
+  const hook = renderHook(() => ({ overview: usePortfolioOverview(), deletion: usePortfolioDeletion("1") }), { wrapper });
+  await waitFor(() => expect(hook.result.current.overview.data).toHaveLength(2));
+  await waitFor(() => expect(hook.result.current.deletion.ready).toBe(true));
+  const metadata = { id: "1", name: rows[0].name, description: rows[0].description };
+  act(() => {
+    client.setQueryData(["portfolioMetadata", alice, "1", 0], metadata);
+    expect(hook.result.current.deletion.reviewDeletion(metadata)).toBe(true);
+  });
+  await act(async () => hook.result.current.deletion.confirmDeletion());
+  expect(hook.result.current.overview.data?.map((r) => r.id)).toEqual(["2"]);
+  await act(async () => { await hook.result.current.overview.refetch(); });
+  expect(hook.result.current.overview.data?.map((r) => r.id)).toEqual(["2"]);
+  fetch.mockImplementationOnce(() => Promise.resolve(json({}, 503)));
+  await act(async () => { await hook.result.current.overview.refetch(); });
+  expect(hook.result.current.overview.isError).toBe(true);
+  expect(hook.result.current.overview.data?.map((r) => r.id)).toEqual(["2"]);
+  expect(hook.result.current.deletion.deletion.phase).toBe("unknown");
+});
+it("masks a hinted row until fresh owned proof, then restores an active row without tombstoning", async () => {
+  const { wrapper } = setup();
+  const next = deferred();
+  const fetch = vi.fn().mockResolvedValueOnce(json([row("1"), row("2")])).mockReturnValueOnce(next.promise);
+  vi.stubGlobal("fetch", fetch);
+  const hook = renderHook(() => usePortfolioOverview(), { wrapper });
+  await waitFor(() => expect(hook.result.current.data).toHaveLength(2));
+  act(() => broadcastMetadataChange("1", "lifecycle"));
+  expect(hook.result.current.data?.map((r) => r.id)).toEqual(["2"]);
+  await act(async () => next.resolve(json([row("1"), row("2")])));
+  await waitFor(() => expect(hook.result.current.data?.map((r) => r.id)).toEqual(["1", "2"]));
 });
 it.each([0, 1, 10])(
   "publishes %s exact independent books in server order through one query",
