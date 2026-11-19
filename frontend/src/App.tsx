@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { ChartNoAxesCombined, Wallet, History } from "lucide-react";
-import { NavLink, Navigate, Route, Routes, useLocation, useParams, matchPath } from "react-router";
+import {
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+  useMatch,
+  matchPath,
+} from "react-router";
 import type { Me } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,13 +36,14 @@ import { portfolioDeletionAuthorityGeneration } from "@/hooks/usePortfolioDeleti
 /** Keep the management operation mounted when financial authority is revoked. */
 export function PortfolioRoute() {
   const { portfolioId } = useParams();
-  const { pathname } = useLocation();
   const target = usePortfolioTarget(portfolioId);
   const client = useQueryClient();
   const owner = useMe().data?.email;
   const root = useRef<HTMLDivElement>(null);
+  const primaryHeading = useRef<HTMLHeadingElement>(null);
   const managementFocus = useRef<Element | null>(null);
-  const detail = isPortfolioId(portfolioId) && pathname === `/portfolios/${portfolioId}`;
+  const detailMatch = useMatch({ path: "/portfolios/:portfolioId", end: true });
+  const detail = isPortfolioId(portfolioId) && detailMatch !== null;
   useEffect(() => {
     if (target.status === "loading" || target.status === "ready") return;
     if (
@@ -45,8 +55,18 @@ export function PortfolioRoute() {
   }, [target.status]);
   return (
     <div className="contents" ref={root}>
-      {detail && target.status === "ready" && (
-        <h1 className="mt-8 mb-4 text-[32px] leading-10 font-medium">Portfolio</h1>
+      {detail && (
+        <h1
+          ref={primaryHeading}
+          tabIndex={-1}
+          className="mt-8 mb-4 text-[32px] leading-10 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {target.status === "ready"
+            ? "Portfolio"
+            : target.status === "loading"
+              ? "Checking portfolio access…"
+              : "Portfolio unavailable"}
+        </h1>
       )}
       {detail && owner && (
         <div
@@ -63,7 +83,7 @@ export function PortfolioRoute() {
           />
         </div>
       )}
-      <PortfolioTargetBoundary />
+      <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
     </div>
   );
 }

@@ -31,6 +31,7 @@ export function PortfolioMetadataForm({
       <PortfolioDeleteForm
         portfolioId={portfolioId}
         metadata={management.metadata}
+        metadataError={management.metadataError}
         metadataBusy={
           editing ||
           management.draft !== null ||

@@ -12,6 +12,7 @@ const action =
 export function PortfolioDeleteForm({
   portfolioId,
   metadata,
+  metadataError = null,
   metadataBusy,
   available = true,
   lastPortfolio = false,
@@ -20,6 +21,7 @@ export function PortfolioDeleteForm({
 }: {
   portfolioId?: string;
   metadata?: PortfolioMetadata;
+  metadataError?: Error | null;
   metadataBusy: boolean;
   available?: boolean;
   lastPortfolio?: boolean;
@@ -49,6 +51,8 @@ export function PortfolioDeleteForm({
   const ownOriginal =
     original !== null && (portfolioId === undefined || original.portfolioId === portfolioId);
   if (ownOriginal && originalId !== original.portfolioId) setOriginalId(original.portfolioId);
+  if (review && originalId !== deletion.review!.portfolioId)
+    setOriginalId(deletion.review!.portfolioId);
   const busy = ["persisting", "submitting", "checking"].includes(deletion.phase);
   useLayoutEffect(() => {
     if (review && previousPhase.current !== "review") cancel.current?.focus();
@@ -56,14 +60,14 @@ export function PortfolioDeleteForm({
       restore.current = false;
       trigger.current?.focus();
     }
-    if (deletion.error && userAction.current && !busy) {
+    if ((deletion.error || metadataError) && userAction.current && !busy) {
       userAction.current = false;
       error.current?.focus();
     }
     if (busy && userAction.current && document.activeElement === document.body)
       pendingHeading.current?.focus();
     previousPhase.current = deletion.phase;
-  }, [review, deletion.phase, deletion.error, busy]);
+  }, [review, deletion.phase, deletion.error, metadataError, busy]);
   function cancelReview() {
     if (!review || busy) return;
     restore.current = true;
@@ -112,7 +116,49 @@ export function PortfolioDeleteForm({
       </section>
     );
   }
-  if (!available && !ownOriginal) return null;
+  if (!available && !ownOriginal) {
+    if (deletion.phase !== "terminal_refusal" || originalId !== portfolioId) return null;
+    return (
+      <section
+        aria-labelledby={`${id}-heading`}
+        className="mt-6 flex max-w-[640px] min-w-0 flex-col gap-4 rounded-card bg-card p-4 text-base leading-6 wrap-anywhere md:p-6"
+      >
+        <h2 id={`${id}-heading`} className="text-xl leading-7 font-medium">
+          Review deletion request
+        </h2>
+        <div
+          ref={error}
+          role="alert"
+          tabIndex={-1}
+          className="rounded-control bg-warn-soft p-4 text-warn-text focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          This portfolio&apos;s name changed. Review its latest name before confirming deletion
+          again.
+        </div>
+        {metadataError && <p>Can&apos;t load portfolio metadata right now. Try again.</p>}
+        {metadataBusy && (
+          <p role="status" aria-busy="true">
+            Checking latest portfolio details…
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="secondary"
+          className={action}
+          disabled={metadataBusy}
+          onClick={() => {
+            userAction.current = true;
+            void refreshMetadata();
+          }}
+        >
+          Review latest portfolio
+        </Button>
+        <Link className={`${action} flex items-center underline`} to="/portfolios">
+          Portfolios
+        </Link>
+      </section>
+    );
+  }
   if (ownOriginal || (busy && review)) {
     const name = original?.confirmationName ?? deletion.review?.confirmationName;
     return (

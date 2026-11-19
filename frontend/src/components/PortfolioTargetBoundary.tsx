@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useLocation, useParams } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -11,9 +18,12 @@ import { usePortfolioMetadataLifetime } from "@/hooks/usePortfolioManagement";
 export function PortfolioTargetBoundary({
   children,
   legacyDestination,
+  primaryHeading,
 }: {
   children?: (target: PortfolioTarget) => ReactNode;
   legacyDestination?: (portfolioId: string) => string;
+  /** A detail layout can own its heading before persistent management content. */
+  primaryHeading?: RefObject<HTMLHeadingElement | null>;
 }) {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const result = usePortfolioTarget(portfolioId, { legacyEntry: !!legacyDestination });
@@ -44,7 +54,8 @@ export function PortfolioTargetBoundary({
         }),
     );
   });
-  const heading = useRef<HTMLHeadingElement>(null);
+  const ownHeading = useRef<HTMLHeadingElement>(null);
+  const heading = primaryHeading ?? ownHeading;
   const entered = useRef(false);
   const financial = useRef<HTMLDivElement>(null);
   const financialFocus = useRef<Element | null>(null);
@@ -73,7 +84,7 @@ export function PortfolioTargetBoundary({
     // Initial refusal replaces the page. Background failures announce without
     // stealing focus from a user who was already interacting with that page.
     if (result.status !== "ready") heading.current?.focus();
-  }, [result.status]);
+  }, [result.status, heading]);
 
   if (result.status === "ready" && result.target)
     return (
@@ -118,13 +129,15 @@ export function PortfolioTargetBoundary({
             : "This portfolio is unavailable. Choose another portfolio from Portfolios.";
   return (
     <section className="mx-auto my-8 flex min-w-0 max-w-xl flex-col gap-4" aria-live="polite">
-      <h1
-        ref={heading}
-        tabIndex={-1}
-        className="break-words text-[32px] leading-9 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-[40px] md:leading-[44px]"
-      >
-        {title}
-      </h1>
+      {!primaryHeading && (
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className="break-words text-[32px] leading-9 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-[40px] md:leading-[44px]"
+        >
+          {title}
+        </h1>
+      )}
       <Card>
         <CardContent className="flex min-w-0 flex-col items-start gap-4">
           <p

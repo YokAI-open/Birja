@@ -37,7 +37,9 @@ function FinancialProbe({ page }: { page: string }) {
 }
 vi.mock("@/pages/PortfolioPage", async (importOriginal) => {
   const RealPage = (await importOriginal<typeof import("@/pages/PortfolioPage")>()).default;
-  return { default: () => probes.actualPage ? <RealPage /> : <FinancialProbe page="Portfolio page" /> };
+  return {
+    default: () => (probes.actualPage ? <RealPage /> : <FinancialProbe page="Portfolio page" />),
+  };
 });
 vi.mock("@/pages/HistoryPage", () => ({ default: () => <FinancialProbe page="History page" /> }));
 vi.mock("@/pages/TradePage", () => ({ default: () => <FinancialProbe page="Crypto" /> }));
@@ -454,23 +456,53 @@ it("keeps a terminal-refusal same-ID metadata retry visible after fresh proof fa
   let failMetadata = false;
   let deletes = 0;
   const base = deletionApi({
-    result: async () => { deletes++; if (deletes > 1) return privateJson({ portfolio_id: "1", state: "closed" }); failMetadata = true; return privateJson({ detail: { code: "portfolio_confirmation_changed" } }, 409); },
-    metadata: () => ({ ...first, name: deletes ? "Latest strategy" : first.name, description: "Keep" }),
+    result: async () => {
+      deletes++;
+      if (deletes > 1) return privateJson({ portfolio_id: "1", state: "closed" });
+      failMetadata = true;
+      return privateJson({ detail: { code: "portfolio_confirmation_changed" } }, 409);
+    },
+    metadata: () => ({
+      ...first,
+      name: deletes ? "Latest strategy" : first.name,
+      description: "Keep",
+    }),
   });
-  const fetch = vi.fn((path: string, init?: RequestInit) => path === "/api/v2/portfolios/1/metadata" && failMetadata ? Promise.resolve(privateJson({}, 503)) : base(path, init));
+  const fetch = vi.fn((path: string, init?: RequestInit) =>
+    path === "/api/v2/portfolios/1/metadata" && failMetadata
+      ? Promise.resolve(privateJson({}, 503))
+      : base(path, init),
+  );
   vi.stubGlobal("fetch", fetch);
   const { user } = setup("/portfolios/1");
   await screen.findByRole("region", { name: "Cash" });
   await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
   await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
   const review = await screen.findByRole("button", { name: "Review latest portfolio" });
+  expect(
+    await screen.findByText("Can't load portfolio metadata right now. Try again."),
+  ).toBeVisible();
+  await waitFor(() => expect(review).toBeEnabled());
   expect(screen.getByText(/This portfolio's name changed/)).toBeVisible();
   expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
   expect(screen.queryByText("Keep")).toBeNull();
   expect(deletes).toBe(1);
+  const proofReads = fetch.mock.calls.filter(([path]) => path.endsWith("/metadata")).length;
+  await user.click(review);
+  await waitFor(() =>
+    expect(fetch.mock.calls.filter(([path]) => path.endsWith("/metadata")).length).toBeGreaterThan(
+      proofReads,
+    ),
+  );
+  await waitFor(() => expect(review).toBeEnabled());
+  expect(screen.getByRole("alert")).toHaveFocus();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(deletes).toBe(1);
   failMetadata = false;
   await user.click(review);
-  await waitFor(() => expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeEnabled());
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeEnabled(),
+  );
   expect(deletes).toBe(1);
   await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
   expect(screen.getByRole("heading", { name: "Delete “Latest strategy”?" })).toBeVisible();
@@ -478,37 +510,60 @@ it("keeps a terminal-refusal same-ID metadata retry visible after fresh proof fa
   await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
   await screen.findByRole("heading", { name: "Portfolios", level: 1 });
   expect(deletes).toBe(2);
-  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE").every(([path]) => path === "/api/v2/portfolios/1")).toBe(true);
+  expect(
+    fetch.mock.calls
+      .filter(([, init]) => init?.method === "DELETE")
+      .every(([path]) => path === "/api/v2/portfolios/1"),
+  ).toBe(true);
 });
-it.each(["/portfolios/1", "/portfolios/1/"])("gives real index %s one primary h1 and the persistent management host", async (route) => {
-  probes.actualPage = true;
-  let reject!: (reason: unknown) => void;
-  deletionApi({ result: () => new Promise((_resolve, rejectResult) => { reject = rejectResult; }) });
-  const { user } = setup(route);
-  await screen.findByRole("region", { name: "Cash" });
-  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  expect(screen.getByRole("heading", { name: "Portfolio", level: 1 })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeEnabled();
-  await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
-  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
-  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
-  await waitFor(() => expect(reject).toBeTypeOf("function"));
-  expect(await screen.findByRole("heading", { name: "Deleting portfolio…" })).toBeVisible();
-  expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
-  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  await act(async () => reject(new TypeError("lost")));
-  expect(await screen.findByRole("heading", { name: "Deletion result unconfirmed" })).toBeVisible();
-  expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
-  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
-});
+it.each(["/portfolios/1", "/portfolios/1/"])(
+  "gives real index %s one primary h1 and the persistent management host",
+  async (route) => {
+    probes.actualPage = true;
+    let reject!: (reason: unknown) => void;
+    deletionApi({
+      result: () =>
+        new Promise((_resolve, rejectResult) => {
+          reject = rejectResult;
+        }),
+    });
+    const { user } = setup(route);
+    await screen.findByRole("region", { name: "Cash" });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Portfolio", level: 1 })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeEnabled(),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+    await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+    await waitFor(() => expect(reject).toBeTypeOf("function"));
+    expect(await screen.findByRole("heading", { name: "Deleting portfolio…" })).toBeVisible();
+    expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    await act(async () => reject(new TypeError("lost")));
+    expect(
+      await screen.findByRole("heading", { name: "Deletion result unconfirmed" }),
+    ).toBeVisible();
+    expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  },
+);
 it("places one generic primary h1 before a real restored-unknown detail section", async () => {
   probes.actualPage = true;
   const recovery = await openDeletionRecovery("alice@example.test", () => true);
-  recovery.persist(capturePortfolioDeletionIntent({ portfolioId: "1", confirmationName: first.name, intentKey: crypto.randomUUID(), policyVersion: DELETION_POLICY }));
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
   const fetch = deletionApi();
   setup("/portfolios/1");
   expect(await screen.findByRole("heading", { name: "Deletion result unconfirmed" })).toBeVisible();
@@ -516,6 +571,31 @@ it("places one generic primary h1 before a real restored-unknown detail section"
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
   expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+});
+it.each(["/portfolios/1/history", "/portfolios/1/trade/BTC", "/portfolios/1/trade/stocks/AAPL"])(
+  "keeps management off nested route %s",
+  async (route) => {
+    deletionApi();
+    setup(route);
+    await screen.findByText(/Private alice@example.test root 1/);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete portfolio…" })).toBeNull();
+  },
+);
+it("keeps a trailing-slash inaccessible index generic even if stale metadata is returned", async () => {
+  probes.actualPage = true;
+  deletionApi({ rows: () => [] });
+  setup("/portfolios/1/");
+  expect(
+    await screen.findByRole("heading", { name: "Portfolio unavailable", level: 1 }),
+  ).toBeVisible();
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Delete portfolio…" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+  expect(screen.queryByText(first.name)).toBeNull();
+  expect(screen.queryByText("Keep this strategy")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
 });
 
 it("keeps public Markets, Account and three safe responsive primary destinations", async () => {
