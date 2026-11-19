@@ -1,6 +1,8 @@
 """Real public closure linearizes private reads at their final root fence."""
 
 import asyncio
+from dataclasses import replace
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -9,11 +11,63 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import history
 from tests.test_portfolio_closure_api import authority, closure_api, create, delete, intent
-from tests.test_portfolio_closure_events import blocked
+from tests.test_portfolio_closure_events import blocked, pay, revise_event, target
 from tests.test_portfolio_strategy_events import management_api, strategy_books, strategy_events
 from tests.test_portfolio_strategy_lifecycle import ledger, trade
 
 __all__ = ["authority", "closure_api", "management_api", "strategy_books", "strategy_events"]
+
+
+@pytest.mark.parametrize("overview", [False, True])
+@pytest.mark.parametrize("read_first", [False, True])
+async def test_valuation_final_membership_with_public_closure(
+    strategy_books, monkeypatch, overview, read_first
+):
+    api, roots, _, _ = strategy_books
+    root = roots[0]
+    original = AsyncSession.execute
+    reached, release = asyncio.Event(), asyncio.Event()
+    armed, pid = True, None
+
+    async def pause(db, statement, *args, **kwargs):
+        nonlocal armed, pid
+        selected = armed and " AS active_ids" in str(statement)
+        if selected:
+            armed = False
+            if not read_first:
+                reached.set()
+                await release.wait()
+        result = await original(db, statement, *args, **kwargs)
+        if selected and read_first:
+            pid = await db.scalar(text("SELECT pg_backend_pid()"))
+            reached.set()
+            await release.wait()
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", pause)
+    path = "/api/v2/portfolios/overview" if overview else f"/api/v2/portfolios/{root}"
+    reader = asyncio.create_task(api.client.get(path))
+    closer = None
+    try:
+        await asyncio.wait_for(reached.wait(), 5)
+        if read_first:
+            closer = asyncio.create_task(delete(api, root, intent("Patient")))
+            assert await blocked(api, pid, "close_portfolio")
+            assert not closer.done()
+            release.set()
+            response, closed = await asyncio.wait_for(asyncio.gather(reader, closer), 8)
+            assert response.status_code == 200, response.text
+            assert closed.status_code == 200, closed.text
+        else:
+            assert (await delete(api, root, intent("Patient"))).status_code == 200
+            release.set()
+            response = await asyncio.wait_for(reader, 5)
+            assert response.status_code == 404, response.text
+            assert response.json() == {"detail": {"code": "portfolio_unavailable"}}
+        assert response.headers["cache-control"] == "no-store"
+    finally:
+        release.set()
+        await finish(reader, *([closer] if closer is not None else []))
 
 
 async def finish(*tasks):
@@ -56,6 +110,129 @@ async def test_metadata_late_read_cannot_publish_closed_identity(closure_api, mo
     finally:
         release.set()
         await finish(reader)
+
+
+async def test_cursor_original_retry_and_closed_foreign_missing_matrix(strategy_events):
+    from app.services import event_history
+
+    api, roots, _, _, action, admission, event_id, engine = strategy_events
+    root, sibling = roots
+    crypto_key, stock_key = uuid4(), uuid4()
+    for stock, key in ((False, crypto_key), (True, stock_key)):
+        made = await trade(api, root, stock=stock, key=key)
+        assert made.status_code == 201, made.text
+    work = await target(api, root, event_id)
+    await pay(engine, work)
+    await revise_event(engine, action, admission, event_id, Decimal(".75"))
+    await pay(engine, await target(api, root, event_id))
+    histories = {}
+    for name in ("history", "event-history"):
+        response = await api.client.get(f"/api/v2/portfolios/{root}/{name}?limit=1")
+        assert response.status_code == 200, response.text
+        histories[name] = response.json()
+        assert histories[name]["next_cursor"]
+    full = (await api.client.get(f"/api/v2/portfolios/{root}/event-history")).json()
+    correction = next(item for item in full["items"] if item["kind"] == "dividend_correction")
+    original_reference = correction["payment_reference"]
+    assert correction["original"]["id"] == original_reference
+    assert (await delete(api, root, intent("Patient"))).status_code == 200
+    frozen = await ledger(api, root)
+    foreign = (await create(api, "Foreign", client=api.other)).json()["id"]
+    for selected in (root, foreign, "9223372036854775807"):
+        prefix = f"/api/v2/portfolios/{selected}"
+        for suffix in (
+            "",
+            "/metadata",
+            "/history",
+            "/event-history",
+            "/holdings/BTC",
+            "/stock-trades/AAPL/context",
+        ):
+            response = await api.client.get(prefix + suffix)
+            assert response.status_code == 404, (suffix, response.text)
+            assert response.json() == {"detail": {"code": "portfolio_unavailable"}}
+            assert response.headers["cache-control"] == "no-store"
+        for stock, key in ((False, crypto_key), (True, stock_key)):
+            body = {"symbol": "AAPL" if stock else "BTC", "side": "buy", "quantity": "1"}
+            trade_path = prefix + ("/stock-trades" if stock else "/trades")
+            response = await api.client.post(
+                trade_path + "/quote", json=body, headers={"X-CSRF-Token": "test-csrf"}
+            )
+            assert response.status_code == 404, response.text
+            body.update(
+                {
+                    "idempotency_key": str(key),
+                    "expected_exec_price" if stock else "expected_mid": "102" if stock else "100",
+                }
+            )
+            response = await api.client.post(
+                trade_path, json=body, headers={"X-CSRF-Token": "test-csrf"}
+            )
+            assert response.status_code == 404, response.text
+            assert response.json() == {"detail": {"code": "portfolio_unavailable"}}
+        for name, page in histories.items():
+            response = await api.client.get(
+                prefix + "/" + name, params={"cursor": page["next_cursor"]}
+            )
+            assert response.status_code == 404, response.text
+    # The original owner cannot turn an old cursor or financial key into the
+    # sibling's authority, even though the sibling is independently active.
+    for name, page in histories.items():
+        response = await api.client.get(
+            f"/api/v2/portfolios/{sibling}/{name}", params={"cursor": page["next_cursor"]}
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "invalid_cursor"
+    boundary = event_history.decode_cursor(
+        histories["event-history"]["next_cursor"], expected_portfolio_id=int(root)
+    )
+    forged = event_history.encode_cursor(replace(boundary, portfolio_id=int(sibling)))
+    response = await api.client.get(
+        f"/api/v2/portfolios/{sibling}/event-history", params={"cursor": forged}
+    )
+    assert response.status_code == 200 and response.json() == {"items": [], "next_cursor": None}
+    replacement = (await create(api, "Patient")).json()["id"]
+    before = await ledger(api, replacement)
+    for stock, key in ((False, crypto_key), (True, stock_key)):
+        response = await trade(api, replacement, stock=stock, key=key)
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "idempotency_conflict"
+        assert "quote" not in response.json()["detail"]
+    assert await ledger(api, replacement) == before
+    assert await ledger(api, root) == frozen
+    assert (await api.other.get(f"/api/v2/portfolios/{root}/event-history")).status_code == 404
+    assert root not in [item["id"] for item in (await api.client.get("/api/v2/portfolios")).json()]
+    assert root not in [
+        item["id"] for item in (await api.client.get("/api/v2/portfolios/overview")).json()
+    ]
+
+
+async def test_retired_finance_never_reads_original_or_selects_replacement(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    assert (await delete(api, root, intent())).status_code == 200
+    replacement = (await create(api)).json()["id"]
+    before = await ledger(api, replacement)
+    for suffix in (
+        "/trades",
+        "/holdings/BTC",
+        "/stock-trades/AAPL/context",
+        "/portfolio",
+        "/history",
+    ):
+        response = await api.client.get("/api/v1" + suffix)
+        assert response.status_code == 409
+        assert response.json() == {"detail": {"code": "portfolio_required"}}
+        assert response.headers["cache-control"] == "no-store"
+    for suffix in ("/trades", "/trades/quote", "/stock-trades", "/stock-trades/quote"):
+        response = await api.client.post(
+            "/api/v1" + suffix,
+            json={"idempotency_key": str(uuid4())},
+            headers={"X-CSRF-Token": "test-csrf"},
+        )
+        assert response.status_code == 409
+        assert response.json() == {"detail": {"code": "portfolio_required"}}
+    assert await ledger(api, replacement) == before
 
 
 @pytest.mark.parametrize("path", ["history", "event-history"])
@@ -249,3 +426,41 @@ async def test_late_financial_read_or_original_receipt_cannot_publish_closed_roo
     finally:
         release.set()
         await finish(reader)
+
+
+@pytest.mark.parametrize("stock", [False, True])
+async def test_financial_final_fence_keeps_public_closer_waiting(
+    strategy_books, monkeypatch, stock
+):
+    from app.api.v2 import stock_trades, trades
+
+    api, roots, _, _ = strategy_books
+    root = roots[0]
+    module = stock_trades if stock else trades
+    original = module.fence_owned_active_portfolios
+    reached, release = asyncio.Event(), asyncio.Event()
+    pid = None
+
+    async def pause(db, owner, identifiers):
+        nonlocal pid
+        await original(db, owner, identifiers)
+        pid = await db.scalar(text("SELECT pg_backend_pid()"))
+        reached.set()
+        await release.wait()
+
+    monkeypatch.setattr(module, "fence_owned_active_portfolios", pause)
+    reader = asyncio.create_task(trade(api, root, stock=stock, key=uuid4()))
+    closer = None
+    try:
+        await asyncio.wait_for(reached.wait(), 5)
+        closer = asyncio.create_task(delete(api, root, intent("Patient")))
+        assert await blocked(api, pid, "close_portfolio")
+        assert not closer.done()
+        release.set()
+        response, closed = await asyncio.wait_for(asyncio.gather(reader, closer), 8)
+        assert response.status_code == 201, response.text
+        assert closed.status_code == 200, closed.text
+        assert (await api.client.get(f"/api/v2/portfolios/{root}/history")).status_code == 404
+    finally:
+        release.set()
+        await finish(reader, *([closer] if closer is not None else []))

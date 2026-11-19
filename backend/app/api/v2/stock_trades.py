@@ -6,6 +6,7 @@ from app.api.v1.stock_trades import PrivateRoute, Symbol, _refusal
 from app.core.deps import DbDep, OwnedActivePortfolioDep, SettingsDep, verify_csrf
 from app.schemas.stock_trades import ContextOut, FillOut, QuoteIn, QuoteOut, TradeIn
 from app.services import stock_trading
+from app.services.portfolios import fence_owned_active_portfolios
 from app.services.trade_math import TradeRefused
 
 router = APIRouter(
@@ -26,9 +27,12 @@ async def post_quote(
     body: QuoteIn, portfolio: OwnedActivePortfolioDep, db: DbDep, settings: SettingsDep
 ) -> QuoteOut:
     try:
-        return await stock_trading.quote(db, portfolio=portfolio, order=body, settings=settings)
+        result = await stock_trading.quote(db, portfolio=portfolio, order=body, settings=settings)
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
+    return result
 
 
 @router.post(
@@ -54,7 +58,9 @@ async def post_trade(
             db, portfolio=portfolio, order=body, settings=settings
         )
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
     if not created:
         response.status_code = 200
     return fill
@@ -73,8 +79,11 @@ async def get_context(
     symbol: Symbol, portfolio: OwnedActivePortfolioDep, db: DbDep, settings: SettingsDep
 ) -> ContextOut:
     try:
-        return await stock_trading.context(
+        result = await stock_trading.context(
             db, portfolio=portfolio, symbol=symbol, settings=settings
         )
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
+    return result

@@ -273,7 +273,19 @@ async def test_crypto_fill_before_closure_preserves_exact_fill_and_basis(
         await blocked(api, writer_pid, "close_portfolio")
         release.set()
         bought, closed = await asyncio.wait_for(asyncio.gather(*tasks), 8)
-        assert bought.status_code == 201, bought.text
+        # The fill commits before closure; its separate final response read can
+        # still lose to the queued closer. That must hide the committed receipt.
+        if bought.status_code == 404:
+            assert bought.json() == {"detail": {"code": "portfolio_unavailable"}}
+            assert bought.headers["cache-control"] == "no-store"
+            assert bought.headers["vary"] == "Cookie, Authorization"
+        else:
+            assert bought.status_code == 201, bought.text
+            assert bought.json()["portfolio_id"] == roots[0]
+            assert bought.json()["symbol"] == "BTC"
+            assert bought.json()["side"] == "buy"
+            assert Decimal(bought.json()["quantity"]) == 1
+            assert Decimal(bought.json()["cash_after"]) == Decimal("9899.50")
         assert closed.status_code == 200, closed.text
         assert await ledger(api, roots[0]) == (
             (Decimal("9899.50"), Decimal(10000)),

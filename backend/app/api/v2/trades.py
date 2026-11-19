@@ -14,6 +14,7 @@ from app.schemas.trades import (
     TradeIn,
 )
 from app.services import trading
+from app.services.portfolios import fence_owned_active_portfolios
 from app.services.trade_math import TradeRefused
 
 router = APIRouter(
@@ -54,7 +55,9 @@ async def post_quote(
             db, portfolio=portfolio, order=body.to_order(), settings=settings
         )
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
     return PortfolioQuoteOut.from_quote(quote)
 
 
@@ -83,7 +86,9 @@ async def post_trade(
             settings=settings,
         )
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
     if not created:
         response.status_code = 200
     return PortfolioFillOut.from_fill(fill)
@@ -101,5 +106,7 @@ async def get_holding(
     try:
         sym, quantity = await trading.holding_quantity(db, portfolio=portfolio, symbol=symbol)
     except TradeRefused as exc:
+        await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
+    await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
     return PortfolioHoldingOut(portfolio_id=portfolio.portfolio_id, symbol=sym, quantity=quantity)

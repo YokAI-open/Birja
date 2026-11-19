@@ -21,13 +21,22 @@ If closure commits before the final fence, normal response is private404
 read transaction; its already-authorized response can complete first. Neither
 server nor browser can retract bytes delivered before closure.
 
+The retained `test_crypto_fill_before_closure_preserves_exact_fill_and_basis`
+case now distinguishes the economic commit from its later response: a queued
+closer may win after the fill commits, requiring exact private404 with no
+receipt. A read-first result must still carry the original root/BTC/buy/quantity
+and exact resulting cash; all original ledger, basis and frozen-state assertions
+remain. This narrow test-file amendment was approved by the parent executor
+after the real regression returned the required private404. Deterministic tests
+separately establish both fence orders; this scheduling case does not replace them.
+
 ## Route → service → query inventory
 
 | Normal surface | Route / service / authoritative query | Final authority and proof |
 |---|---|---|
 | Identity discovery | GET `/api/v2/portfolios` → `list_active_portfolios` → owner/active IDs and names, ID order | Final ordered same-owner active-ID share fence; late hydration closure refuses, read-first blocks actual public closer. `test_metadata_late_read_cannot_publish_closed_identity`, `test_metadata_final_fence_holds_closer_until_response`. Empty discovery creates/grants nothing. |
 | Named metadata | GET `/{id}/metadata` → `get_portfolio_metadata` → exact owner/active ID/name/description | Same final fence and both-order tests above. No name/description returned after closed final fence. |
-| Overview / statement / holdings valuation | GET `/overview`, `/{id}` → `load_portfolio_snapshots` / `get_portfolio` → owner-filtered bounded snapshot + final ordered shared active-membership query | Existing final shared lock includes selected roots and current membership; no new early lock. Closure overlap and private direct-ID cases are checked in Plan10 tests; exact value math is preserved. |
+| Overview / statement / holdings valuation | GET `/overview`, `/{id}` → `load_portfolio_snapshots` / `get_portfolio` → owner-filtered bounded snapshot + final ordered shared active-membership query | Existing final shared lock includes selected roots and current membership; no new early lock. `test_valuation_final_membership_with_public_closure` exercises both public-DELETE orders for overview and detail; direct-ID privacy is covered by the cursor/original matrix. Exact value math is preserved. |
 | Trade History | GET `/{id}/history` → `list_history` → root/owner-filtered seek join `(created_at,id)` | Initial unlocked lifecycle check, bounded root-bound cursor, then final `validate_portfolio_read(final=True)`; same session share locks through response. `test_history_final_fence_holds_closer_until_response`, `test_history_close_before_final_read_refuses_hydrated_data`. |
 | Mixed History / original payment details | GET `/{id}/event-history` → `list_event_history` → owner/root-filtered union then bounded per-kind hydration | Same final shared lifecycle fence. Every embedded original payment join includes owner+root, and seek cursor binds expected root. There is no independent `/event/{id}` original endpoint. Both-order History tests plus Task2 cursor/original privacy matrix cover this surface. |
 | Crypto preview / holding | POST `/{id}/trades/quote`, GET `/{id}/holdings/{symbol}` → trading quote/holding service | Initial captured owner/active resolver and service account check; final route fence after value hydration, including quote-bearing reprice refusals. Task2 late-response and private-read matrix. |
@@ -44,9 +53,29 @@ It exposes no retained name, money, History or original execution receipt. This
 does not weaken any normal read/retry owner-active check. No trash/restore/export
 or normal closed-book detail endpoint is added.
 
-## Remaining execution proof
+## Executable evidence and remaining integration
 
-Task1's metadata/History both-order fence tests are implemented. Task2 adds final
-route fences and the complete cursor/original/retry matrix before Plan10 can
-complete. Whole critical coverage, browser proof and encrypted/TLS qualification
-remain Plans16–18; this inventory is not evidence that those gates passed.
+All selectors below are in `tests/test_portfolio_closure_privacy.py`, with real
+restricted `birja_app` HTTP sessions and real PostgreSQL/public DELETE:
+
+- `metadata_late_read`, `metadata_final_fence`: identity discovery/metadata,
+  both orderings, including post-hydration closure and an observed waiting closer.
+- `history_close_before_final_read`, `history_final_fence`: trade/mixed History,
+  both orderings and an observed waiting closer.
+- `valuation_final_membership`: overview/detail, both orderings, existing final
+  membership lock retained until response cleanup.
+- `late_financial_read_or_original_receipt`: crypto/stock quote, holding/context,
+  new fill, original-key retry and quote-bearing reprice refusal after closure.
+- `financial_final_fence`: crypto/stock committed-fill response wins, actual
+  closer blocked until the request session releases its root share lock.
+- `cursor_original_retry`: original dividend/correction details, owner/root-bound
+  seek cursors, guessed IDs, original execution keys and same-name new roots.
+- `retired_finance`: every retired implicit financial route refuses without
+  selecting or creating a replacement root.
+
+Scheduler jobs are a separate restricted trust boundary: they do not serve
+normal authenticated HTTP or original-receipt URLs. Existing authority/admission
+tests exercise both app/scheduler mutation denials and the app-only exact closure
+signature; no scheduler grant is broadened for these final browser-read fences.
+Whole critical coverage, browser proof and encrypted/TLS qualification remain
+Plans16–18; this inventory is not evidence that those gates passed.
