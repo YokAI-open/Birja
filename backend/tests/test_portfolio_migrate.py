@@ -21,6 +21,191 @@ __all__ = ["portfolio_migration_db"]
 
 URL = "postgresql+asyncpg://birja_migrator:synthetic@postgres:5432/birja"
 
+PRIOR_OBJECT_DRIFT = [
+    (
+        "policy",
+        "CREATE POLICY unexpected_review_policy ON accounts USING (true)",
+        "SELECT EXISTS(SELECT FROM pg_policy WHERE polname='unexpected_review_policy')",
+    ),
+    (
+        "view",
+        "CREATE VIEW unexpected_review_view AS SELECT id FROM accounts",
+        "SELECT to_regclass('public.unexpected_review_view') IS NOT NULL",
+    ),
+    (
+        "materialized",
+        "CREATE MATERIALIZED VIEW unexpected_review_materialized AS "
+        "SELECT id FROM accounts WITH NO DATA",
+        "SELECT to_regclass('public.unexpected_review_materialized') IS NOT NULL",
+    ),
+    (
+        "foreign",
+        "CREATE FOREIGN DATA WRAPPER review_cr01_fdw; "
+        "CREATE SERVER review_cr01_server FOREIGN DATA WRAPPER review_cr01_fdw; "
+        "CREATE FOREIGN TABLE unexpected_review_foreign(id bigint) SERVER review_cr01_server",
+        "SELECT to_regclass('public.unexpected_review_foreign') IS NOT NULL",
+    ),
+    (
+        "rule",
+        "CREATE RULE unexpected_review_rule AS ON UPDATE TO accounts DO INSTEAD NOTHING",
+        "SELECT EXISTS(SELECT FROM pg_rewrite WHERE rulename='unexpected_review_rule')",
+    ),
+    (
+        "rls",
+        "ALTER TABLE accounts ENABLE ROW LEVEL SECURITY",
+        "SELECT relrowsecurity FROM pg_class WHERE oid='accounts'::regclass",
+    ),
+    (
+        "force-rls",
+        "ALTER TABLE accounts FORCE ROW LEVEL SECURITY",
+        "SELECT relforcerowsecurity FROM pg_class WHERE oid='accounts'::regclass",
+    ),
+    (
+        "partitioned",
+        "CREATE TABLE unexpected_review_partitioned(id bigint) PARTITION BY RANGE(id)",
+        "SELECT to_regclass('public.unexpected_review_partitioned') IS NOT NULL",
+    ),
+    (
+        "type",
+        "CREATE TYPE unexpected_review_enum AS ENUM ('a')",
+        "SELECT to_regtype('public.unexpected_review_enum') IS NOT NULL",
+    ),
+    (
+        "collation",
+        'CREATE COLLATION unexpected_review_collation FROM pg_catalog."C"',
+        "SELECT EXISTS(SELECT FROM pg_collation WHERE collname='unexpected_review_collation')",
+    ),
+    (
+        "operator",
+        "CREATE OPERATOR public.=== (FUNCTION=pg_catalog.int8eq,LEFTARG=bigint,RIGHTARG=bigint)",
+        "SELECT EXISTS(SELECT FROM pg_operator WHERE oprnamespace='public'::regnamespace "
+        "AND oprname='===')",
+    ),
+    (
+        "statistics",
+        "CREATE STATISTICS unexpected_review_statistics ON user_id,cash FROM accounts",
+        "SELECT EXISTS(SELECT FROM pg_statistic_ext WHERE stxname='unexpected_review_statistics')",
+    ),
+    (
+        "unlogged",
+        "ALTER TABLE prices SET UNLOGGED",
+        "SELECT relpersistence='u' FROM pg_class WHERE oid='prices'::regclass",
+    ),
+    (
+        "composite",
+        "CREATE TYPE unexpected_review_composite AS (id bigint)",
+        "SELECT to_regtype('public.unexpected_review_composite') IS NOT NULL",
+    ),
+    (
+        "conversion",
+        "CREATE CONVERSION unexpected_review_conversion FOR 'UTF8' TO 'LATIN1' "
+        "FROM pg_catalog.utf8_to_iso8859_1",
+        "SELECT EXISTS(SELECT FROM pg_conversion WHERE conname='unexpected_review_conversion')",
+    ),
+    (
+        "opclass-family",
+        "CREATE OPERATOR CLASS public.unexpected_review_opclass FOR TYPE bigint USING btree AS "
+        "OPERATOR 1 <(bigint,bigint), OPERATOR 2 <=(bigint,bigint), "
+        "OPERATOR 3 =(bigint,bigint), OPERATOR 4 >=(bigint,bigint), "
+        "OPERATOR 5 >(bigint,bigint), FUNCTION 1 pg_catalog.btint8cmp(bigint,bigint)",
+        "SELECT EXISTS(SELECT FROM pg_opclass WHERE opcname='unexpected_review_opclass')",
+    ),
+    (
+        "extension",
+        # Package-free privileged drift fixture: the builtin extension is not
+        # relocatable through DDL. Restore only this owned catalogue field after
+        # asserting that application admission kept the hostile state intact.
+        "UPDATE pg_extension SET extnamespace='public'::regnamespace WHERE extname='plpgsql'",
+        "SELECT EXISTS(SELECT FROM pg_extension WHERE extname='plpgsql' "
+        "AND extnamespace='public'::regnamespace)",
+    ),
+]
+
+
+async def prior_object_evidence(admin, identity):
+    from app.db.portfolio_bootstrap import CATALOGUE_0023_SQL, CATALOGUE_SQL
+    from tests.portfolio_closure_fixtures import retained_snapshot
+
+    async with admin.connect() as conn:
+        rows = await retained_snapshot(conn)
+        for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents"):
+            if await conn.scalar(text("SELECT to_regclass(:t)"), {"t": "public." + table}):
+                rows[table] = tuple(
+                    (
+                        await conn.execute(
+                            text(f"SELECT to_jsonb(t)::text FROM {table} t ORDER BY id")  # noqa: S608
+                        )
+                    ).scalars()
+                )
+                rows[table + "_id_seq"] = tuple(
+                    (
+                        await conn.execute(
+                            text(f"SELECT last_value,is_called FROM {table}_id_seq")  # noqa: S608
+                        )
+                    ).one()
+                )
+        return (
+            await conn.scalar(text("SELECT version_num FROM alembic_version")),
+            await conn.scalar(text(CATALOGUE_SQL)),
+            await conn.scalar(text(CATALOGUE_0023_SQL)),
+            rows,
+            await conn.scalar(text(identity)),
+        )
+
+
+@pytest.mark.parametrize("revision", ["0020", "0021", "0022"])
+@pytest.mark.parametrize(
+    "kind,damage,identity", PRIOR_OBJECT_DRIFT, ids=[case[0] for case in PRIOR_OBJECT_DRIFT]
+)
+async def test_unrecognized_prior_objects_refuse_without_child_or_mutation(
+    portfolio_migration_db, revision, kind, damage, identity
+):
+    from tests.test_portfolio_management_grants import sql
+
+    child, _ = await prepare_pre_closure(portfolio_migration_db, revision)
+    foreign_created = False
+    try:
+        async with portfolio_migration_db.begin() as admin:
+            if kind == "foreign":
+                assert not await admin.scalar(
+                    text(
+                        "SELECT EXISTS(SELECT FROM pg_foreign_data_wrapper "
+                        "WHERE fdwname='review_cr01_fdw')"
+                    )
+                )
+            await sql(admin, damage)
+        foreign_created = kind == "foreign"
+        before = await prior_object_evidence(portfolio_migration_db, identity)
+        assert before[-1] is True
+        # The first RED case is exactly the reviewer's disabled-policy gap.
+        with pytest.raises(ValueError, match="Unrecognized"):
+            async with child.connect() as conn:
+                await migration.require_migrator(conn)
+        with (
+            patch.object(migration, "create_async_engine", return_value=child),
+            patch.object(migration, "database_connect_args", return_value={}),
+            patch.object(migration.asyncio, "create_subprocess_exec", AsyncMock()) as spawn,
+        ):
+            with pytest.raises(ValueError, match="Unrecognized"):
+                await migration.migrate(SimpleNamespace(env="prod", database_url=URL))
+            spawn.assert_not_awaited()
+        after = await prior_object_evidence(portfolio_migration_db, identity)
+        assert after == before
+        assert after[-1] is True  # Keep the unrecognized object for diagnosis.
+    finally:
+        await child.dispose()
+        if foreign_created:
+            # Only test-owned cluster objects, after retention/no-mutation proof.
+            async with portfolio_migration_db.begin() as admin:
+                await sql(admin, "DROP FOREIGN DATA WRAPPER review_cr01_fdw CASCADE")
+        if kind == "extension":
+            async with portfolio_migration_db.begin() as admin:
+                await sql(
+                    admin,
+                    "UPDATE pg_extension SET extnamespace='pg_catalog'::regnamespace "
+                    "WHERE extname='plpgsql'",
+                )
+
 
 async def prepare_pre_closure(engine, revision, *, runtime=True, private=True):
     from uuid import uuid4
