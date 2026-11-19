@@ -107,7 +107,10 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
         if revision in {"0022", "0023"}:
             functions |= {"check_portfolio_terminal_root()"}
         if revision == "0023":
-            functions |= {"close_portfolio(bigint,bigint,uuid,text,text)"}
+            functions |= {
+                "close_portfolio(bigint,bigint,uuid,text,text)",
+                "check_stock_terminal_clock()",
+            }
         return MIGRATION_TABLES | _CLOSURE_TABLES, frozenset(functions)
     if revision is not None and revision not in {f"{n:04}" for n in range(1, 21)}:
         raise RuntimeError("unexpected disposable migration revision inventory")

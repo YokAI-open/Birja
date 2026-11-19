@@ -147,3 +147,35 @@ ALTER FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text) OWNER TO bir
 REVOKE ALL ON FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text)
  FROM PUBLIC,birja_app,birja_scheduler;
 GRANT EXECUTE ON FUNCTION public.close_portfolio(bigint,bigint,uuid,text,text) TO birja_app;
+
+-- A late global timestamp must never be inserted into a frozen stock boundary.
+-- Inspect an ALREADY-held instrument gate: acquiring one behind a root/holding
+-- lock here would reverse the financial lock order and could deadlock closure.
+CREATE FUNCTION public.check_stock_terminal_clock() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $terminal$
+DECLARE stamp timestamptz; boundary timestamptz;
+BEGIN
+ IF NOT EXISTS(SELECT FROM pg_catalog.pg_locks l
+   WHERE l.pid=pg_backend_pid() AND l.locktype='advisory' AND l.granted
+   AND l.mode='ExclusiveLock' AND l.objsubid=1
+   AND l.database=(SELECT oid FROM pg_catalog.pg_database WHERE datname=current_database())
+   AND ((l.classid::bigint << 32) | l.objid::bigint)=
+      hashtextextended('birja.stock.instrument:' || NEW.coin_id::text,0)) THEN
+   RAISE EXCEPTION 'stock_gate_required' USING ERRCODE='23514'; END IF;
+ IF TG_TABLE_NAME='stock_ownership_movements' THEN stamp:=NEW.recorded_at;
+ ELSIF TG_TABLE_NAME='stock_split_applications' THEN stamp:=NEW.processed_at;
+ ELSE RAISE EXCEPTION 'invalid stock terminal clock target' USING ERRCODE='23514'; END IF;
+ SELECT max(c.closed_at) INTO boundary FROM public.portfolio_stock_closures c
+   WHERE c.coin_id=NEW.coin_id;
+ IF stamp IS NULL OR NOT isfinite(stamp) OR (boundary IS NOT NULL AND stamp<=boundary) THEN
+   RAISE EXCEPTION 'stock_terminal_clock' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $terminal$;
+
+ALTER FUNCTION public.check_stock_terminal_clock() OWNER TO birja_migrator;
+REVOKE ALL ON FUNCTION public.check_stock_terminal_clock() FROM PUBLIC,birja_app,birja_scheduler;
+CREATE TRIGGER stock_terminal_clock BEFORE INSERT ON public.stock_ownership_movements
+ FOR EACH ROW EXECUTE FUNCTION public.check_stock_terminal_clock();
+CREATE TRIGGER stock_terminal_clock BEFORE INSERT ON public.stock_split_applications
+ FOR EACH ROW EXECUTE FUNCTION public.check_stock_terminal_clock();

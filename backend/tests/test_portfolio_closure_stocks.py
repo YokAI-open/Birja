@@ -43,7 +43,10 @@ async def test_multi_stock_complete_service_commits_original_and_closed_replay(s
         ).scalar_one() == 2
 
 
-async def test_corrupt_one_of_multiple_histories_rolls_back_all_new_evidence(stock_authority):
+@pytest.mark.parametrize("instrument", ["first", "second"])
+async def test_corrupt_one_of_multiple_histories_rolls_back_all_new_evidence(
+    stock_authority, instrument
+):
     from app.services.portfolio_closure import ClosureIntent, close_portfolio
     from app.services.stock_ownership import OwnershipHeld
 
@@ -51,13 +54,25 @@ async def test_corrupt_one_of_multiple_histories_rolls_back_all_new_evidence(sto
     await proof_grants(admin)
     user, portfolio = books["roots"][0]
     async with migrator.begin() as conn:
-        await conn.execute(text("ALTER TABLE trades DISABLE TRIGGER USER"))
-        await conn.execute(
-            text("UPDATE trades SET quantity=quantity-1 WHERE id=(SELECT min(id) FROM trades)")
-        )
-        await conn.execute(text("ALTER TABLE trades ENABLE TRIGGER USER"))
+        if instrument == "first":
+            await conn.execute(text("ALTER TABLE trades DISABLE TRIGGER USER"))
+            await conn.execute(
+                text("UPDATE trades SET quantity=quantity-1 WHERE id=(SELECT min(id) FROM trades)")
+            )
+            await conn.execute(text("ALTER TABLE trades ENABLE TRIGGER USER"))
+        else:
+            # Preserve valid tail/holding arithmetic so SQL's derived boundary
+            # passes; ONLY the full second-instrument baseline proof catches it.
+            await conn.execute(text("ALTER TABLE stock_ownership_movements DISABLE TRIGGER USER"))
+            await conn.execute(
+                text("""UPDATE stock_ownership_movements m
+                SET economic_at=s.journal_start_at-interval '1 second'
+                FROM stock_action_state s WHERE s.coin_id=m.coin_id AND m.coin_id=:c"""),
+                {"c": books["stocks"][1]},
+            )
+            await conn.execute(text("ALTER TABLE stock_ownership_movements ENABLE TRIGGER USER"))
     async with AsyncSession(app) as db:
-        with pytest.raises(OwnershipHeld, match="fill_mismatch"):
+        with pytest.raises(OwnershipHeld, match="fill_mismatch|history_gap"):
             await close_portfolio(db, ClosureIntent(user, portfolio, uuid4(), "Strategy"))
         assert not db.in_transaction()
     async with admin.connect() as conn:

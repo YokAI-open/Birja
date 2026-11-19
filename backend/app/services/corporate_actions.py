@@ -61,6 +61,7 @@ from app.services.stock_ownership import (
     acquire_stock_gate,
     append_stock_movement,
     assert_ownership_consistent,
+    assert_stock_terminal_clock,
     ownership_digest,
     portfolio_digest_rows,
     reconstruct_stock_quantity,
@@ -670,6 +671,8 @@ async def apply_due_actions(
                     state.unit_epoch + 1,
                 )
             )
+        processed_at = await _clock(db)
+        await assert_stock_terminal_clock(db, coin_id, processed_at)
         application = StockSplitApplication(
             coin_id=coin_id,
             economic_event_id=revision.event_id,
@@ -683,7 +686,7 @@ async def apply_due_actions(
             before_digest=ownership_digest(before),
             after_digest=ownership_digest(after),
             owner_digest_version=2,
-            processed_at=await _clock(db),
+            processed_at=processed_at,
         )
         db.add(application)
         state.unit_epoch += 1

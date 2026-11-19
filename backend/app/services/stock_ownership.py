@@ -342,6 +342,7 @@ async def append_stock_movement(
         ):
             raise OwnershipHeld("split_mismatch")
         economic_at = application.cutoff
+    await assert_stock_terminal_clock(db, movement.coin_id, now)
     sequence = rows[-1].sequence + 1 if rows else 1
     row = StockOwnershipMovement(
         coin_id=movement.coin_id,
@@ -568,6 +569,25 @@ async def _has_instrument_gate(db: AsyncSession, coin_id: int) -> bool:
             )
         ).scalar_one()
     )
+
+
+async def assert_stock_terminal_clock(db: AsyncSession, coin_id: int, at: datetime) -> None:
+    """Never backdate later global activity into a frozen ownership boundary.
+
+    Inspect an already-held gate; never acquire it after a root/holding lock.
+    The historical per-stock closure table exists before the successor schema.
+    """
+    if not await _has_instrument_gate(db, coin_id):
+        raise OwnershipHeld("invalid_closure")
+    boundary = (
+        await db.execute(
+            select(func.max(PortfolioStockClosure.closed_at)).where(
+                PortfolioStockClosure.coin_id == coin_id,
+            )
+        )
+    ).scalar_one()
+    if not utc(at) or boundary is not None and at <= boundary:
+        raise OwnershipHeld("invalid_closure")
 
 
 async def assert_closure_ownership_consistent(db: AsyncSession) -> None:
