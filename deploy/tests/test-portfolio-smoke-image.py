@@ -235,6 +235,21 @@ class ImageCommands:
 
 
 class CurrentImageContracts(unittest.TestCase):
+    def test_prepared14_requires_explicit_diagnostic_and_preimport_authority(self):
+        code = smoke.fresh_authority_program(upgraded=True, upgraded_from='0014')
+        current = smoke.admitted_program(code, '0023', prepared_legacy14=True)
+        compile(current, '<prepared14>', 'exec')
+        self.assertIn("version_num FROM alembic_version')!='0014'", current)
+        self.assertIn("if await require_migrator(authority)!='0014'", current)
+        self.assertLess(current.index('require_source()'), current.index('asyncio.run(smoke_admit())'))
+        self.assertLess(current.index('asyncio.run(smoke_admit())'), current.rindex('from app.services.portfolio_closure import'))
+        self.assertIn('SMOKE_LEGACY14=False', smoke.admitted_program(code, '0023'))
+        for wrong, revision in ((code, '0020'), (code, '0017'),
+                (smoke.fresh_authority_program(upgraded=True), '0023'),
+                (smoke.fresh_authority_program(), '0023')):
+            with self.subTest(revision=revision), self.assertRaises(ValueError):
+                smoke.admitted_program(wrong, revision, prepared_legacy14=True)
+
     def test_program_admits_schema_before_application_imports_and_wires_roles(self):
         fixture = smoke.selected_fixture(sources_module, '0023')
         for mode in ('create', 'verify', 'projection'):

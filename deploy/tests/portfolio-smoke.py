@@ -293,13 +293,17 @@ def selected_fixture(sources, revision, *, archive=None, archive_sha=None):
     return fixture
 
 
-def admitted_program(code, revision):
+def admitted_program(code, revision, *, prepared_legacy14=False):
     """Read exact schema through verified TLS before application imports."""
     if revision not in ("0017", "0020", "0023"):
         raise ValueError("unsupported smoke source/schema")
     create = bool(re.search(r"^MODE\s*=\s*['\"]create['\"]", code, re.MULTILINE))
+    if prepared_legacy14 and (revision != "0023" or not create
+            or not code.startswith("UPGRADED=True\nUPGRADED_FROM='0014'\n")):
+        raise ValueError("explicit current legacy14 diagnostic required")
     prelude = (
         "SMOKE_REVISION=" + repr(revision) + "\nSMOKE_CREATE=" + repr(create) + "\n"
+        + "SMOKE_LEGACY14=" + repr(prepared_legacy14) + "\n"
     )
     prelude += r"""
 import asyncio,asyncpg,os,ssl
@@ -311,12 +315,25 @@ async def smoke_admit():
  if "DATABASE='birja_restore_test'" in SMOKE_BODY:parts=parts._replace(path='/birja_restore_test')
  conn=await asyncpg.connect(urlunsplit(parts),ssl=ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE']))
  try:
-  if SMOKE_CREATE:
+  if SMOKE_LEGACY14:
+   if await conn.fetchval('SELECT version_num FROM alembic_version')!='0014':
+    raise ValueError('prepared legacy14 schema required before import')
+  elif SMOKE_CREATE:
    if await conn.fetchval("SELECT count(*) FROM pg_tables WHERE schemaname='public'"):
     raise ValueError('empty owned schema required before import')
   elif await conn.fetchval('SELECT version_num FROM alembic_version')!=SMOKE_REVISION:
    raise ValueError('selected source/schema mismatch before application import')
  finally:await conn.close()
+ if SMOKE_LEGACY14:
+  from sqlalchemy.ext.asyncio import create_async_engine
+  from app.db.portfolio_migrate import require_migrator,require_source
+  require_source()
+  engine=create_async_engine(os.environ['DATABASE_URL'],connect_args={'ssl':ssl.create_default_context(cafile=os.environ['DATABASE_SSL_CA_FILE'])})
+  try:
+   async with engine.connect() as authority:
+    if await require_migrator(authority)!='0014':
+     raise ValueError('authenticated legacy14 authority required before import')
+  finally:await engine.dispose()
 asyncio.run(smoke_admit())
 """
     return "SMOKE_BODY=" + repr(code) + "\n" + prelude + code
@@ -834,7 +851,8 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                     code = management_role_program(code)
                 if revision == "0023":
                     code = closure_role_program(code)
-                code = admitted_program(code, revision)
+                code = admitted_program(code, revision, prepared_legacy14=(
+                    upgraded_bootstrap and upgraded_from == "0014"))
                 sources.verify_image(
                     binding,
                     json.loads(call(["docker", "image", "inspect", binding["id"]])),
