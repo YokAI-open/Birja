@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 
 from app.api.v1.stock_trades import PRIVATE
 from app.core.config import Settings
+from app.schemas.portfolio_closure import PortfolioClosure
 from app.schemas.portfolios import PortfolioCreate, PortfolioPatch
 from app.services.ratelimit import RateLimited, enforce, ip_bucket
 
@@ -90,6 +91,27 @@ async def enforce_creation_attempt(redis: Redis, owner: int, ip: str, settings: 
         ) from None
 
 
+async def enforce_closure_attempt(redis: Redis, owner: int, ip: str, settings: Settings) -> None:
+    """Separate bounded attempt buckets; the SQL outcome quota remains durable."""
+    try:
+        await enforce(
+            redis,
+            f"sim:rl:portfolio_close:ip:{ip_bucket(ip)}",
+            settings.portfolio_create_ip_limit,
+            60,
+        )
+        await enforce(
+            redis,
+            f"sim:rl:portfolio_close:owner:{owner}",
+            settings.portfolio_create_owner_limit,
+            60,
+        )
+    except RateLimited as exc:
+        raise HTTPException(
+            429, detail={"code": "rate_limited"}, headers={"Retry-After": str(exc.retry_after)}
+        ) from None
+
+
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -115,5 +137,23 @@ async def read_management_body(
         value = json.loads(body.decode("utf-8"), object_pairs_hook=_object)
         schema = PortfolioPatch if patch else PortfolioCreate
         return schema.model_validate(value)
+    except ValueError, ValidationError, RecursionError:
+        raise HTTPException(422, detail={"code": "invalid_input"}) from None
+
+
+async def read_closure_body(request: Request) -> PortfolioClosure:
+    """A dedicated parser invoked only after identity and CSRF validation."""
+    media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media != "application/json":
+        raise HTTPException(415, detail={"code": "unsupported_media_type"})
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_BODY_BYTES:
+            raise HTTPException(413, detail={"code": "body_too_large"})
+        body.extend(chunk)
+    try:
+        return PortfolioClosure.model_validate(
+            json.loads(body.decode("utf-8"), object_pairs_hook=_object)
+        )
     except ValueError, ValidationError, RecursionError:
         raise HTTPException(422, detail={"code": "invalid_input"}) from None

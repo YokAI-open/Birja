@@ -9,6 +9,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.v1.router import api_router
+from app.api.v1.stock_trades import PRIVATE
 from app.api.v2.router import api_router as portfolio_api_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -87,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except SchemaAdmissionError:
                 return JSONResponse(
                     status_code=503,
+                    headers={**PRIVATE, "Retry-After": "5"},
                     content={
                         "detail": {
                             "code": "schema_unavailable",

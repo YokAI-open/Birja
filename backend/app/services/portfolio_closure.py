@@ -1,9 +1,11 @@
 """Atomic terminal closure; no provider I/O or normal closed-book read surface."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +32,39 @@ class ClosureResult:
     portfolio_id: int
     outcome: Literal["closed", "confirmation_changed"]
     replayed: bool
+
+
+async def close_owned_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureResult:
+    """Map private transport dispositions without weakening the transaction proof."""
+    try:
+        result = await close_portfolio(db, original)
+    except DBAPIError as exc:
+        state = getattr(exc.orig, "sqlstate", None)
+        message = getattr(getattr(exc.orig, "__cause__", None), "message", None)
+        if state == "P0002" and message == "portfolio_unavailable":
+            raise HTTPException(404, detail={"code": "portfolio_unavailable"}) from None
+        if state == "23505" and message == "closure_intent_conflict":
+            raise HTTPException(409, detail={"code": "closure_intent_conflict"}) from None
+        if state == "P0001" and message == "closure_quota":
+            now = datetime.now(UTC)
+            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            raise HTTPException(
+                429,
+                detail={"code": "closure_quota"},
+                headers={"Retry-After": str(max(1, int((midnight - now).total_seconds()) + 1))},
+            ) from None
+        raise HTTPException(
+            503, detail={"code": "service_unavailable"}, headers={"Retry-After": "5"}
+        ) from None
+    except OwnershipHeld:
+        raise HTTPException(
+            503, detail={"code": "service_unavailable"}, headers={"Retry-After": "5"}
+        ) from None
+    if result.outcome == "confirmation_changed":
+        # The service already committed this durable terminal refusal. A delayed
+        # original can only replay it, even if the current name changes back.
+        raise HTTPException(409, detail={"code": "portfolio_confirmation_changed"})
+    return result
 
 
 async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureResult:

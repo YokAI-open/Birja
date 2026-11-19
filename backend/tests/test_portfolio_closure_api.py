@@ -1,5 +1,8 @@
 """Actual authenticated DELETE requests against restricted current PostgreSQL."""
 
+import asyncio
+import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -52,8 +55,14 @@ async def closure_api(authority, settings):
             owners.append(uid)
         try:
             yield SimpleNamespace(
-                client=clients[0], other=clients[1], uid=owners[0], other_uid=owners[1],
-                app=app, migrator=migrator, restricted=restricted, admin=admin,
+                client=clients[0],
+                other=clients[1],
+                uid=owners[0],
+                other_uid=owners[1],
+                app=app,
+                migrator=migrator,
+                restricted=restricted,
+                admin=admin,
             )
         finally:
             for client in clients:
@@ -62,7 +71,8 @@ async def closure_api(authority, settings):
 
 async def create(api, name="Strategy", *, key=None, client=None):
     return await (client or api.client).post(
-        "/api/v2/portfolios", json={"name": name},
+        "/api/v2/portfolios",
+        json={"name": name},
         headers={**CSRF, "Idempotency-Key": str(key or uuid4())},
     )
 
@@ -73,7 +83,10 @@ def intent(name="Strategy", *, key=None):
 
 async def delete(api, root, payload=None, *, client=None):
     return await (client or api.client).request(
-        "DELETE", f"/api/v2/portfolios/{root}", json=payload or intent(), headers=CSRF,
+        "DELETE",
+        f"/api/v2/portfolios/{root}",
+        json=payload or intent(),
+        headers=CSRF,
     )
 
 
@@ -91,5 +104,261 @@ async def test_confirmation_actual_delete_and_repeat_are_minimal_private(closure
     assert replay.status_code == 200 and replay.json() == first.json()
     assert (await api.client.get(f"/api/v2/portfolios/{root}/metadata")).status_code == 404
     async with api.migrator.connect() as conn:
-        assert (await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))).scalar_one() == 1
-        assert (await conn.execute(text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": int(root)})).one() == (10000, 10000)
+        assert (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one() == 1
+        assert (
+            await conn.execute(
+                text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": int(root)}
+            )
+        ).one() == (10000, 10000)
+
+
+async def state(api):
+    async with api.migrator.connect() as conn:
+        return (
+            await conn.execute(
+                text("SELECT id,name,cash,starting_cash,closed_at FROM accounts ORDER BY id")
+            )
+        ).all(), (
+            await conn.execute(text("SELECT count(*) FROM portfolio_closure_intents"))
+        ).scalar_one()
+
+
+async def test_csrf_and_identity_precede_untrusted_body(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    before = await state(api)
+    consumed = False
+
+    async def dangerous():
+        nonlocal consumed
+        consumed = True
+        yield b"{" + b" " * 9000
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=api.app), base_url="https://test"
+    ) as guest:
+        r = await guest.request("DELETE", f"/api/v2/portfolios/{root}", content=dangerous())
+    assert r.status_code == 401 and not consumed
+    r = await api.client.request("DELETE", f"/api/v2/portfolios/{root}", content=dangerous())
+    assert r.status_code == 403 and not consumed
+    assert r.headers["cache-control"] == "no-store"
+    assert await state(api) == before
+
+
+async def test_malformed_exact_body_and_canonical_review_refuse_without_writes(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    before = await state(api)
+    original = intent()
+    bodies = [
+        {},
+        [],
+        None,
+        {**original, "owner": api.uid},
+        {**original, "cash": "10000"},
+        {**original, "intent_key": str(uuid4()).upper()},
+        {**original, "intent_key": str(uuid4()).replace("-", "")},
+        {**original, "intent_key": "00000000-0000-0000-0000-000000000000"},
+        {**original, "intent_key": 123},
+        {**original, "confirmation_name": None},
+        {**original, "confirmation_name": " Strategy "},
+        {**original, "confirmation_name": "e\u0301"},
+        {**original, "confirmation_name": "x" * 61},
+        {**original, "confirmation_name": "bad\x00"},
+        {**original, "policy_version": "other"},
+    ]
+    for payload in bodies:
+        r = await api.client.request(
+            "DELETE",
+            f"/api/v2/portfolios/{root}",
+            content=json.dumps(payload),
+            headers={**CSRF, "content-type": "application/json"},
+        )
+        assert r.status_code == 422, r.text
+        assert r.json() == {"detail": {"code": "invalid_input"}}
+        assert r.headers["cache-control"] == "no-store"
+    for raw, media, code in [
+        (b"{", "application/json", 422),
+        (b'{"intent_key":"x","intent_key":"y"}', "application/json", 422),
+        (b"{}", "text/plain", 415),
+        (b"[" * 1500, "application/json", 422),
+    ]:
+        r = await api.client.request(
+            "DELETE",
+            f"/api/v2/portfolios/{root}",
+            content=raw,
+            headers={**CSRF, "content-type": media},
+        )
+        assert r.status_code == code
+    assert await state(api) == before
+    # The exact bounded body remains valid; one extra byte is rejected even
+    # when the Content-Length header claims the request is small.
+    raw = json.dumps(original).encode().ljust(8192)
+    for declared in (None, "1", "8193"):
+
+        async def oversized():
+            yield raw[:4000]
+            yield raw[4000:] + b" "
+
+        headers = {**CSRF, "content-type": "application/json"}
+        if declared is not None:
+            headers["content-length"] = declared
+        r = await api.client.request(
+            "DELETE", f"/api/v2/portfolios/{root}", content=oversized(), headers=headers
+        )
+        assert r.status_code == 413
+    assert await state(api) == before
+    r = await api.client.request(
+        "DELETE",
+        f"/api/v2/portfolios/{root}",
+        content=raw,
+        headers={**CSRF, "content-type": "application/json; charset=utf-8"},
+    )
+    assert r.status_code == 200
+
+
+async def test_foreign_missing_and_path_boundaries_are_private(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    before = await state(api)
+    for target, client in [(root, api.other), ("999999999", api.client)]:
+        r = await delete(api, target, client=client)
+        assert r.status_code == 404 and r.json() == {"detail": {"code": "portfolio_unavailable"}}
+        assert r.headers["vary"] == "Cookie, Authorization"
+    for target in ("0", "-1", "01", "1.0", "9223372036854775808", "x" * 20):
+        r = await delete(api, target)
+        assert r.status_code == 422 and r.json() == {"detail": {"code": "invalid_input"}}
+        assert r.headers["cache-control"] == "no-store"
+    assert await state(api) == before
+
+
+async def test_confirmation_rename_refusal_and_key_conflict_are_durable(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    payload = intent("Wrong reviewed name")
+    r = await delete(api, root, payload)
+    assert r.status_code == 409 and r.json() == {
+        "detail": {"code": "portfolio_confirmation_changed"}
+    }
+    async with api.migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT outcome FROM portfolio_closure_intents"))
+        ).scalar_one() == "confirmation_changed"
+    changed = await delete(api, root, {**payload, "confirmation_name": "Strategy"})
+    assert (
+        changed.status_code == 409 and changed.json()["detail"]["code"] == "closure_intent_conflict"
+    )
+    assert (await delete(api, root, intent())).status_code == 200
+
+
+async def test_attempt_limits_have_ttl_and_replays_cannot_rotate_keys(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    api.app.state.settings = api.app.state.settings.model_copy(
+        update={"portfolio_create_owner_limit": 2}
+    )
+    payload = intent()
+    assert (await delete(api, root, payload)).status_code == 200
+    assert (await delete(api, root, payload)).status_code == 200
+    r = await delete(api, root, intent())
+    assert r.status_code == 429 and 0 < int(r.headers["Retry-After"]) <= 60
+    redis = api.app.state.redis
+    keys = [k async for k in redis.scan_iter(match="sim:rl:portfolio_close:*")]
+    assert len(keys) == 2
+    assert all([0 < await redis.ttl(k) <= 60 for k in keys])
+    assert (await state(api))[1] == 1
+
+
+async def test_real_owner_lock_timeout_refuses_then_retry_can_finish(closure_api):
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    payload = intent()
+    before = await state(api)
+    async with api.migrator.begin() as conn:
+        await conn.execute(text("SELECT id FROM users WHERE id=:u FOR UPDATE"), {"u": api.uid})
+        r = await asyncio.wait_for(delete(api, root, payload), timeout=6)
+        assert r.status_code == 503 and r.headers["Retry-After"] == "5"
+        assert r.json() == {"detail": {"code": "service_unavailable"}}
+        assert await state(api) == before
+    assert (await delete(api, root, payload)).status_code == 200
+
+
+async def test_corrupt_retained_evidence_and_redis_errors_refuse_privately(
+    closure_api, monkeypatch
+):
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.api.v2 import portfolio_management
+
+    api = closure_api
+    root = (await create(api)).json()["id"]
+
+    async def unavailable(*args, **kwargs):
+        raise RedisConnectionError("secret redis details")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(portfolio_management, "enforce", unavailable)
+        r = await delete(api, root)
+    assert r.status_code == 503 and "secret" not in r.text and r.headers["Retry-After"] == "5"
+    assert (await state(api))[1] == 0
+    assert (await delete(api, root)).status_code == 200
+    async with api.migrator.begin() as conn:
+        for table in ("portfolio_lifecycle_closures", "portfolio_closure_intents"):
+            await conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))  # noqa: S608
+            await conn.execute(
+                text(f"UPDATE {table} SET confirmation_name='Corrupt' WHERE portfolio_id=:p"),  # noqa: S608
+                {"p": int(root)},
+            )
+            await conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))  # noqa: S608
+    before = await state(api)
+    r = await delete(api, root)
+    assert r.status_code == 503 and r.headers["Retry-After"] == "5"
+    # The global write-admission guard may refuse corrupt retained names even
+    # before the route's complete proof. That earlier refusal is private too.
+    assert r.json()["detail"]["code"] == "schema_unavailable"
+    assert r.headers["cache-control"] == "no-store"
+    assert await state(api) == before
+
+
+async def test_confirmation_with_real_holdings_freezes_without_liquidation(closure_api):
+    from tests.helpers import put_price
+
+    api = closure_api
+    root = (await create(api)).json()["id"]
+    await put_price(api.admin, "BTC", "100", datetime.now(UTC))
+    order = {
+        "symbol": "BTC",
+        "side": "buy",
+        "quantity": "1",
+        "expected_mid": "100",
+        "idempotency_key": str(uuid4()),
+    }
+    fill = await api.client.post(f"/api/v2/portfolios/{root}/trades", json=order, headers=CSRF)
+    assert fill.status_code == 201, fill.text
+    async with api.migrator.connect() as conn:
+        before = (
+            await conn.execute(text("SELECT cash FROM accounts WHERE id=:p"), {"p": int(root)})
+        ).scalar_one()
+        holding = (
+            await conn.execute(
+                text("SELECT quantity,cost_basis FROM holdings WHERE portfolio_id=:p"),
+                {"p": int(root)},
+            )
+        ).one()
+    assert (await delete(api, root)).status_code == 200
+    async with api.migrator.connect() as conn:
+        assert (
+            await conn.execute(text("SELECT cash FROM accounts WHERE id=:p"), {"p": int(root)})
+        ).scalar_one() == before
+        assert (
+            await conn.execute(
+                text("SELECT quantity,cost_basis FROM holdings WHERE portfolio_id=:p"),
+                {"p": int(root)},
+            )
+        ).one() == holding
+        assert (await conn.execute(text("SELECT count(*) FROM trades"))).scalar_one() == 1
+    assert (
+        await api.client.post(f"/api/v2/portfolios/{root}/trades", json=order, headers=CSRF)
+    ).status_code == 404

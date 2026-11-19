@@ -1,13 +1,16 @@
 """Private metadata discovery and explicitly owned portfolio statements."""
 
 from typing import Annotated, cast
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 
 from app.api.v2.portfolio_management import (
     ManagementRoute,
     creation_key,
+    enforce_closure_attempt,
     enforce_creation_attempt,
+    read_closure_body,
     read_management_body,
 )
 from app.core.deps import (
@@ -20,6 +23,7 @@ from app.core.deps import (
     SettingsDep,
 )
 from app.schemas.portfolio import HoldingOut, PortfolioOut
+from app.schemas.portfolio_closure import PortfolioClosureReceipt
 from app.schemas.portfolios import (
     PortfolioCreate,
     PortfolioMetadata,
@@ -30,6 +34,7 @@ from app.schemas.portfolios import (
 )
 from app.schemas.trades import Money
 from app.services.portfolio import get_portfolio, load_portfolio_snapshots
+from app.services.portfolio_closure import ClosureIntent, close_owned_portfolio
 from app.services.portfolios import (
     create_portfolio,
     get_portfolio_metadata,
@@ -141,3 +146,30 @@ async def metadata(
     portfolio_id: PortfolioPath, user: CurrentUserDep, db: DbDep
 ) -> PortfolioMetadata:
     return await get_portfolio_metadata(db, user, _portfolio_id(portfolio_id))
+
+
+@router.delete(
+    "/{portfolio_id}",
+    response_model=PortfolioClosureReceipt,
+    summary="End one explicitly reviewed owned portfolio",
+    description="Permanently freezes the original strategy; "
+    "retries acknowledge only its original identity.",
+)
+async def delete_portfolio(
+    portfolio_id: PortfolioPath,
+    request: Request,
+    user: CurrentUserDep,
+    csrf: CsrfDep,
+    db: DbDep,
+    redis: RedisDep,
+    ip: ClientIpDep,
+    settings: SettingsDep,
+) -> PortfolioClosureReceipt:
+    target = _portfolio_id(portfolio_id)
+    await enforce_closure_attempt(redis, user.id, ip, settings)
+    payload = await read_closure_body(request)
+    original = ClosureIntent(
+        user.id, target, UUID(payload.intent_key), payload.confirmation_name, payload.policy_version
+    )
+    result = await close_owned_portfolio(db, original)
+    return PortfolioClosureReceipt(portfolio_id=result.portfolio_id)
