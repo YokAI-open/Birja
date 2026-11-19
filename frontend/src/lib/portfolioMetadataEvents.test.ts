@@ -31,7 +31,8 @@ it("accepts the finite lifecycle hint while rejecting authority and private payl
     { kind: "lifecycle", name: "Private" },
     { kind: "lifecycle", key: scope },
     { kind: "lifecycle", cash: "10000" },
-  ]) expect(metadataEvent({ scope, portfolioId: "2", ...extra })).toBeNull();
+  ])
+    expect(metadataEvent({ scope, portfolioId: "2", ...extra })).toBeNull();
 });
 it("broadcasts only opaque source/root and cleans up listeners/channel", () => {
   const close = vi.fn();

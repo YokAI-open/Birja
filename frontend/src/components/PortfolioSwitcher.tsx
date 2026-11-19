@@ -1,7 +1,6 @@
 import { useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router";
-import type { PortfolioSummary } from "@/api/portfolios";
 import { Button } from "@/components/ui/button";
 import { PortfolioContext } from "@/components/PortfolioContext";
 import { useMe } from "@/hooks/useMe";
@@ -29,12 +28,10 @@ function Choices({ owner, portfolioId }: { owner: string; portfolioId?: string }
   const id = useId();
   const navigate = useNavigate();
   const result = usePortfolioTarget(draft || undefined, { legacyEntry: true });
-  const client = useQueryClient();
-  // The target hook owns fetching, parsing, subscription and revocation.
-  // Reading its accepted list here adds no query or independent authority.
-  const metadata = client.getQueryData<readonly PortfolioSummary[]>(["portfolios", owner]);
+  // Only the accepted, lifecycle-filtered projection supplies choices.
+  void owner;
   const known = !["loading", "error", "signed_out"].includes(result.status);
-  const rows = known ? metadata : undefined;
+  const rows = known ? result.portfolios : undefined;
   const current = rows?.find((row) => row.id === portfolioId);
   const target = result.status === "ready" ? result.target : null;
   function open() {

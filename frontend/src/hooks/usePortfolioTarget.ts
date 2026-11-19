@@ -4,6 +4,13 @@ import { ApiError } from "@/api/client";
 import { fetchPortfolios, isPortfolioId, type PortfolioSummary } from "@/api/portfolios";
 import { useMe } from "./useMe";
 import { subscribeMetadataEvents } from "@/lib/portfolioMetadataEvents";
+import {
+  isPortfolioDeletionQuarantined,
+  portfolioDeletionAuthorityReady,
+  portfolioDeletionRevision,
+  subscribePortfolioDeletion,
+  usePortfolioDeletion,
+} from "./usePortfolioDeletion";
 
 type Guard = { owner: string | null; session: number; serial: number };
 const guards = new WeakMap<QueryClient, Guard>();
@@ -64,6 +71,12 @@ export function usePortfolioTarget(
 ) {
   const client = useQueryClient();
   const identity = useMe();
+  // This lease remains mounted when the financial Outlet is removed.
+  const recovery = usePortfolioDeletion();
+  const deletionRevision = useSyncExternalStore(
+    useCallback((notify) => subscribePortfolioDeletion(client, notify), [client]),
+    useCallback(() => portfolioDeletionRevision(client), [client]),
+  );
   const owner = identity.data?.email ?? null;
   const guard = guardFor(client);
   const session = guard.session;
@@ -153,9 +166,10 @@ export function usePortfolioTarget(
         // An event supplies no labels or ownership evidence. Revoke old handles
         // synchronously and renew only from the authenticated discovery endpoint.
         scope.authority.revision++;
+        guard.serial++;
         void client.invalidateQueries({ queryKey: key, exact: true });
       }),
-    [client, owner, explicit, routePortfolioId, key, scope, current],
+    [client, owner, explicit, routePortfolioId, key, scope, current, guard],
   );
 
   const selected =
@@ -164,6 +178,8 @@ export function usePortfolioTarget(
     if (
       !owner ||
       !selected ||
+      !portfolioDeletionAuthorityReady(client, owner) ||
+      isPortfolioDeletionQuarantined(client, owner, selected.id) ||
       metadata.isError ||
       (metadata.isFetching && client.getQueryState(key)?.isInvalidated)
     )
@@ -177,6 +193,8 @@ export function usePortfolioTarget(
         activeScopes.has(scope) &&
         who(client) === owner &&
         guard.session === session &&
+        portfolioDeletionAuthorityReady(client, owner) &&
+        !isPortfolioDeletionQuarantined(client, owner, selected.id) &&
         query?.state.status === "success" &&
         !query.state.isInvalidated &&
         values?.some((p) => p.id === selected.id) === true
@@ -198,7 +216,23 @@ export function usePortfolioTarget(
         );
       },
     });
-  }, [owner, selected, metadata.isError, metadata.isFetching, session, client, key, scope, guard]);
+  }, [
+    owner,
+    selected,
+    metadata.isError,
+    metadata.isFetching,
+    session,
+    client,
+    key,
+    scope,
+    guard,
+    deletionRevision,
+  ]);
+
+  const portfolios =
+    owner && portfolioDeletionAuthorityReady(client, owner)
+      ? metadata.data?.filter((row) => !isPortfolioDeletionQuarantined(client, owner, row.id))
+      : undefined;
 
   let status: PortfolioTargetStatus;
   let redirectPortfolioId: string | null = null;
@@ -206,6 +240,9 @@ export function usePortfolioTarget(
   else if (identity.isError) status = "error";
   else if (owner === null || who(client) !== owner) status = "signed_out";
   else if (!valid) status = "required";
+  else if (!recovery.ready) status = recovery.deletion.error ? "error" : "loading";
+  else if (explicit && isPortfolioDeletionQuarantined(client, owner, routePortfolioId!))
+    status = "unavailable";
   else if (metadata.isError) status = "error";
   else if (
     metadata.isPending ||
@@ -214,22 +251,25 @@ export function usePortfolioTarget(
   )
     status = "loading";
   else if (explicit) status = target ? "ready" : "unavailable";
-  else if (metadata.data?.length === 0) status = "empty";
-  else if (metadata.data?.length === 1) {
+  else if (portfolios?.length === 0) status = "empty";
+  else if (portfolios?.length === 1) {
     status = "redirect";
-    redirectPortfolioId = metadata.data[0].id;
+    redirectPortfolioId = portfolios[0].id;
   } else status = "ambiguous";
 
   return {
     status,
     target: status === "ready" ? target : null,
     redirectPortfolioId,
-    error: identity.error ?? metadata.error,
+    portfolios,
+    error: identity.error ?? metadata.error ?? recovery.deletion.error,
     isFetching: metadata.isFetching,
     /** A stale rendered recovery action cannot fetch as a new owner/target. */
     refetch: () =>
       valid && owner !== null && current()
-        ? metadata.refetch()
+        ? !recovery.ready
+          ? recovery.retryRecoveryStorage()
+          : metadata.refetch()
         : Promise.reject(new Error("Portfolio target changed")),
   };
 }

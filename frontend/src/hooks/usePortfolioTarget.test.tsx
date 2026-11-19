@@ -22,7 +22,15 @@ beforeEach(() => {
 });
 it("treats a forged lifecycle hint as temporary revocation, never a server tombstone", async () => {
   let release!: (response: Response) => void;
-  const fetch = vi.fn().mockResolvedValueOnce(json([first, second])).mockImplementationOnce(() => new Promise<Response>((done) => { release = done; }));
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(json([first, second]))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((done) => {
+          release = done;
+        }),
+    );
   vi.stubGlobal("fetch", fetch);
   const h = setup("1");
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
@@ -38,18 +46,23 @@ it("treats a forged lifecycle hint as temporary revocation, never a server tombs
 it("revokes captured authority before DELETE and never restores an unknown original from active discovery", async () => {
   let captured!: NonNullable<ReturnType<typeof usePortfolioTarget>["target"]>;
   let executableAtSend: boolean | undefined;
-  vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => {
-    if (init?.method === "DELETE") {
-      executableAtSend = captured.isCurrent();
-      return Promise.reject(new TypeError("lost response"));
-    }
-    return Promise.resolve(json([first, second]));
-  }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        executableAtSend = captured.isCurrent();
+        return Promise.reject(new TypeError("lost response"));
+      }
+      return Promise.resolve(json([first, second]));
+    }),
+  );
   const h = setup("1");
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
   captured = h.result.current.target!;
   const metadata = { ...first, description: "Original description" };
-  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={h.client}>{children}</QueryClientProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={h.client}>{children}</QueryClientProvider>
+  );
   const deletion = renderHook(() => usePortfolioDeletion("1"), { wrapper });
   await waitFor(() => expect(deletion.result.current.ready).toBe(true));
   act(() => {
@@ -61,7 +74,9 @@ it("revokes captured authority before DELETE and never restores an unknown origi
   expect(executableAtSend).toBe(false);
   expect(captured.isCurrent()).toBe(false);
   expect(h.result.current.status).toBe("unavailable");
-  await act(async () => { await h.result.current.refetch(); });
+  await act(async () => {
+    await h.result.current.refetch();
+  });
   expect(h.result.current.target).toBeNull();
   expect(deletion.result.current.deletion.phase).toBe("unknown");
   h.rerender({ routeId: "2", legacy: false });

@@ -15,6 +15,7 @@ import {
   type DeletionRecovery,
 } from "@/lib/portfolioDeletionAttempt";
 import { useMe } from "./useMe";
+import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 
 export type PortfolioDeletionCompletion = Readonly<{
   portfolioId: string;
@@ -403,6 +404,7 @@ export function usePortfolioDeletion(
       phase: recovering ? "checking" : "submitting",
       attempt: original,
     });
+    if (operationCurrent()) broadcastMetadataChange(original.portfolioId, "lifecycle");
     let result: Awaited<ReturnType<typeof deletePortfolio>>;
     try {
       result = await mutation.mutateAsync({
@@ -463,6 +465,7 @@ export function usePortfolioDeletion(
     });
     update(session, { operationScope: null, controller: null, reviewScope: null });
     publish(session, { ...empty(), phase: "closed", receipt });
+    if (ownerCurrent()) broadcastMetadataChange(original.portfolioId, "lifecycle");
     // A failed discovery does not change the known committed closure into "unknown".
     try {
       await client.invalidateQueries({
