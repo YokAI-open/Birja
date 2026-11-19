@@ -330,6 +330,38 @@ class DurableCampaign(unittest.TestCase):
         self.assertIn('claim.json',before)
         self.assertEqual(before,{name:(root/name).read_bytes() for name in before})
 
+    def test_forced_preflight_kill_does_not_attest_resource_finalizers(self):
+        root, fixture, request = self.fixture()
+        entered, finalized = root/'entered', root/'never-finalized'
+        def preflight(suite):
+            entered.touch()
+            try:
+                while True: time.sleep(.02)
+            finally:
+                finalized.touch()
+        fixture.preflight = preflight
+        original_stop = campaign.stop_child
+        def bounded(child, ticks):
+            return original_stop(child,ticks,grace_seconds=.1)
+        def interrupt():
+            self.wait_for(entered.exists)
+            os.kill(os.getpid(),signal.SIGTERM)
+        timer = threading.Timer(.05,interrupt)
+        timer.start()
+        try:
+            with patch.object(campaign,'stop_child',side_effect=bounded):
+                result = campaign.worker(root,runner=fixture,command=['false'])
+        finally:
+            timer.cancel(); timer.join()
+        state = campaign.read_json(root/'status.json')
+        self.assertEqual(result,1)
+        self.assertEqual(state['exit_code'],-signal.SIGKILL)
+        self.assertFalse(finalized.exists())
+        self.assertIsNone(campaign.process_identity(state['preflight_pid']))
+        self.assertEqual(state['cleanup'],'preflight-group-killed;finalizers-unconfirmed;long-command-not-started')
+        self.assertEqual(state['resource_cleanup'],'not-attested;see-preflight-log')
+        self.assertFalse((root/'command.log').exists())
+
     def test_claim_binds_request_bytes_and_original_process_identity(self):
         root, fixture, request = self.fixture()
         self.assertEqual(campaign.worker(root,runner=fixture,command=[sys.executable,'-c','pass']),0)

@@ -215,7 +215,7 @@ def group_members(pid):
     return members
 
 
-def stop_child(child, ticks):
+def stop_child(child, ticks, *, grace_seconds=60):
     if process_identity(child.pid) not in (None, ticks):
         raise ValueError("original phase PID reused; refusing signal")
     if group_members(child.pid):
@@ -223,11 +223,12 @@ def stop_child(child, ticks):
             os.killpg(child.pid, signal.SIGINT)
         except ProcessLookupError:
             pass
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + grace_seconds
     while group_members(child.pid) and time.monotonic() < deadline:
         child.poll()
         time.sleep(0.05)
     if group_members(child.pid):
+        child.cancellation_escalated = True
         try:
             os.killpg(child.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -489,11 +490,19 @@ def worker(directory, *, runner=None, command=None):
                     else state.get("child_start_ticks")
                 )
                 state["exit_code"] = stop_child(child, ticks)
+                phase = state.get("phase")
+                escalated = getattr(child, "cancellation_escalated", False)
                 state["cleanup"] = (
-                    "preflight-group-reaped;long-command-not-started"
-                    if state.get("phase") == "preflight"
-                    else "command-group-reaped;see-command-log"
+                    phase + "-group-killed;finalizers-unconfirmed"
+                    if escalated
+                    else phase + "-group-reaped"
                 )
+                state["cleanup"] += (
+                    ";long-command-not-started"
+                    if phase == "preflight"
+                    else ";see-command-log"
+                )
+                state["resource_cleanup"] = "not-attested;see-" + phase + "-log"
             except Exception:  # noqa: BLE001 - report cleanup failure without false success
                 state["cleanup"] = (
                     "owned-group-cleanup-incomplete;manual-inspection-required"
