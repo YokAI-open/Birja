@@ -5,8 +5,9 @@ reviewed: 2026-11-20
 depth: deep
 source_commit: a9580c4
 diff_base: 1c370df
-re_reviewed_source: 4a79c99
-re_reviewed_code: 4a0ac10
+re_reviewed_source: c4029b2
+re_reviewed_code: ecf0a21
+capture_source: 724aa2af46c24a863929bd786a6e859eb383da51
 files_reviewed: 8
 files_reviewed_list:
   - deploy/tests/portfolio-ui-evidence.py
@@ -18,11 +19,11 @@ files_reviewed_list:
   - frontend/e2e/portfolio-review-capture.ts
   - frontend/e2e/portfolio-strategies.spec.ts
 findings:
-  critical: 1
+  critical: 0
   warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 14 Plan 17 — Independent Code Review
@@ -30,9 +31,10 @@ status: issues_found
 ## Narrative Findings (AI reviewer)
 
 The original review recorded two **BLOCKER** findings in the new packet
-qualification boundary. Independent re-review at `4a79c99` resolves CR-01 and
-keeps CR-02 open for the remaining early-policy placement edge described below.
-There is **one remaining blocker and no warnings**. The
+qualification boundary. Final independent repair and evidence review at
+`c4029b2` resolves both: **zero remaining blockers and zero warnings**.
+The intermediate dispositions and original proofs below are retained as history;
+the final disposition and exact follow-up scope appear at the end. The
 exact eight-file `1c370df`→`a9580c4` changeset was reviewed through browser
 journeys, the process-only oracle, capture generation and packet verification.
 No structural pre-pass was supplied. This review does not certify the pending
@@ -90,6 +92,9 @@ set to hide the missing binding.
 **Disposition at `4a79c99`: PARTIALLY RESOLVED; remains open for policy placement.**
 The unsupported SVG and absent/weakened-policy cases are repaired. The remaining
 document-structure edge is recorded in the re-review section below.
+
+**Final disposition at `c4029b2`: RESOLVED.** The strict-prefix code and current
+R5 artifact qualification are assessed in the final sections below.
 
 **File:** `deploy/tests/portfolio-ui-evidence.py:382`;
 `deploy/tests/portfolio-ui-evidence.py:406`;
@@ -373,3 +378,59 @@ Owner UI and genuine native-200% flags remain false; Plans 18 and 19 stay pendin
 
 Only this report was edited. No source, commit, global state, browser, database,
 capture, demonstration or test campaign was changed or executed by this pass.
+
+## Final Independent Repair and Evidence Disposition — `c4029b2`
+
+**Clean within the reviewed Plan 17 scope: zero remaining BLOCKER findings and
+zero WARNING findings.** CR-01 and CR-02 are resolved. Their original severity,
+proofs, failed attempts and intermediate review history remain above. This does
+not certify the whole-source qualification in Plan 18 or either human acceptance
+outcome in Plan 19.
+
+The final follow-up scope is the previously accepted `ecf0a21` verifier/contracts,
+the `ecf0a21` to `c4029b2` capture-only change in
+`frontend/e2e/portfolio-deletion.spec.ts`, its unchanged trusted capture helper,
+the appended Plan 17 summary/UI evidence and actual R4/R5/bounded-capture/offline/
+preservation receipts. The verifier and evidence contracts are unchanged from
+the accepted code. No other original source file was reviewed anew in this pass.
+
+The capture-only correction at `724aa2a` inspects genuine POST responses. Only
+an actual 409 with verified `price_changed` code is forwarded for another
+explicit UI confirmation; all other non-201 results fail. The UI's existing
+price-change handling replaces or refetches the preview and clears the refused
+attempt's key. The bounded loop waits for an enabled confirmation and records
+each response; it requires an actual 201 within four confirmations before
+asserting the unknown-result screen. Only that real committed-fill response is
+dropped. There is no fabricated success, hidden request retry, target change or
+retry after an unknown outcome. Subsequent other-tab deletion and unavailable/
+unresolved-order assertions remain intact.
+
+The bounded 375px receipt records success in 63.614s. R4 records its genuine
+five-pass/one-failure result, unchanged source/tracked files, automatic owned
+cleanup and no canonical packet. That failed attempt is preserved, not counted
+as qualification. R5 records all six capture cases passing in 237.883s, source
+unchanged and all 1,798 tracked files unchanged. Its runner log records successful
+cleanup and empty remaining-container/network/volume probes.
+
+The canonical manifest and receipts bind source
+`724aa2af46c24a863929bd786a6e859eb383da51` and 365-input digest
+`6a644be75ac56fd92287603b2b8785c0f850f8b7e553e8cd5a31d1353850bb18`.
+The independently enumerated packet contains 114 capture HTML pages, 190 PNGs,
+114 sanitized traces and one index: 419 hashed artifacts plus the manifest.
+This reviewer independently reran the read-only current-source/artifact/exact-ZIP
+verification, which returned `CURRENT SOURCE AND ARTIFACTS VERIFIED`, and hashed
+the canonical ZIP as
+`372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`.
+The historical R3 ZIP independently still hashes to
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+
+The actual offline script and receipt were read: all 190 layouts check visible
+heading count, overflow, active elements and loaded fonts; the receipt records
+zero HTTP(S) requests in Chromium `156.0.8078.4` and the same capture source.
+Both manifest human-acceptance flags remain false. These are recorded automated
+layout results, not owner UI or native browser-menu zoom acceptance.
+
+No new browser, database, capture, unit suite, full campaign or security
+demonstration was run by this final reviewer pass. Only this review report was
+edited; no source, commit, global planning state or unrelated `.claude/` content
+was changed. Plans 18 and 19 remain explicitly pending gates.

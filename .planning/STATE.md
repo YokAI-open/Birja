@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
 current_phase: 14
-current_plan: 17
+current_plan: 18
 status: executing
-stopped_at: Phase14 Plan16 independently verified; next Plan17 in wave13
-last_updated: "2026-11-19T22:48:42+00:00"
-last_activity: 2026-11-19 -- Phase14 Plan16 and supervisor repairs independently verified; Plan17 next
+stopped_at: Phase14 Plan17 independently verified; next Plan18 in wave14
+last_updated: "2026-11-20T08:02:36+00:00"
+last_activity: 2026-11-20 -- Phase14 Plan17 browser and corrected packet independently verified; Plan18 next
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 68
-  completed_plans: 65
+  completed_plans: 66
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase 13 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 14 — End Strategies Safely, executing Plan17 in wave13;16/19plans complete.
+Current focus: Phase 14 — End Strategies Safely, executing Plan18 in wave14;17/19plans complete.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -43,12 +43,12 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 ## Current Position
 
 Phase: 14 (End Strategies Safely) — EXECUTING
-Plan: 17 (wave13;16/19 complete)
-Current Plan: 17
+Plan: 18 (wave14;17/19 complete)
+Current Plan: 18
 Status: Executing Phase 14
 Last activity: 2026-11-19 -- Phase 14 execution started
 
-Progress: [█████░░░░░] 50% milestone (2/4 phases complete;65/68 currently planned plans complete)
+Progress: [█████░░░░░] 50% milestone (2/4 phases complete;66/68 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -1072,3 +1072,32 @@ onlyNOT_QUALIFICATION boundedchild follows. Finalindependentre-review0/0,
 originalfindingsretained. No runtime/pin/archive changes in supervisorrepair.
 Next17 realbrowser+sourceboundpacket,18fullqualification,19humanUI/native200.
 All7wholePhase14requirementsstillpending; no provider/package/production/push.
+
+Plan17complete:REDfdc6600/GREENe4f967b publiclifecyclebrowser; RED5f0b2bc/
+GREEN413c25d packetfamily,initialsummarya9580c4.14realcases313.989s plus
+exactfinancialcase53.714s pass; sourcebound19states×6widths=114HTML,
+190PNG,114sanitizedtraces,index419artifacts. Existing12specs/CSPskip retained;
+old3privilegedzero setups nowpublicDELETE. GuardedREADONLYexacttextoracle,
+source0011operator-before14/scheduler-after14timing, freshOTPeventcursor.
+IndependentreviewCR01 omittedlinkeddirectories andCR02 unsupportedactive
+SVG/ineffectivepolicy. RED8f36c8b/GREEN470093b+4a0ac10 addnofollowdescriptor
+inputtraversal/staticSVG/exactCSP. Freshre-reviewkeptCR02openforprepolicy
+closing/nonASCIItext. REDdb80526/GREENecf0a21 TrustedPolicyPrefix coversALL
+parsercallbacks; independentCODE_ACCEPTED recorded44c3cbe BEFORErecapture.
+R4capture5/6legitprice_changed409 promptedcapture-only724aa2a: bounded4
+explicitUIreconfirmationsONLYverifiedrepricing, abortONLYgenuine201commit.
+Bounded375case63.614s andfinalR5sixcapturecases237.883s pass,all1798tracked
+andrenderbytesunchanged; ownedresourcesremoved.26evidence/8browsercontracts
+pass; strictcurrent419artifact/ZIPcheck+190offline0HTTP layouts pass.
+Finalcanonical /tmp/birja-phase14-ui-review.zip SHA256
+372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe
+capture724aa2af46c24a863929bd786a6e859eb383da51, inputdigest
+6a644be75ac56fd92287603b2b8785c0f850f8b7e553e8cd5a31d1353850bb18.
+Evidencec4029b2; finalindependentreview0blockers/0warnings,allhistoryretained.
+R1/R3ZIPs exactpreserved;R2incompleteexplicitmanualownedcleanup;R4failed
+no packet. Original13packet/recovery and15/16archivesunchanged, canonical14
+recoveryABSENT. Bothowner/native200flagsFALSE; nohumanapprovalinferred.
+Next18 distinctcode/security/UIreviews thenfreshuninterruptedall-security
+(expected3653backend/64critical100%)+samefrozensource7stageexactarchive.
+19actualownerUI/native200andfinalgoalverifierstillrequired;7wholeREQpending.
+No runtime/dependency/provider/production/publication in17.
