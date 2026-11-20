@@ -322,3 +322,54 @@ was run by this pass. No executable example is included. Only this review report
 was edited; source, global planning state and unrelated `.claude/` were preserved.
 Both human acceptance flags remain false. Plans 18 and 19 are pending gates,
 not defects inferred by this review.
+
+## Provisional Code-only Re-review — `ecf0a21`
+
+**CODE_ACCEPTED: zero remaining code BLOCKER findings and zero WARNING findings
+in the repair scope. Artifact qualification is PENDING.** This disposition
+supersedes the preceding open code assessment of CR-02, while preserving that
+finding and its evidence. It is not final Plan 17 or phase qualification.
+
+The exact scope is `a2ecf7d` to `ecf0a21` in
+`deploy/tests/portfolio-ui-evidence.py` and
+`deploy/tests/test-portfolio-ui-evidence.py`, including the RED contract commit
+`db80526`. The unchanged trusted capture helper and earlier source-guard/static
+SVG repairs remain the cross-file contract. No other source was reviewed anew.
+
+`TrustedPolicyPrefix` now limits the prefix to the generated document structures:
+one ordinary HTML doctype, optional supported html/head/UTF-8 scaffolding and
+the required policy. Only literal HTML ASCII space characters can precede or
+separate those events. Closing tags, non-ASCII text, character/entity references,
+comments, processing instructions, unknown declarations and self-closing prefix
+elements all reach the prefix validator and refuse before policy completion.
+Unsupported doctypes and repeated or out-of-order scaffolding also refuse.
+All start/end/start-end/data/declaration/unknown-declaration/comment/instruction/
+entity/character-reference callbacks were traced. No inherited callback permits
+the previously identified early-head transition without checking this contract.
+
+The policy moves the prefix to its completed state only after validating its
+raw attribute count, exact distinct normalized names and exact directive set.
+Recognition examines every supplied policy attribute, so duplicate attributes
+cannot hide a policy through last-value dictionary behavior. Duplicate policies
+remain refused after completion; ASCII-only policy tokenization avoids the
+previous Unicode-whitespace mismatch. Attribute normalization remains consistent
+with the conservative accepted vocabulary. Post-policy active-element, handler,
+resource and static-icon checks remain in force. Phase 13 has no prefix object
+and retains its prior interface and attribute checks.
+
+The new contract method checks generated positive prefixes and coherently
+rehashes both index and capture mutations for the rejected event classes. The
+reported 26 evidence methods and eight browser contracts are consistent with
+the inspected code and assertions; they were not independently rerun by this
+reviewer. No additional code defect was established in this bounded pass.
+
+The existing R3 packet is deliberately preserved at its earlier source and SHA
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+It is not claimed current for `ecf0a21`, and planned recapture is not a defect at
+this code-only checkpoint. Final review disposition requires actual committed-
+source recapture, current-source/artifact/ZIP verification and recorded offline
+layout evidence. Existing report frontmatter remains pending that closeout.
+Owner UI and genuine native-200% flags remain false; Plans 18 and 19 stay pending.
+
+Only this report was edited. No source, commit, global state, browser, database,
+capture, demonstration or test campaign was changed or executed by this pass.
