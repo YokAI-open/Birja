@@ -1,7 +1,7 @@
 # Phase 14 — Local qualification
 
-Plan18 is **in progress**. Neither whole-security nor final recovery has been
-launched or passed. All results below are local; no hosted CI, publication,
+Plan18 is **incomplete**. Whole-security R1 failed; final recovery has not
+started. All results below are local; no hosted CI, publication,
 deployment or human acceptance is inferred.
 
 Execution began2026-11-20T08:03Z on `feature/milestone-v1.2`, initial
@@ -77,3 +77,129 @@ python3 deploy/tests/run-portfolio-validation.py --suite recovery
 
 Earlier bounded or partitioned proofs are supplemental evidence only. Actual
 owner UI acceptance and genuine desktop native200% remain separate Plan19 gates.
+
+## Whole security R1 — failed, preserved
+
+Frozen candidate: `5e0803ab088da61a8c2818c99441c021c12b3d93`, including reviewed
+source-integrity repair `d2e8885`. The literal standalone preflight passed:
+
+```text
+python3 deploy/tests/run-portfolio-validation.py --suite all-security --preflight
+python3 deploy/tests/run-portfolio-campaign.py --suite all-security --receipt-dir /tmp/birja-phase14-campaign-security-plan18-r1
+```
+
+The original supervisor2000014/startticks2916395351, runID
+`88b4e1a94f9f4ccb8869603eaccbc901`, passed its own preflight, then launched
+child2002474/startticks2916399426 with literal argv:
+
+```text
+/usr/bin/python3 /home/YokaiExchange/deploy/tests/run-portfolio-validation.py --suite all-security
+```
+
+The command returned1. The supervisor's terminal elapsed time is **5027.363s**,
+started1795163212.4036775 and finished1795168239.7665746. Backend static gates
+passed; pytest completed **3651 passed,2 failed,118 warnings in4975.79s**.
+Overall coverage reached **99.48%**. This is **not a whole-security pass**.
+The separate100% critical command, frontend, browser, audit and image gates
+were not reached. Recovery has not started and no canonical14 archive exists.
+
+Both failures are retained `test_stock_quotes.py` cases:
+`test_genuine_post_split_event_acquires_local_current_units` and
+`test_quote_waiting_for_split_binds_committed_units[True]`. Their collection-time
+clock produced one-hour action authority; these tests executed more than an
+hour later. Actual SQL correctly refused expired authority. No price, epoch,
+lock or freshness assertion is waived.
+
+The same run exposes missing defensive critical branches in the new closure
+service, closure ownership proof and final default-ACL admission check. These
+need meaningful proof before a fresh whole command. Overall99.48% does not
+replace the100% critical gate.
+
+All1802 frozen tracked hashes stayed identical. Independent terminal checks
+found no live original supervisor/child group and no containers, networks or
+volumes for either `birja-test` or `birja-p14-16-preflight`. Request, claim,
+status and log hashes plus exact cleanup inventories are preserved in
+`/tmp/birja-phase14-campaign-plan18-repair/r1-terminal-integrity.json`.
+Original receipts/logs remain in the exclusive R1 campaign directory. Its
+coverage data and JSON were preserved as `r1-backend.coverage` and
+`r1-coverage.json` before focused diagnostics. Nothing was overwritten or
+presented as passing qualification.
+
+## Authorized repair and focused evidence
+
+Commit **`a21eae3`** contains the parent-authorized three-file repair:
+
+- `test_stock_quotes.py` refreshes scenario time per test. Time-dependent
+  parameter values are evaluated inside each case against that fresh time,
+  preserving future+1s, stale120s, expiry equality and prior-date semantics.
+- `portfolio_closure.py` uses an explicit counter and `while True`, preserving
+  exactly three total40001 attempts, rollback before each retry, and one
+  attempt for40P01/other database errors. No pragma or exclusion was added.
+- `test_portfolio_closure_critical.py` adds real-session input/session/HTTP
+  refusals, actual PostgreSQL40001/40P01 fault handling, current transaction/
+  isolation/advisory-gate checks, genuine retained-boundary acknowledgement,
+  and transactional evidence/default-ACL negatives with rollback and original
+  financial/catalogue equality. No execute result or financial payload is
+  fabricated. Privileged corruption is confined to the owned test transaction.
+
+Focused R1 selected128 cases:125 passed and three new negative fixtures failed
+in599.02s (605.804s receipt). All43 stock-quote cases and existing closure API,
+stock, clock and actual first-buy retry regressions passed. Two new corruption
+fixtures hit PostgreSQL's pending-trigger ALTER refusal; the final-default
+race tried to patch a read-only connection instance method. After the guarded
+run ended and cleanup was verified, test-only fixes first validated queued
+deferred links and used class-level instrumentation scoped to the exact real
+connection. Focused R2 reran only those three cases: **3 passed25.36s**,
+31.555s receipt, source unchanged, all owned resources empty.
+
+Independent scoped review found no production blocker and one clock-parameter
+warning. That warning was repaired by delaying parameter evaluation; an
+independent read-only re-review resolves it with **0 blockers/0 warnings**.
+This scoped review does not replace final full-source/security qualification.
+
+Final focused R3 passed **69/69 in203.06s**,209.605s receipt: all24 new critical
+tests, all43 quote tests, actual public HTTP closure-quota behavior and the
+actual first-buy whole-transaction retry regression. Source stayed unchanged;
+all owned containers, networks and volumes are empty. Scoped Ruff, formatting,
+service mypy and whitespace checks pass. Raw evidence:
+`/tmp/birja-phase14-campaign-plan18-repair/focused-r{1,2,3}.{log,json}`.
+
+## Precise continuation gate — Plan18 remains incomplete
+
+The returned-row guard at `portfolio_closure.py:107` remains a critical-coverage
+scope decision. Authenticated immutable0023 SQL returns the submitted root,
+finite outcome and PostgreSQL boolean; valid calls cannot exercise its invalid
+branch. No fake execute result, invented database outcome or coverage waiver
+was used. The parent was asked before any additional protected-source change.
+
+Recommended concrete scope: extract this existing validation into a private
+pure validator, invoked unconditionally on the real SQL row before proof or
+commit. Pure argument tests can exercise invalid ID/outcome/replay types while
+existing real-SQL tests verify production wiring. This preserves the defensive
+guard and avoids modifying database authority. **It is proposed, not approved
+or implemented.** The parent execution thread became unavailable before that
+additional scope decision was delivered.
+
+After the decision: implement only approved scope, verify meaningful affected
+tests and all64 critical paths, obtain independent re-review, and freeze the
+final committed source. The backend service edit changes a render input, so
+the exact R5 UI packet must remain preserved and new current-source evidence
+must be generated/verified through the accepted capture tool and190 offline
+layouts. Do not forge provenance or inherit human acceptance. Then run a new
+exclusive complete all-security command; only after it exits0 run fresh
+seven-stage recovery at the same frozen source and one exact new archive.
+
+Actual current packet verification after commit `a21eae3` refuses with
+`ValueError: Source drift`, as expected. Log:
+`/tmp/birja-phase14-campaign-plan18-repair/current-ui-after-repair.log`.
+R5 ZIP remains exactly
+`372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`;
+canonical recovery directory remains absent. This refusal is not a new packet
+or acceptance result.
+
+No whole task, requirement, recovery, owner UI or native200 result is complete.
+No Plan18 SUMMARY is created because it would misrepresent disk progress to
+the SDK. Shared STATE/ROADMAP/requirements remain parent-owned. Existing issue35,
+dependencies/image pins, historical migrations/profiles, prior archives,
+production/provider state and unrelated `.claude/` are preserved. Nothing was
+pushed, merged or deployed. No test lane remains active.
