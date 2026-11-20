@@ -704,15 +704,29 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await expect(page).toHaveURL("/portfolios");
       expect(sends).toBe(2);
       await page.unroute("**" + api + "/" + network.id);
+      const unknownStatuses: number[] = [];
       await page.route("**" + api + "/" + sibling.id + "/trades", async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
         const response = await route.fetch();
+        if (response.status() === 409) {
+          expect((await response.json()).detail.code).toBe("price_changed");
+          await deliver(route, response);
+          unknownStatuses.push(409);
+          return;
+        }
         expect(response.status()).toBe(201);
         await route.abort("failed");
+        unknownStatuses.push(201);
       });
       await page.goto("/portfolios/" + sibling.id + "/trade/BTC");
       await page.getByLabel("Amount", { exact: true }).fill("10");
-      await expect(button(page, "Confirm buy")).toBeEnabled();
-      await button(page, "Confirm buy").click();
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await expect(button(page, "Confirm buy")).toBeEnabled();
+        await button(page, "Confirm buy").click();
+        await expect.poll(() => unknownStatuses.length).toBe(attempt + 1);
+        if (unknownStatuses.at(-1) === 201) break;
+      }
+      expect(unknownStatuses.at(-1)).toBe(201);
       await expect(button(page, "Check order result")).toBeVisible();
       const other = await context.newPage();
       await detail(other, sibling.id);
