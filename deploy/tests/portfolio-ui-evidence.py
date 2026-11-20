@@ -461,27 +461,55 @@ def verify_capture_metadata(metadata, capture, commit, phase=13):
             raise ValueError("Unsafe credential-free timing evidence")
 
 
-class InertCaptureParser(HTMLParser):
-    def __init__(self, phase=13):
-        super().__init__(convert_charrefs=True)
-        self.phase = phase
-        self.policies = 0
-        self.svg_depth = 0
-        self.head_closed = False
+class TrustedPolicyPrefix:
+    """Finite generated-prefix grammar, before the browser's effective policy."""
 
-    def handle_starttag(self, tag, attributes):
+    def __init__(self):
+        self.state = "initial"
+
+    def accept(self, event, value="", attributes=()):
         attrs = dict(attributes)
         policy = (
-            tag == "meta"
-            and attrs.get("http-equiv", "").lower() == "content-security-policy"
+            event == "start"
+            and value == "meta"
+            and any(
+                key == "http-equiv"
+                and (item or "").lower() == "content-security-policy"
+                for key, item in attributes
+            )
         )
-        if self.phase == 14:
+        if self.state == "complete":
             if policy:
-                self.policies += 1
-                directives = [
-                    item.split()
+                raise ValueError("Duplicate project capture policy")
+            return
+        if event == "data" and all(character in "\t\n\f\r " for character in value):
+            return
+        if (
+            event == "declaration"
+            and self.state == "initial"
+            and value.lower() == "doctype html"
+        ):
+            self.state = "doctype"
+            return
+        if event == "start":
+            if policy and self.state in {
+                "doctype",
+                "head",
+                "head-charset",
+                "implicit-head",
+            }:
+                if (
+                    len(attributes) != 2
+                    or set(attrs) != {"http-equiv", "content"}
+                    or not isinstance(attrs.get("content"), str)
+                ):
+                    raise ValueError("Malformed project capture policy")
+                clauses = [
+                    item.strip("\t\n\f\r ")
                     for item in attrs.get("content", "").split(";")
-                    if item.strip()
+                ]
+                directives = [
+                    re.split(r"[\t\n\f\r ]+", item) for item in clauses if item
                 ]
                 required = {
                     "default-src": ["'none'"],
@@ -492,20 +520,49 @@ class InertCaptureParser(HTMLParser):
                     "form-action": ["'none'"],
                 }
                 if (
-                    self.head_closed
-                    or self.policies != 1
-                    or len(directives) != len(required)
+                    len(directives) != len(required)
                     or {item[0]: item[1:] for item in directives} != required
-                    or len(attributes) != 2
-                    or set(attrs) != {"http-equiv", "content"}
                 ):
-                    raise ValueError("Missing or altered project capture policy")
-            elif not self.policies and not (
-                (tag == "html" and set(attrs) <= {"lang"})
-                or (tag == "head" and not attributes)
-                or (tag == "meta" and set(attrs) == {"charset"})
+                    raise ValueError("Altered project capture policy")
+                self.state = "complete"
+                return
+            if (
+                self.state == "doctype"
+                and value == "html"
+                and list(attributes) in ([], [("lang", "en")])
             ):
-                raise ValueError("Capture policy must precede content")
+                self.state = "html"
+                return
+            if self.state == "html" and value == "head" and not attributes:
+                self.state = "head"
+                return
+            if (
+                self.state in {"doctype", "head"}
+                and value == "meta"
+                and len(attributes) == 1
+                and set(attrs) == {"charset"}
+                and (attrs["charset"] or "").lower() == "utf-8"
+            ):
+                self.state = (
+                    "implicit-head" if self.state == "doctype" else "head-charset"
+                )
+                return
+        raise ValueError("Unsupported event in trusted policy prefix")
+
+
+class InertCaptureParser(HTMLParser):
+    def __init__(self, phase=13):
+        super().__init__(convert_charrefs=False)
+        self.phase = phase
+        self.svg_depth = 0
+        self.prefix = TrustedPolicyPrefix() if phase == 14 else None
+
+    def prefix_event(self, event, value="", attributes=()):
+        if self.prefix is not None:
+            self.prefix.accept(event, value, attributes)
+
+    def handle_starttag(self, tag, attributes):
+        self.prefix_event("start", tag, attributes)
         if tag == "svg":
             self.svg_depth += 1
         if (
@@ -558,14 +615,35 @@ class InertCaptureParser(HTMLParser):
                     raise ValueError("External or active capture resource")
 
     def handle_endtag(self, tag):
-        if tag == "head":
-            self.head_closed = True
+        self.prefix_event("end", tag)
         if tag == "svg":
             self.svg_depth = max(0, self.svg_depth - 1)
 
     def handle_data(self, data):
-        if self.phase == 14 and not self.policies and data.strip():
-            raise ValueError("Capture policy must precede document text")
+        self.prefix_event("data", data)
+
+    def handle_startendtag(self, tag, attributes):
+        self.prefix_event("startend", tag, attributes)
+        self.handle_starttag(tag, attributes)
+        self.handle_endtag(tag)
+
+    def handle_decl(self, declaration):
+        self.prefix_event("declaration", declaration)
+
+    def unknown_decl(self, declaration):
+        self.prefix_event("unknown-declaration", declaration)
+
+    def handle_comment(self, comment):
+        self.prefix_event("comment", comment)
+
+    def handle_pi(self, instruction):
+        self.prefix_event("processing-instruction", instruction)
+
+    def handle_entityref(self, name):
+        self.prefix_event("entity", name)
+
+    def handle_charref(self, name):
+        self.prefix_event("character-reference", name)
 
 
 def validate_html(content, phase=13):
@@ -575,7 +653,7 @@ def validate_html(content, phase=13):
     parser = InertCaptureParser(phase)
     parser.feed(content)
     parser.close()
-    if phase == 14 and parser.policies != 1:
+    if phase == 14 and parser.prefix.state != "complete":
         raise ValueError("Missing project capture policy")
 
 

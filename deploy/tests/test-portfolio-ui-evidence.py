@@ -507,26 +507,58 @@ class Phase14EvidenceContracts(unittest.TestCase):
                         self.module.verify_artifacts(directory, value["artifacts"], 14)
 
     def test_every_prepolicy_event_has_a_trusted_structural_prefix(self):
-        prefixes = ('<!doctype html>', '<!doctype html><meta charset="utf-8">',
-                    '<!doctype html>\n<html lang="en"><head>',
-                    '<!doctype html>\t\n\f\r <html><head>')
+        prefixes = (
+            "<!doctype html>",
+            '<!doctype html><meta charset="utf-8">',
+            '<!doctype html>\n<html lang="en"><head>',
+            "<!doctype html>\t\n\f\r <html><head>",
+        )
         for prefix in prefixes:
-            self.module.validate_html(prefix + PHASE14_POLICY + '<p>ordinary</p>', phase=14)
-        unsupported = ('</html>', '</body>', '</head>', '\u00a0', '\u2003',
-                       '&#160;', '&nbsp;', '&#32;', '<!-- ordinary -->',
-                       '<?ordinary text?>', '<!doctype other>', '<![CDATA[ordinary]]>',
-                       '<html/>', '<head/>', '<meta charset="utf-8"/>')
-        for name in ('index.html', 'phase14-collapsed-320.html'):
+            self.module.validate_html(
+                prefix + PHASE14_POLICY + "<p>ordinary</p>", phase=14
+            )
+        unsupported = (
+            "</html>",
+            "</body>",
+            "</head>",
+            "\u00a0",
+            "\u2003",
+            "\v",
+            "\ufeff",
+            "&#160;",
+            "&nbsp;",
+            "&#32;",
+            "<!-- ordinary -->",
+            "<?ordinary text?>",
+            "<!doctype other>",
+            "<![CDATA[ordinary]]>",
+            "<html/>",
+            "<head/>",
+            '<meta charset="utf-8"/>',
+        )
+        for name in ("index.html", "phase14-collapsed-320.html"):
             for token in unsupported:
-                with self.subTest(name=name, token=token), tempfile.TemporaryDirectory() as temporary:
+                with (
+                    self.subTest(name=name, token=token),
+                    tempfile.TemporaryDirectory() as temporary,
+                ):
                     directory = Path(temporary)
                     value = self.packet(directory)
                     target = directory / name
-                    target.write_text(target.read_text().replace(PHASE14_POLICY, token + PHASE14_POLICY))
+                    content = target.read_text()
+                    if name != "index.html":
+                        content = content.replace(
+                            "<!doctype html>", '<!doctype html><html lang="en"><head>'
+                        )
+                    target.write_text(
+                        content.replace(PHASE14_POLICY, token + PHASE14_POLICY)
+                    )
                     self.checksum(directory, value, name)
                     with self.assertRaises(ValueError):
-                        self.module.verify_artifacts(directory, value['artifacts'], 14)
-        self.module.validate_html('<!doctype html><!-- legacy -->\u00a0<p>Phase 13 compatibility</p>')
+                        self.module.verify_artifacts(directory, value["artifacts"], 14)
+        self.module.validate_html(
+            "<!doctype html><!-- legacy -->\u00a0<p>Phase 13 compatibility</p>"
+        )
 
     def screenshot(self, width):
         import struct
