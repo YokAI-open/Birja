@@ -205,3 +205,56 @@ on the current reviewed evidence. Automated viewport/reflow, this review and
 prior Phase13 approval cannot satisfy them. No requirement, shared state,
 production configuration or publication status was advanced. Only this report
 was created; no source/tests were edited and no commit was made.
+
+## Current evidence association — R6
+
+Reviewed2026-11-20 under the updated `AGENTS.md` defensive-review scope
+(`fb39f0f`). This appendix supersedes the earlier **current packet** association
+only. The original R5 audit, findings and provenance above remain historical
+evidence. The MASTER/UI-SPEC baseline and six pillar scores remain unchanged:
+**24/24, zero UI blockers and zero warnings**.
+
+The current R6 manifest identifies committed source
+`1c97c5022f1e6a6f6ac1fc59ebe4cd4053a380ae` and capture completion
+`2026-11-20T12:00:03.602339+00:00`. Its canonical packet is
+`/tmp/birja-phase14-ui-review[.zip]`, ZIP SHA256
+`b2805c041817aa7eacba1fbbf827c80863093e9167d51667949532bfeab02694`,
+with render-input digest
+`1587a01484f16559fb2a09306354cf34aa9d48c9a459e4b74e58777213285c7d`.
+Direct static comparison found **zero mismatches in all365 manifest source
+inputs and all419 artifact hashes**. The measured ZIP hash matches the supplied
+qualification identity. A Git comparison of R5 capture source to R6 reports no
+frontend, design-system or Phase14 UI-SPEC byte changes; the changed input digest
+therefore does not imply a new visual implementation.
+
+The manifest still contains19 states at320/375/768/1024/1280/1440px:
+114 state HTML files plus index,190 PNGs and114 sanitized traces. All114 base
+and76 narrow-layout records retain one h1 and no horizontal overflow. The
+existing actual receipt
+`/tmp/birja-phase14-campaign-plan18-repair/offline-r6.json` associates source
+`1c97c502…` with190 offline layouts, zero external requests and installed
+Chromium156.0.8078.4. The raw capture log
+`/tmp/birja-phase09-browser-w9fcm8hv/browser-portfolios.log` records all six
+width cases passing. The executor reports233.507s total and190.1s browser
+time, frozen source/all1,871 tracked entries and empty owned cleanup. Those
+run-duration/cleanup observations remain executor evidence, not a new run or
+independent resource inspection by this reviewer.
+
+Opened three representative **current R6 PNGs**: confirmation320,
+restored-unknown375 and cross-tab1440. Named consequences, safe Cancel/final
+Delete separation, readable original-result checking, generic unavailable
+headings and finance-free stale presentation remain consistent with the prior
+audit. No new visual defect was found. Static screenshots/reflow remain
+distinct from genuine browser-menu zoom.
+
+R5 is preserved at `/tmp/birja-phase14-ui-review-r5-historical.zip`; its measured
+SHA256 remains
+`372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`.
+No prior audit or packet identity was overwritten in this report.
+
+Both actual R6 manifest human flags remain **false**. Owner UI acceptance and
+native200% acceptance are **PENDING Plan19**; whole Plan18 security/recovery
+qualification also remains pending. This refresh performed only static evidence
+reads and image inspection and appended this report. No source edit, test suite,
+new DB/browser/capture lane, installation, active demonstration, commit or shared
+planning-state advancement occurred.

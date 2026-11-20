@@ -243,3 +243,44 @@ Scoped Ruff/format/mypy and whitespace checks pass. Final source is committed;
 the next step is preserving R5 and generating genuine current-source UI
 evidence before freezing and starting a new whole security run. The earlier
 scope-decision checkpoint is resolved; whole qualification remains pending.
+
+## Current-source UI packet R6
+
+R5 was moved to the exclusive
+`/tmp/birja-phase14-ui-review-r5-historical[.zip]` paths before recapture;
+its ZIP SHA remains
+`372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`.
+The preservation receipt records original source/input digest and both false
+human flags. Earlier R1/R3 packets remain preserved separately.
+
+The accepted capture tool ran only the six capture cases at committed source
+`1c97c5022f1e6a6f6ac1fc59ebe4cd4053a380ae` (application repair`48aec5b`):
+
+```text
+python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --output /tmp/birja-phase14-ui-review
+```
+
+Actual result: **6/6 widths passed**,233.507s total,190.1s browser phase.
+The eight behavior cases were unchanged and not rerun separately. Source and
+all1871 tracked entries, including link identities, stayed unchanged. The
+owned runner completed cleanup and empty container/network/volume checks.
+Raw browser log: `/tmp/birja-phase09-browser-w9fcm8hv/browser-portfolios.log`.
+
+Current canonical ZIP SHA256:
+`b2805c041817aa7eacba1fbbf827c80863093e9167d51667949532bfeab02694`.
+Render-input digest:
+`1587a01484f16559fb2a09306354cf34aa9d48c9a459e4b74e58777213285c7d`.
+Captured at2026-11-20T12:00:03.602339+00:00. The independent inventory is114
+state HTML pages plus index,190 PNGs and114 sanitized traces:419 artifacts.
+Strict current-source/artifact/exact ZIP verification passes. Actual offline
+Chromium156.0.8078.4 inspection passes all190 layouts with loaded fonts, one
+visible primary heading, no horizontal overflow and **zero HTTP requests**.
+
+The independent UI reviewer verifies365 current source hashes and419 artifact
+hashes, inspects current representative images and retains **24/24,0 blockers/
+0 warnings**. Frontend/design-system/UI-SPEC bytes are unchanged from R5.
+Owner acceptance and genuine native200% flags remain **false/PENDING Plan19**.
+Receipts: `/tmp/birja-phase14-campaign-plan18-repair/`:
+`ui-r5-preservation.json`, `capture-r6.json`, `capture-r6.command.log`,
+`capture-r6.launch.log`, `offline-r6.{json,log}`. R6 now supplies current-source
+UI evidence before the fresh whole-security qualification; it is not that pass.
