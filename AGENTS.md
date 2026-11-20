@@ -48,6 +48,18 @@ visual review, read `.agents/skills/ui-ux-pro-max/SKILL.md`. Use its local
 search scripts and the existing `design-system/` documents. Preserve the
 project's established design system rather than replacing it during setup.
 
+## Defensive review scope
+
+Follow OpenAI's [additional safety-check guidance](https://help.openai.com/en/articles/20001326-additional-safety-checks-for-biological-and-cybersecurity-requests-in-chatgpt-codex-and-the-api).
+Keep security-related work focused on identifying, preventing, and fixing
+issues in this repository. Prefer static analysis, pure validation tests,
+and existing isolated integration checks. Omit unnecessary exploit details,
+executable attack demonstrations, and active test payloads from agent tasks
+and reports; use benign refusal cases and plain-language findings instead.
+If allowed work is blocked, narrow it to the necessary defensive outcome;
+do not disguise its purpose or attempt to bypass safeguards. Automated checks
+may still occur. These instructions do not waive existing security gates.
+
 ## Setup maintenance
 
 See `docs/CODEX.md` for invocation examples, prerequisites, validation, and
