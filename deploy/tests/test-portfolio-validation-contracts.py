@@ -96,6 +96,39 @@ class CurrentCampaign(unittest.TestCase):
                     runner.security_sources()
             self.assertTrue(swapped, 'ordinary source must be opened through the no-follow descriptor path')
 
+    def test_source_parent_replaced_after_open_reads_only_original_descriptor(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-parent-swap-') as directory:
+            root = self.source_tree(directory)
+            outside = Path(directory) / 'outside'
+            outside.mkdir()
+            (outside / 'input.py').write_bytes(b'controlled-outside')
+            actual_open, actual_fdopen = os.open, os.fdopen
+            swapped, read_values = [], []
+            def swap(path, flags, *args, **kwargs):
+                if path == 'input.py' and not swapped:
+                    swapped.append(True)
+                    (root / 'backend').rename(root / 'original-backend')
+                    (root / 'backend').symlink_to(outside, target_is_directory=True)
+                return actual_open(path, flags, *args, **kwargs)
+            def observe(descriptor, *args, **kwargs):
+                stream = actual_fdopen(descriptor, *args, **kwargs)
+                original_read = stream.read
+                def read(*arguments):
+                    data = original_read(*arguments)
+                    read_values.append(data)
+                    return data
+                stream.read = read
+                return stream
+            with patch.object(runner, 'ROOT', root), \
+                 patch.object(runner.os, 'open', side_effect=swap), \
+                 patch.object(runner.os, 'fdopen', side_effect=observe):
+                with self.assertRaises(ValueError):
+                    runner.security_sources()
+            self.assertTrue(swapped)
+            self.assertIn(b'original', read_values)
+            self.assertNotIn(b'controlled-outside', read_values)
+
+
     def test_exact_successor_path_and_seven_stages(self):
         self.assertEqual(str(runner.ARCHIVE), "/tmp/birja-phase14-proof/recovery.tar.gz")
         self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0023-cold",

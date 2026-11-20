@@ -16,7 +16,9 @@ import shutil
 import subprocess
 import tarfile
 import re
+import stat
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -178,32 +180,104 @@ def execute_security(run=subprocess.run):
         run(STACK + ["down", "-v"], cwd=ROOT, env=env, check=True)
 
 
+@contextmanager
+def source_directory(path):
+    """Open every directory component without following a root/ancestor link."""
+    descriptor = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in Path(path).absolute().parts[1:]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                            dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        yield descriptor
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise ValueError('source directory disappeared or symlink refused') from exc
+    finally:
+        os.close(descriptor)
+
+
+def source_identity(value):
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_size,
+            value.st_mtime_ns, value.st_ctime_ns)
+
+
+def source_bytes(name, *, optional=False, allow_link=True):
+    path = ROOT / name
+    if Path(name).is_absolute() or '..' in Path(name).parts:
+        raise ValueError('source inventory escapes checkout')
+    try:
+        with source_directory(path.parent) as directory:
+            before = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+            if stat.S_ISLNK(before.st_mode):
+                if not allow_link:
+                    raise ValueError('source ignore metadata symlink refused')
+                target = os.readlink(path.name, dir_fd=directory)
+                # Inspect only metadata of a finite in-root regular leaf target.
+                # Never read through the link, including its target ancestors.
+                destination = Path(os.path.abspath(path.parent / target))
+                if not destination.is_relative_to(ROOT):
+                    raise ValueError('source symlink escapes checkout')
+                with source_directory(destination.parent) as target_directory:
+                    target_stat = os.stat(destination.name, dir_fd=target_directory,
+                                          follow_symlinks=False)
+                    if not stat.S_ISREG(target_stat.st_mode):
+                        raise ValueError('source leaf symlink requires regular in-root target')
+                    with source_directory(destination.parent) as target_current:
+                        if source_identity(os.fstat(target_current)) != source_identity(os.fstat(target_directory)):
+                            raise ValueError('source link target directory changed')
+                data = b'symlink\0' + os.fsencode(target)
+            else:
+                descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                     dir_fd=directory)
+                with os.fdopen(descriptor, 'rb') as stream:
+                    opened = os.fstat(stream.fileno())
+                    if not stat.S_ISREG(opened.st_mode) or source_identity(opened) != source_identity(before):
+                        raise ValueError('source inventory changed or is not a regular file')
+                    data = stream.read()
+                    if source_identity(os.fstat(stream.fileno())) != source_identity(opened):
+                        raise ValueError('source changed while reading')
+            after = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+            if source_identity(before) != source_identity(after):
+                raise ValueError('source changed while reading')
+            # Reopen the pathname to detect replacement after opening an ancestor.
+            with source_directory(path.parent) as current:
+                if source_identity(os.fstat(current)) != source_identity(os.fstat(directory)):
+                    raise ValueError('source directory changed while reading')
+            return data
+    except FileNotFoundError as exc:
+        if optional:
+            return None
+        raise ValueError('source inventory disappeared') from exc
+    except OSError as exc:
+        raise ValueError('source inventory disappeared or unsafe symlink/type') from exc
+
+
 def security_sources():
     # Ignore credential files using the repository's normal ignore rules, but
     # bind additions/renames as well as tracked edits. Never follow a source
     # symlink outside the checkout or read its target as a secret.
-    exclude = ROOT / ".git/info/exclude"
-    if exclude.is_symlink():
-        raise ValueError("source ignore metadata symlink refused")
-    env = {**environment(), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
-    raw = subprocess.check_output(["git", "-c", "core.fsmonitor=false", "-c",
-        "core.excludesfile=/dev/null", "ls-files", "--cached", "--others", "--exclude-standard",
-        "-z", "--", *SOURCE_SCOPES], cwd=ROOT, env=env)
+    with source_directory(ROOT) as root_directory:
+        identity = source_identity(os.fstat(root_directory))
+        excluded = source_bytes('.git/info/exclude', optional=True, allow_link=False)
+        env = {**environment(), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+        raw = subprocess.check_output(["git", "-c", "core.fsmonitor=false", "-c",
+            "core.excludesfile=/dev/null", "ls-files", "--cached", "--others", "--exclude-standard",
+            "-z", "--", *SOURCE_SCOPES], cwd=ROOT, env=env)
     names = {os.fsdecode(name) for name in raw.split(b"\0") if name}
-    if exclude.is_file():
+    if excluded is not None:
         names.add(".git/info/exclude")
     result = {}
     for name in sorted(names):
-        path = ROOT / name
-        if path.is_symlink():
-            if not path.resolve().is_relative_to(ROOT.resolve()):
-                raise ValueError("source symlink escapes checkout")
-            data = b"symlink\0" + os.fsencode(os.readlink(path))
-        elif path.is_file():
-            data = path.read_bytes()
-        else:
-            raise ValueError("source inventory disappeared or is not a regular file")
+        data = source_bytes(name, allow_link=name != '.git/info/exclude')
         result[name] = hashlib.sha256(data).hexdigest()
+    with source_directory(ROOT) as current:
+        if source_identity(os.fstat(current)) != identity:
+            raise ValueError('source root changed during inventory')
+    if source_bytes('.git/info/exclude', optional=True, allow_link=False) != excluded:
+        raise ValueError('source ignore metadata changed during inventory')
     return result
 
 
