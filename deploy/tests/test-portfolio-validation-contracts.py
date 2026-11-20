@@ -24,6 +24,78 @@ spec.loader.exec_module(runner)
 
 
 class CurrentCampaign(unittest.TestCase):
+    def source_tree(self, directory):
+        root = Path(directory) / 'checkout'
+        root.mkdir()
+        (root / 'backend').mkdir()
+        (root / 'backend/input.py').write_bytes(b'original')
+        subprocess.run(['git', 'init', '-q', str(root)], check=True)
+        subprocess.run(['git', '-C', str(root), 'add', 'backend/input.py'], check=True)
+        return root
+
+    def test_source_linked_ancestors_refuse_even_identical_bytes(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-parents-') as directory:
+            root = self.source_tree(directory)
+            outside = Path(directory) / 'outside'
+            outside.mkdir()
+            (outside / 'input.py').write_bytes(b'original')
+            original = root / 'saved'
+            (root / 'backend').rename(original)
+            for target in (outside, original):
+                with self.subTest(target=target.name):
+                    (root / 'backend').symlink_to(target, target_is_directory=True)
+                    try:
+                        with patch.object(runner, 'ROOT', root), \
+                             patch.object(runner.subprocess, 'check_output', return_value=b'backend/input.py\0'), \
+                             self.assertRaises(ValueError):
+                            runner.security_sources()
+                    finally:
+                        (root / 'backend').unlink()
+
+    def test_source_root_and_root_ancestor_links_refuse_before_git(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-root-') as directory:
+            root = self.source_tree(directory)
+            link = Path(directory) / 'linked'
+            link.symlink_to(root, target_is_directory=True)
+            parent_link = Path(directory) / 'parent-link'
+            parent_link.symlink_to(directory, target_is_directory=True)
+            for target in (link, parent_link / 'checkout'):
+                with self.subTest(target=target), patch.object(runner, 'ROOT', target), \
+                     patch.object(runner.subprocess, 'check_output') as git:
+                    with self.assertRaises(ValueError):
+                        runner.security_sources()
+                    git.assert_not_called()
+
+    def test_source_ignore_metadata_parent_link_refuses_before_git(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-ignore-') as directory:
+            root = self.source_tree(directory)
+            info = root / '.git/info'
+            info.rename(root / '.git/original-info')
+            info.symlink_to('original-info', target_is_directory=True)
+            with patch.object(runner, 'ROOT', root), \
+                 patch.object(runner.subprocess, 'check_output') as git:
+                with self.assertRaises(ValueError):
+                    runner.security_sources()
+                git.assert_not_called()
+
+    def test_source_leaf_replaced_at_open_cannot_read_link_target(self):
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-swap-') as directory:
+            root = self.source_tree(directory)
+            outside = Path(directory) / 'outside.py'
+            outside.write_bytes(b'original')
+            actual_open = os.open
+            swapped = []
+            def swap(path, flags, *args, **kwargs):
+                if path == 'input.py' and flags & os.O_RDONLY == os.O_RDONLY and not swapped:
+                    swapped.append(True)
+                    (root / 'backend/input.py').unlink()
+                    (root / 'backend/input.py').symlink_to(outside)
+                return actual_open(path, flags, *args, **kwargs)
+            with patch.object(runner, 'ROOT', root), patch.object(runner.os, 'open', side_effect=swap):
+                with self.assertRaises(ValueError):
+                    runner.security_sources()
+            self.assertTrue(swapped, 'ordinary source must be opened through the no-follow descriptor path')
+
     def test_exact_successor_path_and_seven_stages(self):
         self.assertEqual(str(runner.ARCHIVE), "/tmp/birja-phase14-proof/recovery.tar.gz")
         self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0023-cold",
