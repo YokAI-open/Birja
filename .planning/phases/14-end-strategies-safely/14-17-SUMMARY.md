@@ -256,3 +256,72 @@ All three repair commits, corrected packet/manifest, historical packet and
 preservation/cleanup receipts exist. Strict current verification passes after
 append-only documentation changes. The original review is unchanged; unrelated
 `.claude/` remains untracked and preserved. No active owned test process remains.
+
+## Strict-prefix acceptance and final artifact qualification follow-up
+
+The narrow independent re-review left CR-01 resolved but requested a complete
+pre-policy event grammar for CR-02. RED `db80526` reproduced 26 benign refusal
+failures. GREEN `ecf0a21` routes all prefix parser callbacks through one finite
+generated-scaffolding state machine, using literal HTML ASCII spaces rather than
+Unicode whitespace trimming and refusing closing tags, references, comments,
+PI and unsupported declarations before the exact policy. No-follow inventory,
+static SVG restrictions, Phase 13 compatibility and exact packet checks remain.
+The 26 evidence methods pass in 7.807s and eight browser contracts in 0.294s;
+format/diff checks pass with only the documented baseline Ruff findings.
+
+Independent code review committed `44c3cbe` recorded **CODE_ACCEPTED, zero code
+blockers/warnings**, leaving artifact qualification pending. No recapture was
+started before that review. The accepted verifier/contracts remain byte-identical
+through the final source. This record does not replace the independent review's
+final evidence disposition.
+
+R3 directory/ZIP were moved to exclusive `-r3-historical` paths with a hash/source
+receipt, preserving exact SHA256
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+R1 history and incomplete R2 remain preserved. R4 then failed honestly: 5/6 cases
+passed but the 375px capture's committed-unknown crypto setup saw genuine
+`price_changed` 409 instead of assumed 201. The 232.757s run had unchanged source
+and all 1,798 tracked bytes, successful owned cleanup/empty probes and no canonical
+packet. Its partial capture and receipts remain; it is not counted as passing.
+
+The parent approved a precise capture-only correction in
+`frontend/e2e/portfolio-deletion.spec.ts`, committed **`724aa2a`**. It forwards
+verified `price_changed` only, performs at most four explicit UI confirmations
+on fresh enabled previews and drops only a genuine 201 committed fill. It never
+retargets/retries an unknown outcome or fabricates success. Scoped TypeScript
+checks pass; the actual bounded 375px case passed in **63.614s** (browser 31.3s),
+source unchanged with all owned cleanup empty. No behavior case or product code
+changed; no eight-case/full-fourteen-case rerun was performed.
+
+The final canonical R5 was captured from committed source
+`724aa2af46c24a863929bd786a6e859eb383da51` on
+`2026-11-20T07:57:59.380548+00:00`:
+
+- **6/6 actual capture cases pass**, 237.883s total (browser 198.4s).
+- All 365 render inputs and **1,798 tracked files** remain byte-identical across
+  the guarded run.
+- ZIP `/tmp/birja-phase14-ui-review.zip`, SHA256
+  `372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`.
+- Input digest `6a644be75ac56fd92287603b2b8785c0f850f8b7e553e8cd5a31d1353850bb18`.
+- Full 114-capture/419-artifact inventory and exact source/ZIP verification pass.
+- All **190 actual offline layouts pass**, zero HTTP(S), one visible h1,
+  no horizontal overflow, loaded fonts and no active forms/scripts/frames.
+- Owner/native acceptance flags remain false. The current desktop cross-tab
+  screenshot was inspected without claiming human acceptance.
+- Owned containers/networks/volumes all removed; no active test process remains.
+
+Final receipts are `/tmp/birja-phase14-plan17/canonical-r5.{json,log}`,
+`canonical-r5-tracked-{start,result}.json`, `offline-r5.json` and the historical
+`canonical-r3-preservation.json`. Failed R4/partial source and cleanup remain
+recorded in its supervisor log and tracked-result receipt. Phase 13 UI bytes
+still hash to `724607e8…`; previous recovery archive bytes and the absent
+Plan 18 canonical recovery output remain unchanged. No runtime, dependencies,
+provider/production operations, publication or global-state edits occurred.
+
+### Final evidence self-check: PASSED
+
+Accepted code and capture-only repair commits exist; current and historical ZIPs,
+manifest and durable receipts exist. Current source/artifact/ZIP verification
+passes after append-only documentation updates. **EVIDENCE_READY** for final
+independent review; Plans 18/19 and whole requirement completion remain pending
+the orchestrator's gates. The original review report is unchanged.

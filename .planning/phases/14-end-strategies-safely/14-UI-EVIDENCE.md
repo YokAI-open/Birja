@@ -191,3 +191,71 @@ was inspected: the original named check remains visible and financial content
 stays masked. Phase 13 UI bytes still match `724607e8…`; no prior recovery archive,
 runtime, migration, authority, dependency, provider or production configuration
 changed. Parent independent re-review and Plans 18/19 remain required.
+
+## Strict-prefix code acceptance and current canonical R5
+
+This appendix supersedes the earlier canonical/current-verification identities.
+All earlier evidence and review history remain preserved. The strict structural
+prefix repair was committed as `ecf0a21` after RED `db80526`; independent code
+review recorded **CODE_ACCEPTED, zero remaining code blockers/warnings** in
+`44c3cbe`, with artifact qualification explicitly pending. The verifier and its
+contracts are byte-identical to that accepted code in the current capture source.
+
+The single prefix state machine governs every pre-policy start/end/self-closing,
+data, declaration, unknown declaration, comment, PI, entity and character-reference
+callback. Only generated doctype/html/head/charset transitions and literal HTML
+ASCII spaces are permitted before exact policy completion. Benign coherent
+index/explicit-head capture regressions reproduce closing-tag and Unicode or
+referenced-text failures. Generated positives and Phase 13 compatibility remain
+covered. **26 evidence methods pass in 7.807s; eight browser contracts pass in
+0.294s**. No executable demonstration or additional browser attack was used.
+
+R3 was moved to exclusive
+`/tmp/birja-phase14-ui-review-r3-historical[.zip]`, preserving SHA256
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`
+and input digest `6f6068c3f44b388e2ac3ade07764ac287dbbe19e0e84dfa876efaf32a2c20ea4`.
+Its receipt is `/tmp/birja-phase14-plan17/canonical-r3-preservation.json`.
+
+The first recapture R4 was **not successful**: five of six cases passed, but
+375px unknown-order setup received a genuine crypto `price_changed` 409 while
+the fixture assumed 201. It failed after 232.757s, source and all 1,798 tracked
+files unchanged; automatic owned cleanup and empty probes succeeded. No canonical
+packet was created. Raw partial captures remain at
+`/tmp/birja-phase14-ui-capture-d1_3vg2f`; supervision/tracked receipts are
+`canonical-r4.{json,log}` and `canonical-r4-tracked-{start,result}.json`.
+
+The parent approved the precise capture-only fixture repair committed `724aa2a`:
+forward only a verified genuine `price_changed` 409, require another explicit
+confirmation of the fresh enabled preview, bound attempts at four, and drop the
+response only after genuine committed 201. It does not retry an unknown result,
+accept another conflict code or fabricate success. Scoped ESLint/Prettier/diff
+checks passed. The bounded actual 375px capture passed in 63.614s (browser 31.3s),
+with unchanged source and empty owned cleanup. The eight behavior cases were not
+rerun or changed.
+
+Current final packet:
+
+- Source: `724aa2af46c24a863929bd786a6e859eb383da51`.
+- Capture completed: `2026-11-20T07:57:59.380548+00:00`.
+- Canonical: `/tmp/birja-phase14-ui-review[.zip]`.
+- ZIP SHA256: `372c94808a6741f410522f1559221d5d2b71b02aefaa95ebe417a15911bffdfe`.
+- 365-input digest: `6a644be75ac56fd92287603b2b8785c0f850f8b7e553e8cd5a31d1353850bb18`.
+- Actual capture: **6/6 cases passed**, 237.883s total; browser 198.4s.
+- 114 actual state pages, 190 PNGs, 114 sanitized timing traces and index:
+  **419 hashed artifacts**, plus the manifest.
+- Render-source and all **1,798 tracked bytes unchanged** throughout the run.
+- Strict current source/artifact/exact ZIP verification passes.
+- Actual extracted offline inspection: **190 layouts**, zero HTTP(S) requests,
+  one visible h1, no horizontal overflow, fonts loaded and no active forms,
+  scripts or frames; Chromium `156.0.8078.4`.
+- Owner UI and native 200% flags remain **false**.
+
+Receipts: `/tmp/birja-phase14-plan17/canonical-r5.{json,log}`,
+`canonical-r5-tracked-{start,result}.json`, and `offline-r5.json`.
+Browser log: `/tmp/birja-phase09-browser-e4vh74ak/browser-portfolios.log`.
+Current desktop cross-tab screenshot was inspected: no financial details remain,
+and the unresolved original-order warning is readable. All owned containers,
+networks and volumes were removed; no test lane remains active. R1/R2/R3 history,
+the Phase 13 UI packet and recovery archives are preserved. The original review
+is unchanged. Evidence is ready for final independent qualification; this does
+not supply Plan 18 integration or Plan 19 human acceptance.
