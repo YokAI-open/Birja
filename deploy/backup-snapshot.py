@@ -1047,7 +1047,7 @@ CLOSURE_SOURCE_SHA256 = {
     'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
     'backend/app/models/__init__.py': '6856ecbbdfe51305caf3ab0fa1061b08d9f105a6eb73beb4240510508232ae9d',
     'backend/app/models/corporate_action.py': 'ec268ad87ef8b1df2509da3513932c50a6b9f007786298694f97377a23eb8077',
-    'backend/app/services/portfolio_closure.py': 'f4875839baaf1379d392c285e7c20d85bd71d6c6cb12521ecefd9bda7b6abedd',
+    'backend/app/services/portfolio_closure.py': 'ef21a9be97efdda0989e55cede877ea624ae654f0bdc74984ea118c76703e025',
     'backend/app/services/stock_ownership.py': 'fe4a317f806998a4804abcf0dbb53e5bd891227440abaa834f8a91b391ad052d',
     'backend/app/services/corporate_actions.py': 'da69ac8e46daf54bb6751bd414248402931b4693b51ec2594ecc8a1aa2a95e2e',
     'backend/alembic/versions/0021_portfolio_closure_schema.py': '737446365d1304dc3721ced552102cde4d386b07031823eaf33967961732c81c',

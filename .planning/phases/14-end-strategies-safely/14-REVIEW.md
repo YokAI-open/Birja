@@ -353,3 +353,26 @@ seven-stage same-archive recovery, current UI packet verification and Plan19's
 actual owner/native200 outcomes remain pending. Neither this scoped approval
 nor the focused coverage measurements complete those gates. Only this report
 was edited; no source change, commit or global-state update was made here.
+
+## Scoped Current-Service Binding Review — Two Entries
+
+**Zero blockers and zero warnings.** The reviewed working-tree diff on
+`7a29129` changes exactly two SHA256 values: the current closure-service entry
+in `deploy/backup-snapshot.py` and its matching current entry in
+`deploy/verify-restore.py`. Both now equal
+`ef21a9be97efdda0989e55cede877ea624ae654f0bdc74984ea118c76703e025`.
+This reviewer independently hashed the working-tree service and its accepted
+`48aec5b` version; both match that value. The update therefore binds the already
+reviewed service repair rather than accepting an unrelated source.
+
+The source-validation loops, required member names, current profile, legacy
+bindings, SQL/schema/ACL fingerprints, dependency and image pins remain
+unchanged. The preflight's earlier refusal of the stale binding remains valid
+failed-history evidence, not a passing long-command result. The recorded four
+offline contract logs contain12 fixture,19 recovery,9 package/retained and22
+image/source tests passing,62 total; this reviewer read those outputs and did
+not independently execute them. Neither changed file is a render input.
+
+Only this report was appended. No source, commit, browser, DB or test operation
+was performed by this pass. Whole R2 has not launched; fresh complete security,
+same-archive recovery and actual human acceptance remain pending.

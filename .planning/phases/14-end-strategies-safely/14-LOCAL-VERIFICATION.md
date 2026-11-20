@@ -284,3 +284,24 @@ Receipts: `/tmp/birja-phase14-campaign-plan18-repair/`:
 `ui-r5-preservation.json`, `capture-r6.json`, `capture-r6.command.log`,
 `capture-r6.launch.log`, `offline-r6.{json,log}`. R6 now supplies current-source
 UI evidence before the fresh whole-security qualification; it is not that pass.
+
+### Current recovery source association
+
+The first bounded R2 preflight refused in0.24s before starting Docker/tests:
+the current producer/consumer still bound the old closure-service bytes.
+The refusal is preserved in`preflight-r2.log`; no whole R2 command was launched.
+The parent explicitly approved updating only the service entry in the two
+current `CLOSURE_SOURCE_SHA256` dictionaries, in`deploy/backup-snapshot.py` and
+`deploy/verify-restore.py`, to independently measured reviewed service SHA
+`ef21a9be97efdda0989e55cede877ea624ae654f0bdc74984ea118c76703e025`.
+All other bindings, legacy source, SQL/schema/ACL, dependencies and image pins
+are unchanged. No automatic runtime hash adoption was added.
+
+Existing offline checks pass **62 tests**:12 fixture contracts,19 recovery,
+9 package/retained and22 image/source. Total per-command wall times are5.300s,
+3.675s,15.707s and6.067s respectively. Raw`binding-*.log` and
+`binding-contracts.json` remain in the private Plan18 repair directory.
+Ordinary independent review accepts the exact two-entry diff with **0 blockers/
+0 warnings** and independently matches the service hash at reviewed48aec5b.
+Neither changed file is a render input; strict current R6 verification still
+passes. A new bounded preflight and whole security command remain required.
