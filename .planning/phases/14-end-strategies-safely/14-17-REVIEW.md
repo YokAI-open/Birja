@@ -5,6 +5,8 @@ reviewed: 2026-11-20
 depth: deep
 source_commit: a9580c4
 diff_base: 1c370df
+re_reviewed_source: 4a79c99
+re_reviewed_code: 4a0ac10
 files_reviewed: 8
 files_reviewed_list:
   - deploy/tests/portfolio-ui-evidence.py
@@ -16,10 +18,10 @@ files_reviewed_list:
   - frontend/e2e/portfolio-review-capture.ts
   - frontend/e2e/portfolio-strategies.spec.ts
 findings:
-  critical: 2
+  critical: 1
   warning: 0
   info: 0
-  total: 2
+  total: 1
 status: issues_found
 ---
 
@@ -27,7 +29,10 @@ status: issues_found
 
 ## Narrative Findings (AI reviewer)
 
-Two **BLOCKER** findings remain in the new packet qualification boundary. The
+The original review recorded two **BLOCKER** findings in the new packet
+qualification boundary. Independent re-review at `4a79c99` resolves CR-01 and
+keeps CR-02 open for the remaining early-policy placement edge described below.
+There is **one remaining blocker and no warnings**. The
 exact eight-file `1c370df`→`a9580c4` changeset was reviewed through browser
 journeys, the process-only oracle, capture generation and packet verification.
 No structural pre-pass was supplied. This review does not certify the pending
@@ -38,6 +43,9 @@ whole-source qualification or owner/native-zoom acceptance.
 ### CR-01: Render-source inventory silently omits linked directories
 
 **Classification:** BLOCKER.
+
+**Disposition at `4a79c99`: RESOLVED.** Original finding and proof retained;
+current repair assessment follows below.
 
 **File:** `deploy/tests/portfolio-ui-evidence.py:71`;
 `deploy/tests/portfolio-ui-evidence.py:80`;
@@ -79,6 +87,10 @@ set to hide the missing binding.
 
 **Classification:** BLOCKER.
 
+**Disposition at `4a79c99`: PARTIALLY RESOLVED; remains open for policy placement.**
+The unsupported SVG and absent/weakened-policy cases are repaired. The remaining
+document-structure edge is recorded in the re-review section below.
+
 **File:** `deploy/tests/portfolio-ui-evidence.py:382`;
 `deploy/tests/portfolio-ui-evidence.py:406`;
 `deploy/tests/portfolio-ui-evidence.py:430`.
@@ -116,6 +128,75 @@ for unsupported SVG animation and absent/weakened policies, including otherwise
 consistent metadata and artifact declarations. Keep static-icon and generated
 packet positive controls, preserve the Phase 13 interface explicitly, and
 recapture/reverify the corrected current-source packet before owner review.
+
+## Independent Repair Re-review at `4a79c99`
+
+Reviewed repair source `4a0ac10` and the exact `70342c2`→`4a79c99` change set:
+`deploy/tests/portfolio-ui-evidence.py`, its evidence contract file and the
+append-only `14-17-SUMMARY.md` / `14-UI-EVIDENCE.md` records. No other original
+source file changed in this repair. No new browser/security demonstration or
+test was run during this re-review; this disposition is defensive source and
+recorded-evidence analysis only.
+
+### CR-01 resolved: descriptor traversal rejects links before filtering
+
+`source_directory()` opens roots and their ancestors without following links.
+`source_files()` inspects every entry before exclusions or suffix filtering,
+rejects links/nonregular input, and recursively opens ordinary directories
+without following links. `source_bytes()` independently checks ancestors,
+opens the final file without following links and verifies its regular-file type
+before reading. Font/configuration inputs use the same guarded path. This closes
+the original silent omission and ancestor-link paths while retaining the
+documented optional-public-root and ordinary cache-directory behavior.
+
+Controlled linked-root/child/ancestor/font/configuration regressions now require
+refusal, and ordinary-file positive/mutation controls preserve useful source
+binding. The original finding is resolved without broadening allowed input.
+
+### CR-02 remaining: pre-policy closing tags can leave effective head placement unverified
+
+**Files:** `deploy/tests/portfolio-ui-evidence.py:503`;
+`deploy/tests/portfolio-ui-evidence.py:560`.
+
+The static icon vocabulary now excludes the previously accepted dynamic SVG
+mechanisms. Exact policy directives, duplicate policies, explicit late-head
+placement, early text and non-scaffolding opening tags are also refused. Those
+parts of CR-02 are resolved.
+
+However, the pre-policy rule applies only to opening tags and text.
+`handle_endtag()` accepts document/body closing tags before any policy and sets
+`head_closed` only for an explicit head-closing tag. HTML document parsing can
+implicitly finish its head and enter its body when processing such closing
+document tokens. A subsequently encountered policy can therefore be outside the
+effective head even though this parser still considers it early. Presence of
+the exact policy text alone does not establish that the browser applies it.
+
+This is a remaining part of the original effective-policy requirement, not a
+new application-runtime finding. The normal generated canonical pages use
+ordinary structure; no active or unsafe current packet is claimed.
+
+**Fix:** Before the first required Phase 14 policy, refuse unsupported closing
+tags as well as unsupported opening tags/text, or track a complete strict
+document-scaffolding state that cannot advance outside the effective head.
+Generated pages need no document/body end tags before their policy. Add benign
+closing-document scaffolding refusal cases and preserve positive generated
+index/capture and Phase 13 compatibility controls. No executable content or
+additional browser demonstration is needed to cover this parser-state gap.
+
+### Repair evidence assessed
+
+The 25 evidence methods / eight browser contracts cover the implemented
+no-follow, static SVG and policy mutations, but do not cover the remaining
+pre-policy closing-tag path. The recorded corrected six-width capture passed
+6/6 cases in 220.327s with source unchanged. Its 114 captures, 419 artifacts and
+190 offline layouts are bound to source `4a0ac10`, input digest
+`6f6068c3f44b388e2ac3ade07764ac287dbbe19e0e84dfa876efaf32a2c20ea4`,
+and ZIP SHA256
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+Offline records report zero external requests and pending human/native flags.
+The historical R1 packet is preserved; the interrupted R2 is explicitly
+incomplete with separate owned cleanup, rather than counted as passing proof.
+Those records were read; no capture, database, browser or whole suite was rerun.
 
 ## Other Assessed Boundaries
 
@@ -167,3 +248,77 @@ remain Plan 18 work. Owner UI and genuine native-200% outcomes remain Plan 19
 work. The six documented baseline Ruff diagnostics were not relabelled as new
 defects, and no push, merge, deployment or live-provider permission follows from
 this review.
+
+## Fresh Defensive Repair Re-review — `70342c2` to `4a79c99`
+
+This second, narrow independent pass preserves the original findings and earlier
+disposition. Its exact source scope is `deploy/tests/portfolio-ui-evidence.py`
+and `deploy/tests/test-portfolio-ui-evidence.py` in that repair diff, with the
+unchanged `frontend/e2e/portfolio-review-capture.ts` cross-read for the trusted
+policy and actual metadata contract. The two append-only repair evidence records
+were also read. This pass does not repeat the original eight-file deep review.
+
+**Disposition: one remaining BLOCKER (CR-02), zero WARNING findings.** CR-01
+remains resolved: roots, ancestors, traversed entries, configuration and fonts
+use the no-follow checks before filtering or consuming file bytes. Ordinary
+source mutations remain bound; linked inputs refuse.
+
+### CR-02: all events before the policy need a strict structural contract
+
+**Classification:** BLOCKER; additional evidence for the existing finding.
+
+**Files:** `deploy/tests/portfolio-ui-evidence.py:503`,
+`deploy/tests/portfolio-ui-evidence.py:560`,
+`deploy/tests/portfolio-ui-evidence.py:566`.
+
+The earlier closing-tag finding is confirmed by source tracing. There is also
+a text-classification mismatch: `handle_data()` uses Python's Unicode whitespace
+trimming. It therefore accepts non-ASCII whitespace before the policy, including
+whitespace obtained by decoding a character reference. HTML document parsing
+recognizes a smaller, specific set of space characters at this boundary. Such
+text can finish the effective head while this verifier still has no policy and
+`head_closed` remains false. The later exact policy then passes the verifier
+without proving effective placement in the browser head. These are two paths
+through the same unresolved policy-placement boundary, not separate findings.
+
+**Fix:** Require a small, explicit trusted document prefix through the first
+policy. Validate every parser event against that contract, including closing
+tags, decoded text and declarations; permit only HTML space characters where
+whitespace is intended. Permit comments, doctypes or processing instructions
+only under explicitly defined inert prefix semantics, or refuse unsupported
+forms. Generated capture/index prefixes need no early closing document tags or
+non-ASCII whitespace. Add benign refusal regressions for those two confirmed
+paths at both index and capture boundaries, preserve generated positive cases
+and the Phase 13 interface, then regenerate current-source evidence after the
+repair source is committed. An end-tag-only patch would leave the text path.
+
+The requested duplicate-attribute/case check found no additional defect in the
+required policy check. Attribute names are normalized by `HTMLParser`, but a
+recognized policy must have exactly two raw attributes and exactly the two
+distinct expected names. Duplicate names therefore refuse even though conversion
+to a dictionary would otherwise choose the last value. Policy values are
+case-normalized for recognition; directive validation remains conservatively
+exact. Every supplied handler/refresh/resource attribute is checked individually.
+The trusted helper emits the required early policy and matching layout, trace,
+source, browser, scope, artifact and pending-human metadata fields.
+
+### Evidence and execution limits for this pass
+
+The repair contracts contain 25 evidence methods and the records retain eight
+browser contracts, six corrected actual capture cases in 220.327s, 114 HTML
+captures, 190 PNGs, 114 sanitized traces and one index (419 hashed artifacts).
+The R3 receipt records unchanged source and successful completion; its offline
+receipt records 190 layouts and zero external requests. This pass independently
+read those receipts and hashed the canonical ZIP, confirming
+`9419f5f632f621ac85d89a161f75361bb36f5628bad1ce3ea8020ab1b5535944`.
+The recorded capture source is `4a0ac10d8bde309b74cf3c7d0ca95b67e4d111ff`
+and input digest is
+`6f6068c3f44b388e2ac3ade07764ac287dbbe19e0e84dfa876efaf32a2c20ea4`.
+R1 preservation and the explicitly incomplete R2/owned-cleanup records remain
+intact. Existing tests do not cover the remaining structural-prefix paths.
+
+No unit test, database, browser, capture, security demonstration or full campaign
+was run by this pass. No executable example is included. Only this review report
+was edited; source, global planning state and unrelated `.claude/` were preserved.
+Both human acceptance flags remain false. Plans 18 and 19 are pending gates,
+not defects inferred by this review.
