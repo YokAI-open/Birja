@@ -203,3 +203,43 @@ the SDK. Shared STATE/ROADMAP/requirements remain parent-owned. Existing issue35
 dependencies/image pins, historical migrations/profiles, prior archives,
 production/provider state and unrelated `.claude/` are preserved. Nothing was
 pushed, merged or deployed. No test lane remains active.
+
+## Resumed approved validation repair
+
+The parent resumed execution and explicitly approved the proposed private pure
+validator. Updated `AGENTS.md` defensive-review instructions at`fb39f0f` were
+read; review and verification stay focused on fixes, ordinary validation and
+existing isolated integration checks.
+
+Commit **`48aec5b`** extracts the exact existing returned-field predicates and
+error into `_validate_closure_result`. The service calls it unconditionally on
+actual SQL fields before proof or commit. The SQL, authority, rollback and
+three-attempt40001 retry policy are unchanged. Nine ordinary argument cases
+cover the two finite outcomes, replay booleans, original-ID mismatch and invalid
+field values without replacing database results.
+
+Focused R4 passes **91/91 in297.16s**,303.956s receipt: the prior69 cases,
+nine pure validator cases and13 retained closure API cases. Current closure
+service coverage is **63 statements/18 branches,100%/100%**, zero exclusions.
+A source-bound diagnostic gap audit also identified two developer-bootstrap
+refusal branches. Four ordinary unsupported-revision argument cases and a real
+owned-transaction final-default check were added in the same critical test file;
+all driver query results remain real. Focused R5 passes **6/6 in6.59s**,
+12.839s receipt, including the existing positive final-SQL authorization check.
+Both runs retain unchanged-source and empty owned-resource receipts.
+
+The final diagnostic coverage-gap audit covers all64 critical files with no
+remaining statement/branch gaps. It is explicitly `qualification:false`: only
+unchanged source may use preservedR1 plus focused evidence, and the edited
+closure service uses fresh focused evidence. It does not relabel failedR1 or
+replace the required fresh literal whole-command and critical gates.
+Evidence: `/tmp/birja-phase14-campaign-plan18-repair/`:
+`focused-r{4,5}.{log,json}`, corresponding coverage JSON and
+`pre-r2-coverage-gap-audit-final.json`.
+
+Ordinary independent code review accepts the final scoped repair with
+**0 blockers/0 warnings**, preserving original history in`14-REVIEW.md`.
+Scoped Ruff/format/mypy and whitespace checks pass. Final source is committed;
+the next step is preserving R5 and generating genuine current-source UI
+evidence before freezing and starting a new whole security run. The earlier
+scope-decision checkpoint is resolved; whole qualification remains pending.

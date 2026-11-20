@@ -6,7 +6,7 @@ source_commit: d2e8885b798e00a2932a18524a80d6268f28533c
 initial_source_commit: 426435789f8f41dea0b3fe9a4c0852c85b314a46
 re_reviewed: 2026-11-20
 diff_base: 9527e358bc6953cec7580043703324db194ba396
-files_reviewed: 44
+files_reviewed: 46
 files_reviewed_list:
   - backend/alembic/sql/0023_portfolio_closure.sql
   - backend/alembic/versions/0021_portfolio_closure_schema.py
@@ -31,6 +31,8 @@ files_reviewed_list:
   - backend/app/services/portfolios.py
   - backend/app/services/stock_ownership.py
   - backend/app/tasks/dividends.py
+  - backend/tests/test_portfolio_closure_critical.py
+  - backend/tests/test_stock_quotes.py
   - deploy/backup-snapshot.py
   - deploy/deploy.sh
   - deploy/tests/run-portfolio-campaign.py
@@ -277,3 +279,77 @@ Fresh uninterrupted whole security and seven-stage same-archive recovery remain
 Plan18 gates at this repaired reviewed source. Current packet verification and
 Plan19's actual owner/native200 acceptance remain separate; this disposition
 does not claim those outcomes or a hosted CI pass. Only this report changed.
+
+## Final Scoped Repair Review — Coverage and Fresh Test Clocks
+
+This independent follow-up follows the updated defensive-review instructions
+in `AGENTS.md` at `fb39f0f`. Scope is the approved Plan18 repair in
+`backend/app/services/portfolio_closure.py`,
+`backend/tests/test_portfolio_closure_critical.py` and
+`backend/tests/test_stock_quotes.py`, including the final working-tree change
+after `a21eae3`. The final source commit remains the executor's next step.
+The reviewed file hashes are:
+
+- Closure service: `ef21a9be97efdda0989e55cede877ea624ae654f0bdc74984ea118c76703e025`.
+- Critical tests: `b2ff646d3e92893ea6f9c156f470ad331ce9f6d707b8728cb695dab747d7433b`.
+- Quote tests: `0dfe30ecf6e0bec40d6862f831bab1778b242be9521e711bc5f0fa2d8e6f10cc`.
+
+**Disposition: zero concrete correctness blockers and zero remaining warnings
+in this scoped repair.** Original findings and their dispositions above remain
+preserved. This review used static analysis and read the recorded isolated
+verification; it ran no tests, DB operations, browser or demonstrations.
+
+The loop refactor keeps the same maximum of three total attempts. Only
+SQLSTATE40001 can continue, after rollback and counter advancement; other DB
+errors, including40P01, leave after the first attempt. The `finally` cleanup
+still runs on each attempt. The former unreachable terminal statement is
+removed without adding an unlimited retry path.
+
+The private `_validate_closure_result` helper contains the exact existing
+returned-field predicates and error. Its call is unconditional on the actual
+SQL row fields, before complete closure proof or commit. There is no new
+accepted result shape, skipped validation or change to transaction handling.
+Its ordinary argument tests cover valid finite outcomes and booleans, target
+inequality, unsupported outcome and invalid boolean arguments. The service
+path still consumes real SQL results in the existing integration tests.
+
+The real-session guard, bounded server-error retry, retained acknowledgement
+and rollback checks remain in the new critical file. The additional unsupported
+revision cases are pure validation tests. The final-default timing check reads
+through the real driver and verifies rollback restores the original authority
+and catalogue. No returned database row is replaced by a fabricated result.
+No schema, SQL authority, ACL source, fingerprint, lockfile or image pin is
+changed by this repair.
+
+The intermediate quote-test warning **WR-02 — collection-time timestamp
+parameters outlive a refreshed test clock — is RESOLVED**. The autouse fixture
+refreshes each scenario's wall clock, and all time-dependent parameter values
+are now evaluated inside the test against that refreshed clock. Future+1s,
+stale120s, exact expiry and prior-date cases therefore retain their intended
+meaning after a long collection-to-execution delay. Other module parameter
+sites contain no collection-time timestamp values. This preserves the refusal
+assertions instead of letting an unrelated stale-time refusal satisfy them.
+
+Recorded evidence assessed under
+`/tmp/birja-phase14-campaign-plan18-repair/`:
+
+- `focused-r3.log/json`:69 tests passed in203.06s,209.605s receipt; the existing
+  critical/quote repairs and actual quota/first-buy regression complements.
+- `focused-r4.log/json`:91 tests passed in297.16s,303.956s receipt. The current
+  closure service has63 statements and18 branches,100% coverage with zero
+  missing statements/branches; no exclusions were added.
+- `focused-r5.log/json`:six bootstrap checks passed in6.59s,12.839s receipt.
+- Both final R4/R5 receipts record exit0, unchanged source and empty owned
+  container/network/volume inventories.
+
+`pre-r2-coverage-gap-audit-final.json` describes64 critical modules and explicitly
+sets `qualification:false`. Its current-service entry uses fresh repair evidence;
+unchanged modules retain provenance from R1 plus focused diagnostics. This is
+a useful diagnostic of remaining gaps, **not a composite qualification pass**.
+The failed R1 whole command remains failed historical evidence.
+
+Fresh uninterrupted all-security, its literal whole critical gate, the complete
+seven-stage same-archive recovery, current UI packet verification and Plan19's
+actual owner/native200 outcomes remain pending. Neither this scoped approval
+nor the focused coverage measurements complete those gates. Only this report
+was edited; no source change, commit or global-state update was made here.
