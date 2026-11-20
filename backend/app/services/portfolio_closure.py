@@ -34,6 +34,18 @@ class ClosureResult:
     replayed: bool
 
 
+def _validate_closure_result(
+    expected_portfolio_id: int, portfolio_id: int, outcome: str, replayed: bool
+) -> None:
+    """Validate returned fields before accepting a transaction's closure result."""
+    if (
+        portfolio_id != expected_portfolio_id
+        or outcome not in {"closed", "confirmation_changed"}
+        or type(replayed) is not bool
+    ):
+        raise OwnershipHeld("invalid_closure")
+
+
 async def close_owned_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureResult:
     """Map private transport dispositions without weakening the transaction proof."""
     try:
@@ -104,12 +116,9 @@ async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureR
                     },
                 )
             ).one()
-            if (
-                row.portfolio_id != original.portfolio_id
-                or row.outcome not in {"closed", "confirmation_changed"}
-                or type(row.replayed) is not bool
-            ):
-                raise OwnershipHeld("invalid_closure")
+            _validate_closure_result(
+                original.portfolio_id, row.portfolio_id, row.outcome, row.replayed
+            )
             if row.outcome == "closed":
                 db.info["portfolio_closure_proof"] = _ClosureProofContext(
                     db.get_transaction(),

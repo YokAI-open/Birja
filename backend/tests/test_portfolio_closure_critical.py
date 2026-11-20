@@ -20,6 +20,27 @@ from tests.test_portfolio_closure_stocks import proof_grants
 __all__ = ["authority", "stock_authority"]
 
 
+@pytest.mark.parametrize("outcome", ["closed", "confirmation_changed"])
+@pytest.mark.parametrize("replayed", [False, True])
+def test_returned_closure_fields_accept_exact_original_and_finite_values(outcome, replayed):
+    assert service._validate_closure_result(11, 11, outcome, replayed) is None
+
+
+@pytest.mark.parametrize(
+    "portfolio_id,outcome,replayed",
+    [
+        (12, "closed", False),
+        (11, "other", False),
+        (11, "closed", 0),
+        (11, "closed", "false"),
+        (11, "closed", None),
+    ],
+)
+def test_returned_closure_fields_refuse_invalid_arguments(portfolio_id, outcome, replayed):
+    with pytest.raises(ownership.OwnershipHeld, match="invalid_closure"):
+        service._validate_closure_result(11, portfolio_id, outcome, replayed)
+
+
 async def new_case(authority):
     app, migrator, admin = authority
     await proof_grants(admin)
@@ -342,3 +363,45 @@ async def test_final_default_acl_check_refuses_actual_post_preflight_change(
         assert await conn.scalar(text(DEFAULT_ACL_0023_SQL)) == baseline
         assert await conn.scalar(text(CATALOGUE_0023_SQL)) == catalogue
         assert await require_schema(conn) == "0023"
+
+
+@pytest.mark.parametrize("revision", ["0006", "0024", "", "unknown"])
+def test_dev_migration_inventory_refuses_unsupported_revision(revision):
+    from app.db.dev_bootstrap import migration_objects
+
+    with pytest.raises(ValueError, match="Unsupported migration revision inventory"):
+        migration_objects(revision)
+
+
+async def test_dev_final_default_acl_recheck_reads_actual_current_authority(engine, migrated):
+    from app.db import dev_bootstrap
+    from app.db.portfolio_bootstrap import ACL_SQL, CATALOGUE_0023_SQL, DEFAULT_ACL_0023_SQL
+
+    queries = (ACL_SQL, DEFAULT_ACL_0023_SQL, CATALOGUE_0023_SQL)
+    async with engine.connect() as conn:
+        before = tuple([await conn.scalar(text(query)) for query in queries])
+        raw = await conn.get_raw_connection()
+        driver = raw.driver_connection
+        changed = []
+
+        class ObservedConnection:
+            async def execute(self, command):
+                return await driver.execute(command)
+
+            async def fetchval(self, query):
+                if query == DEFAULT_ACL_0023_SQL and not changed:
+                    # Coordinate the actual final read on this owned transaction;
+                    # all SQL results still come from the real driver unchanged.
+                    await driver.execute(
+                        "ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator "
+                        "GRANT EXECUTE ON FUNCTIONS TO birja_scheduler"
+                    )
+                    changed.append(True)
+                return await driver.fetchval(query)
+
+        with pytest.raises(ValueError, match="Unexpected final closure default privileges"):
+            await dev_bootstrap._authorize_portfolios(ObservedConnection())
+        assert changed == [True]
+        await conn.rollback()
+    async with engine.connect() as conn:
+        assert tuple([await conn.scalar(text(query)) for query in queries]) == before
