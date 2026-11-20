@@ -89,7 +89,8 @@ async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureR
         or original.policy_version != "freeze_at_closure_v1"
     ):
         raise OwnershipHeld("invalid_closure")
-    for attempt in range(3):
+    attempt = 0
+    while True:
         try:
             row = (
                 await db.execute(
@@ -126,6 +127,7 @@ async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureR
         except DBAPIError as exc:
             await db.rollback()
             if getattr(exc.orig, "sqlstate", None) == "40001" and attempt < 2:
+                attempt += 1
                 continue
             raise
         except BaseException:
@@ -133,4 +135,3 @@ async def close_portfolio(db: AsyncSession, original: ClosureIntent) -> ClosureR
             raise
         finally:
             db.info.pop("portfolio_closure_proof", None)
-    raise OwnershipHeld("invalid_closure")

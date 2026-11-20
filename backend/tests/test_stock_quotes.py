@@ -20,6 +20,14 @@ from tests.test_stock_admission import action_admitted, admitted
 NOW = datetime.now(UTC)
 
 
+@pytest.fixture(autouse=True)
+def current_quote_test_clock(monkeypatch):
+    # SQL rechecks actual wall-clock admission. A full suite may execute this
+    # module more than an hour after collection; each independent scenario
+    # needs fresh evidence while retaining its explicit relative expiry tests.
+    monkeypatch.setitem(globals(), "NOW", datetime.now(UTC))
+
+
 @pytest_asyncio.fixture
 async def db(engine: AsyncEngine, stock_state: list[StockMapping]) -> AsyncIterator[AsyncSession]:
     # Close/roll back each writer before restoring catalogue fixture values.
@@ -157,7 +165,7 @@ async def test_older_equal_changed_and_partial_never_refresh_retained_observatio
         {"collection_allowed": False},
         {"retention_allowed": False},
         {"derived_allowed": False},
-        {"valid_until": NOW},
+        {"valid_until": lambda: NOW},
         {"scope": {}},
         {"quota": {}},
     ],
@@ -167,6 +175,7 @@ async def test_current_permissions_are_required_before_any_write(
     stock_state: list[StockMapping],
     changes: dict[str, object],
 ) -> None:
+    changes = {name: value() if callable(value) else value for name, value in changes.items()}
     await db.execute(update(StockDataAdmission).values(**changes))
     assert await upsert_stock_quotes(db, [accepted(stock_state[0])], 4, now=lambda: NOW) == 0
     assert await db.get(StockQuote, stock_state[0].coin_id) is None
@@ -175,9 +184,9 @@ async def test_current_permissions_are_required_before_any_write(
 @pytest.mark.parametrize(
     "changes",
     [
-        {"event_at": NOW + timedelta(seconds=1)},
-        {"collected_at": NOW + timedelta(seconds=1)},
-        {"event_at": NOW - timedelta(seconds=120)},
+        {"event_at": lambda: NOW + timedelta(seconds=1)},
+        {"collected_at": lambda: NOW + timedelta(seconds=1)},
+        {"event_at": lambda: NOW - timedelta(seconds=120)},
         {"mid": Decimal("1")},
         {"feed": "sip"},
         {"coin_id": 1},
@@ -185,7 +194,7 @@ async def test_current_permissions_are_required_before_any_write(
         {"admission_generation": 5},
         {"bid": Decimal("NaN")},
         {"bid": Decimal("0.000000001")},
-        {"session_date": NOW.date() - timedelta(days=1)},
+        {"session_date": lambda: NOW.date() - timedelta(days=1)},
     ],
 )
 async def test_forged_future_and_invalid_rows_are_refused_without_poisoning_batch(
@@ -193,6 +202,7 @@ async def test_forged_future_and_invalid_rows_are_refused_without_poisoning_batc
     stock_state: list[StockMapping],
     changes: dict[str, object],
 ) -> None:
+    changes = {name: value() if callable(value) else value for name, value in changes.items()}
     first, second = [accepted(m) for m in stock_state[:2]]
     assert await upsert_stock_quotes(db, [replace(first, **changes)], 4, now=lambda: NOW) == 0
     await db.commit()
