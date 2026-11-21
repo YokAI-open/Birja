@@ -459,7 +459,9 @@ class Evidence(unittest.TestCase):
         return b""
 
     def run_restore(self, failure=None, *, actual_preflight=False, clock=None):
-        def verified(*args):
+        def verified(dc, manifest, *, quarantined):
+            self.assertEqual(manifest, self.manifest)
+            self.assertIs(quarantined, manifest['revision'] != '0023')
             if failure == "verify":
                 raise ValueError("synthetic verification failure")
             if clock is not None:
@@ -917,11 +919,17 @@ class Evidence(unittest.TestCase):
         self.run_restore()
 
         @contextlib.contextmanager
-        def cleanup_failure(*args):
+        def cleanup_failure(*args, manifest):
+            self.assertEqual(manifest, self.manifest)
             try:
                 yield
             finally:
                 raise OSError("synthetic teardown failure")
+
+        @contextlib.contextmanager
+        def clean_restore(*args, manifest):
+            self.assertEqual(manifest, self.manifest)
+            yield
 
         for failure in [
             InterruptedError("synthetic interruption"),
@@ -944,7 +952,7 @@ class Evidence(unittest.TestCase):
                     side_effect=cleanup_failure
                     if isinstance(failure, OSError)
                     and not isinstance(failure, InterruptedError)
-                    else lambda *args: contextlib.nullcontext(),
+                    else clean_restore,
                 ),
                 patch.object(
                     r,
@@ -967,7 +975,7 @@ class Evidence(unittest.TestCase):
 
 
 class Fixtures(unittest.TestCase):
-    def test_authentic_legacy_selection_rejects_before_runtime_or_docker(self):
+    def test_authentic_legacy_selection_rejects_before_docker_or_fallback(self):
         spec = importlib.util.spec_from_file_location(
             "fixture", HERE / "tests/ops-fixtures.py"
         )
@@ -1087,6 +1095,10 @@ class Fixtures(unittest.TestCase):
                     runtime.reset_mock()
                     with self.assertRaises(ValueError):
                         ops.roundtrip(str(archive))
+                    # Generic authenticated verification checks tool versions;
+                    # campaign family refusal still precedes Docker/fallback.
+                    runtime.assert_called_once_with()
+                    runtime.reset_mock()
                     with self.assertRaises(ValueError):
                         r.bundle_install(
                             archive,

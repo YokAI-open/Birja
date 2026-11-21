@@ -85,6 +85,30 @@ is unchanged; no new broad audit or human approval is inferred.
 
 ## Independent reviews
 
+### Remaining-tail repair checkpoint
+
+TailR1 at`429edcab1d5892eab0e1ff91736483556eb603f6` is **failed**, exit1/227.210s,
+with16/28 command components passed. Command16 (the17th) exposed stale unit
+mock signatures in`test-deploy-prerequisites.py`; production restore behavior
+was unchanged. Original request/status/logs remain under
+`/tmp/birja-phase14-campaign-security-tail-plan18-r1` with true source/tracked
+guards and verified empty owned resources. Real DB-config139passed36.26s.
+
+Authorized test-only repair requires/asserts exact manifest/quarantine arguments
+and accurately distinguishes a generic tool-version probe from container or
+fallback execution. All legacy refusal/cleanup/interruption assertions remain.
+First affected suite20/21 passed8.407s; the remaining stale local restore mock
+was repaired and that one method passed0.242s. Ordinary independent review0/0.
+Full21 execution remains required in the continuation, not inferred from parts.
+
+`tail-r2-reuse-inputs.json` proves only that unit file differs from TailR1 source;
+all16 passed logs and three built image IDs match their original receipts.
+Preflight remains valid. Parent explicitly permits reuse of these components
+and exact remaining indices16–27 (12 commands), including all strict scans.
+The continuation is not a successful single28-command or whole-security run.
+Current R7 strict verification still passes; no render input changed and no
+recapture or broad backend/frontend/browser rerun is required.
+
 Distinct code, security and UI role passes are required before qualification.
 The configured collaboration limit permits one reviewer at a time in this
 session, so the roles run sequentially. No DB/browser campaign or source edits

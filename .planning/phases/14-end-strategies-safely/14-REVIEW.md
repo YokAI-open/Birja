@@ -460,3 +460,28 @@ browser/all-security pass or same-head hosted CI result. Remaining image/ops
 gates, genuine seven-stage same-archive recovery and actual Plan19 human
 acceptance are not established by this scoped review. Full CI/release gates,
 coverage thresholds and existing waiver scope remain required and unchanged.
+
+## Scoped Restore-Prerequisite Test Repair Review — 2026-11-21
+
+**Disposition: 0 BLOCKER findings, 0 WARNING findings.** Independent bounded
+static review covers only `deploy/tests/test-deploy-prerequisites.py` versus
+`429edca`, SHA256
+`544ed59348b9381927b3fa8f49a5ae7099c99315f89027babfae80087d3405ea`.
+
+The updated verifier mock requires the current `quarantined` keyword and
+asserts the exact source manifest and revision-dependent mode. Restore-context
+mocks require and check the exact manifest before the existing interruption
+or teardown failure is exercised. These changes repair stale call signatures
+without removing failure, cleanup or no-false-success assertions.
+
+The legacy fixture now distinguishes generic authenticated archive verification
+from campaign-family selection: the former performs one installed-tool version
+probe, while the latter still refuses before container work or fallback build.
+The test asserts that one probe, resets its mock, and retains the no-probe
+assertion for installation with the wrong required profile. Existing Docker-call,
+fallback-builder and refusal assertions remain intact. No production file is
+changed by this diff.
+
+The failed tail remains failed evidence; full21-test execution is still required
+in the remaining tail. This reviewer ran no tests, browser or database checks
+and made no source edit or commit. Only this review section was appended.
