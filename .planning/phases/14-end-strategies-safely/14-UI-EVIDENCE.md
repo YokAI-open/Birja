@@ -1,5 +1,26 @@
 # Phase 14 implemented UI evidence
 
+## Current review packet — R7, pending owner acceptance
+
+The current canonical packet is `/tmp/birja-phase14-ui-review.zip`; extract it
+and open `index.html`. Download with VS Code Remote Explorer's Download action.
+
+- ZIP SHA256: `886805a094fad7495ae53539da7ea80d0ddff6c67b1ce0aa0465899a493d32e0`.
+- Capture source: `747d5d75c2ff02c299023b8b52921c863c80d532`.
+- Captured at: `2026-11-21T12:49:56.178962+00:00`.
+- Render-input digest: `9b62b2263fb2c9632f6ec3097bbcdc5344d229711330d22d070fe488093ea7f6`.
+- All six capture widths, strict current source/artifact/ZIP verification, and
+  190 offline layout checks pass. Inventory: 419 hashed artifacts.
+- Final Plan18 integrity checks confirm this remains current after qualification.
+- Owner UI and native browser-menu 200% results are both **pending**. Automated
+  reflow and prior phase approvals do not supply either result.
+
+See [14-HUMAN-UAT.md](14-HUMAN-UAT.md) for the two requested outcomes and
+[14-18-SUMMARY.md](14-18-SUMMARY.md) for qualification provenance. Earlier
+packet identities below are historical; they do not identify the current ZIP.
+
+## Historical packet and capture records
+
 This packet contains actual rendered synthetic deletion states from committed
 source `413c25dcc8500c248a0343a9ce7063f4403435be`. Capture completed at
 `2026-11-19T23:34:14.548445+00:00`. Owner UI acceptance and genuine desktop
