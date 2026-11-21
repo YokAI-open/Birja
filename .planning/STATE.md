@@ -42,6 +42,16 @@ Public deletion/freeze belongs to Phase14; full lifecycle qualification to15.
 
 ## Current Position
 
+Owner process preference (2026-11-21): balance development speed and security,
+for this phase and future milestones. CLAUDE.md now requires proportionate
+verification: targeted rechecks after small fixes, reuse of valid evidence for
+unchanged components, and follow-up debt for nonblocking hardening. For Plan18,
+avoid repeating unaffected backend qualification after browser-fixture-only
+repairs or reopening resolved findings without new evidence. Required CI,
+financial/authentication/data safeguards and truthful result reporting remain.
+This instruction records no new test pass or completed plan; any change to an
+explicit remaining qualification gate must be documented in the plan.
+
 Phase: 14 (End Strategies Safely) — EXECUTING
 Plan: 18 (wave14;17/19 complete)
 Current Plan: 18

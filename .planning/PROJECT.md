@@ -272,6 +272,7 @@ funds are isolated rather than transferable across portfolios.
 - **Money correctness**: `Decimal` / `NUMERIC(20,8)`, explicit `ROUND_HALF_EVEN` at trade execution, money sent as JSON strings, trades in one DB transaction with row locks.
 - **Security**: email OTP stored as an HMAC in Redis, JWT access + rotating refresh token in HttpOnly cookies, CSRF double-submit, rate limits. Per CLAUDE.md.
 - **Process**: MVP-first. Each phase leaves the app runnable. Tests ship with features; 80% coverage, and 100% on money, trade execution, login and authorization.
+- **Verification effort**: Owner requested a better balance of delivery speed and security on 2026-11-21, applying now and to future milestones. Use targeted checks after small fixes, reuse valid unchanged-component evidence, and defer nonblocking hardening. Reserve broad reruns for affected integration or release checkpoints; retain financial/authentication/data safeguards and required CI. Shared details live in CLAUDE.md, Test culture.
 
 ## Key Decisions
 
