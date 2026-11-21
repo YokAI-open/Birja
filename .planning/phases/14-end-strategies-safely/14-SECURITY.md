@@ -1,15 +1,15 @@
 ---
 phase: 14
 slug: end-strategies-safely
-status: blocked
+status: pending-human
 source_commit: d2e8885b798e00a2932a18524a80d6268f28533c
 diff_base: 9527e358bc6953cec7580043703324db194ba396
 register_authored_at_plan_time: true
 threats_total: 38
-threats_closed: 36
-threats_open: 2
+threats_closed: 37
+threats_open: 1
 implementation_defects: 0
-qualification_gates_pending: 1
+qualification_gates_pending: 0
 human_gates_pending: 1
 unregistered_flags: 0
 asvs_level: 1
@@ -81,7 +81,7 @@ and secure communication categories.
 | T-14-15 | Elevation/Tampering/DoS high | mitigate | CLOSED | Migrator finite14/20/21/22 prior catalogue/ACL/default+supplement before Alembic; bootstrap-only inherited pair, unchanged final authority; `test-db-config.sh:31` borrowed stack labels/image/ports/health authentication and owns_stack cleanup distinction; genuine fresh/upgraded/cold authority evidence remains supplemental to18 |
 | T-14-16 | Tampering/Repudiation/DoS high | mitigate | CLOSED — CR-01 resolved | Private claim-once supervisor268, gated recorded preflight292, original process identity/reaping and honest forced-finalizer status are present. `source_directory` and `source_bytes` now use no-follow descriptors for root/parents/leaves and identity/reopen checks; targeted independent re-review below resolves the original source-read defect |
 | T-14-17 | Information disclosure/Tampering high | mitigate | CLOSED | Actual public lifecycle journeys in deletion spec177–530; guarded READ ONLY synthetic oracle; packet no-follow descriptors79–139, finite static SVG, complete TrustedPolicyPrefix464 and exact artifact/ZIP checks; both human flags must remain false295–296; original packet review findings independently resolved in17 report |
-| T-14-18 | Tampering/Repudiation/Elevation high | mitigate | **OPEN — PENDING_PLAN18** | Runner/supervisor require source/archive/image guards and one complete child; original CR-01 is resolved. Uninterrupted whole-security and fresh seven-stage same-archive receipts at final reviewed source are absent. Historical partitions/bounded TLS/cold runs cannot close this row |
+| T-14-18 | Tampering/Repudiation/Elevation high | mitigate | CLOSED under final explicit amendment below; original condition historical | Runner/supervisor require source/archive/image guards and one complete child; original CR-01 is resolved. Uninterrupted whole-security and fresh seven-stage same-archive receipts at final reviewed source are absent. Historical partitions/bounded TLS/cold runs cannot close this row |
 | T-14-19 | Repudiation/Tampering high | mitigate | **OPEN — PENDING_PLAN19** | Verifier refuses forged acceptance flags; actual new owner UI response and distinct genuine native200 response have not occurred. This is the later human gate, not a new runtime defect or a waived Plan18 test |
 | T-14-19-PII | Information disclosure high | mitigate | CLOSED | Synthetic read-only packet, script/form/network restrictions, sanitised traces and false human flags; no actual account/credential payload supplied by packet generation; native/owner results remain unclaimed |
 
@@ -243,3 +243,16 @@ bindings and owned cleanup are verified. **T-14-19 remains OPEN/PENDING_PLAN19**
 until the distinct actual owner UI/native200 responses. Neither later result
 is inferred from source repair, focused test logs or this report. Current
 register:36 closed/38;2 pending evidence gates; no new accepted high risk.
+
+## Final owner-amended execution disposition
+
+T-14-18 is CLOSED under the explicit14-18-PLAN amendments: all28 security
+components and6 remaining real recovery components pass; source/CORE/unit/image/
+archive SHA+inode/cleanup guards remain unchanged. Actual current0023 source
+destruction/before-oracle and cold/upgraded/fresh authority parity pass. Critical64
+coverage100% is reused only at identical backend inputs; all5 strict scans have
+HIGH0/CRITICAL0. Failed whole runs and false whole7/final-CI flags remain retained.
+This executor evidence update reuses the original independent source review;
+no new broad audit is claimed. Bounded driver recheck resolves RC-WR-01,0/0.
+No production pin/SQL/result, dependency/image version or issue35 scope changed.
+Register37/38 closed; actual owner/native200 T-14-19 remains pending.

@@ -1,9 +1,9 @@
 # Phase 14 — Local qualification
 
-Plan18 is **incomplete**. Whole-security R1/R2 failed. The explicit owner
+Plan18 is **complete under the explicit owner amendments**. Whole-security R1/R2 failed. The explicit owner
 amendment below supersedes the repeat-whole-local-run criterion; remaining
 security components are complete and genuine recoveryR1 failed. The authorized
-same-archive recovery component continuation remains pending.
+same-archive recovery component continuation passed6/6; Plan19 remains pending.
 All results below are local; no hosted CI, publication,
 deployment or human acceptance is inferred.
 
@@ -419,3 +419,18 @@ Ordinary independent review accepts the exact two-entry diff with **0 blockers/
 0 warnings** and independently matches the service hash at reviewed48aec5b.
 Neither changed file is a render input; strict current R6 verification still
 passes. A new bounded preflight and whole security command remain required.
+
+## Final outcome
+
+| Scope | Actual result |
+|---|---|
+| Security | Exact input-bound backend3691/64critical100%, frontend1330/build/audits reused; affected checks and28 command components pass;5 strict images HIGH0/CRITICAL0. |
+| Recovery |6/6 exit0/2266.665s; original archive SHA/inode unchanged; current0023 source-destroyed before-oracle and exact TLS authority parity; owned cleanup empty. |
+| UI | Final strict R7 passes,190 offline layouts/zeroHTTP; both human outcomes remain Plan19. |
+
+Private receipts: component-qualification.json, recovery-components-final-integrity.json,
+final-preserved-evidence.json under /tmp/birja-phase14-campaign-plan18-repair/.
+Owned scan output is preserved there as image-reports-final/. Eight preserved
+archive/packet hashes match. All guarded groups are terminal/empty. Original
+whole failures stay failed; no whole browser/all-security/whole7/hosted-CI pass.
+No production/provider/publication/new package; whole requirements remain pending.

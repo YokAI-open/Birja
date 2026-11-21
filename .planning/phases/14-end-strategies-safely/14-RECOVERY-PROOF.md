@@ -1,6 +1,6 @@
 # Phase14 recovery — owner-amended component proof
 
-**INCOMPLETE.** Genuine whole recoveryR1 is failed, exit1/1006.586s. No whole7,
+**COMPLETE under the explicit owner amendment.** Genuine whole recoveryR1 is failed, exit1/1006.586s. No whole7,
 uninterrupted recovery or `same_archive_final_ci=true` result is claimed.
 
 Original canonical archive: `/tmp/birja-phase14-proof/recovery.tar.gz`, SHA256
@@ -37,3 +37,34 @@ The continuation preserves source/alltracked/private-driver hashes, archive
 SHA/inode, original failed status, CORE/unit/image guards before/after every
 operation and final cold/upgraded/fresh authority parity. Separate receipts
 will establish actual outcomes; all whole7/final-CI flags remain false.
+
+## Actual continuation outcome
+
+Receipt: /tmp/birja-phase14-campaign-recovery-components-plan18-r1.
+Source628f0afcf9a6ae56d3948a81d40373d17d157bdc; supervisor851450/startticks2926932944.
+**6/6 pass, exit0/2266.665s**, source/tracked guards true, owned cleanup empty.
+
+| Component | Seconds / exit |
+|---|---|
+| Fixed0020 source-destroyed cold |50.781 /0|
+| Current0023 source-destroyed cold |67.354 /0|
+| Roles/current snapshot |380.201 /0|
+| TLS upgraded from0014 and0020 |358.579 /0|
+| TLS fresh |339.727 /0|
+| Selected rollback/refusal/current replay |1016.564 /0|
+
+Cold/upgraded/fresh actual authority triples are identical:
+- catalogue59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e
+- object ACL71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748
+- private defaults4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+
+Actual immutable before-oracles and source destruction pass for both cold lanes.
+Current0023 supplies the original manifest to unchanged restored() and verifies
+final authority with quarantined=False; no financial result is substituted.
+Original archive SHA/inode/device943123/64512 and original failed whole status
+remain unchanged. Final groups and all5 exact owned project inventories are empty.
+Private final proof: recovery-components-final-integrity.json; source-context
+paths/code hashes appear in00.log/01.log. Driver hashes:
+4fd649e7d4f65aaefad7d551dd80c15d7383643506b2a6b06121baac051032e1 and
+01610cdfbc21044e100b050125dd0e3fa67a0579cc993f1bd94645a145b94563.
+Original wholeR1 stays failed; whole7/same_archive_final_ci remainfalse.
