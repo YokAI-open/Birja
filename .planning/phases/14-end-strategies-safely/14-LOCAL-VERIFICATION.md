@@ -2,7 +2,8 @@
 
 Plan18 is **incomplete**. Whole-security R1/R2 failed. The explicit owner
 amendment below supersedes the repeat-whole-local-run criterion; remaining
-component tail and genuine final recovery have not started.
+security components are complete and genuine recoveryR1 failed. The authorized
+same-archive recovery component continuation remains pending.
 All results below are local; no hosted CI, publication,
 deployment or human acceptance is inferred.
 
@@ -32,7 +33,7 @@ changed after security R2.
 | Browser | Explicit composite: failed fullR2 has92passed/1Historyfailure/1retained CSPskip; final corrected normal History1passed42.674s. No whole pass or forced optional-branch coverage. |
 | Reviews | Distinct original code/security/UI passes retained; final six-file review0/0. |
 | Current UI packet | R7 six capture cases pass239.459s; strict current419 artifacts/ZIP and190 offline layouts/zeroHTTP pass. R6 preserved; accepted visual review retained; both human flags false/Plan19. |
-| Remaining gates | Exact28 existing commands after browser, five strict scans and one uninterrupted seven-stage same-archive recovery still pending. |
+| Remaining gates | All28 security components pass through authenticated16+12 receipts; five strict scans HIGH0/CRITICAL0. Six actual same-archive recovery components remain pending under the second explicit amendment. |
 
 Private root`/tmp/birja-phase14-campaign-plan18-repair/` contains
 `reuse-input-analysis.json`:277 backend files,155 frontend files outside e2e
@@ -84,6 +85,22 @@ owned cleanup is empty. Strict current/exact ZIP verification passes; Chromium
 is unchanged; no new broad audit or human approval is inferred.
 
 ## Independent reviews
+
+### Recovery amendment and continuation checkpoint
+
+Security remainder`/tmp/birja-phase14-campaign-security-tail-plan18-r2` passes
+12/12, exit0/234.724s with unchanged source/tracked inputs and empty owned cleanup.
+`component-qualification.json` authenticates all28 component argv/log outcomes
+and five strict HIGH0/CRITICAL0 reports; it explicitly denies a whole-security,
+whole-browser or hosted-CI pass.
+
+Genuine recoveryR1 fails1006.586s after real image-transition/retained7–14/0017
+results. The original archive remains byte/inode unchanged. The owner explicitly
+amends Task2 to retain that failed whole record and reuse unaffected results,
+then execute the six actual remaining components using the real installed
+same-archive verifier context. Repository CORE and all financial verification
+remain unchanged; original authenticate() passes. No new whole7 claim is allowed.
+See`14-RECOVERY-PROOF.md`, original receipts and the reviewed private drivers.
 
 ### Remaining-tail repair checkpoint
 

@@ -485,3 +485,56 @@ changed by this diff.
 The failed tail remains failed evidence; full21-test execution is still required
 in the remaining tail. This reviewer ran no tests, browser or database checks
 and made no source edit or commit. Only this review section was appended.
+
+## Scoped Private Recovery Component Driver Review — 2026-11-21
+
+Independent bounded static review covers only the two private proof drivers:
+
+- `recovery-component-operations.py`, SHA256
+  `01610cdfbc21044e100b050125dd0e3fa67a0579cc993f1bd94645a145b94563`.
+- `run-recovery-components.py`, SHA256
+  `bab171bff8b4ff465b18abe440494e582b59948090b24b93a94c7c70a65c6341`.
+
+Both are under `/tmp/birja-phase14-campaign-plan18-repair/`.
+**Disposition: 0 BLOCKER findings, 1 WARNING finding.**
+
+**RC-WR-01 — WARNING: failed component skips its trailing integrity guard.**
+`run-recovery-components.py:142` raises on a nonzero child exit before the
+trailing `guard()` at144. The original `execute_stages()` invokes its guard in
+`finally`, including after failed operations. The private driver therefore does
+not yet preserve the required after-component authentication on failure paths.
+Move the guarded post-check into a `finally` that runs after the owned child is
+reaped, retaining the original failed exit/status. This also keeps source,
+archive, image and original failed-record checks consistent for every outcome.
+
+The six explicit selectors otherwise retain the actual fixed0020/current0023
+cold, roles, fresh/upgraded TLS and selected rollback/refusal/replay operations.
+Both0014 and0020 upgrade paths execute, their authority triples are compared,
+and current cold/upgraded/fresh triples must match exactly. The cold factory
+loads actual verifier bytes installed from the authenticated same archive and
+checks those bytes plus the genuine retained0020 source fingerprint; it does
+not substitute verification methods, SQL, rows, manifests or financial results.
+Checkout context remains available to the existing builders.
+
+Archive hash/inode/device, original failed status, driver/source/tracked bytes
+and image bindings are checked before and after successful components. The
+exclusive receipt path and claim prevent accidental reuse; original failed
+whole and same-archive-final-CI flags remain false. Existing operation finalizers
+and process-group supervision retain owned cleanup, with forced finalizers
+marked unconfirmed. The read context-check log and binding receipt record real
+installed-source selection and empty owned projects; this reviewer did not run
+them. No current component or uninterrupted whole recovery pass is inferred.
+
+No tests, database/browser operations, source edits or commits were performed.
+Only this review section was appended; previous failures/history are preserved.
+
+### RC-WR-01 narrow recheck — RESOLVED
+
+The private supervisor now has SHA256
+`4fd649e7d4f65aaefad7d551dd80c15d7383643506b2a6b06121baac051032e1`.
+`run_one()` places child execution/reaping and result publication inside
+`try/finally`; the existing post-operation `guard()` now also executes for
+nonzero exits, interruption and startup errors. Successful behavior and all
+selectors/context remain unchanged. **Remaining disposition: 0 BLOCKER,
+0 WARNING.** This was only the requested static recheck; no tests, operations,
+source edits, new audit or recovery-pass claim were made.
