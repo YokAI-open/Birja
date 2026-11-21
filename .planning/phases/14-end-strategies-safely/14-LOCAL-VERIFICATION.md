@@ -31,7 +31,7 @@ changed after security R2.
 | Affected static checks | Fresh lint/type/format pass12.334/9.449/5.686s; source guard true. |
 | Browser | Explicit composite: failed fullR2 has92passed/1Historyfailure/1retained CSPskip; final corrected normal History1passed42.674s. No whole pass or forced optional-branch coverage. |
 | Reviews | Distinct original code/security/UI passes retained; final six-file review0/0. |
-| Current UI packet | Preserve R6, refresh current packet/provenance/offline artifacts; accepted visual review retained, human flags false/Plan19. |
+| Current UI packet | R7 six capture cases pass239.459s; strict current419 artifacts/ZIP and190 offline layouts/zeroHTTP pass. R6 preserved; accepted visual review retained; both human flags false/Plan19. |
 | Remaining gates | Exact28 existing commands after browser, five strict scans and one uninterrupted seven-stage same-archive recovery still pending. |
 
 Private root`/tmp/birja-phase14-campaign-plan18-repair/` contains
@@ -67,6 +67,21 @@ Receipts`browser-repair-*.{json,log}`, full`*-artifacts/`, terminal inventories,
 `preserved-before-tail.json` verifies unchanged13 recovery/UI,15R4/16R3 recovery,
 17R5/currentR6 packet hashes and absent canonical14 recovery. Remaining commands
 are fixed in`proposed-security-tail.json`; no omitted gate or false whole claim.
+
+### Current R7 packet association before remaining gates
+
+Canonical`/tmp/birja-phase14-ui-review.zip` SHA256:
+`886805a094fad7495ae53539da7ea80d0ddff6c67b1ce0aa0465899a493d32e0`.
+Captured at committed`747d5d75c2ff02c299023b8b52921c863c80d532`; render digest
+`9b62b2263fb2c9632f6ec3097bbcdc5344d229711330d22d070fe488093ea7f6`.
+114 state HTML plus index,190 PNG and114 sanitized traces give419 artifacts.
+Actual six-case capture239.459s keeps source/all1871 tracked entries unchanged;
+owned cleanup is empty. Strict current/exact ZIP verification passes; Chromium
+156.0.8078.4 checks all190 offline layouts with zero HTTP requests. Receipts:
+`capture-r7.json`,`strict-r7.log`,`offline-r7.json`. Exact R6 bytes remain at
+`/tmp/birja-phase14-ui-review-r6-historical.zip`; preservation receipt is
+`ui-r6-preservation.json`. Accepted visual review is reused because app/UI source
+is unchanged; no new broad audit or human approval is inferred.
 
 ## Independent reviews
 

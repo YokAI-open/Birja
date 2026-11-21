@@ -258,3 +258,22 @@ qualification also remains pending. This refresh performed only static evidence
 reads and image inspection and appended this report. No source edit, test suite,
 new DB/browser/capture lane, installation, active demonstration, commit or shared
 planning-state advancement occurred.
+
+## R7 provenance refresh — existing visual review retained
+
+Under the owner's2026-11-21 proportionate-verification decision, the accepted
+visual review remains valid for unchanged application/UI/design-system source.
+This executor refresh is a provenance/offline verification, not a new independent
+visual audit. Reviewed test/runner inputs drifted, so the accepted tool genuinely
+recaptured six widths at`747d5d75c2ff02c299023b8b52921c863c80d532`.
+
+Actual capture6/6 passes239.459s, source/all1871 tracked entries unchanged,
+owned cleanup empty. Current ZIP`/tmp/birja-phase14-ui-review.zip` SHA256
+`886805a094fad7495ae53539da7ea80d0ddff6c67b1ce0aa0465899a493d32e0`, render digest
+`9b62b2263fb2c9632f6ec3097bbcdc5344d229711330d22d070fe488093ea7f6`.
+Strict source/419-artifact/exact ZIP verification passes. Existing Chromium
+156.0.8078.4 checks190 offline layouts with zero HTTP requests, loaded fonts,
+one primary heading and no overflow. R6 is preserved under exclusive historical
+names; original report and packet hashes remain historical evidence.
+Both current manifest human flags remain false/PENDING Plan19. No whole
+all-security/browser/hosted-CI or human acceptance result is inferred.
