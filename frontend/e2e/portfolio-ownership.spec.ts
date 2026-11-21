@@ -1,5 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { signInNewUser, readCodeFromLogs } from "./helpers.js";
@@ -7,10 +8,7 @@ import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 type Book = { id: string; name: string; cash: string; starting_cash: string; closed: boolean };
-function fixture(
-  mode: "inspect" | "sibling" | "zero" | "close" | "name" | "price-tick",
-  email: string,
-): Book[] {
+function fixture(mode: "inspect" | "sibling" | "name" | "price-tick", email: string): Book[] {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return JSON.parse(
     execFileSync(
@@ -332,7 +330,25 @@ test("lost actual response recovers only original portfolio key without duplicat
 for (const mode of ["zero", "sibling"] as const)
   test(`actual identity with ${mode} roots never guesses at legacy entry`, async ({ page }) => {
     const email = await signInNewUser(page);
-    fixture(mode, email);
+    if (mode === "zero") {
+      const id = await only(page);
+      const detail = await statement(page, id);
+      expect((await page.request.get("/api/v1/auth/csrf")).status()).toBe(204);
+      const csrf = (await page.context().cookies()).find((value) => value.name === "bj_csrf");
+      expect(csrf).toBeDefined();
+      const closed = await page.request.delete(`/api/v2/portfolios/${id}`, {
+        headers: { "X-CSRF-Token": csrf!.value },
+        data: {
+          intent_key: randomUUID(),
+          confirmation_name: detail.name,
+          policy_version: "freeze_at_closure_v1",
+        },
+      });
+      expect(closed.status()).toBe(200);
+      expect(await closed.json()).toEqual({ portfolio_id: id, state: "closed" });
+    } else {
+      fixture(mode, email);
+    }
     const finance: string[] = [];
     page.on("request", (request) => {
       if (/\/api\/v2\/portfolios\/\d+/.test(request.url())) finance.push(request.url());

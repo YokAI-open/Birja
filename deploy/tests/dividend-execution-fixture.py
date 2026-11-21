@@ -468,10 +468,10 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
         uid = await owner.fetchval("SELECT id FROM users WHERE email=$1", email)
         if uid is None:
             raise ValueError("Browser owner must sign in through real OTP first")
-        roots = await owner.fetch('SELECT id FROM accounts WHERE user_id=$1 AND closed_at IS NULL', uid)
-        if len(roots) != 1:
-            raise ValueError('This retained browser scenario requires exactly one explicit active root')
-        pid = roots[0]['id']
+        if operation not in {"seed", "bulk", "preanchor"}:
+            roots = await owner.fetch('SELECT id FROM accounts WHERE user_id=$1 AND closed_at IS NULL', uid)
+            if len(roots) != 1:
+                raise ValueError('This retained browser scenario requires exactly one explicit active root')
         await owner.execute("ALTER ROLE birja_scheduler LOGIN PASSWORD 'syntheticSchedulerE2E'")
         state = Path(f"/tmp/birja-phase10-dividend-{uid}.json")
         cid = await owner.fetchval("SELECT id FROM coins WHERE symbol=$1", symbol)
@@ -507,6 +507,17 @@ async def browser_main(operation: str, email: str, symbol: str = "AMD") -> None:
             ]
             cutoff = max(bounds, key=lambda row: row.session_date)
             async with owner.transaction():
+                # Match financial writer order before reading any root/holding
+                # or appending the retained synthetic opening journal entry.
+                await owner.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended('birja.stock.instrument:' || $1::text,0))",
+                    str(cid),
+                )
+                now = await owner.fetchval("SELECT clock_timestamp()")
+                roots = await owner.fetch('SELECT id FROM accounts WHERE user_id=$1 AND closed_at IS NULL', uid)
+                if len(roots) != 1:
+                    raise ValueError('This retained browser scenario requires exactly one explicit active root')
+                pid = roots[0]['id']
                 held = await owner.fetchval(
                     "SELECT quantity FROM holdings WHERE portfolio_id=$1 AND coin_id=$2", pid, cid
                 )

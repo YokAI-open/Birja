@@ -141,6 +141,9 @@ def main():
             "BIRJA_E2E_GUARD": "phase09-isolated",
             "BIRJA_E2E_ANCHOR": datetime.now(UTC).isoformat(),
             "COMPOSE_PROJECT_NAME": PROJECT,
+            # The complete synthetic suite sends more than100 console codes.
+            # Keep a finite owned-fixture budget; production defaults stay100.
+            "RL_SEND_GLOBAL_LIMIT": "200",
         },
         command=[
             "sh",
@@ -200,16 +203,28 @@ def main():
     def run(name, argv, timeout=600, required=True):
         print("START " + name, flush=True)
         started = time.monotonic()
-        result = subprocess.run(
-            argv,
-            check=False,
-            cwd=ROOT,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-        )
+        try:
+            result = subprocess.run(
+                argv,
+                check=False,
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = error.stdout or ""
+            if isinstance(output, bytes):
+                output = output.decode("utf-8", errors="replace")
+            stderr = error.stderr or ""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            safe = re.sub(r"code=\d{6}", "code=******", re.sub(r"to=[^\s]+", "to=***", output + stderr))
+            (work / (name + ".log")).write_text(safe)
+            print(f"{name} timed out seconds={time.monotonic() - started:.1f}; evidence={work}", flush=True)
+            raise
         safe = re.sub(r"code=\d{6}", "code=******", re.sub(r"to=[^\s]+", "to=***", result.stdout))
         (work / (name + ".log")).write_text(safe)
         print(
@@ -256,6 +271,9 @@ def main():
                 assert not service.get("ports")
         assert cfg["services"]["frontend"]["ports"][0]["host_ip"] == "127.0.0.1"
         assert cfg["services"]["backend"]["environment"]["EMAIL_BACKEND"] == "console"
+        assert cfg["services"]["backend"]["environment"]["ENV"] == "dev"
+        assert cfg["services"]["backend"]["environment"]["COMPOSE_PROJECT_NAME"] == PROJECT
+        assert cfg["services"]["backend"]["environment"]["RL_SEND_GLOBAL_LIMIT"] == "200"
         assert cfg["services"]["backend"]["environment"]["STOCK_DATA_ENABLED"] == "false"
         assert cfg["services"]["scheduler"]["environment"]["PRICE_SOURCE"] == "fake"
         assert cfg["services"]["scheduler"]["environment"]["STOCK_ACTIONS_ENABLED"] == "false"
@@ -290,7 +308,7 @@ def main():
             dc + ["up", "--no-build", "-d", "--wait", "--wait-timeout", "180"],
             timeout=240,
         )
-        run("browser-" + args.suite, pw, timeout=900)
+        run("browser-" + args.suite, pw, timeout=1800 if args.suite == "all" else 900)
         if args.review_dir is not None:
             finish_review(args.review_dir, source, env['BIRJA_PHASE12_SOURCE'],
                           phase=14 if 'BIRJA_PHASE14_REVIEW_DIR' in env else 12)

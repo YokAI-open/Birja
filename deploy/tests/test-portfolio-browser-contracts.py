@@ -19,10 +19,18 @@ spec.loader.exec_module(runner)
 
 
 class BrowserContracts(unittest.TestCase):
-    def command(self, *, mutation=None, failure=False, occupied=False):
+    def command(self, *, mutation=None, failure=False, occupied=False,
+                suite='portfolios', timed_out=None, work=None):
         calls = []
         def run(argv, **kwargs):
             calls.append(list(argv))
+            if argv[0].endswith('/playwright'):
+                self.assertEqual(kwargs['timeout'], 1800 if suite == 'all' else 900)
+                self.assertIn('--workers=1', argv)
+                self.assertIn('--retries=0', argv)
+                if timed_out is not None:
+                    raise subprocess.TimeoutExpired(argv, kwargs['timeout'],
+                                                    output=timed_out[0], stderr=timed_out[1])
             env = kwargs['env']
             self.assertNotIn('ALPACA_API_KEY', env)
             self.assertNotIn('RESEND_API_KEY', env)
@@ -43,23 +51,28 @@ class BrowserContracts(unittest.TestCase):
                         key, value = line.strip().split(': ', 1)
                         services[name][key] = [] if value == '!reset []' else json.loads(value)
                 for service in services.values():
-                    service.setdefault('environment', {}).update(EMAIL_BACKEND='console', STOCK_DATA_ENABLED='false', PRICE_SOURCE='fake', STOCK_ACTIONS_ENABLED='false')
+                    service.setdefault('environment', {}).update(ENV='dev', EMAIL_BACKEND='console', STOCK_DATA_ENABLED='false', PRICE_SOURCE='fake', STOCK_ACTIONS_ENABLED='false')
                 services['frontend']['ports'] = [{'host_ip': '127.0.0.1'}]
                 if mutation == 'mount': services['postgres']['volumes'] = ['/srv/birja:/data']
                 if mutation == 'provider': services['backend']['environment']['STOCK_DATA_ENABLED'] = 'true'
                 if mutation == 'port': services['postgres']['ports'] = [5432]
+                if mutation == 'capacity': services['backend']['environment']['RL_SEND_GLOBAL_LIMIT'] = '201'
+                if mutation == 'environment': services['backend']['environment']['ENV'] = 'prod'
+                if mutation == 'project': services['backend']['environment']['COMPOSE_PROJECT_NAME'] = 'another-project'
                 output = json.dumps({'name': runner.PROJECT, 'services': services})
             code = 1 if failure and argv[0].endswith('/playwright') else 0
             return subprocess.CompletedProcess(argv, code, output)
-        with patch.object(sys, 'argv', ['run-stock-browser.py', '--suite', 'portfolios']), \
+        original_mkdtemp = runner.tempfile.mkdtemp
+        with patch.object(sys, 'argv', ['run-stock-browser.py', '--suite', suite]), \
+             patch.object(runner.tempfile, 'mkdtemp', side_effect=(lambda **kw: str(work) if work else original_mkdtemp(**kw))), \
              patch.dict(os.environ, {'ALPACA_API_KEY': 'must-not-leak', 'RESEND_API_KEY': 'must-not-leak'}), \
              patch.object(runner.socket, 'socket') as socket, \
              patch.object(runner.subprocess, 'run', side_effect=run), \
              patch.object(runner, 'require_browser_specs'), \
              patch.object(runner.subprocess, 'check_output', return_value='a' * 40):
             socket.return_value.__enter__.return_value = SimpleNamespace(bind=lambda value: None, getsockname=lambda: ('127.0.0.1', 12345))
-            if mutation or failure or occupied:
-                with self.assertRaises((AssertionError, RuntimeError)):
+            if mutation or failure or occupied or timed_out is not None:
+                with self.assertRaises((AssertionError, RuntimeError, subprocess.TimeoutExpired)):
                     runner.main()
             else:
                 runner.main()
@@ -107,7 +120,7 @@ class BrowserContracts(unittest.TestCase):
                     runner.require_browser_specs(['e2e/portfolio-strategies.spec.ts'], directory=root)
 
     def test_runner_rejects_live_data_mount_provider_and_ports_before_build(self):
-        for mutation in ('mount', 'provider', 'port'):
+        for mutation in ('mount', 'provider', 'port', 'capacity', 'environment', 'project'):
             with self.subTest(mutation=mutation):
                 calls = self.command(mutation=mutation)
                 self.assertFalse(any('build' in c for c in calls))
@@ -117,6 +130,28 @@ class BrowserContracts(unittest.TestCase):
         self.assertTrue(any('down' in c for c in calls))
         calls = self.command(occupied=True)
         self.assertFalse(any('down' in c for c in calls))
+
+    def test_complete_suite_has_bounded_budget_and_retains_every_spec(self):
+        calls = self.command(suite='all')
+        browser = next(c for c in calls if c[0].endswith('/playwright'))
+        self.assertEqual([c for c in browser if c.endswith('.spec.ts')], runner.browser_specs('all'))
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        # Read the job through its next sibling, retaining setup/cleanup headroom.
+        e2e = workflow.split('\n  e2e:\n', 1)[1].split('\n  ops:', 1)[0]
+        self.assertIn('timeout-minutes: 40', e2e)
+
+    def test_timeout_preserves_redacted_partial_output_and_still_fails_and_cleans(self):
+        for values in ((b'to=synthetic@example.com code=123456\xff', b'partial stderr'),
+                       ('to=synthetic@example.com code=123456', 'partial stderr')):
+            with self.subTest(bytes=isinstance(values[0], bytes)), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                calls = self.command(timed_out=values, work=work)
+                output = (work / 'browser-portfolios.log').read_text()
+                self.assertIn('to=*** code=******', output)
+                self.assertIn('partial stderr', output)
+                self.assertNotIn('synthetic@example.com', output)
+                self.assertNotIn('123456', output)
+                self.assertTrue(any('down' in c and '--volumes' in c for c in calls))
 
     def test_review_is_inert_source_bound_exclusive_and_never_claims_native_zoom(self):
         with tempfile.TemporaryDirectory(prefix='birja-phase12-review-contract-') as work:
@@ -149,6 +184,22 @@ class BrowserContracts(unittest.TestCase):
         snapshot = runner.source_snapshot()
         self.assertEqual(snapshot[path.relative_to(ROOT).as_posix()],
                          hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_opening_fixture_takes_instrument_gate_before_root_and_journal(self):
+        import ast
+        source = (ROOT / 'deploy/tests/dividend-execution-fixture.py').read_text()
+        tree = ast.parse(source)
+        browser = next(node for node in tree.body
+                       if isinstance(node, ast.AsyncFunctionDef) and node.name == 'browser_main')
+        transaction = next(node for node in ast.walk(browser)
+                           if isinstance(node, ast.AsyncWith)
+                           and 'pg_advisory_xact_lock' in ast.get_source_segment(source, node))
+        body = ast.get_source_segment(source, transaction)
+        gate = body.index('pg_advisory_xact_lock')
+        self.assertLess(gate, body.index('SELECT id FROM accounts'))
+        self.assertLess(gate, body.index('SELECT quantity FROM holdings'))
+        self.assertLess(gate, body.index('INSERT INTO stock_ownership_movements'))
+        self.assertIn("birja.stock.instrument:", body)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 // Run only in ephemeral fake-price / console-email CI, never real-email dev/prod.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Request } from "@playwright/test";
 import { formatQuantity, formatUnitPrice, formatUsd } from "../src/lib/money.js";
 import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
 
@@ -212,7 +212,10 @@ test("a new user opens their real cash-only portfolio from Markets", async ({ pa
   await expect(cashOnlyMessage).toBeVisible();
 });
 
-async function confirmFill(page: Page, side: "buy" | "sell"): Promise<Fill> {
+async function confirmFill(
+  page: Page,
+  side: "buy" | "sell",
+): Promise<{ fill: Fill; request: Request }> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const endpoint = await portfolioApi(page, "/trades");
     const response = page.waitForResponse(
@@ -221,9 +224,10 @@ async function confirmFill(page: Page, side: "buy" | "sell"): Promise<Fill> {
     await page.getByRole("button", { name: `Confirm ${side}` }).click();
     const result = await response;
     if (result.ok()) {
+      expect(result.status()).toBe(201);
       const fill = (await result.json()) as Fill;
       await expect(page.getByRole("heading", { name: "Order filled" })).toBeVisible();
-      return fill;
+      return { fill, request: result.request() };
     }
     expect(((await result.json()) as { detail: { code: string } }).detail.code).toBe(
       "price_changed",
@@ -243,9 +247,15 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await page.getByRole("link", { name: "Markets", exact: true }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await page.getByLabel("Amount").fill("100");
-  const buy = await confirmFill(page, "buy");
+  const { fill: buy, request: originalBuy } = await confirmFill(page, "buy");
   expect(buy.cash_delta).toMatch(/^-100\.0+$/);
   expect(buy.cash_after).toMatch(/^9900\.0+$/);
+  await expect(page.getByRole("button", { name: "Trade again", exact: true })).toBeVisible();
+  const afterBuy: Request[] = [];
+  const trackOriginal = (request: Request) => {
+    if (request.method() === "POST" && request.url() === originalBuy.url()) afterBuy.push(request);
+  };
+  page.on("request", trackOriginal);
 
   async function openPortfolio() {
     const endpoint = await portfolioApi(page);
@@ -328,11 +338,34 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await openHistory([buy]);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
-  // The original receipt remains authoritative until another order is explicit.
+  // Leaving during post-fill invalidations can retain the original as unknown.
+  // Only explicit recovery may resend that exact attempt, never a replacement.
+  const tradeAgain = page.getByRole("button", { name: "Trade again", exact: true });
+  const recover = page.getByRole("button", { name: "Check order result", exact: true });
+  await expect(tradeAgain.or(recover)).toBeVisible();
+  expect(afterBuy).toHaveLength(0);
+  if (await recover.isVisible()) {
+    const response = page.waitForResponse(
+      (result) => result.url() === originalBuy.url() && result.request().method() === "POST",
+    );
+    await recover.click();
+    const originalResult = await response;
+    expect(originalResult.status()).toBe(200);
+    expect(originalResult.request().url()).toBe(originalBuy.url());
+    expect(originalResult.request().postData()).toBe(originalBuy.postData());
+    expect(originalResult.request().postDataJSON().idempotency_key).toBe(
+      originalBuy.postDataJSON().idempotency_key,
+    );
+    expect(await originalResult.json()).toEqual(buy);
+    expect(afterBuy).toHaveLength(1);
+  }
+  await expect(page.getByRole("heading", { name: "Order filled", exact: true })).toBeVisible();
+  await expect(tradeAgain).toBeVisible();
+  page.off("request", trackOriginal);
   await page.getByRole("button", { name: "Trade again", exact: true }).click();
   await page.getByRole("radio", { name: "Sell", exact: true }).click();
   await page.getByLabel("Quantity").fill(held.quantity);
-  const sell = await confirmFill(page, "sell");
+  const { fill: sell } = await confirmFill(page, "sell");
   expect(formatQuantity(sell.quantity)).toBe(formatQuantity(held.quantity));
   const liquidated = await openPortfolio();
   expect(liquidated.holdings).toEqual([]);
