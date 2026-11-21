@@ -1,7 +1,9 @@
 # Phase 14 — Local qualification
 
-Plan18 is **incomplete**. Whole-security R1 failed; final recovery has not
-started. All results below are local; no hosted CI, publication,
+Plan18 is **incomplete**. Whole-security R1/R2 failed. The explicit owner
+amendment below supersedes the repeat-whole-local-run criterion; remaining
+component tail and genuine final recovery have not started.
+All results below are local; no hosted CI, publication,
 deployment or human acceptance is inferred.
 
 Execution began2026-11-20T08:03Z on `feature/milestone-v1.2`, initial
@@ -9,6 +11,62 @@ HEAD `426435789f8f41dea0b3fe9a4c0852c85b314a46`. SDK initialization confirms
 17/19 plans have summaries; Plans18/19 remain incomplete. All seven whole
 Phase14 requirements remain pending. The parent owns shared STATE/ROADMAP and
 requirements; this executor does not advance them.
+
+## Current ledger — owner-approved proportionate qualification
+
+The2026-11-21 owner preference at`876798e` and explicit parent decision amend
+`14-18-PLAN.md`: reuse valid unchanged-component results and rerun affected
+checks. Failed whole/browser commands remain failed. Required full CI before
+merge, coverage thresholds, issue35 scope/expiry and Plan19 remain unchanged.
+
+Source`85c6040` contains only six reviewed browser/fixture/CI repairs. Independent
+review0blockers/0warnings preserves resolved BR-01: initial fills201, exact
+original replay200. No runtime application/SQL/schema/ACL/dependency/image pin
+changed after security R2.
+
+| Component | Evidence and disposition |
+|---|---|
+| Backend | Reuse actual R2 at09c70f5:3691passed5167.93s; overall99.87%;64critical modules100% (5576 statements/1762 branches). |
+| Frontend unit/build/audits | Reuse actual R2:1330passed/build/audits; relevant inputs unchanged. |
+| Affected static checks | Fresh lint/type/format pass12.334/9.449/5.686s; source guard true. |
+| Browser | Explicit composite: failed fullR2 has92passed/1Historyfailure/1retained CSPskip; final corrected normal History1passed42.674s. No whole pass or forced optional-branch coverage. |
+| Reviews | Distinct original code/security/UI passes retained; final six-file review0/0. |
+| Current UI packet | Preserve R6, refresh current packet/provenance/offline artifacts; accepted visual review retained, human flags false/Plan19. |
+| Remaining gates | Exact28 existing commands after browser, five strict scans and one uninterrupted seven-stage same-archive recovery still pending. |
+
+Private root`/tmp/birja-phase14-campaign-plan18-repair/` contains
+`reuse-input-analysis.json`:277 backend files,155 frontend files outside e2e
+and six dependency/test configs match R2 exactly. Their respective aggregate
+SHA256 values are`fcbc808855c48097b1ee4ae2853ac79dbf65a6057ffff5b6f7863ece8d1f8913`,
+`db9295eddcfa18ba3bbcea961ebd98bde6ea99f5a711019bdaeb96577d3c1c45` and
+`2932bd660f500911b8dba273e0e5a75488ec58b855245aecd2cc168a77f271b2`.
+CI jobs before e2e match. Against full-browserR2, only History and CLAUDE policy
+differ; all other specs/harness inputs match. Auth/global100/3600 default and
+real rate-limit tests remain unchanged.
+
+Whole R2`/tmp/birja-phase14-campaign-security-plan18-r2` remains **exit1,
+6292.392s**: supervisor2471329/startticks2917735101, child2473916/
+startticks2917739422, run3b902f47d30f455bbc03c182d49c7248. Browser900s timeout
+followed passing backend/frontend; image/ops were not reached. Original groups,
+owned resources and1871 tracked inputs are attested by`r2-terminal-integrity.json`.
+Incomplete browser outputs are preserved; their HTML report is stale R6.
+
+Focused fixture8 passed245.797s after one preserved UUID setup failure. Full
+browserR1 remains90pass/3fail/1skip1140.852s: actual429 and explicit global-cap
+logs justify finite200 console-only fixture capacity, leaving production limits
+unchanged. Only three failed cases reran/pass46.131s. Full browserR2 remains
+92pass/1fail/1skip1205.585s: actual201 History navigation interrupted pending
+post-fill invalidations and returned original-only recovery. Minimal final test
+preserves exact request/fill/cash/history/full-sale assertions and accepts replay200.
+Three attempted timing experiments failed39.990/43.718/45.796s; all forced
+orchestration was removed. Final normal case passed42.674s; optional branch was
+not forced, and static API mapping/existing real replay journeys supply context.
+Receipts`browser-repair-*.{json,log}`, full`*-artifacts/`, terminal inventories,
+`frontend-final-static.json` and`final-six-file-binding.json` preserve provenance.
+
+`preserved-before-tail.json` verifies unchanged13 recovery/UI,15R4/16R3 recovery,
+17R5/currentR6 packet hashes and absent canonical14 recovery. Remaining commands
+are fixed in`proposed-security-tail.json`; no omitted gate or false whole claim.
 
 ## Independent reviews
 

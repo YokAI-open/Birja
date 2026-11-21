@@ -376,3 +376,87 @@ not independently execute them. Neither changed file is a render input.
 Only this report was appended. No source, commit, browser, DB or test operation
 was performed by this pass. Whole R2 has not launched; fresh complete security,
 same-archive recovery and actual human acceptance remain pending.
+
+## Final Scoped Browser Harness Review — 2026-11-21
+
+**Reviewer:** independent `gsd-code-reviewer` child, standard bounded static
+review of the six-file working-tree diff against `876798e`.
+**Disposition: 0 remaining BLOCKER findings, 0 WARNING findings.**
+Only this section was appended; earlier reviews and their original dispositions
+remain unchanged. No source edits, commits, tests, browser, database operations,
+installations or active demonstrations were performed by this reviewer.
+
+The exact reviewed scope and SHA256 values are:
+
+| File | SHA256 |
+|---|---|
+| `.github/workflows/ci.yml` | `4c29f19e2b516ed03c8bc0675a4bcc68bf99e257351987680bf8ffaa12d0db28` |
+| `deploy/tests/dividend-execution-fixture.py` | `e39a4dfaaa2f18332b2b669edc01d191015a215ca3b0dbd980889ce64c1f55f9` |
+| `deploy/tests/run-stock-browser.py` | `f27e4da68cc3512bf301017273e2e834bb0f60b43ee1869ce654176d762512e1` |
+| `deploy/tests/test-portfolio-browser-contracts.py` | `adbd367312ef54c6f52e337ab0f91912a64202e4fd7f08eb1c98a19242a3cf5a` |
+| `frontend/e2e/portfolio-ownership.spec.ts` | `3491236ae9880469f3eeda0188edd85b257a1b133349a472ff2919b879305910` |
+| `frontend/e2e/portfolio-history.spec.ts` | `d8ce6e0a9e8cbd0fe963d88b8e6db1beb6ab5977ccf566648ce655bcc0d2ae52` |
+
+### Narrative findings and resolved review history
+
+**BR-01 — BLOCKER, RESOLVED: committed crypto replay expected201.** The
+interrupted earlier review correctly identified the intermediate History
+assertion as wrong: `trading._replay` returns the original fill with
+`created=False`, and `backend/app/api/v2/trades.py:92` maps that to HTTP200.
+The final test requires201 for the genuinely new buy/sell and200 for its one
+explicit original recovery. Exact original URL/root, serialized body,
+idempotency key and complete fill equality are checked before another order.
+The unchanged `test_trades_api.py::test_execute_buy_then_replay_is_byte_identical`
+asserts201 then200, identical response and one stored trade; the unchanged
+`test_portfolio_crypto.py::test_original_active_receipt_replays_before_current_price_gates`
+checks unchanged real financial state. The existing ownership browser recovery
+journey also checks original201/replay200, identical original request and exact
+cash. These sources were traced, not rerun here.
+
+The History case retains its normal visible receipt assertion and accepts the
+existing known-receipt or original-only recovery state after navigation. It
+asserts no automatic extra POST, permits only one explicit identical original
+recovery, then retains the original whole-position sale, cash, holdings and
+exact History assertions. Forced read/navigation scaffolding has been removed.
+The latest normal-case pass does **not** prove that its optional recovery branch
+ran; no forced-branch or new branch-coverage claim is made.
+
+The synthetic dividend opening transaction takes the existing exclusive
+instrument gate before root/holding/journal reads and writes and obtains a
+fresh database clock after the gate. The root ID remains defined on every
+seed/bulk/preanchor path that uses it. No production SQL/schema/ACL or writer
+ordering is changed. The ownership zero-root setup uses actual authenticated,
+CSRF-protected public DELETE with the actual owned ID/name and exact closed
+receipt, rather than the removed privileged fixture mode. Its explicit Node
+UUID import avoids the file's existing `crypto` function name.
+
+The runner preserves all13 registered specs, workers1, retries0 and existing
+per-test deadlines. Only the complete-suite aggregate increases to1800s;
+other suites retain900s. The CI e2e job alone changes20→40min for setup/cleanup
+headroom. Timeout bytes/text are decoded and passed through the same existing
+redaction before saving, then the timeout is re-raised through owned cleanup.
+The finite200 send budget exists only in the generated owned dev/console
+backend configuration, whose exact value/context are checked before builds.
+Production100/3600 defaults and email/IP/verification limits remain unchanged;
+their dedicated rate-limit/default tests are also unchanged.
+
+### Recorded verification and limits
+
+The reviewer read private receipts under
+`/tmp/birja-phase14-campaign-plan18-repair/`: normal History final1passed,
+42.674s total/11.0s browser, source/tracked guards true and owned cleanup empty;
+frontend lint/type/format exit0 in12.334/9.449/5.686s with source guard true.
+The prior11 runner-contract cases and failed full-browser result remain
+separate evidence. Full browser R2 is still **failed**,92passed/1failed/
+1retained deployed-CSPskip,1205.585s; whole-security R2 also remains failed.
+
+The reuse ledger reports matching hashes for277 backend files,155 frontend
+files outside e2e and six dependency/test-configuration inputs, plus unchanged
+CI jobs before e2e. Other browser source differs from the failed full-browser
+snapshot only in the owner preference document and this History test. Under
+the owner's explicit proportionate-verification amendment, these component
+results may be recorded with their distinct provenance; they are not a whole
+browser/all-security pass or same-head hosted CI result. Remaining image/ops
+gates, genuine seven-stage same-archive recovery and actual Plan19 human
+acceptance are not established by this scoped review. Full CI/release gates,
+coverage thresholds and existing waiver scope remain required and unchanged.
