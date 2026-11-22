@@ -4,7 +4,7 @@
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
 - [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements; Phases12–14 complete locally; Phase15 remains.
+- [ ] **v1.2 Multiple Strategy Portfolios** — 28/28 requirements and Phases12–15 complete locally; awaiting milestone audit/archive.
 
 ## Current State
 
@@ -37,7 +37,7 @@ No production/provider/publication action occurred. Phase13 is complete locally.
 Phase14 is complete locally:19/19plans, both actual owner outcomes,5/5roadmap
 criteria and7/7requirements independently verified. Qualification uses the
 recorded owner amendments and genuine recovery; failed whole runs remain failed.
-Phase15 is planned (4plans/9tasks), not implemented; three v1.2 requirements remain pending. Phase7's six
+Phase15 is complete locally:4plans/9tasks,4/4outcomes and3/3requirements independently verified. All28v1.2requirements are locally satisfied; milestone audit is next. Phase7's six
 live gaps stay separately deferred, with its manual campaign consumed.
 
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
@@ -60,7 +60,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
 - [x] **Phase 14: End Strategies Safely** — confirm terminal deletion, freeze records, support zero active portfolios and refuse stale or unauthorized targets. (completed 2026-11-22)
-- [ ] **Phase 15: Verify Exact Portfolio Recovery and Acceptance** — qualify the complete active/deleted lifecycle through exact recovery, compatibility and protected user journeys.
+- [x] **Phase 15: Verify Exact Portfolio Recovery and Acceptance** — qualify the complete active/deleted lifecycle through exact recovery, compatibility and protected user journeys. (completed 2026-11-22)
 
 ## Phase Details
 
@@ -409,7 +409,7 @@ deletion/purge of retained evidence is included.
   3. The operator can exercise the documented migration and supported rollback/refusal contract; incompatible older schemas or application versions refuse safely without merging strategies, reassigning money or discarding financial evidence.
   4. Full real isolated PostgreSQL concurrency/accounting and protected browser journeys verify create, rename, edit/clear optional descriptions, compare, switch, trade, History, delete and zero-active behavior, with original-data preservation, private access, human UI acceptance and the required coverage/security/image gates satisfied.
 
-**Plans**: 4 checked plans,9tasks,4serialwaves. Planning complete; implementation not started. All3assigned requirements and4roadmap outcomes covered.
+**Plans**: 4/4plans complete,9tasks,4serialwaves. Independent verification passes4/4outcomes,12/12supporting truths and3/3assigned requirements.
 
 **Wave 1**
 
@@ -452,9 +452,9 @@ above preserve integrated behavior without duplicating primary ownership.
 | 15 | 3 | 4 |
 | **Total** | **28/28** | **19** |
 
-Mapping alone completes no requirement. Twenty-five requirements are verified
-complete (seven Phase12, eleven Phase13 and seven Phase14); three Phase15
-requirements remain pending. The phase structure was approved on2026-11-14.
+Mapping alone completes no requirement. All28requirements are independently
+verified complete locally:seven Phase12,eleven Phase13,seven Phase14 and
+three Phase15. Milestone audit and publication remain separate. The phase structure was approved on2026-11-14.
 Phase14 implementation, both owner outcomes and independent verification pass.
 
 ## Progress
@@ -463,14 +463,14 @@ Phase14 implementation, both owner outcomes and independent verification pass.
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is complete locally:19/19plans, both owner outcomes and independent5/5goal verification pass under the recorded Plan18 amendments. Phase15 follows it.
+Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is complete locally:19/19plans, both owner outcomes and independent5/5goal verification pass under the recorded Plan18 amendments. Phase15 also passes4/4outcomes and3/3requirements; all local implementation is complete.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
-| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 4/4 | Awaiting independent goal verification | - |
+| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 4/4 | Complete locally; independent verification passed | 2026-11-22 UTC |
 
 ## Deferred Follow-up
 
@@ -494,7 +494,7 @@ acceptance never authorizes live provider calls or stock activation.
 
 **Roadmap status:** APPROVED by the owner on 2026-11-14.
 Milestone setup is complete and the planning record may be committed locally.
-Phases12–13 are complete locally. Phase14 planning is checked (19plans,38tasks,
-15waves). Next: `$gsd-execute-phase 14`. This planning approval does not
-itself start implementation, install dependencies, authorize push/merge,
-operate providers, activate stocks or deploy production.
+Phases12–15 and all28requirements are complete locally. Next:
+`$gsd-audit-milestone`. No milestone archival, push/merge, release, provider
+operation, stock activation or production deployment follows automatically.
+Required full CI before merge remains enforced.

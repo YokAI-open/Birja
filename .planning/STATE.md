@@ -2,28 +2,27 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
+current_phase: 15
 current_plan: 4
-status: verifying
-stopped_at: Phase15 all four plans complete; independent goal verification next
-last_updated: "2026-11-22T09:35:36.954805+00:00"
-last_activity: 2026-11-22 -- Phase15 operator/acceptance complete; final verification next
+status: milestone_ready_for_audit
+stopped_at: Phase15 verified complete; v1.2 implementation complete, milestone audit next
+last_updated: "2026-11-22T09:41:18.593828+00:00"
+last_activity: 2026-11-22 -- Phase15 independently verified; all28v1.2requirements locally satisfied
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 72
   completed_plans: 72
-  percent: 75
-
-current_phase: 15
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See PROJECT.md, updated after Phase14 completion.
+See PROJECT.md, updated after Phase15 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase15 — Verify Exact Portfolio Recovery and Acceptance; 4/4plans complete; independent goal verification next. Phase14 is verified complete locally:19/19plans,5/5outcomes,7/7requirements.
+Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Next: milestone audit; publication and production remain separate.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -39,7 +38,7 @@ Raw receipts and failed-history provenance are linked from the Phase13reports.
 
 Phase7's six live obligations remain deferred and tracked; stock activation is
 still gated. Existing issue35 risk stays unchanged through2026-12-17UTC.
-Public deletion/freeze is locally verified in Phase14; final lifecycle acceptance belongs to Phase15.
+Public deletion/freeze and final lifecycle/recovery acceptance are locally verified in Phases14–15.
 
 ## Current Position
 
@@ -53,13 +52,13 @@ financial/authentication/data safeguards and truthful result reporting remain.
 This instruction records no new test pass or completed plan; any change to an
 explicit remaining qualification gate must be documented in the plan.
 
-Phase: 15 (Verify Exact Portfolio Recovery and Acceptance) — EXECUTING
-Plan: 1 of 4
-Current Plan: 1
-Status: Executing Phase 15
-Last activity: 2026-11-22 -- Phase 15 execution started
+Phase: 15
+Plan: All4complete (Phase15 verified)
+Current Plan: None — awaiting milestone audit
+Status: Local implementation complete; milestone audit next
+Last activity: 2026-11-22
 
-Progress: [███████░░░] 75% milestone (3/4 phases complete;72/72 currently planned plans complete)
+Progress: [██████████] 100% local implementation (4/4 phases complete;72/72plans complete)
 
 ## Phase13 Execution Progress
 
@@ -1209,3 +1208,18 @@ dryrun/reference/diffchecks pass; no newcampaign. All4planscomplete; all3
 assignedrequirements still await independentgoalverification. Schema drift
 check no drift; codebase mapping check nonblocking SDKspawnEPERM. No new
 backend/frontend/DB/browser/scans needed for documentation-only closeout.
+
+## Phase15 Verified Complete — 2026-11-22
+
+Independent15-VERIFICATION passes4/4outcomes,12/12supporting truths,12/12artifacts
+and3/3requirements after actual R5encrypted source-destroyed31table/24tail
+restore/original-request retries,5exactimage scans, source-bound inherited
+coverage/roles/TLS/browser/migration and actual owner provenance. All28v1.2
+requirements are locally satisfied; no new human item or blocker remains.
+SDKphase.complete reports finalphase; its cross-milestone counter error was
+reconciled to actual31+18+19+4=72summaries,4/4phases,100%implementation.
+
+Failedattempts remainfailed; current-only proof is not a seven-stage or hostedCI
+pass. Full CI before merge remainsrequired. Phase7's sixlive requirements,
+stock activation, issue35originalscope/expiry, release and production boundaries
+are unchanged. Next$gsd-audit-milestone; no automatic archival/publication/deploy.

@@ -75,10 +75,13 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - [x] Delete any owned portfolio after named confirmation, including holdings or the last portfolio; keep retained financial records private — Phase14, owner UI/native200 accepted and independently verified.
 - [x] Freeze deleted strategies at the committed closure boundary; prevent later financial effects while active siblings remain independent, with exact cold recovery/TLS/rollback evidence — Phase14.
 
+- [x] Exact active/frozen multi-portfolio recovery, original-request replay, operator support/refusal contract and full lifecycle acceptance — Phase15, independently verified4/4outcomes and3/3requirements.
+
 ### Active
 
+No implementation requirement remains in v1.2. Milestone audit/archive and publication decisions are separate.
 
-- [ ] Qualify the complete active/deleted multi-portfolio lifecycle, recovery and acceptance — Phase15.
+
 
 ### Carried Deferred Work
 
@@ -111,7 +114,7 @@ gated. The bounded approved manual campaign is preserved at its original path.
 
 ## Current State
 
-Local v1.2: Phases12–14 are verified complete. Phase14 delivers19plans/7requirements with both actual owner outcomes and independent5/5goal verification. Phase15 is planned:4checked plans/9tasks ready to execute; current progress is tracked in STATE.md.
+Local v1.2 implementation is complete:Phases12–15,72plans and28requirements. Phase15 independently passes4/4outcomes,12/12supporting truths and3/3requirements. Milestone audit is next; current progress is tracked in STATE.md.
 Phase13delivers18plans/11requirements with owner UI/native200acceptance, full
 security/critical coverage and uninterrupted7stage recovery at9527e35. The
 feature branch remains local; this completion does not change production.
@@ -248,8 +251,8 @@ optional-description amendment (PMGT-06, Phase 13), rename,
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Progress:** Phases12–14 are verified complete locally (31+18+19plans,
-25of28requirements). Phase13 independent verification passes all5roadmap criteria,
+**Progress:** Phases12–15 are verified complete locally (31+18+19+4plans,
+28of28requirements). Phase13 independent verification passes all5roadmap criteria,
 45plan truths and11assigned requirements with no blocker or pending human item.
 Final9527e35 qualification passes3343backend tests,61critical modules100%,
 1194frontend tests,79browser passes/one retained skip, five image policies and
@@ -258,12 +261,15 @@ outcomes pass. Phase14 completes19/19plans,5/5outcomes and7/7requirements;
 both actual owner UI/native200 results passed2026-11-22. Under the recorded
 proportionate-verification amendments, unchanged-input results,28security
 components and6actual recovery components pass; failed whole commands remain
-failed and full CI before merge remains required. Phase15 and its three
-requirements remain; current progress is tracked in STATE.md.
+failed and full CI before merge remains required. Phase15 passes all four
+outcomes and three requirements:actual new encrypted restore/original retries
+with unchanged financial state, five strict image scans and source-bound
+inherited migration/concurrency/browser/TLS/owner evidence. All implementation
+requirements are complete; milestone audit/archive remain. See STATE.md.
 Phase7's six live obligations stay separately deferred and activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
 zero accepted scanner findings are not a dependency remediation claim. No new
-publication or production deployment occurred, and the v1.2milestone stays open.
+publication or production deployment occurred; v1.2 awaits milestone audit/archive.
 No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio
@@ -324,4 +330,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-22 after independently verified Phase14 local completion; Phase15 planning independently checked; production unchanged.*
+*Last updated: 2026-11-22 after independently verified Phase15 completion; v1.2 local implementation complete, milestone audit next; production unchanged.*

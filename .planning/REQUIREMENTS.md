@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** Phases12–14 verified complete locally:25/28 requirements. Phase15 owns the three remaining recovery/acceptance requirements. Planning does not complete feature requirements.
+**Status:** Phases12–15 verified complete locally:28/28 requirements. Milestone audit and publication remain separate; full CI must pass before merge.
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
@@ -57,9 +57,9 @@ approved total to 28 without changing the four-phase structure.
 - [x] **PSAFE-01**: Every portfolio operation and financial object lookup enforces owner and active-state authorization on the server, including guessed IDs, old references, cursors and direct trade/retry requests; other owners' and deleted portfolios' finances remain unavailable through normal APIs.
 - [x] **PSAFE-02**: User identity, OTP sign-in, session refresh and sign-out work independently of having zero, one or many portfolios; legacy financial requests cannot choose an ambiguous portfolio or bypass explicit targeting.
 - [x] **PSAFE-03**: Fresh and migrated portfolio services retain restricted PostgreSQL roles, verified TLS, immutable financial evidence and matching ownership constraints; migration preserves existing financial payloads and does not broaden ordinary mutation privileges.
-- [ ] **PSAFE-04**: Operator can exactly restore active and frozen deleted portfolios, ownership/lifecycle state, baselines, grants, financial lineage and retry protections from an encrypted backup without resurrecting a deleted strategy or repeating grants, fills or payments.
-- [ ] **PSAFE-05**: Operator has a tested migration and rollback/refusal contract for supported retained schemas and application versions; incompatible older applications cannot silently merge strategies, reassign money or discard financial history.
-- [ ] **PSAFE-06**: Real isolated PostgreSQL concurrency/accounting tests and browser journeys verify the full multi-portfolio loop, deletion races, original-data preservation and private access; required coverage, security, image and human UI acceptance gates remain enforced.
+- [x] **PSAFE-04**: Operator can exactly restore active and frozen deleted portfolios, ownership/lifecycle state, baselines, grants, financial lineage and retry protections from an encrypted backup without resurrecting a deleted strategy or repeating grants, fills or payments.
+- [x] **PSAFE-05**: Operator has a tested migration and rollback/refusal contract for supported retained schemas and application versions; incompatible older applications cannot silently merge strategies, reassign money or discard financial history.
+- [x] **PSAFE-06**: Real isolated PostgreSQL concurrency/accounting tests and browser journeys verify the full multi-portfolio loop, deletion races, original-data preservation and private access; required coverage, security, image and human UI acceptance gates remain enforced.
 - [x] **PSAFE-07**: Portfolio requests and financial jobs remain bounded, portfolio creation reuses appropriate rate/resource controls, and portfolio count does not multiply shared market-data polling or bypass existing backup-capacity and stock-activation safeguards.
 
 ## Acceptance interpretations
@@ -157,13 +157,13 @@ roadmap. No mapping is an implementation or completion claim.
 | PSAFE-01 | Phase 14 | Complete |
 | PSAFE-02 | Phase 12 | Complete |
 | PSAFE-03 | Phase 12 | Complete |
-| PSAFE-04 | Phase 15 | Pending |
-| PSAFE-05 | Phase 15 | Pending |
-| PSAFE-06 | Phase 15 | Pending |
+| PSAFE-04 | Phase 15 | Complete |
+| PSAFE-05 | Phase 15 | Complete |
+| PSAFE-06 | Phase 15 | Complete |
 | PSAFE-07 | Phase 13 | Complete |
 
 **Coverage:** 28/28 approved requirements mapped exactly once to approved Phases
-12–15; zero orphaned or duplicate primary owners. Twenty-five requirements are complete (seven Phase12, eleven Phase13 and seven Phase14); three Phase15 requirements remain pending.
+12–15; zero orphaned or duplicate primary owners. All28requirements are complete locally (seven Phase12, eleven Phase13, seven Phase14 and three Phase15).
 Six carried Phase 7 requirements remain separately deferred, not completion claims.
 
 ## Research and decision evidence
@@ -183,4 +183,4 @@ Six carried Phase 7 requirements remain separately deferred, not completion clai
   operations, protected merges or deployment.
 
 ---
-*Last updated: 2026-11-22 after Phase14 verification. Twenty-five requirements are complete; three Phase15 requirements remain pending. Issue35 retains its accepted scope and expiry; Phase7 live requirements remain separate.*
+*Last updated: 2026-11-22 after independent Phase15 verification. All28requirements are complete locally; milestone audit and full CI before merge remain. Issue35 retains its original scope/expiry; Phase7 live requirements remain deferred.*
