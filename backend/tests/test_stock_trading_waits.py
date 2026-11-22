@@ -500,9 +500,10 @@ async def test_actual_action_processor_waits_for_first_fill_gate(
     async with factory.begin() as db:
         admission = await corporate_actions._load_admission(db, "actions")
         action = replace(dividend(), coin_id=cid, symbol="AAPL", observed_at=now)
-        await corporate_actions.persist_action_batch(
+        persisted = await corporate_actions.persist_action_batch(
             db, batch(split_action(action, cutoff)), admission
         )
+        assert persisted[0].classification == "supported_forward_split"
     # Hold the first real fill immediately after its final guard. The processor
     # must wait for its instrument gate, never invent opening ownership.
     ready, release = asyncio.Event(), asyncio.Event()

@@ -1068,6 +1068,7 @@ def split_action(action, cutoff, **changes):
         economic_at=cutoff,
         ex_date=cutoff.date(),
         record_date=cutoff.date(),
+        payable_date=cutoff.date(),
         units="pre_split",
     )
     return replace(base, **changes)
