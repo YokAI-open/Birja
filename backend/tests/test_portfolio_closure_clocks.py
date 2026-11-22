@@ -220,12 +220,14 @@ async def test_service_split_clock_refuses_then_pending_sibling_assembly_resumes
                 provider_event_id=str(uuid4()),
                 observed_at=now,
                 process_date=cutoff.date(),
+                payable_date=cutoff.date(),
             ),
             cutoff,
             new_rate=Decimal(2),
             old_rate=Decimal(1),
         )
-        await actions.persist_action_batch(db, batch(action), evidence)
+        persisted = await actions.persist_action_batch(db, batch(action), evidence)
+        assert persisted[0].classification == "supported_forward_split"
         await db.flush()
         original_authority, original_clock = actions._authority, actions._clock
         armed = False
