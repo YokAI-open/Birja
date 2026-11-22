@@ -34,10 +34,20 @@ async function headers(page: Page) {
   return { "X-CSRF-Token": csrf.value };
 }
 async function create(page: Page, name: string, description = "") {
-  const response = await page.request.post(api, {
+  const options = {
     headers: { ...(await headers(page)), "Idempotency-Key": crypto.randomUUID() },
     data: { name, description },
-  });
+  };
+  let response = await page.request.post(api, options);
+  // These setup calls share the runner's IP across many independent owners.
+  // Respect its actual limit rather than changing application limits for CI.
+  if (response.status() === 429) {
+    const retryAfter = response.headers()["retry-after"];
+    expect(retryAfter).toMatch(/^[1-9]\d?$/);
+    expect(Number(retryAfter)).toBeLessThanOrEqual(60);
+    await new Promise((resolve) => setTimeout(resolve, (Number(retryAfter) + 1) * 1000));
+    response = await page.request.post(api, options);
+  }
   expect(response.status()).toBe(201);
   return response.json() as Promise<{ id: string; name: string; description: string }>;
 }
