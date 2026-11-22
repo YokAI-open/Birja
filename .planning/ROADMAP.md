@@ -1,5 +1,10 @@
 # Roadmap: Birja
 
+Current follow-up2026-11-22: Phase7owner acceptance is closed using explicit
+owner confirmation and saved measurement/local proof; see07-OWNER-CLOSURE.md.
+Its historical deferral entries below remain as dated history. A live stock-
+status transport is still missing and is a separate engineering follow-up.
+
 ## Milestones
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).

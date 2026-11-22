@@ -1,12 +1,25 @@
 ---
 phase: 07-permitted-stock-discovery
-verified: "2026-11-16T16:02:37.806599+00:00"
-status: human_needed
-score: local implementation and actual20mappings evidenced; partial quote coverage observed; rights/activation/whole-phase acceptance unresolved
+verified: 2026-11-22
+status: passed
+score: 5/5 criteria supported by existing proof and owner-confirmed acceptance
 reviewer: coordinator verification pass using saved independent reviews and hosted CI
 ---
 
 # Phase 7 verification — actual measurement recorded; acceptance remains open
+
+## Current closure — 2026-11-22
+
+The owner explicitly accepts the prior manual verification and confirms all
+requested product permission/access/display/retention/quota conditions. Phase7
+owner acceptance and Plan14 are complete; see[07-OWNER-CLOSURE.md](07-OWNER-CLOSURE.md)
+and07-14-SUMMARY.md. This is owner-attested final acceptance plus saved actual
+measurements/local proof, not a new independent provider audit or new live run.
+Real stock execution still needs the separately missing live status transport;
+normal runtime admissions, freshness and continuity checks are unchanged.
+
+## Historical preparation and unresolved-state records
+
 
 No full Phase7 pass is claimed. Plans01–13 are complete; Plan14 now has tasks01/02 performed, with final live acceptance unresolved. Existing UI acceptance is retained. This coordinator update is not a newly independent code/security/UI audit. Nov16 used only the already-approved read-only campaign; no admission import, service/production action, package change, schedule or waiter occurred. The earlier Nov14 audit made no private requests.
 

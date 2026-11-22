@@ -91,19 +91,17 @@ approved total to 28 without changing the four-phase structure.
   authority and recovery compatibility. The final integrated proof supplements
   earlier phase checks; it does not defer safety until release.
 
-## Carried deferred work — outside v1.2 committed scope
+## Carried work outside v1.2 scope
 
-STOCK-01/02/03, DATA-01, MKT-01 and SAFE-01 remain unchecked and unverified from
-v1.1. Their original primary phase remains Phase 7; they are not counted as new
-v1.2 requirements or silently reassigned to a new phase. See
-[DEFERRED.md](DEFERRED.md), [archived requirements](milestones/v1.1-REQUIREMENTS.md)
-and the [v1.1 audit](milestones/v1.1-MILESTONE-AUDIT.md).
+The six original Phase7owner acceptance items were closed on2026-11-22 using
+explicit owner confirmation, saved measurements and existing implementation
+proof. See[DEFERRED.md](DEFERRED.md) and[owner closure](phases/07-permitted-stock-discovery/07-OWNER-CLOSURE.md).
+The v1.1 archive retains its historical accepted-gap status.
 
-Live stock collection/execution admissions remain gated. The existing bounded
-November 16 manual campaign stays at its original path and authorization; no
-provider calls, new schedule or repeat campaign follows from this milestone.
-Production rollout remains separate. Last confirmed production is v0.4.0/schema0008;
-milestone planning has not inspected or changed it.
+The missing live stock-status transport remains a separate engineering follow-up;
+closing owner acceptance does not implement it or bypass runtime admissions.
+Production rollout is now separately owner-authorized and must be recorded by
+the release workflow; no completed deployment is claimed here.
 
 ## Future requirements
 

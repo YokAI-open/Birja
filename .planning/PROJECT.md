@@ -83,13 +83,14 @@ No implementation requirement remains in v1.2. Milestone audit/archive and publi
 
 
 
-### Carried Deferred Work
+### Carried Work Outside v1.2
 
-Phase 7 requirements STOCK-01/02/03, DATA-01, MKT-01 and SAFE-01 remain
-unchecked and unverified from v1.1. They stay tracked separately in
-[DEFERRED.md](DEFERRED.md) and the v1.1 archive, outside v1.2's committed
-feature scope. Live stock activation and production rollout remain separately
-gated. The bounded approved manual campaign is preserved at its original path.
+Phase7's six owner acceptance items are closed as of2026-11-22: explicit owner
+confirmation of prior manual checks and applicable product rights/access/retention/
+limits supplements the preserved measurements and implementation proof. See
+[DEFERRED.md](DEFERRED.md) for provenance. Historical archives remain unchanged.
+The missing live stock-status transport is a separate engineering follow-up;
+no real stock execution or production activation is claimed from acceptance.
 
 ### Out of Scope
 

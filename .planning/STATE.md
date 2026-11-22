@@ -1223,3 +1223,12 @@ Failedattempts remainfailed; current-only proof is not a seven-stage or hostedCI
 pass. Full CI before merge remainsrequired. Phase7's sixlive requirements,
 stock activation, issue35originalscope/expiry, release and production boundaries
 are unchanged. Next$gsd-audit-milestone; no automatic archival/publication/deploy.
+
+## Owner-authorized release workflow — 2026-11-22
+
+Owner asked to perform PR/fullCI,merge/release andproductionreadiness/deploy.
+Also requestedPhase7closure fromprior manualchecks, then explicitlyconfirmed
+allproductpermissions/access/display/retention/quotas. RecordedOWNER-CLOSURE/
+07-14SUMMARY; no newprivatecallsorindependenttermsaudit. Separateengineering
+gap: stockstatusschedulerhasnolivetransport, so normalruntimegate cannotbe
+removed merelybyacceptance. FeaturePR/releasework proceeds with that limit.

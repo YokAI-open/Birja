@@ -2,16 +2,29 @@
 phase: 07-permitted-stock-discovery
 plan: "14"
 checkpoint: 07-14-03
-status: actual-reference-quotes-measured-whole-acceptance-pending
+status: passed-owner-confirmed
 prepared: 2026-11-10
 preparation_updated: 2026-11-11
-tasks_completed: 2
-live_activation: disabled
+tasks_completed: 3
+live_activation: pending-runtime-status-integration
 private_requests_made: Nov16-30-measured; Nov11-unknown
 owner_ui_acceptance: accepted-2026-11-11
 ---
 
 # Stock discovery activation review and continuation handoff
+
+## Current closure — 2026-11-22
+
+The owner explicitly accepts the prior manual verification and confirms all
+requested product permission/access/display/retention/quota conditions. Phase7
+owner acceptance and Plan14 are complete; see[07-OWNER-CLOSURE.md](07-OWNER-CLOSURE.md)
+and07-14-SUMMARY.md. This is owner-attested final acceptance plus saved actual
+measurements/local proof, not a new independent provider audit or new live run.
+Real stock execution still needs the separately missing live status transport;
+normal runtime admissions, freshness and continuity checks are unchanged.
+
+## Historical preparation and unresolved-state records
+
 
 ## Actual November16 campaign result
 

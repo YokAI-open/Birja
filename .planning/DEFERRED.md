@@ -3,7 +3,21 @@
 This register survives milestone switches. Items remain unverified until their
 actual acceptance evidence is obtained. Starting v1.2 does not complete them.
 
-## v1.1 Phase 7: live stock acceptance
+## Current Phase7 disposition — closed by owner acceptance2026-11-22
+
+STOCK-01/02/03,DATA-01,MKT-01,SAFE-01 owner acceptance is now closed. The owner
+confirmed earlier manual checks and all requested access/display/retention/quota
+conditions; see[owner closure](phases/07-permitted-stock-discovery/07-OWNER-CLOSURE.md).
+Saved November16measurement and existing local/hosted proofs remain the technical
+evidence; no provider terms audit or new measurement is inferred.
+
+**Remaining engineering follow-up:** the stock-status scheduler has no live
+transport (`backend/app/tasks/stock_status.py`). Implement and qualify a supported
+transport before claiming real stock execution enabled. This is separate from
+the now-closed human acceptance. Do not bypass runtime status/admission checks.
+
+## Historical v1.1 Phase7 deferral record
+
 
 | Requirement | Outstanding outcome | Status |
 |---|---|---|
