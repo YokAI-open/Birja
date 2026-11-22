@@ -1,7 +1,13 @@
 # Phase15 — Local Qualification Checkpoint
 
-**Plan03 Task1 complete; Task2 pending.** No encrypted original-request replay,
-strict final image scan or whole qualification pass is claimed yet.
+**Plan03 complete: both tasks pass.** R5actual current cold/replay proof passes
+exit0/135.998s; all five strict image scans pass41.220s with HIGH0/CRITICAL0 and
+zero accepted findings. The final source/tracked/archive/image guards pass,
+owned processes/resources are empty, and all prior identities are preserved.
+See15-RECOVERY-PROOF.md and private`final-integrity.json`. No whole7/hosted-CI
+pass is claimed. The checkpoint/failed-attempt text below is preserved history.
+
+## Historical Checkpoint
 
 Task1 source-bound reuse and combined independent review are recorded in
 15-EVIDENCE-REUSE.md/15-REVIEW.md; private raw measurement is
@@ -20,7 +26,8 @@ were independently verified. The custom8765migrated-baseline row is explicit.
 |r4|failed,135.717s|Adapter identity succeeds, but pg_stat_ssl row is not visible after attenuating to the runtime role; observation must precede SET ROLE|
 
 All receipts are under`/tmp/birja-phase15-campaign-recovery-current-rN` and
-remain failed/refused, never relabelled. R4canonical archive is
+remain failed/refused, never relabelled. The failed R4archive was canonical at the checkpoint and is now preserved at
+`/tmp/birja-phase15-proof-r4-failed/recovery.tar.gz`. Its original path was
 `/tmp/birja-phase15-proof/recovery.tar.gz`, SHA256
 `3a68c39c635e4b0ca0e722dcdaaee195afb53600ab1e927cbea6d5ff3159e78c`,
 inode943056/device64512,244357120bytes, sourcec78e96e. All original R4groups
@@ -44,3 +51,19 @@ No unrelated backend/browser/legacy rerun or owner permission question is needed
 The executor stopped further edits at its three-repair limit and returns this
 precise checkpoint for the authorized continuation. No Plan03SUMMARY exists,
 so incomplete Task2 cannot be mistaken for plan completion.
+
+## Successful Bounded Continuation
+
+The parent authorized one focused continuation after the recorded retry-cap
+checkpoint. TLS observation moved before role attenuation on the same bound
+connection; all effective-role/transaction/finally-reset/financial assertions
+remain. Affected14management/25smoke contracts pass15.198/6.246s; independent
+placement recheck0/0. Commit6d7ee7f binds fixtureb8ecf208…c4d3 in both current
+producer/consumer entries. R5alone is the successful actual proof; all older
+failures stay failed. The source-owned economic fixture required no regeneration.
+
+Final code/contract changes stay limited to the authorized test harness and
+exact current source bindings. No application/schema/financial SQL/dependency/
+image version/UI/provider/production/publication change. Parent resumes04
+operator/lifecycle acceptance; three whole requirements remain pending until
+that plan and independent phase-goal verification.

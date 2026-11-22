@@ -122,3 +122,14 @@ matches the two current producer/consumer entries. No old source binding changed
 R4archive/binding records are preserved at`/tmp/birja-phase15-proof-r4-failed/`
 with original3a68c39c…9e78c SHA/inode943056 and unchanged receipt. One new R5proof
 will use a fresh matching canonical archive; no unrelated campaign is repeated.
+
+## Final Reuse/Current Result
+
+The full input/raw-log/artifact comparison was requalified at final6d7ee7f:
+all277/155/314/139/10relevant input groups,365render inputs,28security logs and
+six recovery logs still match; no unrelated rerun was necessary. R5now supplies
+the changed current cold/replay evidence, with exact inherited authority parity.
+All5exact current image scans pass without findings. Final attestation verifies
+9priorartifacts and3failed15archive sets unchanged, originalprocesses and6owned
+projects empty. Actual result/details are in15-RECOVERY-PROOF.md; no whole-run
+or new authenticated direct-login TLS claim is introduced.
