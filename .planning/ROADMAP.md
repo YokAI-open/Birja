@@ -425,7 +425,7 @@ deletion/purge of retained evidence is included.
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 15-04-PLAN.md — Finish operator support/refusal and full lifecycle acceptance records
+- [x] 15-04-PLAN.md — Finish operator support/refusal and full lifecycle acceptance records
 
 **Cross-cutting constraints:** Preserve original retry/owner/portfolio identities and frozen finances; use the authentic installed verifier and finite owned Phase15 outputs, preserving prior archives. One serial isolated DB lane and one fresh matching affected proof; exact input-bound reuse for unaffected components. Keep complete CI executable and required before merge, coverage and image gates enforced, and whole/component result claims distinct. Preserve accepted UI and actual owner outcomes for unchanged surfaces; review only affected interactions. No application/schema/dependency/image-version change is planned. Keep local; Phase7/provider, production, publication and issue35scope changes remain excluded.
 
@@ -470,7 +470,7 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
-| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 3/4 | Executing; Plan04 acceptance next | - |
+| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 4/4 | Awaiting independent goal verification | - |
 
 ## Deferred Follow-up
 
