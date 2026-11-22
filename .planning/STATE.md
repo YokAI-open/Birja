@@ -1276,3 +1276,15 @@ Next: approve new hotfix branch publication, required full CI, merge/tag/recover
 asset publication and guarded production fix-forward, followed by back-merge.
 Reuse prior owner approvals within their scope; no stock activation or milestone
 archival. Unrelated root.claude/ remains untouched.
+
+## Collation Readiness Correction Prepared —2026-11-22
+
+v0.6.1 fullyqualified/published9a143fc; deployment stillpaused. Old/newbinding
+context explains wrapper refusal; reviewedoperator composition preserves all
+checks and freshrecovery before rebind. Dryrun then correctly exposed old
+COLLATION_PREFLIGHT misclassifying builtinC NULLversions as drift. No admin SQL
+applied; originalfinances unchanged. Narrow0.6.2 corrects only knownC/POSIX
+classification, retaining realdrift/unknown/index/database guards. GenuineRED
+and6GREEN/2.54s, independentreview0/0 and parentread-onlyliveprobe pass.
+Next publishnewhotfix with approval, fullCI then finish authorizedrepair/backmerge.
+No dependency, finance/schema, stockactivation or milestonearchive change.
