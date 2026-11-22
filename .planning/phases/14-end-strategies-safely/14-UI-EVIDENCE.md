@@ -1,6 +1,6 @@
 # Phase 14 implemented UI evidence
 
-## Current review packet — R7, pending owner acceptance
+## Current review packet — R7, owner accepted
 
 The current canonical packet is `/tmp/birja-phase14-ui-review.zip`; extract it
 and open `index.html`. Download with VS Code Remote Explorer's Download action.
@@ -12,8 +12,10 @@ and open `index.html`. Download with VS Code Remote Explorer's Download action.
 - All six capture widths, strict current source/artifact/ZIP verification, and
   190 offline layout checks pass. Inventory: 419 hashed artifacts.
 - Final Plan18 integrity checks confirm this remains current after qualification.
-- Owner UI and native browser-menu 200% results are both **pending**. Automated
-  reflow and prior phase approvals do not supply either result.
+- Owner explicitly accepted both the implemented UI and native browser-menu
+  200% result on 2026-11-22: “i approve ui and 200 zoom”. Both actual outcomes
+  are recorded in 14-HUMAN-UAT.md; browser metadata is unknown. The immutable
+  capture flags remain unchanged as capture-time facts.
 
 See [14-HUMAN-UAT.md](14-HUMAN-UAT.md) for the two requested outcomes and
 [14-18-SUMMARY.md](14-18-SUMMARY.md) for qualification provenance. Earlier
