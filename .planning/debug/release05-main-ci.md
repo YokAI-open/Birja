@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: resolved
 trigger: Finish the approved v0.5.0 release CI workflow
 created: 2026-11-14
 updated: 2026-11-14
@@ -8,7 +8,7 @@ updated: 2026-11-14
 ## Current Focus
 
 hypothesis: The private selected-cutover clone inherits main as its checked-out branch on push CI, so unconditional branch creation fails.
-next_action: Parent independently reviews and publishes the test-only correction, then obtains full hosted recovery/rollback proof.
+next_action: None; both corrective target PRs passed all required hosted jobs and merged under the owner-approved CI completion policy.
 
 reasoning_checkpoint:
   hypothesis: A local clone can already contain main; unconditional branch creation fails although current is correct.
@@ -59,3 +59,13 @@ Original back-merge run43596978120 completed its five substantive jobs successfu
 the test-only correction will get fresh required CI. A corrective release PR to
 main will carry the same reviewed CI/test/planning-only head under the owner's
 existing authorization to finish release CI. Neither published tag is moved.
+
+## Hosted completion
+
+Both target runs43598785838/43598814564 passed all six checks, including the full
+serial campaign with this correction; PR34/main and PR33/develop merged tested
+head952881b. Final trees match. Resolution is based on the owner's explicit
+machine-check-until-green authorization and observable hosted results, not a
+claim that the owner manually inspected a run. The focused regression also
+exercises the main-checkout condition that differs from a detached PR checkout.
+Published tags and production remain unchanged. No further fix is required.

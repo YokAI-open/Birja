@@ -1,7 +1,7 @@
 // Phase 3 happy path. Needs the full compose stack with PRICE_SOURCE=fake (CI sets it).
 // Never run it against a stack whose email backend is resend.
 import { expect, test } from "@playwright/test";
-import { signInNewUser } from "./helpers.js";
+import { portfolioId, signInNewUser } from "./helpers.js";
 
 test("a signed-in user sees live prices for the curated coins", async ({ page, browser }) => {
   test.setTimeout(90_000);
@@ -43,8 +43,11 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
 
   await page.getByRole("link", { name: "Account" }).click();
   await expect(page).toHaveURL((url) => url.pathname === "/account");
-  await expect(page.getByText("$10,000.00")).toBeVisible();
+  await expect(page.getByText("$10,000.00")).toHaveCount(0);
   await expect(page.getByText(email)).toBeVisible();
+  const id = await portfolioId(page);
+  await page.goto(`/portfolios/${id}`);
+  await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$10,000.00");
 
   // The redirect from unknown paths happens client-side after load, so wait for it.
   await page.goto("/nope");

@@ -1,11 +1,12 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, within, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { Link, MemoryRouter, Route, Routes } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixtures";
 import StockTradePage from "./StockTradePage";
 import App from "@/App";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 const clients: QueryClient[] = [];
 function setup(
   options: {
@@ -13,9 +14,18 @@ function setup(
     trade?: (body: Record<string, unknown>) => Response | Promise<Response>;
     route?: string;
     app?: boolean;
+    name?: string;
+    metadata?: () => unknown;
   } = {},
 ) {
   document.cookie = "bj_csrf=test; path=/";
+  const scoped = async (response: Response) => {
+    const payload = await response.json();
+    if (response.ok) {
+      payload.portfolio_id ??= "1";
+    } else if (payload.detail?.quote) payload.detail.quote.portfolio_id ??= "1";
+    return new Response(JSON.stringify(payload), { status: response.status });
+  };
   const calls: { path: string; body: Record<string, unknown> | null }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -24,27 +34,56 @@ function setup(
         body = init?.body ? JSON.parse(String(init.body)) : null;
       calls.push({ path, body });
       if (path.endsWith("/context"))
-        return options.context?.() ?? new Response(JSON.stringify(contextFixture()));
-      if (path.endsWith("/quote")) return new Response(JSON.stringify(quoteFixture()));
-      if (path === "/api/v1/stock-trades")
-        return options.trade?.(body!) ?? new Response(JSON.stringify(fillFixture()));
+        return scoped(options.context?.() ?? new Response(JSON.stringify(contextFixture())));
+      if (path.endsWith("/quote")) return scoped(new Response(JSON.stringify(quoteFixture())));
+      if (path === "/api/v2/portfolios/1/stock-trades")
+        return scoped(
+          await (options.trade?.(body!) ?? new Response(JSON.stringify(fillFixture()))),
+        );
+      if (path === "/api/v2/portfolios")
+        return new Response(
+          JSON.stringify(
+            options.metadata?.() ?? [
+              { id: "1", name: options.name ?? "Strategy one" },
+              { id: "2", name: "Strategy two" },
+            ],
+          ),
+        );
       if (path.endsWith("/me"))
-        return new Response(JSON.stringify({ email: "first@example.test", cash_usd: "9796" }));
+        return new Response(JSON.stringify({ email: "first@example.test" }));
       return new Response("{}", { status: 404 });
     }),
   );
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   clients.push(client);
-  client.setQueryData(["me"], { email: "first@example.test", cash_usd: "10000" });
+  client.setQueryData(["me"], { email: "first@example.test" });
   const user = userEvent.setup();
   const rendered = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[options.route ?? "/trade/stocks/AAPL"]}>
+      <MemoryRouter
+        initialEntries={[
+          options.route
+            ? options.route.startsWith("/trade/")
+              ? "/portfolios/1" + options.route
+              : options.route
+            : "/portfolios/1/trade/stocks/AAPL",
+        ]}
+      >
         {options.app ? (
           <App />
         ) : (
           <Routes>
-            <Route path="/trade/stocks/:symbol" element={<StockTradePage />} />
+            <Route path="/portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+              <Route
+                path="trade/stocks/:symbol"
+                element={
+                  <>
+                    <Link to="/portfolios/2/trade/stocks/AAPL">Other strategy</Link>
+                    <StockTradePage />
+                  </>
+                }
+              />
+            </Route>
           </Routes>
         )}
       </MemoryRouter>
@@ -67,7 +106,7 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
   await waitFor(() => expect(confirm).toBeEnabled());
-  expect(calls.filter((x) => x.path === "/api/v1/stock-trades")).toHaveLength(0);
+  expect(calls.filter((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(0);
   expect(screen.getByText("Commission")).toBeVisible();
   expect(screen.getByText("Added spread")).toBeVisible();
   await user.click(confirm);
@@ -78,7 +117,7 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   expect(receipt).toHaveTextContent("Shares after this trade2");
   expect(within(receipt).getByRole("link", { name: "Portfolio" })).toHaveAttribute(
     "href",
-    "/portfolio",
+    "/portfolios/1",
   );
   await user.click(screen.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
@@ -101,7 +140,7 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
     screen.getByText("Market closed. You can edit a draft; no order is queued."),
   ).toBeVisible();
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
-  expect(calls.some((x) => x.path === "/api/v1/stock-trades")).toBe(false);
+  expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
 it("keeps an unresolvable saved receipt as an uncertain attempt instead of allowing a new order", async () => {
   const { user, calls } = setup({
@@ -116,12 +155,11 @@ it("keeps an unresolvable saved receipt as an uncertain attempt instead of allow
   await user.click(confirm);
   expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
   expect(input).toBeDisabled();
-  const original = calls.find((c) => c.path === "/api/v1/stock-trades")!.body;
+  const original = calls.find((c) => c.path === "/api/v2/portfolios/1/stock-trades")!.body;
   await user.click(screen.getByRole("button", { name: "Check order result" }));
-  expect(calls.filter((c) => c.path === "/api/v1/stock-trades").map((c) => c.body)).toEqual([
-    original,
-    original,
-  ]);
+  expect(
+    calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades").map((c) => c.body),
+  ).toEqual([original, original]);
 });
 it.each(["0", "1.5", "1e2", "-2", "1000000000000"])(
   "rejects invalid whole-share quantity %s without requesting a preview",
@@ -140,9 +178,9 @@ it("Buy max edits the draft only and side selection highlights ask/bid with keyb
   await waitFor(() => expect(screen.getByRole("button", { name: "Buy max" })).toBeEnabled());
   await user.click(screen.getByRole("button", { name: "Buy max" }));
   expect(input).toHaveValue("98");
-  expect(calls.some((c) => c.path.endsWith("/quote") || c.path === "/api/v1/stock-trades")).toBe(
-    false,
-  );
+  expect(
+    calls.some((c) => c.path.endsWith("/quote") || c.path === "/api/v2/portfolios/1/stock-trades"),
+  ).toBe(false);
   expect(screen.getByText("Buy price")).toBeVisible();
   const sell = screen.getByRole("radio", { name: "Sell" });
   await user.click(sell);
@@ -199,7 +237,9 @@ it("price changes show old/new values and require a second explicit confirmation
   await user.click(confirm);
   await screen.findByRole("heading", { name: "Order filled" });
   expect(count).toBe(2);
-  const bodies = calls.filter((c) => c.path === "/api/v1/stock-trades").map((c) => c.body!);
+  const bodies = calls
+    .filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")
+    .map((c) => c.body!);
   expect(bodies[0].idempotency_key).not.toBe(bodies[1].idempotency_key);
   expect(bodies[1].expected_exec_price).toBe("103");
 });
@@ -220,21 +260,25 @@ it("unknown response keeps fields frozen and checks the same original body after
   const check = await screen.findByRole("button", { name: "Check order result" });
   expect(input).toBeDisabled();
   expect(screen.queryByRole("button", { name: "Trade again" })).toBeNull();
-  const key = ["stockContext", "first@example.test", "AAPL"];
+  const key = client
+    .getQueryCache()
+    .findAll({ queryKey: ["stockContext", "first@example.test", "1"] })[0]!.queryKey;
   const c = client.getQueryData<Record<string, unknown>>(key)!;
   act(() =>
     client.setQueryData(key, { ...c, execution_enabled: false, execution_reason: "market_closed" }),
   );
   await user.click(check);
   await screen.findByRole("heading", { name: "Order filled" });
-  const bodies = calls.filter((c) => c.path === "/api/v1/stock-trades").map((c) => c.body);
+  const bodies = calls
+    .filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")
+    .map((c) => c.body);
   expect(bodies[1]).toEqual(bodies[0]);
 });
-it("invalid route symbols show a safe return to Markets without stock requests", () => {
+it("invalid route symbols show a safe return to Markets without stock requests", async () => {
   const { calls } = setup({ route: "/trade/stocks/invalid!" });
-  expect(screen.getByRole("heading", { name: "Unknown stock" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Unknown stock" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Back to Markets" })).toHaveAttribute("href", "/");
-  expect(calls).toHaveLength(0);
+  expect(calls.some((c) => c.path.includes("/stock-trades"))).toBe(false);
 });
 
 it("the authenticated App mounts the distinct stock route", async () => {
@@ -243,4 +287,96 @@ it("the authenticated App mounts the distinct stock route", async () => {
   expect(await screen.findByLabelText("Whole-share quantity")).toBeVisible();
   expect(screen.getByRole("link", { name: "Markets" })).toHaveAttribute("href", "/");
   expect(screen.queryByLabelText("Amount (USD)")).toBeNull();
+});
+
+it("names the stock ticket, preview and original receipt and keeps scoped destinations", async () => {
+  const { user, calls } = setup();
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  const confirm = await screen.findByRole("button", { name: "Confirm buy" });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
+  await user.click(confirm);
+  const receipt = within(await screen.findByRole("region", { name: "Order filled" }));
+  expect(receipt.getByText("Strategy one")).toBeVisible();
+  expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/portfolios/1");
+  await user.click(receipt.getByRole("button", { name: "Trade again" }));
+  expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
+});
+it("wraps and escapes a full60-character stock portfolio name", async () => {
+  const name = "<script>" + "a".repeat(43) + "</script>";
+  setup({ name });
+  const names = await screen.findAllByText(name);
+  expect(names[0]).toHaveClass("[overflow-wrap:anywhere]");
+  expect(document.querySelector("script")).toBeNull();
+});
+it("suppresses every financial field and receipt when the original portfolio is lost during confirmation", async () => {
+  let closed = false,
+    resolve!: (v: Response) => void;
+  const { user, calls } = setup({
+    metadata: () =>
+      closed ? [{ id: "2", name: "Strategy two" }] : [{ id: "1", name: "Strategy one" }],
+    trade: () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  });
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  const confirm = screen.getByRole("button", { name: "Confirm buy" });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  await user.click(confirm);
+  closed = true;
+  await act(async () => {
+    resolve(
+      new Response(JSON.stringify({ detail: { code: "portfolio_unavailable" } }), { status: 404 }),
+    );
+  });
+  await screen.findByRole("heading", { name: "Portfolio unavailable" });
+  expect(await screen.findByText(/An earlier order's result is unconfirmed/)).toBeVisible();
+  expect(screen.queryByLabelText("Whole-share quantity")).toBeNull();
+  expect(screen.queryByText("Cash available")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Check order result" })).toBeNull();
+  expect(calls.some((c) => c.path === "/api/v2/portfolios/2/stock-trades")).toBe(false);
+});
+it("does not display or relabel a late original stock receipt in a sibling ticket", async () => {
+  let resolve!: (v: Response) => void;
+  const { user, calls } = setup({
+    trade: () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  });
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  const confirm = screen.getByRole("button", { name: "Confirm buy" });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  await user.click(confirm);
+  await user.click(screen.getByRole("link", { name: "Other strategy" }));
+  expect((await screen.findAllByText("Strategy two"))[0]).toBeVisible();
+  await act(async () => {
+    resolve(new Response(JSON.stringify(fillFixture())));
+  });
+  expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
+  expect(screen.queryByText("Strategy one")).toBeNull();
+  expect(calls.some((c) => c.path === "/api/v2/portfolios/2/stock-trades")).toBe(false);
+});
+
+it("explains a conflicting original reference without identifying another portfolio", async () => {
+  const { user, calls } = setup({
+    trade: () =>
+      new Response(JSON.stringify({ detail: { code: "idempotency_conflict" } }), { status: 409 }),
+  });
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  const confirm = screen.getByRole("button", { name: "Confirm buy" });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  await user.click(confirm);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "This order reference belongs to a different portfolio or request. Return to the original portfolio to check it.",
+  );
+  expect(screen.queryByText("Strategy two")).toBeNull();
+  expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
 });

@@ -1,6 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChartNoAxesCombined, Wallet, History } from "lucide-react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router";
+import {
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+  useMatch,
+  matchPath,
+} from "react-router";
 import type { Me } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,7 +22,71 @@ import SignInPage from "@/pages/SignInPage";
 import StockTradePage from "@/pages/StockTradePage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
+import PortfoliosPage from "@/pages/PortfoliosPage";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import HistoryPage from "@/pages/HistoryPage";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { isPortfolioId } from "@/api/portfolios";
+import { PortfolioMetadataForm } from "@/components/PortfolioMetadataForm";
+import PortfolioDeletionPage from "@/pages/PortfolioDeletionPage";
+import { useQueryClient } from "@tanstack/react-query";
+import { portfolioDeletionAuthorityGeneration } from "@/hooks/usePortfolioDeletion";
+
+/** Keep the management operation mounted when financial authority is revoked. */
+export function PortfolioRoute() {
+  const { portfolioId } = useParams();
+  const target = usePortfolioTarget(portfolioId);
+  const client = useQueryClient();
+  const owner = useMe().data?.email;
+  const root = useRef<HTMLDivElement>(null);
+  const primaryHeading = useRef<HTMLHeadingElement>(null);
+  const managementFocus = useRef<Element | null>(null);
+  const detailMatch = useMatch({ path: "/portfolios/:portfolioId", end: true });
+  const detail = isPortfolioId(portfolioId) && detailMatch !== null;
+  useEffect(() => {
+    if (target.status === "loading" || target.status === "ready") return;
+    if (
+      managementFocus.current &&
+      !managementFocus.current.isConnected &&
+      document.activeElement === document.body
+    )
+      root.current?.querySelector<HTMLHeadingElement>("h1")?.focus();
+  }, [target.status]);
+  return (
+    <div className="contents" ref={root}>
+      {detail && (
+        <h1
+          ref={primaryHeading}
+          tabIndex={-1}
+          className="mt-8 mb-4 text-[32px] leading-10 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {target.status === "ready"
+            ? "Portfolio"
+            : target.status === "loading"
+              ? "Checking portfolio access…"
+              : "Portfolio unavailable"}
+        </h1>
+      )}
+      {detail && owner && (
+        <div
+          className="contents"
+          onFocusCapture={(event) => {
+            managementFocus.current = event.target;
+          }}
+        >
+          <PortfolioMetadataForm
+            key={`${owner}:${portfolioId}:${portfolioDeletionAuthorityGeneration(client)}`}
+            portfolioId={portfolioId}
+            available={target.status === "ready"}
+            lastPortfolio={target.portfolios?.length === 1}
+          />
+        </div>
+      )}
+      <PortfolioTargetBoundary primaryHeading={detail ? primaryHeading : undefined} />
+    </div>
+  );
+}
 
 function AuthSwitch() {
   const { data, isPending, isError, refetch } = useMe();
@@ -48,7 +121,7 @@ function AuthSwitch() {
       </Card>
     );
   }
-  return data === null ? <SignInPage /> : <SignedIn me={data} />;
+  return data === null ? <SignInPage /> : <SignedIn key={data.email} me={data} />;
 }
 
 const navItem = ({ isActive }: { isActive: boolean }) =>
@@ -59,8 +132,28 @@ const navItem = ({ isActive }: { isActive: boolean }) =>
       : "text-muted-foreground hover:bg-muted",
   );
 
+function LegacyTrade({ stock = false }: { stock?: boolean }) {
+  const { symbol } = useParams<{ symbol: string }>();
+  return (
+    <PortfolioTargetBoundary
+      legacyDestination={(id) =>
+        `/portfolios/${id}/trade/${stock ? "stocks/" : ""}${encodeURIComponent(symbol ?? "")}`
+      }
+    />
+  );
+}
+
 function SignedIn({ me }: { me: Me }) {
   const { pathname } = useLocation();
+  // This memory belongs to this mounted signed-in identity only. Explicit
+  // routes take priority, including their refusal; never fall back from one.
+  const [openedId, setOpenedId] = useState<string>();
+  const matchedId = matchPath("/portfolios/:portfolioId/*", pathname)?.params.portfolioId;
+  const explicitId = isPortfolioId(matchedId) ? matchedId : undefined;
+  const navigation = usePortfolioTarget(explicitId ?? openedId);
+  const target = navigation.status === "ready" ? navigation.target : null;
+  if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
+  const historyPath = target ? `/portfolios/${target.portfolioId}/history` : "/history";
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = content.current!;
@@ -95,11 +188,11 @@ function SignedIn({ me }: { me: Me }) {
             <ChartNoAxesCombined aria-hidden="true" className="size-5 md:hidden" />
             Markets
           </NavLink>
-          <NavLink to="/portfolio" className={navItem}>
+          <NavLink to="/portfolios" end className={navItem}>
             <Wallet aria-hidden="true" className="size-5 md:hidden" />
-            Portfolio
+            Portfolios
           </NavLink>
-          <NavLink to="/history" className={navItem}>
+          <NavLink to={historyPath} className={navItem}>
             <History aria-hidden="true" className="size-5 md:hidden" />
             History
           </NavLink>
@@ -109,10 +202,27 @@ function SignedIn({ me }: { me: Me }) {
         </NavLink>
       </div>
       <div ref={content}>
+        {explicitId && <PortfolioSwitcher portfolioId={explicitId} />}
         <Routes>
-          <Route index element={<MarketsPage />} />
-          <Route path="portfolio" element={<PortfolioPage />} />
-          <Route path="history" element={<HistoryPage />} />
+          <Route index element={<MarketsPage authenticated portfolioId={target?.portfolioId} />} />
+          <Route path="portfolios/deletion" element={<PortfolioDeletionPage />} />
+          <Route path="portfolios/:portfolioId" element={<PortfolioRoute />}>
+            <Route index element={<PortfolioPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
+            <Route path="trade/:symbol" element={<TradePage />} />
+          </Route>
+          <Route path="portfolios" element={<PortfoliosPage />} />
+          <Route
+            path="portfolio"
+            element={<PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}`} />}
+          />
+          <Route
+            path="history"
+            element={
+              <PortfolioTargetBoundary legacyDestination={(id) => `/portfolios/${id}/history`} />
+            }
+          />
           <Route
             path="account"
             element={
@@ -125,8 +235,8 @@ function SignedIn({ me }: { me: Me }) {
               </>
             }
           />
-          <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
-          <Route path="trade/:symbol" element={<TradePage />} />
+          <Route path="trade/stocks/:symbol" element={<LegacyTrade stock />} />
+          <Route path="trade/:symbol" element={<LegacyTrade />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

@@ -33,12 +33,17 @@ export function readCookie(name: string): string | null {
   return null;
 }
 
-async function ensureCsrfToken(): Promise<string | null> {
+async function ensureCsrfToken(
+  check: () => void = () => {},
+  signal?: AbortSignal,
+): Promise<string | null> {
+  check();
   const existing = readCookie(CSRF_COOKIE);
   if (existing) {
     return existing;
   }
-  await fetch("/api/v1/auth/csrf", { headers: { Accept: "application/json" } });
+  await fetch("/api/v1/auth/csrf", { headers: { Accept: "application/json" }, signal });
+  check();
   return readCookie(CSRF_COOKIE);
 }
 
@@ -68,18 +73,20 @@ async function toApiError(response: Response): Promise<ApiError> {
 let refreshInFlight: Promise<boolean> | null = null;
 
 /** One refresh at a time: concurrent 401s share a single in-flight request. */
-function refreshSession(): Promise<boolean> {
+function refreshSession(check: () => void = () => {}): Promise<boolean> {
   if (refreshInFlight) {
     return refreshInFlight;
   }
   refreshInFlight = (async () => {
     try {
-      const token = await ensureCsrfToken();
+      const token = await ensureCsrfToken(check);
+      check();
       const headers = new Headers({ Accept: "application/json" });
       if (token) {
         headers.set("X-CSRF-Token", token);
       }
       const response = await fetch("/api/v1/auth/refresh", { method: "POST", headers });
+      check();
       return response.status === 204;
     } catch {
       return false;
@@ -90,7 +97,12 @@ function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function send(path: string, init: RequestInit): Promise<Response> {
+async function send(
+  path: string,
+  init: RequestInit,
+  check: () => void = () => {},
+): Promise<Response> {
+  check();
   init.signal?.throwIfAborted();
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
@@ -99,20 +111,100 @@ async function send(path: string, init: RequestInit): Promise<Response> {
     headers.set("Content-Type", "application/json");
   }
   if (method !== "GET" && method !== "HEAD") {
-    const token = await ensureCsrfToken();
+    const token = await ensureCsrfToken(check, init.signal ?? undefined);
+    check();
     if (token) {
       headers.set("X-CSRF-Token", token);
     }
   }
   init.signal?.throwIfAborted();
+  check();
   return fetch(path, { ...init, method, headers });
+}
+
+/** Opt-in strict transport for immutable originals. Existing apiFetch callers keep their contract. */
+export async function guardedJsonRequest(
+  path: string,
+  init: RequestInit,
+  isCurrent: () => boolean,
+): Promise<unknown> {
+  const check = () => {
+    init.signal?.throwIfAborted();
+    if (!isCurrent()) throw new DOMException("Request context unavailable", "AbortError");
+  };
+  const json = async (response: Response): Promise<unknown> => {
+    check();
+    if (
+      response.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase() !==
+      "application/json"
+    )
+      throw new Error("Unexpected response");
+    const value: unknown = await response.json();
+    check();
+    return value;
+  };
+  check();
+  // All request bytes/target must already have been captured by the caller.
+  let response = await send(path, init, check);
+  check();
+  if (response.status === 401) {
+    // A well-formed authentication refusal may recover once, never a transport/5xx failure.
+    const value = await json(response);
+    check();
+    const refused = strictError(response, value);
+    if (refused.code !== "not_authenticated") throw refused;
+    const refreshed = await refreshSession(check);
+    check();
+    if (refreshed) {
+      response = await send(path, init, check);
+      check();
+    } else {
+      throw strictError(response, value);
+    }
+  }
+  const value = await json(response);
+  check();
+  if (!response.ok) throw strictError(response, value);
+  if (response.status !== 200) throw new Error("Unexpected response");
+  return value;
+}
+
+function strictError(response: Response, value: unknown): ApiError {
+  const record = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+  if (!record(value) || Object.keys(value).join() !== "detail" || !record(value.detail))
+    throw new Error("Unexpected response");
+  const detail = value.detail;
+  if (
+    typeof detail.code !== "string" ||
+    !Object.keys(detail).every(
+      (key) =>
+        key === "code" ||
+        ((response.status === 401 || response.status === 403 || response.status >= 500) &&
+          key === "message" &&
+          typeof detail.message === "string"),
+    )
+  )
+    throw new Error("Unexpected response");
+  const header = response.headers.get("Retry-After");
+  const wait = header !== null && /^\d+$/.test(header.trim()) ? Number(header.trim()) : null;
+  return new ApiError(
+    response.status,
+    detail.code,
+    "Request refused",
+    wait !== null && Number.isSafeInteger(wait) ? wait : null,
+  );
 }
 
 /** The only place that calls fetch for /api. Returns parsed JSON, or null for 204. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<unknown> {
   let response = await send(path, init);
   init.signal?.throwIfAborted();
-  if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
+  if (
+    response.status === 401 &&
+    !path.startsWith("/api/v1/auth/") &&
+    !path.startsWith("/api/v2/auth/")
+  ) {
     await refreshSession();
     init.signal?.throwIfAborted();
     response = await send(path, init);

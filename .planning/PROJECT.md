@@ -4,9 +4,9 @@
 
 A virtual-money investing simulator. Deployed v0.4.0 offers crypto trading;
 published software v0.5.0 adds the locally verified twenty-stock US implementation,
-shared cash/portfolio, dividends/splits and mixed History. Live stock activation
-remains gated because accepted provider/live-verification gaps are unresolved.
-Planning milestone v1.1 is closed with known gaps, not fully live-validated.
+shared cash/portfolio, dividends/splits and mixed History. Phase7 manual owner acceptance was closed on2026-11-22; live stock activation
+remains gated pending a supported live-status transport. The v1.1 archive
+preserves its historical accepted gaps and later owner-resolution provenance.
 
 ## Core Value
 
@@ -55,10 +55,42 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   tested-source rollback and complete protected local journeys (SAFE-02/03) —
   verified in Phase11 with four independent reviews; live activation deferred.
 
+- [x] Existing investing preserved under explicit private portfolio ownership:
+  original finances/no regrant, target-bound execution/retries, named financial
+  surfaces/private History, zero/one/many identity and restricted verified-TLS
+  recovery — Phase12, seven assigned requirements verified locally. Creation,
+  descriptions/comparison are now validated in Phase13; public deletion remains Phase14.
+
+- [x] Up to ten private named strategy portfolios, editable/clearable optional
+  descriptions, one independent$10,000grant/baseline per genuinely new portfolio,
+  My portfolio onboarding and permanent original creation replay — Phase13.
+- [x] Independent active-book trading, same-asset positions/basis, historical
+  dividends/corrections and active splits, explicit switching with isolated
+  browser authority, receipts and cursors — Phase13.
+- [x] Stable strategy overview with cash/value/return against original baselines,
+  shared exact detail valuation and per-book incomplete semantics; bounded
+  polling/capacity and exact current0020/retained0017cold recovery — Phase13,
+  independently verified11/11requirements and both owner acceptance outcomes.
+
+- [x] Delete any owned portfolio after named confirmation, including holdings or the last portfolio; keep retained financial records private — Phase14, owner UI/native200 accepted and independently verified.
+- [x] Freeze deleted strategies at the committed closure boundary; prevent later financial effects while active siblings remain independent, with exact cold recovery/TLS/rollback evidence — Phase14.
+
+- [x] Exact active/frozen multi-portfolio recovery, original-request replay, operator support/refusal contract and full lifecycle acceptance — Phase15, independently verified4/4outcomes and3/3requirements.
+
 ### Active
 
-- [ ] Use IEX stock quotes with visible feed labels and crypto-like freshness; display permission remains a prerequisite for enabling live data.
-- [ ] Accepted deferred v1.1 Phase 7 live acceptance (STOCK-01/02/03, DATA-01, MKT-01, SAFE-01); live activation and production rollout stay separately gated.
+No implementation requirement remains in v1.2. Milestone audit/archive and publication decisions are separate.
+
+
+
+### Carried Work Outside v1.2
+
+Phase7's six owner acceptance items are closed as of2026-11-22: explicit owner
+confirmation of prior manual checks and applicable product rights/access/retention/
+limits supplements the preserved measurements and implementation proof. See
+[DEFERRED.md](DEFERRED.md) for provenance. Historical archives remain unchanged.
+The missing live stock-status transport is a separate engineering follow-up;
+no real stock execution or production activation is claimed from acceptance.
 
 ### Out of Scope
 
@@ -66,8 +98,8 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - Portfolio value-over-time chart: v2. It needs a snapshot job and stored history.
 - Limit/stop orders: v2+. They need a background matcher. Market orders cover the core loop.
 - Short selling, leverage, margin: not planned. Too complex for a learning tool aimed at beginners.
-- Leaderboard and social features: v2+. v1 is solo; each user sees only their own portfolio.
-- Portfolio reset: deliberately excluded. Mistakes stay, like real investing.
+- Leaderboard and social features: deferred. Portfolios remain private to their owner.
+- Resetting an existing portfolio or transferring cash between portfolios: outside v1.2. The owner approved independently funded new portfolios and deletion/recreation for strategy experiments; each portfolio still receives its own starting grant only once.
 - Streaming tick-by-tick prices (websockets): not planned for v1. Prices about 1 minute old are enough and work on free data tiers.
 - Real money, deposits, brokerage integration: never. This is a simulator.
 - Full order-book execution and real order routing: excluded. Stock fills use eligible IEX bid/ask quotes; crypto retains its configured simulated spread.
@@ -82,6 +114,11 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
 ## Current State
+
+Local v1.2 implementation is complete:Phases12–15,72plans and28requirements. Phase15 independently passes4/4outcomes,12/12supporting truths and3/3requirements. Milestone audit is next; current progress is tracked in STATE.md.
+Phase13delivers18plans/11requirements with owner UI/native200acceptance, full
+security/critical coverage and uninterrupted7stage recovery at9527e35. The
+feature branch remains local; this completion does not change production.
 
 The v1.0 MVP milestone is shipped and archived (2026-11-10): all 7 phases,
 69 plans and 31 requirements validated. Software release v0.4.0 is live at
@@ -136,7 +173,8 @@ scans0HIGH/CRITICAL pass. See11-VERIFICATION and11-03/04SUMMARY. Phase7live
 acceptance remains unverified. The owner2026-11-14 accepted closure/archive of
 v1.1 with those six requirement gaps. Software v0.5.0 was published after all six
 PR #32 checks passed; main c2c7af1 has the exact tested candidate tree. The
-approved develop back-merge is pending. No live activation or production change
+approved develop back-merge and test-only main CI correction are merged after
+six green jobs each; final main/develop trees match. No live activation or production change
 has occurred. See the v1.1 release receipt and archived
 v1.1ROADMAP/REQUIREMENTS/MILESTONE-AUDIT and integration audit.
 
@@ -194,12 +232,51 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 
 </details>
 
-## Next Milestone Goals
+## Current Milestone: v1.2 Multiple Strategy Portfolios
 
-No next milestone is selected. Accepted live-activation gaps remain follow-up,
-not automatically approved new feature scope. The existing November16manual
-measurement approval remains bounded/no automatic process. Use archivedv1.1
-requirements/audit when the owner selects further work.
+**Goal:** Let users try independent investing strategies with separately funded,
+private portfolios while preserving existing accounts and financial records.
+
+**Confirmed target features (2026-11-14):**
+- Up to ten active named portfolios per user, each granted $10,000 virtual cash once; users can add, view, edit or clear an optional plain-text description, including leaving it empty.
+- Crypto and stock capabilities within each portfolio, retaining all existing stock activation prerequisites.
+- Independent cash, holdings, trading, History and performance; an overview shows cash, total value and return.
+- Open a chosen portfolio to trade; delete any owned portfolio after confirmation, including holdings or the last portfolio.
+- Deletion ends the experiment: freeze its cash, holdings and financial history at the committed closure boundary; stop future dividends/splits/corrections, without fabricated liquidation or cash transfers. Retained records remain outside normal screens; zero active portfolios has a create action.
+- Existing cash/holdings/history migrate into the user's first portfolio without another grant or reset.
+
+**Research:** Completed in [research/v1.2/SUMMARY.md](research/v1.2/SUMMARY.md); no new dependencies recommended. The owner explicitly confirmed freeze at deletion after research surfaced its accounting consequences.
+
+**Requirements:** 28 requirements approved on 2026-11-14, including the owner's
+optional-description amendment (PMGT-06, Phase 13), rename,
+unique case-insensitive active names, initial “My portfolio” onboarding, and
+freeze-at-deletion treatment of unpaid/future effects.
+
+**Progress:** Phases12–15 are verified complete locally (31+18+19+4plans,
+28of28requirements). Phase13 independent verification passes all5roadmap criteria,
+45plan truths and11assigned requirements with no blocker or pending human item.
+Final9527e35 qualification passes3343backend tests,61critical modules100%,
+1194frontend tests,79browser passes/one retained skip, five image policies and
+uninterrupted7stage source-bound recovery. Security58/58closed and owner UI/native200
+outcomes pass. Phase14 completes19/19plans,5/5outcomes and7/7requirements;
+both actual owner UI/native200 results passed2026-11-22. Under the recorded
+proportionate-verification amendments, unchanged-input results,28security
+components and6actual recovery components pass; failed whole commands remain
+failed and full CI before merge remains required. Phase15 passes all four
+outcomes and three requirements:actual new encrypted restore/original retries
+with unchanged financial state, five strict image scans and source-bound
+inherited migration/concurrency/browser/TLS/owner evidence. All implementation
+requirements are complete; milestone audit/archive remain. See STATE.md.
+Phase7's six live obligations stay separately deferred and activation remains gated.
+Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
+zero accepted scanner findings are not a dependency remediation claim. No new
+publication or production deployment occurred; v1.2 awaits milestone audit/archive.
+No historical performance chart is included.
+
+**Funding policy change:** The owner explicitly replaces the single-portfolio
+funding limit with independent per-portfolio starting grants. Creating a new
+strategy after deletion is allowed. No existing portfolio is reset, and virtual
+funds are isolated rather than transferable across portfolios.
 
 ## Constraints
 
@@ -208,11 +285,14 @@ requirements/audit when the owner selects further work.
 - **Money correctness**: `Decimal` / `NUMERIC(20,8)`, explicit `ROUND_HALF_EVEN` at trade execution, money sent as JSON strings, trades in one DB transaction with row locks.
 - **Security**: email OTP stored as an HMAC in Redis, JWT access + rotating refresh token in HttpOnly cookies, CSRF double-submit, rate limits. Per CLAUDE.md.
 - **Process**: MVP-first. Each phase leaves the app runnable. Tests ship with features; 80% coverage, and 100% on money, trade execution, login and authorization.
+- **Verification effort**: Owner requested a better balance of delivery speed and security on 2026-11-21, applying now and to future milestones. Use targeted checks after small fixes, reuse valid unchanged-component evidence, and defer nonblocking hardening. Reserve broad reruns for affected integration or release checkpoints; retain financial/authentication/data safeguards and required CI. Shared details live in CLAUDE.md, Test culture.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Independently funded, deletable strategy portfolios | Owner wants users to try separate strategies; up to ten active, $10,000 each, zero active allowed | Approved v1.2 scope, 2026-11-14 |
+| Carry Phase 7 live requirements separately | Preserve unmet outcomes without blocking unrelated local work or enabling stocks | Deferred/unverified, see DEFERRED.md |
 | Close v1.1 with six accepted live gaps | Owner requested release/finish anyway; keep truthful history and gated admissions | Accepted deferred, 2026-11-14 |
 | Crypto only in v1 | 24/7 market, free near-real-time APIs, fractional quantities; proves the core loop with one data source | ✓ Good — prices and trading shipped in Phases 3/4 |
 | Prices refreshed about every 1 min by one scheduled job, not streamed | Fits free tiers; much less infra; "as of" time shown | ✓ Good — Phase 3 live scheduler verified |
@@ -251,4 +331,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after approved v0.5.0 publication; v1.1 closed with known gaps, production unchanged.*
+*Last updated: 2026-11-22 after independently verified Phase15 completion; v1.2 local implementation complete, milestone audit next; production unchanged.*

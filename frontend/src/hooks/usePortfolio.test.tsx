@@ -1,3 +1,4 @@
+import { portfolioTargetFixture } from "@/test/portfolioTargetFixture";
 import { afterEach, it, expect, vi } from "vitest";
 import { act, renderHook, waitFor, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,11 +13,11 @@ function setup() {
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
   clients.push(client);
-  client.setQueryData(["me"], { email: "first@example.test", cash_usd: "9796" });
+  client.setQueryData(["me"], { email: "first@example.test" });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return { client, ...renderHook(() => usePortfolio(), { wrapper }) };
+  return { client, ...renderHook(() => usePortfolio(portfolioTargetFixture(client)), { wrapper }) };
 }
 afterEach(() => {
   cleanup();
@@ -43,7 +44,7 @@ it("purges expired stock marks and dependent summaries from cache, without inven
   expect(result.current.data?.holdings[0].mid).toBeNull();
   expect(result.current.data?.known_value).toBeNull();
   expect(result.current.data?.total_value).toBeNull();
-  const cached = client.getQueryData<Portfolio>(["portfolio", "first@example.test"]);
+  const cached = client.getQueryData<Portfolio>(["portfolio", "first@example.test", "1", 0]);
   expect(cached?.holdings[0].mid).toBeNull();
   expect(cached?.known_value).toBeNull();
   expect(cached?.cash).toBe("9796.00");
@@ -68,7 +69,7 @@ it("newer split epochs suppress delayed old units in both cache and view", async
   mock();
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.holdings[0].mid).not.toBeNull());
-  const key = ["portfolio", "first@example.test"];
+  const key = ["portfolio", "first@example.test", "1", 0];
   const old = client.getQueryData(key)!;
   const current = structuredClone(old) as ReturnType<typeof mixedPortfolio>;
   current.valued_at = "2026-11-10T15:00:11Z";
@@ -81,7 +82,7 @@ it("same-generation changed admission hash cannot restore a mark on a later time
   mock();
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.total_value).toBe("9998.00"));
-  const key = ["portfolio", "first@example.test"];
+  const key = ["portfolio", "first@example.test", "1", 0];
   const p = structuredClone(client.getQueryData(key)) as ReturnType<typeof mixedPortfolio>;
   p.holdings[0].stock_mark!.authority!.admissions[0].row_hash = "b".repeat(64);
   p.valued_at = "2026-11-10T15:00:11Z";
@@ -109,7 +110,7 @@ it("auth changes discard a pending old-user reply and remove the old private cac
     finish(new Response(JSON.stringify(mixedPortfolio())));
   });
   expect(result.current.data).toBeUndefined();
-  expect(client.getQueryData(["portfolio", "first@example.test"])).toBeUndefined();
+  expect(client.getQueryData(["portfolio", "first@example.test", "1", 0])).toBeUndefined();
 });
 it("full transport time exhausting the mark suppresses the first result", async () => {
   let clock = 0;
@@ -144,14 +145,14 @@ it("exact deadline timers remove values without waiting for the display interval
   });
   expect(result.current.data?.known_value).toBeNull();
   expect(
-    client.getQueryData<Portfolio>(["portfolio", "first@example.test"])?.holdings[0].mid,
+    client.getQueryData<Portfolio>(["portfolio", "first@example.test", "1", 0])?.holdings[0].mid,
   ).toBeNull();
 });
 it("a later old restrictive response suppresses current values without rolling cash back", async () => {
   mock();
   const { result, client } = setup();
   await waitFor(() => expect(result.current.data?.total_value).toBe("9998.00"));
-  const key = ["portfolio", "first@example.test"];
+  const key = ["portfolio", "first@example.test", "1", 0];
   const older = structuredClone(client.getQueryData(key)) as ReturnType<typeof mixedPortfolio>;
   older.valued_at = "2026-11-10T15:00:09Z";
   older.cash = "9000";
@@ -179,7 +180,7 @@ it("an independently observed halt cannot leave a cached fresh stock mark advert
     buy_max_quantity: "0",
   });
   c.status.state = "halted";
-  act(() => client.setQueryData(["stockContext", "first@example.test", "AAPL"], c));
+  act(() => client.setQueryData(["stockContext", "first@example.test", "1", 0, "AAPL"], c));
   expect(result.current.data?.holdings[0].mid).toBeNull();
   expect(result.current.data?.known_value).toBeNull();
 });

@@ -22,12 +22,10 @@ function stubApi(routes: Routes) {
     if (url === "/api/v1/auth/request-code") {
       return Promise.resolve((routes.request ?? (() => ok({ status: "code_sent" }, 202)))());
     }
-    if (url === "/api/v1/auth/verify-code") {
-      return Promise.resolve(
-        (routes.verify ?? (() => ok({ email: "a@example.com", cash_usd: "10000.00000000" })))(),
-      );
+    if (url === "/api/v2/auth/verify-code") {
+      return Promise.resolve((routes.verify ?? (() => ok({ email: "a@example.com" })))());
     }
-    if (url === "/api/v1/me") {
+    if (url === "/api/v2/me") {
       return Promise.resolve(errorResponse(401, "not_authenticated"));
     }
     return Promise.resolve(ok({ status: "ok", db: "ok", redis: "ok" }));
@@ -160,8 +158,10 @@ describe("SignInPage code step", () => {
     await view.user.click(screen.getByRole("button", { name: "Send code" }));
     await view.user.type(await screen.findByLabelText("6-digit code"), "123456");
     await view.user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByText("$10,000.00")).toBeVisible();
-    const meCalls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/me");
+    expect(await screen.findByRole("heading", { name: "Your account" })).toBeVisible();
+    expect(screen.getByText("a@example.com")).toBeVisible();
+    expect(screen.queryByText("$10,000.00")).not.toBeInTheDocument();
+    const meCalls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v2/me");
     // The signed-out /me is tried twice (401, silent refresh, retry); sign-in adds none.
     expect(meCalls).toHaveLength(2);
   });

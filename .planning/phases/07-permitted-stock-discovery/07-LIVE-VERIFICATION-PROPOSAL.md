@@ -1,5 +1,9 @@
 # Phase 7 replacement live-verification proposal
 
+**Execution disposition2026-11-16:** This approved campaign is consumed.
+Thirty attempts completed; actual evidence is in07-LIVE-20261116-REVIEW.md.
+Do not launch it again or treat the historical preparation below as pending.
+
 Prepared2026-11-14; explicitly approved by owner on2026-11-14:
 “Approve Monday’s manual campaign (Recommended)”. This is authorization, not
 a scheduled or launched process. No credentials read, provider call, admission

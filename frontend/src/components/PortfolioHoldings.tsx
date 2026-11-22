@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
 import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioContext } from "@/components/PortfolioContext";
 
 export function PortfolioOutcome({ value, dollars = false }: { value: string; dollars?: boolean }) {
   const state = outcome(value);
@@ -101,14 +103,14 @@ function Return({ holding }: { holding: PortfolioHolding }) {
   );
 }
 
-function Trade({ holding }: { holding: PortfolioHolding }) {
+function Trade({ holding, target }: { holding: PortfolioHolding; target: PortfolioTarget }) {
   return holding.is_active ? (
     <Button asChild variant="secondary" className="min-h-11 min-w-11">
       <Link
         to={
           holding.asset_class === "stock"
-            ? `/trade/stocks/${encodeURIComponent(holding.symbol)}`
-            : `/trade/${encodeURIComponent(holding.symbol)}`
+            ? `/portfolios/${target.portfolioId}/trade/stocks/${encodeURIComponent(holding.symbol)}`
+            : `/portfolios/${target.portfolioId}/trade/${encodeURIComponent(holding.symbol)}`
         }
       >
         Trade {holding.symbol}
@@ -119,11 +121,13 @@ function Trade({ holding }: { holding: PortfolioHolding }) {
   );
 }
 function Asset({
+  target,
   holding,
   elapsed,
   freshSeconds,
   staleSeconds,
 }: {
+  target: PortfolioTarget;
   holding: PortfolioHolding;
   elapsed: number;
   freshSeconds: number;
@@ -167,7 +171,7 @@ function Asset({
             : "Stock valuation unavailable. A verified permitted price is required."}
         </span>
       )}
-      <Trade holding={holding} />
+      <Trade holding={holding} target={target} />
     </div>
   );
 }
@@ -181,11 +185,13 @@ const columns = [
   "Allocation",
 ];
 export function PortfolioHoldings({
+  target,
   holdings,
   elapsed,
   freshSeconds,
   staleSeconds,
 }: {
+  target: PortfolioTarget;
   holdings: PortfolioHolding[];
   elapsed: number;
   freshSeconds: number;
@@ -218,6 +224,7 @@ export function PortfolioHoldings({
     <Card className="min-w-0 md:col-span-2 lg:col-span-12">
       <CardContent>
         <h2 className="font-medium">Holdings</h2>
+        <PortfolioContext name={target.name} />
         <p className="text-muted-foreground">
           Average cost includes crypto buy fees. Values use market mid prices.
         </p>
@@ -254,6 +261,7 @@ export function PortfolioHoldings({
                     >
                       <th scope="row" className="px-2 py-3 text-[13px] leading-[18px] font-normal">
                         <Asset
+                          target={target}
                           holding={h}
                           elapsed={elapsed}
                           freshSeconds={freshSeconds}
@@ -277,6 +285,7 @@ export function PortfolioHoldings({
               {sorted.map((h) => (
                 <li key={h.coin_id} className="min-w-0 rounded-control border border-border p-4">
                   <Asset
+                    target={target}
                     holding={h}
                     elapsed={elapsed}
                     freshSeconds={freshSeconds}

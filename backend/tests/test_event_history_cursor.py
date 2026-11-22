@@ -19,13 +19,25 @@ from app.services.event_history import (
 
 def test_mixed_cursor_roundtrip_preserves_all_order_columns():
     value = EventHistoryCursor(
-        datetime(2026, 11, 12, 15, 1, 2, 123456, UTC), 4, 9223372036854775807
+        datetime(2026, 11, 12, 15, 1, 2, 123456, UTC), 4, 9223372036854775807, portfolio_id=1
     )
-    assert decode_cursor(encode_cursor(value)) == value
+    assert decode_cursor(encode_cursor(value), expected_portfolio_id=1) == value
+
+
+@pytest.mark.parametrize("portfolio_id", [True, "1", None])
+def test_mixed_encoder_cannot_coerce_a_portfolio_identity(portfolio_id):
+    with pytest.raises(InvalidCursor):
+        encode_cursor(EventHistoryCursor(datetime(2026, 11, 12, tzinfo=UTC), 4, 1, portfolio_id))
 
 
 STAMP = "2026-11-12T15:01:02.123456Z"
-VALID = {"v": 2, "recorded_at": STAMP, "kind_rank": 4, "source_id": "9223372036854775807"}
+VALID = {
+    "v": 3,
+    "portfolio_id": "1",
+    "recorded_at": STAMP,
+    "kind_rank": 4,
+    "source_id": "9223372036854775807",
+}
 
 
 def token(value):
@@ -53,9 +65,13 @@ def token(value):
         token(json.dumps(VALID).encode()),
         token({**VALID, "other": 1}),
         token(
-            b'{"v":2,"v":2,"recorded_at":"2026-11-12T15:01:02.123456Z","kind_rank":4,"source_id":"1"}'
+            b'{"v":3,"v":3,"portfolio_id":"1","recorded_at":"2026-11-12T15:01:02.123456Z","kind_rank":4,"source_id":"1"}'
         ),
-        *[token({**VALID, "v": v}) for v in (True, 1, "2", 2.0, None)],
+        *[token({**VALID, "v": v}) for v in (True, 1, 2, "3", 3.0, None)],
+        *[
+            token({**VALID, "portfolio_id": v})
+            for v in (None, True, 1, "0", "01", "2", "9223372036854775808")
+        ],
         *[
             token({**VALID, "recorded_at": v})
             for v in (
@@ -73,23 +89,25 @@ def token(value):
             token({**VALID, "source_id": v})
             for v in (None, True, 1, "0", "-1", "01", "+1", "1e2", "1.0", "9223372036854775808")
         ],
-        history.encode_cursor(history.HistoryCursor(datetime(2026, 11, 12, tzinfo=UTC), 1)),
+        history.encode_cursor(
+            history.HistoryCursor(datetime(2026, 11, 12, tzinfo=UTC), 1, portfolio_id=1)
+        ),
     ],
 )
 def test_mixed_cursor_rejects_malformed_or_legacy(value):
     with pytest.raises(InvalidCursor):
-        decode_cursor(value)
+        decode_cursor(value, expected_portfolio_id=1)
 
 
 @pytest.mark.parametrize("rank", [1, 2, 3, 4])
 def test_cursor_all_ranks_timezone_and_legacy_unchanged(rank):
     dt = datetime(2026, 11, 12, 18, 1, 2, 123456, timezone(timedelta(hours=3)))
-    value = EventHistoryCursor(dt, rank, 1)
-    assert decode_cursor(encode_cursor(value)) == value
-    legacy = history.HistoryCursor(dt, 1)
-    assert history.decode_cursor(history.encode_cursor(legacy)) == legacy
+    value = EventHistoryCursor(dt, rank, 1, portfolio_id=1)
+    assert decode_cursor(encode_cursor(value), expected_portfolio_id=1) == value
+    legacy = history.HistoryCursor(dt, 1, portfolio_id=1)
+    assert history.decode_cursor(history.encode_cursor(legacy), expected_portfolio_id=1) == legacy
     with pytest.raises(history.InvalidCursor):
-        history.decode_cursor(encode_cursor(value))
+        history.decode_cursor(encode_cursor(value), expected_portfolio_id=1)
 
 
 @pytest.mark.parametrize(
@@ -103,7 +121,7 @@ def test_cursor_all_ranks_timezone_and_legacy_unchanged(rank):
 )
 def test_mixed_encoder_rejects_invalid_tuple(stamp, rank, identifier):
     with pytest.raises(InvalidCursor):
-        encode_cursor(EventHistoryCursor(stamp, rank, identifier))
+        encode_cursor(EventHistoryCursor(stamp, rank, identifier, portfolio_id=1))
 
 
 TERMS = dict(

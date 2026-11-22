@@ -28,10 +28,16 @@ class StockFillFacts(Base):
     __tablename__ = "stock_fill_facts"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["trade_id", "coin_id", "user_id"],
-            ["trades.id", "trades.coin_id", "trades.user_id"],
+            ["trade_id", "portfolio_id", "coin_id", "user_id"],
+            ["trades.id", "trades.portfolio_id", "trades.coin_id", "trades.user_id"],
             name="fk_stock_fill_trade_owner_coin",
         ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_stock_fill_portfolio_owner",
+        ),
+        Index("ix_stock_fill_facts_portfolio_id", "portfolio_id"),
         Index("ix_stock_fill_facts_user_id", "user_id"),
         Index("ix_stock_fill_facts_coin_id", "coin_id"),
         bounded("provider_asset_id", 128),
@@ -53,6 +59,7 @@ class StockFillFacts(Base):
         object_json("authority", 8192),
     )
     trade_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger)
     coin_id: Mapped[int] = mapped_column(ForeignKey("stock_instruments.coin_id"))
     user_id: Mapped[int] = mapped_column(BigInteger)
     provider_asset_id: Mapped[str] = mapped_column(Text)

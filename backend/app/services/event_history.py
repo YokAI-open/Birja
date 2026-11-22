@@ -23,6 +23,8 @@ from app.models.price import Coin
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Trade
 from app.schemas.event_history import EventDividend, EventHistoryPage
+from app.services.history import validate_portfolio_read
+from app.services.portfolios import OwnedActivePortfolio
 
 MAX_ID = 9223372036854775807
 TIMESTAMP = re.compile(r"[1-9][0-9]{3}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z")
@@ -37,6 +39,7 @@ class EventHistoryCursor:
     recorded_at: datetime
     kind_rank: int
     source_id: int
+    portfolio_id: int
 
 
 def encode_cursor(value: EventHistoryCursor) -> str:
@@ -45,7 +48,8 @@ def encode_cursor(value: EventHistoryCursor) -> str:
     if type(value.source_id) is not int:
         raise InvalidCursor()
     obj = {
-        "v": 2,
+        "v": 3,
+        "portfolio_id": str(value.portfolio_id),
         "recorded_at": value.recorded_at.astimezone(UTC)
         .isoformat(timespec="microseconds")
         .replace("+00:00", "Z"),
@@ -57,7 +61,9 @@ def encode_cursor(value: EventHistoryCursor) -> str:
         .decode()
         .rstrip("=")
     )
-    decode_cursor(encoded)
+    if type(value.portfolio_id) is not int:
+        raise InvalidCursor()
+    decode_cursor(encoded, expected_portfolio_id=value.portfolio_id)
     return encoded
 
 
@@ -70,7 +76,7 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return obj
 
 
-def decode_cursor(value: str) -> EventHistoryCursor:
+def decode_cursor(value: str, *, expected_portfolio_id: int) -> EventHistoryCursor:
     try:
         if (
             not isinstance(value, str)
@@ -83,11 +89,26 @@ def decode_cursor(value: str) -> EventHistoryCursor:
             raise InvalidCursor()
         decoded = raw.decode("utf-8")
         obj = json.loads(decoded, object_pairs_hook=_object)
-        if not isinstance(obj, dict) or set(obj) != {"v", "recorded_at", "kind_rank", "source_id"}:
+        if not isinstance(obj, dict) or set(obj) != {
+            "v",
+            "recorded_at",
+            "kind_rank",
+            "source_id",
+            "portfolio_id",
+        }:
             raise InvalidCursor()
         if json.dumps(obj, separators=(",", ":"), ensure_ascii=True) != decoded:
             raise InvalidCursor()
-        if type(obj["v"]) is not int or obj["v"] != 2:
+        if type(obj["v"]) is not int or obj["v"] != 3:
+            raise InvalidCursor()
+        portfolio_id = obj["portfolio_id"]
+        if (
+            not isinstance(portfolio_id, str)
+            or re.fullmatch(r"[1-9][0-9]{0,18}", portfolio_id) is None
+            or int(portfolio_id) > MAX_ID
+            or type(expected_portfolio_id) is not int
+            or int(portfolio_id) != expected_portfolio_id
+        ):
             raise InvalidCursor()
         stamp, rank, identifier = obj["recorded_at"], obj["kind_rank"], obj["source_id"]
         if not isinstance(stamp, str) or TIMESTAMP.fullmatch(stamp) is None:
@@ -98,7 +119,9 @@ def decode_cursor(value: str) -> EventHistoryCursor:
             raise InvalidCursor()
         if int(identifier) > MAX_ID:
             raise InvalidCursor()
-        return EventHistoryCursor(datetime.fromisoformat(stamp), rank, int(identifier))
+        return EventHistoryCursor(
+            datetime.fromisoformat(stamp), rank, int(identifier), int(portfolio_id)
+        )
     except (ValueError, TypeError, UnicodeError, binascii.Error) as exc:
         raise InvalidCursor() from exc
 
@@ -140,28 +163,37 @@ def _dividend(row: StockDividendPayment) -> dict[str, Any]:
 
 
 async def list_event_history(
-    db: AsyncSession, *, user_id: int, limit: int = 25, cursor: str | None = None
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, limit: int = 25, cursor: str | None = None
 ) -> EventHistoryPage:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("History limit must be between 1 and 100")
+    user_id = portfolio.user_id
+    portfolio_id = portfolio.portfolio_id
     if type(user_id) is not int or not 1 <= user_id <= MAX_ID:
         raise ValueError("Invalid History owner")
-    boundary = decode_cursor(cursor) if cursor is not None else None
+    boundary = (
+        decode_cursor(cursor, expected_portfolio_id=portfolio_id) if cursor is not None else None
+    )
+    await validate_portfolio_read(db, portfolio)
     # Every source is owner-filtered before the seek and the bounded lookahead.
     sources = union_all(
         select(
             Trade.created_at.label("recorded_at"),
             literal(4).label("kind_rank"),
             Trade.id.label("source_id"),
-        ).where(Trade.user_id == user_id),
+        ).where(Trade.user_id == user_id, Trade.portfolio_id == portfolio_id),
         select(StockDividendPayment.recorded_at, literal(3), StockDividendPayment.id).where(
-            StockDividendPayment.user_id == user_id
+            StockDividendPayment.user_id == user_id,
+            StockDividendPayment.portfolio_id == portfolio_id,
         ),
         select(StockOwnershipMovement.recorded_at, literal(2), StockOwnershipMovement.id).where(
-            StockOwnershipMovement.user_id == user_id, StockOwnershipMovement.cause_kind == "split"
+            StockOwnershipMovement.user_id == user_id,
+            StockOwnershipMovement.portfolio_id == portfolio_id,
+            StockOwnershipMovement.cause_kind == "split",
         ),
         select(StockDividendDecision.recorded_at, literal(1), StockDividendDecision.id).where(
-            StockDividendDecision.user_id == user_id
+            StockDividendDecision.user_id == user_id,
+            StockDividendDecision.portfolio_id == portfolio_id,
         ),
     ).subquery("owned_events")
     stmt = select(sources)
@@ -188,9 +220,15 @@ async def list_event_history(
                 .join(Coin, Coin.id == Trade.coin_id)
                 .outerjoin(
                     StockFillFacts,
-                    (StockFillFacts.trade_id == Trade.id) & (StockFillFacts.user_id == user_id),
+                    (StockFillFacts.trade_id == Trade.id)
+                    & (StockFillFacts.user_id == user_id)
+                    & (StockFillFacts.portfolio_id == portfolio_id),
                 )
-                .where(Trade.user_id == user_id, Trade.id.in_(ids[4]))
+                .where(
+                    Trade.user_id == user_id,
+                    Trade.portfolio_id == portfolio_id,
+                    Trade.id.in_(ids[4]),
+                )
             )
         ).all()
         for trade, coin, facts in trades:
@@ -218,7 +256,9 @@ async def list_event_history(
         payments = (
             await db.scalars(
                 select(StockDividendPayment).where(
-                    StockDividendPayment.user_id == user_id, StockDividendPayment.id.in_(ids[3])
+                    StockDividendPayment.user_id == user_id,
+                    StockDividendPayment.portfolio_id == portfolio_id,
+                    StockDividendPayment.id.in_(ids[3]),
                 )
             )
         ).all()
@@ -237,6 +277,7 @@ async def list_event_history(
                 )
                 .where(
                     StockOwnershipMovement.user_id == user_id,
+                    StockOwnershipMovement.portfolio_id == portfolio_id,
                     StockOwnershipMovement.id.in_(ids[2]),
                     StockOwnershipMovement.cause_kind == "split",
                 )
@@ -272,10 +313,13 @@ async def list_event_history(
                 .join(
                     StockDividendPayment,
                     (StockDividendPayment.id == StockDividendDecision.payment_id)
-                    & (StockDividendPayment.user_id == user_id),
+                    & (StockDividendPayment.user_id == user_id)
+                    & (StockDividendPayment.portfolio_id == portfolio_id),
                 )
                 .where(
-                    StockDividendDecision.user_id == user_id, StockDividendDecision.id.in_(ids[1])
+                    StockDividendDecision.user_id == user_id,
+                    StockDividendDecision.portfolio_id == portfolio_id,
+                    StockDividendDecision.id.in_(ids[1]),
                 )
             )
         ).all()
@@ -303,11 +347,14 @@ async def list_event_history(
                 "terms": None if decision.outcome == "held_uncertain" else _terms(decision),
                 "original": EventDividend(**_dividend(original)),
             }
+    if any((row.kind_rank, row.source_id) not in projected for row in selected):
+        raise ValueError("Incomplete owned History projection")
     items = [projected[(row.kind_rank, row.source_id)] for row in selected]
     next_cursor = None
     if len(rows) > limit:
         last = selected[-1]
         next_cursor = encode_cursor(
-            EventHistoryCursor(last.recorded_at, last.kind_rank, last.source_id)
+            EventHistoryCursor(last.recorded_at, last.kind_rank, last.source_id, portfolio_id)
         )
+    await validate_portfolio_read(db, portfolio, final=True)
     return EventHistoryPage(items=items, next_cursor=next_cursor)

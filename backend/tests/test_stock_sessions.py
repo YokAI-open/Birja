@@ -38,8 +38,8 @@ def evidence(now: datetime):
                 "https://www.nasdaq.com/market-activity/stock-market-holiday-schedule",
             ],
             "review_valid_until": (now + timedelta(hours=8)).isoformat(),
-            "coverage_start": (now.date() - timedelta(days=45)).isoformat(),
-            "coverage_end": (now.date() + timedelta(days=90)).isoformat(),
+            "coverage_start": ((now - timedelta(hours=1)).date() - timedelta(days=45)).isoformat(),
+            "coverage_end": ((now - timedelta(hours=1)).date() + timedelta(days=90)).isoformat(),
             "overrides": [],
         },
     )

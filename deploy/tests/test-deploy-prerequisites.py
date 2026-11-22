@@ -346,6 +346,11 @@ except BaseException as error:
 
 class Evidence(unittest.TestCase):
     def setUp(self):
+        # In-process synthetic restore tests must not inherit a backend test
+        # DATABASE_URL (the real operational boundary intentionally rejects it).
+        environment = patch.dict(os.environ, {}, clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix="birja-backup-test-")
         self.root = Path(self.tmp.name)
         self.state = self.root / "state"
@@ -411,6 +416,16 @@ class Evidence(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_restore_rejects_ambient_database_before_loading_configuration(self):
+        with (
+            patch.dict(os.environ, {"DATABASE_URL": "synthetic-forbidden"}),
+            patch.object(r, "backup_module") as load,
+            self.assertRaisesRegex(ValueError, "recovery guard"),
+        ):
+            r.restore(["--synthetic", str(self.root / "config"), "--snapshot", self.sid])
+        load.assert_not_called()
+        self.assertFalse((self.state / "restore-last-success.json").exists())
+
     def test_restore_requires_the_real_complete_manifest_contract(self):
         b.validate_manifest(self.manifest)
         for mutation in ("missing_table", "missing_column", "negative_cash"):
@@ -444,7 +459,9 @@ class Evidence(unittest.TestCase):
         return b""
 
     def run_restore(self, failure=None, *, actual_preflight=False, clock=None):
-        def verified(*args):
+        def verified(dc, manifest, *, quarantined):
+            self.assertEqual(manifest, self.manifest)
+            self.assertIs(quarantined, manifest['revision'] != '0023')
             if failure == "verify":
                 raise ValueError("synthetic verification failure")
             if clock is not None:
@@ -902,11 +919,17 @@ class Evidence(unittest.TestCase):
         self.run_restore()
 
         @contextlib.contextmanager
-        def cleanup_failure(*args):
+        def cleanup_failure(*args, manifest):
+            self.assertEqual(manifest, self.manifest)
             try:
                 yield
             finally:
                 raise OSError("synthetic teardown failure")
+
+        @contextlib.contextmanager
+        def clean_restore(*args, manifest):
+            self.assertEqual(manifest, self.manifest)
+            yield
 
         for failure in [
             InterruptedError("synthetic interruption"),
@@ -929,7 +952,7 @@ class Evidence(unittest.TestCase):
                     side_effect=cleanup_failure
                     if isinstance(failure, OSError)
                     and not isinstance(failure, InterruptedError)
-                    else lambda *args: contextlib.nullcontext(),
+                    else clean_restore,
                 ),
                 patch.object(
                     r,
@@ -952,7 +975,7 @@ class Evidence(unittest.TestCase):
 
 
 class Fixtures(unittest.TestCase):
-    def test_authentic_legacy_selection_rejects_before_runtime_or_docker(self):
+    def test_authentic_legacy_selection_rejects_before_docker_or_fallback(self):
         spec = importlib.util.spec_from_file_location(
             "fixture", HERE / "tests/ops-fixtures.py"
         )
@@ -1072,6 +1095,10 @@ class Fixtures(unittest.TestCase):
                     runtime.reset_mock()
                     with self.assertRaises(ValueError):
                         ops.roundtrip(str(archive))
+                    # Generic authenticated verification checks tool versions;
+                    # campaign family refusal still precedes Docker/fallback.
+                    runtime.assert_called_once_with()
+                    runtime.reset_mock()
                     with self.assertRaises(ValueError):
                         r.bundle_install(
                             archive,

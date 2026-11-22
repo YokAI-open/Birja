@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { isPortfolioId, isCanonicalPortfolioName } from "./portfolios";
 import { stockTimestamp, stockInstant } from "./stocks";
 import {
   isStockAuthority,
@@ -44,6 +45,8 @@ export type PortfolioHolding = {
   status: "fresh" | "aging" | "stale" | "unpriced";
 };
 export type Portfolio = {
+  portfolio_id: string;
+  name: string;
   cash: string;
   starting_cash: string;
   total_value: string | null;
@@ -181,8 +184,10 @@ export function isPortfolio(v: unknown): v is Portfolio {
     !stockRecord(v) ||
     !stockExact(
       v,
-      "cash starting_cash total_value total_pl total_pl_percent cash_allocation_percent valuation_complete known_value unvalued_holding_count class_values class_allocation_percent valued_at prices_as_of fresh_seconds stale_seconds holdings",
+      "portfolio_id name cash starting_cash total_value total_pl total_pl_percent cash_allocation_percent valuation_complete known_value unvalued_holding_count class_values class_allocation_percent valued_at prices_as_of fresh_seconds stale_seconds holdings",
     ) ||
+    !isPortfolioId(v.portfolio_id) ||
+    !isCanonicalPortfolioName(v.name) ||
     !unsigned(v.cash) ||
     !unsigned(v.starting_cash) ||
     !unsigned(v.known_value) ||
@@ -256,8 +261,18 @@ export function isPortfolio(v: unknown): v is Portfolio {
     : allocations.every((x) => x !== null) &&
         stockFixed(p.cash_allocation_percent) === stockFixed(p.class_allocation_percent.cash);
 }
-export async function fetchPortfolio(signal?: AbortSignal): Promise<Portfolio> {
-  const body = await apiFetch("/api/v1/portfolio", { signal, cache: "no-store" });
-  if (!isPortfolio(body)) throw new Error("Unexpected portfolio response");
+export async function fetchPortfolio(
+  portfolioId: string,
+  signal?: AbortSignal,
+): Promise<Portfolio> {
+  signal?.throwIfAborted();
+  if (!isPortfolioId(portfolioId)) throw new Error("Invalid portfolio target");
+  const body = await apiFetch(`/api/v2/portfolios/${encodeURIComponent(portfolioId)}`, {
+    signal,
+    cache: "no-store",
+  });
+  if (!isPortfolio(body) || body.portfolio_id !== portfolioId)
+    throw new Error("Unexpected portfolio response");
+  signal?.throwIfAborted();
   return body;
 }

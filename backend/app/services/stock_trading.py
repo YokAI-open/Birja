@@ -11,6 +11,7 @@ from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any, cast
 
+from fastapi import HTTPException
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -36,6 +37,7 @@ from app.schemas.stock_trades import (
     StatusFacts,
     TradeIn,
 )
+from app.services.portfolios import OwnedActivePortfolio
 from app.services.stock_eligibility import LoadedExecution, load_execution_evidence
 from app.services.stock_ownership import (
     OwnershipHeld,
@@ -122,14 +124,47 @@ async def _instrument(db: AsyncSession, symbol: str) -> int:
     return cid
 
 
-async def _financial(db: AsyncSession, uid: int, cid: int) -> tuple[Decimal, Decimal, Decimal]:
+async def _account(
+    db: AsyncSession, portfolio: OwnedActivePortfolio, *, lock: bool = False
+) -> Account:
+    query = (
+        select(Account)
+        .where(
+            Account.id == portfolio.portfolio_id,
+            Account.user_id == portfolio.user_id,
+            Account.closed_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+    )
+    if lock:
+        query = query.with_for_update()
+    account = (await db.execute(query)).scalar_one_or_none()
+    if account is None:
+        raise HTTPException(404, detail={"code": "portfolio_unavailable"})
+    return account
+
+
+async def _financial(
+    db: AsyncSession, portfolio: OwnedActivePortfolio, cid: int
+) -> tuple[Decimal, Decimal, Decimal]:
     row = (
         await db.execute(
             select(Account.cash, Holding.quantity, Holding.cost_basis)
-            .outerjoin(Holding, (Holding.user_id == Account.user_id) & (Holding.coin_id == cid))
-            .where(Account.user_id == uid)
+            .outerjoin(
+                Holding,
+                (Holding.portfolio_id == Account.id)
+                & (Holding.user_id == Account.user_id)
+                & (Holding.coin_id == cid),
+            )
+            .where(
+                Account.id == portfolio.portfolio_id,
+                Account.user_id == portfolio.user_id,
+                Account.closed_at.is_(None),
+            )
         )
-    ).one()
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, detail={"code": "portfolio_unavailable"})
     return row.cash, row.quantity or ZERO, row.cost_basis or ZERO
 
 
@@ -149,9 +184,12 @@ def _plan(
     )
 
 
-def _preview(loaded: LoadedExecution, plan: StockTradePlan) -> QuoteOut:
+def _preview(
+    loaded: LoadedExecution, plan: StockTradePlan, portfolio: OwnedActivePortfolio
+) -> QuoteOut:
     e, d, q = loaded.evidence, loaded.decision, loaded.evidence.quote
     return QuoteOut(
+        portfolio_id=str(portfolio.portfolio_id),
         coin_id=str(e.coin_id),
         provider_asset_id=e.provider_asset_id,
         symbol=loaded.symbol,
@@ -182,11 +220,14 @@ def _preview(loaded: LoadedExecution, plan: StockTradePlan) -> QuoteOut:
     )
 
 
-async def quote(db: AsyncSession, *, user_id: int, order: QuoteIn, settings: Settings) -> QuoteOut:
+async def quote(
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, order: QuoteIn, settings: Settings
+) -> QuoteOut:
+    await _account(db, portfolio)
     cid = await _instrument(db, order.symbol)
-    cash, held, basis = await _financial(db, user_id, cid)
+    cash, held, basis = await _financial(db, portfolio, cid)
     loaded = await load_execution_evidence(db, cid, settings)
-    return _preview(loaded, _plan(loaded, order, cash, held, basis))
+    return _preview(loaded, _plan(loaded, order, cash, held, basis), portfolio)
 
 
 def _receipt(trade: Trade, facts: StockFillFacts, executed: datetime) -> FillOut:
@@ -206,6 +247,7 @@ def _receipt(trade: Trade, facts: StockFillFacts, executed: datetime) -> FillOut
         status_sequence=raw["status"]["sequence"],
     )
     return FillOut(
+        portfolio_id=str(trade.portfolio_id),
         trade_id=str(trade.id),
         executed_at=executed,
         coin_id=str(facts.coin_id),
@@ -239,10 +281,20 @@ def _receipt(trade: Trade, facts: StockFillFacts, executed: datetime) -> FillOut
     )
 
 
-async def _replay(db: AsyncSession, user_id: int, order: TradeIn) -> FillOut | None:
-    trade = await find_user_trade(db, user_id, order.idempotency_key)
+async def _replay(
+    db: AsyncSession, portfolio: OwnedActivePortfolio, order: TradeIn
+) -> FillOut | None:
+    trade = await find_user_trade(db, portfolio.user_id, order.idempotency_key)
     if trade is None:
         return None
+    require_same_order(
+        trade,
+        same_instrument=trade.portfolio_id == portfolio.portfolio_id,
+        portfolio_id=portfolio.portfolio_id,
+        side=order.side,
+        kind="quantity",
+        value=order.quantity,
+    )
     # Historical stock replay joins no current catalogue, rights or holding.
     row = (
         await db.execute(
@@ -250,7 +302,12 @@ async def _replay(db: AsyncSession, user_id: int, order: TradeIn) -> FillOut | N
             .join(
                 StockOwnershipMovement, StockOwnershipMovement.trade_id == StockFillFacts.trade_id
             )
-            .where(StockFillFacts.trade_id == trade.id, StockFillFacts.user_id == user_id)
+            .where(
+                StockFillFacts.trade_id == trade.id,
+                StockFillFacts.user_id == portfolio.user_id,
+                StockFillFacts.portfolio_id == portfolio.portfolio_id,
+                StockOwnershipMovement.portfolio_id == portfolio.portfolio_id,
+            )
         )
     ).one_or_none()
     if row is None:
@@ -259,13 +316,19 @@ async def _replay(db: AsyncSession, user_id: int, order: TradeIn) -> FillOut | N
         ).scalar_one()
         if kind != "stock":
             require_same_order(
-                trade, same_instrument=False, side=order.side, kind="quantity", value=order.quantity
+                trade,
+                same_instrument=False,
+                side=order.side,
+                kind="quantity",
+                value=order.quantity,
+                portfolio_id=portfolio.portfolio_id,
             )
         raise _refuse("receipt_unavailable")
     facts, executed = row
     require_same_order(
         trade,
         same_instrument=facts.symbol == order.symbol,
+        portfolio_id=portfolio.portfolio_id,
         side=order.side,
         kind="quantity",
         value=order.quantity,
@@ -281,49 +344,60 @@ class _QuoteRefreshed(Exception):
 
 
 async def execute(
-    db: AsyncSession, *, user_id: int, order: TradeIn, settings: Settings
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, order: TradeIn, settings: Settings
 ) -> tuple[FillOut, bool]:
     # Exactly one clean rebuild for quote metadata; never retry deadlock, timeout,
     # cancellation, ownership, constraint or permission failure. All authority and
     # cash locks are reacquired. A changed selected price still needs confirmation.
     try:
-        return await _execute_once(db, user_id=user_id, order=order, settings=settings)
+        return await _execute_once(db, portfolio=portfolio, order=order, settings=settings)
     except _QuoteRefreshed:
         try:
-            return await _execute_once(db, user_id=user_id, order=order, settings=settings)
+            return await _execute_once(db, portfolio=portfolio, order=order, settings=settings)
         except _QuoteRefreshed:
             raise _refuse("quote_unavailable") from None
 
 
 async def _execute_once(
-    db: AsyncSession, *, user_id: int, order: TradeIn, settings: Settings
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, order: TradeIn, settings: Settings
 ) -> tuple[FillOut, bool]:
     try:
-        prior = await _replay(db, user_id, order)
-        if prior is not None:
-            await db.rollback()
-            return prior, False
+        await _account(db, portfolio)
+        historical = await find_user_trade(db, portfolio.user_id, order.idempotency_key)
+        if historical is not None:
+            stock_cause = await db.scalar(
+                select(StockFillFacts.trade_id).where(StockFillFacts.trade_id == historical.id)
+            )
+            if stock_cause is None:
+                require_same_order(
+                    historical,
+                    same_instrument=False,
+                    portfolio_id=portfolio.portfolio_id,
+                    side=order.side,
+                    kind="quantity",
+                    value=order.quantity,
+                )
+            await acquire_stock_gate(db, historical.coin_id)
+            await _account(db, portfolio, lock=True)
+            prior = await _replay(db, portfolio, order)
+            if prior is not None:
+                await db.rollback()
+                return prior, False
         cid = await _instrument(db, order.symbol)
         await acquire_stock_gate(db, cid)
-        account = (
-            await db.execute(
-                select(Account)
-                .where(Account.user_id == user_id)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-        ).scalar_one()
-        prior = await _replay(db, user_id, order)
+        account = await _account(db, portfolio, lock=True)
+        prior = await _replay(db, portfolio, order)
         if prior is not None:
             await db.rollback()
             return prior, False
-        cash, held, basis = await _financial(db, user_id, cid)
+        cash, held, basis = await _financial(db, portfolio, cid)
         loaded = await load_execution_evidence(db, cid, settings)
         plan = _plan(loaded, order, cash, held, basis)
         if plan.exec_price != order.expected_exec_price:
-            raise PriceChanged(_preview(loaded, plan), order.expected_exec_price)
+            raise PriceChanged(_preview(loaded, plan, portfolio), order.expected_exec_price)
         trade = Trade(
-            user_id=user_id,
+            user_id=portfolio.user_id,
+            portfolio_id=portfolio.portfolio_id,
             coin_id=cid,
             side=order.side,
             input_kind="quantity",
@@ -342,7 +416,8 @@ async def _execute_once(
         movement = await append_stock_movement(
             db,
             StockMovementInput(
-                user_id=user_id,
+                user_id=portfolio.user_id,
+                portfolio_id=portfolio.portfolio_id,
                 coin_id=cid,
                 quantity=plan.quantity if order.side == "buy" else -plan.quantity,
                 after_basis=plan.cost_basis_after,
@@ -355,15 +430,19 @@ async def _execute_once(
         if current.evidence.quote != loaded.evidence.quote:
             replacement = _plan(current, order, cash, held, basis)
             if replacement.exec_price != order.expected_exec_price:
-                raise PriceChanged(_preview(current, replacement), order.expected_exec_price)
+                raise PriceChanged(
+                    _preview(current, replacement, portfolio), order.expected_exec_price
+                )
             # Already inserted immutable Trade metadata must not be rewritten.
             raise _QuoteRefreshed
         authority = json.loads(json.dumps(asdict(current.evidence), default=_encoded))
+        authority["portfolio_id"] = portfolio.portfolio_id
         e, q = current.evidence, current.evidence.quote
         facts = StockFillFacts(
             trade_id=trade.id,
             coin_id=cid,
-            user_id=user_id,
+            user_id=portfolio.user_id,
+            portfolio_id=portfolio.portfolio_id,
             provider_asset_id=e.provider_asset_id,
             symbol=current.symbol,
             company_name=current.company_name,
@@ -396,7 +475,7 @@ async def _execute_once(
             text(
                 "SELECT public.assert_stock_execution_current(:trade,:user,:authority)"
             ).bindparams(bindparam("authority", type_=JSONB)),
-            {"trade": trade.id, "user": user_id, "authority": authority},
+            {"trade": trade.id, "user": portfolio.user_id, "authority": authority},
         )
         await db.commit()
         return fill, True
@@ -404,7 +483,8 @@ async def _execute_once(
         await db.rollback()
         if "uq_trades_user_idempotency_key" in str(exc.orig):
             try:
-                prior = await _replay(db, user_id, order)
+                await _account(db, portfolio, lock=True)
+                prior = await _replay(db, portfolio, order)
                 if prior is not None:
                     return prior, False
             finally:
@@ -425,9 +505,12 @@ async def _execute_once(
         raise
 
 
-async def context(db: AsyncSession, *, user_id: int, symbol: str, settings: Settings) -> ContextOut:
+async def context(
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, symbol: str, settings: Settings
+) -> ContextOut:
+    await _account(db, portfolio)
     cid = await _instrument(db, symbol)
-    cash, held, basis = await _financial(db, user_id, cid)
+    cash, held, basis = await _financial(db, portfolio, cid)
     loaded = await load_execution_evidence(db, cid, settings)
     if not loaded.symbol or loaded.decision.reason == "permission_unavailable":
         raise _refuse("permission_unavailable")
@@ -465,6 +548,7 @@ async def context(db: AsyncSession, *, user_id: int, symbol: str, settings: Sett
             cost_basis=basis,
         )
     return ContextOut(
+        portfolio_id=str(portfolio.portfolio_id),
         coin_id=str(cid),
         provider_asset_id=e.provider_asset_id,
         symbol=loaded.symbol,

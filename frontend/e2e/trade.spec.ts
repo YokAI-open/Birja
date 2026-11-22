@@ -1,7 +1,7 @@
 // Phase 4 happy path. Needs the full compose stack with PRICE_SOURCE=fake (CI sets it).
 // Never run it against a stack whose email backend is resend: it creates accounts and trades.
 import { expect, test, type Page } from "@playwright/test";
-import { signInNewUser } from "./helpers.js";
+import { portfolioId, signInNewUser } from "./helpers.js";
 
 // Fake prices move on each minute boundary, so a legitimate price_changed can happen between
 // preview and confirm (TRADE-05). Confirm again, bounded to 3 attempts.
@@ -23,9 +23,10 @@ test("a signed-in user buys $100 of BTC and sells the whole position", async ({ 
 
   // (1) Markets row -> trade page.
   await signInNewUser(page);
+  const id = await portfolioId(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await page.getByRole("link", { name: "Trade BTC" }).click();
-  await expect(page).toHaveURL((url) => url.pathname === "/trade/BTC");
+  await expect(page).toHaveURL((url) => url.pathname === `/portfolios/${id}/trade/BTC`);
   await expect(page.getByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();
   await expect(page.getByText(/^Live · \d+s ago$/).first()).toBeVisible();
 
@@ -44,7 +45,7 @@ test("a signed-in user buys $100 of BTC and sells the whole position", async ({ 
   await expect(fill.getByText("Fee", { exact: true }).locator("..")).toContainText("$0.25");
 
   // (4) Sell the whole position by quantity.
-  await page.getByRole("button", { name: "New order" }).click();
+  await page.getByRole("button", { name: "Trade again" }).click();
   await page.getByRole("radio", { name: "Sell" }).click();
   const hold = page.getByText(/You hold ([\d.]+) BTC/);
   await expect(hold).toBeVisible();
@@ -61,7 +62,7 @@ test("a signed-in user buys $100 of BTC and sells the whole position", async ({ 
   await expect(sellFill.getByText("New cash balance").locator("..")).toContainText(
     /\$(9,9\d\d|10,0\d\d)\.\d{2}/,
   );
-  await page.getByRole("button", { name: "New order" }).click();
+  await page.getByRole("button", { name: "Trade again" }).click();
   await expect(page.getByText("You hold 0 BTC")).toBeVisible();
 
   // (6) Unknown coin goes back to Markets (client-side redirect, so wait for it).

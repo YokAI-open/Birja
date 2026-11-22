@@ -123,6 +123,7 @@ class QuoteFacts(Contract):
 
 
 class EconomicFacts(Contract):
+    portfolio_id: Identifier
     coin_id: Identifier
     provider_asset_id: str = Field(min_length=1, max_length=128)
     symbol: str = Field(min_length=1, max_length=10)
@@ -198,6 +199,7 @@ class PriceChangedOut(Contract):
 
 
 class ContextOut(Contract):
+    portfolio_id: Identifier
     coin_id: Identifier
     provider_asset_id: str = Field(min_length=1, max_length=128)
     symbol: str = Field(min_length=1, max_length=10)

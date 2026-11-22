@@ -39,7 +39,9 @@ follow-up debt. Open-artifact scan11 entries:8classification false positives and
 3references to the same realPhase7checkpoint, not11new product defects.
 
 **Publication evidence:**[release receipt](milestones/v1.1-RELEASE-RECEIPT.md).
-The approved develop back-merge is pending.
+The approved develop back-merge PR33 and test-only main correction PR34 are
+merged after six green checks each. Final main e061815 and develop26d2011
+have identical trees; software and planning tags remain unchanged.
 
 **Archives:**[roadmap](milestones/v1.1-ROADMAP.md),
 [requirements](milestones/v1.1-REQUIREMENTS.md),

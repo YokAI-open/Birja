@@ -7,20 +7,25 @@ also enforce admission, quote/session and action eligibility immediately before
 execution. Trade.created_at is ingestion time, never economic ownership time.
 """
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from fractions import Fraction
 from typing import Literal, cast
+from uuid import UUID
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_action import (
+    PortfolioStockClosure,
     StockActionState,
     StockOwnershipMovement,
     StockSplitApplication,
 )
+from app.models.portfolio_lifecycle import PortfolioClosureIntent, PortfolioLifecycleClosure
 from app.models.stock import StockInstrument
 from app.models.trade import Holding, Trade
 from app.models.user import Account
@@ -48,6 +53,9 @@ OwnershipReason = Literal[
     "split_mismatch",
     "unit_gap",
     "transaction_epoch_unverified",
+    "portfolio_unavailable",
+    "invalid_closure",
+    "invalid_digest",
 ]
 
 
@@ -81,6 +89,7 @@ class StockMovementInput:
     causal_key: str
     trade_id: int | None = None
     application_id: int | None = None
+    portfolio_id: int | None = None
 
 
 async def acquire_stock_gate(db: AsyncSession, coin_id: int) -> datetime:
@@ -127,6 +136,8 @@ def _validate(movement: StockMovementInput) -> None:
     if (
         type(movement.user_id) is not int
         or not 0 < movement.user_id <= 9007199254740991
+        or type(movement.portfolio_id) is not int
+        or not 0 < movement.portfolio_id <= 9007199254740991
         or not isinstance(movement.quantity, Decimal)
         or not movement.quantity.is_finite()
         or not _decimal(abs(movement.quantity))
@@ -159,11 +170,28 @@ async def append_stock_movement(
     """
     _validate(movement)
     await acquire_stock_gate(db, movement.coin_id)
+    if movement.application_id is not None:
+        await db.execute(
+            text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": movement.coin_id}
+        )
+    root_query = select(Account).where(
+        Account.id == movement.portfolio_id,
+        Account.user_id == movement.user_id,
+        Account.closed_at.is_(None),
+    )
+    if movement.trade_id is not None:
+        root_query = root_query.with_for_update()
+    account = (
+        await db.execute(root_query.execution_options(populate_existing=True))
+    ).scalar_one_or_none()
+    if account is None:
+        raise OwnershipHeld("portfolio_unavailable")
     found = (
         await db.execute(
             select(StockOwnershipMovement).where(
                 StockOwnershipMovement.coin_id == movement.coin_id,
                 StockOwnershipMovement.user_id == movement.user_id,
+                StockOwnershipMovement.portfolio_id == movement.portfolio_id,
                 StockOwnershipMovement.causal_key == movement.causal_key,
             )
         )
@@ -184,28 +212,19 @@ async def append_stock_movement(
                 StockOwnershipMovement.trade_id == movement.trade_id
                 if movement.trade_id is not None
                 else (StockOwnershipMovement.application_id == movement.application_id)
-                & (StockOwnershipMovement.user_id == movement.user_id)
+                & (StockOwnershipMovement.portfolio_id == movement.portfolio_id)
             )
         )
     ).scalar_one_or_none()
     await _clock(db)
     if duplicate_cause is not None:
         raise OwnershipHeld("causal_conflict")
-    if movement.trade_id is not None:
-        account = (
-            await db.execute(
-                select(Account.user_id).where(Account.user_id == movement.user_id).with_for_update()
-            )
-        ).scalar_one_or_none()
-        await _clock(db)
-        if account is None:
-            raise OwnershipHeld("missing_account")
     holdings = (
         (
             await db.execute(
                 select(Holding)
                 .where(Holding.coin_id == movement.coin_id)
-                .order_by(Holding.user_id, Holding.id)
+                .order_by(Holding.portfolio_id, Holding.id)
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
@@ -258,7 +277,7 @@ async def append_stock_movement(
         pending_trade_id=movement.trade_id,
     )
     now = await _clock(db)
-    holding = next((row for row in holdings if row.user_id == movement.user_id), None)
+    holding = next((row for row in holdings if row.portfolio_id == movement.portfolio_id), None)
     before = Decimal(0) if holding is None else holding.quantity
     basis = Decimal(0) if holding is None else holding.cost_basis
     after = before + movement.quantity
@@ -272,6 +291,7 @@ async def append_stock_movement(
                     Trade.id == movement.trade_id,
                     Trade.coin_id == movement.coin_id,
                     Trade.user_id == movement.user_id,
+                    Trade.portfolio_id == movement.portfolio_id,
                 )
             )
         ).scalar_one_or_none()
@@ -322,9 +342,11 @@ async def append_stock_movement(
         ):
             raise OwnershipHeld("split_mismatch")
         economic_at = application.cutoff
+    await assert_stock_terminal_clock(db, movement.coin_id, now)
     sequence = rows[-1].sequence + 1 if rows else 1
     row = StockOwnershipMovement(
         coin_id=movement.coin_id,
+        portfolio_id=cast(int, movement.portfolio_id),
         user_id=movement.user_id,
         sequence=sequence,
         economic_at=economic_at,
@@ -344,6 +366,7 @@ async def append_stock_movement(
         db.add(
             Holding(
                 user_id=movement.user_id,
+                portfolio_id=cast(int, movement.portfolio_id),
                 coin_id=movement.coin_id,
                 quantity=after,
                 cost_basis=movement.after_basis,
@@ -372,6 +395,25 @@ async def assert_ownership_consistent(
     cannot exceed that tail. This works with the existing append-only app grants.
     """
     await acquire_stock_gate(db, coin_id)
+    return await _assert_locked_ownership_consistent(
+        db,
+        coin_id,
+        pending_application_id=pending_application_id,
+        pending_trade_id=pending_trade_id,
+    )
+
+
+async def _assert_locked_ownership_consistent(
+    db: AsyncSession,
+    coin_id: int,
+    *,
+    pending_application_id: int | None = None,
+    pending_trade_id: int | None = None,
+) -> tuple[StockActionState, list[StockOwnershipMovement]]:
+    """Complete proof, entered only through a gate-verifying wrapper.
+
+    Keep historical pre-backfill verification independent of successor schema.
+    """
     state = (
         await db.execute(
             select(StockActionState)
@@ -397,7 +439,13 @@ async def assert_ownership_consistent(
     trades = (
         await db.execute(
             select(
-                Trade.id, Trade.coin_id, Trade.user_id, Trade.side, Trade.quantity, Trade.cash_delta
+                Trade.id,
+                Trade.coin_id,
+                Trade.user_id,
+                Trade.portfolio_id,
+                Trade.side,
+                Trade.quantity,
+                Trade.cash_delta,
             ).where(Trade.coin_id == coin_id)
         )
     ).all()
@@ -410,6 +458,7 @@ async def assert_ownership_consistent(
         if (
             row is None
             or row.user_id != trade.user_id
+            or row.portfolio_id != trade.portfolio_id
             or row.quantity != (trade.quantity if trade.side == "buy" else -trade.quantity)
             or row.after_basis
             != cost_basis_after(
@@ -430,11 +479,11 @@ async def assert_ownership_consistent(
             or row.recorded_at < row.economic_at
             or (row.cause_kind == "fill" and row.recorded_at != row.economic_at)
             or (row.before_quantity, row.before_basis)
-            != totals.get(row.user_id, (Decimal(0), Decimal(0)))
+            != totals.get(row.portfolio_id, (Decimal(0), Decimal(0)))
         ):
             raise OwnershipHeld("history_gap")
         previous = row.economic_at
-        totals[row.user_id] = (row.after_quantity, row.after_basis)
+        totals[row.portfolio_id] = (row.after_quantity, row.after_basis)
     if state.sequence > len(rows):
         raise OwnershipHeld("history_gap")
     applications = list(
@@ -449,10 +498,26 @@ async def assert_ownership_consistent(
         .all()
     )
     await _clock(db)
-    _check_units(rows, applications, state.unit_epoch, pending_application_id)
+    accounts = {a.id: a for a in (await db.execute(select(Account))).scalars()}
+    closures = {
+        c.portfolio_id: c
+        for c in (
+            await db.execute(
+                select(PortfolioStockClosure).where(PortfolioStockClosure.coin_id == coin_id)
+            )
+        ).scalars()
+    }
+    _check_closures(rows, applications, accounts, closures, await _clock(db))
+    _check_units(rows, applications, state.unit_epoch, pending_application_id, closures)
     holdings = (await db.execute(select(Holding).where(Holding.coin_id == coin_id))).scalars().all()
     await _clock(db)
-    actual = {row.user_id: (row.quantity, row.cost_basis) for row in holdings}
+    for held in holdings:
+        root = accounts.get(held.portfolio_id)
+        if root is None or root.user_id != held.user_id:
+            raise OwnershipHeld("holding_mismatch")
+        if root.closed_at is not None and held.portfolio_id not in closures:
+            raise OwnershipHeld("invalid_closure")
+    actual = {row.portfolio_id: (row.quantity, row.cost_basis) for row in holdings}
     if any(
         actual.get(uid, (Decimal(0), Decimal(0))) != total for uid, total in totals.items()
     ) or any(total != totals.get(uid, (Decimal(0), Decimal(0))) for uid, total in actual.items()):
@@ -460,11 +525,253 @@ async def assert_ownership_consistent(
     return state, rows
 
 
+@dataclass(frozen=True)
+class _ClosureProofContext:
+    transaction: object
+    user_id: int
+    portfolio_id: int
+    intent_key: UUID
+    confirmation_name: str
+    policy_version: str
+    instruments: tuple[int, ...]
+
+
+async def _closure_instruments(db: AsyncSession, portfolio_id: int) -> tuple[int, ...]:
+    return tuple(
+        (
+            await db.execute(
+                text(
+                    "SELECT coin_id FROM stock_ownership_movements WHERE portfolio_id=:p "
+                    "UNION SELECT h.coin_id FROM holdings h JOIN stock_instruments s "
+                    "ON s.coin_id=h.coin_id WHERE h.portfolio_id=:p ORDER BY coin_id"
+                ),
+                {"p": portfolio_id},
+            )
+        ).scalars()
+    )
+
+
+async def _has_instrument_gate(db: AsyncSession, coin_id: int) -> bool:
+    # PostgreSQL documents bigint advisory keys as high/low32bit with objsubid1.
+    return bool(
+        (
+            await db.execute(
+                text(
+                    "SELECT EXISTS(SELECT FROM pg_catalog.pg_locks l "
+                    "WHERE l.pid=pg_backend_pid() AND l.locktype='advisory' "
+                    "AND l.granted AND l.mode='ExclusiveLock' AND l.objsubid=1 "
+                    "AND l.database=(SELECT oid FROM pg_catalog.pg_database "
+                    "WHERE datname=current_database()) "
+                    "AND ((l.classid::bigint << 32) | l.objid::bigint)="
+                    "hashtextextended('birja.stock.instrument:' || CAST(:c AS text),0))"
+                ),
+                {"c": str(coin_id)},
+            )
+        ).scalar_one()
+    )
+
+
+async def assert_stock_terminal_clock(db: AsyncSession, coin_id: int, at: datetime) -> None:
+    """Never backdate later global activity into a frozen ownership boundary.
+
+    Inspect an already-held gate; never acquire it after a root/holding lock.
+    The historical per-stock closure table exists before the successor schema.
+    """
+    if not await _has_instrument_gate(db, coin_id):
+        raise OwnershipHeld("invalid_closure")
+    boundary = (
+        await db.execute(
+            select(func.max(PortfolioStockClosure.closed_at)).where(
+                PortfolioStockClosure.coin_id == coin_id,
+            )
+        )
+    ).scalar_one()
+    if not utc(at) or boundary is not None and at <= boundary:
+        raise OwnershipHeld("invalid_closure")
+
+
+async def assert_closure_ownership_consistent(db: AsyncSession) -> None:
+    """Verify a service-created SQL result in its originating transaction.
+
+    No caller boolean, coin list or stale returned receipt authorizes this path.
+    It never changes the financial one-instrument marker or permits an append.
+    """
+    proof = db.info.get("portfolio_closure_proof")
+    if not isinstance(proof, _ClosureProofContext) or proof.transaction is not db.get_transaction():
+        raise OwnershipHeld("invalid_closure")
+    if (await db.execute(text("SHOW transaction_isolation"))).scalar_one() != "read committed":
+        raise OwnershipHeld("read_committed_required")
+    account = (
+        await db.execute(
+            select(Account)
+            .where(
+                Account.id == proof.portfolio_id,
+                Account.user_id == proof.user_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    lifecycle = (
+        await db.execute(
+            select(PortfolioLifecycleClosure)
+            .where(
+                PortfolioLifecycleClosure.portfolio_id == proof.portfolio_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if (
+        account is None
+        or lifecycle is None
+        or account.closed_at is None
+        or account.closed_at > await _clock(db)
+        or (lifecycle.user_id, lifecycle.closed_at, lifecycle.policy_version)
+        != (proof.user_id, account.closed_at, proof.policy_version)
+    ):
+        raise OwnershipHeld("invalid_closure")
+    if lifecycle.provenance == "owner_confirmation":
+        if lifecycle.confirmation_name != account.name:
+            raise OwnershipHeld("invalid_closure")
+        original = await db.get(PortfolioClosureIntent, lifecycle.intent_id, populate_existing=True)
+        if original is None or (
+            original.user_id,
+            original.portfolio_id,
+            original.confirmation_name,
+            original.policy_version,
+            original.recorded_at,
+            original.outcome,
+        ) != (
+            proof.user_id,
+            proof.portfolio_id,
+            lifecycle.confirmation_name,
+            proof.policy_version,
+            account.closed_at,
+            "closed",
+        ):
+            raise OwnershipHeld("invalid_closure")
+    elif (
+        lifecycle.provenance != "retained_boundary"
+        or lifecycle.intent_id is not None
+        or lifecycle.confirmation_name is not None
+    ):
+        raise OwnershipHeld("invalid_closure")
+    request = (
+        await db.execute(
+            select(PortfolioClosureIntent).where(
+                PortfolioClosureIntent.user_id == proof.user_id,
+                PortfolioClosureIntent.intent_key == proof.intent_key,
+            )
+        )
+    ).scalar_one_or_none()
+    if request is not None and (
+        request.portfolio_id,
+        request.confirmation_name,
+        request.policy_version,
+        request.outcome,
+    ) != (proof.portfolio_id, proof.confirmation_name, proof.policy_version, "closed"):
+        raise OwnershipHeld("invalid_closure")
+    instruments = await _closure_instruments(db, proof.portfolio_id)
+    boundaries = (
+        (
+            await db.execute(
+                select(PortfolioStockClosure).where(
+                    PortfolioStockClosure.portfolio_id == proof.portfolio_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if (
+        instruments != proof.instruments
+        or len(instruments) > 20
+        or tuple(sorted(c.coin_id for c in boundaries)) != instruments
+        or any((c.user_id, c.closed_at) != (proof.user_id, account.closed_at) for c in boundaries)
+    ):
+        raise OwnershipHeld("invalid_closure")
+    for coin_id in instruments:
+        if not await _has_instrument_gate(db, coin_id):
+            raise OwnershipHeld("invalid_closure")
+        await _assert_locked_ownership_consistent(db, coin_id)
+
+
+def ownership_digest(value: object) -> str:
+    """Stable JSON interpretation; never rewrites a persisted legacy hash."""
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def portfolio_digest_rows(
+    rows: list[StockOwnershipMovement],
+    boundary: int,
+    coin_id: int,
+    unit_epoch: int,
+    excluded: set[int] | None = None,
+) -> list[tuple[int, int, int, str, str, int, int]]:
+    latest = {r.portfolio_id: r for r in rows if r.sequence <= boundary}
+    return [
+        (
+            pid,
+            r.user_id,
+            coin_id,
+            format(r.after_quantity, ".8f"),
+            format(r.after_basis, ".8f"),
+            r.sequence,
+            unit_epoch,
+        )
+        for pid, r in sorted(latest.items())
+        if pid not in (excluded or set())
+    ]
+
+
+def _check_closures(
+    rows: list[StockOwnershipMovement],
+    applications: list[StockSplitApplication],
+    accounts: dict[int, Account],
+    closures: dict[int, PortfolioStockClosure],
+    checked_at: datetime | None = None,
+) -> None:
+    for row in rows:
+        account = accounts.get(row.portfolio_id)
+        if account is None or account.user_id != row.user_id:
+            raise OwnershipHeld("history_gap")
+        closure = closures.get(row.portfolio_id)
+        if account.closed_at is not None and closure is None:
+            raise OwnershipHeld("invalid_closure")
+        if closure is not None and (
+            row.sequence > closure.closing_sequence
+            or row.recorded_at > closure.closed_at
+            or row.unit_epoch > closure.unit_epoch
+        ):
+            raise OwnershipHeld("invalid_closure")
+    for pid, closure in closures.items():
+        account = accounts.get(pid)
+        if (
+            account is None
+            or account.user_id != closure.user_id
+            or account.closed_at is None
+            or account.closed_at != closure.closed_at
+            or closure.closing_sequence > len(rows)
+            or closure.closing_sequence
+            != max((r.sequence for r in rows if r.recorded_at <= closure.closed_at), default=0)
+            or checked_at is not None
+            and closure.closed_at > checked_at
+            or closure.unit_epoch != sum(a.processed_at <= closure.closed_at for a in applications)
+            or any(
+                r.sequence <= closure.closing_sequence and r.recorded_at > closure.closed_at
+                for r in rows
+            )
+        ):
+            raise OwnershipHeld("invalid_closure")
+
+
 def _check_units(
     rows: list[StockOwnershipMovement],
     applications: list[StockSplitApplication],
     current_epoch: int,
     pending: int | None,
+    closures: dict[int, PortfolioStockClosure],
 ) -> None:
     """sequence_boundary is the tail BEFORE the first per-owner split delta.
 
@@ -490,9 +797,10 @@ def _check_units(
             if row.sequence <= app.sequence_boundary:
                 if row.economic_at >= app.cutoff:
                     raise OwnershipHeld("unit_gap")
-                owners[row.user_id] = row.after_quantity
-        actual = {row.user_id: row for row in rows if row.application_id == app.id}
-        expected = {uid: qty for uid, qty in owners.items() if qty > 0}
+                owners[row.portfolio_id] = row.after_quantity
+        excluded = {pid for pid, c in closures.items() if c.unit_epoch < epoch}
+        actual = {row.portfolio_id: row for row in rows if row.application_id == app.id}
+        expected = {pid: qty for pid, qty in owners.items() if qty > 0 and pid not in excluded}
         if (
             app.id != pending and actual.keys() != expected.keys()
         ) or not actual.keys() <= expected.keys():
@@ -509,6 +817,59 @@ def _check_units(
                 / Fraction(Decimal(app.old_rate))
             ):
                 raise OwnershipHeld("unit_gap")
+        before = [r for r in rows if r.sequence <= app.sequence_boundary]
+        latest = {r.portfolio_id: r for r in before}
+        before_value: object
+        after_value: object
+        if app.owner_digest_version is None:
+            # A legacy application has one original root per user. Later siblings
+            # have no movement before its immutable boundary and are excluded.
+            by_user = {r.user_id: r for r in latest.values()}
+            if len(by_user) != len(latest):
+                raise OwnershipHeld("invalid_digest")
+            before_value = [
+                (uid, str(r.after_quantity), str(r.after_basis))
+                for uid, r in sorted(by_user.items())
+            ]
+            after_value = [
+                (
+                    uid,
+                    str(
+                        Decimal(
+                            int(
+                                actual[r.portfolio_id].after_quantity
+                                if r.portfolio_id in actual
+                                else r.after_quantity
+                            )
+                        )
+                    ),
+                    str(r.after_basis),
+                )
+                for uid, r in sorted(by_user.items())
+            ]
+        elif app.owner_digest_version == 2:
+            before_v2 = portfolio_digest_rows(
+                rows, app.sequence_boundary, app.coin_id, app.prior_unit_epoch, excluded
+            )
+            before_value = before_v2
+            after_value = [
+                (
+                    pid,
+                    uid,
+                    cid,
+                    format(actual[pid].after_quantity, ".8f") if pid in actual else qty,
+                    basis,
+                    actual[pid].sequence if pid in actual else seq,
+                    app.new_unit_epoch,
+                )
+                for pid, uid, cid, qty, basis, seq, _ in before_v2
+            ]
+        else:
+            raise OwnershipHeld("invalid_digest")
+        if ownership_digest(before_value) != app.before_digest or (
+            app.id != pending and ownership_digest(after_value) != app.after_digest
+        ):
+            raise OwnershipHeld("invalid_digest")
         last_boundary, last_cutoff = app.sequence_boundary, app.cutoff
     for row in rows:
         # Composite application/coin/unit FK already proves split membership.
@@ -530,7 +891,7 @@ class StockQuantitySnapshot:
 
 
 async def reconstruct_stock_quantity(
-    db: AsyncSession, user_id: int, coin_id: int, cutoff: CutoffEvidence, units: int
+    db: AsyncSession, portfolio_id: int, coin_id: int, cutoff: CutoffEvidence, units: int
 ) -> StockQuantitySnapshot:
     """Exclusive cutoff with explicit integer unit_epoch denomination selection.
 
@@ -550,11 +911,22 @@ async def reconstruct_stock_quantity(
         or not cutoff.calendar_version
         or type(units) is not int
         or units < 0
-        or type(user_id) is not int
-        or user_id <= 0
+        or type(portfolio_id) is not int
+        or portfolio_id <= 0
     ):
         raise OwnershipHeld("invalid_cutoff")
     state, rows = await assert_ownership_consistent(db, coin_id)
+    root = await db.get(Account, portfolio_id)
+    if root is None:
+        raise OwnershipHeld("portfolio_unavailable")
+    closure = (
+        await db.execute(
+            select(PortfolioStockClosure).where(
+                PortfolioStockClosure.portfolio_id == portfolio_id,
+                PortfolioStockClosure.coin_id == coin_id,
+            )
+        )
+    ).scalar_one_or_none()
     now = await _clock(db)
     if cutoff.cutoff > now or state.complete_from is None or cutoff.cutoff < state.complete_from:
         raise OwnershipHeld("missing_baseline")
@@ -577,6 +949,8 @@ async def reconstruct_stock_quantity(
         allowed.add(boundary[0].new_unit_epoch)
     if units not in allowed:
         raise OwnershipHeld("ambiguous_units")
+    if closure is not None and (cutoff.cutoff > closure.closed_at or units > closure.unit_epoch):
+        raise OwnershipHeld("invalid_closure")
     selected = [
         row
         for row in rows
@@ -587,7 +961,9 @@ async def reconstruct_stock_quantity(
             and row.unit_epoch <= units
         )
     ]
-    quantity = sum((row.quantity for row in selected if row.user_id == user_id), Decimal(0))
+    quantity = sum(
+        (row.quantity for row in selected if row.portfolio_id == portfolio_id), Decimal(0)
+    )
     return StockQuantitySnapshot(
         quantity, units, max((row.sequence for row in selected), default=0), cutoff
     )

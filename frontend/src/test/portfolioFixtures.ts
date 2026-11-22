@@ -2,6 +2,8 @@ import type { Portfolio, PortfolioHolding } from "@/api/portfolio";
 import { quoteFixture } from "./stockTradeFixtures";
 export function cashPortfolio(): Portfolio {
   return {
+    portfolio_id: "1",
+    name: "My portfolio",
     cash: "10000.00",
     starting_cash: "10000.00",
     total_value: "10000.00",

@@ -105,6 +105,7 @@ async def state(
         alpaca_api_key="synthetic-key",
         alpaca_secret_key="synthetic-secret",
         stock_max_retries=0,
+        price_source="kraken",
     )
     yield {"factory": factory, "now": now, "mappings": mappings, "settings": settings}
     await redis_client.delete(stock_scheduler.WINDOW_KEY)

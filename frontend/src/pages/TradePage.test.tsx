@@ -1,8 +1,11 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
-import { Route, Routes } from "react-router";
+import { Link, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithClient } from "@/test/render";
 import TradePage from "./TradePage";
+import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { cashPortfolio } from "@/test/portfolioFixtures";
+import { openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
 
 type Ctx = {
   mid: string;
@@ -12,6 +15,7 @@ type Ctx = {
   quote: (body: Record<string, unknown>) => Response | Promise<Response>;
   trade: (body: Record<string, unknown>) => Response | Promise<Response>;
   me: () => Response;
+  name: string;
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -21,6 +25,7 @@ const refusal = (status: number, code: string, message: string, extra: object = 
 const quoteBody = (body: Record<string, unknown>, mid: string) => {
   const sell = body.side === "sell";
   return {
+    portfolio_id: "1",
     symbol: "BTC",
     side: body.side,
     input_kind: body.amount_usd !== undefined ? "usd" : "quantity",
@@ -41,13 +46,17 @@ const quoteBody = (body: Record<string, unknown>, mid: string) => {
   };
 };
 
-const fillBody = (mid: string) => ({
+const fillBody = (
+  mid: string,
+  body: Record<string, unknown> = { side: "buy", amount_usd: "100" },
+) => ({
+  portfolio_id: "1",
   trade_id: 1,
   created_at: "2026-10-28T10:00:00Z",
   symbol: "BTC",
-  side: "buy",
-  input_kind: "usd",
-  input_value: "100",
+  side: body.side,
+  input_kind: body.amount_usd !== undefined ? "usd" : "quantity",
+  input_value: String(body.amount_usd ?? body.quantity),
   mid,
   as_of: "2026-10-28T09:59:50Z",
   exec_price: "100250.00000000",
@@ -64,13 +73,14 @@ let urls: string[];
 
 function install() {
   ctx = {
+    name: "Strategy one",
     mid: "100000.00000000",
     holding: "0",
     priceAge: 10,
     coins: ["BTC", "ETH"],
     quote: (body) => json(quoteBody(body, ctx.mid)),
-    trade: () => json(fillBody(ctx.mid)),
-    me: () => json({ email: "a@example.com", cash_usd: "10000.00000000" }),
+    trade: (body) => json(fillBody(ctx.mid, body)),
+    me: () => json({ email: "a@example.com" }),
   };
   posts = [];
   urls = [];
@@ -95,31 +105,58 @@ function install() {
           }),
         );
       }
-      if (url === "/api/v1/me") return Promise.resolve(ctx.me());
-      if (url.startsWith("/api/v1/holdings/")) {
-        return Promise.resolve(json({ symbol: "BTC", quantity: ctx.holding }));
+      if (url === "/api/v2/me") return Promise.resolve(ctx.me());
+      if (url === "/api/v2/portfolios")
+        return Promise.resolve(
+          json([
+            { id: "1", name: ctx.name },
+            { id: "2", name: "Strategy two" },
+          ]),
+        );
+      if (/^\/api\/v2\/portfolios\/[12]$/.test(url))
+        return Promise.resolve(
+          json({
+            ...cashPortfolio(),
+            portfolio_id: url.endsWith("2") ? "2" : "1",
+            name: "Strategy one",
+          }),
+        );
+      if (url.startsWith("/api/v2/portfolios/1/holdings/")) {
+        return Promise.resolve(json({ portfolio_id: "1", symbol: "BTC", quantity: ctx.holding }));
       }
-      if (url === "/api/v1/trades/quote" || url === "/api/v1/trades") {
+      if (url === "/api/v2/portfolios/1/trades/quote" || url === "/api/v2/portfolios/1/trades") {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
         posts.push({ url, body });
-        return Promise.resolve(url === "/api/v1/trades" ? ctx.trade(body) : ctx.quote(body));
+        return Promise.resolve(
+          url === "/api/v2/portfolios/1/trades" ? ctx.trade(body) : ctx.quote(body),
+        );
       }
       return Promise.resolve(new Response(null, { status: 204 }));
     }),
   );
 }
 
-const tradePosts = () => posts.filter((p) => p.url === "/api/v1/trades");
-const quotePosts = () => posts.filter((p) => p.url === "/api/v1/trades/quote");
+const tradePosts = () => posts.filter((p) => p.url === "/api/v2/portfolios/1/trades");
+const quotePosts = () => posts.filter((p) => p.url === "/api/v2/portfolios/1/trades/quote");
 const countUrl = (url: string) => urls.filter((u) => u === url).length;
 
 function show(route = "/trade/BTC") {
   return renderWithClient(
     <Routes>
-      <Route path="/trade/:symbol" element={<TradePage />} />
+      <Route path="/portfolios/:portfolioId" element={<PortfolioTargetBoundary />}>
+        <Route
+          path="trade/:symbol"
+          element={
+            <>
+              <Link to="/portfolios/2/trade/BTC">Other strategy</Link>
+              <TradePage />
+            </>
+          }
+        />
+      </Route>
       <Route path="/" element={<p>Markets home</p>} />
     </Routes>,
-    { route },
+    { route: route.startsWith("/trade/") ? "/portfolios/1" + route : route },
   );
 }
 
@@ -143,12 +180,17 @@ async function previewReady(user: User, value = "100") {
 }
 
 let uuid = 0;
+const tradeKey = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-beforeEach(() => {
+beforeEach(async () => {
   document.cookie = "bj_csrf=tok; path=/";
+  sessionStorage.clear();
+  // Recovery has its own genuine nonce; deterministic valid UUIDs below
+  // identify financial attempts, independently of recovery initialization.
+  await openDeletionRecovery("a@example.com");
   uuid = 0;
   vi.spyOn(crypto, "randomUUID").mockImplementation(
-    () => `key-${++uuid}` as unknown as ReturnType<typeof crypto.randomUUID>,
+    () => tradeKey(++uuid) as ReturnType<typeof crypto.randomUUID>,
   );
   install();
 });
@@ -163,7 +205,7 @@ afterEach(() => {
 describe("TradePage", () => {
   it("renders the coin, live price and an idle form", async () => {
     show();
-    expect(screen.getByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();
     expect(await screen.findByText("Bitcoin")).toBeVisible();
     expect(screen.getByText("$100,000.00")).toBeVisible();
     expect(screen.getByText("Live · 10s ago")).toBeVisible();
@@ -222,8 +264,8 @@ describe("TradePage", () => {
     const { user } = show();
     await previewReady(user);
     const before = {
-      me: countUrl("/api/v1/me"),
-      holding: countUrl("/api/v1/holdings/BTC"),
+      portfolio: countUrl("/api/v2/portfolios/1"),
+      holding: countUrl("/api/v2/portfolios/1/holdings/BTC"),
       prices: countUrl("/api/v1/prices"),
     };
     await user.click(confirmButton());
@@ -234,7 +276,7 @@ describe("TradePage", () => {
       side: "buy",
       amount_usd: "100",
       expected_mid: "100000.00000000",
-      idempotency_key: "key-1",
+      idempotency_key: tradeKey(1),
     });
     const card = within(screen.getByRole("region", { name: "Order filled" }));
     expect(card.getByText("0.00099501 BTC")).toBeVisible();
@@ -243,24 +285,24 @@ describe("TradePage", () => {
     expect(card.getByText("-$100.00")).toBeVisible();
     expect(card.getByText("$9,900.00")).toBeVisible();
     await waitFor(() => {
-      expect(countUrl("/api/v1/me")).toBeGreaterThan(before.me);
-      expect(countUrl("/api/v1/holdings/BTC")).toBeGreaterThan(before.holding);
+      expect(countUrl("/api/v2/portfolios/1")).toBeGreaterThan(before.portfolio);
+      expect(countUrl("/api/v2/portfolios/1/holdings/BTC")).toBeGreaterThan(before.holding);
       expect(countUrl("/api/v1/prices")).toBeGreaterThan(before.prices);
     });
 
-    await user.click(screen.getByRole("button", { name: "New order" }));
+    await user.click(screen.getByRole("button", { name: "Trade again" }));
     expect(screen.getByRole("heading", { name: "Preview" })).toBeVisible();
     expect(screen.getByLabelText("Amount")).toHaveValue("");
     // A fill ends the attempt: the next order gets a new key.
     await previewReady(user);
     await user.click(confirmButton());
     await screen.findByRole("heading", { name: "Order filled" });
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
   it("sends exactly one request on a double click", async () => {
-    ctx.trade = () =>
-      new Promise((resolve) => setTimeout(() => resolve(json(fillBody(ctx.mid))), 80));
+    ctx.trade = (body) =>
+      new Promise((resolve) => setTimeout(() => resolve(json(fillBody(ctx.mid, body))), 80));
     const { user } = show();
     await previewReady(user);
     await user.dblClick(confirmButton());
@@ -268,43 +310,36 @@ describe("TradePage", () => {
     expect(tradePosts()).toHaveLength(1);
   });
 
-  it("keeps the key across a network-error retry and replaces it after an edit", async () => {
+  it("locks edits for an unknown result and checks only its frozen original attempt", async () => {
     let fail = true;
-    ctx.trade = () => {
-      if (fail) return Promise.reject(new TypeError("network"));
-      return json(fillBody(ctx.mid));
-    };
+    ctx.trade = (body) =>
+      fail ? Promise.reject(new TypeError("network")) : json(fillBody(ctx.mid, body));
     const { user } = show();
     await previewReady(user);
     await user.click(confirmButton());
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Couldn't confirm. Check your connection and try again.",
-    );
-    await user.click(confirmButton());
-    await waitFor(() => {
-      expect(tradePosts()).toHaveLength(2);
-    });
-    expect(tradePosts()[0]!.body.idempotency_key).toBe("key-1");
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-1");
-
-    await enter(user, "50");
-    await waitFor(() => {
-      expect(confirmButton()).toBeEnabled();
-    });
-    await screen.findByText("0.00099501 BTC");
-    expect(screen.queryByRole("alert")).toBeNull();
+    const check = await screen.findByRole("button", { name: "Check order result" });
+    expect(screen.getByLabelText("Amount")).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Sell" })).toBeDisabled();
+    await user.click(check);
+    await waitFor(() => expect(tradePosts()).toHaveLength(2));
+    expect(tradePosts()[1]!.body).toEqual(tradePosts()[0]!.body);
     fail = false;
+    await user.click(await screen.findByRole("button", { name: "Check order result" }));
+    await screen.findByRole("heading", { name: "Order filled" });
+    expect(tradePosts()[2]!.body).toEqual(tradePosts()[0]!.body);
+    await user.click(screen.getByRole("button", { name: "Trade again" }));
+    await previewReady(user, "50");
     await user.click(confirmButton());
     await screen.findByRole("heading", { name: "Order filled" });
-    expect(tradePosts()[2]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[3]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
   it("reuses the key when a quote refetch moves the mid between a failed attempt and the retry", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let fail = true;
-    ctx.trade = () => {
+    ctx.trade = (body) => {
       if (fail) return Promise.reject(new TypeError("network"));
-      return json(fillBody(ctx.mid));
+      return json(fillBody(ctx.mid, body));
     };
     const { user } = show();
     await previewReady(user);
@@ -319,11 +354,11 @@ describe("TradePage", () => {
     expect(await previewCard().findByText("$100,050.00")).toBeVisible();
 
     fail = false;
-    await user.click(confirmButton());
+    await user.click(screen.getByRole("button", { name: "Check order result" }));
     await screen.findByRole("heading", { name: "Order filled" });
     expect(tradePosts()).toHaveLength(2);
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-1");
-    expect(tradePosts()[1]!.body.expected_mid).toBe("100050.00000000");
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(1));
+    expect(tradePosts()[1]!.body.expected_mid).toBe("100000.00000000");
     expect(uuid).toBe(1);
   });
 
@@ -351,20 +386,20 @@ describe("TradePage", () => {
     await screen.findByRole("heading", { name: "Order filled" });
     expect(tradePosts()).toHaveLength(2);
     expect(tradePosts()[1]!.body.expected_mid).toBe("100100.00000000");
-    expect(tradePosts()[0]!.body.idempotency_key).toBe("key-1");
-    expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+    expect(tradePosts()[0]!.body.idempotency_key).toBe(tradeKey(1));
+    expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
   });
 
-  it("re-quotes when price_changed carries no usable quote", async () => {
+  it("keeps an invalid reprice response unknown instead of inventing a new quote or attempt", async () => {
     ctx.trade = () => refusal(409, "price_changed", "The price moved.", { quote: { mid: 1 } });
     const { user } = show();
     await previewReady(user);
     const before = quotePosts().length;
     await user.click(confirmButton());
-    expect(await screen.findByText("Price updated. Please review again.")).toBeVisible();
-    await waitFor(() => {
-      expect(quotePosts().length).toBeGreaterThan(before);
-    });
+    expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
+    expect(screen.getByLabelText("Amount")).toBeDisabled();
+    expect(quotePosts()).toHaveLength(before);
+    expect(screen.queryByText("Price updated. Please review again.")).toBeNull();
   });
 
   it.each([
@@ -386,11 +421,11 @@ describe("TradePage", () => {
         expect(screen.queryByRole("alert")).toBeNull();
         expect(confirmButton()).toBeEnabled();
       });
-      ctx.trade = () => json(fillBody(ctx.mid));
+      ctx.trade = (body) => json(fillBody(ctx.mid, body));
       await user.click(confirmButton());
       await screen.findByRole("heading", { name: "Order filled" });
-      expect(tradePosts()[0]!.body.idempotency_key).toBe("key-1");
-      expect(tradePosts()[1]!.body.idempotency_key).toBe("key-2");
+      expect(tradePosts()[0]!.body.idempotency_key).toBe(tradeKey(1));
+      expect(tradePosts()[1]!.body.idempotency_key).toBe(tradeKey(2));
     },
   );
 
@@ -501,14 +536,59 @@ describe("TradePage", () => {
     expect(quotePosts().length).toBeGreaterThanOrEqual(2);
   });
 
-  it("refreshes the session state when the quote returns 401", async () => {
+  it("hides the target when the quote returns 401", async () => {
     ctx.quote = () => refusal(401, "not_authenticated", "Sign in.");
     const { user } = show();
     await screen.findByText("Bitcoin");
-    const before = countUrl("/api/v1/me");
     await enter(user, "100");
     await waitFor(() => {
-      expect(countUrl("/api/v1/me")).toBeGreaterThan(before);
+      expect(screen.queryByRole("heading", { name: "Trade BTC" })).toBeNull();
     });
   });
+});
+
+it("names the ticket, confirmation and focused original receipt with scoped links", async () => {
+  const { user } = show();
+  await previewReady(user);
+  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
+  expect(previewCard().getByText("Strategy one")).toBeVisible();
+  await user.click(confirmButton());
+  const heading = await screen.findByRole("heading", { name: "Order filled" });
+  await waitFor(() => expect(heading).toHaveFocus());
+  const receipt = within(screen.getByRole("region", { name: "Order filled" }));
+  expect(receipt.getByText("Strategy one")).toBeVisible();
+  expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/portfolios/1");
+});
+it("renders a long markup-like portfolio name as wrapping plain text", async () => {
+  ctx.name = "<img src=x onerror=alert(1)> Strategy " + "a".repeat(22);
+  show();
+  const names = await screen.findAllByText(ctx.name);
+  expect(names[0]).toHaveClass("min-w-0");
+  expect(names[0]).toHaveClass("[overflow-wrap:anywhere]");
+  expect(document.querySelector("img")).toBeNull();
+});
+it("does not mount prices, holdings, previews or receipts for an unavailable target", async () => {
+  show("/portfolios/99/trade/BTC");
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(urls.some((p) => p.includes("/99/") || p === "/api/v1/prices")).toBe(false);
+  expect(screen.queryByLabelText("Amount")).toBeNull();
+});
+it("does not label a late original fill as a sibling portfolio after navigation", async () => {
+  let resolve!: (value: Response) => void;
+  ctx.trade = () =>
+    new Promise<Response>((done) => {
+      resolve = done;
+    });
+  const { user } = show();
+  await previewReady(user);
+  await user.click(confirmButton());
+  await waitFor(() => expect(tradePosts()).toHaveLength(1));
+  await user.click(screen.getByRole("link", { name: "Other strategy" }));
+  expect((await screen.findAllByText("Strategy two"))[0]).toBeVisible();
+  await act(async () => {
+    resolve(json(fillBody(ctx.mid)));
+  });
+  expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
+  expect(screen.queryByText("Strategy one")).toBeNull();
+  expect(urls.some((p) => p === "/api/v2/portfolios/2/trades")).toBe(false);
 });

@@ -89,7 +89,7 @@ async def test_existing_account_response_is_identical(
     code = await request_and_get_code(auth_client, outbox, known)
     headers = await csrf_headers(auth_client)
     v = await auth_client.post(
-        "/api/v1/auth/verify-code", json={"email": known, "code": code}, headers=headers
+        "/api/v2/auth/verify-code", json={"email": known, "code": code}, headers=headers
     )
     assert v.status_code == 200
     unknown = unique_email()

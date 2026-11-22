@@ -163,9 +163,15 @@ async def test_build_email_sender_selects_backend() -> None:
         assert isinstance(build_email_sender(resend, http), ResendSender)
 
 
-async def test_lifespan_wires_and_closes_http_client() -> None:
-    settings = _settings(email_backend="resend", resend_api_key=KEY, email_from=FROM)
-    app = create_app(settings)
+async def test_lifespan_wires_and_closes_http_client(settings: Settings, migrated: None) -> None:
+    email_settings = _settings(
+        database_url=settings.database_url,
+        redis_url=settings.redis_url,
+        email_backend="resend",
+        resend_api_key=KEY,
+        email_from=FROM,
+    )
+    app = create_app(email_settings)
     async with app.router.lifespan_context(app):
         assert isinstance(app.state.email_sender, ResendSender)
         assert not app.state.http.is_closed

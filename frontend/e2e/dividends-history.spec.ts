@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
-import { signInNewUser } from "./helpers.js";
+import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -57,15 +57,16 @@ async function focusedInView(page: Page, target: Locator) {
 async function history(page: Page) {
   await page.goto("/history");
   await expect(page.getByRole("heading", { name: "Account activity", exact: true })).toBeVisible();
-  return (await page.request.get("/api/v1/history")).json();
+  return (await page.request.get(await portfolioApi(page, "/event-history"))).json();
 }
 async function cryptoFill(page: Page, side: "buy" | "sell", amount: string) {
   await page.goto("/trade/BTC");
   if (side === "sell") await page.getByRole("radio", { name: "Sell", exact: true }).check();
   await page.getByLabel(side === "buy" ? "Amount" : "Quantity", { exact: true }).fill(amount);
   for (let attempt = 0; attempt < 3; attempt++) {
+    const endpoint = await portfolioApi(page, "/trades");
     const response = page.waitForResponse(
-      (r) => r.url().endsWith("/api/v1/trades") && r.request().method() === "POST",
+      (r) => new URL(r.url()).pathname === endpoint && r.request().method() === "POST",
     );
     await page.getByRole("button", { name: `Confirm ${side}`, exact: true }).click();
     const result = await response;
@@ -108,7 +109,7 @@ test.beforeEach(() => stockFixture("fresh"));
 
 test("authenticated mixed History starts empty", async ({ page }) => {
   await signInNewUser(page);
-  const response = await page.request.get("/api/v1/history");
+  const response = await page.request.get(await portfolioApi(page, "/event-history"));
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual({ items: [], next_cursor: null });
 });
@@ -133,8 +134,9 @@ test("real restricted worker credits once and publishes uncertainty with no cash
   await page.goto("/trade/stocks/AAPL");
   await page.getByLabel("Whole-share quantity").fill("50");
   await page.getByRole("button", { name: "Preview trade", exact: true }).click();
+  const endpoint = await portfolioApi(page, "/stock-trades");
   const stockResponse = page.waitForResponse(
-    (r) => r.url().endsWith("/api/v1/stock-trades") && r.request().method() === "POST",
+    (r) => new URL(r.url()).pathname === endpoint && r.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Confirm buy", exact: true }).click();
   const stockResult = await stockResponse;
@@ -200,7 +202,7 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   const paused = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/v1/history*", async (route) => {
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), async (route) => {
     const response = await route.fetch();
     await paused;
     await route.fulfill({ response });
@@ -210,8 +212,8 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await snapshot(page, info, "history-loading");
   release();
   await expect(activity(page)).toBeVisible();
-  await page.unroute("**/api/v1/history*");
-  const first = await (await page.request.get("/api/v1/history")).json();
+  await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
+  const first = await (await page.request.get(await portfolioApi(page, "/event-history"))).json();
   expect(first.items).toHaveLength(25);
   expect(new Set(first.items.map((item: { kind: string }) => item.kind))).toEqual(
     new Set(["trade", "split", "dividend", "dividend_correction"]),
@@ -254,7 +256,7 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
     await page.keyboard.press("Enter");
     await expect(original).toBeFocused();
   }
-  await page.route("**/api/v1/history*", (route) =>
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
     route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } }),
   );
   await page.getByRole("button", { name: "Load more", exact: true }).click();
@@ -263,13 +265,15 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await focusedInView(page, page.getByRole("button", { name: "Try loading more", exact: true }));
   await expect(activity(page)).toContainText("Forward split");
   await snapshot(page, info, "history-append-error");
-  await page.unroute("**/api/v1/history*");
+  await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
   const end = page.getByText("All events loaded.", { exact: true });
   await page.getByRole("button", { name: "Try loading more", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(end).toBeFocused();
   await focusedInView(page, end);
-  const all = await (await page.request.get(`/api/v1/history?limit=100`)).json();
+  const all = await (
+    await page.request.get(await portfolioApi(page, "/event-history?limit=100"))
+  ).json();
   expect(all.items).toHaveLength(31);
   expect(new Set(all.items.map((item: { id: string }) => item.id)).size).toBe(31);
   await expect(page.getByRole("status")).toContainText("6 more events loaded. 31 events shown.");
@@ -284,14 +288,14 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
     expect(await page.evaluate("document.documentElement.scrollWidth<=innerWidth")).toBe(true);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.route("**/api/v1/history*", (route) =>
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
     route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } }),
   );
   await page.getByRole("button", { name: "Refresh history", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Showing the last successful update");
   await expect(activity(page)).toContainText("Forward split");
   await snapshot(page, info, "history-refresh-error");
-  await page.unroute("**/api/v1/history*");
+  await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
   // Separate read-only presentation fixture: retained real economics with a
   // synthetic common publication time. Actual SQL tie/privacy proof is Plan10;
   // this checks browser order/append only, never creates a cash success.
@@ -302,13 +306,14 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   }));
   const boundary = Buffer.from(
     JSON.stringify({
-      v: 2,
+      v: 3,
+      portfolio_id: await portfolioId(page),
       recorded_at: tied[1].recorded_at,
       kind_rank: 3,
       source_id: tied[1].id.split(":")[1],
     }),
   ).toString("base64url");
-  await page.route("**/api/v1/history*", (route) =>
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
     route.fulfill({
       json: new URL(route.request().url()).searchParams.has("cursor")
         ? { items: tied.slice(2), next_cursor: null }
@@ -321,10 +326,15 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await expect(page.getByText("All events loaded.", { exact: true })).toBeFocused();
   const identities = await activity(page)
     .locator("tbody tr, :scope > li")
-    .evaluateAll((nodes) => nodes.map((node) => node.id.replace(/^history-(desktop|mobile)-/, "")));
-  expect(identities).toEqual(tied.map((item) => item.id));
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  const id = await portfolioId(page);
+  for (const identity of identities)
+    expect(identity).toMatch(new RegExp(`^history-${id}-\\d+-(desktop|mobile)-`));
+  expect(
+    identities.map((identity) => identity.replace(/^history-\d+-\d+-(desktop|mobile)-/, "")),
+  ).toEqual(tied.map((item) => item.id));
   await snapshot(page, info, "history-tied-read-only");
-  await page.unroute("**/api/v1/history*");
+  await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
   // Supplementary enlarged text only; owner native browser zoom remains pending.
   await page.addStyleTag({ content: "html{font-size:200%}" });
   expect(await page.evaluate("document.documentElement.scrollWidth<=innerWidth")).toBe(true);
@@ -335,6 +345,7 @@ test("pre-anchor uncertainty has no Dividend and late previous-owner reads canno
 }, info) => {
   test.setTimeout(120000);
   const email = await signInNewUser(page);
+  const oldHistoryRoute = "**" + (await portfolioApi(page, "/event-history*"));
   const before = evidence("preanchor", email, "NVDA");
   expect(cents(before.cash)).toBe(1000000n);
   expect(before.originals).toEqual([]);
@@ -343,13 +354,13 @@ test("pre-anchor uncertainty has no Dividend and late previous-owner reads canno
   await history(page);
   await expect(page.getByRole("heading", { name: "No activity yet", exact: true })).toBeVisible();
   await snapshot(page, info, "history-empty");
-  await page.route("**/api/v1/history*", (route) =>
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
     route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } }),
   );
   await page.reload();
   await expect(page.getByRole("alert")).toContainText("Can't load your history");
   await snapshot(page, info, "history-initial-error");
-  await page.unroute("**/api/v1/history*");
+  await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(page.getByRole("heading", { name: "No activity yet", exact: true })).toBeVisible();
   await cryptoFill(page, "buy", "1");
@@ -363,7 +374,7 @@ test("pre-anchor uncertainty has no Dividend and late previous-owner reads canno
   const observed = new Promise<void>((resolve) => {
     started = resolve;
   });
-  await page.route("**/api/v1/history*", async (route) => {
+  await page.route("**" + (await portfolioApi(page, "/event-history*")), async (route) => {
     const response = await route.fetch();
     started();
     await paused;
@@ -379,9 +390,11 @@ test("pre-anchor uncertainty has no Dividend and late previous-owner reads canno
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
   release();
-  await page.unroute("**/api/v1/history*");
+  await page.unroute(oldHistoryRoute);
   await signInNewUser(page);
   await history(page);
   await expect(page.getByRole("heading", { name: "No activity yet", exact: true })).toBeVisible();
-  expect((await (await page.request.get("/api/v1/history")).json()).items).toEqual([]);
+  expect(
+    (await (await page.request.get(await portfolioApi(page, "/event-history"))).json()).items,
+  ).toEqual([]);
 });

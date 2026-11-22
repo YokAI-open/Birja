@@ -1,9 +1,15 @@
+import { portfolioTargetFixture } from "@/test/portfolioTargetFixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useHistory } from "./useHistory";
 
+const cursor = (id: string) =>
+  btoa(JSON.stringify({ v: 2, portfolio_id: "1", created_at: "2026-10-30T08:01:02.123456Z", id }))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 const item = (id: string) => ({
   id,
   created_at: "2026-10-30T08:01:02.123456Z",
@@ -25,20 +31,25 @@ afterEach(() => {
 it("refetches the loaded chain sequentially with new boundaries after newer fills and retains it on failure", async () => {
   const fetch = vi
     .fn()
-    .mockResolvedValueOnce(page(["9"], "old_A"))
-    .mockResolvedValueOnce(page(["8"], "old_B"))
-    .mockResolvedValueOnce(page(["7"], "old_C"))
-    .mockResolvedValueOnce(page(["10"], "new_A"))
-    .mockResolvedValueOnce(page(["9"], "new_B"))
-    .mockResolvedValueOnce(page(["8"], "new_C"))
-    .mockResolvedValueOnce(page(["11"], "failed_A"))
+    .mockResolvedValueOnce(page(["9"], cursor("9")))
+    .mockResolvedValueOnce(page(["8"], cursor("8")))
+    .mockResolvedValueOnce(page(["7"], cursor("7")))
+    .mockResolvedValueOnce(page(["10"], cursor("10")))
+    .mockResolvedValueOnce(page(["9"], cursor("9")))
+    .mockResolvedValueOnce(page(["8"], cursor("8")))
+    .mockResolvedValueOnce(page(["11"], cursor("11")))
     .mockResolvedValueOnce(new Response("{}", { status: 500 }));
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  client.setQueryDefaults(["me"], { gcTime: Infinity });
+  client.setQueryData(["me"], { email: "first@example.test" });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  const { result, unmount } = renderHook(() => ({ ...useHistory() }), { wrapper });
+  const { result, unmount } = renderHook(
+    () => ({ ...useHistory(portfolioTargetFixture(client)) }),
+    { wrapper },
+  );
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   await act(async () => {
     const next = await result.current.fetchNextPage();
@@ -69,21 +80,25 @@ it("refetches the loaded chain sequentially with new boundaries after newer fill
     await result.current.refetch();
   });
   await waitFor(() => expect(result.current.isRefetchError).toBe(true));
-  expect(result.current.data?.pages.map((p) => p.next_cursor)).toEqual(["new_A", "new_B", "new_C"]);
+  expect(result.current.data?.pages.map((p) => p.next_cursor)).toEqual([
+    cursor("10"),
+    cursor("9"),
+    cursor("8"),
+  ]);
   expect(result.current.data?.pages.flatMap((p) => p.items.map((i) => i.id))).toEqual([
     "10",
     "9",
     "8",
   ]);
   expect(fetch.mock.calls.map((args) => String(args[0]))).toEqual([
-    "/api/v1/trades",
-    "/api/v1/trades?cursor=old_A",
-    "/api/v1/trades?cursor=old_B",
-    "/api/v1/trades",
-    "/api/v1/trades?cursor=new_A",
-    "/api/v1/trades?cursor=new_B",
-    "/api/v1/trades",
-    "/api/v1/trades?cursor=failed_A",
+    "/api/v2/portfolios/1/history",
+    `/api/v2/portfolios/1/history?cursor=${cursor("9")}`,
+    `/api/v2/portfolios/1/history?cursor=${cursor("8")}`,
+    "/api/v2/portfolios/1/history",
+    `/api/v2/portfolios/1/history?cursor=${cursor("10")}`,
+    `/api/v2/portfolios/1/history?cursor=${cursor("9")}`,
+    "/api/v2/portfolios/1/history",
+    `/api/v2/portfolios/1/history?cursor=${cursor("11")}`,
   ]);
   unmount();
   client.clear();

@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { StockFill } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioContext } from "./PortfolioContext";
 import { StockAttribution } from "./StockAttribution";
 import { fullLocalTimestamp, signedUsd } from "@/lib/financialDisplay";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
@@ -37,15 +39,28 @@ export function StockDate({ value, exchange = false }: { value: string; exchange
 export function StockTradeReceipt({
   fill: f,
   onTradeAgain,
+  target,
+  portfolioName,
 }: {
   fill: StockFill;
+  target: PortfolioTarget;
+  portfolioName: string;
   onTradeAgain: () => void;
 }) {
   const id = useId(),
-    heading = useRef<HTMLHeadingElement>(null);
+    heading = useRef<HTMLHeadingElement>(null),
+    focusedReceipt = useRef<string | null>(null);
   useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-  }, [f.trade_id]);
+    if (
+      target.isCurrent() &&
+      f.portfolio_id === target.portfolioId &&
+      focusedReceipt.current !== f.trade_id
+    ) {
+      focusedReceipt.current = f.trade_id;
+      heading.current?.focus({ preventScroll: true });
+    }
+  }, [f.trade_id, f.portfolio_id, target]);
+  if (!target.isCurrent() || f.portfolio_id !== target.portfolioId) return null;
   return (
     <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4">
       <h2
@@ -56,6 +71,7 @@ export function StockTradeReceipt({
       >
         Order filled
       </h2>
+      <PortfolioContext name={portfolioName} />
       <p className="wrap-anywhere">
         {f.company_name} · {f.symbol} · {f.listing_exchange} · Stock
       </p>
@@ -86,7 +102,7 @@ export function StockTradeReceipt({
       <StockDisclosure />
       <div className="flex flex-wrap gap-3">
         <Button asChild className="min-h-11">
-          <Link to="/portfolio">Portfolio</Link>
+          <Link to={`/portfolios/${f.portfolio_id}`}>Portfolio</Link>
         </Button>
         <Button variant="secondary" className="min-h-11" onClick={onTradeAgain}>
           Trade again

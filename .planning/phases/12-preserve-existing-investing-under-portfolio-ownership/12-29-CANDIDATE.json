@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "plan": "12-29",
+  "status": "no_candidate",
+  "observed_at": "2026-11-17T19:43:24.125695+00:00",
+  "source_commit": "8291b8377cbc0a0fcb2fdcc55a0550ce6fcc8336",
+  "base_manifest_sha256": "73cd4f25fb329d7d0711321ee56dd9f07b25426eb9ddb69f3491396c2ccbdb59",
+  "base_lock_sha256": "1461d4f89e875a5b915278e9d39ba413608fa4ff816fab6be6b21e280db5475b",
+  "advisory_id": "GHSA-fc5q-39xc-vjpf",
+  "cve_id": "CVE-2026-112366",
+  "severity": "high",
+  "affected_range": "<= 4.0.7",
+  "first_patched_version": null,
+  "registry_latest": "4.0.7",
+  "candidate_versions": [],
+  "affected_paths_remaining": 2,
+  "affected_lock_paths": [
+    {"path": "node_modules/picomatch", "version": "4.0.7"},
+    {"path": "node_modules/micromatch/node_modules/picomatch", "version": "2.3.2"}
+  ],
+  "prospective_manifest_sha256": null,
+  "prospective_lock_sha256": null,
+  "package_approval_obtained": false,
+  "installation_performed": false,
+  "audit_or_test_campaign_performed": false,
+  "plan_complete": false,
+  "blocked_before_task": "12-29-02",
+  "blocked_dependents": ["12-30", "12-31"],
+  "blocker": "No maintainer-published patched picomatch artifact is available in the refreshed official evidence. The exact package approval checkpoint is not reached.",
+  "successful_metadata_refreshes": 1,
+  "transport_note": "The first sandbox-only two-URL attempt failed DNS before HTTP; the exact two public requests succeeded once with approved network escalation. No background/repeating refresh exists.",
+  "raw_receipt": {
+    "path": "/tmp/birja-phase12-29-metadata-yvcwquan/refresh-receipt.json",
+    "sha256": "8232b5c0696d3cb4c6b4cce2b7e05c8192997c72dc6d2d884fd033126b3ebae1"
+  },
+  "failed_transport_receipt": {
+    "path": "/tmp/birja-phase12-29-metadata-5orpuk0w/refresh-receipt.json",
+    "sha256": "f153341fdca87542aa82d1b92265a33ca947eb1175fdc3e9f69810d6c6890c55"
+  },
+  "sources": [
+    {
+      "url": "https://api.github.com/advisories/GHSA-fc5q-39xc-vjpf",
+      "public_page": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+      "http_status": 200,
+      "path": "/tmp/birja-phase12-29-metadata-yvcwquan/advisory.json",
+      "sha256": "cc99706e61047047b6690db94abb98b5940d007196775c12902c0f79d8aedbd5"
+    },
+    {
+      "url": "https://registry.npmjs.org/picomatch",
+      "http_status": 200,
+      "path": "/tmp/birja-phase12-29-metadata-yvcwquan/registry.json",
+      "sha256": "9a8e64f1208fef4d18c27f48267e00c639b65743484cf3f5e788d018195b6fbb"
+    }
+  ]
+}
