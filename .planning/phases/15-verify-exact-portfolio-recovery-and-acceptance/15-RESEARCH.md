@@ -310,3 +310,11 @@ an implementation analog, not a new committed supported interface.
 No new external facts, packages, web recommendations or standards were used.
 No tests, services, Docker operations, provider calls or production inspection
 were run during this research. Only15-RESEARCH.md was written.
+
+## Planning Resolutions — 2026-11-22
+
+Plan01 fixes the CLI contract as finite `--phase {14,15}` with default14 and
+an explicitly labelled `recovery-current` suite. Plan02Task1 resolves the seed
+question with a genuine active-portfolio fill and an updated independent oracle;
+Task2 specifies actual post-restore original-request checks. These decisions
+resolve the research-time uncertainties above; no execution result is implied.

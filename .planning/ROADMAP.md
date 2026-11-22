@@ -37,7 +37,7 @@ No production/provider/publication action occurred. Phase13 is complete locally.
 Phase14 is complete locally:19/19plans, both actual owner outcomes,5/5roadmap
 criteria and7/7requirements independently verified. Qualification uses the
 recorded owner amendments and genuine recovery; failed whole runs remain failed.
-Phase15 is unplanned; three v1.2 requirements remain pending. Phase7's six
+Phase15 is planned (4plans/9tasks), not implemented; three v1.2 requirements remain pending. Phase7's six
 live gaps stay separately deferred, with its manual campaign consumed.
 
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
@@ -409,7 +409,26 @@ deletion/purge of retained evidence is included.
   3. The operator can exercise the documented migration and supported rollback/refusal contract; incompatible older schemas or application versions refuse safely without merging strategies, reassigning money or discarding financial evidence.
   4. Full real isolated PostgreSQL concurrency/accounting and protected browser journeys verify create, rename, edit/clear optional descriptions, compare, switch, trade, History, delete and zero-active behavior, with original-data preservation, private access, human UI acceptance and the required coverage/security/image gates satisfied.
 
-**Plans**: TBD
+**Plans**: 4 checked plans,9tasks,4serialwaves. Planning complete; implementation not started. All3assigned requirements and4roadmap outcomes covered.
+
+**Wave 1**
+
+- [ ] 15-01-PLAN.md — Make installed-verifier recovery and finite Phase15 campaigns reproducible
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 15-02-PLAN.md — Prove genuine restored original-request retries with an active fill and independent oracle
+
+**Wave 3** *(blocked on Waves 1–2)*
+
+- [ ] 15-03-PLAN.md — Run one affected current recovery proof and qualify unchanged-input evidence reuse
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 15-04-PLAN.md — Finish operator support/refusal and full lifecycle acceptance records
+
+**Cross-cutting constraints:** Preserve original retry/owner/portfolio identities and frozen finances; use the authentic installed verifier and finite owned Phase15 outputs, preserving prior archives. One serial isolated DB lane and one fresh matching affected proof; exact input-bound reuse for unaffected components. Keep complete CI executable and required before merge, coverage and image gates enforced, and whole/component result claims distinct. Preserve accepted UI and actual owner outcomes for unchanged surfaces; review only affected interactions. No application/schema/dependency/image-version change is planned. Keep local; Phase7/provider, production, publication and issue35scope changes remain excluded.
+
 **UI hint**: yes
 
 **Delivery boundary**: This phase supplies final integrated evidence for
@@ -451,7 +470,7 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
-| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
+| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/4 | Planned; independent check passed | - |
 
 ## Deferred Follow-up
 
