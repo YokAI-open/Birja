@@ -143,3 +143,17 @@ transition before migration; post-rollout0023 recovery follows deployment.
 No new role password, CA, manual grant repair, volume copy or downgrade is
 introduced. Current source release stays actual old live46d24c8 until rollout
 succeeds. Exact final source/manifest binding and all six CI checks remain pending.
+
+## Query-replacement test scheduling repair
+
+Run45019889211 atd7e3f66 exposed one frontend unit race:overview replacement
+could occur before the first deferred request had started, so resolving it
+legitimately answered the new query. The test now waits for the original
+request, asserts its cache identity, proves a second request/new cache entry,
+then delivers the old reply and still requires no published data. Application
+response-handling logic is unchanged.
+
+Both affected overview/owner-boundary files pass56cases. A fresh full frontend
+qualification passes all1330tests/60files in31.89seconds, with96.46%statements
+and94.01%branches; formatting and diff checks pass. The prior failed hosted
+run remains failed/superseded. Required CI must pass at the new exact head.

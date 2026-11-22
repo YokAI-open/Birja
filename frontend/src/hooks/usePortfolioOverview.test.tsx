@@ -280,17 +280,22 @@ it("keeps initial loading distinct and ignores a reply after query replacement",
   const { client, wrapper } = setup();
   const late = deferred();
   const replacement = deferred();
-  vi.stubGlobal(
-    "fetch",
-    vi
-      .fn()
-      .mockImplementationOnce(() => late.promise)
-      .mockImplementation(() => replacement.promise),
-  );
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(() => late.promise)
+    .mockImplementation(() => replacement.promise);
+  vi.stubGlobal("fetch", fetch);
   const hook = renderHook(() => usePortfolioOverview(), { wrapper });
   expect(hook.result.current.isPending).toBe(true);
   expect(hook.result.current.data).toBeUndefined();
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  const original = client.getQueryCache().find({ queryKey: ["portfolioOverview", alice, 0] });
+  expect(original).toBeDefined();
   act(() => client.removeQueries({ queryKey: ["portfolioOverview", alice, 0] }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(client.getQueryCache().find({ queryKey: ["portfolioOverview", alice, 0] })).not.toBe(
+    original,
+  );
   await act(async () => {
     late.resolve(json([row()]));
   });
