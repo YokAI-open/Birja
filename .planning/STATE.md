@@ -1255,3 +1255,24 @@ first-party version metadata, its audit-file bindings and documentation.
 App/migration/dependency graphs remain unchanged; proof is in METADATA-REVIEW.
 Production and stock activation remain unchanged. No planning milestone archive
 or tag is authorized by this software preparation.
+
+## Production Upgrade Hotfix Prepared —2026-11-22
+
+PR36 and releasePR37 passed all six jobs and merged. Softwarev0.6.0 is published
+at maina328007; CI/recovery/publication receipts are in releases/0.6.0/.
+Production's approved0008→0023 upgrade reached0023, then refused an inherited
+permission state. Backend/scheduler remain stopped. Original cash/holdings/trades
+and owner associations compare unchanged; both fresh pre-migration exact backups/
+restores passed. No old-app downgrade or financial repair was performed.
+
+Independent reproduction from authentic0008 grants identifies the missing finite
+bootstrap case. Locally reviewed hotfix0.6.1 admits only that ACL/private-default
+pair; existing normalization, canonical runtime authority, historical contracts,
+financial logic and dependencies remain unchanged.79affected PostgreSQL cases,
+111CI/17image/12audit contracts and static checks pass; review0blockers/0warnings.
+See debug/deploy-0008-permissions.md and releases/0.6.1/SHIPPING.md.
+
+Next: approve new hotfix branch publication, required full CI, merge/tag/recovery
+asset publication and guarded production fix-forward, followed by back-merge.
+Reuse prior owner approvals within their scope; no stock activation or milestone
+archival. Unrelated root.claude/ remains untouched.

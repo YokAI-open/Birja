@@ -1,0 +1,13 @@
+{
+  "main": "a3280075a92a63ba2c364f6069ff364721f3c6a1",
+  "candidate": "a39d79ab912819b578c41d2b57870a370c52a085",
+  "tree": "41f107d4b003c8d4a73c3146e50face4c6bf07e7",
+  "feature_merge": "6f443652c89c2b91914e46b60f6b12480bc77cc3",
+  "feature_ci": 45025493690,
+  "release_ci": 45025495337,
+  "archive_sha256": "41839607250c74d83ce80fdbf2d78ebefd50d8acb763c734b2ba90b26dc6de62",
+  "expected_ops_manifest_sha256": "4f1775ef7d83ddd12a64da39eb2a1a2996c84084d61303cb7f7192a550dd60a6",
+  "tag": "v0.6.0",
+  "release_url": "https://github.com/YokAI-open/Birja/releases/tag/v0.6.0",
+  "published_asset_download_verified": true
+}
