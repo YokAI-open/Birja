@@ -397,6 +397,9 @@ ACL_0023_QUARANTINE_SHA256 = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c
 # This is never a runtime-admission fingerprint.
 ACL_0023_FROM_0020_SHA256 = "f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425"
 ACL_0023_FROM_0014_SHA256 = "8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06"
+# Configured0008 carries its reviewed runtime/column grants through migration.
+# Accept this exact private-default pair only for explicit final bootstrap.
+ACL_0023_FROM_0008_SHA256 = "b4d138c09ace93ff69484b1b2932a667b17a19ce453a5623cae861e3e5a6ad62"
 
 # An absent global function-default row means PUBLIC EXECUTE; an absent
 # schema-local row adds nothing. Normalize effective, not merely explicit ACLs.
@@ -540,11 +543,14 @@ PREFLIGHT_0023_SQL = (
   AND x.grantee<>d.defaclrole) THEN
   RAISE EXCEPTION 'unexpected closure default privileges'; END IF;
  IF (__ACL__) NOT IN
-  ('__INITIAL__','__FINAL__','__QUARANTINE__','__FROM_0020__','__FROM_0014__') THEN
+  ('__INITIAL__','__FINAL__','__QUARANTINE__','__FROM_0020__','__FROM_0014__',
+   '__FROM_0008__') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
  IF (__ACL__) IN ('__FROM_0020__','__FROM_0014__')
  AND (__DEFAULT__) NOT IN ('__BUILTIN__','__PRIVATE__') THEN
   RAISE EXCEPTION 'unexpected migrated closure default privileges'; END IF;
+ IF (__ACL__)='__FROM_0008__' AND (__DEFAULT__) IS DISTINCT FROM '__PRIVATE__' THEN
+  RAISE EXCEPTION 'unexpected legacy0008 closure defaults'; END IF;
  IF (__ACL__)='__FINAL__' AND (__DEFAULT__)<>'__PRIVATE__' THEN
   RAISE EXCEPTION 'unexpected effective closure default privileges'; END IF;
  IF EXISTS(SELECT FROM public.accounts a
@@ -587,6 +593,7 @@ END $closure_identity$;
 """.replace("__ACL__", ACL_SQL)
         .replace("__FROM_0020__", ACL_0023_FROM_0020_SHA256)
         .replace("__FROM_0014__", ACL_0023_FROM_0014_SHA256)
+        .replace("__FROM_0008__", ACL_0023_FROM_0008_SHA256)
         .replace("__BUILTIN__", DEFAULT_ACL_0020_BUILTIN_SHA256)
         .replace("__INITIAL__", ACL_0023_INITIAL_SHA256)
         .replace("__FINAL__", ACL_0023_SHA256)

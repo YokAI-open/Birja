@@ -1,0 +1,98 @@
+{
+  "runs": [
+    {
+      "scope": "feature",
+      "run": 45025493690,
+      "url": "https://github.com/YokAI-open/Birja/actions/runs/45025493690",
+      "head": "c7f41d397bc1b4cbeef690f5e78fba0f75afe857",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "frontend",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:05:20Z"
+        },
+        {
+          "name": "image",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:05:55Z"
+        },
+        {
+          "name": "ops",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:32:19Z"
+        },
+        {
+          "name": "e2e",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:50Z",
+          "completedAt": "2026-11-22T13:16:04Z"
+        },
+        {
+          "name": "backend",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:49:41Z"
+        },
+        {
+          "name": "ci-pass",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:49:43Z",
+          "completedAt": "2026-11-22T13:49:46Z"
+        }
+      ]
+    },
+    {
+      "scope": "release",
+      "run": 45025495337,
+      "url": "https://github.com/YokAI-open/Birja/actions/runs/45025495337",
+      "head": "a39d79ab912819b578c41d2b57870a370c52a085",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "frontend",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:05:45Z"
+        },
+        {
+          "name": "e2e",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:19:49Z"
+        },
+        {
+          "name": "backend",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:52Z",
+          "completedAt": "2026-11-22T13:47:46Z"
+        },
+        {
+          "name": "image",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:52Z",
+          "completedAt": "2026-11-22T13:05:58Z"
+        },
+        {
+          "name": "ops",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:03:51Z",
+          "completedAt": "2026-11-22T13:41:13Z"
+        },
+        {
+          "name": "ci-pass",
+          "conclusion": "success",
+          "startedAt": "2026-11-22T13:47:49Z",
+          "completedAt": "2026-11-22T13:47:52Z"
+        }
+      ]
+    }
+  ],
+  "release_backend_tests": 3695,
+  "release_critical_coverage_percent": 100,
+  "release_frontend_tests": 1330,
+  "all_six_checks_passed_before_protected_merges": true
+}
