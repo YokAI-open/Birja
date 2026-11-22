@@ -2,17 +2,21 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal as D
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import event, update
 
 from app.models.price import Coin
 from app.services.portfolio import get_portfolio
+from app.services.portfolios import OwnedActivePortfolio
 from tests.helpers import put_holding, put_price, set_cash
+from tests.stock_action_fixtures import synthetic_portfolio_id
 
 
 async def test_single_scalar_snapshot_includes_inactive_and_omits_zero(
     db, engine, new_user, settings, clean_prices
 ):
     uid = await new_user()
+    portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     await set_cash(engine, uid, "9900")
     await put_holding(engine, uid, "BTC", "0.00099501", "100")
     await put_holding(engine, uid, "ETH", "0", "0")
@@ -27,13 +31,16 @@ async def test_single_scalar_snapshot_includes_inactive_and_omits_zero(
 
     event.listen(engine.sync_engine, "before_cursor_execute", capture)
     try:
-        p = await get_portfolio(db, user_id=uid, settings=settings, now=now)
+        p = await get_portfolio(db, portfolio=portfolio, settings=settings, now=now)
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", capture)
         async with engine.begin() as conn:
             await conn.execute(update(Coin).where(Coin.symbol == "BTC").values(is_active=True))
-    assert len(statements) == 1
-    assert "FOR UPDATE" not in statements[0].upper()
+    assert len(statements) == 2
+    assert all("FOR UPDATE" not in statement.upper() for statement in statements)
+    assert "HOLDINGS" in statements[0].upper() and "ACCOUNTS.CASH" in statements[0].upper()
+    assert "FOR SHARE OF ACCOUNTS" in statements[1].upper()
+    assert "ACCOUNTS.CASH" not in statements[1].upper()
     assert p.total_value == D("9999.50")
     assert p.prices_as_of == now - timedelta(seconds=120)
     assert len(p.holdings) == 1
@@ -43,19 +50,24 @@ async def test_single_scalar_snapshot_includes_inactive_and_omits_zero(
 
 async def test_cash_only_missing_account_and_unpriced(db, engine, new_user, settings, clean_prices):
     uid = await new_user()
+    portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     await set_cash(engine, uid, "9999")
-    p = await get_portfolio(db, user_id=uid, settings=settings)
+    p = await get_portfolio(db, portfolio=portfolio, settings=settings)
     assert p.total_value == D("9999") and p.total_pl == D("-1")
     assert p.prices_as_of is None
     assert p.valued_at.tzinfo is not None
     await db.rollback()
     await put_holding(engine, uid, "BTC", "1", "2")
-    p = await get_portfolio(db, user_id=uid, settings=settings)
+    p = await get_portfolio(db, portfolio=portfolio, settings=settings)
     assert p.holdings[0].status == "unpriced"
     assert p.holdings[0].as_of is p.holdings[0].age_seconds is None
     assert p.total_value is None
-    with pytest.raises(RuntimeError, match="account"):
-        await get_portfolio(db, user_id=-1, settings=settings)
+    with pytest.raises(HTTPException) as exc:
+        await get_portfolio(
+            db, portfolio=OwnedActivePortfolio(9223372036854775807, uid), settings=settings
+        )
+    assert exc.value.status_code == 404
+    assert exc.value.detail == {"code": "portfolio_unavailable"}
 
 
 @pytest.mark.parametrize(
@@ -74,11 +86,12 @@ async def test_price_age_boundaries_and_configured_rules(
     db, engine, new_user, settings, clean_prices, age, fresh, stale, expected_age, expected_status
 ):
     uid = await new_user()
+    portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     now = datetime(2026, 10, 30, 12, tzinfo=UTC)
     await put_holding(engine, uid, "BTC", "1", "100")
     await put_price(engine, "BTC", "200", now - timedelta(seconds=age))
     rules = settings.model_copy(update={"price_fresh_seconds": fresh, "price_stale_seconds": stale})
-    p = await get_portfolio(db, user_id=uid, settings=rules, now=now)
+    p = await get_portfolio(db, portfolio=portfolio, settings=rules, now=now)
     assert (p.fresh_seconds, p.stale_seconds) == (fresh, stale)
     assert (p.holdings[0].age_seconds, p.holdings[0].status) == (expected_age, expected_status)
 
@@ -87,12 +100,13 @@ async def test_oldest_available_price_and_missing_totals(
     db, engine, new_user, settings, clean_prices
 ):
     uid = await new_user()
+    portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     now = datetime.now(UTC)
     for symbol in ("BTC", "ETH", "SOL"):
         await put_holding(engine, uid, symbol, "1", "10")
     await put_price(engine, "BTC", "100", now - timedelta(seconds=10))
     await put_price(engine, "ETH", "200", now - timedelta(seconds=301))
-    p = await get_portfolio(db, user_id=uid, settings=settings, now=now)
+    p = await get_portfolio(db, portfolio=portfolio, settings=settings, now=now)
     assert p.prices_as_of == now - timedelta(seconds=301)
     assert not p.valuation_complete
     assert p.total_value is p.total_pl is p.total_pl_percent is p.cash_allocation_percent is None
@@ -108,9 +122,10 @@ async def test_oldest_available_price_and_missing_totals(
 async def test_price_clock_is_sampled_after_awaited_database_read(
     db, engine, new_user, settings, clean_prices, monkeypatch
 ):
-    from app.services import portfolio
+    from app.services import portfolio as portfolio_service
 
     uid = await new_user()
+    portfolio = OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid)
     early = datetime(2026, 10, 30, 12, tzinfo=UTC)
     late = early + timedelta(seconds=182)
     await put_holding(engine, uid, "BTC", "1", "100")
@@ -131,8 +146,8 @@ async def test_price_clock_is_sampled_after_awaited_database_read(
         read_finished = True
         return result
 
-    monkeypatch.setattr(portfolio, "datetime", Clock)
+    monkeypatch.setattr(portfolio_service, "datetime", Clock)
     monkeypatch.setattr(db, "execute", delayed_read)
-    p = await get_portfolio(db, user_id=uid, settings=settings)
+    p = await get_portfolio(db, portfolio=portfolio, settings=settings)
     assert p.valued_at == late
     assert (p.holdings[0].age_seconds, p.holdings[0].status) == (301, "stale")

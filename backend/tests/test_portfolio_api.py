@@ -11,6 +11,7 @@ from tests.helpers import (
     holding_of,
     put_holding,
     put_price,
+    selected_portfolio_path,
     set_cash,
     sign_in,
     trade_count,
@@ -19,7 +20,7 @@ from tests.helpers import (
 
 
 async def test_portfolio_requires_session(auth_client):
-    assert (await auth_client.get("/api/v1/portfolio")).status_code == 401
+    assert (await auth_client.get(await selected_portfolio_path(auth_client))).status_code == 401
 
 
 async def test_portfolio_is_private_plain_and_read_only(auth_client, outbox, engine, clean_prices):
@@ -34,11 +35,13 @@ async def test_portfolio_is_private_plain_and_read_only(auth_client, outbox, eng
         await holding_of(engine, uid, "BTC"),
         await trade_count(engine, uid),
     )
-    response = await auth_client.get("/api/v1/portfolio")
+    response = await auth_client.get(await selected_portfolio_path(auth_client))
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
     assert set(body) == {
+        "portfolio_id",
+        "name",
         "cash",
         "starting_cash",
         "total_value",
@@ -91,7 +94,7 @@ async def test_portfolio_is_private_plain_and_read_only(auth_client, outbox, eng
     # A different real synthetic session must never inherit A's financial rows.
     auth_client.cookies.clear()
     await sign_in(auth_client, outbox, unique_email())
-    other = (await auth_client.get("/api/v1/portfolio")).json()
+    other = (await auth_client.get(await selected_portfolio_path(auth_client))).json()
     assert other["holdings"] == []
     assert other["cash"] == other["total_value"] == "10000.00"
 
@@ -142,18 +145,25 @@ async def test_portfolio_api_one_financial_read_inactive_and_missing_isolation(
         statements.append(statement.upper())
 
     api_engine = running_app.state.engine.sync_engine
+    target = await selected_portfolio_path(auth_client)
     event.listen(api_engine, "before_cursor_execute", capture)
     try:
-        response = await auth_client.get("/api/v1/portfolio")
+        response = await auth_client.get(target)
     finally:
         event.remove(api_engine, "before_cursor_execute", capture)
         async with engine.begin() as conn:
             await conn.execute(update(Coin).where(Coin.symbol == "BTC").values(is_active=True))
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
-    financial = [s for s in statements if "FROM ACCOUNTS" in s]
+    financial = [s for s in statements if "FROM ACCOUNTS" in s and "HOLDINGS" in s]
     assert len(financial) == 1
     assert all(table in financial[0] for table in ("HOLDINGS", "COINS", "PRICES"))
+    # The dependency and final proof read only owner/active root identity;
+    # the financial inputs above still come from exactly one statement.
+    assert len([s for s in statements if "FROM ACCOUNTS" in s]) == 3
+    proof = [s for s in statements if "FOR SHARE OF ACCOUNTS" in s]
+    assert len(proof) == 1
+    assert all(field in proof[0] for field in ("ACCOUNTS.USER_ID", "ACCOUNTS.CLOSED_AT IS NULL"))
     assert all("FOR UPDATE" not in s for s in statements)
     assert any("FROM USERS" in s for s in statements)  # Existing authentication is separate.
     body = response.json()
@@ -195,7 +205,7 @@ async def test_portfolio_api_one_financial_read_inactive_and_missing_isolation(
         ).scalar_one()
     await set_cash(engine, other_uid, "9990")
     await put_holding(engine, other_uid, "SOL", "3", "10")
-    other = (await auth_client.get("/api/v1/portfolio")).json()
+    other = (await auth_client.get(await selected_portfolio_path(auth_client))).json()
     assert other["cash"] == "9990.00"
     assert [h["symbol"] for h in other["holdings"]] == ["SOL"]
     assert other["holdings"][0]["quantity"] == "3.00000000"

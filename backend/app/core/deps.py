@@ -2,7 +2,7 @@ import hmac
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Path, Request
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from app.models.auth import AuthSession
 from app.models.user import User
 from app.services.email import EmailSender
 from app.services.otp import OtpStore
+from app.services.portfolios import OwnedActivePortfolio, resolve_owned_active_portfolio
 
 
 def get_settings_dep(request: Request) -> Settings:
@@ -115,3 +116,14 @@ CsrfDep = Annotated[None, Depends(verify_csrf)]
 OtpStoreDep = Annotated[OtpStore, Depends(get_otp_store)]
 EmailSenderDep = Annotated[EmailSender, Depends(get_email_sender)]
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+async def get_owned_active_portfolio(
+    db: DbDep,
+    user: CurrentUserDep,
+    portfolio_id: Annotated[int, Path(gt=0, le=9223372036854775807)],
+) -> OwnedActivePortfolio:
+    return await resolve_owned_active_portfolio(db, user, portfolio_id)
+
+
+OwnedActivePortfolioDep = Annotated[OwnedActivePortfolio, Depends(get_owned_active_portfolio)]

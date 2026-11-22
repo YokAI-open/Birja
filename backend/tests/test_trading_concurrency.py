@@ -23,6 +23,7 @@ from tests.helpers import (
     holding_of,
     put_holding,
     put_price,
+    selected_portfolio_path,
     set_cash,
     sign_in,
     trade_count,
@@ -30,7 +31,7 @@ from tests.helpers import (
 )
 
 D = Decimal
-TRADE_URL = "/api/v1/trades"
+TRADE_URL = "/trades"
 
 
 async def _setup(
@@ -59,7 +60,9 @@ def _body(
 async def _post(
     client: httpx.AsyncClient, headers: dict[str, str], body: dict[str, Any]
 ) -> httpx.Response:
-    return await client.post(TRADE_URL, json=body, headers=headers)
+    return await client.post(
+        await selected_portfolio_path(client, TRADE_URL), json=body, headers=headers
+    )
 
 
 async def test_parallel_buys_never_overspend(

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { readCodeFromLogs, signInNewUser } from "./helpers.js";
+import { portfolioId, readCodeFromLogs, signInNewUser } from "./helpers.js";
 
 test("a new user signs in, stays signed in, signs out and signs in again", async ({
   page,
@@ -7,20 +7,39 @@ test("a new user signs in, stays signed in, signs out and signs in again", async
 }) => {
   const email = await signInNewUser(page);
   const code = await readCodeFromLogs(email);
+  const id = await portfolioId(page);
+  async function fundedPortfolio() {
+    expect(await portfolioId(page)).toBe(id);
+    const response = await page.request.get(`/api/v2/portfolios/${id}`);
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      portfolio_id: id,
+      cash: "10000.00",
+      starting_cash: "10000.00",
+      holdings: [],
+    });
+    await page.goto(`/portfolios/${id}`);
+    await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText(
+      "$10,000.00",
+    );
+  }
 
   await expect(page.getByRole("heading", { name: "Markets" })).toBeVisible();
+  await fundedPortfolio();
   await page.getByRole("link", { name: "Account" }).click();
-  await expect(page.getByText("$10,000.00")).toBeVisible();
+  await expect(page.getByText("$10,000.00")).toHaveCount(0);
   await expect(page.getByText(email)).toBeVisible();
 
   await page.goto("/account");
-  await expect(page.getByText("$10,000.00")).toBeVisible();
+  await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
 
   // Access cookie gone: the app refreshes silently and stays signed in.
   await context.clearCookies({ name: "bj_access" });
   await page.goto("/account");
-  await expect(page.getByText("$10,000.00")).toBeVisible();
+  await expect(page.getByText(email)).toBeVisible();
+  await fundedPortfolio();
+  await page.goto("/account");
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
@@ -33,5 +52,7 @@ test("a new user signs in, stays signed in, signs out and signs in again", async
   const code2 = await readCodeFromLogs(email, code);
   await page.getByLabel("6-digit code").fill(code2);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("$10,000.00")).toBeVisible();
+  // The protected account URL is restored after successful verification.
+  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await fundedPortfolio();
 });

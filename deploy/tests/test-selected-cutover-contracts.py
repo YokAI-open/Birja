@@ -22,15 +22,87 @@ spec.loader.exec_module(selected)
 
 
 class Contracts(unittest.TestCase):
+    def test_retained_cutover_reads_its_authenticated_release_control(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == '_integration')
+        loop = next(node for node in ast.walk(function)
+                    if isinstance(node, ast.For) and isinstance(node.iter, ast.Name)
+                    and node.iter.id == 'names')
+        assignment = loop.body[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            current, retained = root / 'current', root / 'authenticated'
+            for path, value in ((current, 'current0017 refusal'),
+                                (retained, 'immutable retained finite control')):
+                (path / 'deploy').mkdir(parents=True)
+                (path / 'deploy/deploy.sh').write_text(value)
+            namespace = {'ROOT': current, 'tooling': retained, 'name': 'deploy/deploy.sh'}
+            exec(compile(ast.fix_missing_locations(ast.Module(body=[assignment], type_ignores=[])),
+                         '<actual-control-source>', 'exec'), namespace)
+            self.assertEqual(namespace['text'], 'immutable retained finite control')
+
+    def test_direct_compose_keeps_authenticated_images_after_env_rewrite(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == '_integration')
+        assignment = next(node for node in ast.walk(function)
+                          if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == 'compose_env'
+                                  for target in node.targets))
+        image = 'sha256:' + 'd' * 64
+        namespace = {'r': SimpleNamespace(ENV={'BIRJA_QUALIFIED_RUNTIME_IMAGE': 'untrusted',
+                                               'BIRJA_QUALIFIED_MIGRATOR_IMAGE': 'untrusted'}),
+                     'app': Path('/private/app'), 'release': Path('/private/release'),
+                     'current': 'retained', 'qualified_images': {'retained': {'id': image}}}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[assignment], type_ignores=[])),
+                     '<actual-selected-compose-environment>', 'exec'), namespace)
+        for key in ('BIRJA_QUALIFIED_RUNTIME_IMAGE', 'BIRJA_QUALIFIED_MIGRATOR_IMAGE'):
+            self.assertEqual(namespace['compose_env'][key], image)
+
+    def test_selected_source_child_rechecks_exact_image_without_application_overlays(self):
+        tree = ast.parse((HERE / 'selected-cutover.py').read_text())
+        function = next(node for node in ast.walk(tree)
+                        if isinstance(node, ast.FunctionDef) and node.name == 'source_python')
+        image = 'sha256:' + 'a' * 64
+        source = 'b' * 40
+        verify = mock.Mock(return_value=(Path('/private-retained-source'), image))
+        call = mock.Mock(return_value=b'original-owned-evidence')
+        namespace = {'f': SimpleNamespace(retained_runtime=verify),
+                     'r': SimpleNamespace(BOOT='birja_ops_bootstrap'),
+                     'lane': 'retained', 'current': source,
+                     'qualified_images': {source: {'id': image}},
+                     'app': Path('/unreadable-checkout'),
+                     'seed': ['docker', 'run', '--rm', '-i', '--network', 'birja-ops-test_data'],
+                     'call': call}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
+                     '<actual-selected-source-child>', 'exec'), namespace)
+        self.assertEqual(namespace['source_python']('assert original_evidence', 'birja_migrator'),
+                         b'original-owned-evidence')
+        verify.assert_called_once_with('retained')
+        argv, code = call.call_args.args
+        self.assertEqual(argv[-4:], ['--entrypoint', 'python', image, '-'])
+        self.assertEqual(code, b'assert original_evidence')
+        for option in ('-v', '--volume', '--mount', '--user'):
+            self.assertNotIn(option, argv)
+        verify.return_value = (Path('/private-retained-source'), 'sha256:' + 'c' * 64)
+        call.reset_mock()
+        with self.assertRaises(AssertionError):
+            namespace['source_python']('assert original_evidence')
+        call.assert_not_called()
+
     def test_private_clone_main_tracks_current_for_every_source_checkout(self):
         # Execute the actual fixture's branch preparation with real Git, so a
         # main push and detached PR checkout exercise the same contract.
         tree = ast.parse((HERE / 'selected-cutover.py').read_text())
         function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_integration')
         session = next(n for n in function.body if isinstance(n, ast.With))
-        index = next(i for i, node in enumerate(session.body)
-                     if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'current' for target in node.targets))
-        setup = compile(ast.fix_missing_locations(ast.Module(body=session.body[index:index + 2], type_ignores=[])), '<actual-private-branch>', 'exec')
+        node = next(node for node in session.body if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == 'git' and len(node.value.args) > 1
+                    and isinstance(node.value.args[1], ast.Constant)
+                    and node.value.args[1].value == '-B')
+        setup = compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])), '<actual-private-branch>', 'exec')
         for checkout in ('main', 'feature', 'detached'):
             with self.subTest(checkout=checkout), tempfile.TemporaryDirectory(prefix='birja-backup-test-git-') as directory:
                 root = Path(directory)
@@ -52,15 +124,13 @@ class Contracts(unittest.TestCase):
                 git_at(root, 'clone', '--no-hardlinks', str(source), str(app))
                 for key, value in (('user.email', 'synthetic@example.invalid'), ('user.name', 'Synthetic')):
                     git_at(app, 'config', key, value)
-                (app / 'fixture').write_text('relocated synthetic host\n')
-                git_at(app, 'commit', '-am', 'Relocate synthetic fixture')
-                expected = git_at(app, 'rev-parse', 'HEAD')
-                self.assertNotEqual(expected, original)
-                scope = {'git': lambda *args: git_at(app, *args)}
+                expected = original
+                scope = {'git': lambda *args: git_at(app, *args), 'current': original}
                 exec(setup, scope)
                 self.assertEqual(scope['current'], expected)
                 self.assertEqual(git_at(app, 'rev-parse', 'main'), expected)
                 self.assertEqual(git_at(app, 'rev-parse', 'HEAD'), expected)
+                self.assertEqual(git_at(app, 'status', '--porcelain'), '')
                 git_at(root, 'clone', '--bare', str(app), str(origin))
                 self.assertEqual(git_at(origin, 'rev-parse', 'main'), expected)
                 self.assertEqual(git_at(source, 'rev-parse', 'main'), original)

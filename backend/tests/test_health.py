@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import Settings
 from app.main import create_app
@@ -37,13 +38,27 @@ async def test_health_redis_down(settings: Settings, caplog: pytest.LogCaptureFi
     assert any("dependency=redis" in r.getMessage() for r in caplog.records)
 
 
-async def test_health_db_down(settings: Settings, caplog: pytest.LogCaptureFixture) -> None:
+async def test_health_db_down(
+    settings: Settings, migrated: None, caplog: pytest.LogCaptureFixture
+) -> None:
     caplog.set_level(logging.WARNING, logger="app.services.health")
-    broken = settings.model_copy(
-        update={"database_url": "postgresql+asyncpg://birja_test:test@127.0.0.1:1/birja_test"}
-    )
-    async with _client_for(broken) as c:
-        resp = await c.get("/api/v1/health")
+    app = create_app(settings)
+    unavailable = create_async_engine("postgresql+asyncpg://birja_test:test@127.0.0.1:1/birja_test")
+    try:
+        # Startup must first authenticate the actual final schema. Inject a
+        # real request-time connection refusal without bypassing that admission.
+        async with app.router.lifespan_context(app):
+            original = app.state.sessionmaker
+            app.state.sessionmaker = async_sessionmaker(unavailable)
+            try:
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="http://test"
+                ) as c:
+                    resp = await c.get("/api/v1/health")
+            finally:
+                app.state.sessionmaker = original
+    finally:
+        await unavailable.dispose()
     assert resp.status_code == 503
     assert resp.json() == {"status": "degraded", "db": "error", "redis": "ok"}
     assert any("dependency=db" in r.getMessage() for r in caplog.records)

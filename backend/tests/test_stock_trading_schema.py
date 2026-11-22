@@ -93,6 +93,7 @@ def test_receipt_is_saved_projection_without_renewed_deadline() -> None:
 
     now = datetime(2026, 11, 11, 15, tzinfo=UTC)
     facts = {
+        "portfolio_id": "9007199254740992",
         "coin_id": "9007199254740993",
         "provider_asset_id": "fixture-AAPL",
         "symbol": "AAPL",

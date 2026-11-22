@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
+from app.schemas.portfolios import PortfolioId
 from app.services import trading
 
 # NUMERIC(20,8) values can be Decimal("0E-8") or 1E-8; format(..., "f") always gives plain
@@ -115,3 +116,19 @@ class FillOut(BaseModel):
 class HoldingOut(BaseModel):
     symbol: str
     quantity: Money
+
+
+class PortfolioQuoteOut(QuoteOut):
+    portfolio_id: PortfolioId
+
+    @classmethod
+    def from_quote(cls, q: trading.Quote) -> Self:
+        return cls(**QuoteOut.from_quote(q).model_dump(), portfolio_id=q.portfolio_id)
+
+
+class PortfolioFillOut(FillOut):
+    portfolio_id: PortfolioId
+
+
+class PortfolioHoldingOut(HoldingOut):
+    portfolio_id: PortfolioId

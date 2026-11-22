@@ -1,5 +1,47 @@
 # Birja production runbook
 
+## Portfolio closure schema0023 recovery contract
+
+The current closure family is payload version3, revision0023 and recovery profile
+`deploy-recovery-v4`. Keep V1/0017 and V2/0020 as distinct retained families, using
+their complete authenticated source archives; never overlay current services on
+an older retained database. A current bundle also binds the fixed complete0020
+source9527e35, complete0017source4b4320b and older released source lanes.
+
+Before import, the consumer authenticates the approved archive checksum, exact
+members, image provenance, reviewed current source pins and retained archive
+identities. Missing lifecycle/intent members or coherently rewritten metadata
+must refuse. The current contract includes31tables,24identity tails and the
+explicit0023 catalogue/object/effective-default privilege fingerprints.
+
+Restore uses `--no-owner --no-acl` into an isolated private clone. Authenticate
+the finite no-ACL state and compare the source manifest's complete financial,
+lifecycle, stock and identity evidence **before** any runtime regrant. Only the
+built-in PUBLIC function default from a no-ACL restore may be removed; unexpected
+table/column grants, principals or explicit unsafe future defaults refuse.
+After fixed private-default normalization, authenticate quarantine again, then
+apply the exact source-owned0023 grants and require final runtime authority.
+Quarantine never satisfies ordinary runtime admission. Do not repair or invent
+closed records, confirmation names, timestamps, intents, payments or balances.
+
+The supported authenticated forward path from0020 proceeds through migration-only
+0021/22 to complete0023. Normal runtime refuses the intermediate revisions.
+Selected current source must match the retained tested commit and exact reviewed
+closure authority assets. Old application rollback on0023 refuses before checkout,
+service start, routing or state changes; schema downgrade cannot discard lifecycle
+evidence. A pending rollback to the same tested0023-compatible source can preserve
+the candidate's current data. No rollback transfers, liquidates or resurrects books.
+
+Local diagnostics are `python3 deploy/tests/test-portfolio-management-recovery.py
+--postgres` (owned Plan06 synthetic stack only),
+`bash deploy/tests/test-deploy-compatibility.sh` and
+`bash deploy/tests/test-rollback-db-security.sh --self-test-retained-install`.
+The first is a source-database-destroyed **logical** restore/oracle proof; it is
+not an encrypted, independent-server or verified-TLS campaign. Full same-archive
+security/recovery qualification remains required before release. These tooling
+contracts and diagnostics authorize no production restore, migration, rollout,
+credential change, provider operation or retained-tool installation.
+
 Production runs at https://birja.nist.one on one host. This file covers deploy, rollback, manual certificate renewal, manual Cloudflare IP refresh and how to undo each host change.
 
 ## Overview
@@ -614,6 +656,87 @@ rollout each require the corresponding reviewed scope and approval. Phase7 local
 proofs and provider acceptance do not deploy a release, modify a timer or touch
 production data. See `07-LOCAL-PROOF.md` for exact local source/lock/image evidence
 and `07-ACTIVATION.md` for remaining rights/access and owner UI gates.
+
+## Multiple strategy portfolios: local recovery qualification (Phase15)
+
+This section records the locally tested successor contract, not a production
+rollout or provider activation. Current schema0023 retains active and frozen
+portfolio identities, original funding baselines, financial lineage and retry
+identities. Restoring it does not create a deleted-portfolio trash/restore UI.
+Closed strategies remain unavailable and receive no later financial effects.
+
+The supported runner has finite `--phase {14,15}` selection (default14):
+
+| Selection | Output and meaning |
+|---|---|
+| `--suite recovery` | Complete seven-stage graph; only a successful complete graph can emit `same_archive_final_ci=true`. Required CI remains a merge gate. |
+| `--phase 15 --suite recovery-current` | `/tmp/birja-phase15-proof/recovery.tar.gz`; current0023 cold restore and original-request retries only. Always `whole7=false`/`same_archive_final_ci=false`. |
+| `--status` / `--resume` with the original receipt directory | Inspect that recorded run read-only. Never launch, retry, repackage or rewrite old receipts. |
+
+Inspect the completed Phase15 proof safely:
+
+```bash
+python3 deploy/tests/run-portfolio-validation.py --phase 15 --suite recovery-current --dry-run
+python3 deploy/tests/run-portfolio-campaign.py --status --receipt-dir /tmp/birja-phase15-campaign-recovery-current-r5
+```
+
+A new authorized attempt uses the same launcher with `--phase 15 --suite
+recovery-current --receipt-dir /tmp/birja-phase15-campaign-<new-id>`. Both its
+exclusive receipt and canonical output must be absent before launch. Use a
+fresh isolated CI/test host for an unchanged repeat; never remove a completed
+proof to make preflight pass. Full-graph CI uses the default full `recovery`
+selection on an isolated host, not the current-only result as a substitute.
+Only one owned database-bearing lane may run at a time. Use synthetic test
+configuration, never the production `.env`, database, backup repository or keys.
+
+### Tested source/schema support matrix
+
+| Family | Tested scope / evidence |
+|---|---|
+| Current0023 | Phase15 source `6d7ee7f`: authenticated installed consumer, encrypted cold restore after source destruction, independent31-table/24-tail oracle, original creation/fill/paid-dividend replay and three closed-target refusals; R5 exit0 in135.998s. |
+| Qualified0020 | Genuine complete source `9527e35`, not a current-source overlay; Phase14 fixed0020 cold result `00.log`, SHA256 `8227628067c8bcafc7b5e7b1f8a2f63e2435159259d60c9c85949b63e9cf5ad8`. |
+| Qualified0017 | Genuine complete source `4b4320b`; retained cold/TLS evidence in Phase14's preserved retained-roundtrip receipt and recovery proof. |
+| Retained0007–0014 | Existing revision-specific retained round trips, exact financial data/sequence and refusal evidence; Phase14 retained-roundtrip history and earlier qualified archives remain preserved. No current source is substituted. |
+| Actual0014/0020→0023 upgrade | Inherited real TLS upgrade/parity checks, including original cash123.45 and baseline8765 preservation, in Phase14 component `03.log` SHA256 `65b6e4a33f7e6fd2aa4824a3e74be062ce8d98b606ffb27f1c3a0b663edc887c`. |
+| Fresh/current restricted authority | Actual current cold authority matches inherited cold/upgraded/fresh/rollback catalogue/object/default ACL triples. Phase15 replay uses an owned test login attenuated with `SET ROLE`; it is not a new direct runtime-login TLS test. |
+| Supported selected rollback/refusal | Phase14 component `05.log`, SHA256 `a4c07f175c55ee7433e5321a1f7144ac6f3c46f3e9fee67b8221783ff836f6bf`: selected target, compatible retained tool/source and refusal of lost/incompatible evidence. No unrestricted downgrade contract. |
+
+The component logs above are under
+`/tmp/birja-phase14-campaign-recovery-components-plan18-r1/`; scope and unchanged
+input comparisons are in `.planning/phases/15-verify-exact-portfolio-recovery-and-acceptance/15-EVIDENCE-REUSE.md`.
+An incompatible old application/schema, wrong source package, missing lifecycle
+evidence, changed archive, or authority mismatch must refuse before use. Never
+merge strategies, reassign funds, discard financial rows, repair grants during
+restore, or repin historical source to get past that refusal. Preserve the
+failed receipt, verify owned cleanup, diagnose the specific mismatch, and use a
+new exclusive attempt only after an authorized correction invalidates the old
+inputs. Status/resume is not a retry mechanism.
+
+### Proof identity, custody and operational boundary
+
+The current synthetic archive SHA256 is
+`bbbec1af156b594f5093ecef8badf918f8b0a7e039dfdb3e486fb8b58823f47a`,
+bound to source `6d7ee7f` and runtime image
+`sha256:dacbd2c31e69610d179638999281bd91b5d3d1d0ad897473371ab1eda0f961b7`.
+All five exact image scans pass HIGH0/CRITICAL0. Phase15 R1–R4 failures remain
+failed; their archives/receipts and prior Phase12/13/14 proofs remain intact.
+Final owned processes, containers, networks and volumes are empty. Exact
+bindings, hashes, assertion results and limitations are in `15-RECOVERY-PROOF.md`
+and the private `/tmp/birja-phase15-plan03/final-integrity.json` record.
+
+For separately approved real recovery, retain the exact authenticated tooling
+archive/source/image bindings plus encryption password, storage credentials,
+production configuration, database-role credentials and CA/certificate recovery
+material in the already agreed off-server custody. Verify access before an
+approved operation; do not put secrets in this runbook or repository. Existing
+nightly B2 quota, capacity/headroom, retention, custody and checking policies
+above are unchanged. This phase performs no real backup upload or restore.
+
+Local successor qualification does not establish a direct production0008→0023
+rollout, a fresh whole-security/browser/seven-stage run, or hosted CI success.
+Production installation/custody/migration/rollout and publishing/merging still
+need their separate scope and approvals; full required CI must pass before merge.
+Phase7's deferred live-data obligations and stock activation gates remain separate.
 
 ## Out of scope here
 

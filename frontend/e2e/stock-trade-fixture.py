@@ -23,8 +23,9 @@ def guard():
         and os.environ.get("ENV") == "dev"
         and os.environ.get("EMAIL_BACKEND") == "console"
         and url.hostname == "postgres"
-        and url.username == "birja_e2e"
-        and url.path == "/birja_e2e"
+        and url.username == "birja"
+        and url.path == "/birja"
+        and os.environ.get("COMPOSE_PROJECT_NAME") == "birja-phase09-e2e-test"
         and not os.environ.get("ALPACA_API_KEY")
         and not os.environ.get("ALPACA_SECRET_KEY")
     ):
@@ -167,7 +168,7 @@ async def prepare(operation, symbol="AAPL", argument=""):
         async with factory.begin() as db:
             if (
                 await db.execute(select(func.current_database()))
-            ).scalar_one() != "birja_e2e":
+            ).scalar_one() != "birja":
                 raise RuntimeError("Disposable database mismatch")
             now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
             if operation in ("fresh", "open", "close"):

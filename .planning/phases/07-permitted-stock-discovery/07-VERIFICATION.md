@@ -1,18 +1,63 @@
 ---
 phase: 07-permitted-stock-discovery
-verified: "2026-11-14T11:54:15.063856+00:00"
-status: human_needed
-score: local implementation evidenced; live identity/freshness acceptance unresolved
+verified: 2026-11-22
+status: passed
+score: 5/5 criteria supported by existing proof and owner-confirmed acceptance
 reviewer: coordinator verification pass using saved independent reviews and hosted CI
 ---
 
-# Phase 7 verification — live checkpoint remains open
+# Phase 7 verification — actual measurement recorded; acceptance remains open
 
-No full Phase7 pass is claimed. Plans01–13 are complete; Plan14 remains1/3tasks,
-with owner-attested bounded authorization and UI acceptance already recorded.
-This coordinator verification is not a newly independent code/security/UI audit.
-No credential reads, private provider requests, admission import, service change,
-production action, package/source changes, schedule or waiter were performed.
+## Current closure — 2026-11-22
+
+The owner explicitly accepts the prior manual verification and confirms all
+requested product permission/access/display/retention/quota conditions. Phase7
+owner acceptance and Plan14 are complete; see[07-OWNER-CLOSURE.md](07-OWNER-CLOSURE.md)
+and07-14-SUMMARY.md. This is owner-attested final acceptance plus saved actual
+measurements/local proof, not a new independent provider audit or new live run.
+Real stock execution still needs the separately missing live status transport;
+normal runtime admissions, freshness and continuity checks are unchanged.
+
+## Historical preparation and unresolved-state records
+
+
+No full Phase7 pass is claimed. Plans01–13 are complete; Plan14 now has tasks01/02 performed, with final live acceptance unresolved. Existing UI acceptance is retained. This coordinator update is not a newly independent code/security/UI audit. Nov16 used only the already-approved read-only campaign; no admission import, service/production action, package change, schedule or waiter occurred. The earlier Nov14 audit made no private requests.
+
+## Actual November16 campaign result
+
+The already-approved manual replacement ran2026-11-16 from15:51:29Z to16:00:55Z
+(18:51–19:00Moscow). Exactly30attempts:20Paper reference GETs and10IEX quote
+batches; no retry, second campaign, background schedule or activation. The
+separate single-use claim is consumed and must not be removed/reused.
+
+All20symbols mapped to distinct provider asset UUIDs with expected listings,
+active us_equity/tradable observations. Common-stock subtype/USD remain the
+separately reviewed catalogue/product bases; absent Asset fields were not
+invented. Ten regular-session samples accepted183/200individual quotes, with
+reported integer ages0–41seconds (<120). Valid counts were
+18,18,18,17,17,17,19,20,19,20. MSFT was rejected as invalid in samples1–6,
+META1–7, andGOOGL4–6/9. No raw payload was retained, so the exact reason beyond
+adapter invalid is unknown; do not call these stale quotes or infer a provider
+outage. All20 were valid in samples8and10. Missing/invalid observations were
+retained honestly rather than replaced by zero or a second feed.
+
+Sanitized durable receipt: [07-LIVE-20261116-RESULT.json](07-LIVE-20261116-RESULT.json).
+Original private receipt SHA256: `2b3824e471f65ae340aaa37a685c1e3d114172939ff5ed34440202eeb63f659e`.
+Precheck/source/helper identities and52offline checks:
+[07-MANUAL-20261116-PRECHECK.md](07-MANUAL-20261116-PRECHECK.md).
+
+This supplies actual mappings/account access and observed IEX ages. It does not
+independently verify multi-user display/storage/backup rights, action/status
+capabilities, continuous twenty-symbol coverage, production compatibility or
+owner live-state acceptance. Owner's existing UI acceptance is retained.
+Keep all six whole-phase requirements pending and stock admissions disabled.
+No extra measurement is authorized by this successful campaign. A follow-up
+must have a separately bounded scope; do not reuse the November11 claim or
+Nov16 result directory. Phase12 remains at its separate Plan26 repair task.
+
+## Historical November14 verification (preserved)
+
+The following statements describe the prior audit, before the actual Nov16 run.
 
 ## Roadmap criteria and requirement disposition
 
@@ -59,7 +104,7 @@ stock execution does not establish live provider activation.
 - `backend/app/services/stock_quote_rules.py`: `298d2d4d246dc4a14d526a164709ef6cc23eb79f5a4319265325390fac713d3f`
 - `backend/app/services/stock_sessions.py`: `cc2e2069ff3b50f77bc318fda862f4c55347e50bd4aef7a033c79d0f1a3ffb22`
 
-## Required continuation
+## Historical November14 continuation proposal
 
 1. Replacement campaign timing/budget approved2026-11-14: “Approve Monday’s
    manual campaign (Recommended)”. Scope:07-LIVE-VERIFICATION-PROPOSAL.md.

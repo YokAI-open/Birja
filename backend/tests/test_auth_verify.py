@@ -1,12 +1,11 @@
 import asyncio
-from decimal import Decimal
 
 import httpx
 from redis.asyncio import Redis
 
 from tests.helpers import OutboxSender, csrf_headers, request_and_get_code, unique_email
 
-URL = "/api/v1/auth/verify-code"
+URL = "/api/v2/auth/verify-code"
 
 
 async def _verify(client: httpx.AsyncClient, email: str, code: str) -> httpx.Response:
@@ -24,8 +23,7 @@ async def test_success_creates_account(
     assert resp.status_code == 200
     body = resp.json()
     assert body["email"] == email.lower()
-    assert isinstance(body["cash_usd"], str)
-    assert Decimal(body["cash_usd"]) == Decimal("10000.00")
+    assert body == {"email": email.lower()}
 
 
 async def test_reused_code_is_400(auth_client: httpx.AsyncClient, outbox: OutboxSender) -> None:

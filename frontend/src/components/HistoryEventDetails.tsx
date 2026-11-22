@@ -2,6 +2,8 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import type { DividendTerms, EventHistoryItem } from "@/api/eventHistory";
 import { Button } from "@/components/ui/button";
 import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioContext } from "@/components/PortfolioContext";
 
 function signed(value: string) {
   if (/^-?0+(\.0+)?$/.test(value)) return formatUsd("0");
@@ -86,17 +88,46 @@ function Terms({ terms }: { terms: DividendTerms }) {
 
 export function HistoryEventDetails({
   item,
-  anchorPrefix = "history-",
+  target,
+  anchorPrefix = `history-${target.portfolioId}-${target.epoch.session}-`,
 }: {
   item: EventHistoryItem;
+  target: PortfolioTarget;
   anchorPrefix?: string;
+}) {
+  return (
+    <OwnedEventDetails
+      key={JSON.stringify([target.owner, target.portfolioId, target.epoch.session, item.id])}
+      item={item}
+      target={target}
+      anchorPrefix={anchorPrefix}
+    />
+  );
+}
+
+function OwnedEventDetails({
+  item,
+  target,
+  anchorPrefix,
+}: {
+  item: EventHistoryItem;
+  target: PortfolioTarget;
+  anchorPrefix: string;
 }) {
   const [originalOpen, setOriginalOpen] = useState(false);
   const originalButton = useRef<HTMLButtonElement>(null);
+  const focusedHeadings = useRef(new WeakSet<HTMLHeadingElement>());
   const headingId = useId();
-  const captureOriginalHeading = useCallback((node: HTMLHeadingElement | null) => {
-    node?.focus();
-  }, []);
+  const captureOriginalHeading = useCallback(
+    (node: HTMLHeadingElement | null) => {
+      if (node && !focusedHeadings.current.has(node)) {
+        focusedHeadings.current.add(node);
+        if (target.isCurrent()) node.focus();
+      }
+    },
+    [target],
+  );
+  if (!target.isCurrent()) return null;
   return (
     <div className="flex min-w-0 flex-col gap-4 text-[13px] leading-[18px]">
       <dl className="grid min-w-0 gap-2">
@@ -195,6 +226,7 @@ export function HistoryEventDetails({
             aria-expanded={originalOpen}
             aria-controls={originalOpen ? headingId : undefined}
             onClick={() => {
+              if (!target.isCurrent()) return;
               const loaded = document.getElementById(`${anchorPrefix}${item.payment_reference}`);
               if (loaded) {
                 loaded.focus();
@@ -210,6 +242,7 @@ export function HistoryEventDetails({
               className="min-w-0 rounded-control border border-border p-4"
               aria-labelledby={headingId}
             >
+              <PortfolioContext name={target.name} />
               <h3
                 id={headingId}
                 tabIndex={-1}
@@ -224,11 +257,16 @@ export function HistoryEventDetails({
               <p>
                 <HistoryEventCash item={item.original} />
               </p>
-              <HistoryEventDetails item={item.original} />
+              <HistoryEventDetails
+                item={item.original}
+                target={target}
+                anchorPrefix={anchorPrefix}
+              />
               <Button
                 variant="secondary"
                 className="mt-4 min-h-11"
                 onClick={() => {
+                  if (!target.isCurrent()) return;
                   setOriginalOpen(false);
                   originalButton.current?.focus();
                 }}

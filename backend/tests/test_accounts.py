@@ -81,14 +81,39 @@ async def test_negative_cash_rejected(sessions: async_sessionmaker) -> None:  # 
             await db.flush()
 
 
-async def test_second_account_rejected(sessions: async_sessionmaker) -> None:  # type: ignore[type-arg]
+async def test_seeded_sibling_does_not_repeat_the_initial_grant(
+    sessions: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    email = unique_email()
     async with sessions() as db:
-        uid, _ = await get_or_create_user(db, unique_email())
+        uid, _ = await get_or_create_user(db, email)
         await db.commit()
     async with sessions() as db:
-        db.add(Account(user_id=uid, cash=Decimal("1"), starting_cash=Decimal("1")))
-        with pytest.raises(IntegrityError):
-            await db.flush()
+        # Current0020 permits canonical owned sibling roots. This isolated seed is not
+        # a public creation endpoint or an additional onboarding grant.
+        db.add(
+            Account(
+                user_id=uid,
+                name="Seeded strategy",
+                name_key="seeded strategy",
+                cash=Decimal("1"),
+                starting_cash=Decimal("1"),
+            )
+        )
+        await db.commit()
+    async with sessions() as db:
+        same_uid, created = await get_or_create_user(db, email)
+        await db.commit()
+        roots = (
+            (await db.execute(select(Account).where(Account.user_id == uid).order_by(Account.id)))
+            .scalars()
+            .all()
+        )
+    assert same_uid == uid and created is False
+    assert [(a.cash, a.starting_cash) for a in roots] == [
+        (STARTING_CASH, STARTING_CASH),
+        (Decimal("1"), Decimal("1")),
+    ]
 
 
 async def test_uppercase_email_rejected(sessions: async_sessionmaker) -> None:  # type: ignore[type-arg]
@@ -108,10 +133,10 @@ async def test_second_sign_in_keeps_cash(
         code = await request_and_get_code(auth_client, outbox, email)
         headers = await csrf_headers(auth_client)
         resp = await auth_client.post(
-            "/api/v1/auth/verify-code", json={"email": email, "code": code}, headers=headers
+            "/api/v2/auth/verify-code", json={"email": email, "code": code}, headers=headers
         )
         assert resp.status_code == 200
-        assert Decimal(resp.json()["cash_usd"]) == Decimal("10000.00")
+        assert resp.json() == {"email": email}
     async with sessions() as db:
         n = (
             await db.execute(

@@ -1,0 +1,424 @@
+"""Independent synthetic money oracles on the guarded disposable test database.
+
+Staged tests intentionally do not request migrated/running_app: a runnable app
+must never be admitted against expansion/association-only revisions.
+"""
+
+import asyncio
+import hashlib
+import json
+import os
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest_asyncio
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
+
+from tests.test_migrations import (
+    ensure_dividend_test_owner,
+    install_current_test_grants,
+    run_test_migration,
+    test_migration_url,
+)
+
+OWNED_TABLES = (
+    "holdings",
+    "trades",
+    "stock_fill_facts",
+    "stock_ownership_movements",
+    "stock_dividend_entitlements",
+    "stock_dividend_payments",
+    "stock_dividend_decisions",
+)
+ECONOMIC_TABLES = ("users", "accounts", *OWNED_TABLES, "stock_split_applications")
+
+
+async def migrate_to(revision: str, *, down: bool = False) -> None:
+    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 24))}
+    await asyncio.to_thread(run_test_migration, revision, down=down)
+
+
+async def reset_disposable_schema(engine: AsyncEngine) -> None:
+    """Destructive teardown ONLY in the exact throwaway database, never an app path."""
+    test_migration_url(os.environ["DATABASE_URL"], os.environ["REDIS_URL"])
+    async with engine.begin() as conn:
+        assert (
+            await conn.execute(
+                text(
+                    "SELECT current_database(),session_user,rolsuper FROM pg_roles "
+                    "WHERE rolname=session_user"
+                )
+            )
+        ).one() == ("birja_test", "birja_test", True)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public AUTHORIZATION birja_test"))
+    await ensure_dividend_test_owner()
+
+
+@pytest_asyncio.fixture
+async def portfolio_migration_db(engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
+    await reset_disposable_schema(engine)
+    try:
+        yield engine
+    finally:
+        # Immutable seeded ledgers cannot be SQL-deleted or downgraded. Throw
+        # away this isolated schema, then restore the genuine migration head.
+        await reset_disposable_schema(engine)
+        await migrate_to("head")
+        await install_current_test_grants()
+
+
+async def restore_current_test_schema(engine: AsyncEngine) -> None:
+    """Restore the supported runtime AFTER a destructive staged test completes."""
+    await reset_disposable_schema(engine)
+    await migrate_to("head")
+    await install_current_test_grants()
+
+
+async def close_empty_test_root(conn, root: int) -> None:
+    """SQL-only negative fixtures: close a verified empty root with real authority.
+
+    Integrated lifecycle acceptance uses authenticated public DELETE instead.
+    Finish insertion constraints while the synthetic root is active, as real
+    creation and closure are separate operations. Never disable a guard.
+    """
+    assert not (
+        await conn.execute(
+            text(
+                "SELECT EXISTS(SELECT FROM stock_ownership_movements WHERE portfolio_id=:p) "
+                "OR EXISTS(SELECT FROM holdings WHERE portfolio_id=:p)"
+            ),
+            {"p": root},
+        )
+    ).scalar_one()
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await conn.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+    uid, name = (
+        await conn.execute(text("SELECT user_id,name FROM accounts WHERE id=:p"), {"p": root})
+    ).one()
+    assert (
+        await conn.execute(
+            text("SELECT outcome FROM close_portfolio(:u,:p,:k,:n,'freeze_at_closure_v1')"),
+            {"u": uid, "p": root, "k": uuid4(), "n": name},
+        )
+    ).scalar_one() == "closed"
+
+
+async def delete_owned_test_root(client, factory, root: int) -> None:
+    """An already authenticated current browser confirms its exact named root."""
+    async with factory() as db:
+        name = await db.scalar(text("SELECT name FROM accounts WHERE id=:p"), {"p": root})
+    response = await client.request(
+        "DELETE",
+        f"/api/v2/portfolios/{root}",
+        json={
+            "intent_key": str(uuid4()),
+            "confirmation_name": name,
+            "policy_version": "freeze_at_closure_v1",
+        },
+        headers={"X-CSRF-Token": client.cookies["bj_csrf"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"portfolio_id": str(root), "state": "closed"}
+
+
+async def economic_snapshot(conn: AsyncConnection) -> dict[str, tuple[tuple, ...]]:
+    """Freeze every legacy column including retained jsonb bytes and timestamps."""
+    result = {}
+    for table in ECONOMIC_TABLES:
+        present = (await conn.execute(text("SELECT to_regclass(:t)"), {"t": table})).scalar()
+        if present is None:
+            continue
+        # Compare all legacy values, explicitly removing only new metadata.
+        key = "trade_id" if table == "stock_fill_facts" else "id"
+        rows = await conn.execute(
+            text(  # noqa: S608 - fixed inventory above
+                f"SELECT {key},(to_jsonb(t)-'portfolio_id'-'name'-'closed_at'-'description'"  # noqa: S608
+                f"-'name_key'-'owner_digest_version')::text FROM public.{table} t ORDER BY {key}"
+            )
+        )
+        result[table] = tuple(tuple(row) for row in rows)
+    return result
+
+
+@dataclass(frozen=True)
+class LegacyBooks:
+    owners: tuple[int, int]
+    roots: tuple[int, int]
+    crypto: int
+    stock: int
+    trade_ids: tuple[int, int]
+    split_id: int
+    cash: tuple[Decimal, Decimal] = (Decimal("8765.43"), Decimal("123.45"))
+    baselines: tuple[Decimal, Decimal] = (Decimal("12500.00"), Decimal("7777.00"))
+
+
+def legacy_digest(rows: list[list[object]]) -> str:
+    # Independent canonical oracle, not imported from the implementation under test.
+    return hashlib.sha256(
+        json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+async def seed_legacy_books(conn: AsyncConnection) -> LegacyBooks:
+    """Two actual users, unequal original books and ONE global two-owner split."""
+    from tests.test_stock_action_migrations import event
+    from tests.test_stock_action_migrations import retained_movement as movement
+
+    assert (
+        await conn.execute(text("SELECT version_num FROM alembic_version"))
+    ).scalar_one() == "0014"
+
+    owners, roots, trade_ids = [], [], []
+    crypto = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+    stock = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+    for cash, baseline in (("8765.43", "12500"), ("123.45", "7777")):
+        uid = (
+            await conn.execute(
+                text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                {"e": f"portfolio-legacy-{uuid4()}@example.test"},
+            )
+        ).scalar_one()
+        root = (
+            await conn.execute(
+                text(
+                    "INSERT INTO accounts(user_id,cash,starting_cash) "
+                    "VALUES (:u,:cash,:baseline) RETURNING id"
+                ),
+                {"u": uid, "cash": Decimal(cash), "baseline": Decimal(baseline)},
+            )
+        ).scalar_one()
+        owners.append(uid)
+        roots.append(root)
+        await conn.execute(
+            text(
+                "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) "
+                "VALUES (:u,:c,0.00123456,123.46),(:u,:s,4,20)"
+            ),
+            {"u": uid, "c": crypto, "s": stock},
+        )
+        await conn.execute(
+            text("""INSERT INTO trades
+            (user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+             exec_price,fee,cash_delta,cash_after,idempotency_key)
+            VALUES (:u,:c,'buy','quantity',0.00123456,0.00123456,99900,
+             TIMESTAMPTZ '2026-10-01 12:00:00+00',100000,0,-123.46,:cash,:key)"""),
+            {"u": uid, "c": crypto, "cash": Decimal(cash), "key": uuid4()},
+        )
+        # The retained oracle uses original0014 columns and economics. Current
+        # execution fixtures require portfolio_id/closed_at, absent in this lane.
+        tid = (
+            await conn.execute(
+                text("""INSERT INTO public.trades
+                (coin_id,user_id,side,input_kind,input_value,quantity,mid_price,price_as_of,
+                 exec_price,fee,cash_delta,cash_after,idempotency_key)
+                VALUES (:c,:u,'buy','quantity',2,2,10,clock_timestamp(),10,0,-20,9980,:key)
+                RETURNING id"""),
+                {"c": stock, "u": uid, "key": uuid4()},
+            )
+        ).scalar_one()
+        trade_ids.append(tid)
+        await conn.execute(
+            text("""INSERT INTO stock_fill_facts
+            (trade_id,coin_id,user_id,provider_asset_id,symbol,company_name,listing_exchange,
+             source,feed,bid,ask,exact_mid,held_after,event_at,collected_at,observed_at,
+             session_date,opens_at,closes_at,authority)
+            SELECT id,coin_id,user_id,'fixture-asset','AAPL','Saved company','NASDAQ',
+             'alpaca','iex',10,10,10,2,price_as_of,price_as_of,price_as_of,
+             (price_as_of AT TIME ZONE 'UTC')::date,price_as_of-interval '1 hour',
+             price_as_of+interval '1 hour','{}'::jsonb FROM trades WHERE id=:t"""),
+            {"t": tid},
+        )
+        await movement(conn, stock, uid, seq=len(owners), kind="fill", trade=tid, key=f"fill:{tid}")
+    eid, _, rid = await event(conn, stock)
+    sid = (
+        await conn.execute(
+            text("""INSERT INTO stock_split_applications
+        (coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,
+         new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)
+        VALUES (:c,:e,:r,'2','1',now(),0,1,2,:before,:after,now()) RETURNING id"""),
+            {
+                "c": stock,
+                "e": eid,
+                "r": rid,
+                "before": legacy_digest([[u, "2.00000000", "20.00000000"] for u in owners]),
+                "after": legacy_digest([[u, "4.00000000", "20.00000000"] for u in owners]),
+            },
+        )
+    ).scalar_one()
+    for i, uid in enumerate(owners):
+        await movement(
+            conn,
+            stock,
+            uid,
+            seq=3 + i,
+            q=Decimal(2),
+            before=Decimal(2),
+            after=Decimal(4),
+            bb=Decimal(20),
+            ab=Decimal(20),
+            epoch=1,
+            kind="split",
+            app=sid,
+            key=f"split:{sid}:{uid}",
+        )
+    # One paid/corrected dividend and a separate earned-but-unpaid entitlement.
+    for i, uid in enumerate(owners):
+        de, _, dr = await event(conn, stock)
+        en = (
+            await conn.execute(
+                text("""INSERT INTO stock_dividend_entitlements
+            (event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,
+             last_movement_sequence,eligible_quantity,state,fingerprint)
+            VALUES (:e,:u,:r,now(),'exclusive',1,'shares',1,900000002,4,'eligible',:f)
+            RETURNING id"""),
+                {"e": de, "u": uid, "r": dr, "f": "b" * 64},
+            )
+        ).scalar_one()
+        if i == 0:
+            terms = {
+                "event_id": de,
+                "coin_id": stock,
+                "user_id": uid,
+                "revision_id": dr,
+                "revision_fingerprint": "a" * 64,
+                "entitlement_id": en,
+                "entitlement_fingerprint": "b" * 64,
+            }
+            # Exact retained0014 columns, independent of current0017 ORM/root
+            # helpers. This lane intentionally seeds before portfolio expansion.
+            assert (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar_one() == "0014"
+            pid = (
+                await conn.execute(
+                    text("""INSERT INTO stock_dividend_payments
+                    (event_id,coin_id,user_id,revision_id,revision_fingerprint,entitlement_id,
+                     entitlement_fingerprint,symbol,company_name,cutoff,cutoff_rule,units_basis,
+                     unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date,
+                     original_amount,recorded_at,cash_after)
+                    VALUES (:event_id,:coin_id,:user_id,:revision_id,:revision_fingerprint,
+                     :entitlement_id,:entitlement_fingerprint,'AAPL','Saved Apple',now(),
+                     'exclusive','shares',0,2,.5,'2026-11-01','2026-11-02','2026-11-10',
+                     1,now(),10001) RETURNING id"""),
+                    terms,
+                )
+            ).scalar_one()
+            await conn.execute(
+                text("""INSERT INTO stock_dividend_decisions
+                (payment_id,event_id,coin_id,user_id,revision_id,revision_fingerprint,
+                 entitlement_id,entitlement_fingerprint,desired_total,cumulative_applied_before,
+                 proposed_delta,applied_delta,outcome,reason,status_identity,recorded_at,cash_after,
+                 symbol,company_name,cutoff,cutoff_rule,units_basis,unit_epoch,eligible_quantity,
+                 rate,ex_date,record_date,payable_date)
+                VALUES (:p,:event_id,:coin_id,:user_id,:revision_id,:revision_fingerprint,
+                 :entitlement_id,:entitlement_fingerprint,.5,1,-.5,0,'held_unaffordable',
+                 'insufficient_cash','epoch:1:insufficient_cash',now(),.2,'AAPL','Saved Apple',
+                 now(),'exclusive','shares',0,2,.25,'2026-11-01','2026-11-02','2026-11-10')"""),
+                {**terms, "p": pid},
+            )
+    await conn.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    return LegacyBooks(tuple(owners), tuple(roots), crypto, stock, tuple(trade_ids), sid)
+
+
+@dataclass(frozen=True)
+class PortfolioWorld:
+    empty_owner: int
+    single_owner: int
+    owner: int
+    foreign_owner: int
+    single: int
+    first: int
+    sibling: int
+    closed: int
+    foreign: int
+    crypto: int
+
+
+async def seed_portfolio_world(conn: AsyncConnection) -> PortfolioWorld:
+    """Final-schema test seeding authenticated as migrator, not public creation."""
+    assert (await conn.execute(text("SELECT session_user"))).scalar_one() == "birja_migrator"
+    owners = []
+    for label in ("empty", "single", "strategies", "foreign"):
+        owners.append(
+            (
+                await conn.execute(
+                    text("INSERT INTO users(email) VALUES (:e) RETURNING id"),
+                    {"e": f"{label}-{uuid4()}@example.test"},
+                )
+            ).scalar_one()
+        )
+    roots = []
+    for owner, name, cash, closed in (
+        (owners[1], "Only strategy", "9876.54", False),
+        (owners[2], "Strategy A", "1234.56", False),
+        (owners[2], "Strategy B", "4321.09", False),
+        (owners[2], "Ended strategy", "55.55", True),
+        (owners[3], "Foreign strategy", "777.77", False),
+    ):
+        roots.append(
+            (
+                await conn.execute(
+                    text("SELECT portfolio_id FROM public.create_portfolio(:u,:k,:n,'')"),
+                    {"u": owner, "n": name, "k": uuid4()},
+                )
+            ).scalar_one()
+        )
+        await conn.execute(
+            text("UPDATE accounts SET cash=:cash WHERE id=:p"),
+            {"p": roots[-1], "cash": Decimal(cash), "closed": closed},
+        )
+        if closed:
+            await close_empty_test_root(conn, roots[-1])
+    await conn.execute(
+        text("INSERT INTO portfolio_initializations(user_id,origin) VALUES (:u,'legacy')"),
+        {"u": owners[0]},
+    )
+    crypto = (await conn.execute(text("SELECT id FROM coins WHERE symbol='BTC'"))).scalar_one()
+    for root, quantity, basis in ((roots[1], "0.1", "123.00"), (roots[2], "0.2", "456.00")):
+        await conn.execute(
+            text("""INSERT INTO holdings
+            (portfolio_id,user_id,coin_id,quantity,cost_basis) VALUES (:p,:u,:c,:q,:b)"""),
+            {"p": root, "u": owners[2], "c": crypto, "q": Decimal(quantity), "b": Decimal(basis)},
+        )
+    return PortfolioWorld(*owners, *roots, crypto)
+
+
+@pytest_asyncio.fixture
+async def portfolio_world(engine: AsyncEngine, migrated: None):
+    """Private final-schema matrix; all financial changes roll back after a case."""
+    migrator = create_async_engine(test_migration_url())
+    try:
+        async with migrator.connect() as conn:
+            tx = await conn.begin()
+            try:
+                world = await seed_portfolio_world(conn)
+                yield conn, world
+            finally:
+                await tx.rollback()
+    finally:
+        await migrator.dispose()
+
+
+async def seed_owned_crypto_trade(
+    conn: AsyncConnection, world: PortfolioWorld, root: int, key=None
+) -> tuple[int, object]:
+    key = key or uuid4()
+    tid = (
+        await conn.execute(
+            text("""INSERT INTO trades
+        (portfolio_id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,
+         price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key)
+        VALUES (:p,:u,:c,'buy','quantity',0.001,0.001,50000,clock_timestamp(),
+         50000,0.25,-50.25,1184.31,:key) RETURNING id"""),
+            {"p": root, "u": world.owner, "c": world.crypto, "key": key},
+        )
+    ).scalar_one()
+    return tid, key
+
+
+def portfolio_session(conn: AsyncConnection) -> AsyncSession:
+    return AsyncSession(bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint")

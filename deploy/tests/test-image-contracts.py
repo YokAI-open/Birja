@@ -419,8 +419,8 @@ class Identity(unittest.TestCase):
     def test_signed_exact_packages_and_complete_group_boundaries(self):
         backend = (ROOT / "backend/Dockerfile").read_text()
         frontend = (ROOT / "frontend/Dockerfile").read_text()
-        self.assertIn("python-3.14=3.14.10_git20261104-r0", backend)
-        self.assertIn("python-3.14-base=3.14.10_git20261104-r0", backend)
+        self.assertIn("python-3.14=3.14.10_git20261111-r0", backend)
+        self.assertIn("python-3.14-base=3.14.10_git20261111-r0", backend)
         self.assertIn("nodejs-24=24.22.3-r0", frontend)
         for pin in ("icu79-data-full=79.1-r1", "libicu79=79.1-r1", "libstdc++=16.2.0-r2"):
             self.assertIn(pin, frontend)
@@ -609,6 +609,67 @@ class Identity(unittest.TestCase):
 
 
 class Scans(unittest.TestCase):
+    def producer(self):
+        spec = importlib.util.spec_from_file_location("image_exception", ROOT / "deploy/scan-images.py")
+        producer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(producer)
+        return producer
+
+    def accepted_fixture(self):
+        return {
+            "Target": "Node.js", "Class": "lang-pkgs", "Type": "node-pkg",
+            "Vulnerabilities": [{
+                "VulnerabilityID": "CVE-2026-112366",
+                "VendorIDs": ["GHSA-fc5q-39xc-vjpf"],
+                "Severity": "HIGH", "PkgName": "picomatch", "PkgID": "picomatch@4.0.4",
+                "InstalledVersion": "4.0.4",
+                "PkgPath": "usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch/package.json",
+            }],
+        }
+
+    def test_exact_image_advisory_scope_expiry_and_source_binding(self):
+        producer = self.producer()
+        result = self.accepted_fixture()
+        finding = result["Vulnerabilities"][0]
+        now = datetime.datetime(2026, 11, 17, tzinfo=datetime.UTC)
+        source = (ROOT / "frontend/Dockerfile").read_bytes()
+        kwargs = {"now": now, "dockerfile": source}
+        self.assertTrue(producer.accepted_finding("node", result, finding, **kwargs))
+        for target in ["runtime", "builder", "postgres", "redis"]:
+            self.assertFalse(producer.accepted_finding(target, result, finding, **kwargs))
+        for field, value in [
+            ("Severity", "CRITICAL"), ("VulnerabilityID", "CVE-2026-119170"),
+            ("VendorIDs", []), ("VendorIDs", ["GHSA-other-advisory"]),
+            ("PkgName", "python-3.14"), ("PkgID", "picomatch@4.0.7"),
+            ("InstalledVersion", "4.0.7"), ("PkgPath", "app/node_modules/picomatch/package.json"),
+        ]:
+            with self.subTest(field=field, value=value):
+                self.assertFalse(producer.accepted_finding("node", result, {**finding, field: value}, **kwargs))
+        for field, value in [("Target", "Python"), ("Class", "os-pkgs"), ("Type", "apk")]:
+            self.assertFalse(producer.accepted_finding("node", {**result, field: value}, finding, **kwargs))
+        for changed in [source + b"\n", b"", source.replace(b"11.21.2", b"11.21.3")]:
+            self.assertFalse(producer.accepted_finding("node", result, finding, now=now, dockerfile=changed))
+        for expired in [datetime.datetime(2026, 12, 17, tzinfo=datetime.UTC), datetime.datetime(2027, 1, 1, tzinfo=datetime.UTC), datetime.datetime(2026, 11, 17)]:
+            self.assertFalse(producer.accepted_finding("node", result, finding, now=expired, dockerfile=source))
+
+    def test_accepted_image_risk_keeps_other_findings_and_rejects_malformed_data(self):
+        producer = self.producer()
+        result = self.accepted_fixture()
+        kwargs = {"now": datetime.datetime(2026, 11, 17, tzinfo=datetime.UTC)}
+        findings, accepted = producer.classify_findings("node", [result], **kwargs)
+        self.assertEqual((len(findings), len(accepted)), (1, 1))
+        python = {"VulnerabilityID": "CVE-2026-119170", "Severity": "HIGH", "PkgName": "python-3.14"}
+        for extra in [python, {"Severity": "HIGH", "VulnerabilityID": "new"}, {"Severity": "CRITICAL", "VulnerabilityID": "new"}]:
+            mixed = {**result, "Vulnerabilities": result["Vulnerabilities"] + [extra]}
+            findings, accepted = producer.classify_findings("node", [mixed], **kwargs)
+            self.assertEqual((len(findings), len(accepted)), (2, 1))
+        for target in ["runtime", "builder", "postgres", "redis"]:
+            findings, accepted = producer.classify_findings(target, [result], **kwargs)
+            self.assertEqual((len(findings), len(accepted)), (1, 0))
+        for malformed in [None, [], [{}], [{"Target": "x", "Vulnerabilities": {}}], [{"Target": "x", "Vulnerabilities": [{"Severity": "unexpected"}]}]]:
+            with self.subTest(malformed=malformed), self.assertRaises((ValueError, KeyError)):
+                producer.classify_findings("node", malformed, **kwargs)
+
     def workflow_handoff(self, root, unavailable, inputs):
         """Execute the actual CI scan shell with one missing built image."""
         script = (
@@ -675,6 +736,9 @@ class Scans(unittest.TestCase):
         }
         for mode in [
             "clean",
+            "accepted-node",
+            "accepted-node-error",
+            "accepted-node-mixed",
             "high",
             "critical",
             "scanner",
@@ -790,6 +854,15 @@ class Scans(unittest.TestCase):
                     ],
                 }
                 status = 0
+                if archive.stem == "node" and mode.startswith("accepted-node"):
+                    doc["Results"] = [self.accepted_fixture()]
+                    status = 1
+                    if mode == "accepted-node-error":
+                        status = 2
+                    elif mode == "accepted-node-mixed":
+                        doc["Results"][0]["Vulnerabilities"].append({
+                            "Severity": "HIGH", "VulnerabilityID": "CVE-2026-119170", "PkgName": "python-3.14"
+                        })
                 if len(seen) == 1:
                     if mode in ["high", "critical"]:
                         doc["Results"][0]["Vulnerabilities"] = [
@@ -826,8 +899,17 @@ class Scans(unittest.TestCase):
                         result = producer.main()
                 else:
                     result = producer.run_scans(Path(tmp), selected)
-                self.assertEqual(result, 0 if mode == "clean" else 1, mode)
+                self.assertEqual(result, 0 if mode in {"clean", "accepted-node"} else 1, mode)
                 evidence = json.loads((Path(tmp) / "status.json").read_text())
+                if mode.startswith("accepted-node"):
+                    node = evidence["targets"]["node"]
+                    self.assertEqual(node["risk_status"], "accepted-risk")
+                    self.assertEqual(node["accepted_findings"], 1)
+                    self.assertEqual(node["blocking_findings"], 1 if mode == "accepted-node-mixed" else 0)
+                    self.assertEqual(node["qualifying_findings"], 2 if mode == "accepted-node-mixed" else 1)
+                    self.assertEqual(node["accepted_risk"]["issue"], producer.IMAGE_EXCEPTION["issue"])
+                    self.assertIn("CVE-2026-112366", (Path(tmp) / "node.json").read_text())
+                    self.assertEqual(node["ok"], mode == "accepted-node")
                 self.assertEqual(set(evidence["targets"]), set(inputs))
                 self.assertEqual(
                     len(seen),

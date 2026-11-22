@@ -2,7 +2,7 @@
 
 import importlib.util
 from collections.abc import AsyncIterator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,10 +15,11 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from app.models.dividend import StockDividendDecision
+from tests.portfolio_fixtures import portfolio_migration_db
 from tests.test_stock_action_migrations import event, ledger
 from tests.test_stock_migrations import migrate
 
-__all__ = ["ledger"]
+__all__ = ["ledger", "portfolio_migration_db"]
 
 
 def migration():
@@ -45,16 +46,61 @@ async def test_anchor_schema_exists(engine: AsyncEngine, migrated: None) -> None
 
 
 @pytest_asyncio.fixture
-async def dividend_case(ledger) -> AsyncIterator[tuple[AsyncConnection, dict[str, object]]]:
+async def dividend_case(
+    ledger, request
+) -> AsyncIterator[tuple[AsyncConnection, dict[str, object]]]:
     conn, cid, uid = ledger
+    root = (
+        await conn.execute(
+            text(
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',100,10000) RETURNING id"
+            ),
+            {"u": uid},
+        )
+    ).scalar_one()
+    now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
+    params = getattr(getattr(request.node, "callspec", None), "params", {})
+    quantity = Decimal(params.get("quantity", 2))
+    from app.services.stock_sessions import build_sessions
+    from tests.test_stock_sessions import evidence
+
+    sessions = [
+        row
+        for row in build_sessions(now, evidence(now))
+        if row.exchange == "NASDAQ"
+        and row.opens_at is not None
+        and row.session_date < now.date() - timedelta(days=1)
+    ]
+    pairs = [
+        (first, second)
+        for first, second in zip(sessions, sessions[1:], strict=False)
+        if second.session_date - first.session_date == timedelta(days=1)
+    ]
+    assert pairs, "Producer correction cases require consecutive genuine regular sessions"
+    opening = pairs[-1][0]
+    cutoff = datetime.combine(opening.session_date, now.timetz())
+    if params.get("change") in ("shortened_close", "shortened_matching"):
+        cutoff = opening.opens_at
+        assert cutoff is not None
     eid, _, rid = await event(conn, cid)
     entitlement = (
         await conn.execute(
             text("""INSERT INTO stock_dividend_entitlements
-        (event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,
+        (event_id,portfolio_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,
          last_movement_sequence,eligible_quantity,state,fingerprint)
-        VALUES (:e,:u,:r,now(),'exclusive',1,'shares',0,0,2,'eligible',:f) RETURNING id"""),
-            {"e": eid, "u": uid, "r": rid, "f": "b" * 64},
+        VALUES (:e,:p,:u,:r,:cutoff,'exclusive-regular-session-open',1,'unit_epoch:0',0,
+          :sequence,:quantity,'eligible',:f) RETURNING id"""),
+            {
+                "e": eid,
+                "p": root,
+                "u": uid,
+                "r": rid,
+                "f": "b" * 64,
+                "cutoff": cutoff,
+                "sequence": 1 if quantity else 0,
+                "quantity": quantity,
+            },
         )
     ).scalar_one()
     yield (
@@ -63,6 +109,7 @@ async def dividend_case(ledger) -> AsyncIterator[tuple[AsyncConnection, dict[str
             "event_id": eid,
             "coin_id": cid,
             "user_id": uid,
+            "portfolio_id": root,
             "revision_id": rid,
             "revision_fingerprint": "a" * 64,
             "entitlement_id": entitlement,
@@ -76,11 +123,12 @@ async def payment(conn: AsyncConnection, terms: dict[str, object], **changes: ob
     return (
         await conn.execute(
             text("""INSERT INTO stock_dividend_payments
-      (event_id,coin_id,user_id,revision_id,revision_fingerprint,entitlement_id,
+      (event_id,coin_id,portfolio_id,user_id,revision_id,revision_fingerprint,entitlement_id,
        entitlement_fingerprint,symbol,company_name,cutoff,cutoff_rule,units_basis,
        unit_epoch,eligible_quantity,rate,ex_date,record_date,payable_date,
        original_amount,recorded_at,cash_after)
-      VALUES (:event_id,:coin_id,:user_id,:revision_id,:revision_fingerprint,:entitlement_id,
+      VALUES (:event_id,:coin_id,:portfolio_id,:user_id,:revision_id,
+       :revision_fingerprint,:entitlement_id,
        :entitlement_fingerprint,'AAPL','Saved Apple',now(),'exclusive','shares',0,2,:rate,
        DATE '2026-11-01',DATE '2026-11-02',DATE '2026-11-10',:original_amount,now(),10001)
       RETURNING id"""),
@@ -333,15 +381,11 @@ async def test_decision_immutable(dividend_case, operation: str) -> None:
 
 
 async def test_runtime_direct_writes_denied_and_app_read_only(dividend_case) -> None:
+    from tests.stock_action_fixtures import install_current_runtime_roles
+
     conn, terms = dividend_case
     pid = await payment(conn, terms)
-    for role in ("birja_app", "birja_scheduler"):
-        # Roles exist only in this rollback-owned test transaction.
-        await conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
-        await conn.execute(text(f"GRANT USAGE ON SCHEMA public TO {role}"))
-    # Execute the exact migration grant block after provisioning local NOLOGIN
-    # roles; full fresh/upgraded restricted bootstrap parity belongs to plan02.
-    await conn.execute(text(migration().GRANTS))
+    await install_current_runtime_roles(conn)
     for role in ("birja_app", "birja_scheduler"):
         async with conn.begin_nested():
             await conn.execute(text(f"SET LOCAL ROLE {role}"))
@@ -420,10 +464,13 @@ async def test_model_metadata_matches_reviewed_migration(engine, migrated) -> No
         assert await conn.run_sync(compare) == []
 
 
-async def test_populated_0013_entitlement_survives_upgrade_and_empty_downgrade(engine, migrated):
+async def test_populated_0013_entitlement_survives_upgrade_and_empty_downgrade(
+    portfolio_migration_db,
+):
     from uuid import uuid4
 
-    await migrate("0013", down=True)
+    engine = portfolio_migration_db
+    await migrate("0013")
     try:
         async with engine.begin() as conn:
             uid = (

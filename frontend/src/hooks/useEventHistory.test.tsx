@@ -1,3 +1,4 @@
+import { portfolioTargetFixture } from "@/test/portfolioTargetFixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager, useQuery } from "@tanstack/react-query";
@@ -14,11 +15,15 @@ function setup(email: string | null = "first@example.test") {
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
   clients.push(client);
-  client.setQueryData(["me"], email === null ? null : { email, cash_usd: "10000.00" });
+  client.setQueryData(["me"], email === null ? null : { email });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return { client, wrapper, ...renderHook(() => useEventHistory(), { wrapper }) };
+  return {
+    client,
+    wrapper,
+    ...renderHook(() => useEventHistory(portfolioTargetFixture(client)), { wrapper }),
+  };
 }
 afterEach(() => {
   cleanup();
@@ -51,7 +56,8 @@ const item = (id: string): EventDividend => ({
 const cursor = (id: string) =>
   btoa(
     JSON.stringify({
-      v: 2,
+      v: 3,
+      portfolio_id: "1",
       recorded_at: "2026-11-12T15:00:00.000001Z",
       kind_rank: 3,
       source_id: id,
@@ -71,7 +77,7 @@ function pending() {
 }
 function historyTransport(fetch: typeof globalThis.fetch) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
-    String(input) === "/api/v1/me"
+    String(input) === "/api/v2/me"
       ? Promise.resolve(new Response(JSON.stringify(clients.at(-1)?.getQueryData(["me"]))))
       : fetch(input, init),
   );
@@ -102,16 +108,15 @@ it("loads exact server order under an owner and epoch key without local money", 
     "dividend:3",
     "dividend:2",
   ]);
-  expect(fetch.mock.calls[0]?.[0]).toBe("/api/v1/history");
+  expect(fetch.mock.calls[0]?.[0]).toBe("/api/v2/portfolios/1/event-history");
   expect(
     client
       .getQueryCache()
       .findAll({ queryKey: ["eventHistory"] })
       .map((query) => query.queryKey),
-  ).toEqual([["eventHistory", "first@example.test", 0]]);
+  ).toEqual([["eventHistory", "first@example.test", "1", 0]]);
   expect(client.getQueryData(["me"])).toEqual({
     email: "first@example.test",
-    cash_usd: "10000.00",
   });
 });
 
@@ -122,7 +127,7 @@ it.each([null, "second@example.test"])(
     const { result, client } = setup();
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     act(() => client.setQueryData(["me"], email === null ? null : { email }));
-    expect(client.getQueryData(["eventHistory", "first@example.test", 0])).toBeUndefined();
+    expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
     expect(result.current.data).toBeUndefined();
   },
 );
@@ -142,7 +147,7 @@ it.each([null, "second@example.test"])(
     await act(async () => {
       old.resolve(page(["3"]));
     });
-    expect(client.getQueryData(["eventHistory", "first@example.test", 0])).toBeUndefined();
+    expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
     if (email === null) expect(result.current.data).toBeUndefined();
     else await waitFor(() => expect(result.current.data?.pages[0].items[0].id).toBe("dividend:9"));
   },
@@ -166,8 +171,8 @@ it("gives same-owner relogin a fresh epoch and cannot revive the old request", a
     old.resolve(page(["3"]));
   });
   expect(result.current.data?.pages[0].items[0].id).toBe("dividend:9");
-  expect(client.getQueryData(["eventHistory", "first@example.test", 0])).toBeUndefined();
-  expect(client.getQueryData(["eventHistory", "first@example.test", 2])).toBeDefined();
+  expect(client.getQueryData(["eventHistory", "first@example.test", "1", 0])).toBeUndefined();
+  expect(client.getQueryData(["eventHistory", "first@example.test", "1", 2])).toBeDefined();
 });
 
 it("deduplicates simultaneous appends without cancelling the active page", async () => {
@@ -287,7 +292,7 @@ it("invalidates authoritative owner cash and portfolio once for newly accepted e
   const fetch = vi.fn((input: RequestInfo | URL) =>
     Promise.resolve(
       String(input).endsWith("/me")
-        ? new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10001.00" }))
+        ? new Response(JSON.stringify({ email: "first@example.test" }))
         : page(["3"]),
     ),
   );
@@ -296,10 +301,12 @@ it("invalidates authoritative owner cash and portfolio once for newly accepted e
   const invalidate = vi.spyOn(client, "invalidateQueries");
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   await waitFor(() =>
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["portfolio", "first@example.test"] }),
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["portfolio", "first@example.test", "1"] }),
   );
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["me"], exact: true });
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["stockContext", "first@example.test"] });
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["me"], exact: true });
+  expect(invalidate).toHaveBeenCalledWith({
+    queryKey: ["stockContext", "first@example.test", "1"],
+  });
   const count = invalidate.mock.calls.length;
   await act(async () => {
     await result.current.refetch();
@@ -307,7 +314,6 @@ it("invalidates authoritative owner cash and portfolio once for newly accepted e
   expect(invalidate).toHaveBeenCalledTimes(count);
   expect(client.getQueryData(["me"])).toEqual({
     email: "first@example.test",
-    cash_usd: "10001.00",
   });
 });
 
@@ -316,8 +322,8 @@ it("cancels a pending pre-event financial response before authoritative replacem
   let historyIds: string[] = [];
   const fetch = vi.fn((input: RequestInfo | URL) =>
     Promise.resolve(
-      String(input) === "/api/v1/me"
-        ? new Response(JSON.stringify({ email: "first@example.test", cash_usd: "10001.00" }))
+      String(input) === "/api/v2/me"
+        ? new Response(JSON.stringify({ email: "first@example.test" }))
         : page(historyIds),
     ),
   );
@@ -328,7 +334,7 @@ it("cancels a pending pre-event financial response before authoritative replacem
   const portfolio = renderHook(
     () =>
       useQuery({
-        queryKey: ["portfolio", "first@example.test"],
+        queryKey: ["portfolio", "first@example.test", "1"],
         retry: false,
         queryFn: async ({ signal }) => {
           const response =
@@ -377,6 +383,7 @@ it("does not invalidate another owner if auth changes while cancellation settles
 });
 
 const cryptoFill = {
+  portfolio_id: "1",
   trade_id: 17,
   created_at: "2026-11-12T15:00:00Z",
   symbol: "BTC",
@@ -403,18 +410,22 @@ it("actual crypto fill invalidates only the current event owner and retains lega
   historyTransport(
     vi.fn((input: RequestInfo | URL) =>
       Promise.resolve(
-        String(input) === "/api/v1/trades" ? new Response(JSON.stringify(cryptoFill)) : page([]),
+        String(input) === "/api/v2/portfolios/1/trades"
+          ? new Response(JSON.stringify(cryptoFill))
+          : page([]),
       ),
     ),
   );
   const { client, wrapper } = setup();
   const invalidate = vi.spyOn(client, "invalidateQueries");
-  const trade = renderHook(() => useTrade("BTC"), { wrapper });
+  const trade = renderHook(() => useTrade(portfolioTargetFixture(client), "BTC"), { wrapper });
   await act(async () => {
     await trade.result.current.mutateAsync(order);
   });
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["eventHistory", "first@example.test", 0] });
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history"] });
+  expect(invalidate).toHaveBeenCalledWith({
+    queryKey: ["eventHistory", "first@example.test", "1"],
+  });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "first@example.test", "1"] });
   expect(
     invalidate.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === "eventHistory"),
   ).toHaveLength(1);
@@ -427,12 +438,14 @@ it.each(["other-owner", "same-owner-relogin"])(
     const response = pending();
     historyTransport(
       vi.fn((input: RequestInfo | URL) =>
-        String(input) === "/api/v1/trades" ? response.promise : Promise.resolve(page([])),
+        String(input) === "/api/v2/portfolios/1/trades"
+          ? response.promise
+          : Promise.resolve(page([])),
       ),
     );
     const { client, wrapper } = setup();
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    const trade = renderHook(() => useTrade("BTC"), { wrapper });
+    const trade = renderHook(() => useTrade(portfolioTargetFixture(client), "BTC"), { wrapper });
     let execution!: ReturnType<typeof trade.result.current.mutateAsync>;
     act(() => {
       execution = trade.result.current.mutateAsync(order);
@@ -442,12 +455,11 @@ it.each(["other-owner", "same-owner-relogin"])(
       client.setQueryData(["me"], null);
       client.setQueryData(["me"], {
         email: change === "other-owner" ? "second@example.test" : "first@example.test",
-        cash_usd: "10000.00",
       });
     });
     await act(async () => {
       response.resolve(new Response(JSON.stringify(cryptoFill)));
-      await execution;
+      await expect(execution).rejects.toThrow("Portfolio target changed");
     });
     expect(invalidate).not.toHaveBeenCalled();
   },
@@ -462,7 +474,7 @@ it("actual stock fill invalidates the current event owner while keeping legacy H
         ? contextFixture()
         : path.endsWith("/quote")
           ? quoteFixture()
-          : path === "/api/v1/stock-trades"
+          : path === "/api/v2/portfolios/1/stock-trades"
             ? fillFixture()
             : { items: [], next_cursor: null };
       return Promise.resolve(new Response(JSON.stringify(body)));
@@ -470,7 +482,9 @@ it("actual stock fill invalidates the current event owner while keeping legacy H
   );
   const { client, wrapper } = setup();
   const invalidate = vi.spyOn(client, "invalidateQueries");
-  const stock = renderHook(() => useStockTrade("AAPL"), { wrapper });
+  const stock = renderHook(() => useStockTrade(portfolioTargetFixture(client), "AAPL"), {
+    wrapper,
+  });
   await waitFor(() => expect(stock.result.current.context?.execution_enabled).toBe(true));
   act(() => stock.result.current.setQuantity("2"));
   await act(async () => {
@@ -480,6 +494,8 @@ it("actual stock fill invalidates the current event owner while keeping legacy H
   await act(async () => {
     await stock.result.current.confirm();
   });
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["eventHistory", "first@example.test"] });
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history"] });
+  expect(invalidate).toHaveBeenCalledWith({
+    queryKey: ["eventHistory", "first@example.test", "1"],
+  });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "first@example.test", "1"] });
 });

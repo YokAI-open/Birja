@@ -107,7 +107,7 @@ function Side({ item, allowed, side }: { item: StockItem; allowed: boolean; side
   );
 }
 
-export function StockSection() {
+export function StockSection({ portfolioId }: { portfolioId?: string }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const { data, isPending, isError, isFetching, refetch } = useStocks();
   const retryButton = useRef<HTMLButtonElement>(null);
@@ -298,7 +298,9 @@ export function StockSection() {
                                 variant="secondary"
                                 className="min-h-11 whitespace-normal"
                               >
-                                <Link to={`/trade/stocks/${encodeURIComponent(item.symbol)}`}>
+                                <Link
+                                  to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/stocks/${encodeURIComponent(item.symbol)}`}
+                                >
                                   {allowed && item.execution_enabled
                                     ? `Trade ${item.symbol}`
                                     : `View stock ${item.symbol}`}
@@ -366,7 +368,9 @@ export function StockSection() {
                             variant="secondary"
                             className="min-h-11 whitespace-normal"
                           >
-                            <Link to={`/trade/stocks/${encodeURIComponent(item.symbol)}`}>
+                            <Link
+                              to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/stocks/${encodeURIComponent(item.symbol)}`}
+                            >
                               {allowed && item.execution_enabled
                                 ? `Trade ${item.symbol}`
                                 : `View stock ${item.symbol}`}

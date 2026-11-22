@@ -31,3 +31,7 @@ class VerifyCodeIn(RequestCodeIn):
 class MeOut(BaseModel):
     email: str
     cash_usd: Decimal = Field(description="USD cash balance, serialized as a decimal string")
+
+
+class IdentityOut(BaseModel):
+    email: str

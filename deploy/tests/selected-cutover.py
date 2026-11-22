@@ -69,6 +69,23 @@ def isolate_entrypoint_environment(text, root):
     )
 
 
+def qualified_image_program(bindings, *, archive, archive_sha, migrator_commit):
+    """Private relocated tooling validates frozen identities before each child."""
+    return ('import hashlib,json,subprocess,sys\nfrom pathlib import Path\n'
+            + 'bindings=' + repr(bindings) + '\n'
+            + 'archive=' + repr(str(archive)) + '\n'
+            + 'expected=' + repr(archive_sha) + '\n'
+            + 'assert hashlib.sha256(Path(archive).read_bytes()).hexdigest()==expected\n'
+            + 'def check(commit):\n'
+            + ' b=bindings[commit]\n'
+            + " row=json.loads(subprocess.check_output(['/usr/bin/docker','image','inspect',b['id']]))[0]\n"
+            + " assert row['Id']==b['id'] and row['Config']['Labels']['org.opencontainers.image.revision']==commit\n"
+            + " for field,key in [('Config','config_sha256'),('RootFS','rootfs_sha256')]:\n"
+            + "  assert hashlib.sha256(json.dumps(row[field],sort_keys=True,separators=(',',':')).encode()).hexdigest()==b[key]\n"
+            + " return b['id']\n"
+            + 'print(check(sys.argv[1]),check(' + repr(migrator_commit) + '))\n')
+
+
 def integration(archive=None):
     return _integration(archive, current0014=False)
 
@@ -203,11 +220,11 @@ def current0014_checks(*, session, current, old, app, root, launcher, target,
                                '-e', 'JWT_SECRET=synthetic-only-jwt-secret-00000000000000',
                                'migrate', 'python', '-', data=code.encode())
 
-            runtime = owner(f.runtime_program(seed=False, database='birja_restore_test', expected=runtime_saved))
+            runtime = owner(f.runtime_program(seed=False, database='birja_restore_test', expected=runtime_saved, revision='0014'))
             assert f.runtime_receipt_digest(runtime) == runtime_saved
             assert b'runtime_current_mixed_history=true revision0014=true' in runtime
             assert b'verified_tls=true' in runtime
-            dividend = owner(f.dividend_program(mode='verify', database='birja_restore_test', expected=dividend_saved))
+            dividend = owner(f.dividend_program(mode='verify', database='birja_restore_test', expected=dividend_saved, revision='0014'))
             assert f.dividend_digest(dividend) == dividend_saved
             assert b'scheduler_quarantine=true' in dividend and b'verified_tls=true' in dividend
             r.verify(command, manifest)
@@ -286,18 +303,34 @@ def _integration(archive=None, *, current0014):
         def git(*args):
             return call(["git", "-C", str(app), *args]).decode().strip()
 
-        git("config", "user.email", "synthetic@example.invalid")
-        git("config", "user.name", "Synthetic")
-        old = git("rev-parse", "v0.3.1^{commit}")
-        # Preserve the actual legacy0008 rollout/old-runtime rollback lane.
-        # Only this private clone receives immutable v0.4.0 application/schema
-        # bytes; reviewed current retained ops and build instructions remain.
-        if not current0014:
-            for directory in ("backend/app", "backend/alembic"):
-                shutil.rmtree(app / directory)
-            with tarfile.open(fileobj=io.BytesIO(f.source_git("archive", "v0.4.0", "backend/app", "backend/alembic"))) as legacy_archive:
-                legacy_archive.extractall(app, filter="data")
-            git("add", "backend/app", "backend/alembic")
+        sources = f.portfolio_sources()
+        sources.validate_matrix()
+        lane = 'retained' if current0014 else 'legacy0008'
+        current = sources.MATRIX[lane]['commit']
+        old = sources.MATRIX['legacy0007']['commit']
+        git('checkout', '--detach', current)
+        assert not git('status', '--porcelain')
+        # Relocated control tooling is separate from the complete immutable
+        # application ref. Never manufacture a commit or overlay app/Alembic.
+        tooling = root / 'selected-tooling'
+        tooling.mkdir(mode=0o700)
+        payload = sources.source_archive(lane, archive=session.archive,
+                                         archive_sha=session.archive_sha)
+        with tarfile.open(fileobj=io.BytesIO(payload)) as immutable_source:
+            immutable_source.extractall(tooling, filter='data')
+        sources.verify_source_tree(tooling, payload)
+        selected_source = {'commit': current, 'lane': lane,
+                           'payload_sha256': hashlib.sha256(payload).hexdigest(),
+                           'archive_sha256': session.archive_sha}
+        qualified_images = {}
+        for image_lane in (lane, 'legacy0007'):
+            f.retained_runtime(image_lane)
+            _, image_binding = f._RETAINED_RUNTIME[(session.archive_sha, image_lane)]
+            qualified_images[sources.MATRIX[image_lane]['commit']] = image_binding
+        selected_source['images'] = qualified_images
+        (tooling / 'deploy/qualified-images.py').write_text(qualified_image_program(
+            qualified_images, archive=session.archive,
+            archive_sha=session.archive_sha, migrator_commit=current))
         etc = root / "etc"
         etc.mkdir(mode=0o700)
         (root / "bin").mkdir(mode=0o700)
@@ -361,7 +394,12 @@ def _integration(archive=None, *, current0014):
             "deploy/db-security.compose.yml",
         ]
         for name in names:
-            text = (ROOT / name).read_text()
+            # Retained cutover exercises the released finite deployment lane.
+            # Current0017 control correctly refuses a new legacy deployment;
+            # never remove that guard to make this historical fixture pass.
+            # tooling was extracted and authenticated from this lane's exact
+            # selected archive above, before any private host relocation.
+            text = (tooling / name if name == 'deploy/deploy.sh' else ROOT / name).read_text()
             text = re.sub(
                 "|".join(re.escape(key) for key in replacements),
                 lambda match: replacements[match[0]],
@@ -369,7 +407,23 @@ def _integration(archive=None, *, current0014):
             )
             if name == "deploy/deploy-entrypoint.sh":
                 text = isolate_entrypoint_environment(text, root)
+                # Test-only relocation: retain the real clean Git/source check
+                # while installing separately authenticated control bytes.
+                text = text.replace(
+                    "require(source == Path(" + repr(str(app / name)) + "))",
+                    "require(source == Path(" + repr(str(tooling / name)) + "))")
+                text = text.replace("original = Path(" + repr(str(app)) + ")/name",
+                                    "original = Path(" + repr(str(tooling)) + ")/name")
+                text = text.replace("names += call(['git'", "names += ['deploy/qualified-images.py']\n    names += call(['git'", 1)
             if name == "deploy/deploy.sh":
+                anchor = '    BIRJA_OLD_TLS_SUFFIX=$suffix '
+                assert text.count(anchor) == 1
+                text = text.replace(anchor,
+                    '    local qualified_runtime qualified_migrator\n'
+                    '    read -r qualified_runtime qualified_migrator < <(python3 "$BIRJA_RETAINED_DIR/deploy/qualified-images.py" "$(git -C "$APP_DIR" rev-parse HEAD)")\n'
+                    '    [ -n "$qualified_runtime" ] && [ -n "$qualified_migrator" ] || return 1\n'
+                    '    BIRJA_QUALIFIED_RUNTIME_IMAGE=$qualified_runtime BIRJA_QUALIFIED_MIGRATOR_IMAGE=$qualified_migrator '
+                    'BIRJA_OLD_TLS_SUFFIX=$suffix ')
                 text = text.replace("HOST=birja.nist.one", "HOST=postgres")
                 text = text.replace(":443:127.0.0.1", ":" + str(port) + ":127.0.0.1")
                 text = text.replace(
@@ -395,9 +449,15 @@ def _integration(archive=None, *, current0014):
                     "  app:\n    internal: true",
                 )
                 text = text.replace('"127.0.0.1:18000:8000"', '"127.0.0.1::8000"')
-            (app / name).write_text(text)
+            if name == 'deploy/db-security.compose.yml':
+                text, count = re.subn(r'    build:\n(?:      [^\n]*\n)+',
+                    lambda match: '    build: !reset null\n    image: ${BIRJA_QUALIFIED_' +
+                    ('MIGRATOR' if 'BIRJA_MIGRATOR_CONTEXT' in match[0] else 'RUNTIME') +
+                    '_IMAGE:?authenticated image required}\n', text)
+                assert count == 3
+            (tooling / name).write_text(text)
         for name in ("check-nginx-config.sh", "install-nginx.sh", "cloudflare-ips.sh"):
-            (app / "deploy" / name).write_text(
+            (tooling / "deploy" / name).write_text(
                 "#!/bin/bash\n# Private origin fixture; no host nginx operation.\nexit 0\n"
             )
         for name in names + [
@@ -406,16 +466,14 @@ def _integration(archive=None, *, current0014):
             "deploy/cloudflare-ips.sh",
         ]:
             if name.endswith(".sh"):
-                (app / name).chmod(0o700)
-        git(
-            "add",
-            *names,
-            "deploy/check-nginx-config.sh",
-            "deploy/install-nginx.sh",
-            "deploy/cloudflare-ips.sh",
-        )
-        git("commit", "-m", "Relocate fixed synthetic host and origin endpoints")
-        current = git("rev-parse", "HEAD")
+                (tooling / name).chmod(0o500)
+        relocated = names + ['deploy/qualified-images.py', 'deploy/check-nginx-config.sh',
+                             'deploy/install-nginx.sh', 'deploy/cloudflare-ips.sh']
+        selected_source['tooling'] = {name: r.digest(tooling / name) for name in relocated}
+        source_binding = root / 'selected-source-binding.json'
+        source_binding.write_text(json.dumps(selected_source, sort_keys=True))
+        source_binding.chmod(0o400)
+        assert git('rev-parse', 'HEAD') == current and not git('status', '--porcelain')
         git("checkout", "-B", "main", current)
         call(["git", "clone", "--bare", str(app), str(root / "origin")])
         git("remote", "set-url", "origin", str(root / "origin"))
@@ -534,7 +592,7 @@ def _integration(archive=None, *, current0014):
         # Its exec-only fixed project/service reaches the real selected source;
         # no recovery producer may use it to recreate this source container.
         dc = []
-        extra_paths = []
+        extra_paths = [session.archive]
         held = None
         try:
             for volume in owned:
@@ -585,18 +643,18 @@ def _integration(archive=None, *, current0014):
             }.items():
                 seed += ["-e", key + "=" + value]
             call(
-                seed + ["--entrypoint", "python", "birja-backend-test:phase05-07", "-"],
+                seed + ["--entrypoint", "python", qualified_images[current]['id'], "-"],
                 f.SEED.encode(),
             )
             print("selected_cutover_originals_seeded=true", flush=True)
 
             def source_python(code, role=r.BOOT):
+                _, image = f.retained_runtime(lane)
+                assert image == qualified_images[current]['id']
                 password = 'synthetic-ops-only' if role == r.BOOT else 'c' * 64
                 return call(seed + [
                     '-e', 'DATABASE_URL=postgresql+asyncpg://' + role + ':' + password + '@postgres:5432/birja_source_test',
-                    '-v', str(app / 'backend/app') + ':/app/app:ro',
-                    '-v', str(app / 'backend/alembic') + ':/app/alembic:ro',
-                    '--entrypoint', 'python', 'birja-backend-test:phase05-07', '-'], code.encode())
+                    '--entrypoint', 'python', image, '-'], code.encode())
 
             if current0014:
                 source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0013')")
@@ -607,10 +665,10 @@ def _integration(archive=None, *, current0014):
                 # Source fixture programs select app/scheduler a*64 without TLS.
                 query_roles = "ALTER ROLE birja_scheduler PASSWORD '" + 'a'*64 + "';"
                 r.sql(dc0, query_roles, 'birja_source_test')
-                runtime_saved = f.runtime_receipt_digest(source_python(f.runtime_program(seed=True), 'birja_migrator'))
+                runtime_saved = f.runtime_receipt_digest(source_python(f.runtime_program(seed=True,revision='0013'), 'birja_migrator'))
                 source_python("from alembic import command\nfrom alembic.config import Config\ncommand.upgrade(Config('/app/alembic.ini'),'0014')", 'birja_migrator')
-                source_python(f.dividend_program(mode='prepare'), 'birja_migrator')
-                dividend_saved = f.dividend_digest(source_python(f.dividend_program(mode='exercise'), 'birja_migrator'))
+                source_python(f.dividend_program(mode='prepare',revision='0014'), 'birja_migrator')
+                dividend_saved = f.dividend_digest(source_python(f.dividend_program(mode='exercise',revision='0014'), 'birja_migrator'))
                 # The unchanged clone verifier uses this fixed maintenance DB;
                 # create it while preparing originals, before physical copies.
                 r.sql(dc0, 'CREATE DATABASE birja_ops_test OWNER birja_ops_bootstrap', 'birja_source_test')
@@ -663,7 +721,7 @@ def _integration(archive=None, *, current0014):
             call(
                 [
                     "bash",
-                    str(app / "deploy/provision-db-tls.sh"),
+                    str(tooling / "deploy/provision-db-tls.sh"),
                     "--production",
                     "--create",
                     "--approved-operation",
@@ -675,7 +733,7 @@ def _integration(archive=None, *, current0014):
             call(
                 [
                     "bash",
-                    str(app / "deploy/deploy-entrypoint.sh"),
+                    str(tooling / "deploy/deploy-entrypoint.sh"),
                     "--install",
                     "--approved-operation",
                     "install-retained-deploy",
@@ -684,6 +742,8 @@ def _integration(archive=None, *, current0014):
                 ]
             )
             release = (root / "ops/current").resolve()
+            assert {name: r.digest(release / name) for name in relocated} == selected_source['tooling']
+            assert json.loads(source_binding.read_text()) == selected_source
             retained = {
                 path: r.digest(path) for path in release.rglob("*") if path.is_file()
             }
@@ -844,6 +904,11 @@ m.main(['--check-volumes'])
                 "BIRJA_APP_DIR": str(app),
                 "BIRJA_OPS_DIR": str(release),
                 "BIRJA_MIGRATOR_CONTEXT": str(release / "backend"),
+                # The production role transition rewrites its private env file.
+                # Direct fixture inspection/cleanup must retain the same pinned
+                # image inputs instead of relying on incidental env-file keys.
+                "BIRJA_QUALIFIED_RUNTIME_IMAGE": qualified_images[current]['id'],
+                "BIRJA_QUALIFIED_MIGRATOR_IMAGE": qualified_images[current]['id'],
             }
 
             def compose(*args, data=None):

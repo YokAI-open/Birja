@@ -21,11 +21,18 @@ async def find_user_trade(db: AsyncSession, user_id: int, key: UUID) -> Trade | 
 
 
 def require_same_order(
-    trade: Trade, *, same_instrument: bool, side: str, kind: str, value: Decimal
+    trade: Trade,
+    *,
+    same_instrument: bool,
+    side: str,
+    kind: str,
+    value: Decimal,
+    portfolio_id: int,
 ) -> None:
     """Confirmation prices are deliberately excluded from economic identity."""
     if not (
         same_instrument
+        and trade.portfolio_id == portfolio_id
         and trade.side == side
         and trade.input_kind == kind
         and trade.input_value == value

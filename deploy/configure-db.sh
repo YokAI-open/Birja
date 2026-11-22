@@ -76,7 +76,12 @@ def main():
         p = private("/etc/birja/db-roles.json")
         rest = args[1:]
         root = Path("/etc/birja")
-    apply = rest == ["--apply", "--approved-operation", "populated-role-transition"]
+    resume = rest == ["--resume-portfolio-migration", "--approved-operation",
+                      "portfolio-migration-to-final"]
+    # Recovery-only synthetic Compose intentionally contains no application or
+    # migration service. Actual staged runner tests use owned dev Compose.
+    require(not resume or not synthetic)
+    apply = rest == ["--apply", "--approved-operation", "populated-role-transition"] or resume
     require(apply or rest == ["--inspect"])
     c = json.loads(p.read_text())
     require(set(c) == {"project", "db_name", "bootstrap", "password_files"})
@@ -119,6 +124,23 @@ def main():
                                input=COLLATION_PREFLIGHT.encode(), capture_output=True, timeout=15, check=False,
                                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
         require(probe.returncode == 0 and probe.stdout == b"collation_ok\n")
+        if resume:
+            running = subprocess.run(dc + ["ps", "--status", "running", "--services"],
+                capture_output=True, timeout=15, check=False,
+                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
+            require(running.returncode == 0 and not
+                    ({"backend", "scheduler"} & set(running.stdout.decode().splitlines())))
+            # The reviewed migrate image authenticates session_user exactly as
+            # birja_migrator and verifies its fixed source before touching SQL.
+            # Never invoke ordinary bootstrap/readiness on a staged schema.
+            result = subprocess.run(dc + ["run", "--rm", "--no-deps", "migrate",
+                "env", "OTP_HMAC_SECRET=migration-unused-not-an-otp-secret-000000",
+                "JWT_SECRET=migration-unused-not-a-jwt-secret-000000",
+                "EMAIL_BACKEND=resend", "RESEND_API_KEY=migration-unused",
+                "EMAIL_FROM=migration@example.invalid", "python", "-m",
+                "app.db.portfolio_migrate"], capture_output=True, timeout=200, check=False,
+                env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "LANG": "C.UTF-8"})
+            require(result.returncode == 0)
         prefix = "".join("\\set " + k + " '" + v + "'\n" for k, v in values.items())
         # The revision-selected bootstrap validates exact0014 definer/helper
         # bodies, owners, paths and ACLs before any role/table privilege change.

@@ -123,10 +123,10 @@ it("GETs through shared client with cancellation/no-store and rejects malformed 
     .mockResolvedValueOnce(new Response("{}"));
   vi.stubGlobal("fetch", fetch);
   const signal = new AbortController().signal;
-  expect(await fetchPortfolio(signal)).toEqual(body);
-  expect(fetch.mock.calls[0][0]).toBe("/api/v1/portfolio");
+  expect(await fetchPortfolio("1", signal)).toEqual(body);
+  expect(fetch.mock.calls[0][0]).toBe("/api/v2/portfolios/1");
   expect(fetch.mock.calls[0][1]).toMatchObject({ signal, cache: "no-store" });
-  await expect(fetchPortfolio()).rejects.toThrow("Unexpected portfolio response");
+  await expect(fetchPortfolio("1")).rejects.toThrow("Unexpected portfolio response");
 });
 it("rejects a source timestamp after valuation and prices attached to unavailable authority", () => {
   const future = mixedPortfolio();

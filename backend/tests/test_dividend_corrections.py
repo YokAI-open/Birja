@@ -15,12 +15,15 @@ from tests.test_stock_action_migrations import ledger
 __all__ = ["authority_case", "dividend_case", "ledger"]
 
 
-async def hold(conn, payment_id, fingerprint):
+async def hold(conn, ids, payment_id, fingerprint):
     await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
     try:
         async with AsyncSession(bind=conn, join_transaction_mode="create_savepoint") as db:
             return await dividends.record_dividend_hold(
-                db, payment_id=payment_id, expected_revision_fingerprint=fingerprint
+                db,
+                portfolio_id=ids["portfolio_id"],
+                payment_id=payment_id,
+                expected_revision_fingerprint=fingerprint,
             )
     finally:
         await conn.execute(text("RESET ROLE"))
@@ -33,9 +36,9 @@ async def test_correction_unknown_after_original_deduplicates_without_reversal(
     conn, ids = authority_case
     original = await process(conn, ids)
     revised = await successor(conn, ids, classification=classification, eligible=False)
-    result = await hold(conn, original.payment_id, revised["revision_fingerprint"])
+    result = await hold(conn, ids, original.payment_id, revised["revision_fingerprint"])
     assert result.outcome == "held_uncertain" and result.decision_id is not None
-    assert await hold(conn, original.payment_id, revised["revision_fingerprint"]) == result
+    assert await hold(conn, ids, original.payment_id, revised["revision_fingerprint"]) == result
     assert await cash(conn, ids) == Decimal("101")
     row = (
         await conn.execute(
@@ -89,8 +92,8 @@ async def test_correction_before_original_cannot_fabricate_anchor_or_zero(
     conn, ids = authority_case
     revised = await successor(conn, ids, classification=classification, eligible=False)
     with pytest.raises(dividends.DividendRefused) as error:
-        await hold(conn, 9223372036854775807, revised["revision_fingerprint"])
-    assert error.value.code == "authority_unavailable"
+        await hold(conn, ids, 9223372036854775807, revised["revision_fingerprint"])
+    assert error.value.code == "portfolio_unavailable"
     with pytest.raises(dividends.DividendRefused):
         await process(conn, revised)
     assert await cash(conn, ids) == Decimal(100)
@@ -106,11 +109,11 @@ async def test_correction_hold_requires_current_rights_and_uncertainty(authority
     conn, ids = authority_case
     original = await process(conn, ids)
     with pytest.raises(dividends.DividendRefused):
-        await hold(conn, original.payment_id, ids["revision_fingerprint"])
+        await hold(conn, ids, original.payment_id, ids["revision_fingerprint"])
     revised = await successor(conn, ids, classification="uncertain", eligible=False)
     await conn.execute(text("UPDATE stock_data_admissions SET state='denied'"))
     with pytest.raises(dividends.DividendRefused):
-        await hold(conn, original.payment_id, revised["revision_fingerprint"])
+        await hold(conn, ids, original.payment_id, revised["revision_fingerprint"])
     assert await cash(conn, ids) == Decimal(101)
     assert (
         await conn.execute(text("SELECT count(*) FROM stock_dividend_decisions"))
@@ -125,7 +128,7 @@ async def test_correction_hold_validates_bounded_work_identity(
 ):
     conn, ids = authority_case
     with pytest.raises(dividends.DividendRefused) as error:
-        await hold(conn, payment, fingerprint)
+        await hold(conn, ids, payment, fingerprint)
     assert error.value.code == "invalid_identity"
     assert await cash(conn, ids) == Decimal(100)
 

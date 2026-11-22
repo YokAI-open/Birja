@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import func, select, text
 
 from app.services import stock_trading
+from tests.stock_action_fixtures import synthetic_owned_portfolio
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 from tests.test_stock_status import financial_snapshot
 from tests.test_stock_trading_service import trade_order
@@ -61,7 +62,12 @@ async def test_opposite_side_quote_after_staging_needs_no_reconfirmation(
         monkeypatch.setattr(writer, "execute", execute)
         monkeypatch.setattr(writer, "flush", flush)
         task = asyncio.create_task(
-            stock_trading.execute(writer, user_id=uid, order=trade_order(), settings=settings)
+            stock_trading.execute(
+                writer,
+                portfolio=await synthetic_owned_portfolio(writer, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         )
         try:
             await wait_for_lock(factory, pid, task)
@@ -152,7 +158,10 @@ async def test_adversarial_change_at_actual_wait_boundary(
     # A real existing holding makes the helper's sorted row lock observable.
     async with factory() as db:
         await stock_trading.execute(
-            db, user_id=uid, order=trade_order(quantity="1"), settings=settings
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(quantity="1"),
+            settings=settings,
         )
     before = await financial_snapshot(factory)
     gate = 91090702
@@ -204,7 +213,12 @@ async def test_adversarial_change_at_actual_wait_boundary(
         monkeypatch.setattr(writer, "execute", execute)
         monkeypatch.setattr(writer, "flush", flush)
         task = asyncio.create_task(
-            stock_trading.execute(writer, user_id=uid, order=trade_order(), settings=settings)
+            stock_trading.execute(
+                writer,
+                portfolio=await synthetic_owned_portfolio(writer, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         )
         try:
             await wait_for_lock(factory, pid, task)
@@ -244,22 +258,28 @@ async def test_actual_first_fill_has_exclusive_dividend_ownership_boundary(
     factory, cid, uid, now = stock_trade_case
     order = trade_order()
     async with factory() as db:
-        fill, _ = await stock_trading.execute(db, user_id=uid, order=order, settings=settings)
+        fill, _ = await stock_trading.execute(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
+        )
         await stock_trading.execute(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=trade_order(side="sell", expected_exec_price="100"),
             settings=settings,
         )
     async with factory.begin() as db:
         quantity = await reconstruct_stock_quantity(
-            db, uid, cid, cutoff_at(fill.executed_at + timedelta(microseconds=offset)), 0
+            db,
+            (await synthetic_owned_portfolio(db, uid)).portfolio_id,
+            cid,
+            cutoff_at(fill.executed_at + timedelta(microseconds=offset)),
+            0,
         )
         assert quantity.quantity == expected
     # Sold-out current holdings never erase a historical original receipt.
     async with factory() as db:
         again, created = await stock_trading.execute(
-            db, user_id=uid, order=order, settings=settings
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
         )
         assert not created and again == fill and again.held_after == 2
 
@@ -284,7 +304,9 @@ async def test_actual_first_fill_then_matched_forward_split_preserves_units_and_
     factory, cid, uid, now = stock_trade_case
     order = trade_order()
     async with factory() as db:
-        fill, _ = await stock_trading.execute(db, user_id=uid, order=order, settings=settings)
+        fill, _ = await stock_trading.execute(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
+        )
     async with factory.begin() as db:
         cutoff = await db.scalar(select(func.clock_timestamp()))
         # The synthetic terms are explicit; the causal application, ownership
@@ -299,6 +321,7 @@ async def test_actual_first_fill_then_matched_forward_split_preserves_units_and_
                 Decimal(204),
                 "split:" + str(application.id),
                 application_id=application.id,
+                portfolio_id=(await synthetic_owned_portfolio(db, uid)).portfolio_id,
             ),
         )
         await db.execute(
@@ -319,17 +342,21 @@ async def test_actual_first_fill_then_matched_forward_split_preserves_units_and_
                 collected_at=quote_at,
             )
         )
-        old = await reconstruct_stock_quantity(db, uid, cid, cutoff_at(cutoff), 0)
-        new = await reconstruct_stock_quantity(db, uid, cid, cutoff_at(cutoff), 1)
+        old = await reconstruct_stock_quantity(
+            db, (await synthetic_owned_portfolio(db, uid)).portfolio_id, cid, cutoff_at(cutoff), 0
+        )
+        new = await reconstruct_stock_quantity(
+            db, (await synthetic_owned_portfolio(db, uid)).portfolio_id, cid, cutoff_at(cutoff), 1
+        )
         assert old.quantity == 2 and new.quantity == 4
     async with factory() as db:
         again, created = await stock_trading.execute(
-            db, user_id=uid, order=order, settings=settings
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
         )
         assert not created and again == fill
         sale, created = await stock_trading.execute(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=trade_order(side="sell", quantity="4", expected_exec_price="50"),
             settings=settings,
         )
@@ -337,7 +364,11 @@ async def test_actual_first_fill_then_matched_forward_split_preserves_units_and_
         assert sale.cash_after == 9996 and sale.authority.unit_epoch == 1
     async with factory.begin() as db:
         historical = await reconstruct_stock_quantity(
-            db, uid, cid, cutoff_at(cutoff + timedelta(microseconds=1)), 1
+            db,
+            (await synthetic_owned_portfolio(db, uid)).portfolio_id,
+            cid,
+            cutoff_at(cutoff + timedelta(microseconds=1)),
+            1,
         )
         assert historical.quantity == 4
 
@@ -365,7 +396,12 @@ async def test_final_guard_is_last_business_statement(stock_trade_case, settings
         monkeypatch.setattr(db, "execute", execute)
         monkeypatch.setattr(db, "flush", flush)
         monkeypatch.setattr(db, "commit", commit)
-        await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+        await stock_trading.execute(
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
+        )
     assert calls[-2].startswith("SELECT public.assert_stock_execution_current")
     assert calls[-1] == "commit"
     assert calls[-3] == "SET CONSTRAINTS ALL IMMEDIATE"
@@ -389,7 +425,12 @@ async def test_cancellation_during_actual_account_wait_releases_everything(
         )
         pid = await writer.scalar(select(func.pg_backend_pid()))
         task = asyncio.create_task(
-            stock_trading.execute(writer, user_id=uid, order=trade_order(), settings=settings)
+            stock_trading.execute(
+                writer,
+                portfolio=await synthetic_owned_portfolio(writer, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         )
         try:
             await wait_for_lock(factory, pid, task)
@@ -405,7 +446,10 @@ async def test_cancellation_during_actual_account_wait_releases_everything(
     assert await financial_snapshot(factory) == before
     async with factory() as db:
         _, created = await stock_trading.execute(
-            db, user_id=uid, order=trade_order(), settings=settings
+            db,
+            portfolio=await synthetic_owned_portfolio(db, uid),
+            order=trade_order(),
+            settings=settings,
         )
         assert created
 
@@ -429,7 +473,12 @@ async def test_runtime_calls_wrapped_xid_refusal_before_financial_commit(
     monkeypatch.setattr(stock_ownership, "require_supported_transaction_epoch", reject_wrapped)
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
-            await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         assert exc.value.code == "action_unavailable" and len(seen) == 1
     assert await financial_snapshot(factory) == before
 
@@ -468,7 +517,12 @@ async def test_actual_action_processor_waits_for_first_fill_gate(
 
         monkeypatch.setattr(writer, "commit", commit)
         fill_task = asyncio.create_task(
-            stock_trading.execute(writer, user_id=uid, order=order, settings=settings)
+            stock_trading.execute(
+                writer,
+                portfolio=await synthetic_owned_portfolio(writer, uid),
+                order=order,
+                settings=settings,
+            )
         )
         processor_task = None
         try:
@@ -511,7 +565,7 @@ async def test_actual_action_processor_waits_for_first_fill_gate(
         ).one()
         assert tuple(row) == (Decimal(8), Decimal(204))
         again, created = await stock_trading.execute(
-            db, user_id=uid, order=order, settings=settings
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
         )
         assert not created and again == fill
 
@@ -553,7 +607,12 @@ async def test_actual_clock_expires_while_waiting_before_final_guard(
 
         monkeypatch.setattr(writer, "execute", execute)
         task = asyncio.create_task(
-            stock_trading.execute(writer, user_id=uid, order=trade_order(), settings=settings)
+            stock_trading.execute(
+                writer,
+                portfolio=await synthetic_owned_portfolio(writer, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         )
         try:
             await wait_for_lock(factory, pid, task)

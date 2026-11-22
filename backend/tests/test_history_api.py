@@ -1,14 +1,16 @@
 import pytest
 from sqlalchemy import select
 
-from app.models.user import User
+from app.models.user import Account, User
 from app.services.history import HistoryCursor, encode_cursor
-from tests.helpers import cash_of, sign_in, trade_count, unique_email
+from tests.helpers import cash_of, selected_portfolio_path, sign_in, trade_count, unique_email
 from tests.test_history_service import INVALID, STAMP, put_fill
 
 
 async def test_history_requires_session(auth_client):
-    assert (await auth_client.get("/api/v1/trades")).status_code == 401
+    assert (
+        await auth_client.get(await selected_portfolio_path(auth_client, "/history"))
+    ).status_code == 401
 
 
 async def test_history_private_stored_read_only(auth_client, outbox, engine, new_user):
@@ -17,9 +19,11 @@ async def test_history_private_stored_read_only(auth_client, outbox, engine, new
     async with engine.connect() as conn:
         uid = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
     await put_fill(engine, uid)
+    async with engine.connect() as conn:
+        pid = (await conn.execute(select(Account.id).where(Account.user_id == uid))).scalar_one()
     foreign = await put_fill(engine, await new_user(), side="sell", total="200")
     before = await cash_of(engine, uid), await trade_count(engine, uid)
-    response = await auth_client.get("/api/v1/trades")
+    response = await auth_client.get(await selected_portfolio_path(auth_client, "/history"))
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
@@ -49,18 +53,28 @@ async def test_history_private_stored_read_only(auth_client, outbox, engine, new
     # foreign boundary and a guessed upper boundary remain session-scoped.
     for boundary in (foreign, 9223372036854775807):
         seek = await auth_client.get(
-            "/api/v1/trades",
-            params={"cursor": encode_cursor(HistoryCursor(created_at=STAMP, id=boundary))},
+            await selected_portfolio_path(auth_client, "/history"),
+            params={
+                "cursor": encode_cursor(
+                    HistoryCursor(created_at=STAMP, id=boundary, portfolio_id=pid)
+                )
+            },
         )
         assert seek.status_code == 200
         assert seek.json()["items"] == [item]
-    older = encode_cursor(HistoryCursor(created_at=STAMP, id=int(item["id"])))
-    assert (await auth_client.get("/api/v1/trades", params={"cursor": older})).json() == {
+    older = encode_cursor(HistoryCursor(created_at=STAMP, id=int(item["id"]), portfolio_id=pid))
+    assert (
+        await auth_client.get(
+            await selected_portfolio_path(auth_client, "/history"), params={"cursor": older}
+        )
+    ).json() == {
         "items": [],
         "next_cursor": None,
     }
     for cursor in INVALID:
-        bad = await auth_client.get("/api/v1/trades", params={"cursor": cursor})
+        bad = await auth_client.get(
+            await selected_portfolio_path(auth_client, "/history"), params={"cursor": cursor}
+        )
         assert bad.status_code == 422, cursor
         assert bad.json()["detail"] == {
             "code": "invalid_cursor",
@@ -71,13 +85,21 @@ async def test_history_private_stored_read_only(auth_client, outbox, engine, new
 @pytest.mark.parametrize("limit", ["0", "101", "1.5", "true", "1e1"])
 async def test_history_bounds(auth_client, outbox, limit):
     await sign_in(auth_client, outbox, unique_email())
-    assert (await auth_client.get("/api/v1/trades", params={"limit": limit})).status_code == 422
+    assert (
+        await auth_client.get(
+            await selected_portfolio_path(auth_client, "/history"), params={"limit": limit}
+        )
+    ).status_code == 422
 
 
 @pytest.mark.parametrize("limit", [1, 100])
 async def test_history_valid_bounds(auth_client, outbox, limit):
     await sign_in(auth_client, outbox, unique_email())
-    assert (await auth_client.get("/api/v1/trades", params={"limit": limit})).json() == {
+    assert (
+        await auth_client.get(
+            await selected_portfolio_path(auth_client, "/history"), params={"limit": limit}
+        )
+    ).json() == {
         "items": [],
         "next_cursor": None,
     }
@@ -94,21 +116,33 @@ async def test_legacy_and_mixed_history_cursor_namespaces_stay_separate(
     async with engine.connect() as conn:
         uid = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
     tid = await put_fill(engine, uid, high=True)
-    old = encode_cursor(HistoryCursor(created_at=STAMP, id=tid))
-    mixed = mixed_cursor(EventHistoryCursor(STAMP, 4, tid))
-    legacy = await auth_client.get("/api/v1/trades")
+    async with engine.connect() as conn:
+        pid = (await conn.execute(select(Account.id).where(Account.user_id == uid))).scalar_one()
+    old = encode_cursor(HistoryCursor(created_at=STAMP, id=tid, portfolio_id=pid))
+    mixed = mixed_cursor(EventHistoryCursor(STAMP, 4, tid, pid))
+    legacy = await auth_client.get(await selected_portfolio_path(auth_client, "/history"))
     assert legacy.status_code == 200
     assert legacy.json()["items"][0]["id"] == str(tid)
     assert legacy.json()["items"][0]["total"] == "-100.00000000"
-    assert (await auth_client.get("/api/v1/trades", params={"cursor": old})).json() == {
+    assert (
+        await auth_client.get(
+            await selected_portfolio_path(auth_client, "/history"), params={"cursor": old}
+        )
+    ).json() == {
         "items": [],
         "next_cursor": None,
     }
-    assert (await auth_client.get("/api/v1/history", params={"cursor": mixed})).json() == {
+    assert (
+        await auth_client.get(
+            await selected_portfolio_path(auth_client, "/event-history"), params={"cursor": mixed}
+        )
+    ).json() == {
         "items": [],
         "next_cursor": None,
     }
-    for path, wrong in (("/api/v1/trades", mixed), ("/api/v1/history", old)):
-        response = await auth_client.get(path, params={"cursor": wrong})
+    for path, wrong in (("/history", mixed), ("/event-history", old)):
+        response = await auth_client.get(
+            await selected_portfolio_path(auth_client, path), params={"cursor": wrong}
+        )
         assert response.status_code == 422
         assert response.json()["detail"]["code"] == "invalid_cursor"

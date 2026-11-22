@@ -1,0 +1,46 @@
+{
+  "backend/alembic/sql/0023_portfolio_closure.sql": {
+    "before": "1da9076cc99e36c2eb264dcf0801e3752d0329c5e7f54fd4a358e7ea8c3c8949",
+    "after": "59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920"
+  },
+  "backend/alembic/versions/0023_portfolio_closure_authority.py": {
+    "before": "53be2dd5070bb216cd0e2d7466adb090c9500d3fe26efebb44d75b2963bffb52",
+    "after": "d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5"
+  },
+  "backend/app/db/portfolio_bootstrap.py": {
+    "before": "5a5039030974ad83061462d21e34a94aa3577dc30a7e44fc1d9a9aa4679d2173",
+    "after": "ef9badb168626dee827ee9ee4c9fcfce72a6961c4f15e79746007a171e883791"
+  },
+  "backend/app/db/portfolio_migrate.py": {
+    "before": "49bc15388c03dffb8d52f1ef290f54195ab2e42698f96238ccf6558a39c24169",
+    "after": "b9c6291f1f636277104a3108f2c469952d620169b215b8ff6e06c1b67a922a7f"
+  },
+  "backend/app/services/portfolio_closure.py": {
+    "before": "baee05e84287e18f6d095afd536a853193c43e7fb9a22f1120bb1a5b4015c2d9",
+    "after": "f4875839baaf1379d392c285e7c20d85bd71d6c6cb12521ecefd9bda7b6abedd"
+  },
+  "backend/tests/test_portfolio_closure_api.py": {
+    "before": "05487d57958c093f7edbbea1b43c299e5255b9b1604c0a1b638fd8f3682051c8",
+    "after": "879dcccd83027fc36f1833cba74afa10b5d1024b6f34919a74c113fb38730e13"
+  },
+  "deploy/backup-snapshot.py": {
+    "before": "4579d94c0c46a49f2c1d4ad99aaae782fd08a0ccc280ea03df57ee5533cfc7f0",
+    "after": "2df09c3d6c9a447dfe00ab902f4f8c03743375cd058b5fb91cd93c1df1688cd4"
+  },
+  "deploy/db/bootstrap-roles.sql": {
+    "before": "e9441fb7d98c7143dbdfea71419abd9e43f1d8aac7dab3d9ff734d4c1730f41a",
+    "after": "acbe0cfc7b26c4c5ef013e57b634d6d368a4bd0af0a477f0e94fd2def12976a7"
+  },
+  "deploy/deploy.sh": {
+    "before": "2a74c15a11e9f1a45843b986b63ddaaafbea3a5f848ac2657b1c167cbd7c2cd2",
+    "after": "2b1e897b5a703e77f7b817ee6ec2796ca61090e4422b44b67abe33a6b5c4dbad"
+  },
+  "deploy/tests/fixtures/portfolio-recovery-0023.json": {
+    "before": "09779d2bbff13c87004ee7e3d136708a99f825367a37f344a253f39e886948c4",
+    "after": "a179dc551a395d2381e0ac2c6074b3948b5e41054b1e2d10962d51c6ab8b21b4"
+  },
+  "deploy/verify-restore.py": {
+    "before": "ba19b453980feb87d1630798497cfee445a81c0cfa419fbc9282023641a74655",
+    "after": "b3036ac2ae3d8682c387fc5b71c776204f178873d2a0e70f51f4f5ba313fffc4"
+  }
+}

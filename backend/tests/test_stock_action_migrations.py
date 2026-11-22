@@ -1,6 +1,7 @@
 """Real isolated PostgreSQL accounting invariants and privilege boundaries."""
 
 import asyncio
+import hashlib
 import os
 import shutil
 import subprocess
@@ -15,8 +16,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from tests.test_migrations import EXPECTED_HEAD, _versions
+from tests.stock_action_fixtures import install_current_runtime_roles
+from tests.test_migrations import _versions, retained_migration_db
 from tests.test_stock_migrations import _financial_snapshot, migrate
+
+__all__ = ["retained_migration_db"]
 
 ACTION_TABLES = {
     "stock_action_events",
@@ -82,6 +86,13 @@ async def ledger(
 
 
 async def event(conn: AsyncConnection, cid: int) -> tuple[int, int, int]:
+    await conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(cid)},
+    )
     eid = (
         await conn.execute(
             text(
@@ -120,7 +131,9 @@ async def event(conn: AsyncConnection, cid: int) -> tuple[int, int, int]:
     return eid, sid, rid
 
 
-async def movement(conn: AsyncConnection, cid: int, uid: int, **changes: object) -> None:
+async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes: object) -> None:
+    # These are deliberately original columns for authenticated pre-portfolio
+    # schemas; current0020 callers must use movement with an explicit owned root.
     params: dict[str, object] = {
         "c": cid,
         "u": uid,
@@ -140,7 +153,55 @@ async def movement(conn: AsyncConnection, cid: int, uid: int, **changes: object)
     await conn.execute(
         text("""INSERT INTO stock_ownership_movements
     (coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,trade_id,application_id,causal_key)
-    VALUES (:c,:u,:seq,now(),now(),:q,:before,:after,:bb,:ab,:epoch,:kind,:trade,:app,:key)"""),
+    VALUES (:c,:u,:seq,now(),now(),:q,:before,:after,:bb,:ab,:epoch,:kind,:trade,:app,:key)
+      """),
+        params,
+    )
+
+
+async def current_root(conn, uid):
+    assert (
+        await conn.execute(text("SELECT version_num FROM alembic_version"))
+    ).scalar_one() == "0023"
+    return (
+        await conn.execute(
+            text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}
+        )
+    ).scalar_one()
+
+
+async def movement(conn, cid, uid, **changes):
+    await conn.execute(
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended("
+            "'birja.stock.instrument:' || CAST(:c AS text),0))"
+        ),
+        {"c": str(cid)},
+    )
+    root = await current_root(conn, uid)
+    # Explicit current-only adapter; retained0014 seeds use retained_movement.
+    params = dict(
+        c=cid,
+        u=uid,
+        p=root,
+        seq=1,
+        q=Decimal(2),
+        before=Decimal(0),
+        after=Decimal(2),
+        bb=Decimal(0),
+        ab=Decimal(20),
+        epoch=0,
+        kind="opening",
+        trade=None,
+        app=None,
+        key="opening",
+    )
+    params.update(changes)
+    await conn.execute(
+        text("""INSERT INTO stock_ownership_movements
+      (portfolio_id,coin_id,user_id,sequence,economic_at,recorded_at,quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,cause_kind,trade_id,application_id,causal_key)
+      VALUES (:p,:c,:u,:seq,now(),now(),:q,:before,:after,:bb,:ab,:epoch,:kind,:trade,:app,:key)
+      """),
         params,
     )
 
@@ -169,6 +230,13 @@ async def movement(conn: AsyncConnection, cid: int, uid: int, **changes: object)
 )
 async def test_movement_constraints(ledger, changes) -> None:
     conn, cid, uid = ledger
+    await conn.execute(
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
+    )
     with pytest.raises(DBAPIError) as error:
         await movement(conn, cid, uid, **changes)
     assert error.value.orig.sqlstate in {"23514", "23503", "22003"}
@@ -177,6 +245,13 @@ async def test_movement_constraints(ledger, changes) -> None:
 @pytest.mark.parametrize("changes", [{"key": "other"}, {"seq": 2}])
 async def test_movement_economic_uniqueness(ledger, changes) -> None:
     conn, cid, uid = ledger
+    await conn.execute(
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
+    )
     await movement(conn, cid, uid)
     with pytest.raises(DBAPIError) as error:
         await movement(conn, cid, uid, **changes)
@@ -206,7 +281,16 @@ async def test_event_revision_source_and_current_pointer_match(ledger) -> None:
 async def test_durable_event_duplicate_refused(ledger, target) -> None:
     conn, cid, uid = ledger
     eid, sid, rid = await event(conn, cid)
-    params = {"e": eid, "s": sid, "r": rid, "u": uid, "f": "a" * 64, "c": cid}
+    root = (
+        await conn.execute(
+            text(
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',10000,10000) RETURNING id"
+            ),
+            {"u": uid},
+        )
+    ).scalar_one()
+    params = {"p": root, "e": eid, "s": sid, "r": rid, "u": uid, "f": "a" * 64, "c": cid}
     if target.startswith("revision"):
         params["ordinal"] = 1 if target == "revision_ordinal" else 2
         params["f"] = "b" * 64 if target == "revision_ordinal" else "a" * 64
@@ -230,14 +314,14 @@ async def test_durable_event_duplicate_refused(ledger, target) -> None:
     elif target == "split":
         sql = (
             "INSERT INTO "
-            "stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)"
-            " VALUES (:c,:e,:r,'2','1',now(),0,1,0,:f,:f,now())"
+            "stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at,owner_digest_version)"
+            " VALUES (:c,:e,:r,'2','1',now(),0,1,0,:f,:f,now(),2)"
         )
     else:
         sql = (
             "INSERT INTO "
-            "stock_dividend_entitlements(event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,fingerprint)"
-            " VALUES (:e,:u,:r,now(),'exclusive',1,'epoch0',0,0,2,'eligible',:f)"
+            "stock_dividend_entitlements(portfolio_id,event_id,user_id,revision_id,cutoff,cutoff_rule,version,units_basis,unit_epoch,last_movement_sequence,eligible_quantity,state,fingerprint)"
+            " VALUES (:p,:e,:u,:r,now(),'exclusive',1,'epoch0',0,0,2,'eligible',:f)"
         )
     if target in {"observation", "split", "entitlement"}:
         await conn.execute(text(sql), params)
@@ -272,8 +356,10 @@ async def test_bounded_authority_state(ledger, table, column, value) -> None:
     assert error.value.orig.sqlstate == "23514"
 
 
-async def test_populated_0010_upgrade_preserves_legacy(engine: AsyncEngine, migrated: None) -> None:
-    await migrate("0010", down=True)
+async def test_populated_0010_upgrade_preserves_legacy(
+    engine: AsyncEngine, retained_migration_db
+) -> None:
+    await migrate("0010")
     async with engine.begin() as conn:
         uid = (
             await conn.execute(
@@ -303,13 +389,13 @@ async def test_populated_0010_upgrade_preserves_legacy(engine: AsyncEngine, migr
         )
     try:
         before = await _financial_snapshot(engine)
-        await migrate("head")
-        assert await _versions(engine) == [EXPECTED_HEAD]
+        await migrate("0014")
+        assert await _versions(engine) == ["0014"]
         assert await _financial_snapshot(engine) == before
         await migrate("0010", down=True)
         assert await _financial_snapshot(engine) == before
     finally:
-        await migrate("head")
+        await migrate("0014")
         async with engine.begin() as conn:
             for table in ("trades", "holdings", "accounts"):
                 await conn.execute(text(f"DELETE FROM {table} WHERE user_id=:u"), {"u": uid})  # noqa: S608 - fixed allowlist
@@ -317,8 +403,9 @@ async def test_populated_0010_upgrade_preserves_legacy(engine: AsyncEngine, migr
 
 
 async def test_populated_accounting_downgrade_refuses_before_alter(
-    engine: AsyncEngine, migrated: None
+    engine: AsyncEngine, retained_migration_db
 ) -> None:
+    await migrate("0011")
     async with engine.begin() as conn:
         cid = (
             await conn.execute(
@@ -359,8 +446,8 @@ async def test_populated_accounting_downgrade_refuses_before_alter(
 
 
 @pytest_asyncio.fixture
-async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[None]:
-    await migrate("0010", down=True)
+async def retained_upgrade_roles(engine: AsyncEngine, retained_migration_db) -> AsyncIterator[None]:
+    await migrate("0010")
     created_roles: set[str] = set()
     async with engine.begin() as conn:
         for role in ("birja_app", "birja_scheduler", "birja_migrator"):
@@ -392,12 +479,28 @@ async def runtime_roles(engine: AsyncEngine, migrated: None) -> AsyncIterator[No
                 if exists:
                     await conn.execute(text(f"DROP OWNED BY {role}"))  # noqa: S608 - fixed isolated roles
                     await conn.execute(text(f"DROP ROLE {role}"))  # noqa: S608
-        await migrate("head")
+        await migrate("0014")
+
+
+@pytest_asyncio.fixture
+async def retained_runtime_roles(retained_upgrade_roles):
+    await retained_bootstrap()
+    yield
+
+
+@pytest_asyncio.fixture
+async def runtime_roles(engine, migrated):
+    async with engine.begin() as conn:
+        await install_current_runtime_roles(conn)
+    root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[2])
+    script = await asyncio.to_thread((root / "deploy/db/bootstrap-roles.sql").read_text)
+    await retained_bootstrap(script=script)
+    yield
 
 
 async def test_upgrade_grants_support_quantity_but_deny_cash_and_authority(
     engine: AsyncEngine,
-    runtime_roles: None,
+    retained_upgrade_roles: None,
 ) -> None:
     async with engine.connect() as conn:
         for column in ("id", "coin_id", "user_id", "side", "quantity", "cash_delta"):
@@ -462,7 +565,7 @@ async def denied(conn: AsyncConnection, statement: str) -> None:
 
 async def test_actual_runtime_grants_deny_immutable_and_authority_writes(
     engine: AsyncEngine,
-    runtime_roles: None,
+    retained_runtime_roles: None,
 ) -> None:
     async with engine.connect() as conn, conn.begin():
         for role in ("birja_app", "birja_scheduler", "birja_action_operator"):
@@ -526,7 +629,7 @@ async def test_actual_runtime_grants_deny_immutable_and_authority_writes(
 
 async def test_scheduler_grants_allow_append_with_identity_sequences(
     engine: AsyncEngine,
-    runtime_roles: None,
+    retained_runtime_roles: None,
 ) -> None:
     async with engine.connect() as conn, conn.begin():
         cid = (
@@ -552,9 +655,74 @@ async def test_scheduler_grants_allow_append_with_identity_sequences(
         await conn.rollback()
 
 
+async def retained_bootstrap_source():
+    # Immutable source matching the original0013 narrow trade-read contract.
+    # Current deployment tooling is deliberately not loaded on retained schemas.
+    # Commit c408be806fdad8e8b6ee5961c123d5be52ab096c; checked-in exact bytes
+    # also work under the backend CI job's shallow source checkout.
+    data = await asyncio.to_thread(
+        (Path(__file__).parent / "fixtures/bootstrap-roles-0013.sql").read_bytes
+    )
+    assert hashlib.sha256(data).hexdigest() == (
+        "06880ad0cf3592cd6d436c588eafaad8f4490560a1ae0e4dc23da120676421bb"
+    )
+    return data.decode()
+
+
+async def retained_bootstrap(*, script=None):
+    from sqlalchemy.engine import make_url
+
+    from tests.test_migrations import test_migration_url
+
+    root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[2])
+    script = script if script is not None else await retained_bootstrap_source()
+    password = make_url(test_migration_url()).password
+    result = await asyncio.to_thread(
+        subprocess.run,
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            "/dev/null",
+            "-f",
+            str(root / "docker-compose.test.yml"),
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "birja_test",
+            "-d",
+            "birja_test",
+            "-X",
+            "-qAt",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-v",
+            "bootstrap=birja_test",
+            "-v",
+            "apply=true",
+            "-v",
+            "db_name=birja_test",
+            "-v",
+            "app_password=test-only-app",
+            "-v",
+            "scheduler_password=test-only-scheduler",
+            "-v",
+            "migrator_password=" + password,
+        ],
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.replace(password, "[redacted]")
+
+
 async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
     engine: AsyncEngine,
-    runtime_roles: None,
+    retained_upgrade_roles: None,
 ) -> None:
     matrix = """SELECT string_agg(r||':'||t||':'||p||':'||
       has_table_privilege(r,t,p)::text,'|' ORDER BY r,t,p)
@@ -566,7 +734,7 @@ async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
     async with engine.connect() as conn:
         before = (await conn.execute(text(matrix))).scalar_one()
     root = await asyncio.to_thread(lambda: Path(__file__).resolve().parents[2])
-    script = await asyncio.to_thread((root / "deploy/db/bootstrap-roles.sql").read_text)
+    script = await retained_bootstrap_source()
     script = script.rsplit("COMMIT;", 1)[0] + matrix + ";\nROLLBACK;\n"
     docker = shutil.which("docker")
     assert docker is not None
@@ -575,6 +743,8 @@ async def test_fresh_bootstrap_grants_match_upgrade_without_repair(
         [
             docker,
             "compose",
+            "--env-file",
+            "/dev/null",
             "-f",
             str(root / "docker-compose.test.yml"),
             "exec",
@@ -641,7 +811,7 @@ async def test_verified_alias_can_observe_same_economic_revision(ledger) -> None
     ).scalar_one() == 1
 
 
-async def fill_cause(conn: AsyncConnection, cid: int, uid: int) -> int:
+async def retained_fill_cause(conn: AsyncConnection, cid: int, uid: int) -> int:
     return (
         await conn.execute(
             text("""INSERT INTO trades
@@ -654,9 +824,42 @@ async def fill_cause(conn: AsyncConnection, cid: int, uid: int) -> int:
     ).scalar_one()
 
 
+async def fill_cause(conn, cid, uid):
+    roots = (
+        (await conn.execute(text("SELECT id FROM accounts WHERE user_id=:u"), {"u": uid}))
+        .scalars()
+        .all()
+    )
+    if not roots:
+        await conn.execute(
+            text(
+                "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+                "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+            ),
+            {"u": uid},
+        )
+    root = await current_root(conn, uid)
+    return (
+        await conn.execute(
+            text("""INSERT INTO trades
+      (portfolio_id,user_id,coin_id,side,input_kind,input_value,quantity,mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key)
+      VALUES (:p,:u,:c,'buy','quantity',2,2,10,now(),10,0,-20,9980,gen_random_uuid()) RETURNING id
+      """),
+            {"p": root, "u": uid, "c": cid},
+        )
+    ).scalar_one()
+
+
 @pytest.mark.parametrize("mismatch", ["user", "coin"])
 async def test_movement_rejects_foreign_fill_cause(ledger, mismatch: str) -> None:
     conn, cid, uid = ledger
+    await conn.execute(
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
+    )
     foreign_cid = cid
     foreign_uid = uid
     if mismatch == "coin":
@@ -695,7 +898,7 @@ async def test_observation_rejects_cross_event_alias(ledger, mismatch: str) -> N
     assert error.value.orig.sqlstate == "23503"
 
 
-async def split_cause(conn: AsyncConnection, cid: int) -> int:
+async def retained_split_cause(conn: AsyncConnection, cid: int) -> int:
     eid, _, rid = await event(conn, cid)
     return (
         await conn.execute(
@@ -708,9 +911,41 @@ async def split_cause(conn: AsyncConnection, cid: int) -> int:
     ).scalar_one()
 
 
+async def split_cause(conn, cid, *, declared_coin=None):
+    for coin in sorted({cid, cid if declared_coin is None else declared_coin}):
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(coin)},
+        )
+    eid, _, rid = await event(conn, cid)
+    return (
+        await conn.execute(
+            text("""INSERT INTO stock_split_applications
+      (coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at,owner_digest_version)
+      VALUES (:c,:e,:r,'2','1',now(),0,1,0,:f,:f,now(),2) RETURNING id"""),
+            {
+                "c": cid if declared_coin is None else declared_coin,
+                "e": eid,
+                "r": rid,
+                "f": "a" * 64,
+            },
+        )
+    ).scalar_one()
+
+
 @pytest.mark.parametrize("mismatch", ["coin", "epoch"])
 async def test_movement_rejects_foreign_split_cause(ledger, mismatch: str) -> None:
     conn, cid, uid = ledger
+    await conn.execute(
+        text(
+            "INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) "
+            "VALUES (:u,'My portfolio','my portfolio',10000,10000)"
+        ),
+        {"u": uid},
+    )
     source_coin = cid
     if mismatch == "coin":
         source_coin = (
@@ -740,7 +975,6 @@ async def test_movement_rejects_foreign_split_cause(ledger, mismatch: str) -> No
 
 async def test_split_application_cannot_claim_another_event_coin(ledger) -> None:
     conn, cid, _ = ledger
-    app = await split_cause(conn, cid)
     other = (
         await conn.execute(
             text(
@@ -750,16 +984,15 @@ async def test_split_application_cannot_claim_another_event_coin(ledger) -> None
         )
     ).scalar_one()
     with pytest.raises(DBAPIError) as error:
-        await conn.execute(
-            text("UPDATE stock_split_applications SET coin_id=:c WHERE id=:a"),
-            {"c": other, "a": app},
-        )
+        # Test the causal FK at creation. An UPDATE now correctly encounters
+        # financial immutability before it could reach this original FK proof.
+        await split_cause(conn, cid, declared_coin=other)
     assert error.value.orig.sqlstate == "23503"
 
 
 async def test_valid_causes_work_under_runtime_grants_with_narrow_trade_read(
     engine: AsyncEngine,
-    runtime_roles: None,
+    retained_runtime_roles: None,
 ) -> None:
     async with engine.connect() as conn:
         tx = await conn.begin()
@@ -775,15 +1008,15 @@ async def test_valid_causes_work_under_runtime_grants_with_narrow_trade_read(
                     text("SELECT coin_id FROM stock_instruments ORDER BY coin_id LIMIT 1")
                 )
             ).scalar_one()
-            tid = await fill_cause(conn, cid, uid)
-            app = await split_cause(conn, cid)
+            tid = await retained_fill_cause(conn, cid, uid)
+            app = await retained_split_cause(conn, cid)
             await conn.execute(text("SET LOCAL ROLE birja_app"))
-            await movement(conn, cid, uid, kind="fill", trade=tid)
+            await retained_movement(conn, cid, uid, kind="fill", trade=tid)
             await conn.execute(text("RESET ROLE"))
             await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
             await conn.execute(text("SELECT id FROM trades LIMIT 1"))
             await denied(conn, "SELECT cash_after FROM trades LIMIT 1")
-            await movement(
+            await retained_movement(
                 conn,
                 cid,
                 uid,
@@ -809,10 +1042,10 @@ async def test_valid_causes_work_under_runtime_grants_with_narrow_trade_read(
 
 async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
     engine: AsyncEngine,
-    migrated: None,
+    retained_migration_db,
 ) -> None:
     """The committed concurrent index must survive and support a safe retry."""
-    await migrate("0010", down=True)
+    await migrate("0010")
     async with engine.begin() as conn:
         exists = (
             await conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname='birja_action_operator'"))
@@ -898,21 +1131,21 @@ async def test_failed_restricted_upgrade_can_retry_exact_concurrent_index(
                 await conn.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one() == "0010":
                 await conn.execute(text("DROP INDEX IF EXISTS uq_trades_id_coin_user"))
-        await migrate("head")
+        await migrate("0014")
 
 
 async def test_same_name_wrong_cause_index_is_rejected_without_repair(
     engine: AsyncEngine,
-    migrated: None,
+    retained_migration_db,
 ) -> None:
-    await migrate("0010", down=True)
+    await migrate("0010")
     try:
         async with engine.begin() as conn:
             await conn.execute(
                 text("CREATE UNIQUE INDEX uq_trades_id_coin_user ON trades(id,user_id,coin_id)")
             )
         with pytest.raises(RuntimeError, match="incompatible preexisting trade cause index"):
-            await migrate("head")
+            await migrate("0014")
         assert await _versions(engine) == ["0010"]
         async with engine.connect() as conn:
             assert (
@@ -930,15 +1163,15 @@ async def test_same_name_wrong_cause_index_is_rejected_without_repair(
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("DROP INDEX uq_trades_id_coin_user"))
-        await migrate("head")
+        await migrate("0014")
 
 
 async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
     engine: AsyncEngine,
-    migrated: None,
+    retained_migration_db,
 ) -> None:
     """Create a genuine invalid build by cancelling its old-snapshot wait."""
-    await migrate("0010", down=True)
+    await migrate("0010")
     try:
         async with engine.connect() as snapshot, engine.connect() as builder:
             snapshot = await snapshot.execution_options(isolation_level="REPEATABLE READ")
@@ -993,8 +1226,8 @@ async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
                     )
                 )
             ).scalar_one()
-        await migrate("head")
-        assert await _versions(engine) == [EXPECTED_HEAD]
+        await migrate("0014")
+        assert await _versions(engine) == ["0014"]
         async with engine.connect() as conn:
             assert (
                 await conn.execute(
@@ -1005,4 +1238,4 @@ async def test_cancelled_exact_concurrent_index_is_rebuilt_safely(
                 )
             ).scalar_one()
     finally:
-        await migrate("head")
+        await migrate("0014")

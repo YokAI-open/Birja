@@ -31,6 +31,8 @@ class HoldingOut(BaseModel):
 
 
 class PortfolioOut(BaseModel):
+    portfolio_id: str = Field(pattern=r"^[1-9][0-9]{0,18}$")
+    name: str
     cash: Money
     starting_cash: Money
     total_value: Money | None

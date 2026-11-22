@@ -1,3 +1,4 @@
+import { portfolioTargetFixture } from "@/test/portfolioTargetFixture";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQueries } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -5,15 +6,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiFetch } from "@/api/client";
 import { useTrade } from "./useTrade";
 
-const keys = [["me"], ["holding", "BTC"], ["prices"], ["portfolio"], ["history"]];
+const keys = [
+  ["holding", "first@example.test", "1", "BTC"],
+  ["prices"],
+  ["portfolio", "first@example.test", "1"],
+  ["history", "first@example.test", "1"],
+  ["eventHistory", "first@example.test", "1"],
+];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const fill = {
+  portfolio_id: "1",
   trade_id: 17,
   created_at: "2026-10-30T07:00:00Z",
   symbol: "BTC",
   side: "buy",
-  input_kind: "usd",
-  input_value: "100",
+  input_kind: "quantity",
+  input_value: "0.00995018",
   mid: "10000",
   as_of: "2026-10-30T07:00:00Z",
   exec_price: "10025",
@@ -39,11 +47,13 @@ describe("useTrade financial refresh", () => {
     async (side, status) => {
       document.cookie = "bj_csrf=test; path=/";
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(["me"], { email: "first@example.test" });
       const old = { cash: "10000", rows: [] };
       keys.forEach((key) => client.setQueryData(key, old));
       const releases = new Map<string, (r: Response) => void>();
       const fetchMock = vi.fn((path: string) => {
-        if (path === "/api/v1/trades") return Promise.resolve(json({ ...fill, side }, status));
+        if (path === "/api/v2/portfolios/1/trades")
+          return Promise.resolve(json({ ...fill, side }, status));
         return new Promise<Response>((resolve) => releases.set(path, resolve));
       });
       vi.stubGlobal("fetch", fetchMock);
@@ -60,7 +70,7 @@ describe("useTrade financial refresh", () => {
                 apiFetch(`/view/${queryKey[0]}`, { signal }),
             })),
           });
-          return { trade: useTrade("BTC"), views };
+          return { trade: useTrade(portfolioTargetFixture(client), "BTC"), views };
         },
         { wrapper },
       );
@@ -69,7 +79,7 @@ describe("useTrade financial refresh", () => {
       act(() => {
         pending = result.current.trade
           .mutateAsync({
-            order: { symbol: "BTC", side, quantity: "0.01" },
+            order: { symbol: "BTC", side, quantity: "0.00995018" },
             expectedMid: "10000",
             idempotencyKey: "same-key",
           })
@@ -80,7 +90,7 @@ describe("useTrade financial refresh", () => {
       });
       await waitFor(() => expect(releases.size).toBe(5));
       expect(completed).toBe(false);
-      expect(result.current.trade.isPending).toBe(true);
+      expect(result.current.trade.data).toEqual({ ...fill, side });
       keys.forEach((key) => expect(client.getQueryData(key)).toEqual(old));
       for (const [index, key] of keys.entries()) {
         const server = { cash: "server-value", rows: [{ trade_id: 17 }] };
@@ -94,11 +104,13 @@ describe("useTrade financial refresh", () => {
         await pending;
       });
       expect(completed).toBe(true);
-      expect(client.getQueryData(["history"])).toEqual({
+      expect(client.getQueryData(["history", "first@example.test", "1"])).toEqual({
         cash: "server-value",
         rows: [{ trade_id: 17 }],
       });
-      expect(fetchMock.mock.calls.filter(([path]) => path === "/api/v1/trades")).toHaveLength(1);
+      expect(
+        fetchMock.mock.calls.filter(([path]) => path === "/api/v2/portfolios/1/trades"),
+      ).toHaveLength(1);
       unmount();
       client.clear();
     },
@@ -109,6 +121,7 @@ describe("useTrade financial refresh", () => {
     async (failure) => {
       document.cookie = "bj_csrf=test; path=/";
       const client = new QueryClient();
+      client.setQueryData(["me"], { email: "first@example.test" });
       keys.forEach((key) => client.setQueryData(key, { unchanged: true }));
       const invalidate = vi.spyOn(client, "invalidateQueries");
       const fetchMock = vi.fn(() =>
@@ -117,11 +130,14 @@ describe("useTrade financial refresh", () => {
           : Promise.resolve(json({ detail: { code: "insufficient_cash" } }, 422)),
       );
       vi.stubGlobal("fetch", fetchMock);
-      const { result, unmount } = renderHook(() => useTrade("BTC"), {
-        wrapper: ({ children }: { children: ReactNode }) => (
-          <QueryClientProvider client={client}>{children}</QueryClientProvider>
-        ),
-      });
+      const { result, unmount } = renderHook(
+        () => useTrade(portfolioTargetFixture(client), "BTC"),
+        {
+          wrapper: ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={client}>{children}</QueryClientProvider>
+          ),
+        },
+      );
       await act(async () => {
         await expect(
           result.current.mutateAsync({

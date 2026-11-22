@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import { fetchPortfolio, type Portfolio, type PortfolioHolding } from "@/api/portfolio";
 import { stockInstant, type TimedStocks } from "@/api/stocks";
 import type { AuthorityIdentity, TimedStockContext } from "@/api/stockTrades";
-import { useMe } from "./useMe";
+import type { PortfolioTarget } from "./usePortfolioTarget";
+import { financialScope, revokePortfolioTarget } from "./useQuote";
+import { eventHistorySession } from "./useEventHistory";
 
-type TimedPortfolio = Portfolio & {
+export type TimedPortfolio = Portfolio & {
   transport: { received_at: number; round_trip_ms: number };
   authority_offset_ms?: number;
 };
@@ -20,39 +22,60 @@ type HoldingGuard = {
 };
 type Guard = {
   email: string | null;
+  portfolioId: string | null;
+  session: number;
   lifecycle: number;
   serial: number;
+  // Proof knowledge and conservative time are shared by all views of this root.
   holdings: Map<string, HoldingGuard>;
-  latest: TimedPortfolio | null;
+  // Financial statements keep the response's own cash, holdings and valued_at.
+  latest: Record<"detail" | "overview", TimedPortfolio | null>;
   clock: { upper: number; at: number } | null;
 };
-const guards = new WeakMap<QueryClient, Guard>();
+const guards = new WeakMap<QueryClient, Map<string, Guard>>();
 const who = (c: QueryClient) => c.getQueryData<{ email: string } | null>(["me"])?.email ?? null;
-function guardFor(client: QueryClient) {
-  let g = guards.get(client);
-  if (g) return g;
-  g = {
-    email: who(client),
+export function portfolioGuardFor(
+  client: QueryClient,
+  email: string | null,
+  portfolioId: string | null,
+  session: number,
+) {
+  let roots = guards.get(client);
+  if (!roots) {
+    roots = new Map();
+    guards.set(client, roots);
+    const current = roots;
+    let owner = who(client);
+    client.getQueryCache().subscribe(() => {
+      const next = who(client);
+      if (next === owner) return;
+      const old = owner;
+      owner = next;
+      for (const guard of current.values()) {
+        guard.lifecycle++;
+        guard.serial++;
+        guard.holdings.clear();
+        guard.latest = { detail: null, overview: null };
+        guard.clock = null;
+      }
+      current.clear();
+      if (old !== null) client.removeQueries({ queryKey: ["portfolio", old] });
+    });
+  }
+  const key = JSON.stringify([email, portfolioId, session]);
+  const existing = roots.get(key);
+  if (existing) return existing;
+  const g: Guard = {
+    email,
+    portfolioId,
+    session,
     lifecycle: 0,
     serial: 0,
     holdings: new Map(),
-    latest: null,
+    latest: { detail: null, overview: null },
     clock: null,
   };
-  guards.set(client, g);
-  const guard = g;
-  client.getQueryCache().subscribe(() => {
-    const email = who(client);
-    if (email === guard.email) return;
-    const old = guard.email;
-    guard.email = email;
-    guard.lifecycle++;
-    guard.serial++;
-    guard.holdings.clear();
-    guard.latest = null;
-    guard.clock = null;
-    if (old !== null) client.removeQueries({ queryKey: ["portfolio", old] });
-  });
+  roots.set(key, g);
   return g;
 }
 function versions(a: AuthorityIdentity): [string, number][] {
@@ -120,13 +143,15 @@ function hide(h: PortfolioHolding): PortfolioHolding {
     },
   };
 }
-function externalRestriction(
-  client: QueryClient,
-  email: string | null,
-  h: PortfolioHolding,
-): boolean {
+function externalRestriction(client: QueryClient, g: Guard, h: PortfolioHolding): boolean {
   const a = h.stock_mark?.authority;
-  const context = client.getQueryData<TimedStockContext>(["stockContext", email, h.symbol]);
+  const context = client.getQueryData<TimedStockContext>([
+    "stockContext",
+    g.email,
+    g.portfolioId,
+    g.session,
+    h.symbol,
+  ]);
   if (
     context &&
     (context.coin_id !== h.coin_id ||
@@ -142,7 +167,7 @@ function externalRestriction(
       ))
   )
     return true;
-  const stocks = client.getQueryData<TimedStocks>(["stocks", email]);
+  const stocks = client.getQueryData<TimedStocks>(["stocks", g.email]);
   if (stocks?.admission.state === "unavailable") return true;
   const item = stocks?.items.find((x) => String(x.id) === h.coin_id);
   return (
@@ -153,7 +178,12 @@ function externalRestriction(
   );
 }
 /** Suppress stock-derived values only; never calculate a replacement financial subtotal. */
-function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): TimedPortfolio {
+export function projectPortfolio(
+  client: QueryClient,
+  g: Guard,
+  incoming: TimedPortfolio,
+  view: "detail" | "overview" = "detail",
+): TimedPortfolio {
   const now = performance.now();
   let p = incoming;
   const ownUpper = upperAt(p, now),
@@ -161,14 +191,15 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
       ownUpper,
       g.clock === null ? ownUpper : g.clock.upper + Math.max(0, now - g.clock.at),
     );
+  const latest = g.latest[view];
   const staleSnapshot =
-    g.latest !== null && stockInstant(p.valued_at) < stockInstant(g.latest.valued_at);
+    latest !== null && stockInstant(p.valued_at) < stockInstant(latest.valued_at);
   const lateRestrictions = new Set(
     staleSnapshot
       ? p.holdings.filter((h) => h.stock_mark?.mark_mode === "unavailable").map((h) => h.coin_id)
       : [],
   );
-  if (staleSnapshot) p = g.latest!;
+  if (staleSnapshot) p = latest!;
   let changed = false;
   const at = stockInstant(p.valued_at);
   const holdings = p.holdings.map((h) => {
@@ -202,7 +233,7 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
       identityChanged ||
       expired ||
       boundExpired ||
-      externalRestriction(client, g.email, h) ||
+      externalRestriction(client, g, h) ||
       (saved.restrictionAt !== null &&
         at <= saved.restrictionAt &&
         mark.mark_mode !== "unavailable");
@@ -246,44 +277,63 @@ function project(client: QueryClient, g: Guard, incoming: TimedPortfolio): Timed
     };
   }
   g.clock = { upper, at: now };
-  g.latest = p;
+  g.latest[view] = p;
   return p;
 }
-export function usePortfolio() {
-  const client = useQueryClient(),
-    { data: me } = useMe();
-  const email = me?.email ?? null,
-    g = guardFor(client);
-  const key = useMemo(() => ["portfolio", email] as const, [email]);
+export function usePortfolio(target: PortfolioTarget | null) {
+  const client = useQueryClient();
+  const subscribe = useCallback(
+    (notify: () => void) => client.getQueryCache().subscribe(notify),
+    [client],
+  );
+  useSyncExternalStore(subscribe, () => eventHistorySession(client).epoch);
+  const scope = useMemo(() => financialScope(client, target), [client, target]);
+  const email = scope.owner,
+    portfolioId = scope.portfolioId,
+    epoch = scope.epoch;
+  const g = portfolioGuardFor(client, email, portfolioId, epoch);
+  const key = useMemo(
+    () => ["portfolio", email, portfolioId, epoch] as const,
+    [email, portfolioId, epoch],
+  );
   const [, tick] = useReducer((x: number) => x + 1, 0);
   const query = useQuery({
     queryKey: key,
-    enabled: email !== null,
+    enabled: scope.current(),
     retry: false,
     gcTime: 0,
     queryFn: async ({ signal }) => {
+      if (target === null || !scope.current()) throw new Error("Portfolio target changed");
       const lifecycle = g.lifecycle,
         serial = g.serial;
       const owner = client.getQueryCache().find({ queryKey: key, exact: true });
       const started = performance.now();
       try {
-        const body = await fetchPortfolio(signal);
+        const body = await fetchPortfolio(target.portfolioId, signal);
         signal.throwIfAborted();
         if (
-          who(client) !== email ||
+          !scope.current() ||
           lifecycle !== g.lifecycle ||
           serial !== g.serial ||
           client.getQueryCache().find({ queryKey: key, exact: true }) !== owner
         )
           throw new Error("Portfolio session changed");
         const received_at = performance.now();
-        return project(client, g, {
+        return projectPortfolio(client, g, {
           ...body,
           transport: { received_at, round_trip_ms: Math.max(0, received_at - started) },
         });
       } catch (error) {
         if (
-          who(client) === email &&
+          scope.current() &&
+          error instanceof ApiError &&
+          error.code === "portfolio_unavailable"
+        ) {
+          g.latest.detail = null;
+          revokePortfolioTarget(client, target);
+        }
+        if (
+          scope.current() &&
           lifecycle === g.lifecycle &&
           error instanceof ApiError &&
           error.status === 401
@@ -302,15 +352,16 @@ export function usePortfolio() {
     const update = () => {
       if (writing) return;
       clearTimeout(timer);
+      if (!scope.current()) return;
       const cached = client.getQueryData<TimedPortfolio>(key);
-      if (cached) {
-        const safe = project(client, g, cached);
+      if (cached?.portfolio_id === portfolioId) {
+        const safe = projectPortfolio(client, g, cached);
         if (safe !== cached) {
           writing = true;
           client.getQueryCache().find({ queryKey: key, exact: true })?.setState({ data: safe });
           writing = false;
         }
-        const upper = upperAt(safe, performance.now());
+        const upper = Math.max(upperAt(safe, performance.now()), g.clock?.upper ?? 0);
         const deadlines = safe.holdings.flatMap((h) =>
           h.stock_mark?.valid_until ? [Date.parse(h.stock_mark.valid_until) - upper] : [],
         );
@@ -320,11 +371,15 @@ export function usePortfolio() {
       tick();
     };
     const unsubscribe = client.getQueryCache().subscribe((event) => {
-      const [prefix, owner] = event.query.queryKey;
+      const [prefix, owner, root, session] = event.query.queryKey;
       if (
         (event.type === "updated" || event.type === "removed") &&
         owner === email &&
-        ["portfolio", "stockContext", "stocks"].includes(String(prefix))
+        (prefix === "stocks" ||
+          (prefix === "portfolioOverview"
+            ? root === epoch
+            : root === portfolioId && session === epoch)) &&
+        ["portfolio", "portfolioOverview", "stockContext", "stocks"].includes(String(prefix))
       )
         update();
     });
@@ -339,8 +394,14 @@ export function usePortfolio() {
       window.removeEventListener("focus", update);
       window.removeEventListener("visibilitychange", update);
     };
-  }, [client, email, key, g]);
+  }, [client, email, portfolioId, epoch, key, g, scope]);
   const cached = client.getQueryData<TimedPortfolio>(key);
   // Cache notifications/timers commit reductions; render never restores an older observer snapshot.
-  return { ...query, data: email !== null && who(client) === email ? cached : undefined };
+  return {
+    ...query,
+    data:
+      scope.current() && !query.isError && cached?.portfolio_id === portfolioId
+        ? cached
+        : undefined,
+  };
 }

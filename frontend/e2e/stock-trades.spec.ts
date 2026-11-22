@@ -1,7 +1,7 @@
 import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { stockFixture } from "./stock-trade-fixtures.js";
-import { signInNewUser } from "./helpers.js";
+import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
 type StockFill = Record<"exec_price" | "cash_after" | "fee" | "held_after", string>;
 
 /** Actual DOM/CSS, frozen for offline owner zoom review; no API, script or navigation. */
@@ -58,6 +58,19 @@ async function reviewSnapshot(page: Page, info: TestInfo, name: string) {
 
 test.beforeEach(() => stockFixture("fresh"));
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
+async function openOwnedPortfolio(page: Page) {
+  const id = await portfolioId(page);
+  const overview = nav(page).getByRole("link", { name: "Portfolios", exact: true });
+  await overview.click();
+  await expect(overview).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeFocused();
+  await page
+    .getByRole("link", { name: "Open portfolio", exact: true })
+    .and(page.locator(`[href="/portfolios/${id}"]`))
+    .click();
+  await expect(page).toHaveURL(`/portfolios/${id}`);
+  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeFocused();
+}
 async function ticket(page: Page) {
   await signInNewUser(page);
   const link = page.getByRole("link", { name: "Trade AAPL", exact: true });
@@ -68,7 +81,8 @@ async function ticket(page: Page) {
 }
 async function preview(page: Page, quantity = "2") {
   await page.getByLabel("Whole-share quantity").fill(quantity);
-  const response = page.waitForResponse((r) => r.url().endsWith("/api/v1/stock-trades/quote"));
+  const endpoint = await portfolioApi(page, "/stock-trades/quote");
+  const response = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint);
   await page.getByRole("button", { name: "Preview trade", exact: true }).click();
   expect((await response).status()).toBe(200);
   await expect(page.getByRole("button", { name: /^Confirm (buy|sell)$/ })).toBeEnabled();
@@ -83,8 +97,9 @@ async function preview(page: Page, quantity = "2") {
   }
 }
 async function fill(page: Page): Promise<StockFill> {
+  const endpoint = await portfolioApi(page, "/stock-trades");
   const response = page.waitForResponse(
-    (r) => r.url().endsWith("/api/v1/stock-trades") && r.request().method() === "POST",
+    (r) => new URL(r.url()).pathname === endpoint && r.request().method() === "POST",
   );
   await page.getByRole("button", { name: /^Confirm (buy|sell)$/ }).click();
   const r = await response;
@@ -103,15 +118,15 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   await ticket(page);
   await page.getByRole("button", { name: "Buy max", exact: true }).click();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("98");
-  expect((await page.request.get("/api/v1/portfolio")).status()).toBe(200);
+  expect((await page.request.get(await portfolioApi(page))).status()).toBe(200);
   await preview(page);
   const buy = await fill(page);
   expect(buy.exec_price).toBe("102.00000000");
   expect(buy.cash_after).toBe("9796.00000000");
   expect(buy.fee).toBe("0.00000000");
   expect(buy.held_after).toBe("2.00000000");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
-  const portfolio = await page.request.get("/api/v1/portfolio");
+  await openOwnedPortfolio(page);
+  const portfolio = await page.request.get(await portfolioApi(page));
   const p = await portfolio.json();
   expect(p.cash).toBe("9796.00");
   expect(p.known_value).toBe("9998.00");
@@ -145,8 +160,8 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   await preview(page, "1");
   const next = await fill(page);
   expect(next.cash_after).toBe("9794.00000000");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
-  const mixed = await (await page.request.get("/api/v1/portfolio")).json();
+  await openOwnedPortfolio(page);
+  const mixed = await (await page.request.get(await portfolioApi(page))).json();
   expect(mixed.cash).toBe("9794.00");
   expect(mixed.starting_cash).toBe("10000.00");
   expect(mixed.holdings.map((h: { symbol: string }) => h.symbol)).toEqual(["AAPL", "BTC"]);
@@ -171,7 +186,7 @@ test("actual changed ask requires renewed confirmation with the exact server del
   await expect(changes).toBeVisible();
   await expect(changes).toContainText("New execution price$103.00");
   await expect(changes).toContainText("Difference−$2.00");
-  const before = await (await page.request.get("/api/v1/portfolio")).json();
+  const before = await (await page.request.get(await portfolioApi(page))).json();
   expect(before.cash).toBe("10000.00");
   await page.screenshot({ path: info.outputPath("stock-reprice.png"), fullPage: true });
   await reviewSnapshot(page, info, "stock-reprice-review");
@@ -186,7 +201,7 @@ test("actual committed lost response resolves the original receipt with the same
   await preview(page);
   const bodies: unknown[] = [];
   let original: unknown;
-  await page.route("**/api/v1/stock-trades", async (route) => {
+  await page.route("**" + (await portfolioApi(page, "/stock-trades")), async (route) => {
     bodies.push(route.request().postDataJSON());
     const response = await route.fetch();
     if (bodies.length === 1) {
@@ -209,7 +224,7 @@ test("actual committed lost response resolves the original receipt with the same
   await expect(page.getByRole("heading", { name: "Order filled" })).toBeFocused();
   expect(bodies[1]).toEqual(bodies[0]);
   await page.screenshot({ path: info.outputPath("stock-replayed-receipt.png"), fullPage: true });
-  const p = await (await page.request.get("/api/v1/portfolio")).json();
+  const p = await (await page.request.get(await portfolioApi(page))).json();
   expect(p.cash).toBe("9796.00");
   expect(p.holdings[0].quantity).toBe("2.00000000");
 });
@@ -220,7 +235,7 @@ test("actual malformed success preserves the original attempt for safe result re
   await ticket(page);
   await preview(page);
   let count = 0;
-  await page.route("**/api/v1/stock-trades", async (route) => {
+  await page.route("**" + (await portfolioApi(page, "/stock-trades")), async (route) => {
     const response = await route.fetch();
     if (++count === 1) {
       expect(response.status()).toBe(201);
@@ -249,7 +264,7 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   await page.getByRole("button", { name: "Retry stock", exact: true }).click();
   await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
-  expect((await (await page.request.get("/api/v1/portfolio")).json()).cash).toBe("10000.00");
+  expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");
 });
 
 test("real historical closed/halted marks survive execution age while uncertain actions make totals incomplete", async ({
@@ -259,7 +274,7 @@ test("real historical closed/halted marks survive execution age while uncertain 
   await preview(page);
   await fill(page);
   stockFixture("close");
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   await expect(
     page
       .getByRole("table", { name: "Holdings", exact: true })
@@ -312,7 +327,7 @@ for (const width of [320, 375, 768, 1024, 1440]) {
     await noOverflow(page);
     await page.screenshot({ path: info.outputPath(`stock-receipt-${width}.png`), fullPage: true });
     if (width === 1440) await reviewSnapshot(page, info, "stock-receipt-review");
-    await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+    await openOwnedPortfolio(page);
     await expect(page.getByRole("table", { name: "Holdings", exact: true })).toHaveCount(
       width >= 1024 ? 1 : 0,
     );
@@ -349,7 +364,7 @@ test("keyboard-only ticket controls and stale deadlines never queue an order", a
   await page.getByRole("button", { name: "Retry stock", exact: true }).click();
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(input).toHaveValue("2");
-  expect((await (await page.request.get("/api/v1/portfolio")).json()).cash).toBe("10000.00");
+  expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");
   await noOverflow(page);
   await page.screenshot({
     path: info.outputPath("stock-keyboard-stale-draft.png"),
@@ -362,7 +377,7 @@ test("a late actual fill response cannot leak into another signed-in account", a
   await preview(page);
   let release!: () => void;
   let committed = false;
-  await page.route("**/api/v1/stock-trades", async (route) => {
+  await page.route("**" + (await portfolioApi(page, "/stock-trades")), async (route) => {
     const response = await route.fetch();
     expect(response.status()).toBe(201);
     committed = true;
@@ -381,7 +396,7 @@ test("a late actual fill response cannot leak into another signed-in account", a
   await page.goto("/trade/stocks/AAPL");
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("");
   await expect(page.getByRole("heading", { name: "Order filled", exact: true })).toHaveCount(0);
-  expect((await (await page.request.get("/api/v1/portfolio")).json()).cash).toBe("10000.00");
+  expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");
 });
 
 test("checks browser zoom support and captures explicit supplementary reflow", async ({
@@ -415,7 +430,7 @@ test("checks browser zoom support and captures explicit supplementary reflow", a
     fullPage: true,
   });
   await fill(page);
-  await nav(page).getByRole("link", { name: "Portfolio", exact: true }).click();
+  await openOwnedPortfolio(page);
   await noOverflow(page);
   await page.screenshot({
     path: info.outputPath(

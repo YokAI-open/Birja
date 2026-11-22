@@ -1,484 +1,964 @@
+import { useEffect } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useNavigate } from "react-router";
+import { MemoryRouter, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import userEvent from "@testing-library/user-event";
-import { fetchHistory } from "@/api/history";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderWithClient } from "@/test/render";
+import { afterEach, expect, it, vi } from "vitest";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { PortfolioContext } from "@/components/PortfolioContext";
 import App from "./App";
+import { DELETION_STORAGE_KEY, openDeletionRecovery } from "@/lib/portfolioDeletionAttempt";
+import { capturePortfolioDeletionIntent, DELETION_POLICY } from "@/api/portfolioDeletion";
+import { cashPortfolio } from "@/test/portfolioFixtures";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
+// Real page migration belongs to24/25; these probes verify shell and boundary
+// wiring and captured target identity without claiming future page behavior.
+const probes = vi.hoisted(() => ({ mounted: vi.fn(), actualPage: false }));
+function FinancialProbe({ page }: { page: string }) {
+  const target = useOutletContext<PortfolioTarget>();
+  const { pathname } = useLocation();
+  const { symbol } = useParams();
+  useEffect(() => {
+    probes.mounted(pathname, target);
+  }, [pathname, target]);
+  return (
+    <>
+      <h1>
+        {page}
+        {symbol ? ` ${symbol}` : ""}
+      </h1>
+      <PortfolioContext name={target.name} />
+      <p>
+        Private {target.owner} root {target.portfolioId}
+      </p>
+      <button>Financial action</button>
+    </>
+  );
+}
+vi.mock("@/pages/PortfolioPage", async (importOriginal) => {
+  const RealPage = (await importOriginal<typeof import("@/pages/PortfolioPage")>()).default;
+  return {
+    default: () => (probes.actualPage ? <RealPage /> : <FinancialProbe page="Portfolio page" />),
+  };
 });
+vi.mock("@/pages/HistoryPage", () => ({ default: () => <FinancialProbe page="History page" /> }));
+vi.mock("@/pages/TradePage", () => ({ default: () => <FinancialProbe page="Crypto" /> }));
+vi.mock("@/pages/StockTradePage", () => ({ default: () => <FinancialProbe page="Stock" /> }));
 
-const health = () =>
-  new Response(JSON.stringify({ status: "ok", db: "ok", redis: "ok" }), { status: 200 });
-
-const prices = () =>
-  new Response(
-    JSON.stringify({
-      server_time: "2026-10-28T10:00:00Z",
-      fresh_seconds: 90,
-      stale_seconds: 300,
-      items: [
-        ["BTC", "Bitcoin", "81042.35000000"],
-        ["ETH", "Ethereum", "3200.10000000"],
-      ].map(([symbol, name, price]) => ({
-        symbol,
-        name,
-        price,
-        as_of: "2026-10-28T09:59:50Z",
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const unauthorized = () =>
+  json({ detail: { code: "not_authenticated", message: "Unavailable" } }, 401);
+const first = { id: "1", name: "My portfolio" },
+  second = { id: "2", name: "Second strategy" };
+const clients: QueryClient[] = [];
+function prices() {
+  return json({
+    server_time: "2026-11-16T10:00:00Z",
+    fresh_seconds: 90,
+    stale_seconds: 300,
+    items: [
+      {
+        symbol: "BTC",
+        name: "Bitcoin",
+        price: "81042.35000000",
+        as_of: "2026-11-16T09:59:50Z",
         age_seconds: 10,
         status: "fresh",
-      })),
-    }),
-    { status: 200 },
-  );
-
-const route = (url: string, me: () => Response | Promise<Response>) => {
-  if (url === "/api/v1/me") return me();
-  if (url === "/api/v1/prices") return prices();
-  if (url === "/api/v1/holdings/BTC")
-    return new Response(JSON.stringify({ symbol: "BTC", quantity: "0" }), { status: 200 });
-  return health();
-};
-
-function stubApi(me: () => Response | Promise<Response>) {
-  const fetchMock = vi.fn((url: string) => Promise.resolve(route(url, me)));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+      },
+    ],
+  });
 }
-
-const meOk = () =>
-  new Response(JSON.stringify({ email: "a@example.com", cash_usd: "10000.00000000" }), {
-    status: 200,
-  });
-
-const unauthorized = () =>
-  new Response(JSON.stringify({ detail: { code: "not_authenticated", message: "x" } }), {
-    status: 401,
-  });
-
-describe("App", () => {
-  it("keeps Account separate from the three responsive primary destinations", async () => {
-    stubApi(meOk);
-    renderWithClient(<App />);
-    const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(nav.querySelectorAll("a")).toHaveLength(3);
-    expect(nav).not.toContainElement(screen.getByRole("link", { name: "Account" }));
-    expect(nav.className).toContain("md:static");
-    expect(nav.className).toContain("safe-area-inset-bottom");
-    expect(screen.getByRole("main").className).toContain("80px");
-    for (const link of nav.querySelectorAll("a")) {
-      expect(link.className).toContain("min-h-11");
-      expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    }
-  });
-
-  it("focuses route headings on direct entry, navigation and Back without refetch theft", async () => {
-    stubApi(meOk);
-    function Back() {
-      const navigate = useNavigate();
-      return <button onClick={() => void navigate(-1)}>Back</button>;
-    }
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
+function api({
+  identity = () => json({ email: "alice@example.test" }),
+  metadata = () => json([first]),
+}: {
+  identity?: () => Response | Promise<Response>;
+  metadata?: () => Response | Promise<Response>;
+} = {}) {
+  const fetch = vi.fn((path: string) =>
+    Promise.resolve(
+      path === "/api/v2/me"
+        ? identity()
+        : path === "/api/v2/portfolios"
+          ? metadata()
+          : path === "/api/v2/portfolios/overview"
+            ? json([])
+            : path === "/api/v1/prices"
+              ? prices()
+              : path === "/api/v1/health"
+                ? json({ status: "ok", db: "ok", redis: "ok" })
+                : path === "/api/v1/auth/refresh"
+                  ? unauthorized()
+                  : json({}, 500),
+    ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  return fetch;
+}
+function Controls() {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => void navigate(-1)}>Back</button>
+      <p data-testid="location">{useLocation().pathname}</p>
+    </>
+  );
+}
+function setup(route = "/") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  clients.push(client);
+  return {
+    client,
+    user: userEvent.setup(),
+    ...render(
       <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <Back />
+        <MemoryRouter initialEntries={[route]}>
+          <Controls />
           <App />
         </MemoryRouter>
       </QueryClientProvider>,
-    );
-    const user = userEvent.setup();
-    expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
-    await user.click(screen.getByRole("link", { name: "Account" }));
-    expect(await screen.findByRole("heading", { name: "Account", level: 1 })).toHaveFocus();
-    const signOut = screen.getByRole("button", { name: "Sign out" });
-    signOut.focus();
-    await act(async () => {
-      await client.invalidateQueries({ queryKey: ["me"] });
-    });
-    expect(signOut).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
-    client.clear();
-  });
-
-  it("never shows cached or late A portfolio/history after passive expiry and B sign-in", async () => {
-    document.cookie = "bj_csrf=synthetic; path=/";
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const portfolio = (cash: string) => ({
-      cash,
-      starting_cash: "10000.00",
-      total_value: cash,
-      total_pl: cash === "10000.00" ? "0.00" : "-1876.55",
-      total_pl_percent: cash === "10000.00" ? "0.00" : "-18.77",
-      cash_allocation_percent: "100.00",
-      valuation_complete: true,
-      known_value: cash,
-      unvalued_holding_count: 0,
-      class_values: { cash, stocks: "0", crypto: "0" },
-      class_allocation_percent: { cash: "100", stocks: "0", crypto: "0" },
-      valued_at: "2026-10-30T07:00:00Z",
-      prices_as_of: null,
-      fresh_seconds: 120,
-      stale_seconds: 300,
-      holdings: [],
-    });
-    const aHistory = {
-      items: [
-        {
-          id: "1",
-          created_at: "2026-10-30T07:00:00Z",
-          symbol: "BTC",
-          name: "Private A coin",
-          side: "buy",
-          quantity: "1",
-          exec_price: "100",
-          fee: "0.25",
-          total: "-100.25",
-        },
-      ],
-      next_cursor: null,
-    };
-    const response = (body: unknown, status = 200) =>
-      new Response(JSON.stringify(body), { status });
-    let identity: "a" | "expired" | "b" = "a";
-    let releaseA!: (r: Response) => void;
-    let releasePortfolioB!: (r: Response) => void;
-    let releaseHistoryB!: (r: Response) => void;
-    let aSignal!: AbortSignal;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((path: string, init?: RequestInit) => {
-        if (path === "/api/v1/me")
-          return Promise.resolve(
-            identity === "expired"
-              ? unauthorized()
-              : response({
-                  email: `${identity}@example.test`,
-                  cash_usd: identity === "a" ? "8123.45" : "10000.00",
-                }),
-          );
-        if (path === "/api/v1/auth/refresh") return Promise.resolve(unauthorized());
-        if (path === "/api/v1/auth/request-code")
-          return Promise.resolve(response({ status: "code_sent" }, 202));
-        if (path === "/api/v1/auth/verify-code") {
-          identity = "b";
-          return Promise.resolve(response({ email: "b@example.test", cash_usd: "10000.00" }));
-        }
-        if (path === "/api/v1/portfolio")
-          return identity === "a"
-            ? Promise.resolve(response(portfolio("8123.45")))
-            : new Promise<Response>((resolve) => {
-                releasePortfolioB = resolve;
-              });
-        if (path.startsWith("/api/v1/trades") || path.startsWith("/api/v1/history")) {
-          if (identity === "a") {
-            aSignal = init!.signal as AbortSignal;
-            return new Promise<Response>((resolve) => {
-              releaseA = resolve;
-            });
-          }
-          return new Promise<Response>((resolve) => {
-            releaseHistoryB = resolve;
-          });
-        }
-        return Promise.resolve(health());
-      }),
-    );
-    client.setQueryData(["history"], { pages: [aHistory], pageParams: [undefined] });
-    client.setQueryData(["eventHistory", "a@example.test", 0], {
-      pages: [
-        {
-          items: aHistory.items.map(({ id, created_at, total, ...fill }) => ({
-            ...fill,
-            kind: "trade",
-            asset_type: "crypto",
-            id: `trade:${id}`,
-            recorded_at: created_at,
-            filled_at: created_at,
-            cash_delta: total,
-            source: null,
-            feed: null,
-            quote_at: null,
-          })),
-          next_cursor: null,
-        },
-      ],
-      pageParams: [undefined],
-    });
-    const { container, unmount } = render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/portfolio"]}>
-          <App />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    const user = userEvent.setup();
-    expect((await screen.findAllByText("$8,123.45")).length).toBeGreaterThan(0);
-    const oldMe = client.getQueryCache().find({ queryKey: ["me"] });
-    // Keep an unobserved A read alive even when the signed-in routes unmount.
-    const pendingA = client
-      .fetchQuery({
-        queryKey: ["history", "pending"],
-        queryFn: ({ signal }) => fetchHistory({}, signal),
-      })
-      .catch((error: unknown) => error);
-    identity = "expired";
-    await act(async () => {
-      await client.invalidateQueries({ queryKey: ["me"] });
-    });
-    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-    expect(client.getQueryData(["portfolio", "a@example.test"])).toBeUndefined();
-    expect(aSignal.aborted).toBe(false);
-    const frames: string[] = [];
-    const observer = new MutationObserver(() => {
-      frames.push(container.textContent ?? "");
-    });
-    observer.observe(container, { subtree: true, childList: true, characterData: true });
-    await user.type(screen.getByLabelText("Email"), "b@example.test");
-    await user.click(screen.getByRole("button", { name: "Send code" }));
-    await user.type(await screen.findByLabelText("6-digit code"), "123456");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => expect(releasePortfolioB).toBeTypeOf("function"));
-    expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(oldMe);
-    expect(oldMe!.getObserversCount()).toBe(2);
-    expect(aSignal.aborted).toBe(true);
-    expect(screen.queryByText("$8,123.45")).toBeNull();
-    await user.click(screen.getByRole("link", { name: "History" }));
-    await waitFor(() => expect(releaseHistoryB).toBeTypeOf("function"));
-    expect(screen.queryByText("Private A coin")).toBeNull();
-    await act(async () => {
-      releaseA(response(aHistory));
-      releasePortfolioB(response(portfolio("10000.00")));
-      releaseHistoryB(response({ items: [], next_cursor: null }));
-      await pendingA;
-    });
-    expect(await screen.findByText("No activity yet")).toBeVisible();
-    expect(client.getQueryData(["history", "pending"])).toBeUndefined();
-    expect(
-      frames.every((frame) => !frame.includes("$8,123.45") && !frame.includes("Private A coin")),
-    ).toBe(true);
-    observer.disconnect();
-    unmount();
-    client.clear();
-    document.cookie = "bj_csrf=; max-age=0; path=/";
-  });
-
-  it("shows a loading skeleton while /me is pending", async () => {
-    stubApi(() => new Promise<Response>(() => {}));
-    renderWithClient(<App />);
-    expect(screen.getByText("Birja")).toBeVisible();
-    const skeleton = screen.getByRole("status", { name: "Loading your account" });
-    expect(skeleton).toHaveAttribute("aria-busy", "true");
-    expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
-  });
-
-  it("shows the sign-in card when not authenticated", async () => {
-    stubApi(unauthorized);
-    renderWithClient(<App />);
-    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
-  });
-
-  it.each(["/account", "/portfolio", "/history"])(
-    "gates direct %s entry when signed out",
-    async (path) => {
-      stubApi(unauthorized);
-      renderWithClient(<App />, { route: path });
-      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-      expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
-      expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
-    },
-  );
-
-  it.each(["/portfolio", "/history"])(
-    "returns %s to sign-in after a final private-read 401",
-    async (path) => {
-      let meCalls = 0;
-      vi.stubGlobal(
-        "fetch",
-        vi.fn((url: string) => {
-          if (url === "/api/v1/me")
-            return Promise.resolve(++meCalls === 1 ? meOk() : unauthorized());
-          return Promise.resolve(unauthorized());
-        }),
-      );
-      renderWithClient(<App />, { route: path });
-      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-      expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
-      expect(screen.queryByRole("table")).toBeNull();
-    },
-  );
-
-  it("shows Markets with the nav at / when signed in", async () => {
-    stubApi(meOk);
-    renderWithClient(<App />);
-    expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
-    expect(await screen.findByText("$81,042.35")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Markets" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Account" })).not.toHaveAttribute("aria-current");
-    expect(screen.queryByRole("heading", { name: "System status" })).toBeNull();
-  });
-
-  it("falls back to sign-in when prices return 401 mid-session", async () => {
-    let meCalls = 0;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => {
-        if (url === "/api/v1/me") {
-          meCalls += 1;
-          return Promise.resolve(meCalls === 1 ? meOk() : unauthorized());
-        }
-        return Promise.resolve(unauthorized());
-      }),
-    );
-    renderWithClient(<App />);
-    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-  });
-
-  it("shows the trade page at /trade/BTC when signed in", async () => {
-    stubApi(meOk);
-    renderWithClient(<App />, { route: "/trade/BTC" });
-    expect(await screen.findByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();
-    expect(screen.getByRole("navigation", { name: "Main" })).toBeVisible();
-  });
-
-  it("shows the sign-in card at /trade/BTC when signed out", async () => {
-    stubApi(unauthorized);
-    renderWithClient(<App />, { route: "/trade/BTC" });
-    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Trade BTC" })).toBeNull();
-  });
-
-  it("redirects unknown paths to Markets", async () => {
-    stubApi(meOk);
-    renderWithClient(<App />, { route: "/unknown" });
-    expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
-  });
-
-  it("navigates from Markets to Account", async () => {
-    stubApi(meOk);
-    const { user } = renderWithClient(<App />);
-    await user.click(await screen.findByRole("link", { name: "Account" }));
-    expect(await screen.findByText("$10,000.00")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute("aria-current", "page");
-  });
-
-  it("shows the account view with the formatted balance", async () => {
-    stubApi(meOk);
-    renderWithClient(<App />, { route: "/account" });
-    expect(await screen.findByText("$10,000.00")).toBeVisible();
-    expect(screen.getByText("a@example.com")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "System status" })).toBeVisible();
-  });
-
-  it("shows an error with a retry when /me fails", async () => {
-    let calls = 0;
-    stubApi(() => {
-      calls += 1;
-      return calls === 1
-        ? new Response("{}", { status: 500 })
-        : new Response(JSON.stringify({ email: "a@example.com", cash_usd: "1.00" }), {
-            status: 200,
-          });
-    });
-    const { user } = renderWithClient(<App />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach Birja right now.");
-    await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
-  });
-
-  describe("sign out", () => {
-    it("signs out and shows the sign-in card", async () => {
-      document.cookie = "bj_csrf=tok; path=/";
-      let resolveLogout: (r: Response) => void = () => {};
-      let deferMe = false;
-      let resolveMe!: (r: Response) => void;
-      let meSignal!: AbortSignal;
-      const fetchMock = vi.fn((url: string, init: RequestInit) => {
-        if (url === "/api/v1/me" && deferMe) {
-          meSignal = init.signal as AbortSignal;
-          return new Promise<Response>((resolve) => {
-            resolveMe = resolve;
-          });
-        }
-        if (url === "/api/v1/auth/logout") {
-          return new Promise<Response>((resolve) => {
-            resolveLogout = resolve;
-          });
-        }
-        return Promise.resolve(route(url, meOk));
-      });
-      vi.stubGlobal("fetch", fetchMock);
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const user = userEvent.setup();
-      const { container } = render(
-        <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={["/account"]}>
-            <App />
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
-      await screen.findByRole("button", { name: "Sign out" });
-      const meQuery = client.getQueryCache().find({ queryKey: ["me"] });
-      deferMe = true;
-      let pendingMe!: Promise<void>;
-      act(() => {
-        pendingMe = client.invalidateQueries({ queryKey: ["me"] });
-      });
-      await waitFor(() => expect(resolveMe).toBeTypeOf("function"));
-      await user.click(await screen.findByRole("button", { name: "Sign out" }));
-      expect(await screen.findByRole("button", { name: "Signing out…" })).toBeDisabled();
-      const call = fetchMock.mock.calls.find(([u]) => u === "/api/v1/auth/logout") as unknown as [
-        string,
-        RequestInit,
-      ];
-      expect(new Headers(call[1].headers).get("X-CSRF-Token")).toBe("tok");
-      resolveLogout(new Response(null, { status: 204 }));
-      expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
-      expect(screen.queryByText("$10,000.00")).toBeNull();
-      expect(screen.queryByText("a@example.com")).toBeNull();
-      expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(meQuery);
-      expect(meQuery!.getObserversCount()).toBe(1);
-      expect(meSignal.aborted).toBe(true);
-      const frames: string[] = [];
-      const observer = new MutationObserver(() => frames.push(container.textContent ?? ""));
-      observer.observe(container, { subtree: true, childList: true, characterData: true });
-      await act(async () => {
-        resolveMe(meOk());
-        await pendingMe;
-      });
-      expect(client.getQueryData(["me"])).toBeNull();
-      expect(screen.getByRole("button", { name: "Send code" })).toBeVisible();
-      expect(screen.queryByText("$10,000.00")).toBeNull();
-      expect(screen.queryByText("a@example.com")).toBeNull();
-      expect(
-        frames.every((frame) => !frame.includes("a@example.com") && !frame.includes("$10,000.00")),
-      ).toBe(true);
-      observer.disconnect();
-      document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
-    });
-
-    it("keeps the account view and shows an error when sign-out fails", async () => {
-      document.cookie = "bj_csrf=tok; path=/";
-      vi.stubGlobal(
-        "fetch",
-        vi.fn((url: string) => {
-          if (url === "/api/v1/auth/logout") {
-            return Promise.resolve(new Response("{}", { status: 500 }));
-          }
-          return Promise.resolve(route(url, meOk));
-        }),
-      );
-      const { user } = renderWithClient(<App />, { route: "/account" });
-      await user.click(await screen.findByRole("button", { name: "Sign out" }));
-      expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't sign out. Try again.");
-      expect(screen.getByText("$10,000.00")).toBeVisible();
-      document.cookie = "bj_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
-    });
-  });
+    ),
+  };
+}
+afterEach(() => {
+  clients.splice(0).forEach((c) => c.clear());
+  vi.unstubAllGlobals();
+  probes.mounted.mockReset();
+  probes.actualPage = false;
+  document.cookie = "bj_csrf=; max-age=0; path=/";
+  sessionStorage.clear();
 });
+
+const privateJson = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+function deletionApi({
+  result,
+  listFailure = false,
+  metadata = () => ({ ...first, description: "Keep this strategy" }),
+  rows = () => [first],
+}: {
+  result?: () => Promise<Response>;
+  listFailure?: boolean;
+  metadata?: () => { id: string; name: string; description: string };
+  rows?: () => { id: string; name: string }[];
+} = {}) {
+  let closed = false;
+  const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path === "/api/v2/me") return privateJson({ email: "alice@example.test" });
+    if (path === "/api/v2/portfolios/1" && init?.method === "DELETE") {
+      const response = result
+        ? await result()
+        : privateJson({ portfolio_id: "1", state: "closed" });
+      if (response.ok) closed = true;
+      return response;
+    }
+    if (path === "/api/v2/portfolios/1/metadata")
+      return closed
+        ? privateJson({ detail: { code: "portfolio_unavailable" } }, 404)
+        : privateJson(metadata());
+    if (path === "/api/v2/portfolios/1") return privateJson(cashPortfolio());
+    if (path === "/api/v2/portfolios")
+      return closed && listFailure
+        ? privateJson({}, 503)
+        : privateJson(closed ? rows().filter((row) => row.id !== "1") : rows());
+    if (path === "/api/v2/portfolios/overview")
+      return closed && listFailure ? privateJson({}, 503) : privateJson([]);
+    if (path === "/api/v1/prices") return prices();
+    if (path === "/api/v1/health") return privateJson({ status: "ok", db: "ok", redis: "ok" });
+    return privateJson({}, 500);
+  });
+  vi.stubGlobal("fetch", fetch);
+  document.cookie = "bj_csrf=test; path=/";
+  return fetch;
+}
+it("mounts static authenticated deletion recovery outside the dynamic financial route", async () => {
+  const fetch = deletionApi();
+  setup("/portfolios/deletion");
+  expect(await screen.findByText("No deletion request to check.")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Deletion request", level: 1 })).toHaveFocus();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.some(([path]) => path.includes("/deletion/"))).toBe(false);
+  expect(screen.getByRole("link", { name: "Account" })).toBeVisible();
+});
+it("keeps the deletion lease alive while quarantine removes the financial Outlet and then opens the empty overview", async () => {
+  let release!: (response: Response) => void;
+  const fetch = deletionApi({
+    result: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByText(/This is your last active portfolio/)).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(await screen.findByRole("heading", { name: "Deleting portfolio…" })).toBeVisible();
+  expect(screen.queryByText(/Private alice/)).toBeNull();
+  expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt.portfolioId).toBe("1");
+  await act(async () => release(privateJson({ portfolio_id: "1", state: "closed" })));
+  expect(await screen.findByText("No portfolios yet")).toBeVisible();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios$/);
+  expect(screen.getByRole("heading", { name: "Portfolios", level: 1 })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Create portfolio" })).toBeEnabled();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  const financialMounts = probes.mounted.mock.calls.length;
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(probes.mounted.mock.calls).toHaveLength(financialMounts);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+});
+it("keeps a lost original named request in recovery without auto DELETE on navigation or reload", async () => {
+  const fetch = deletionApi({ result: () => Promise.reject(new TypeError("lost")) });
+  const { user, unmount } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  expect(await screen.findByRole("heading", { name: "Deletion result unconfirmed" })).toBeVisible();
+  await user.click(screen.getAllByRole("link", { name: "Portfolios" })[0]);
+  await user.click(await screen.findByRole("link", { name: "Review deletion request" }));
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/deletion$/);
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  unmount();
+  setup("/portfolios/deletion");
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+});
+it.each(["signed-out", "same-owner-new-session", "replacement-owner"])(
+  "does not navigate on a late closure after %s",
+  async (next) => {
+    let release!: (response: Response) => void;
+    deletionApi({
+      result: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    const { user, client } = setup("/portfolios/1");
+    await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+    await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    act(() => {
+      client.setQueryData(["me"], null);
+      if (next !== "signed-out")
+        client.setQueryData(["me"], {
+          email: next === "same-owner-new-session" ? "alice@example.test" : "bob@example.test",
+        });
+    });
+    if (next === "signed-out")
+      expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
+    else await screen.findByRole("navigation", { name: "Main" });
+    await act(async () => release(privateJson({ portfolio_id: "1", state: "closed" })));
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/1$/);
+    expect(screen.queryByText("Portfolio deleted.")).toBeNull();
+  },
+);
+it("does not turn a failed post-ack overview read into an empty account", async () => {
+  deletionApi({ listFailure: true });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  expect(await screen.findByText("Can't load your portfolios right now. Try again.")).toBeVisible();
+  expect(screen.queryByText("No portfolios yet")).toBeNull();
+});
+it("restores only a validated same-tab original on the static recovery route", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const fetch = deletionApi();
+  const { user } = setup("/portfolios/deletion");
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Check deletion result" }));
+  expect(await screen.findByText("No portfolios yet")).toBeVisible();
+});
+it("cancels before submit with Escape and restores the disclosure without sending DELETE", async () => {
+  const fetch = deletionApi();
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeDisabled();
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveFocus();
+  expect(screen.queryByRole("button", { name: "Delete portfolio" })).toBeNull();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Edit portfolio" }));
+  expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeDisabled();
+  await user.type(screen.getByLabelText("Description (optional)"), "Keep this draft");
+  expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeDisabled();
+});
+it("requires a fresh named review after a durable rename conflict without sending twice", async () => {
+  let name = first.name;
+  const fetch = deletionApi({
+    metadata: () => ({ ...first, name, description: "Keep" }),
+    result: async () => {
+      name = "Changed strategy";
+      return privateJson({ detail: { code: "portfolio_confirmation_changed" } }, 409);
+    },
+  });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  expect(await screen.findByText(/This portfolio's name changed/)).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Delete portfolio" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Review latest portfolio" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeEnabled(),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("heading", { name: "Delete “Changed strategy”?" })).toBeVisible();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+});
+it("keeps current-page focus and navigation when an obsolete deletion replies after leaving", async () => {
+  let release!: (response: Response) => void;
+  deletionApi({
+    result: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  await user.click(screen.getByRole("link", { name: "Account" }));
+  const heading = await screen.findByRole("heading", { name: "Account", level: 1 });
+  expect(heading).toHaveFocus();
+  await act(async () => release(privateJson({ portfolio_id: "1", state: "closed" })));
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/account$/);
+  expect(heading).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+  expect(JSON.parse(sessionStorage.getItem(DELETION_STORAGE_KEY)!).attempt.portfolioId).toBe("1");
+});
+it("does not expose a prior owner's original on a signed-in replacement session", async () => {
+  const recovery = await openDeletionRecovery("another@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: "Private prior strategy",
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const fetch = deletionApi();
+  setup("/portfolios/deletion");
+  expect(await screen.findByText("No deletion request to check.")).toBeVisible();
+  expect(screen.queryByText(/Private prior strategy/)).toBeNull();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+});
+it("offers explicit storage retry on recovery without implicitly sending any original", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const read = Storage.prototype.getItem;
+  const broken = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (
+    this: Storage,
+    key,
+  ) {
+    if (key === DELETION_STORAGE_KEY) throw new Error("storage unavailable");
+    return read.call(this, key);
+  });
+  const fetch = deletionApi();
+  const { user } = setup("/portfolios/deletion");
+  expect(
+    await screen.findByText("Can't check deletion recovery right now. Try again."),
+  ).toBeVisible();
+  broken.mockRestore();
+  await user.click(screen.getByRole("button", { name: "Retry deletion recovery" }));
+  expect(await screen.findByText(/We couldn't confirm whether/)).toHaveTextContent(first.name);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+});
+it("never unhides the original when a different same-name strategy is discovered", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const fetch = deletionApi({ rows: () => [{ id: "2", name: first.name }] });
+  const { user } = setup("/portfolios/1");
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/1$/);
+  await user.click(screen.getAllByRole("link", { name: "Portfolios" })[0]);
+  expect(await screen.findByRole("link", { name: "Review deletion request" })).toBeVisible();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+});
+it("ends on the overview without auto-opening the one remaining sibling", async () => {
+  const fetch = deletionApi({ rows: () => [first, second] });
+  const { user } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.queryByText(/This is your last active portfolio/)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await screen.findByRole("heading", { name: "Portfolios", level: 1 });
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios$/);
+  expect(probes.mounted.mock.calls.every(([, target]) => target.portfolioId === "1")).toBe(true);
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+});
+it("keeps terminal recovery refusal explicit and links only to fresh same-ID metadata review", async () => {
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const fetch = deletionApi({
+    result: async () => privateJson({ detail: { code: "portfolio_confirmation_changed" } }, 409),
+    metadata: () => ({ ...first, name: "Latest strategy", description: "" }),
+  });
+  const { user } = setup("/portfolios/deletion");
+  await user.click(await screen.findByRole("button", { name: "Check deletion result" }));
+  expect(await screen.findByText(/This portfolio's name changed/)).toBeVisible();
+  const review = screen.getByRole("link", { name: "Review latest portfolio" });
+  expect(review).toHaveAttribute("href", "/portfolios/1");
+  await user.click(review);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeEnabled(),
+  );
+  await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("heading", { name: "Delete “Latest strategy”?" })).toBeVisible();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+});
+it("focuses the private unavailable heading when a focused metadata field loses authority", async () => {
+  let active = [first];
+  deletionApi({ rows: () => active });
+  const { user, client } = setup("/portfolios/1");
+  await user.click(await screen.findByRole("button", { name: "Edit portfolio" }));
+  const field = screen.getByLabelText("Description (optional)");
+  await user.type(field, "Private draft");
+  expect(field).toHaveFocus();
+  active = [];
+  await act(async () => client.invalidateQueries({ queryKey: ["portfolios"] }));
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toHaveFocus();
+  expect(screen.queryByDisplayValue(/Private draft/)).toBeNull();
+});
+it("keeps a terminal-refusal same-ID metadata retry visible after fresh proof fails", async () => {
+  probes.actualPage = true;
+  let failMetadata = false;
+  let deletes = 0;
+  const base = deletionApi({
+    result: async () => {
+      deletes++;
+      if (deletes > 1) return privateJson({ portfolio_id: "1", state: "closed" });
+      failMetadata = true;
+      return privateJson({ detail: { code: "portfolio_confirmation_changed" } }, 409);
+    },
+    metadata: () => ({
+      ...first,
+      name: deletes ? "Latest strategy" : first.name,
+      description: "Keep",
+    }),
+  });
+  const fetch = vi.fn((path: string, init?: RequestInit) =>
+    path === "/api/v2/portfolios/1/metadata" && failMetadata
+      ? Promise.resolve(privateJson({}, 503))
+      : base(path, init),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const { user } = setup("/portfolios/1");
+  await screen.findByRole("region", { name: "Cash" });
+  await user.click(await screen.findByRole("button", { name: "Delete portfolio…" }));
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  const review = await screen.findByRole("button", { name: "Review latest portfolio" });
+  expect(
+    await screen.findByText("Can't load portfolio metadata right now. Try again."),
+  ).toBeVisible();
+  await waitFor(() => expect(review).toBeEnabled());
+  expect(screen.getByText(/This portfolio's name changed/)).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(screen.queryByText("Keep")).toBeNull();
+  expect(deletes).toBe(1);
+  const proofReads = fetch.mock.calls.filter(([path]) => path.endsWith("/metadata")).length;
+  await user.click(review);
+  await waitFor(() =>
+    expect(fetch.mock.calls.filter(([path]) => path.endsWith("/metadata")).length).toBeGreaterThan(
+      proofReads,
+    ),
+  );
+  await waitFor(() => expect(review).toBeEnabled());
+  expect(screen.getByRole("alert")).toHaveFocus();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(deletes).toBe(1);
+  failMetadata = false;
+  await user.click(review);
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toBeEnabled(),
+  );
+  expect(deletes).toBe(1);
+  await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+  expect(screen.getByRole("heading", { name: "Delete “Latest strategy”?" })).toBeVisible();
+  expect(deletes).toBe(1);
+  await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+  await screen.findByRole("heading", { name: "Portfolios", level: 1 });
+  expect(deletes).toBe(2);
+  expect(
+    fetch.mock.calls
+      .filter(([, init]) => init?.method === "DELETE")
+      .every(([path]) => path === "/api/v2/portfolios/1"),
+  ).toBe(true);
+});
+it.each(["/portfolios/1", "/portfolios/1/"])(
+  "gives real index %s one primary h1 and the persistent management host",
+  async (route) => {
+    probes.actualPage = true;
+    let reject!: (reason: unknown) => void;
+    deletionApi({
+      result: () =>
+        new Promise((_resolve, rejectResult) => {
+          reject = rejectResult;
+        }),
+    });
+    const { user } = setup(route);
+    await screen.findByRole("region", { name: "Cash" });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Portfolio", level: 1 })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeEnabled(),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Delete portfolio…" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Delete portfolio…" }));
+    await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
+    await waitFor(() => expect(reject).toBeTypeOf("function"));
+    expect(await screen.findByRole("heading", { name: "Deleting portfolio…" })).toBeVisible();
+    expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    await act(async () => reject(new TypeError("lost")));
+    expect(
+      await screen.findByRole("heading", { name: "Deletion result unconfirmed" }),
+    ).toBeVisible();
+    expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  },
+);
+it("places one generic primary h1 before a real restored-unknown detail section", async () => {
+  probes.actualPage = true;
+  const recovery = await openDeletionRecovery("alice@example.test", () => true);
+  recovery.persist(
+    capturePortfolioDeletionIntent({
+      portfolioId: "1",
+      confirmationName: first.name,
+      intentKey: crypto.randomUUID(),
+      policyVersion: DELETION_POLICY,
+    }),
+  );
+  const fetch = deletionApi();
+  setup("/portfolios/1");
+  expect(await screen.findByRole("heading", { name: "Deletion result unconfirmed" })).toBeVisible();
+  expect(screen.getAllByRole("heading")[0].tagName).toBe("H1");
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+});
+it.each(["/portfolios/1/history", "/portfolios/1/trade/BTC", "/portfolios/1/trade/stocks/AAPL"])(
+  "keeps management off nested route %s",
+  async (route) => {
+    deletionApi();
+    setup(route);
+    await screen.findByText(/Private alice@example.test root 1/);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete portfolio…" })).toBeNull();
+  },
+);
+it("keeps a trailing-slash inaccessible index generic even if stale metadata is returned", async () => {
+  probes.actualPage = true;
+  deletionApi({ rows: () => [] });
+  setup("/portfolios/1/");
+  expect(
+    await screen.findByRole("heading", { name: "Portfolio unavailable", level: 1 }),
+  ).toBeVisible();
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Delete portfolio…" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit portfolio" })).toBeNull();
+  expect(screen.queryByText(first.name)).toBeNull();
+  expect(screen.queryByText("Keep this strategy")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
+});
+
+it("keeps public Markets, Account and three safe responsive primary destinations", async () => {
+  api();
+  setup();
+  const nav = await screen.findByRole("navigation", { name: "Main" });
+  expect(nav.querySelectorAll("a")).toHaveLength(3);
+  expect(nav).not.toContainElement(screen.getByRole("link", { name: "Account" }));
+  expect(nav.className).toContain("safe-area-inset-bottom");
+  expect(screen.getByRole("main").className).toContain("80px");
+  for (const a of nav.querySelectorAll("a")) {
+    expect(a.className).toContain("min-h-11");
+    expect(a.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  }
+  expect(await screen.findByText("$81,042.35")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
+});
+it.each([
+  ["/portfolios/1", "Portfolio page"],
+  ["/portfolios/1/history", "History page"],
+  ["/portfolios/1/trade/BTC", "Crypto BTC"],
+  ["/portfolios/1/trade/stocks/AAPL", "Stock AAPL"],
+])("hands explicit %s to financial children only after metadata", async (path, heading) => {
+  let release!: (value: Response) => void;
+  api({
+    metadata: () =>
+      new Promise((r) => {
+        release = r;
+      }),
+  });
+  setup(path);
+  expect(await screen.findByRole("status", { name: "Loading portfolio" })).toBeVisible();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(probes.mounted).not.toHaveBeenCalled();
+  await act(async () => {
+    release(json([first, second]));
+  });
+  expect(await screen.findByRole("heading", { name: heading })).toBeVisible();
+  expect(probes.mounted).toHaveBeenCalledWith(
+    path,
+    expect.objectContaining({ owner: "alice@example.test", portfolioId: "1", name: first.name }),
+  );
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
+  expect(screen.getByRole("link", { name: "History" })).toHaveAttribute(
+    "href",
+    "/portfolios/1/history",
+  );
+});
+it.each([
+  ["/portfolio", "/portfolios/1", "Portfolio page"],
+  ["/history", "/portfolios/1/history", "History page"],
+  ["/trade/BTC", "/portfolios/1/trade/BTC", "Crypto BTC"],
+  ["/trade/stocks/AAPL", "/portfolios/1/trade/stocks/AAPL", "Stock AAPL"],
+])("replaces legacy %s before financial child mount", async (path, next, heading) => {
+  api();
+  setup(path);
+  expect(await screen.findByRole("heading", { name: heading })).toBeVisible();
+  expect(screen.getByTestId("location")).toHaveTextContent(next);
+  expect(probes.mounted.mock.calls.every(([url]) => url === next)).toBe(true);
+});
+it.each([
+  { values: [], heading: "No portfolio available" },
+  { values: [first, second], heading: "Portfolio required" },
+])("never selects or grants on legacy $heading", async ({ values, heading }) => {
+  const fetch = api({ metadata: () => json(values) });
+  setup("/trade/BTC");
+  expect(await screen.findByRole("heading", { name: heading })).toBeVisible();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(screen.getByTestId("location")).toHaveTextContent("/trade/BTC");
+  expect(
+    fetch.mock.calls.every(([url]) => ["/api/v2/me", "/api/v2/portfolios"].includes(url)),
+  ).toBe(true);
+  expect(screen.queryByRole("combobox")).toBeNull();
+});
+it.each(["/portfolios/01", "/portfolios/0", "/portfolios/nope/history"])(
+  "refuses missing/malformed %s without metadata or finance",
+  async (path) => {
+    const fetch = api();
+    setup(path);
+    expect(await screen.findByRole("heading", { name: "Portfolio required" })).toBeVisible();
+    expect(probes.mounted).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/v2/me"]);
+  },
+);
+it("never substitutes a sole other strategy for an explicit unavailable root", async () => {
+  api({ metadata: () => json([second]) });
+  setup("/portfolios/1/history");
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(probes.mounted).not.toHaveBeenCalled();
+  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/history");
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
+});
+it("retains verified root through nav, global Markets and trade links", async () => {
+  api({ metadata: () => json([first, second]) });
+  const { user } = setup("/portfolios/2/history");
+  await screen.findByRole("heading", { name: "History page" });
+  await user.click(screen.getByRole("link", { name: "Markets" }));
+  expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+  expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/2/trade/BTC",
+  );
+  expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
+  await user.click(screen.getByRole("link", { name: "Trade BTC" }));
+  expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toBeVisible();
+  expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
+});
+it("focuses route and Back headings without refetch focus theft", async () => {
+  api();
+  const { client, user } = setup();
+  expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
+  await user.click(screen.getByRole("link", { name: "Account" }));
+  expect(await screen.findByRole("heading", { name: "Account", level: 1 })).toHaveFocus();
+  const logout = screen.getByRole("button", { name: "Sign out" });
+  logout.focus();
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["me"] });
+  });
+  expect(logout).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(await screen.findByRole("heading", { name: "Markets", level: 1 })).toHaveFocus();
+});
+it("keeps Account identity-only with zero roots and no financial discovery", async () => {
+  const fetch = api({ metadata: () => json([]) });
+  setup("/account");
+  expect(await screen.findByText("alice@example.test")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
+  expect(screen.queryByText("Cash")).toBeNull();
+  expect(screen.queryByText(/\$10,000/)).toBeNull();
+  expect(fetch.mock.calls.some(([url]) => url === "/api/v2/portfolios")).toBe(false);
+});
+it("masks prior finance and nav memory on account switch", async () => {
+  let email = "alice@example.test";
+  let values = [first];
+  api({ identity: () => json({ email }), metadata: () => json(values) });
+  const { client, user } = setup("/portfolios/1");
+  await screen.findByText("Private alice@example.test root 1");
+  await user.click(screen.getByRole("link", { name: "Markets" }));
+  await screen.findByRole("heading", { name: "Markets" });
+  email = "bob@example.test";
+  values = [];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["me"] });
+  });
+  await waitFor(() =>
+    expect(screen.getAllByRole("link", { name: "Portfolios" })[0]).toHaveAttribute(
+      "href",
+      "/portfolios",
+    ),
+  );
+  expect(screen.queryByText(/Private alice/)).toBeNull();
+  await user.click(screen.getAllByRole("link", { name: "Portfolios" })[0]!);
+  expect(await screen.findByRole("heading", { name: "No portfolios yet" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Financial action" })).toBeNull();
+});
+it("removes finance on metadata revocation without redirecting", async () => {
+  let values = [first];
+  api({ metadata: () => json(values) });
+  const { client } = setup("/portfolios/1");
+  await screen.findByText("Private alice@example.test root 1");
+  values = [second];
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["portfolios", "alice@example.test"] });
+  });
+  expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
+  expect(screen.queryByText(/Private alice/)).toBeNull();
+  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1");
+});
+it("shows account skeleton while identity is pending", () => {
+  api({ identity: () => new Promise<Response>(() => {}) });
+  setup();
+  expect(screen.getByRole("status", { name: "Loading your account" })).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  expect(screen.queryByRole("navigation")).toBeNull();
+});
+it.each(["/account", "/portfolio", "/portfolios/1/history", "/trade/BTC"])(
+  "keeps signed-out %s behind OTP",
+  async (path) => {
+    api({ identity: unauthorized });
+    setup(path);
+    expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+    expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+    expect(probes.mounted).not.toHaveBeenCalled();
+  },
+);
+it("uses existing sign-in flow after metadata401", async () => {
+  api({ metadata: unauthorized });
+  setup("/portfolios/1");
+  expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+  expect(probes.mounted).not.toHaveBeenCalled();
+});
+it("retries identity failure without synthetic financial fields", async () => {
+  let count = 0;
+  api({ identity: () => (++count === 1 ? json({}, 500) : json({ email: "alice@example.test" })) });
+  const { user } = setup();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach Birja right now.");
+  await user.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+});
+it("redirects unknown paths to Markets", async () => {
+  api();
+  setup("/unknown");
+  expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+});
+it("preserves logout CSRF and refuses late identity/root resurrection", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  let defer = false;
+  let release!: (r: Response) => void;
+  let signal!: AbortSignal;
+  const base = api();
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/api/v2/me" && defer) {
+      signal = init!.signal as AbortSignal;
+      return new Promise<Response>((r) => {
+        release = r;
+      });
+    }
+    if (url === "/api/v1/auth/logout") return Promise.resolve(new Response(null, { status: 204 }));
+    return base(url);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const { client, user } = setup("/account");
+  await screen.findByRole("button", { name: "Sign out" });
+  const query = client.getQueryCache().find({ queryKey: ["me"] });
+  defer = true;
+  let pending!: Promise<void>;
+  act(() => {
+    pending = client.invalidateQueries({ queryKey: ["me"] });
+  });
+  await waitFor(() => expect(release).toBeTypeOf("function"));
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  expect(await screen.findByRole("button", { name: "Send code" })).toBeVisible();
+  expect(signal.aborted).toBe(true);
+  expect(client.getQueryCache().find({ queryKey: ["me"] })).toBe(query);
+  const call = fetch.mock.calls.find(([url]) => url === "/api/v1/auth/logout")!;
+  expect(new Headers(call[1]!.headers).get("X-CSRF-Token")).toBe("synthetic");
+  await act(async () => {
+    release(json({ email: "alice@example.test" }));
+    await pending;
+  });
+  expect(client.getQueryData(["me"])).toBeNull();
+  expect(screen.queryByRole("navigation")).toBeNull();
+});
+it("keeps identity visible on logout failure", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  api();
+  const { user } = setup("/account");
+  await user.click(await screen.findByRole("button", { name: "Sign out" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't sign out. Try again.");
+  expect(screen.getByText("alice@example.test")).toBeVisible();
+});
+
+it.each([{ values: [] }, { values: [first] }, { values: [first, second] }])(
+  "routes the real overview independently of target count $values.length",
+  async ({ values }) => {
+    const fetch = api({ metadata: () => json(values) });
+    setup("/portfolios");
+    expect(await screen.findByRole("heading", { name: "Portfolios", level: 1 })).toHaveFocus();
+    expect(await screen.findByRole("heading", { name: "No portfolios yet" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create portfolio" })).toBeEnabled();
+    expect(probes.mounted).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.some(([url]) => url === "/api/v2/portfolios/overview")).toBe(true);
+  },
+);
+
+it("opens a draft choice at detail, preserving the original trade route for Back", async () => {
+  api({ metadata: () => json([first, second]) });
+  const { user } = setup("/portfolios/1/trade/BTC");
+  await screen.findByRole("heading", { name: "Crypto BTC" });
+  const select = screen.getByRole("combobox", { name: "Open portfolio" });
+  await user.selectOptions(select, "2");
+  expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
+  expect(probes.mounted.mock.calls.every(([, target]) => target.portfolioId === "1")).toBe(true);
+  await user.click(screen.getByRole("button", { name: "Open selected portfolio" }));
+  expect(await screen.findByRole("heading", { name: "Portfolio", level: 1 })).toHaveFocus();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
+  expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toHaveFocus();
+  expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
+});
+
+it("navigates a current real creation receipt to its original ID and focuses detail once", async () => {
+  document.cookie = "bj_csrf=synthetic; path=/";
+  let values: { id: string; name: string }[] = [];
+  const base = api({ metadata: () => json(values) });
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/api/v2/portfolios" && init?.method === "POST") {
+      values = [{ id: "19", name: "Created strategy" }];
+      return Promise.resolve(json({ id: "19", name: "Created strategy", description: "" }, 201));
+    }
+    return base(url);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const { user, client } = setup("/portfolios");
+  await screen.findByRole("heading", { name: "No portfolios yet" });
+  await user.click(screen.getByRole("button", { name: "Create portfolio" }));
+  const name = screen.getByRole("textbox", { name: "Portfolio name" });
+  expect(name).toHaveFocus();
+  await user.type(name, "Created strategy");
+  await user.click(screen.getAllByRole("button", { name: "Create portfolio" })[1]!);
+  const heading = await screen.findByRole("heading", { name: "Portfolio", level: 1 });
+  expect(heading).toHaveFocus();
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/19$/);
+  const action = screen.getByRole("button", { name: "Financial action" });
+  action.focus();
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["portfolios"] });
+  });
+  // Revalidation may replace financial children; route focus must not rerun.
+  expect(await screen.findByRole("heading", { name: "Portfolio", level: 1 })).not.toHaveFocus();
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+});
+
+it.each(["route", "owner"])(
+  "ignores a late real creation receipt after %s departure",
+  async (departure) => {
+    document.cookie = "bj_csrf=synthetic; path=/";
+    let release!: (response: Response) => void;
+    const base = api({ metadata: () => json([first, second]) });
+    const fetch = vi.fn((url: string, init?: RequestInit) =>
+      url === "/api/v2/portfolios" && init?.method === "POST"
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : base(url),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { user, client } = setup("/portfolios");
+    await screen.findByRole("heading", { name: "No portfolios yet" });
+    await user.click(screen.getByRole("button", { name: "Create portfolio" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Portfolio name" }),
+      "Private old creation",
+    );
+    await user.click(screen.getAllByRole("button", { name: "Create portfolio" })[1]!);
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    if (departure === "route") await user.click(screen.getByRole("link", { name: "Markets" }));
+    else act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
+    await act(async () => {
+      release(json({ id: "99", name: "Private old creation", description: "" }, 201));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).not.toHaveTextContent("/portfolios/99"),
+    );
+    expect(screen.queryByText("Private old creation")).toBeNull();
+    expect(probes.mounted).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  },
+);

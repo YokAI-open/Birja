@@ -46,3 +46,17 @@ export async function signInNewUser(page: Page): Promise<string> {
   await expect(page.getByRole("heading", { name: "Markets", exact: true })).toBeVisible();
   return email;
 }
+
+/** Resolve only the actual sole owned active root created for this test user. */
+export async function portfolioId(page: Page): Promise<string> {
+  const response = await page.request.get("/api/v2/portfolios");
+  expect(response.status()).toBe(200);
+  const roots = await response.json();
+  expect(roots).toHaveLength(1);
+  expect(roots[0].id).toMatch(/^[1-9]\d*$/);
+  return roots[0].id;
+}
+
+export async function portfolioApi(page: Page, suffix = ""): Promise<string> {
+  return `/api/v2/portfolios/${await portfolioId(page)}${suffix}`;
+}

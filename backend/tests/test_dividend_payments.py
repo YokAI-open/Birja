@@ -18,6 +18,7 @@ __all__ = ["authority_case", "dividend_case", "ledger"]
 
 async def process(conn, ids, **changes):
     work = {
+        "portfolio_id": ids["portfolio_id"],
         "event_id": ids["event_id"],
         "entitlement_id": ids["entitlement_id"],
         "expected_revision_fingerprint": ids["revision_fingerprint"],
@@ -131,10 +132,11 @@ async def derive_current(conn, ids):
     # Current balance reconciles with the journal; eligibility is reconstructed independently.
     await conn.execute(
         text(
-            "INSERT INTO holdings(user_id,coin_id,quantity,cost_basis) "
-            "SELECT user_id,coin_id,after_quantity,after_basis FROM stock_ownership_movements "
-            "WHERE user_id=:user_id AND coin_id=:coin_id ORDER BY sequence DESC LIMIT 1 "
-            "ON CONFLICT (user_id,coin_id) DO NOTHING"
+            "INSERT INTO holdings(portfolio_id,user_id,coin_id,quantity,cost_basis) "
+            "SELECT portfolio_id,user_id,coin_id,after_quantity,after_basis "
+            "FROM stock_ownership_movements WHERE portfolio_id=:portfolio_id "
+            "AND user_id=:user_id AND coin_id=:coin_id ORDER BY sequence DESC LIMIT 1 "
+            "ON CONFLICT (portfolio_id,coin_id) DO NOTHING"
         ),
         ids,
     )
@@ -197,9 +199,11 @@ async def test_due_actual_producer_predecessor_entitlement_and_sold_after_cutoff
     trade = (
         await conn.execute(
             text(
-                "INSERT INTO trades(user_id,coin_id,side,input_kind,input_value,quantity,"
+                "INSERT INTO trades(portfolio_id,user_id,coin_id,side,input_kind,input_value,"
+                "quantity,"
                 "mid_price,price_as_of,exec_price,fee,cash_delta,cash_after,idempotency_key) "
-                "VALUES (:user_id,:coin_id,'sell','quantity',2,2,1,clock_timestamp(),1,0,2,100,"
+                "VALUES (:portfolio_id,:user_id,:coin_id,'sell','quantity',2,2,1,"
+                "clock_timestamp(),1,0,2,100,"
                 "gen_random_uuid()) RETURNING id"
             ),
             ids,
@@ -207,10 +211,11 @@ async def test_due_actual_producer_predecessor_entitlement_and_sold_after_cutoff
     ).scalar_one()
     await conn.execute(
         text(
-            "INSERT INTO stock_fill_facts(trade_id,coin_id,user_id,provider_asset_id,symbol,"
+            "INSERT INTO stock_fill_facts(trade_id,portfolio_id,coin_id,user_id,"
+            "provider_asset_id,symbol,"
             "company_name,listing_exchange,source,feed,bid,ask,exact_mid,held_after,event_at,"
             "collected_at,observed_at,"
-            "session_date,opens_at,closes_at,authority) SELECT id,coin_id,user_id,"
+            "session_date,opens_at,closes_at,authority) SELECT id,portfolio_id,coin_id,user_id,"
             "'synthetic-dividend-asset',"
             "'AAPL','Synthetic company','NASDAQ','alpaca','iex',1,1,1,0,price_as_of,"
             "price_as_of,price_as_of,"
@@ -221,11 +226,13 @@ async def test_due_actual_producer_predecessor_entitlement_and_sold_after_cutoff
     )
     await conn.execute(
         text(
-            "INSERT INTO stock_ownership_movements(coin_id,user_id,sequence,economic_at,"
+            "INSERT INTO stock_ownership_movements(portfolio_id,coin_id,user_id,sequence,"
+            "economic_at,"
             "recorded_at,"
             "quantity,before_quantity,after_quantity,before_basis,after_basis,unit_epoch,"
             "cause_kind,trade_id,causal_key) "
-            "VALUES (:coin_id,:user_id,2,CAST(:cutoff AS timestamptz)+interval '1 hour',"
+            "VALUES (:portfolio_id,:coin_id,:user_id,2,"
+            "CAST(:cutoff AS timestamptz)+interval '1 hour',"
             "CAST(:cutoff AS timestamptz)+interval '1 hour',-2,2,0,0,0,0,'fill',:trade,"
             "'synthetic-sold-after')"
         ),
@@ -242,7 +249,13 @@ async def test_due_actual_producer_predecessor_entitlement_and_sold_after_cutoff
     assert result.outcome == "original" and await cash(conn, ids) == Decimal(101)
     assert await process(conn, retained) == result
     async with AsyncSession(bind=conn) as db:
-        portfolio = await get_portfolio(db, user_id=ids["user_id"], settings=settings)
+        from app.services.portfolios import OwnedActivePortfolio
+
+        portfolio = await get_portfolio(
+            db,
+            portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"]),
+            settings=settings,
+        )
         assert portfolio.cash == Decimal(101) and portfolio.total_value == Decimal(101)
         assert portfolio.starting_cash == Decimal(10000)
     from tests.test_dividend_authority import successor
@@ -295,10 +308,11 @@ async def test_due_latest_held_snapshot_forbids_older_eligible_fallback(authorit
     conn, ids = authority_case
     await conn.execute(
         text(
-            "INSERT INTO stock_dividend_entitlements(event_id,user_id,revision_id,"
+            "INSERT INTO stock_dividend_entitlements(event_id,portfolio_id,user_id,revision_id,"
             "cutoff,cutoff_rule,units_basis,unit_epoch,last_movement_sequence,"
             "eligible_quantity,state,"
-            "version,supersedes_id,fingerprint) SELECT event_id,user_id,revision_id,cutoff,"
+            "version,supersedes_id,fingerprint) SELECT event_id,portfolio_id,user_id,"
+            "revision_id,cutoff,"
             "cutoff_rule,"
             "units_basis,unit_epoch,last_movement_sequence,0,'held',version+1,id,repeat('c',64) "
             "FROM stock_dividend_entitlements WHERE id=:entitlement_id"
@@ -374,6 +388,7 @@ async def test_due_active_transaction_refused_without_discarding_caller_work(aut
         with pytest.raises(dividends.DividendRefused) as error:
             await dividends.process_dividend(
                 db,
+                portfolio_id=ids["portfolio_id"],
                 event_id=ids["event_id"],
                 entitlement_id=ids["entitlement_id"],
                 expected_revision_fingerprint=ids["revision_fingerprint"],
@@ -384,11 +399,15 @@ async def test_due_active_transaction_refused_without_discarding_caller_work(aut
 
 async def test_due_cancellation_after_actual_sql_rolls_back_cash_and_payment(authority_case):
     conn, ids = authority_case
+    completed = []
 
     class CancelAfterActualSQL(AsyncSession):
         async def execute(self, statement, *args, **kwargs):
-            await super().execute(statement, *args, **kwargs)
-            raise asyncio.CancelledError
+            result = await super().execute(statement, *args, **kwargs)
+            if "SELECT * FROM public.apply_stock_dividend" in str(statement):
+                completed.append(True)
+                raise asyncio.CancelledError
+            return result
 
     await conn.execute(text("SET LOCAL ROLE birja_scheduler"))
     try:
@@ -396,12 +415,14 @@ async def test_due_cancellation_after_actual_sql_rolls_back_cash_and_payment(aut
             with pytest.raises(asyncio.CancelledError):
                 await dividends.process_dividend(
                     db,
+                    portfolio_id=ids["portfolio_id"],
                     event_id=ids["event_id"],
                     entitlement_id=ids["entitlement_id"],
                     expected_revision_fingerprint=ids["revision_fingerprint"],
                     expected_entitlement_fingerprint=ids["entitlement_fingerprint"],
                 )
             assert not db.in_transaction()
+            assert completed == [True]
     finally:
         await conn.execute(text("RESET ROLE"))
     assert await cash(conn, ids) == Decimal(100)

@@ -10,12 +10,13 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.models.price import Coin
 from app.models.trade import Holding, Trade
 from app.models.user import Account, User
 from tests.helpers import unique_email
+from tests.stock_action_fixtures import synthetic_corruption
 
 
 @pytest_asyncio.fixture
@@ -27,14 +28,44 @@ async def ids(engine: AsyncEngine, migrated: None) -> AsyncIterator[dict[str, in
         other_id = (
             await conn.execute(insert(User).values(email=unique_email("schema")).returning(User.id))
         ).scalar_one()
-        await conn.execute(
-            insert(Account).values(user_id=user_id, cash=Decimal("10000.00"), starting_cash=10000)
-        )
+        root = (
+            await conn.execute(
+                insert(Account)
+                .values(
+                    user_id=user_id,
+                    name="My portfolio",
+                    name_key="my portfolio",
+                    cash=Decimal("10000.00"),
+                    starting_cash=10000,
+                )
+                .returning(Account.id)
+            )
+        ).scalar_one()
+        other_root = (
+            await conn.execute(
+                insert(Account)
+                .values(
+                    user_id=other_id,
+                    name="My portfolio",
+                    name_key="my portfolio",
+                    cash=10000,
+                    starting_cash=10000,
+                )
+                .returning(Account.id)
+            )
+        ).scalar_one()
         coin_id = (await conn.execute(select(Coin.id).where(Coin.symbol == "BTC"))).scalar_one()
-    yield {"user": user_id, "other": other_id, "coin": coin_id}
-    async with engine.begin() as conn:
+    yield {
+        "user": user_id,
+        "root": root,
+        "other": other_id,
+        "other_root": other_root,
+        "coin": coin_id,
+    }
+    async with async_sessionmaker(engine).begin() as conn:
         for uid in (user_id, other_id):
-            await conn.execute(delete(Trade).where(Trade.user_id == uid))
+            async with synthetic_corruption(conn, "trades"):
+                await conn.execute(delete(Trade).where(Trade.user_id == uid))
             await conn.execute(delete(Holding).where(Holding.user_id == uid))
             await conn.execute(delete(Account).where(Account.user_id == uid))
             await conn.execute(delete(User).where(User.id == uid))
@@ -43,6 +74,7 @@ async def ids(engine: AsyncEngine, migrated: None) -> AsyncIterator[dict[str, in
 def _trade(ids: dict[str, int], **over: Any) -> dict[str, Any]:
     row: dict[str, Any] = {
         "user_id": ids["user"],
+        "portfolio_id": ids["root"],
         "coin_id": ids["coin"],
         "side": "buy",
         "input_kind": "usd",
@@ -63,6 +95,7 @@ def _trade(ids: dict[str, int], **over: Any) -> dict[str, Any]:
 def _holding(ids: dict[str, int], **over: Any) -> dict[str, Any]:
     row: dict[str, Any] = {
         "user_id": ids["user"],
+        "portfolio_id": ids["root"],
         "coin_id": ids["coin"],
         "quantity": Decimal("1.00000000"),
         "cost_basis": Decimal("100.00"),
@@ -100,7 +133,12 @@ async def test_valid_buy_and_sell_rows_insert(engine: AsyncEngine, ids: dict[str
 async def test_holding_default_cost_basis_is_zero(engine: AsyncEngine, ids: dict[str, int]) -> None:
     async with engine.begin() as conn:
         await conn.execute(
-            insert(Holding).values(user_id=ids["user"], coin_id=ids["coin"], quantity=Decimal("0"))
+            insert(Holding).values(
+                user_id=ids["user"],
+                portfolio_id=ids["root"],
+                coin_id=ids["coin"],
+                quantity=Decimal("0"),
+            )
         )
         cost = (
             await conn.execute(select(Holding.cost_basis).where(Holding.user_id == ids["user"]))
@@ -128,7 +166,7 @@ async def test_negative_holding_quantity_refused(engine: AsyncEngine, ids: dict[
 async def test_duplicate_holding_refused(engine: AsyncEngine, ids: dict[str, int]) -> None:
     async with engine.begin() as conn:
         await conn.execute(insert(Holding).values(_holding(ids)))
-    await _refuses(engine, insert(Holding).values(_holding(ids)), "uq_holdings_user_coin")
+    await _refuses(engine, insert(Holding).values(_holding(ids)), "uq_holdings_portfolio_coin")
 
 
 async def test_empty_holding_with_cost_refused(engine: AsyncEngine, ids: dict[str, int]) -> None:
@@ -159,7 +197,11 @@ async def test_same_key_for_other_user_allowed(engine: AsyncEngine, ids: dict[st
     async with engine.begin() as conn:
         await conn.execute(insert(Trade).values(_trade(ids, idempotency_key=key)))
         await conn.execute(
-            insert(Trade).values(_trade(ids, idempotency_key=key, user_id=ids["other"]))
+            insert(Trade).values(
+                _trade(
+                    ids, idempotency_key=key, user_id=ids["other"], portfolio_id=ids["other_root"]
+                )
+            )
         )
 
 

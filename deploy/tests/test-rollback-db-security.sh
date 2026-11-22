@@ -43,7 +43,10 @@ def options(argv):
         assert a.recovery_bundle
         archive = r.synthetic_path(a.recovery_bundle)
         sha = r.private(str(archive) + '.sha256').read_text().strip()
-        r.bundle_verify(archive, sha, required_profile='deploy-recovery-v2')
+        inventory = r.bundle_verify(archive, sha)
+        family = inventory.get('portfolio_payload', {})
+        assert (inventory.get('recovery_profile'),family.get('version'),family.get('revision')) in {
+            ('deploy-recovery-v3',2,'0020'), ('deploy-recovery-v4',3,'0023')}
     return a
 
 
@@ -448,6 +451,9 @@ def integration(archive_arg):
 args = options(sys.argv[2:])
 if args.self_test_retained_install:
     orchestration_self_test()
+    # Source/candidate compatibility is an offline actual control-flow gate.
+    # Its0023 cases prove old-app refusal before checkout/state/data changes.
+    run(['bash',str(ROOT/'deploy/tests/test-deploy-compatibility.sh')])
 elif args.self_test_recovery_bundle_inputs:
     f.input_self_test()
     for bad in [['--recovery-bundle'], ['--recovery-bundle',''], ['--unknown'], ['--self-test-recovery-bundle-inputs']*2, ['--recovery-bundle','a','--recovery-bundle','b'], ['--recovery-bundle=a','--recovery-bundle=b']]:

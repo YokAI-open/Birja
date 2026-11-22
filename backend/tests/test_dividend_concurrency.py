@@ -7,8 +7,10 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.services import dividends, trading
+from app.services.portfolios import OwnedActivePortfolio
 from app.services.trade_math import TradeRefused
 from tests.dividend_fixtures import (  # noqa: F401
     books,
@@ -27,6 +29,30 @@ from tests.test_stock_trading_concurrency import stock_request
 from tests.test_stock_trading_service import trade_order
 
 __all__ = ["dividend_case"]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "UPDATE stock_dividend_entitlements SET eligible_quantity=3 WHERE id=:entitlement_id",
+        "UPDATE stock_dividend_entitlements SET cutoff=cutoff+interval '1 second' "
+        "WHERE id=:entitlement_id",
+        "UPDATE stock_dividend_entitlements SET units_basis='shares' WHERE id=:entitlement_id",
+        "UPDATE stock_dividend_entitlements SET last_movement_sequence=99 WHERE id=:entitlement_id",
+    ],
+)
+async def test_committed_entitlement_cannot_be_rewritten_even_by_setup_owner(dividend_case, sql):
+    factory, ids = dividend_case
+    query = text("SELECT to_jsonb(e) FROM stock_dividend_entitlements e WHERE id=:entitlement_id")
+    async with factory.begin() as db:
+        before = (await db.execute(query, ids)).scalar_one()
+        with pytest.raises(DBAPIError) as error:
+            async with db.begin_nested():
+                await db.execute(text(sql), ids)
+        assert error.value.orig.sqlstate == "23514"
+        assert (await db.execute(query, ids)).scalar_one() == before
+    result = await process(factory, ids)
+    assert result.outcome == "original" and (await books(factory, ids["user_id"]))[0] == 101
 
 
 async def test_duplicate_workers_credit_once(dividend_case):
@@ -86,7 +112,7 @@ async def test_spend_races_credit_or_debit_exactly(
             try:
                 return await trading.execute(
                     db,
-                    user_id=ids["user_id"],
+                    portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"]),
                     order=trading.Order("BTC", "buy", "usd", Decimal(102)),
                     expected_mid=Decimal(100),
                     idempotency_key=uuid4(),
@@ -230,7 +256,11 @@ async def test_uncommitted_cash_and_history_are_both_invisible(dividend_case, mo
             await asyncio.wait_for(ready.wait(), 5)
             assert (await books(factory, ids["user_id"]))[0] == Decimal(100)
             async with factory() as reader:
-                assert not (await list_event_history(reader, user_id=ids["user_id"])).items
+                assert not (
+                    await list_event_history(
+                        reader, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])
+                    )
+                ).items
             release.set()
             result = await asyncio.wait_for(task, 5)
         finally:
@@ -240,5 +270,7 @@ async def test_uncommitted_cash_and_history_are_both_invisible(dividend_case, mo
             await asyncio.gather(task, return_exceptions=True)
     assert (await books(factory, ids["user_id"]))[0] == 101
     async with factory() as reader:
-        page = await list_event_history(reader, user_id=ids["user_id"])
+        page = await list_event_history(
+            reader, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])
+        )
         assert len(page.items) == 1 and page.items[0].id == f"dividend:{result.payment_id}"

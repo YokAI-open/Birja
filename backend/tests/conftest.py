@@ -76,17 +76,21 @@ def dividend_owner_prerequisite() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def provision_test_migration_owner(dividend_owner_prerequisite: None) -> None:
-    pass
+    """Finite revision-aware owner validation precedes EVERY test session.
+
+    This supports migration-only0021/22 setup, not partial runtime admission;
+    only the separately qualified current bootstrap can grant runtime authority.
+    """
 
 
 @pytest.fixture(scope="session")
 def migrated() -> None:
-    from pathlib import Path
+    import asyncio
 
-    from alembic import command
-    from alembic.config import Config
+    from tests.test_migrations import install_current_test_grants, run_test_migration
 
-    command.upgrade(Config(str(Path(__file__).resolve().parent.parent / "alembic.ini")), "head")
+    run_test_migration("head")
+    asyncio.run(install_current_test_grants())
 
 
 @pytest_asyncio.fixture(scope="session")
