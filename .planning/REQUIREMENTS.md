@@ -2,7 +2,7 @@
 
 **Milestone:** v1.2 — Multiple Strategy Portfolios
 **Defined:** 2026-11-14
-**Status:** Phases12–13 verified complete locally:18/28 requirements. Phase14 planning is checked (19plans/38tasks); its seven requirements and Phase15's three remain pending. Planning does not complete feature requirements.
+**Status:** Phases12–14 verified complete locally:25/28 requirements. Phase15 owns the three remaining recovery/acceptance requirements. Planning does not complete feature requirements.
 **Core value:** Make a trade at a real, recent market price and see what it is worth now, correct to the cent.
 
 ## v1.2 Requirements
@@ -183,4 +183,4 @@ Six carried Phase 7 requirements remain separately deferred, not completion clai
   operations, protected merges or deployment.
 
 ---
-*Last updated: 2026-11-17 UTC after final Phase12 verification. Seven assigned requirements are complete;21remain pending. Issue35 retains the explicitly accepted unresolved picomatch risk; Phase7 live requirements remain separate.*
+*Last updated: 2026-11-22 after Phase14 verification. Twenty-five requirements are complete; three Phase15 requirements remain pending. Issue35 retains its accepted scope and expiry; Phase7 live requirements remain separate.*
