@@ -1,0 +1,33 @@
+{
+  "version": "0.6.0",
+  "third_party_python_graph_unchanged": true,
+  "third_party_node_graph_unchanged": true,
+  "issue35_advisory_and_expiry_unchanged": true,
+  "changes": {
+    "backend/pyproject.toml": {
+      "before": "649ef4e7b185e2b5f8d434b388b3c4ffd071b452a72c2fc2a7557ed36d5dfbd2",
+      "after": "110658c22827f679a1810ecfb347910e994571d237e4d343266919fd37929e04"
+    },
+    "backend/uv.lock": {
+      "before": "201c4282ebf3d0025e092b3ab688516769197f16d5631cef997c88926dc09133",
+      "after": "2a0a0f985edc4d86691d76adbc75498f4858fddf4e901c7b1f8043401e1a45e3"
+    },
+    "frontend/package.json": {
+      "before": "73cd4f25fb329d7d0711321ee56dd9f07b25426eb9ddb69f3491396c2ccbdb59",
+      "after": "00ee5f1e652e44bf49734a16d4d7dadf0d1f38ff02196ae410bef433e4fcc74f"
+    },
+    "frontend/package-lock.json": {
+      "before": "1461d4f89e875a5b915278e9d39ba413608fa4ff816fab6be6b21e280db5475b",
+      "after": "266a58c739815d58a426786b0010487445b7143459df05bb1b833f9bf1cdf5b0"
+    },
+    "deploy/audit-frontend.mjs": {
+      "before": "1ead63130b67037784cae2c65b3164b287a4113c6883736ed3a8150112c871b8",
+      "after": "9ee3638bbd501ef489942c53762e9eba67ec88b2cb82f3fd1f01100e2e9bdf15"
+    }
+  },
+  "uv_lock_check_offline": {
+    "passed": true,
+    "packages": 83,
+    "interpreter": "existing CPython3.14.9"
+  }
+}

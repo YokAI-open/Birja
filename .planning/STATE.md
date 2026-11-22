@@ -5,9 +5,9 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 15
 current_plan: 4
 status: milestone_ready_for_audit
-stopped_at: Owner-authorized PR36 release/deployment workflow; CI repairs under verification
-last_updated: "2026-11-22T09:41:18.593828+00:00"
-last_activity: 2026-11-22 -- PR36 published; feature CI diagnosis; portfolios deployment authorized with stock activation deferred
+stopped_at: Production v0.6.2 verified online; final develop back-merge pending
+last_updated: "2026-11-22T22:14:00+00:00"
+last_activity: 2026-11-22 -- v0.6.2 live; exact recovery and custody verified; back-merge pending
 progress:
   total_phases: 4
   completed_phases: 4
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase15 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Next: milestone audit; publication and production remain separate.
+Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Software v0.6.2 is now published and deployed. Next: complete the develop back-merge, then the separate milestone audit.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -39,6 +39,20 @@ Raw receipts and failed-history provenance are linked from the Phase13reports.
 Phase7 owner acceptance is closed (07-OWNER-CLOSURE); missing live stock-status
 transport remains a separate engineering follow-up and stock activation stays gated. Existing issue35 risk stays unchanged through2026-12-17UTC.
 Public deletion/freeze and final lifecycle/recovery acceptance are locally verified in Phases14–15.
+
+## Release and production status — 2026-11-22
+
+Softwarev0.6.2 is published and live at main7d236e4/schema0023. All six PR39checks
+passed (3,703backend tests, criticalcoverage100%). Original finances/owners are
+preserved. Exact pre-start and post-rollout B2 restores pass. Current-API operator
+smoke41/41 and public9/9 pass; the distinct installed legacy smoke40/41result
+and explicit protocol adaptation are retained. Encrypted off-server export is
+verified. See[production receipt](releases/0.6.2/PRODUCTION.md).
+
+Stock activation remainsfalse and its transport follow-up remains separate.
+Final release/hotfix back-merge into develop is pending; milestone audit/archive
+remains the next separate planning action. Earlier local-only and unchanged-
+production statements below describe historical phase checkpoints.
 
 ## Current Position
 
@@ -1242,3 +1256,49 @@ CI repairs and actual outcomes are recorded in
 green; no merge/publication or production write/restart has occurred. Temporary
 release/rollout preparations are linked there. Reuse existing authorization;
 do not repeat completed phase plans or reopen owner acceptance.
+
+## Parallel software release qualification —2026-11-22
+
+To avoid another serial full-suite wait, release-0.6.0 is prepared in the real
+isolated /tmp/birja-release-0.6.0-worktree from freshly pulled develop26d2011,
+with a local--no-ff merge of reviewed feature92a8956. No protected branch has
+merged. FeaturePR36 must pass and merge into develop before the main release
+merge; draft release CI may run concurrently on its own isolated runners.
+All six checks remain required on both exact heads. Release prep changes only
+first-party version metadata, its audit-file bindings and documentation.
+App/migration/dependency graphs remain unchanged; proof is in METADATA-REVIEW.
+Production and stock activation remain unchanged. No planning milestone archive
+or tag is authorized by this software preparation.
+
+## Production Upgrade Hotfix Prepared —2026-11-22
+
+PR36 and releasePR37 passed all six jobs and merged. Softwarev0.6.0 is published
+at maina328007; CI/recovery/publication receipts are in releases/0.6.0/.
+Production's approved0008→0023 upgrade reached0023, then refused an inherited
+permission state. Backend/scheduler remain stopped. Original cash/holdings/trades
+and owner associations compare unchanged; both fresh pre-migration exact backups/
+restores passed. No old-app downgrade or financial repair was performed.
+
+Independent reproduction from authentic0008 grants identifies the missing finite
+bootstrap case. Locally reviewed hotfix0.6.1 admits only that ACL/private-default
+pair; existing normalization, canonical runtime authority, historical contracts,
+financial logic and dependencies remain unchanged.79affected PostgreSQL cases,
+111CI/17image/12audit contracts and static checks pass; review0blockers/0warnings.
+See debug/deploy-0008-permissions.md and releases/0.6.1/SHIPPING.md.
+
+Next: approve new hotfix branch publication, required full CI, merge/tag/recovery
+asset publication and guarded production fix-forward, followed by back-merge.
+Reuse prior owner approvals within their scope; no stock activation or milestone
+archival. Unrelated root.claude/ remains untouched.
+
+## Collation Readiness Correction Prepared —2026-11-22
+
+v0.6.1 fullyqualified/published9a143fc; deployment stillpaused. Old/newbinding
+context explains wrapper refusal; reviewedoperator composition preserves all
+checks and freshrecovery before rebind. Dryrun then correctly exposed old
+COLLATION_PREFLIGHT misclassifying builtinC NULLversions as drift. No admin SQL
+applied; originalfinances unchanged. Narrow0.6.2 corrects only knownC/POSIX
+classification, retaining realdrift/unknown/index/database guards. GenuineRED
+and6GREEN/2.54s, independentreview0/0 and parentread-onlyliveprobe pass.
+Next publishnewhotfix with approval, fullCI then finish authorizedrepair/backmerge.
+No dependency, finance/schema, stockactivation or milestonearchive change.

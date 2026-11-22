@@ -53,6 +53,13 @@ SELECT CASE WHEN
     CROSS JOIN LATERAL unnest(i.indcollation) AS used(oid)
     JOIN pg_collation c ON c.oid = used.oid
     WHERE n.nspname = 'public' AND c.collprovider IN ('b', 'c', 'i')
+      -- The built-in bytewise C/POSIX definitions are intentionally unversioned.
+      -- Unknown NULL versions remain blocked, including custom collations.
+      AND (c.collprovider = 'c' AND c.collnamespace = 'pg_catalog'::regnamespace
+           AND c.collname IN ('C', 'POSIX') AND c.collisdeterministic
+           AND c.collcollate = c.collname::text AND c.collctype = c.collname::text
+           AND c.collversion IS NULL
+           AND pg_collation_actual_version(c.oid) IS NULL) IS NOT TRUE
       AND (c.collversion IS NULL OR pg_collation_actual_version(c.oid) IS NULL
            OR c.collversion IS DISTINCT FROM pg_collation_actual_version(c.oid)))
   THEN 'collation_ok' ELSE 'collation_blocked' END;

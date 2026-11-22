@@ -2,6 +2,7 @@
 """Stdlib structural/behavioral CI contracts; no YAML package dependency."""
 
 import ast
+import hashlib
 import importlib.util
 import json
 import re
@@ -763,6 +764,66 @@ class CI(unittest.TestCase):
             self.assertIn("contains(needs.*.result, '" + result + "')", j["ci-pass"])
         self.assertRegex(j["ci-pass"], r"(?s)if \[.*exit 1")
 
+    def test_ops_exports_only_exact_archive_after_full_recovery(self):
+        ops = jobs()["ops"]
+        serial = ops.index("- name: Serial real PostgreSQL recovery")
+        stage = ops.index("- name: Stage verified recovery tooling")
+        upload = ops.index("- name: Upload verified recovery tooling")
+        cleanup = ops.index("- name: Clean fixed synthetic projects")
+        self.assertLess(serial, stage)
+        self.assertLess(stage, upload)
+        self.assertLess(upload, cleanup)
+        preparation = ops[stage:upload]
+        collection = ops[upload:cleanup]
+        self.assertIn("if: success()", preparation)
+        self.assertIn("if: success()", collection)
+        self.assertIn("if-no-files-found: error", collection)
+        self.assertIn("name: verified-recovery-tooling", collection)
+        paths = collection.split("path: |\n", 1)[1].split("if-no-files-found:", 1)[0]
+        self.assertEqual(
+            [line.strip() for line in paths.splitlines() if line.strip()],
+            [
+                "${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz",
+                "${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz.sha256",
+            ],
+        )
+        script = textwrap.dedent(preparation.split("run: |\n", 1)[1])
+        canonical = "/tmp/birja-phase14-proof"
+        self.assertIn(canonical + "/recovery.tar.gz", script)
+        payload = b"public recovery tooling fixture\n"
+        for case in ("matching", "modified", "missing"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source, runner, tools = root / "source", root / "runner", root / "bin"
+                for folder in (source, runner, tools):
+                    folder.mkdir()
+                if case != "missing":
+                    (source / "recovery.tar.gz").write_bytes(
+                        payload + (b"modified" if case == "modified" else b"")
+                    )
+                (source / "recovery.tar.gz.sha256").write_text(
+                    hashlib.sha256(payload).hexdigest() + "\n"
+                )
+                # The real snippet operates only on owned test files here.
+                sudo = tools / "sudo"
+                sudo.write_text('#!/bin/sh\nexec "$@"\n')
+                sudo.chmod(0o700)
+                result = subprocess.run(
+                    ["bash", "-c", script.replace(canonical, str(source))],
+                    env={"PATH": str(tools) + ":/usr/bin:/bin", "RUNNER_TEMP": str(runner)},
+                    capture_output=True,
+                    check=False,
+                    timeout=10,
+                )
+                if case == "matching":
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(
+                        (runner / "birja-verified-recovery/recovery.tar.gz").read_bytes(),
+                        payload,
+                    )
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+
     def test_ops_runs_real_serial_producers_with_verified_tool(self):
         ops = jobs().get("ops", "")
         rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
@@ -915,7 +976,10 @@ class PortfolioValidation(unittest.TestCase):
         def preexisting(argv, **kwargs):
             calls.append(argv)
             return SimpleNamespace(stdout=b"someone-elses-container")
-        with self.assertRaises(ValueError):
+        # Keep this mocked orchestration case independent of checkout layout.
+        # Real source-inventory behavior is covered by the separate guard tests.
+        with patch.object(runner, "security_sources", return_value={"fixed": "a"}), \
+             self.assertRaises(ValueError):
             runner.execute_security(run=preexisting)
         self.assertEqual(calls, [runner.STACK + ["ps", "-q"]])
 

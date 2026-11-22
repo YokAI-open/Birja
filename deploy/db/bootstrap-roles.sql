@@ -435,7 +435,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06') THEN
+) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06','b4d138c09ace93ff69484b1b2932a667b17a19ce453a5623cae861e3e5a6ad62') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
@@ -479,6 +479,48 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 ) defaults
 ) NOT IN ('3c6c72d38f50b3150f0c849954fa0842a0711cfcbda15936e470bc648d436ebe','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945') THEN
   RAISE EXCEPTION 'unexpected migrated closure default privileges'; END IF;
+ IF (
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('relation',c.relname,coalesce(r.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,
+  acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','S')
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('column',c.relname,a.attname,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+ CROSS JOIN LATERAL aclexplode(a.attacl) x LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE c.relnamespace='public'::regnamespace AND a.attnum>0 AND NOT a.attisdropped
+ AND x.grantee<>c.relowner
+ UNION ALL SELECT jsonb_build_array('routine',p.oid::regprocedure::text,
+  coalesce(r.rolname,'PUBLIC'),x.privilege_type,x.is_grantable)
+ FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
+ LEFT JOIN pg_roles r ON r.oid=x.grantee
+ WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
+) privileges
+) = 'b4d138c09ace93ff69484b1b2932a667b17a19ce453a5623cae861e3e5a6ad62' AND (
+SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
+ 'UTF8')),'hex') FROM (
+ SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'
+  ELSE 'public' END,scope.kind,coalesce(grantee.rolname,'PUBLIC'),
+  x.privilege_type,x.is_grantable) v
+ FROM (VALUES (0::oid,'r'),(0::oid,'S'),(0::oid,'f'),
+  ('public'::regnamespace::oid,'r'),('public'::regnamespace::oid,'S'),
+  ('public'::regnamespace::oid,'f')) scope(namespace,kind)
+ CROSS JOIN pg_roles creator
+ LEFT JOIN pg_default_acl d ON d.defaclrole=creator.oid
+  AND d.defaclnamespace=scope.namespace AND d.defaclobjtype=scope.kind::"char"
+ CROSS JOIN LATERAL unnest(coalesce(d.defaclacl,CASE WHEN scope.namespace=0
+  THEN acldefault(scope.kind::"char",creator.oid) ELSE '{}'::aclitem[] END)) item(value)
+ CROSS JOIN LATERAL aclexplode(ARRAY[item.value]) x
+ LEFT JOIN pg_roles grantee ON grantee.oid=x.grantee
+ WHERE creator.rolname='birja_migrator' AND x.grantee<>creator.oid
+) defaults
+) IS DISTINCT FROM '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' THEN
+  RAISE EXCEPTION 'unexpected legacy0008 closure defaults'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
  'UTF8')),'hex') FROM (

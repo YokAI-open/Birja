@@ -158,6 +158,75 @@ qualification passes all1330tests/60files in31.89seconds, with96.46%statements
 and94.01%branches; formatting and diff checks pass. The prior failed hosted
 run remains failed/superseded. Required CI must pass at the new exact head.
 
+## Parallel draft release preparation
+
+Feature candidate92a8956 is under run45020330811; latest observed frontend,
+image and full browser jobs pass, with backend/ops still running. Its full
+1330-test frontend result is also locally qualified.
+
+Release worktree was created from freshly pulled develop26d2011 and locally
+merged reviewed feature92a8956 with--no-ff. This changes no protected branch.
+Preparing a draft main PR now lets both required full CI graphs execute in
+parallel on separate hosted runners. Main merge remains held until featurePR36
+is green and merged, and the release head independently passes all six checks.
+
+Version0.6.0 changes only root project metadata. METADATA-REVIEW.json proves
+parsed Python/Node third-party graphs identical; prospective uv lock --check
+--offline passes83packages. Exact Node audit bindings follow those changed
+metadata bytes; advisory scope and expiry remain unchanged. UI/runtime/migration
+programs remain identical to the reviewed feature. No new human UI gate.
+
+Staged independent release asset birja-recovery-0.6.0.tar is exactly244357120bytes,
+SHA256bbbec1af156b594f5093ecef8badf918f8b0a7e039dfdb3e486fb8b58823f47a,
+and all51 current payloads match. It contains public recovery tooling and
+source profiles, with configuration/credentials separately in encrypted custody.
+Publish/verify that asset with the software release before production transition
+to provide an off-server exact independent recovery toolchain.
+
+Release-preparation review re-parsed actual candidate TOML/JSON against feature
+92a8956 and proves every third-party entry identical. Policy JS differs only
+in its two file-hash constants. Actual uv lock --check --offline passes83
+packages; direct audit contract execution passes all12cases; Prettier/diff
+checks pass. All51 archive payloads still match, and application, migration,
+frontend runtime/E2E and deployment/smoke sources are byte-identical to feature.
+This is a separate inline review pass, not an independent-agent review.
+
+## Retain the exact fully tested distribution artifact
+
+Feature run45020330811 at92a8956 completed its entire serial recovery job
+successfully in39m27s. Its actual same_archive_final_ci=true archive is
+41839607250c74d83ce80fdbf2d78ebefd50d8acb763c734b2ba90b26dc6de62.
+The workflow did not upload that generated archive, so it cannot be retrieved
+from the completed ephemeral runner. Backend qualification remains in progress.
+
+Release workflow collection is therefore added after successful whole recovery:
+copy only its fixed canonical archive and SHA to a runner-owned private staging
+directory, verify the copied bytes, then upload exactly those two tooling files.
+Missing/modified data fails the collection and ops job. All seven stages, image/
+coverage gates and the45-minute ops bound remain unchanged. No production data
+or configuration is collected. Current feature qualification is untouched.
+
+Earlier localbbbe archive remains the separately qualified Phase15current proof;
+it must not be substituted for the final full-CI distribution archive. The
+previous staged copy is preserved under the temporary local-qualified folder.
+Publish/install only the subsequently downloaded and verified successful release
+CI artifact. The release notes defer its exact checksum to the actual sidecar
+and receipt, avoiding a guessed identity or another metadata-only CI restart.
+
+ROLLOUT-DRAFT.md records the measured existing image/role prerequisites and
+guarded sequence. Exact final main/manifest/CI artifact identities must be bound
+after the release gates pass; no production write is claimed.
+
+Collector verification passes all111 CI contracts in27.55seconds, including
+matching/modified/missing archive behavior. A first worktree-local contract run
+failed because its mocked preexisting-stack branch called a real source snapshot
+that deliberately expects an ordinary.git directory. That branch now uses the
+same fixed source double as its existing failure matrix, so it actually tests
+the intended owned-stack refusal. Runtime source guards remain unchanged and
+independently covered. The failed first run remains recorded, not relabeled.
+Separate inline diff review confirms unchanged full recovery invocation, exact
+two-file upload scope, copied-byte verification and strict failure propagation.
+
 ## Shared split fixture and complete remaining-case check
 
 Feature run45020330811 at92a8956 passed frontend, image, browser and the actual

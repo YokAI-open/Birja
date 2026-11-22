@@ -86,3 +86,15 @@ This accepted item does not block the locally verified Phase12 closure, waive
 other findings, complete Phase7live acceptance or authorize publication or
 production changes. The separate approved Python image finding was fixed and
 qualified rather than added to this exception.
+
+## Production and operator follow-up — 2026-11-22
+
+The earlier publication-only rollout item is superseded by actual verified
+v0.6.2deployment/main7d236e4/schema0023; see[receipt](releases/0.6.2/PRODUCTION.md).
+Stock activation remainsfalse; the missing status transport stays separate.
+
+Nonblocking routine maintenance: update maintained `deploy/smoke-prod.sh` to
+verify current v2sign-in instead of retired v1sign-in. Actual operator verification
+used an independently reviewed exact one-endpoint adaptation and passed41/41;
+retain the original installed40/41failure honestly. No current authentication
+failure, product bypass or waived assertion was found.

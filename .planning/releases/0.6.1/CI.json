@@ -1,0 +1,45 @@
+{
+  "run": 45044997711,
+  "head": "e9d7c486f50c168a8f2ee5efb75eff11a8e65374",
+  "conclusion": "success",
+  "backend_tests": 3697,
+  "critical_coverage_percent": 100,
+  "jobs": [
+    {
+      "name": "e2e",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T16:38:50Z",
+      "completedAt": "2026-11-22T16:51:49Z"
+    },
+    {
+      "name": "frontend",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T16:38:50Z",
+      "completedAt": "2026-11-22T16:40:47Z"
+    },
+    {
+      "name": "ops",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T16:38:50Z",
+      "completedAt": "2026-11-22T17:14:30Z"
+    },
+    {
+      "name": "image",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T16:38:50Z",
+      "completedAt": "2026-11-22T16:40:45Z"
+    },
+    {
+      "name": "backend",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T16:38:50Z",
+      "completedAt": "2026-11-22T17:26:42Z"
+    },
+    {
+      "name": "ci-pass",
+      "conclusion": "success",
+      "startedAt": "2026-11-22T17:26:45Z",
+      "completedAt": "2026-11-22T17:26:50Z"
+    }
+  ]
+}
