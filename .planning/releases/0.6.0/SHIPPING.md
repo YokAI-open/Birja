@@ -157,3 +157,25 @@ Both affected overview/owner-boundary files pass56cases. A fresh full frontend
 qualification passes all1330tests/60files in31.89seconds, with96.46%statements
 and94.01%branches; formatting and diff checks pass. The prior failed hosted
 run remains failed/superseded. Required CI must pass at the new exact head.
+
+## Shared split fixture and complete remaining-case check
+
+Feature run45020330811 at92a8956 passed frontend, image, browser and the actual
+whole seven-stage operations proof. Its backend failed after3473passes at
+stock_trading_waits' first-fill/action gate: the shared split factory inherited
+a dividend payable date earlier than its current ex/record date. The event was
+correctly held, so the expected fill never reached the test's commit hook.
+
+Test-only654ea26 makes the synthetic payable date follow its cutoff, preserving
+explicit overrides, and asserts supported classification before concurrency.
+The exact failed case passes6.08s. All385cases from the full shared factory and
+wait modules plus the remaining backend collection tail pass90.98s. Ruff/format
+and diff pass; owned test PostgreSQL/Redis and network are removed. The first
+local tail invocation was refused by sandbox networking; the authorized isolated
+DB invocation passed. No app, schema, dependency or recovery payload changed.
+
+Review pass checked all shared-factory call sites and deliberate uncertainty,
+rollback, sequence and concurrent-processor assertions; no unresolved finding.
+This was an inline review, not a new independent-agent review. Prior failed CI
+remains failed. Release run45024680004 was canceled because it contained the same
+stale fixture; both final heads require a new full green CI result before merge.
