@@ -110,3 +110,36 @@ completed. These are read-only smoke semantics, not production acceptance.
 Run45018036764 at77f1a57 began after the earlier four repair commits; frontend
 passed, remaining checks were still running before this correction was published.
 Its eventual canceled/failed outcome must not be called a fullCI pass.
+
+## Related fixed-date fixture closure
+
+Static caller review found the same expired payable-date inheritance in two
+remaining portfolio split helpers. The active-sibling case reproduced the
+failure locally (no supported split applied); this was not a production bug.
+Their synthetic payable dates now follow their actual database clock, preserving
+all financial assertions and deliberate uncertain/reverse cases. All14 affected
+split and legacy-journal reload cases pass in114.21seconds; Ruff/diff checks
+pass and the owned test stack is removed. App/SQL/recovery payloads are unchanged.
+
+Atf47889e, run45018262873 has successful frontend, image and full browser jobs.
+Actual browser-all exit0 took672.0seconds and owned cleanup passed. Backend and
+operations were still running when these final test-only fixes were prepared;
+no whole-CI pass is claimed. These component receipts remain valid for their
+unchanged inputs, while the final head still requires all six green checks.
+
+## Measured production transition prerequisite
+
+The old installed configure-db --production --inspect passes for live0008.
+Running the candidate inspector directly safely refuses existing old image/HBA
+bindings. Read-only role query also confirms birja_action_operator is absent.
+No grants, database rows, services or installed tools were changed.
+
+The concrete rollout draft now uses existing guarded --start-selected-datastores
+after a fresh exact new-tool0008 backup/restore, keeping the same selected
+volumes. This moves PG18.6→18.7 and the immutable HBA binding, then the reviewed
+populated-role bootstrap preprovisions the fixed NOLOGIN operator role using
+existing credentials. Fresh final0008 backup/restore follows that security
+transition before migration; post-rollout0023 recovery follows deployment.
+No new role password, CA, manual grant repair, volume copy or downgrade is
+introduced. Current source release stays actual old live46d24c8 until rollout
+succeeds. Exact final source/manifest binding and all six CI checks remain pending.

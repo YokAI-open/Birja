@@ -124,6 +124,7 @@ async def split_case(journal_case):
         symbol=symbol,
         provider_event_id=str(uuid4()),
         observed_at=now,
+        payable_date=now.date(),
     )
     yield db, conn, case, action, evidence
 

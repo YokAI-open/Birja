@@ -484,7 +484,12 @@ async def apply_later_mixed_split(db, cid, users, original):
     )
     symbol = (await db.execute(select(Coin.symbol).where(Coin.id == cid))).scalar_one()
     action = replace(
-        dividend(), coin_id=cid, symbol=symbol, provider_event_id=str(uuid4()), observed_at=now
+        dividend(),
+        coin_id=cid,
+        symbol=symbol,
+        provider_event_id=str(uuid4()),
+        observed_at=now,
+        payable_date=now.date(),
     )
     await actions.persist_action_batch(
         db, batch(split_action(action, now - timedelta(hours=1), new_rate=Decimal(2))), evidence
