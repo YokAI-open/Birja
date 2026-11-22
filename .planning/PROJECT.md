@@ -2,11 +2,13 @@
 
 ## What This Is
 
-A virtual-money investing simulator. Deployed v0.4.0 offers crypto trading;
-published software v0.5.0 adds the locally verified twenty-stock US implementation,
-shared cash/portfolio, dividends/splits and mixed History. Phase7 manual owner acceptance was closed on2026-11-22; live stock activation
-remains gated pending a supported live-status transport. The v1.1 archive
-preserves its historical accepted gaps and later owner-resolution provenance.
+A virtual-money investing simulator. Production softwarev0.6.2 now provides
+multiple private strategy portfolios with independent virtual cash, creation,
+names/descriptions, comparison, switching and confirmed terminal deletion.
+Original investing data is preserved. Stock implementation remains available
+locally, with production activation deferred pending supported live-status
+transport; Phase7owner acceptance is closed. See the actual
+[production receipt](releases/0.6.2/PRODUCTION.md).
 
 ## Core Value
 
@@ -114,6 +116,13 @@ no real stock execution or production activation is claimed from acceptance.
 - The design system lives in `design-system/birja/MASTER.md`; existing Tailwind/shadcn components and Node 24 were established in Phase 1. Codex discovers maintained skills through `.agents/skills/`; shared project rules remain in CLAUDE.md.
 
 ## Current State
+
+Production is verified online at main7d236e4/schema0023 (v0.6.2), with exact
+post-rollout encrypted recovery, original-data preservation and refreshed
+private custody export. All six release checks passed. Final develop back-merge
+is pending. v1.2 audit/archive remains separate; live stock activation staysfalse.
+The detailed phase/release paragraphs below retain historical checkpoints.
+
 
 Local v1.2 implementation is complete:Phases12–15,72plans and28requirements. Phase15 independently passes4/4outcomes,12/12supporting truths and3/3requirements. Milestone audit is next; current progress is tracked in STATE.md.
 Phase13delivers18plans/11requirements with owner UI/native200acceptance, full

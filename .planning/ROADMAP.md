@@ -481,8 +481,9 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 
 The durable [carryover register](DEFERRED.md) stays separate from v1.2 scope.
 
-- Phase 7 STOCK-01/02/03, DATA-01, MKT-01, SAFE-01: actual permitted live-data
-  verification and acceptance remain unchecked/unverified; [audit](milestones/v1.1-MILESTONE-AUDIT.md).
+- Phase7 STOCK-01/02/03,DATA-01,MKT-01,SAFE-01 owner acceptance is closed;
+  [owner resolution](phases/07-permitted-stock-discovery/07-OWNER-CLOSURE.md)
+  supplements the preserved historical [audit](milestones/v1.1-MILESTONE-AUDIT.md).
 
 - Applicable live action/status/retention prerequisites remain necessary before stock activation.
 - The existing approved manual November 16 campaign remains bounded, with no automatic schedule;
@@ -491,8 +492,8 @@ The durable [carryover register](DEFERRED.md) stays separate from v1.2 scope.
 - W09 metadata discipline and the previously accepted v1.0 W01–W08/four validation-record gaps remain in the [v1.1 audit](milestones/v1.1-MILESTONE-AUDIT.md) and [v1.0 audit](milestones/v1.0-MILESTONE-AUDIT.md).
 
 Phase 07–11 directories, historical research and original manual-campaign links
-remain in place. These six carried outcomes are not included in v1.2's 28
-requirements and are not silently completed or reassigned. Local portfolio
+remain in place. These six outcomes are outside v1.2's28requirements; owner closure is explicit
+and historical accepted-gap records remain unchanged. Local portfolio
 acceptance never authorizes live provider calls or stock activation.
 
 ## Approval Boundary
@@ -503,3 +504,11 @@ Phases12–15 and all28requirements are complete locally. Next:
 `$gsd-audit-milestone`. No milestone archival, push/merge, release, provider
 operation, stock activation or production deployment follows automatically.
 Required full CI before merge remains enforced.
+
+## Actual delivery update — 2026-11-22
+
+Softwarev0.6.2 is deployed and verified at main7d236e4/schema0023. Multiple
+strategy portfolios are live; original finances and exact recovery pass. See
+[production receipt](releases/0.6.2/PRODUCTION.md). Stock activation remainsfalse.
+Final develop back-merge is pending. Planning milestone audit/archive remains
+a separate next action, not completed by software deployment.

@@ -1,4 +1,16 @@
-# Software0.6.2 preparation
+# Software 0.6.2 shipping record
+
+## Final outcome
+
+All six required checks passed; PR39 merged main7d236e4 and v0.6.2 was
+published. Production is online at schema0023, original finances are preserved,
+exact post-rollout recovery passes and the refreshed private export is verified.
+See [CI](CI-RECEIPT.md), [publication](PUBLICATION.md) and
+[production](PRODUCTION.md). Final develop back-merge is pending; stock
+activation and planning milestone audit/archive remain separate.
+
+## Historical preparation
+
 
 Software0.6.1 passed all six hosted checks (run45044997711,3697backend tests,
 criticalcoverage100%) and published main9a143fc55f9402732a63266b3327ea3952261900.

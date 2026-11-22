@@ -162,7 +162,8 @@ roadmap. No mapping is an implementation or completion claim.
 
 **Coverage:** 28/28 approved requirements mapped exactly once to approved Phases
 12–15; zero orphaned or duplicate primary owners. All28requirements are complete locally (seven Phase12, eleven Phase13, seven Phase14 and three Phase15).
-Six carried Phase 7 requirements remain separately deferred, not completion claims.
+Phase7owner acceptance is separatelyclosed with explicit provenance; stock
+activation remains gated and historical gaps remain preserved.
 
 ## Research and decision evidence
 
@@ -182,3 +183,10 @@ Six carried Phase 7 requirements remain separately deferred, not completion clai
 
 ---
 *Last updated: 2026-11-22 after independent Phase15 verification. All28requirements are complete locally; milestone audit and full CI before merge remain. Issue35 retains its original scope/expiry; Phase7 live requirements remain deferred.*
+
+## Delivery update — 2026-11-22
+
+All28requirements are now included in deployed softwarev0.6.2 at main7d236e4,
+with original-data and exact recovery verification. See[receipt](releases/0.6.2/PRODUCTION.md).
+This deployment leaves stock activationfalse; milestone audit/archive remains
+separate. Earlier local-only statements are historical phase checkpoints.

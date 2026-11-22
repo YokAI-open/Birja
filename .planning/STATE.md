@@ -5,9 +5,9 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 15
 current_plan: 4
 status: milestone_ready_for_audit
-stopped_at: Parallel feature and draft release qualification; both CI gates required before protected merges
-last_updated: "2026-11-22T12:32:38.471589+00:00"
-last_activity: 2026-11-22 -- Draft software0.6.0 prepared in an isolated worktree for parallel release qualification
+stopped_at: Production v0.6.2 verified online; final develop back-merge pending
+last_updated: "2026-11-22T22:14:00+00:00"
+last_activity: 2026-11-22 -- v0.6.2 live; exact recovery and custody verified; back-merge pending
 progress:
   total_phases: 4
   completed_phases: 4
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase15 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Next: milestone audit; publication and production remain separate.
+Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Software v0.6.2 is now published and deployed. Next: complete the develop back-merge, then the separate milestone audit.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -39,6 +39,20 @@ Raw receipts and failed-history provenance are linked from the Phase13reports.
 Phase7 owner acceptance is closed (07-OWNER-CLOSURE); missing live stock-status
 transport remains a separate engineering follow-up and stock activation stays gated. Existing issue35 risk stays unchanged through2026-12-17UTC.
 Public deletion/freeze and final lifecycle/recovery acceptance are locally verified in Phases14–15.
+
+## Release and production status — 2026-11-22
+
+Softwarev0.6.2 is published and live at main7d236e4/schema0023. All six PR39checks
+passed (3,703backend tests, criticalcoverage100%). Original finances/owners are
+preserved. Exact pre-start and post-rollout B2 restores pass. Current-API operator
+smoke41/41 and public9/9 pass; the distinct installed legacy smoke40/41result
+and explicit protocol adaptation are retained. Encrypted off-server export is
+verified. See[production receipt](releases/0.6.2/PRODUCTION.md).
+
+Stock activation remainsfalse and its transport follow-up remains separate.
+Final release/hotfix back-merge into develop is pending; milestone audit/archive
+remains the next separate planning action. Earlier local-only and unchanged-
+production statements below describe historical phase checkpoints.
 
 ## Current Position
 
