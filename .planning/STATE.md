@@ -5,9 +5,9 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 15
 current_plan: 4
 status: milestone_ready_for_audit
-stopped_at: Production v0.6.2 verified online; final develop back-merge pending
-last_updated: "2026-11-22T22:14:00+00:00"
-last_activity: 2026-11-22 -- v0.6.2 live; exact recovery and custody verified; back-merge pending
+stopped_at: Software v0.6.2 deployed; release back-merge complete; milestone audit next
+last_updated: "2026-11-22T23:16:35.453655+00:00"
+last_activity: 2026-11-22 UTC -- Production and exact recovery verified; PR40 merged after all six checks passed
 progress:
   total_phases: 4
   completed_phases: 4
@@ -22,7 +22,7 @@ progress:
 
 See PROJECT.md, updated after Phase15 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Software v0.6.2 is now published and deployed. Next: complete the develop back-merge, then the separate milestone audit.
+Current focus: v1.2 local implementation complete:4/4phases,72/72plans,28/28requirements. Phase15 passes4/4outcomes,12/12supporting truths and3/3requirements. Software v0.6.2 is now published and deployed. Release back-merge is complete. Next: the separate milestone audit.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -50,7 +50,7 @@ and explicit protocol adaptation are retained. Encrypted off-server export is
 verified. See[production receipt](releases/0.6.2/PRODUCTION.md).
 
 Stock activation remainsfalse and its transport follow-up remains separate.
-Final release/hotfix back-merge into develop is pending; milestone audit/archive
+Final release/hotfix back-merge into develop is complete (PR40, develop5029c8e); milestone audit/archive
 remains the next separate planning action. Earlier local-only and unchanged-
 production statements below describe historical phase checkpoints.
 
@@ -1302,3 +1302,11 @@ classification, retaining realdrift/unknown/index/database guards. GenuineRED
 and6GREEN/2.54s, independentreview0/0 and parentread-onlyliveprobe pass.
 Next publishnewhotfix with approval, fullCI then finish authorizedrepair/backmerge.
 No dependency, finance/schema, stockactivation or milestonearchive change.
+
+## Final release closeout
+
+PR40 passed all six checks and merged develop5029c8e with the exact tested tree.
+Production remains main7d236e4/v0.6.2, healthy at the final public check. See
+[back-merge receipt](releases/0.6.2/BACKMERGE.md). All software shipping work is
+complete. Earlier pending-publication/back-merge statements are historical.
+Stock activation and v1.2 milestone audit/archive remain separate.
