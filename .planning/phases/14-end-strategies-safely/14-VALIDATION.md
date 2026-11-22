@@ -1,13 +1,26 @@
 ---
 phase: 14
 slug: end-strategies-safely
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-19
 ---
 
 # Phase 14 — Validation Strategy
+
+## Final execution disposition — 2026-11-22
+
+All38tasks have implemented test/checkpoint coverage; all19plans complete.
+Independent goal verification confirms38/38supporting truths,5/5outcomes and
+7/7requirements. Plan18 component qualification and actual recovery pass under
+the explicit owner amendments; failed whole commands remain failed. Both actual
+Plan19 human outcomes pass. No new framework/Wave0 installation is required.
+The original planning contract below is retained as history; its per-task
+selectors are coverage references, not claims of fresh execution today. See
+plan summaries and14-VERIFICATION for actual results and source provenance.
+
+## Historical planning contract and task map
 
 Planning contract only. No Phase14 implementation, test result or human
 acceptance is claimed. The concrete38-task map below assigns plan/task/wave IDs, threat references
@@ -142,44 +155,44 @@ in each plan; actual security dispositions and counts are execution evidence.
 
 |Task|Wave|Requirements|Threat|Secure behavior / creation owner|Automated command|Existence / status|
 |---|---|---|---|---|---|---|
-|14-01-01|1|PMGT-04, PFIN-05, PSAFE-01|T-14-01|Add additive lifecycle and immutable intent schema| `cd backend && uv run pytest tests/test_portfolio_closure_migrations.py -k 'expansion or immutable' -x` |test/feature creation in this task; pending|
-|14-01-02|1|PMGT-04, PFIN-05, PSAFE-01|T-14-01|Backfill only verified historical closed boundaries and validate links| `cd backend && uv run pytest tests/test_portfolio_closure_migrations.py -k 'backfill or corrupt or downgrade' -x` |test/feature creation in this task; pending|
-|14-02-01|2|PMGT-03, PMGT-04, PFIN-06, PSAFE-01|T-14-02|Install narrow sorted-gate closure SQL authority| `cd backend && uv run pytest tests/test_portfolio_closure_authority.py -k 'named or sold_out or replay' -x` |test/feature creation in this task; pending|
-|14-02-02|2|PMGT-03, PMGT-04, PFIN-06, PSAFE-01|T-14-02|Seal terminal named refusals and bound durable intent growth| `cd backend && uv run pytest tests/test_portfolio_closure_authority.py -k 'refusal or quota or replay or rollback' -x` |test/feature creation in this task; pending|
-|14-03-01|3|PMGT-04, PFIN-05, PFIN-06|T-14-03|Share complete read-only stock proof without relaxing financial guard| `cd backend && uv run pytest tests/test_portfolio_closure_stocks.py -k 'guard or corrupt or multi' -x` |test/feature creation in this task; pending|
-|14-03-02|3|PMGT-04, PFIN-05, PFIN-06|T-14-03|Fence equal/backward global stock times at successor boundary| `cd backend && uv run pytest tests/test_portfolio_closure_clocks.py -x` |test/feature creation in this task; pending|
-|14-04-01|4|PMGT-04, PSAFE-01, PFIN-06|T-14-04|Version current0023 bootstrap and grant inventory| `cd backend && uv run pytest tests/test_portfolio_closure_admission.py tests/test_portfolio_management_grants.py -x` |test/feature creation in this task; pending|
-|14-04-02|4|PMGT-04, PSAFE-01, PFIN-06|T-14-04|Wire migration-only transitions and runtime admission| `cd backend && uv run pytest tests/test_portfolio_closure_admission.py -k 'fresh or upgraded or partial or downgrade or repeated_bootstrap' -x && uv run pytest tests/test_portfolio_closure_admission.py -k 'fresh or upgraded or partial or downgrade or repeated_bootstrap' -x` |test/feature creation in this task; pending|
-|14-05-01|5|PMGT-04, PFIN-05, PSAFE-01|T-14-05|Freeze qualified0020 source dispatch and build lifecycle oracle| `python3 deploy/tests/test-portfolio-fixture-contracts.py` |test/feature creation in this task; pending|
-|14-05-02|5|PMGT-04, PFIN-05, PSAFE-01|T-14-05|Produce V3 authenticated inventory and validate lifecycle integrity| `python3 deploy/tests/test-portfolio-recovery-contracts.py` |test/feature creation in this task; pending|
-|14-06-01|6|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-06|Consume strictV3 quarantine and exact regrant| `python3 deploy/tests/test-portfolio-management-recovery.py --postgres` |test/feature creation in this task; pending|
-|14-06-02|6|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-06|Extend selected deployment/rollback and operating contracts| `bash deploy/tests/test-deploy-compatibility.sh` |test/feature creation in this task; pending|
-|14-07-01|7|PMGT-03, PMGT-04, PMGT-05, PSAFE-01|T-14-07|Parse strict deletion intent and publish authenticated endpoint| `cd backend && uv run pytest tests/test_portfolio_closure_api.py -k 'confirmation or csrf or repeat or malformed' -x` |test/feature creation in this task; pending|
-|14-07-02|7|PMGT-03, PMGT-04, PMGT-05, PSAFE-01|T-14-07|Prove real commit/response-loss and terminal refusal recovery| `cd backend && uv run pytest tests/test_portfolio_closure_api.py tests/test_portfolio_closure_identity.py -k 'response or delayed or last or replacement' -x` |test/feature creation in this task; pending|
-|14-08-01|8|PMGT-04, PFIN-05, PFIN-06|T-14-08|Define retained lifecycle disposition and fence selected-before-close jobs| `cd backend && uv run pytest tests/test_portfolio_closure_events.py -k 'unpaid or negative or selected' -x` |test/feature creation in this task; pending|
-|14-08-02|8|PMGT-04, PFIN-05, PFIN-06|T-14-08|Prove event boundary both orders and sibling independence| `cd backend && uv run pytest tests/test_portfolio_closure_events.py -x` |test/feature creation in this task; pending|
-|14-09-01|9|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06|T-14-09|Exercise multi-stock sold-out closure and successive sibling splits| `cd backend && uv run pytest tests/test_portfolio_closure_stocks.py -k 'sold_out or successive or closed_market' -x` |test/feature creation in this task; pending|
-|14-09-02|9|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06|T-14-09|Exercise real first-buy, duplicate-close and create/delete concurrency| `cd backend && uv run pytest tests/test_portfolio_closure_races.py -k 'first_buy or management or duplicate' -x` |test/feature creation in this task; pending|
-|14-10-01|10|PCTX-03, PSAFE-01, PMGT-04|T-14-10|Inventory and fence late reads and metadata discovery| `cd backend && uv run pytest tests/test_portfolio_closure_privacy.py -k 'history or metadata or late_read' -x` |test/feature creation in this task; pending|
-|14-10-02|10|PCTX-03, PSAFE-01, PMGT-04|T-14-10|Close original-reference and execution/retry authorization gaps| `cd backend && uv run pytest tests/test_portfolio_closure_privacy.py -k 'cursor or original or retry' -x` |test/feature creation in this task; pending|
-|14-11-01|8|PMGT-03, PCTX-03, PSAFE-01|T-14-11|Parse exact deletion request, result and terminal errors| `cd frontend && npm run test -- src/api/portfolioDeletion.test.ts` |test/feature creation in this task; pending|
-|14-11-02|8|PMGT-03, PCTX-03, PSAFE-01|T-14-11|Persist bounded metadata-only original before send| `cd frontend && npm run test -- src/lib/portfolioDeletionAttempt.test.ts` |test/feature creation in this task; pending|
-|14-12-01|9|PMGT-03, PMGT-04, PCTX-03, PSAFE-01|T-14-12|Implement owner/session deletion state machine and explicit recovery| `cd frontend && npm run test -- src/hooks/usePortfolioDeletion.test.tsx -t 'unknown|original|refusal|persist'` |test/feature creation in this task; pending|
-|14-12-02|9|PMGT-03, PMGT-04, PCTX-03, PSAFE-01|T-14-12|Reconcile lifecycle navigation and sibling independence| `cd frontend && npm run test -- src/hooks/usePortfolioDeletion.test.tsx src/hooks/usePortfolioManagement.test.tsx` |test/feature creation in this task; pending|
-|14-13-01|10|PCTX-03, PSAFE-01, PFIN-06|T-14-13|Publish identity-only lifecycle invalidation and quarantine| `cd frontend && npm run test -- src/lib/portfolioMetadataEvents.test.ts src/hooks/usePortfolioTarget.test.tsx` |test/feature creation in this task; pending|
-|14-13-02|10|PCTX-03, PSAFE-01, PFIN-06|T-14-13|Mask scoped finances and preserve safe unavailable recovery| `cd frontend && npm run test -- src/components/PortfolioTargetBoundary.test.tsx src/hooks/usePortfolioOverview.test.tsx` |test/feature creation in this task; pending|
-|14-14-01|11|PMGT-03, PMGT-04, PMGT-05, PCTX-03, PSAFE-01|T-14-14|Build accessible named confirmation and unknown-result form| `cd frontend && npm run test -- src/components/PortfolioDeleteForm.test.tsx src/components/PortfolioMetadataForm.test.tsx` |test/feature creation in this task; pending|
-|14-14-02|11|PMGT-03, PMGT-04, PMGT-05, PCTX-03, PSAFE-01|T-14-14|Mount metadata-only recovery and definitive empty/overview navigation| `cd frontend && npm run test -- src/pages/PortfolioDeletionPage.test.tsx src/pages/PortfoliosPage.test.tsx src/App.test.tsx` |test/feature creation in this task; pending|
-|14-15-01|11|PMGT-04, PMGT-05, PFIN-05, PFIN-06, PSAFE-01|T-14-15|Make whole backend fixtures explicitly current or retained| `cd backend && uv run pytest tests/test_migrations.py tests/test_portfolio_closure_admission.py -x` |test/feature creation in this task; pending|
-|14-15-02|11|PMGT-04, PMGT-05, PFIN-05, PFIN-06, PSAFE-01|T-14-15|Qualify actual fresh/upgraded TLS and rollback-tail successor branches| `bash deploy/tests/test-db-config.sh` |test/feature creation in this task; pending|
-|14-16-01|12|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-16|Extend CI critical paths and offline runner contracts| `python3 deploy/tests/test-portfolio-validation-contracts.py` |test/feature creation in this task; pending|
-|14-16-02|12|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-16|Implement bounded preflight and interruption-safe one-shot campaigns| `python3 deploy/tests/test-portfolio-validation-contracts.py && python3 deploy/tests/test-portfolio-smoke-image.py` |test/feature creation in this task; pending|
-|14-17-01|13|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06, PCTX-03, PSAFE-01|T-14-17|Add public lifecycle browser journeys and register exact spec| `python3 deploy/tests/test-portfolio-browser-contracts.py && python3 deploy/tests/run-stock-browser.py --suite portfolios --grep 'deletion'` |test/feature creation in this task; pending|
-|14-17-02|13|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06, PCTX-03, PSAFE-01|T-14-17|Build separate Phase14 packet and refusal contracts| `python3 deploy/tests/test-portfolio-ui-evidence.py && python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --output /tmp/birja-phase14-ui-review` |test/feature creation in this task; pending|
+|14-01-01|1|PMGT-04, PFIN-05, PSAFE-01|T-14-01|Add additive lifecycle and immutable intent schema| `cd backend && uv run pytest tests/test_portfolio_closure_migrations.py -k 'expansion or immutable' -x` |covered; see task summary and final qualification|
+|14-01-02|1|PMGT-04, PFIN-05, PSAFE-01|T-14-01|Backfill only verified historical closed boundaries and validate links| `cd backend && uv run pytest tests/test_portfolio_closure_migrations.py -k 'backfill or corrupt or downgrade' -x` |covered; see task summary and final qualification|
+|14-02-01|2|PMGT-03, PMGT-04, PFIN-06, PSAFE-01|T-14-02|Install narrow sorted-gate closure SQL authority| `cd backend && uv run pytest tests/test_portfolio_closure_authority.py -k 'named or sold_out or replay' -x` |covered; see task summary and final qualification|
+|14-02-02|2|PMGT-03, PMGT-04, PFIN-06, PSAFE-01|T-14-02|Seal terminal named refusals and bound durable intent growth| `cd backend && uv run pytest tests/test_portfolio_closure_authority.py -k 'refusal or quota or replay or rollback' -x` |covered; see task summary and final qualification|
+|14-03-01|3|PMGT-04, PFIN-05, PFIN-06|T-14-03|Share complete read-only stock proof without relaxing financial guard| `cd backend && uv run pytest tests/test_portfolio_closure_stocks.py -k 'guard or corrupt or multi' -x` |covered; see task summary and final qualification|
+|14-03-02|3|PMGT-04, PFIN-05, PFIN-06|T-14-03|Fence equal/backward global stock times at successor boundary| `cd backend && uv run pytest tests/test_portfolio_closure_clocks.py -x` |covered; see task summary and final qualification|
+|14-04-01|4|PMGT-04, PSAFE-01, PFIN-06|T-14-04|Version current0023 bootstrap and grant inventory| `cd backend && uv run pytest tests/test_portfolio_closure_admission.py tests/test_portfolio_management_grants.py -x` |covered; see task summary and final qualification|
+|14-04-02|4|PMGT-04, PSAFE-01, PFIN-06|T-14-04|Wire migration-only transitions and runtime admission| `cd backend && uv run pytest tests/test_portfolio_closure_admission.py -k 'fresh or upgraded or partial or downgrade or repeated_bootstrap' -x && uv run pytest tests/test_portfolio_closure_admission.py -k 'fresh or upgraded or partial or downgrade or repeated_bootstrap' -x` |covered; see task summary and final qualification|
+|14-05-01|5|PMGT-04, PFIN-05, PSAFE-01|T-14-05|Freeze qualified0020 source dispatch and build lifecycle oracle| `python3 deploy/tests/test-portfolio-fixture-contracts.py` |covered; see task summary and final qualification|
+|14-05-02|5|PMGT-04, PFIN-05, PSAFE-01|T-14-05|Produce V3 authenticated inventory and validate lifecycle integrity| `python3 deploy/tests/test-portfolio-recovery-contracts.py` |covered; see task summary and final qualification|
+|14-06-01|6|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-06|Consume strictV3 quarantine and exact regrant| `python3 deploy/tests/test-portfolio-management-recovery.py --postgres` |covered; see task summary and final qualification|
+|14-06-02|6|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-06|Extend selected deployment/rollback and operating contracts| `bash deploy/tests/test-deploy-compatibility.sh` |covered; see task summary and final qualification|
+|14-07-01|7|PMGT-03, PMGT-04, PMGT-05, PSAFE-01|T-14-07|Parse strict deletion intent and publish authenticated endpoint| `cd backend && uv run pytest tests/test_portfolio_closure_api.py -k 'confirmation or csrf or repeat or malformed' -x` |covered; see task summary and final qualification|
+|14-07-02|7|PMGT-03, PMGT-04, PMGT-05, PSAFE-01|T-14-07|Prove real commit/response-loss and terminal refusal recovery| `cd backend && uv run pytest tests/test_portfolio_closure_api.py tests/test_portfolio_closure_identity.py -k 'response or delayed or last or replacement' -x` |covered; see task summary and final qualification|
+|14-08-01|8|PMGT-04, PFIN-05, PFIN-06|T-14-08|Define retained lifecycle disposition and fence selected-before-close jobs| `cd backend && uv run pytest tests/test_portfolio_closure_events.py -k 'unpaid or negative or selected' -x` |covered; see task summary and final qualification|
+|14-08-02|8|PMGT-04, PFIN-05, PFIN-06|T-14-08|Prove event boundary both orders and sibling independence| `cd backend && uv run pytest tests/test_portfolio_closure_events.py -x` |covered; see task summary and final qualification|
+|14-09-01|9|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06|T-14-09|Exercise multi-stock sold-out closure and successive sibling splits| `cd backend && uv run pytest tests/test_portfolio_closure_stocks.py -k 'sold_out or successive or closed_market' -x` |covered; see task summary and final qualification|
+|14-09-02|9|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06|T-14-09|Exercise real first-buy, duplicate-close and create/delete concurrency| `cd backend && uv run pytest tests/test_portfolio_closure_races.py -k 'first_buy or management or duplicate' -x` |covered; see task summary and final qualification|
+|14-10-01|10|PCTX-03, PSAFE-01, PMGT-04|T-14-10|Inventory and fence late reads and metadata discovery| `cd backend && uv run pytest tests/test_portfolio_closure_privacy.py -k 'history or metadata or late_read' -x` |covered; see task summary and final qualification|
+|14-10-02|10|PCTX-03, PSAFE-01, PMGT-04|T-14-10|Close original-reference and execution/retry authorization gaps| `cd backend && uv run pytest tests/test_portfolio_closure_privacy.py -k 'cursor or original or retry' -x` |covered; see task summary and final qualification|
+|14-11-01|8|PMGT-03, PCTX-03, PSAFE-01|T-14-11|Parse exact deletion request, result and terminal errors| `cd frontend && npm run test -- src/api/portfolioDeletion.test.ts` |covered; see task summary and final qualification|
+|14-11-02|8|PMGT-03, PCTX-03, PSAFE-01|T-14-11|Persist bounded metadata-only original before send| `cd frontend && npm run test -- src/lib/portfolioDeletionAttempt.test.ts` |covered; see task summary and final qualification|
+|14-12-01|9|PMGT-03, PMGT-04, PCTX-03, PSAFE-01|T-14-12|Implement owner/session deletion state machine and explicit recovery| `cd frontend && npm run test -- src/hooks/usePortfolioDeletion.test.tsx -t 'unknown|original|refusal|persist'` |covered; see task summary and final qualification|
+|14-12-02|9|PMGT-03, PMGT-04, PCTX-03, PSAFE-01|T-14-12|Reconcile lifecycle navigation and sibling independence| `cd frontend && npm run test -- src/hooks/usePortfolioDeletion.test.tsx src/hooks/usePortfolioManagement.test.tsx` |covered; see task summary and final qualification|
+|14-13-01|10|PCTX-03, PSAFE-01, PFIN-06|T-14-13|Publish identity-only lifecycle invalidation and quarantine| `cd frontend && npm run test -- src/lib/portfolioMetadataEvents.test.ts src/hooks/usePortfolioTarget.test.tsx` |covered; see task summary and final qualification|
+|14-13-02|10|PCTX-03, PSAFE-01, PFIN-06|T-14-13|Mask scoped finances and preserve safe unavailable recovery| `cd frontend && npm run test -- src/components/PortfolioTargetBoundary.test.tsx src/hooks/usePortfolioOverview.test.tsx` |covered; see task summary and final qualification|
+|14-14-01|11|PMGT-03, PMGT-04, PMGT-05, PCTX-03, PSAFE-01|T-14-14|Build accessible named confirmation and unknown-result form| `cd frontend && npm run test -- src/components/PortfolioDeleteForm.test.tsx src/components/PortfolioMetadataForm.test.tsx` |covered; see task summary and final qualification|
+|14-14-02|11|PMGT-03, PMGT-04, PMGT-05, PCTX-03, PSAFE-01|T-14-14|Mount metadata-only recovery and definitive empty/overview navigation| `cd frontend && npm run test -- src/pages/PortfolioDeletionPage.test.tsx src/pages/PortfoliosPage.test.tsx src/App.test.tsx` |covered; see task summary and final qualification|
+|14-15-01|11|PMGT-04, PMGT-05, PFIN-05, PFIN-06, PSAFE-01|T-14-15|Make whole backend fixtures explicitly current or retained| `cd backend && uv run pytest tests/test_migrations.py tests/test_portfolio_closure_admission.py -x` |covered; see task summary and final qualification|
+|14-15-02|11|PMGT-04, PMGT-05, PFIN-05, PFIN-06, PSAFE-01|T-14-15|Qualify actual fresh/upgraded TLS and rollback-tail successor branches| `bash deploy/tests/test-db-config.sh` |covered; see task summary and final qualification|
+|14-16-01|12|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-16|Extend CI critical paths and offline runner contracts| `python3 deploy/tests/test-portfolio-validation-contracts.py` |covered; see task summary and final qualification|
+|14-16-02|12|PMGT-04, PFIN-05, PFIN-06, PSAFE-01|T-14-16|Implement bounded preflight and interruption-safe one-shot campaigns| `python3 deploy/tests/test-portfolio-validation-contracts.py && python3 deploy/tests/test-portfolio-smoke-image.py` |covered; see task summary and final qualification|
+|14-17-01|13|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06, PCTX-03, PSAFE-01|T-14-17|Add public lifecycle browser journeys and register exact spec| `python3 deploy/tests/test-portfolio-browser-contracts.py && python3 deploy/tests/run-stock-browser.py --suite portfolios --grep 'deletion'` |covered; see task summary and final qualification|
+|14-17-02|13|PMGT-03, PMGT-04, PMGT-05, PFIN-05, PFIN-06, PCTX-03, PSAFE-01|T-14-17|Build separate Phase14 packet and refusal contracts| `python3 deploy/tests/test-portfolio-ui-evidence.py && python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --output /tmp/birja-phase14-ui-review` |covered; see task summary and final qualification|
 |14-18-01|14|PMGT-03/04/05,PFIN-05/06,PCTX-03,PSAFE-01|T-14-18|Owner-amended local security components|Exact28 receipts plus input-reuse ledger|PASS; no whole-run claim|
 |14-18-02|14|PMGT-03/04/05,PFIN-05/06,PCTX-03,PSAFE-01|T-14-18|Owner-amended same-archive recovery components|run-recovery-components.py --launch|PASS6/6 exit0/2266.665s; no whole7 claim|
-|14-19-01|15|PMGT-03/04/05,PCTX-03,PSAFE-01|T-14-19|Actual new UI owner outcome|`python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --verify /tmp/birja-phase14-ui-review`|tool created17; human pending|
-|14-19-02|15|PCTX-03,PSAFE-01|T-14-19|Separate actual native200 outcome|same current packet verify; actual human result required|human pending|
+|14-19-01|15|PMGT-03/04/05,PCTX-03,PSAFE-01|T-14-19|Actual new UI owner outcome|`python3 deploy/tests/portfolio-ui-evidence.py --phase 14 --verify /tmp/birja-phase14-ui-review`|PASS; explicit owner acceptance2026-11-22|
+|14-19-02|15|PCTX-03,PSAFE-01|T-14-19|Separate actual native200 outcome|same current packet verify; actual human result required|PASS; explicit native200 acceptance2026-11-22|
 
 All38 tasks have an automated selector/entrypoint (the two manual checkpoints
 also require actual owner answers). No three-task sampling gap or watch mode.

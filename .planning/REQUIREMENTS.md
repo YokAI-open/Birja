@@ -20,9 +20,9 @@ approved total to 28 without changing the four-phase structure.
 
 - [x] **PMGT-01**: User can create a named private portfolio while fewer than ten owned portfolios are active; deleted portfolios free a slot, and a replacement has a new permanent identity.
 - [x] **PMGT-02**: User can name and rename an active portfolio using a trimmed nonblank name of 1–60 characters without control characters; active names are unique for that owner under a documented case-insensitive normalization rule, and renaming changes no money or history.
-- [ ] **PMGT-03**: User can delete any owned portfolio, including one with holdings, only after a confirmation identifies the portfolio and explains the effect; cancellation changes nothing and repeated deletion cannot affect another portfolio.
-- [ ] **PMGT-04**: Deletion freezes that portfolio's committed cash, holdings and financial History, stops future dividend/split/correction effects on it, and preserves its financial records outside normal screens without creating liquidation trades or moving funds elsewhere.
-- [ ] **PMGT-05**: User can delete their last portfolio and remain signed in with an empty overview and Create portfolio action; subsequent reads, refreshes and sign-ins do not silently create or fund another portfolio.
+- [x] **PMGT-03**: User can delete any owned portfolio, including one with holdings, only after a confirmation identifies the portfolio and explains the effect; cancellation changes nothing and repeated deletion cannot affect another portfolio.
+- [x] **PMGT-04**: Deletion freezes that portfolio's committed cash, holdings and financial History, stops future dividend/split/correction effects on it, and preserves its financial records outside normal screens without creating liquidation trades or moving funds elsewhere.
+- [x] **PMGT-05**: User can delete their last portfolio and remain signed in with an empty overview and Create portfolio action; subsequent reads, refreshes and sign-ins do not silently create or fund another portfolio.
 - [x] **PMGT-06**: User can add, view, edit and clear an optional plain-text description for an active owned portfolio; an empty description is valid, existing/initial portfolios start with an empty description, and description changes do not change finances or History.
 
 ### Starting funds and preservation
@@ -37,14 +37,14 @@ approved total to 28 without changing the four-phase structure.
 - [x] **PFIN-02**: User can preview and execute existing crypto and stock orders in an explicitly targeted active portfolio with unchanged fee, quantity, quote freshness, eligibility and stock-activation rules; no unspecified or unavailable target silently selects another portfolio.
 - [x] **PFIN-03**: User retries an uncertain order only against its original portfolio and payload without duplicate execution or another portfolio's receipt; an original active-portfolio fill remains replayable under existing safe-retry rules.
 - [x] **PFIN-04**: Each active portfolio's dividend eligibility, credits and corrections use its own historical ownership and cash, apply once, and remain attributable to that portfolio when the same user holds the stock in other portfolios.
-- [ ] **PFIN-05**: Each active portfolio receives only its own verified split effects with preserved total basis and unchanged historical fills; frozen deleted portfolios remain consistent at closure and cannot disrupt another portfolio's later stock accounting.
-- [ ] **PFIN-06**: Concurrent creation, deletion, trades and financial jobs cannot exceed ten active portfolios, duplicate grants/events, overspend a portfolio, mutate a portfolio after its deletion boundary or move an operation into a different strategy.
+- [x] **PFIN-05**: Each active portfolio receives only its own verified split effects with preserved total basis and unchanged historical fills; frozen deleted portfolios remain consistent at closure and cannot disrupt another portfolio's later stock accounting.
+- [x] **PFIN-06**: Concurrent creation, deletion, trades and financial jobs cannot exceed ten active portfolios, duplicate grants/events, overspend a portfolio, mutate a portfolio after its deletion boundary or move an operation into a different strategy.
 
 ### Portfolio context and navigation
 
 - [x] **PCTX-01**: User sees the target portfolio's name on trade tickets, confirmations, receipts, holding details and History so each action's strategy is clear.
 - [x] **PCTX-02**: Switching portfolios or deleting one invalidates its actionable previews and isolates cached pages, cursors, late responses and pending attempts; an old tab or unresolved request never becomes an order or financial display for the newly selected portfolio.
-- [ ] **PCTX-03**: User can open an active portfolio from the overview and navigate its holdings, trading and History through stable portfolio-specific links; a stale/deleted link explains unavailability and offers the overview without exposing retained financial records.
+- [x] **PCTX-03**: User can open an active portfolio from the overview and navigate its holdings, trading and History through stable portfolio-specific links; a stale/deleted link explains unavailability and offers the overview without exposing retained financial records.
 
 ### Strategy overview and statements
 
@@ -54,7 +54,7 @@ approved total to 28 without changing the four-phase structure.
 
 ### Privacy, compatibility and acceptance
 
-- [ ] **PSAFE-01**: Every portfolio operation and financial object lookup enforces owner and active-state authorization on the server, including guessed IDs, old references, cursors and direct trade/retry requests; other owners' and deleted portfolios' finances remain unavailable through normal APIs.
+- [x] **PSAFE-01**: Every portfolio operation and financial object lookup enforces owner and active-state authorization on the server, including guessed IDs, old references, cursors and direct trade/retry requests; other owners' and deleted portfolios' finances remain unavailable through normal APIs.
 - [x] **PSAFE-02**: User identity, OTP sign-in, session refresh and sign-out work independently of having zero, one or many portfolios; legacy financial requests cannot choose an ambiguous portfolio or bypass explicit targeting.
 - [x] **PSAFE-03**: Fresh and migrated portfolio services retain restricted PostgreSQL roles, verified TLS, immutable financial evidence and matching ownership constraints; migration preserves existing financial payloads and does not broaden ordinary mutation privileges.
 - [ ] **PSAFE-04**: Operator can exactly restore active and frozen deleted portfolios, ownership/lifecycle state, baselines, grants, financial lineage and retry protections from an encrypted backup without resurrecting a deleted strategy or repeating grants, fills or payments.
@@ -135,9 +135,9 @@ roadmap. No mapping is an implementation or completion claim.
 |---|---|---|
 | PMGT-01 | Phase 13 | Complete |
 | PMGT-02 | Phase 13 | Complete |
-| PMGT-03 | Phase 14 | Pending |
-| PMGT-04 | Phase 14 | Pending |
-| PMGT-05 | Phase 14 | Pending |
+| PMGT-03 | Phase 14 | Complete |
+| PMGT-04 | Phase 14 | Complete |
+| PMGT-05 | Phase 14 | Complete |
 | PMGT-06 | Phase 13 | Complete |
 | PFUND-01 | Phase 13 | Complete |
 | PFUND-02 | Phase 13 | Complete |
@@ -146,15 +146,15 @@ roadmap. No mapping is an implementation or completion claim.
 | PFIN-02 | Phase 12 | Complete |
 | PFIN-03 | Phase 12 | Complete |
 | PFIN-04 | Phase 13 | Complete |
-| PFIN-05 | Phase 14 | Pending |
-| PFIN-06 | Phase 14 | Pending |
+| PFIN-05 | Phase 14 | Complete |
+| PFIN-06 | Phase 14 | Complete |
 | PCTX-01 | Phase 12 | Complete |
 | PCTX-02 | Phase 13 | Complete |
-| PCTX-03 | Phase 14 | Pending |
+| PCTX-03 | Phase 14 | Complete |
 | PVIEW-01 | Phase 13 | Complete |
 | PVIEW-02 | Phase 13 | Complete |
 | PVIEW-03 | Phase 12 | Complete |
-| PSAFE-01 | Phase 14 | Pending |
+| PSAFE-01 | Phase 14 | Complete |
 | PSAFE-02 | Phase 12 | Complete |
 | PSAFE-03 | Phase 12 | Complete |
 | PSAFE-04 | Phase 15 | Pending |
@@ -163,7 +163,7 @@ roadmap. No mapping is an implementation or completion claim.
 | PSAFE-07 | Phase 13 | Complete |
 
 **Coverage:** 28/28 approved requirements mapped exactly once to approved Phases
-12–15; zero orphaned or duplicate primary owners. Eighteen requirements are complete (seven Phase12 and eleven Phase13); ten Phase14–15requirements remain pending.
+12–15; zero orphaned or duplicate primary owners. Twenty-five requirements are complete (seven Phase12, eleven Phase13 and seven Phase14); three Phase15 requirements remain pending.
 Six carried Phase 7 requirements remain separately deferred, not completion claims.
 
 ## Research and decision evidence

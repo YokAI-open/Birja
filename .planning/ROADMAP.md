@@ -4,7 +4,7 @@
 
 - [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
 - [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements; Phases12–13 complete locally, Phase14 awaiting human acceptance, Phase15 remains.
+- [ ] **v1.2 Multiple Strategy Portfolios** — 28 requirements; Phases12–14 complete locally; Phase15 remains.
 
 ## Current State
 
@@ -34,10 +34,10 @@ expiring2026-12-17UTC; this is not a remediation claim. The rejected fork stays
 uninstalled. A separate official Python image patch was explicitly approved,
 verified and qualified. Prior failed runs and the old archive are retained.
 No production/provider/publication action occurred. Phase13 is complete locally.
-Phase14 has18/19plans complete, including automated component qualification and
-actual recovery under the recorded owner amendments; Plan19 owner UI/native200
-acceptance and independent phase-goal verification remain. Phase15 is unplanned;
-ten v1.2 requirements remain pending. Phase7's six
+Phase14 is complete locally:19/19plans, both actual owner outcomes,5/5roadmap
+criteria and7/7requirements independently verified. Qualification uses the
+recorded owner amendments and genuine recovery; failed whole runs remain failed.
+Phase15 is unplanned; three v1.2 requirements remain pending. Phase7's six
 live gaps stay separately deferred, with its manual campaign consumed.
 
 [Research](research/v1.2/SUMMARY.md) supports reusing the existing stack; it does
@@ -59,7 +59,7 @@ financial ownership boundary; they are not separate database/API/UI layers.
 
 - [x] **Phase 12: Preserve Existing Investing Under Portfolio Ownership** — keep the existing investing loop and financial evidence intact while every financial operation acquires an explicit portfolio target. (completed 2026-11-17 UTC)
 - [x] **Phase 13: Create and Compare Independent Strategies** — create, name, fund, open and compare independent strategies with isolated financial activity. (completed 2026-11-19 UTC)
-- [ ] **Phase 14: End Strategies Safely** — confirm terminal deletion, freeze records, support zero active portfolios and refuse stale or unauthorized targets.
+- [x] **Phase 14: End Strategies Safely** — confirm terminal deletion, freeze records, support zero active portfolios and refuse stale or unauthorized targets. (completed 2026-11-22)
 - [ ] **Phase 15: Verify Exact Portfolio Recovery and Acceptance** — qualify the complete active/deleted lifecycle through exact recovery, compatibility and protected user journeys.
 
 ## Phase Details
@@ -315,7 +315,7 @@ compatibility for every newly supported state as it ships.
   4. Deleting the last portfolio leaves a signed-in empty overview with a Create portfolio action; login, refresh and ordinary reads do not recreate it, and explicit replacement creation receives a new identity without violating the ten-active limit.
   5. Direct IDs, stale links, cursors, original-event references and retry requests cannot reveal another owner's or deleted portfolio's finances; stale tabs explain unavailability and offer the overview without redirecting an order, while delete/trade/job races cannot overspend, duplicate effects or mutate a closed target.
 
-**Plans**: 19 plans (38 tasks,15 dependency waves), independently checked;18/19 complete, awaiting Plan19 human acceptance.
+**Plans**: 19 plans (38 tasks,15 dependency waves), independently checked;19/19 complete, both owner outcomes and goal verification pass.
 
 **Wave 1**
 
@@ -379,7 +379,7 @@ compatibility for every newly supported state as it ships.
 
 **Wave 15** *(blocked on declared earlier-plan dependencies)*
 
-- [ ] 14-19-PLAN.md — Obtain separate owner UI and genuine native200 acceptance
+- [x] 14-19-PLAN.md — Obtain separate owner UI and genuine native200 acceptance
 
 **Cross-cutting constraints:** Dedicated sorted historical-stock gates before root; immutable original intent/policy and terminal freeze; strict owner/active/private reads; existing one-instrument financial guard;31-table/24-sequence successor0023 and immutable qualified0020/0017/older recovery. All DB-bearing tests/browser/ops use one serial disposable lane; disjoint frontend11–14 may overlap backend08–10/15 only. Preserve61critical modules plus new paths at100%, strict security/image gates and unchanged issue35. Plan18's recorded owner amendments replace repeated whole-local campaigns with source-bound component evidence and actual same-archive cold/TLS/rollback proofs; original whole-run failures remain failed and full CI before merge remains required. Preserve prior qualified archives. Actual new owner UI and native200 outcomes remain separate execution checkpoints. Keep local; Phase7 activation/provider work, new packages, push/merge and production remain outside scope.
 
@@ -444,13 +444,13 @@ checked; no Phase14 implementation or completion is claimed.
 Phase12 execution, independent reviews and goal verification are complete.
 The owner-approved unresolved picomatch advisory stays tracked in issue35;
 actual complete security and fresh recovery pass under its scoped exception.
-Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 automated qualification is complete under the recorded Plan18 amendments; Plan19 human acceptance and independent phase-goal verification remain. Phase15 follows it.
+Phase13 is verified complete locally:18plans,11requirements, both owner checks and complete security/recovery pass. Phase14 is complete locally:19/19plans, both owner outcomes and independent5/5goal verification pass under the recorded Plan18 amendments. Phase15 follows it.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
-| 14. End Strategies Safely | v1.2 | 18/19 | Awaiting Plan19 UI and native200 acceptance, then goal verification | - |
+| 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
 | 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/TBD | Not started | - |
 
 ## Deferred Follow-up

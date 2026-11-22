@@ -72,11 +72,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
   polling/capacity and exact current0020/retained0017cold recovery — Phase13,
   independently verified11/11requirements and both owner acceptance outcomes.
 
+- [x] Delete any owned portfolio after named confirmation, including holdings or the last portfolio; keep retained financial records private — Phase14, owner UI/native200 accepted and independently verified.
+- [x] Freeze deleted strategies at the committed closure boundary; prevent later financial effects while active siblings remain independent, with exact cold recovery/TLS/rollback evidence — Phase14.
+
 ### Active
 
-- [ ] Delete any owned portfolio after explicit confirmation, including portfolios with holdings and the last portfolio; retain financial records outside normal portfolio screens.
 
-- [ ] Freeze deleted strategies at the committed closure boundary and prevent future financial effects while preserving other active books — Phase14.
 - [ ] Qualify the complete active/deleted multi-portfolio lifecycle, recovery and acceptance — Phase15.
 
 ### Carried Deferred Work
@@ -110,7 +111,7 @@ gated. The bounded approved manual campaign is preserved at its original path.
 
 ## Current State
 
-Local v1.2: Phases12and13 are verified complete; Phase14is executing locally; current plan progress is tracked in STATE.md.
+Local v1.2: Phases12–14 are verified complete. Phase14 delivers19plans/7requirements with both actual owner outcomes and independent5/5goal verification. Phase15 is ready for planning; current progress is tracked in STATE.md.
 Phase13delivers18plans/11requirements with owner UI/native200acceptance, full
 security/critical coverage and uninterrupted7stage recovery at9527e35. The
 feature branch remains local; this completion does not change production.
@@ -247,13 +248,18 @@ optional-description amendment (PMGT-06, Phase 13), rename,
 unique case-insensitive active names, initial “My portfolio” onboarding, and
 freeze-at-deletion treatment of unpaid/future effects.
 
-**Progress:** Phases12and13 are verified complete locally (31+18plans,
-18of28requirements). Phase13 independent verification passes all5roadmap criteria,
+**Progress:** Phases12–14 are verified complete locally (31+18+19plans,
+25of28requirements). Phase13 independent verification passes all5roadmap criteria,
 45plan truths and11assigned requirements with no blocker or pending human item.
 Final9527e35 qualification passes3343backend tests,61critical modules100%,
 1194frontend tests,79browser passes/one retained skip, five image policies and
 uninterrupted7stage source-bound recovery. Security58/58closed and owner UI/native200
-outcomes pass. Phase14is executing locally; current plan progress is tracked in STATE.md; Phase15andtenrequirements remain.
+outcomes pass. Phase14 completes19/19plans,5/5outcomes and7/7requirements;
+both actual owner UI/native200 results passed2026-11-22. Under the recorded
+proportionate-verification amendments, unchanged-input results,28security
+components and6actual recovery components pass; failed whole commands remain
+failed and full CI before merge remains required. Phase15 and its three
+requirements remain; current progress is tracked in STATE.md.
 Phase7's six live obligations stay separately deferred and activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
 zero accepted scanner findings are not a dependency remediation claim. No new
@@ -318,4 +324,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-19 after independently verified Phase13local completion; Phase14ready for planning; production unchanged.*
+*Last updated: 2026-11-22 after independently verified Phase14 local completion; Phase15 ready for planning; production unchanged.*
