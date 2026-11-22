@@ -5,9 +5,9 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 15
 current_plan: 4
 status: milestone_ready_for_audit
-stopped_at: Phase15 verified complete; v1.2 implementation complete, milestone audit next
+stopped_at: Owner-authorized PR36 release/deployment workflow; CI repairs under verification
 last_updated: "2026-11-22T09:41:18.593828+00:00"
-last_activity: 2026-11-22 -- Phase15 independently verified; all28v1.2requirements locally satisfied
+last_activity: 2026-11-22 -- PR36 published; feature CI diagnosis; portfolios deployment authorized with stock activation deferred
 progress:
   total_phases: 4
   completed_phases: 4
@@ -36,8 +36,8 @@ seven-stage current0020/retained0017-and-earlier recovery. Exact TLS authority,
 cold source destruction/oracles and all21owned-resource cleanup checks pass.
 Raw receipts and failed-history provenance are linked from the Phase13reports.
 
-Phase7's six live obligations remain deferred and tracked; stock activation is
-still gated. Existing issue35 risk stays unchanged through2026-12-17UTC.
+Phase7 owner acceptance is closed (07-OWNER-CLOSURE); missing live stock-status
+transport remains a separate engineering follow-up and stock activation stays gated. Existing issue35 risk stays unchanged through2026-12-17UTC.
 Public deletion/freeze and final lifecycle/recovery acceptance are locally verified in Phases14–15.
 
 ## Current Position
@@ -1232,3 +1232,13 @@ allproductpermissions/access/display/retention/quotas. RecordedOWNER-CLOSURE/
 07-14SUMMARY; no newprivatecallsorindependenttermsaudit. Separateengineering
 gap: stockstatusschedulerhasnolivetransport, so normalruntimegate cannotbe
 removed merelybyacceptance. FeaturePR/releasework proceeds with that limit.
+
+## Software0.6.0 shipping in progress —2026-11-22
+
+Owner authorized PR/fullCI, merge/release and production rollout; then explicitly
+chose portfolios deployment with stock activation separate. PR36 is open.
+CI repairs and actual outcomes are recorded in
+[software shipping receipt](releases/0.6.0/SHIPPING.md). Current fullCI is not
+green; no merge/publication or production write/restart has occurred. Temporary
+release/rollout preparations are linked there. Reuse existing authorization;
+do not repeat completed phase plans or reopen owner acceptance.
