@@ -113,16 +113,20 @@ def independent_projection():
     }
 
 
-def closure_postgres_proof(*, write_fixture=False):
+def closure_postgres_proof(*, write_fixture=False, project='birja-p14-05', snapshot=None):
     """Owned current producer/causal oracle proof, not encrypted/TLS restore."""
+    if project not in {'birja-p14-05', 'birja-p15-02'}:
+        raise ValueError('exclusive owned closure proof required')
     labels = json.loads(subprocess.check_output(
-        ['docker', 'inspect', 'birja-p14-05-postgres-1']))[0]['Config']['Labels']
-    if labels.get('com.docker.compose.project') != 'birja-p14-05':
+        ['docker', 'inspect', project+'-postgres-1']))[0]['Config']['Labels']
+    if labels.get('com.docker.compose.project') != project:
         raise ValueError('exclusive owned closure proof required')
     env = {'PATH':os.environ['PATH'], 'HOME':'/tmp', 'ENV':'test',
            'PRICE_SOURCE':'fake', 'EMAIL_BACKEND':'console',
            'UV_NO_SYNC':'1', 'UV_OFFLINE':'1',
-           'CLOSURE_WRITE_FIXTURE':'1' if write_fixture else '0'}
+           'CLOSURE_WRITE_FIXTURE':'1' if write_fixture else '0',
+           'CLOSURE_PROJECT':project,
+           'CLOSURE_SNAPSHOT':str(snapshot or '/tmp/birja-phase14-plan05/before-backup.json')}
     code = r'''
 import asyncio,copy,importlib.util,json,os,secrets,subprocess
 from pathlib import Path
@@ -162,7 +166,7 @@ async def main():
   await fixture.seed(factory,Settings(),app,scheduler,helpers)
   async with factory() as db:
    value=await fixture.project(db);fixture.require_projection(value)
-  dc=['docker','compose','--env-file','/dev/null','-p','birja-p14-05','-f',str(root/'docker-compose.test.yml'),'exec','-T','postgres']
+  dc=['docker','compose','--env-file','/dev/null','-p',os.environ['CLOSURE_PROJECT'],'-f',str(root/'docker-compose.test.yml'),'exec','-T','postgres']
   selection=['--table='+table+'_id_seq' for table in producer.identity_tables('0023')]
   logical_dump=subprocess.check_output(dc+['pg_dump','-U','birja_migrator','-d','birja_test','-Fc','--compress=none'])
   dump_sequences=subprocess.check_output(dc+['pg_restore','--data-only','--file=-',*selection],input=logical_dump)
@@ -180,8 +184,8 @@ async def main():
     producer.validate_manifest(noacl,quarantined=True)
    finally:await quarantine_tx.rollback()
    before=fixture.canonical(value)
-   snapshot=Path('/tmp/birja-phase14-plan05/before-backup.json')
-   if snapshot.exists():snapshot.unlink()
+   snapshot=Path(os.environ['CLOSURE_SNAPSHOT'])
+   if snapshot.exists() and os.environ['CLOSURE_PROJECT']=='birja-p14-05':snapshot.unlink()
    digest=fixture.save_snapshot(snapshot,value)
    assert fixture.compare_snapshot(snapshot,digest,value)==digest
    for damage in ("ALTER ROLE birja_action_operator LOGIN",
@@ -222,6 +226,36 @@ asyncio.run(main())
     if result.returncode:
         raise AssertionError(result.stderr[-7000:])
     return json.loads(result.stdout.splitlines()[-1])
+
+
+def write_current_fixture():
+    """Generate only the current fixture in one exclusive disposable lane."""
+    project = 'birja-p15-02'
+    env = {'PATH': os.environ['PATH'], 'HOME': '/tmp'}
+    dc = ['docker', 'compose', '--env-file', '/dev/null', '-p', project,
+          '-f', str(ROOT/'docker-compose.test.yml')]
+    def resources():
+        result = {}
+        for kind in ('container', 'network', 'volume'):
+            argv = ['docker', kind, 'ls', '-q']
+            if kind == 'container':
+                argv.append('-a')
+            argv += ['--filter', 'label=com.docker.compose.project='+project]
+            result[kind] = subprocess.check_output(argv, env=env, text=True).splitlines()
+        return result
+    if any(resources().values()):
+        raise ValueError('preexisting Phase15 fixture resources refused')
+    with tempfile.TemporaryDirectory(prefix='birja-p15-02-seed-') as directory:
+        try:
+            subprocess.run(dc+['up', '-d', '--wait'], env=env, check=True, timeout=120)
+            result = closure_postgres_proof(write_fixture=True, project=project,
+                snapshot=Path(directory)/'before-backup.json')
+        finally:
+            subprocess.run(dc+['down', '-v', '--remove-orphans'], env=env, check=True, timeout=90)
+            if any(resources().values()):
+                raise ValueError('Phase15 fixture resources remain')
+    result['owned_resources_clean'] = True
+    return result
 
 
 def closure_restore_postgres_proof():
@@ -519,6 +553,29 @@ asyncio.run(main())
     if result.returncode:
         raise AssertionError(result.stderr[-5000:])
     return json.loads(result.stdout.splitlines()[-1])
+
+
+class ClosureFixtureWriterContracts(unittest.TestCase):
+    def test_writer_refuses_existing_owned_resources_before_start(self):
+        with mock.patch.object(subprocess, 'check_output', return_value='existing\n'), \
+             mock.patch.object(subprocess, 'run') as run, \
+             self.assertRaisesRegex(ValueError, 'preexisting Phase15'):
+            write_current_fixture()
+        run.assert_not_called()
+
+    def test_writer_failure_cleans_only_its_owned_compose_project(self):
+        with mock.patch.object(subprocess, 'check_output', return_value=''), \
+             mock.patch.object(subprocess, 'run') as run, \
+             mock.patch.object(sys.modules[__name__], 'closure_postgres_proof',
+                               side_effect=RuntimeError('producer refused')), \
+             self.assertRaisesRegex(RuntimeError, 'producer refused'):
+            write_current_fixture()
+        self.assertEqual(len(run.call_args_list), 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0][:7], ['docker', 'compose', '--env-file', '/dev/null',
+                '-p', 'birja-p15-02', '-f'])
+        self.assertEqual(run.call_args_list[-1].args[0][-3:],
+                         ['down', '-v', '--remove-orphans'])
 
 
 class ClosureProducerContracts(unittest.TestCase):
@@ -1035,7 +1092,9 @@ class ManagementRecoveryContracts(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ['--postgres']:
+    if sys.argv[1:] == ['--write-current-fixture']:
+        print(json.dumps(write_current_fixture(), sort_keys=True))
+    elif sys.argv[1:] == ['--postgres']:
         print(json.dumps(closure_restore_postgres_proof(),sort_keys=True))
     elif sys.argv[1:] == ["--postgres-operator-login"]:
         result = postgres_proof()

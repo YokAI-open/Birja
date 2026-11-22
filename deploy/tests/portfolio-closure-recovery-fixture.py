@@ -118,7 +118,7 @@ def require_projection(value):
     # Independent expected economics, not recomputed by the seed or restore.
     expected = {
         "Mixed": ("9880.50000000", True),
-        "Active": ("9960.25000000", False),
+        "Active": ("9860.25000000", False),
         "Crypto": ("9900.00000000", True),
         "Blank": ("10000.00000000", True),
         "Zero": ("10000.00000000", True),
@@ -185,8 +185,14 @@ def require_projection(value):
         raise ValueError("global sold-out stock boundary oracle")
     if not all(r["portfolio_id"] == roots["Mixed"]["id"] for r in boundaries):
         raise ValueError("stock closure moved into sibling")
-    if len(tables["trades"]) != 3 or len(tables["stock_fill_facts"]) != 1:
+    if len(tables["trades"]) != 4 or len(tables["stock_fill_facts"]) != 1:
         raise ValueError("immutable stock sale and crypto fill oracle")
+    btc = next(r["id"] for r in tables["coins"] if r["symbol"] == "BTC")
+    if held[roots["Active"]["id"], btc] != ("0.00995012", "100.00000000"):
+        raise ValueError("independent active crypto quantity/basis oracle")
+    active_fills = [r for r in tables["trades"] if r["portfolio_id"] == roots["Active"]["id"]]
+    if len(active_fills) != 1 or active_fills[0]["idempotency_key"] != "00000000-0000-4000-8000-000000000067":
+        raise ValueError("original active crypto fill identity required")
     if len(tables["stock_dividend_payments"]) != 2 or not any(
         r["outcome"] == "held_uncertain" for r in tables["stock_dividend_decisions"]
     ):
@@ -364,7 +370,7 @@ async def seed(factory, settings, app_engine, scheduler_engine, helpers):
             {"c": btc},
         )
     app_factory = async_sessionmaker(app_engine, expire_on_commit=False)
-    for index, name in enumerate(("Mixed", "Crypto"), 1):
+    for index, name in enumerate(("Mixed", "Crypto", "Active"), 1):
         async with app_factory() as db:
             result, new = await execute(
                 db,
@@ -375,7 +381,7 @@ async def seed(factory, settings, app_engine, scheduler_engine, helpers):
                 settings=settings,
             )
             if not new or result.cash_after != (
-                Decimal("9880") if name == "Mixed" else Decimal("9900")
+                {"Mixed": Decimal("9880"), "Crypto": Decimal("9900"), "Active": Decimal("9860")}[name]
             ):
                 raise ValueError("actual crypto execution oracle")
             await db.commit()
