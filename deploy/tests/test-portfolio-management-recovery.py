@@ -556,6 +556,51 @@ asyncio.run(main())
 
 
 class ClosureFixtureWriterContracts(unittest.TestCase):
+    def test_restored_replay_program_requires_original_snapshot_and_database(self):
+        fixture = load('restored_closure_fixture', 'deploy/tests/portfolio-closure-recovery-fixture.py')
+        value = json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())['projection']
+        sha = hashlib.sha256(fixture.canonical(value)).hexdigest()
+        for database, digest, before in [(None, sha, value), ('birja_restore_test', None, value),
+                                         ('birja_restore_test', sha, None), ('birja_restore_test', '0'*64, value)]:
+            with self.subTest(database=database, digest=digest), self.assertRaises((ValueError, TypeError)):
+                fixture.program(mode='replay-restored', database=database, expected=digest, before=before)
+        code = fixture.program(mode='replay-restored', database='birja_restore_test', expected=sha, before=value)
+        compile(code, '<actual-restored-replay-program>', 'exec')
+        smoke = load('restored_smoke_program', 'deploy/tests/portfolio-smoke.py')
+        compile(smoke.closure_role_program(code), '<actual-restored-role-program>', 'exec')
+        self.assertLess(code.index('assert json.dumps(value'), code.index('value,replay=await replay_restored'))
+        self.assertIn('metadata, replayed = await create_portfolio', code)
+        self.assertIn('fill, new = await execute', code)
+        self.assertIn("assert not new", code)
+        self.assertIn('assert asdict(fill) == expected_fill', code)
+        self.assertIn('paid = await process_dividend', code)
+        self.assertIn("payment['revision_fingerprint']", code)
+        self.assertIn("paid.outcome == 'original'", code)
+        self.assertIn("assert after['tables'] == tables", code)
+        self.assertIn('assert await active_lists() == lists_before', code)
+        self.assertNotIn('setval(', code)
+
+    def test_restored_replay_is_cold_only_after_exact_compare(self):
+        import ast
+        source = (ROOT/'deploy/tests/portfolio-smoke.py').read_text()
+        tree = ast.parse(source)
+        run = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'run')
+        cold = next(n for n in ast.walk(run) if isinstance(n, ast.If)
+                    and isinstance(n.test, ast.Name) and n.test.id == 'cold'
+                    and "'replay-restored'" in ast.get_source_segment(source, n))
+        text = ast.get_source_segment(source, cold)
+        self.assertLess(text.index('"compare"'), text.index("'replay-restored'"))
+        self.assertIn("if revision == '0023':", text)
+        self.assertIn("'birja_restore_test'", text)
+        self.assertIn("'--expected-sha256', digest", text)
+
+    def test_replay_mode_refuses_source_or_missing_snapshot_before_transport(self):
+        fixture = load('replay_mode_refusal', 'deploy/tests/portfolio-closure-recovery-fixture.py')
+        for args in (['replay-restored'], ['replay-restored', '--database', 'birja_restore_test']):
+            with mock.patch.object(fixture, 'program') as program, self.assertRaises(ValueError):
+                fixture.main(args, transport=lambda code: self.fail('transport before admission'))
+            program.assert_not_called()
+
     def test_writer_refuses_existing_owned_resources_before_start(self):
         with mock.patch.object(subprocess, 'check_output', return_value='existing\n'), \
              mock.patch.object(subprocess, 'run') as run, \

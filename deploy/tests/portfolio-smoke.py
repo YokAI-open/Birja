@@ -893,6 +893,12 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                     or b"portfolio_verified_tls=true" not in output.splitlines()
                 ):
                     raise AssertionError("missing actual verified TLS projection")
+                if "MODE='replay-restored'\n" in code:
+                    reports = [line.split(b'=', 1)[1] for line in output.splitlines()
+                               if line.startswith(b'portfolio_restored_replay=')]
+                    if len(reports) != 1:
+                        raise ValueError('actual restored retry report required')
+                    return {'projection': json.loads(rows[0]), 'replay': json.loads(reports[0])}
                 return json.loads(rows[0])
 
             def production_bootstrap():
@@ -1053,6 +1059,12 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                             ],
                             transport=transport,
                         )
+                        if revision == '0023':
+                            fixture.main(
+                                ['replay-restored', '--database', 'birja_restore_test',
+                                 '--snapshot', str(expected), '--expected-sha256', digest],
+                                transport=transport,
+                            )
                     print(
                         "actual_current"
                         + revision

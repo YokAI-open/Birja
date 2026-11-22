@@ -654,6 +654,127 @@ async def project(db, *, columns=None, identities=None):
     return {"revision": "0023", "tables": tables, "sequences": tails}
 
 
+async def replay_restored(factory, settings, app_engine, scheduler_engine, before,
+                          *, columns, identities):
+    """Retry actual original services after the complete restored comparison."""
+    from dataclasses import asdict
+    from datetime import datetime
+    from decimal import Decimal
+    from uuid import UUID
+    from fastapi import HTTPException
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from app.models.user import User
+    from app.schemas.portfolios import PortfolioCreate
+    from app.services.portfolios import create_portfolio, list_active_portfolios, OwnedActivePortfolio
+    from app.services.trading import execute, Order
+    from app.services.dividends import process_dividend, DividendRefused
+
+    tables = before['tables']
+    roots = {row['name']: row for row in tables['accounts']}
+    active, closed = roots['Active'], roots['Mixed']
+    app = async_sessionmaker(app_engine, expire_on_commit=False)
+    scheduler = async_sessionmaker(scheduler_engine, expire_on_commit=False)
+    for role, sessions in (('app', app), ('scheduler', scheduler)):
+        async with sessions() as db:
+            assert (await db.execute(text('SELECT session_user'))).scalar_one() == 'birja_'+role
+            assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
+            await db.rollback()
+
+    async def active_lists():
+        result = {}
+        for user in tables['users']:
+            async with app() as db:
+                values = await list_active_portfolios(db, User(id=user['id']))
+                result[user['id']] = [(value.id, value.name) for value in values]
+                await db.rollback()
+        return result
+
+    lists_before = await active_lists()
+    assert lists_before[roots['Zero']['user_id']] == []
+    assert lists_before[active['user_id']] == [(active['id'], 'Active')]
+    creation = next(row for row in tables['portfolio_creations'] if row['portfolio_id'] == active['id'])
+    async with app() as db:
+        metadata, replayed = await create_portfolio(db, User(id=creation['user_id']),
+            UUID(creation['creation_key']), PortfolioCreate(**creation['canonical_payload']))
+        assert replayed and metadata.id == active['id']
+        assert (metadata.name, metadata.description) == (active['name'], active['description'])
+
+    original = next(row for row in tables['trades']
+                    if row['portfolio_id'] == active['id']
+                    and row['idempotency_key'] == str(UUID(int=103, version=4)))
+    async with app() as db:
+        fill, new = await execute(db, portfolio=OwnedActivePortfolio(active['id'], active['user_id']),
+            order=Order('BTC', 'buy', 'usd', Decimal('100')), expected_mid=Decimal('10000'),
+            idempotency_key=UUID(original['idempotency_key']), settings=settings)
+        assert not new
+        expected_fill = {
+            'portfolio_id': active['id'], 'trade_id': original['id'],
+            'created_at': datetime.fromisoformat(original['created_at']), 'symbol': 'BTC',
+            'side': original['side'], 'input_kind': original['input_kind'],
+            'input_value': Decimal(original['input_value']), 'mid': Decimal(original['mid_price']),
+            'as_of': datetime.fromisoformat(original['price_as_of']),
+            **{key: Decimal(original[key]) for key in
+               ('exec_price', 'quantity', 'fee', 'cash_delta', 'cash_after')},
+            'notional': -Decimal(original['cash_delta'])-Decimal(original['fee']),
+        }
+        assert asdict(fill) == expected_fill
+
+    payment = next(row for row in tables['stock_dividend_payments'] if row['portfolio_id'] == active['id'])
+    async with scheduler() as db:
+        paid = await process_dividend(db, portfolio_id=active['id'], event_id=payment['event_id'],
+            entitlement_id=payment['entitlement_id'],
+            expected_revision_fingerprint=payment['revision_fingerprint'],
+            expected_entitlement_fingerprint=payment['entitlement_fingerprint'])
+        assert paid.payment_id == payment['id'] and paid.outcome == 'original'
+
+    closed_creation = next(row for row in tables['portfolio_creations'] if row['portfolio_id'] == closed['id'])
+    async with app() as db:
+        try:
+            await create_portfolio(db, User(id=closed['user_id']), UUID(closed_creation['creation_key']),
+                PortfolioCreate(**closed_creation['canonical_payload']))
+        except HTTPException as error:
+            assert error.status_code == 404 and error.detail == {'code': 'portfolio_unavailable'}
+        else:
+            raise AssertionError('closed original creation admitted')
+    closed_fill = next(row for row in tables['trades'] if row['portfolio_id'] == closed['id']
+                       and row['idempotency_key'] == str(UUID(int=101, version=4)))
+    async with app() as db:
+        try:
+            await execute(db, portfolio=OwnedActivePortfolio(closed['id'], closed['user_id']),
+                order=Order('BTC', 'buy', 'usd', Decimal('100')), expected_mid=Decimal('10000'),
+                idempotency_key=UUID(closed_fill['idempotency_key']), settings=settings)
+        except HTTPException as error:
+            assert error.status_code == 404 and error.detail == {'code': 'portfolio_unavailable'}
+        else:
+            raise AssertionError('closed original fill admitted')
+    closed_payment = next(row for row in tables['stock_dividend_payments'] if row['portfolio_id'] == closed['id'])
+    async with scheduler() as db:
+        try:
+            await process_dividend(db, portfolio_id=closed['id'], event_id=closed_payment['event_id'],
+                entitlement_id=closed_payment['entitlement_id'],
+                expected_revision_fingerprint=closed_payment['revision_fingerprint'],
+                expected_entitlement_fingerprint=closed_payment['entitlement_fingerprint'])
+        except DividendRefused as error:
+            assert error.code == 'portfolio_unavailable'
+        else:
+            raise AssertionError('closed original dividend admitted')
+
+    assert await active_lists() == lists_before
+    async with factory() as db:
+        after = await project(db, columns=columns, identities=identities)
+    assert after['tables'] == tables
+    changes = {}
+    for name, (last, called) in before['sequences'].items():
+        actual_last, actual_called = after['sequences'][name]
+        assert actual_last >= last and (not called or actual_called)
+        if [actual_last, actual_called] != [last, called]:
+            changes[name] = {'before': [last, called], 'after': [actual_last, actual_called]}
+    return after, {'restored_original_retries': True, 'active_creation_id': metadata.id,
+        'active_fill_id': fill.trade_id, 'active_payment_id': paid.payment_id,
+        'closed_refusals': 3, 'sequence_changes': changes}
+
+
 def private_snapshot(path, existing):
     path = Path(path)
     if (
@@ -697,17 +818,23 @@ def compare_snapshot(path, digest, value):
     return digest
 
 
-def program(*, mode, database=None, expected=None):
+def program(*, mode, database=None, expected=None, before=None):
     if (
-        mode not in {"create", "projection", "verify", "compare"}
+        mode not in {"create", "projection", "verify", "compare", "replay-restored"}
         or database not in {None, "birja_restore_test"}
         or (mode == "create" and database)
     ):
         raise ValueError("unsafe closure fixture mode/database")
-    if mode == "compare" and (
+    if mode in {"compare", "replay-restored"} and (
         not isinstance(expected, str) or not re.fullmatch("[0-9a-f]{64}", expected)
     ):
         raise ValueError("before-backup snapshot hash required")
+    if mode == 'replay-restored':
+        if database != 'birja_restore_test':
+            raise ValueError('restored database required for original retries')
+        require_projection(before)
+        if hashlib.sha256(canonical(before)).hexdigest() != expected:
+            raise ValueError('before-backup snapshot hash required')
     contract = producer()
     _, common = historical_helpers(load_backend=False)
     pins = {
@@ -720,6 +847,7 @@ def program(*, mode, database=None, expected=None):
         + repr(database)
         + "\nMODE="
         + repr(mode)
+        + "\nBEFORE_SNAPSHOT=" + repr(before)
         + "\nSOURCE_SHA256="
         + repr(pins)
         + "\n"
@@ -760,7 +888,7 @@ asyncio.run(declared())
     code += (
         common
         + "\n"
-        + "\n".join(inspect.getsource(fn) for fn in (seed, dividend_seed, project))
+        + "\n".join(inspect.getsource(fn) for fn in (seed, dividend_seed, project, replay_restored))
     )
     code += r"""
 async def run():
@@ -780,6 +908,10 @@ async def run():
    await seed(factory,settings,app,scheduler,globals())
   async with factory() as db:
    value=await project(db,columns=TABLE_COLUMNS,identities=IDENTITY_TABLES)
+   if MODE=='replay-restored':
+    assert json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False)==json.dumps(BEFORE_SNAPSHOT,sort_keys=True,separators=(',',':'),ensure_ascii=False)
+    value,replay=await replay_restored(factory,settings,app,scheduler,value,columns=TABLE_COLUMNS,identities=IDENTITY_TABLES)
+    print('portfolio_restored_replay='+json.dumps(replay,sort_keys=True,separators=(',',':')))
    print('portfolio_projection='+json.dumps(value,sort_keys=True,separators=(',',':')))
    print('portfolio_verified_tls=true')
  finally:await app.dispose();await scheduler.dispose();await engine.dispose()
@@ -790,14 +922,20 @@ asyncio.run(run())
 
 def main(argv=None, *, transport=None):
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("mode", choices=["create", "projection", "verify", "compare"])
+    parser.add_argument("mode", choices=["create", "projection", "verify", "compare", "replay-restored"])
     parser.add_argument("--database", choices=["birja_restore_test"])
     parser.add_argument("--snapshot")
     parser.add_argument("--expected-sha256")
     args = parser.parse_args(argv)
-    code = program(
-        mode=args.mode, database=args.database, expected=args.expected_sha256
-    )
+    before = None
+    if args.mode == 'replay-restored':
+        if args.database != 'birja_restore_test' or not args.snapshot:
+            raise ValueError('restored database and before-backup snapshot required')
+        path = private_snapshot(args.snapshot, True)
+        before = json.loads(path.read_bytes())
+        compare_snapshot(path, args.expected_sha256, before)
+    code = program(mode=args.mode, database=args.database,
+        expected=args.expected_sha256, before=before)
     if transport:
         value = transport(code)
     else:
@@ -822,6 +960,24 @@ def main(argv=None, *, transport=None):
         ):
             raise ValueError("exact TLS projection required")
         value = json.loads(rows[0])
+        if args.mode == 'replay-restored':
+            reports = [r.split(b'=', 1)[1] for r in result.stdout.splitlines()
+                       if r.startswith(b'portfolio_restored_replay=')]
+            if len(reports) != 1:
+                raise ValueError('actual restored retry report required')
+            value = {'projection': value, 'replay': json.loads(reports[0])}
+    if args.mode == 'replay-restored':
+        if not isinstance(value, dict) or set(value) != {'projection', 'replay'}:
+            raise ValueError('actual restored retry report required')
+        report = value['replay']
+        if report.get('restored_original_retries') is not True or report.get('closed_refusals') != 3:
+            raise ValueError('actual restored retry report required')
+        value = value['projection']
+        require_projection(value)
+        if value['tables'] != before['tables']:
+            raise ValueError('restored retry changed immutable tables')
+        print('restored_original_retries=true')
+        print('restored_retry_result='+json.dumps(report,sort_keys=True))
     require_projection(value)
     digest = (
         save_snapshot(args.snapshot, value)
