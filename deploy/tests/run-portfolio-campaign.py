@@ -36,7 +36,7 @@ def private_directory(path, *, create=False):
         or path != path.resolve()
         or path.parent != Path("/tmp")
         or not re.fullmatch(
-            r"birja-(?:backup-test-[A-Za-z0-9_.-]+|phase14-campaign-[a-z0-9-]+)",
+            r"birja-(?:backup-test-[A-Za-z0-9_.-]+|phase(?:14|15)-campaign-[a-z0-9-]+)",
             path.name,
         )
     ):
@@ -93,15 +93,37 @@ def source_snapshot(runner):
     return result
 
 
-def artifact_snapshot(runner, previous):
+def qualification_phase(request, directory=None, state=None):
+    """Format1 receipts without this field always retain Phase14 semantics."""
+    phase = request.get("qualification_phase", 14)
+    if (type(phase) is not int or phase not in {14, 15}
+            or request.get("suite") not in {"all-security", "recovery", "recovery-current"}
+            or request["suite"] == "recovery-current" and phase != 15):
+        raise ValueError("campaign qualification phase/suite mismatch")
+    if directory is not None:
+        for selected in (14, 15):
+            if Path(directory).name.startswith(f"birja-phase{selected}-campaign-") and phase != selected:
+                raise ValueError("campaign receipt namespace/phase mismatch")
+    if state is not None and state.get("qualification_phase", 14) != phase:
+        raise ValueError("campaign receipt qualification phase mismatch")
+    return phase
+
+
+def selected_archive(runner, phase):
+    return runner.ARCHIVE if phase == 14 else runner.archive_for_phase(phase)
+
+
+def artifact_snapshot(runner, previous, *, phase=14, suite=None):
     """Only freeze a complete packaged archive, not a partially written tar."""
-    archive = runner.ARCHIVE
+    archive = selected_archive(runner, phase)
     status_file = archive.parent / "status.json"
     if not status_file.exists():
         if previous is not None:
             raise ValueError("campaign archive/status disappeared")
         return None
     state = read_json(status_file)
+    if state.get("phase", 14) != phase or (suite is not None and state.get("suite", "recovery") != suite):
+        raise ValueError("campaign archive qualification identity mismatch")
     expected = state.get("archive_sha256")
     sources = runner.load("portfolio-sources")
     sources.verify_archive_binding(archive, expected)
@@ -126,13 +148,20 @@ def artifact_snapshot(runner, previous):
 
 
 def verify_integrity(runner, request, state):
+    phase = qualification_phase(request, state=state)
+    if "archive" in request and (request["archive"] != str(selected_archive(runner, phase))
+                                 or state.get("archive") != request["archive"]):
+        raise ValueError("campaign recorded archive selection mismatch")
     if source_snapshot(runner) != request["source_sha256"]:
         raise ValueError("frozen campaign source changed")
     if runner.preserved_archive() != request["preserved_archive_sha256"]:
         raise ValueError("preserved archive changed")
+    if phase == 15 and ("preserved_phase14_archive_sha256" not in request
+                       or runner.preserved_phase14_archive() != request["preserved_phase14_archive_sha256"]):
+        raise ValueError("preserved Phase14 archive changed")
     return (
-        artifact_snapshot(runner, state.get("artifacts"))
-        if request["suite"] == "recovery"
+        artifact_snapshot(runner, state.get("artifacts"), phase=phase, suite=request["suite"])
+        if request["suite"] in {"recovery", "recovery-current"}
         else None
     )
 
@@ -157,7 +186,7 @@ def inspect_status(directory):
     if (
         request.get("format") != 1
         or state.get("format") != 1
-        or request.get("suite") not in {"all-security", "recovery"}
+        or request.get("suite") not in {"all-security", "recovery", "recovery-current"}
         or state.get("suite") != request["suite"]
         or state.get("state")
         not in {
@@ -174,6 +203,7 @@ def inspect_status(directory):
         or request["run_id"] != state.get("run_id")
     ):
         raise ValueError("campaign receipt identity mismatch")
+    qualification_phase(request, directory, state)
     if (
         state["state"] == "passed"
         and (type(state.get("exit_code")) is not int or state["exit_code"] != 0)
@@ -323,7 +353,8 @@ def start_preflight(directory, runner, request, state):
 
                 signal.signal(signal.SIGINT, cancel)
                 signal.signal(signal.SIGTERM, cancel)
-                result = runner.preflight(request["suite"])
+                selected_phase = qualification_phase(request, directory, state)
+                result = runner.preflight(request["suite"], **({"phase": selected_phase} if selected_phase != 14 else {}))
                 if cancelled:
                     raise KeyboardInterrupt
                 write_json(directory / "preflight.json", result)
@@ -363,6 +394,7 @@ def worker(directory, *, runner=None, command=None):
     """Internal worker; command injection is only for bounded stdlib tests."""
     directory = private_directory(directory)
     request = read_json(directory / "request.json")
+    selected_phase = qualification_phase(request, directory)
     try:
         claim = claim_request(directory, request)
     except FileExistsError:
@@ -372,6 +404,8 @@ def worker(directory, *, runner=None, command=None):
         "format": 1,
         "run_id": request["run_id"],
         "suite": request["suite"],
+        "qualification_phase": selected_phase,
+        "archive": str(selected_archive(runner, selected_phase)),
         "pid": os.getpid(),
         "start_ticks": process_identity(os.getpid()),
         "state": "preflight",
@@ -425,6 +459,8 @@ def worker(directory, *, runner=None, command=None):
                 str(ROOT / "deploy/tests/run-portfolio-validation.py"),
                 "--suite",
                 request["suite"],
+                "--phase",
+                str(selected_phase),
             ]
         )
         fd = os.open(
@@ -521,11 +557,11 @@ def worker(directory, *, runner=None, command=None):
     return 0 if state["state"] == "passed" else 1
 
 
-def start(suite, directory):
-    if suite not in {"all-security", "recovery"}:
-        raise ValueError("explicit suite required")
+def start(suite, directory, *, phase=14):
+    qualification_phase({"suite": suite, "qualification_phase": phase}, directory)
     runner = validation()
-    if suite == "recovery" and runner.ARCHIVE.parent.exists():
+    archive = selected_archive(runner, phase)
+    if suite != "all-security" and archive.parent.exists():
         raise ValueError(
             "new recovery campaign requires absent exclusive archive directory"
         )
@@ -534,9 +570,13 @@ def start(suite, directory):
         "format": 1,
         "run_id": uuid.uuid4().hex,
         "suite": suite,
+        "qualification_phase": phase,
+        "archive": str(archive),
         "source_sha256": source_snapshot(runner),
         "preserved_archive_sha256": runner.preserved_archive(),
     }
+    if phase == 15:
+        request["preserved_phase14_archive_sha256"] = runner.preserved_phase14_archive()
     write_json(directory / "request.json", request)
     (directory / "request.json").chmod(0o400)
     fd = os.open(
@@ -573,18 +613,21 @@ def start(suite, directory):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--receipt-dir", required=True)
+    parser.add_argument("--phase", type=int, choices=[14, 15])
     choice = parser.add_mutually_exclusive_group(required=True)
-    choice.add_argument("--suite", choices=["all-security", "recovery"])
+    choice.add_argument("--suite", choices=["all-security", "recovery", "recovery-current"])
     choice.add_argument("--status", action="store_true")
     choice.add_argument(
         "--resume", action="store_true", help="Inspect the original run; never rerun it"
     )
     choice.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.phase is not None and not args.suite:
+        parser.error("status/resume/worker derive the phase from the original request")
     if args.worker:
         return worker(args.receipt_dir)
     state = (
-        start(args.suite, args.receipt_dir)
+        start(args.suite, args.receipt_dir, phase=14 if args.phase is None else args.phase)
         if args.suite
         else inspect_status(args.receipt_dir)
     )

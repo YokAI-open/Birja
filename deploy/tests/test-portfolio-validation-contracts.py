@@ -464,6 +464,72 @@ campaign_spec.loader.exec_module(campaign)
 
 
 class DurableCampaign(unittest.TestCase):
+    def test_phase15_worker_forwards_original_selection_and_status_is_read_only(self):
+        root, fixture, request = self.fixture()
+        archive = root / "phase15/recovery.tar.gz"
+        fixture.archive_for_phase = lambda phase: archive if phase == 15 else fixture.ARCHIVE
+        fixture.preserved_phase14_archive = lambda: None
+        fixture.preflight = lambda suite, *, phase=14: {"ok": True, "suite": suite, "phase": phase}
+        request.update(suite="recovery-current", qualification_phase=15,
+                       archive=str(archive), preserved_phase14_archive_sha256=None)
+        campaign.write_json(root / "request.json", request)
+        (root / "request.json").chmod(0o400)
+        original_request = (root / "request.json").read_bytes()
+        original_popen = campaign.subprocess.Popen
+        commands = []
+        def launch(argv, **kwargs):
+            commands.append(argv)
+            self.assertEqual(argv[-4:], ["--suite", "recovery-current", "--phase", "15"])
+            return original_popen([sys.executable, "-c", "print('component boundary')"], **kwargs)
+        with patch.object(campaign.subprocess, "Popen", side_effect=launch):
+            self.assertEqual(campaign.worker(root, runner=fixture), 0)
+        state = campaign.read_json(root / "status.json")
+        self.assertEqual(state["qualification_phase"], 15)
+        self.assertEqual(state["archive"], str(archive))
+        self.assertEqual(campaign.read_json(root / "preflight.json")["phase"], 15)
+        self.assertEqual(len(commands), 1)
+        before = {name: (root / name).read_bytes() for name in ("request.json", "claim.json", "status.json", "command.log")}
+        with patch.object(campaign.subprocess, "Popen", side_effect=AssertionError("restart")):
+            self.assertEqual(campaign.inspect_status(root)["qualification_phase"], 15)
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(campaign.main(["--resume", "--receipt-dir", str(root)]), 0)
+        self.assertEqual(before, {name: (root / name).read_bytes() for name in before})
+        self.assertEqual(original_request, (root / "request.json").read_bytes())
+        changed = {**state, "qualification_phase": 14}
+        campaign.write_json(root / "status.json", changed)
+        with self.assertRaisesRegex(ValueError, "phase mismatch"):
+            campaign.inspect_status(root)
+
+    def test_finite_receipt_namespaces_match_the_original_phase_and_suite(self):
+        for phase in (14, 15):
+            request = {"suite": "recovery", "qualification_phase": phase}
+            self.assertEqual(campaign.qualification_phase(request, f"/tmp/birja-phase{phase}-campaign-test"), phase)
+            with self.assertRaisesRegex(ValueError, "namespace"):
+                campaign.qualification_phase(request, f"/tmp/birja-phase{29-phase}-campaign-test")
+        self.assertEqual(campaign.qualification_phase({"suite": "recovery"}), 14)
+        for request in ({"suite": "recovery-current"}, {"suite": "recovery", "qualification_phase": 16},
+                        {"suite": "recovery", "qualification_phase": True}):
+            with self.assertRaises(ValueError):
+                campaign.qualification_phase(request)
+
+    def test_phase15_archive_snapshot_refuses_other_qualification_before_inspection(self):
+        root, fixture, request = self.fixture()
+        fixture.archive_for_phase = lambda phase: root / "phase15/recovery.tar.gz"
+        archive = fixture.archive_for_phase(15)
+        archive.parent.mkdir()
+        campaign.write_json(archive.parent / "status.json", {"phase": 14, "suite": "recovery", "archive_sha256": "a" * 64})
+        with patch.object(campaign.subprocess, "check_output", side_effect=AssertionError("image inspection")):
+            with self.assertRaisesRegex(ValueError, "identity mismatch"):
+                campaign.artifact_snapshot(fixture, None, phase=15, suite="recovery-current")
+
+    def test_legacy_request_bytes_and_phase14_interpretation_are_preserved(self):
+        root, fixture, request = self.fixture()
+        before = (root / "request.json").read_bytes()
+        self.assertNotIn("qualification_phase", request)
+        self.assertEqual(campaign.worker(root, runner=fixture, command=[sys.executable, "-c", "pass"]), 0)
+        self.assertEqual(campaign.inspect_status(root)["qualification_phase"], 14)
+        self.assertEqual(before, (root / "request.json").read_bytes())
+
     def wait_for(self, predicate, timeout=5):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
