@@ -266,6 +266,7 @@ it("masks prior finances immediately when the signed-in owner changes", async ()
   await screen.findByText(/Private cash/);
   act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
   await waitFor(() => expect(screen.queryByText(/Private cash/)).toBeNull());
+  await waitFor(() => expect(release).toEqual(expect.any(Function)));
   await act(async () => {
     release(json([]));
   });
