@@ -75,7 +75,7 @@ def image_policy(image, aggregate):
 
 def recovery_policy(ops, runner_source=None):
     command = "run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery"
-    if ops.count(command) != 1:
+    if sum(line.strip() == command for line in ops.splitlines()) != 1:
         raise ValueError("missing exact serial runner")
     source = runner_source if runner_source is not None else (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
     tree = ast.parse(source)
@@ -86,10 +86,10 @@ def recovery_policy(ops, runner_source=None):
     if ast.literal_eval(constants["STAGES"]) != expected:
         raise ValueError("missing or reordered serial stage")
     for required in (
-        "ops.package_current_archive(ARCHIVE)", "ops.r.bundle_verify(ARCHIVE, expected",
-        "ops.bind_source_archive(ARCHIVE, expected)", "ops.roundtrip(archive)",
+        "ops.package_current_archive(archive)", "ops.r.bundle_verify(archive, expected",
+        "ops.bind_source_archive(archive, expected)", "ops.roundtrip(archive)",
         "cold=True", "ops.roles", "fresh_bootstrap=fresh", "--recovery-bundle",
-        "authenticate(ops, ARCHIVE, expected, source, image_records)", "verify_archive_binding(archive, expected)",
+        "authenticate(ops, archive, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
         "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V3", "RETAINED_CLOSURE_SOURCE_PAYLOADS",
@@ -538,7 +538,7 @@ class CI(unittest.TestCase):
         recovery_policy(ops)
         source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
         for old in (
-            "ops.package_current_archive(ARCHIVE)", "ops.roundtrip(archive)",
+            "ops.package_current_archive(archive)", "ops.roundtrip(archive)",
             "cold=True", "fresh_bootstrap=fresh", "--recovery-bundle",
             "verify_archive_binding(archive, expected)", "verify_image(binding, inspect)",
             "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
@@ -548,6 +548,8 @@ class CI(unittest.TestCase):
                 recovery_policy(ops, source.replace(old, "omitted_stage"))
         with self.assertRaises(ValueError):
             recovery_policy(ops.replace("--suite recovery", "--suite all-security"))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace("--suite recovery", "--suite recovery-current"))
         with self.assertRaises(ValueError):
             recovery_policy(ops, source.replace("\"roles\", \"tls-upgraded\"", "\"tls-upgraded\", \"roles\"", 1))
         for old in ("bash deploy/tests/test-deploy-compatibility.sh", "python3 deploy/tests/test-selected-cutover-contracts.py"):
@@ -879,7 +881,7 @@ class PortfolioValidation(unittest.TestCase):
         self.assertEqual(len(backend[4][4].split(",")), 64)
         recovery = json.loads(subprocess.check_output([sys.executable, str(ROOT / "deploy/tests/run-portfolio-validation.py"),
             "--suite", "recovery", "--dry-run"]))
-        self.assertEqual(recovery, {"archive": "/tmp/birja-phase14-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
+        self.assertEqual(recovery, {"phase": 14, "suite": "recovery", "archive": "/tmp/birja-phase14-proof/recovery.tar.gz", "stages": list(runner.STAGES)})
 
     def test_security_failures_propagate_and_owned_stack_always_cleans(self):
         runner = self.runner()

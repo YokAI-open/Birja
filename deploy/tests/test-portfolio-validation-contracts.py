@@ -428,19 +428,37 @@ class CurrentCampaign(unittest.TestCase):
             if argv[-1] == 'version':
                 value = b'restic 0.19.1 compiled with approved Go'
             return SimpleNamespace(stdout=value, stderr=b'')
-        with patch.dict(os.environ, {'ALPACA_API_KEY':'private', 'DATABASE_URL':'production'}):
-            result = runner.preflight('all-security', run=command)
-        self.assertTrue(result['ok'])
-        self.assertIn('/usr/sbin', result['path'].split(os.pathsep))
-        self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
-        self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p14-16-preflight')
-        self.assertNotIn('ALPACA_API_KEY', calls[-1][1]['env'])
-        self.assertIn('@127.0.0.1:55432/birja_test', calls[-1][1]['env']['DATABASE_URL'])
-        selected = runner.preflight('recovery-current', phase=15, run=command)
-        self.assertEqual(selected['phase'], 15)
-        self.assertEqual(selected['archive'], str(runner.PHASE15_ARCHIVE))
-        self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
-        self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p15-01-preflight')
+        # Command doubles test dispatch/environment, not host tool installation.
+        # Real tool/checksum admission remains exercised by actual preflight.
+        required = {ROOT / 'backend/.venv/bin' / name for name in ('pytest', 'ruff', 'mypy', 'pip-audit')}
+        required |= {ROOT / 'frontend/node_modules/.bin' / name
+                     for name in ('prettier', 'eslint', 'tsc', 'vitest', 'vite', 'playwright')}
+        original_file, original_access = Path.is_file, os.access
+        def installed_file(path):
+            return True if path in required else original_file(path)
+        def installed_access(path, mode):
+            return True if Path(path) in required and mode == os.X_OK else original_access(path, mode)
+        with tempfile.TemporaryDirectory(prefix='birja-backup-test-preflight-unit-') as directory:
+            tools = Path(directory)
+            for name in ('uv', 'node', 'python3', 'restic', 'nginx', 'docker'):
+                (tools / name).write_bytes(b'unit-test-tool')
+            with patch.object(runner.shutil, 'which', side_effect=lambda name, **kw: str(tools / name)), \
+                 patch.object(runner, 'RESTIC_SHA256', hashlib.sha256(b'unit-test-tool').hexdigest()), \
+                 patch.object(Path, 'is_file', installed_file), patch.object(os, 'access', installed_access), \
+                 patch.object(runner, 'PHASE15_ARCHIVE', tools / 'absent-proof/recovery.tar.gz'), \
+                 patch.dict(os.environ, {'ALPACA_API_KEY':'private', 'DATABASE_URL':'production'}):
+                result = runner.preflight('all-security', run=command)
+                self.assertTrue(result['ok'])
+                self.assertIn('/usr/sbin', result['path'].split(os.pathsep))
+                self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
+                self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p14-16-preflight')
+                self.assertNotIn('ALPACA_API_KEY', calls[-1][1]['env'])
+                self.assertIn('@127.0.0.1:55432/birja_test', calls[-1][1]['env']['DATABASE_URL'])
+                selected = runner.preflight('recovery-current', phase=15, run=command)
+                self.assertEqual(selected['phase'], 15)
+                self.assertEqual(selected['archive'], str(runner.PHASE15_ARCHIVE))
+                self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
+                self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p15-01-preflight')
 
     def test_untracked_addition_rename_and_link_changes_are_real_source_drift(self):
         with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-git-') as directory:
