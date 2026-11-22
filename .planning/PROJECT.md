@@ -4,9 +4,9 @@
 
 A virtual-money investing simulator. Deployed v0.4.0 offers crypto trading;
 published software v0.5.0 adds the locally verified twenty-stock US implementation,
-shared cash/portfolio, dividends/splits and mixed History. Live stock activation
-remains gated because accepted provider/live-verification gaps are unresolved.
-Planning milestone v1.1 is closed with known gaps, not fully live-validated.
+shared cash/portfolio, dividends/splits and mixed History. Phase7 manual owner acceptance was closed on2026-11-22; live stock activation
+remains gated pending a supported live-status transport. The v1.1 archive
+preserves its historical accepted gaps and later owner-resolution provenance.
 
 ## Core Value
 

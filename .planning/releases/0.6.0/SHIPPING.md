@@ -157,3 +157,36 @@ Both affected overview/owner-boundary files pass56cases. A fresh full frontend
 qualification passes all1330tests/60files in31.89seconds, with96.46%statements
 and94.01%branches; formatting and diff checks pass. The prior failed hosted
 run remains failed/superseded. Required CI must pass at the new exact head.
+
+## Parallel draft release preparation
+
+Feature candidate92a8956 is under run45020330811; latest observed frontend,
+image and full browser jobs pass, with backend/ops still running. Its full
+1330-test frontend result is also locally qualified.
+
+Release worktree was created from freshly pulled develop26d2011 and locally
+merged reviewed feature92a8956 with--no-ff. This changes no protected branch.
+Preparing a draft main PR now lets both required full CI graphs execute in
+parallel on separate hosted runners. Main merge remains held until featurePR36
+is green and merged, and the release head independently passes all six checks.
+
+Version0.6.0 changes only root project metadata. METADATA-REVIEW.json proves
+parsed Python/Node third-party graphs identical; prospective uv lock --check
+--offline passes83packages. Exact Node audit bindings follow those changed
+metadata bytes; advisory scope and expiry remain unchanged. UI/runtime/migration
+programs remain identical to the reviewed feature. No new human UI gate.
+
+Staged independent release asset birja-recovery-0.6.0.tar is exactly244357120bytes,
+SHA256bbbec1af156b594f5093ecef8badf918f8b0a7e039dfdb3e486fb8b58823f47a,
+and all51 current payloads match. It contains public recovery tooling and
+source profiles, with configuration/credentials separately in encrypted custody.
+Publish/verify that asset with the software release before production transition
+to provide an off-server exact independent recovery toolchain.
+
+Release-preparation review re-parsed actual candidate TOML/JSON against feature
+92a8956 and proves every third-party entry identical. Policy JS differs only
+in its two file-hash constants. Actual uv lock --check --offline passes83
+packages; direct audit contract execution passes all12cases; Prettier/diff
+checks pass. All51 archive payloads still match, and application, migration,
+frontend runtime/E2E and deployment/smoke sources are byte-identical to feature.
+This is a separate inline review pass, not an independent-agent review.

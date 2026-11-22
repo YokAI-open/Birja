@@ -5,9 +5,9 @@ milestone_name: Multiple Strategy Portfolios
 current_phase: 15
 current_plan: 4
 status: milestone_ready_for_audit
-stopped_at: Owner-authorized PR36 release/deployment workflow; CI repairs under verification
-last_updated: "2026-11-22T09:41:18.593828+00:00"
-last_activity: 2026-11-22 -- PR36 published; feature CI diagnosis; portfolios deployment authorized with stock activation deferred
+stopped_at: Parallel feature and draft release qualification; both CI gates required before protected merges
+last_updated: "2026-11-22T12:32:38.471589+00:00"
+last_activity: 2026-11-22 -- Draft software0.6.0 prepared in an isolated worktree for parallel release qualification
 progress:
   total_phases: 4
   completed_phases: 4
@@ -1242,3 +1242,16 @@ CI repairs and actual outcomes are recorded in
 green; no merge/publication or production write/restart has occurred. Temporary
 release/rollout preparations are linked there. Reuse existing authorization;
 do not repeat completed phase plans or reopen owner acceptance.
+
+## Parallel software release qualification —2026-11-22
+
+To avoid another serial full-suite wait, release-0.6.0 is prepared in the real
+isolated /tmp/birja-release-0.6.0-worktree from freshly pulled develop26d2011,
+with a local--no-ff merge of reviewed feature92a8956. No protected branch has
+merged. FeaturePR36 must pass and merge into develop before the main release
+merge; draft release CI may run concurrently on its own isolated runners.
+All six checks remain required on both exact heads. Release prep changes only
+first-party version metadata, its audit-file bindings and documentation.
+App/migration/dependency graphs remain unchanged; proof is in METADATA-REVIEW.
+Production and stock activation remain unchanged. No planning milestone archive
+or tag is authorized by this software preparation.

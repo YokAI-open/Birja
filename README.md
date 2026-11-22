@@ -1,19 +1,25 @@
 # Birja
 
-## v0.5.0 release scope
+## v0.6.0 release scope
 
-The crypto simulator remains available. This release also contains the local
-implementation for 20 curated NYSE/Nasdaq stocks, whole-share trading, shared
-cash/portfolio, ordinary dividends, forward splits and mixed History.
+Run up to ten private strategy portfolios. Each new portfolio starts with its
+own $10,000 virtual cash once; add a name and optional description, compare
+returns, and select a portfolio to trade. Existing investments keep their
+original balances and history.
 
-**Live stock data and execution remain gated.** Provider identity/freshness,
-action/status suitability and applicable usage/retention prerequisites have not
-completed live acceptance. Closing planning milestone v1.1 accepts that known
-gap; it does not activate stocks or certify live readiness. See the
-[milestone audit](.planning/milestones/v1.1-MILESTONE-AUDIT.md).
+Deleting a portfolio ends that experiment, including one with holdings or the
+last active portfolio. Its retained financial records stay private and frozen;
+no assets are sold and no money moves to another portfolio.
 
-The release does not perform a production rollout. The broader asset ideas
-below describe future direction, not features all available today.
+**Live stock activation remains a separate follow-up.** The owner has confirmed
+Phase7 manual acceptance and provider prerequisites, but a supported live
+stock-status transport still needs implementation and verification. Collection
+and real stock orders remain gated. See [tracked follow-up](.planning/DEFERRED.md)
+and [release notes](docs/releases/0.6.0.md).
+
+Software publication and the actual production rollout are recorded separately
+in the [shipping receipt](.planning/releases/0.6.0/SHIPPING.md). The broader asset
+ideas below describe future direction.
 
 ## The idea
 
