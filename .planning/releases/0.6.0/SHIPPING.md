@@ -190,3 +190,39 @@ packages; direct audit contract execution passes all12cases; Prettier/diff
 checks pass. All51 archive payloads still match, and application, migration,
 frontend runtime/E2E and deployment/smoke sources are byte-identical to feature.
 This is a separate inline review pass, not an independent-agent review.
+
+## Retain the exact fully tested distribution artifact
+
+Feature run45020330811 at92a8956 completed its entire serial recovery job
+successfully in39m27s. Its actual same_archive_final_ci=true archive is
+41839607250c74d83ce80fdbf2d78ebefd50d8acb763c734b2ba90b26dc6de62.
+The workflow did not upload that generated archive, so it cannot be retrieved
+from the completed ephemeral runner. Backend qualification remains in progress.
+
+Release workflow collection is therefore added after successful whole recovery:
+copy only its fixed canonical archive and SHA to a runner-owned private staging
+directory, verify the copied bytes, then upload exactly those two tooling files.
+Missing/modified data fails the collection and ops job. All seven stages, image/
+coverage gates and the45-minute ops bound remain unchanged. No production data
+or configuration is collected. Current feature qualification is untouched.
+
+Earlier localbbbe archive remains the separately qualified Phase15current proof;
+it must not be substituted for the final full-CI distribution archive. The
+previous staged copy is preserved under the temporary local-qualified folder.
+Publish/install only the subsequently downloaded and verified successful release
+CI artifact. The release notes defer its exact checksum to the actual sidecar
+and receipt, avoiding a guessed identity or another metadata-only CI restart.
+
+ROLLOUT-DRAFT.md records the measured existing image/role prerequisites and
+guarded sequence. Exact final main/manifest/CI artifact identities must be bound
+after the release gates pass; no production write is claimed.
+
+Collector verification passes all111 CI contracts in27.55seconds, including
+matching/modified/missing archive behavior. A first worktree-local contract run
+failed because its mocked preexisting-stack branch called a real source snapshot
+that deliberately expects an ordinary.git directory. That branch now uses the
+same fixed source double as its existing failure matrix, so it actually tests
+the intended owned-stack refusal. Runtime source guards remain unchanged and
+independently covered. The failed first run remains recorded, not relabeled.
+Separate inline diff review confirms unchanged full recovery invocation, exact
+two-file upload scope, copied-byte verification and strict failure propagation.
