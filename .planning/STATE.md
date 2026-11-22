@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Phase15 Plan02 complete; Plan03 affected proof next
-last_updated: "2026-11-22T08:52:47.616737+00:00"
-last_activity: 2026-11-22 -- Phase15 Plan02 fixture/replay verified; Plan03 next
+stopped_at: Phase15 Plan03 current proof passed; Plan04 acceptance next
+last_updated: "2026-11-22T09:29:42.451049+00:00"
+last_activity: 2026-11-22 -- Phase15 current restore/retries/scans pass; Plan04 next
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 72
-  completed_plans: 70
+  completed_plans: 71
   percent: 75
 
 current_phase: 15
@@ -23,7 +23,7 @@ current_phase: 15
 
 See PROJECT.md, updated after Phase14 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase15 — Verify Exact Portfolio Recovery and Acceptance; Plan03 next,2/4plans complete. Phase14 is verified complete locally:19/19plans,5/5outcomes,7/7requirements.
+Current focus: Phase15 — Verify Exact Portfolio Recovery and Acceptance; Plan04 next,3/4plans complete. Phase14 is verified complete locally:19/19plans,5/5outcomes,7/7requirements.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -59,7 +59,7 @@ Current Plan: 1
 Status: Executing Phase 15
 Last activity: 2026-11-22 -- Phase 15 execution started
 
-Progress: [███████░░░] 75% milestone (3/4 phases complete;70/72 currently planned plans complete)
+Progress: [███████░░░] 75% milestone (3/4 phases complete;71/72 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -1182,3 +1182,20 @@ actual encrypted replay remains03. Authorized currentfixture source entry in
 bothproducer/consumer matchesfinaleb841760…4fc66; nootherpinschange. Prior
 archive/snapshotidentities unchanged,ownedresourcesempty,R1failurepreserved.
 Next03 one currentproof plus sourceboundreuse/scans; no unrelatedwholecampaign.
+
+## Phase15 Plan03 Complete — 2026-11-22
+
+Summary473c744: actual supportedR5encrypted cold restore/retries PASSED135.998s
+at6d7ee7f; source_destroyed/immutablebeforeoracle true; originalcreation3/fill4/
+payment2 replay,3closedrefusals,completefinancialequality,nosequencechanges.
+Authoritytriple matchesqualifiedcold/upgraded/fresh. CanonicalPhase15archive
+SHA256bbbec1af156b594f5093ecef8badf918f8b0a7e039dfdb3e486fb8b58823f47a,
+inode943204/device64512. FiveexactimagesHIGH0/CRITICAL0; allguards/ownedcleanup
+pass,9priorartifacts+3failedarchivespreserved.
+
+R1–R4remainfailed/refused. Boundedtestfixture repairs admitexactpreflightlabel
+and useexistingownedlogin→SETROLEbound-sessionadapter forNOLOGINgroups; actual
+TLScheckedonsameconnectionbeforeattenuation, restrictedrolecheckedbeforecalls.
+NoLOGIN/grant/ACL/app/SQL/dependencyversionchange. Currentfixturepinb8ec…c4d3
+updatedbothmaps, priorpinsunchanged. FullCIbeforemerge remainsrequired; no
+whole7/hostedCIclaim. Next04operator/acceptancerecords,thenindependentgoalreview.

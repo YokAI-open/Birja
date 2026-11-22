@@ -421,7 +421,7 @@ deletion/purge of retained evidence is included.
 
 **Wave 3** *(blocked on Waves 1–2)*
 
-- [ ] 15-03-PLAN.md — Run one affected current recovery proof and qualify unchanged-input evidence reuse
+- [x] 15-03-PLAN.md — Run one affected current recovery proof and qualify unchanged-input evidence reuse
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -470,7 +470,7 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
-| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 2/4 | Executing; Plan03 affected proof next | - |
+| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 3/4 | Executing; Plan04 acceptance next | - |
 
 ## Deferred Follow-up
 
