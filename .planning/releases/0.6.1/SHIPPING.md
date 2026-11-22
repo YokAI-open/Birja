@@ -27,3 +27,19 @@ Ruff/format, Bash syntax, diff and offline83-package lock validation pass.
 All79 affected PostgreSQL cases pass507.63s, including both legacy14 default
 variants and the existing management/grant cases. The owned test stack and
 network are removed. Required hosted full CI remains pending. No production repair or hotfix publication yet.
+
+## Hosted qualification/publication and later operational refusal
+
+AllsixCIchecks pass45044997711:3697backend,100%criticalcoverage,1330frontend,
+five strictimages, browser and actual seven-stage same-archive recovery.
+MergedPR38/publishedv0.6.1 main9a143fc; testedtree equality verified. ActualCI
+archive5c7d59…a7e7e2 and all51payloads independently verified and publicasset
+downloaded/hashchecked. Newops3ce488…f39e14 installed; original4f1775 retained.
+
+Newwrapper refused the old authenticated HBA mount beforeSQL. Both manifests
+and unchanged config/actual old binding verified. A bounded reviewed operational
+bridge retains all original binding/TLS/collation/configuration/fullSQL gates
+and requires freshcanonical23backup/restore before normalnewstart-selected.
+Its nonmutating dryrun retained COLLATION_PREFLIGHT and refused healthy builtinC.
+No role, money, index or schema mutation occurred;0.6.2 addresses that separate
+readiness-check compatibility bug. Original financial projections remainequal.
