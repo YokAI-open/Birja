@@ -23,6 +23,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE = Path("/tmp/birja-phase14-proof/recovery.tar.gz")
+PHASE15_ARCHIVE = Path("/tmp/birja-phase15-proof/recovery.tar.gz")
+PHASE14_SHA256 = "1a41c8b9a55986998e46ea6341dfea93dd2b7c8da0e0428af08251d21d6b742f"
 PRESERVED_ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
 PRESERVED_SHA256 = "6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92"
 STAGES = ("image-transition", "retained-roundtrip", "current0023-cold",
@@ -67,9 +69,23 @@ def environment():
             "JWT_SECRET": "synthetic-only-validation-jwt-" + "y" * 32}
 
 
-def preflight(suite, *, run=subprocess.run, fixture_tail=True):
-    if suite not in {"all-security", "recovery"}:
+def archive_for_phase(phase=14):
+    if type(phase) is not int or phase not in {14, 15}:
+        raise ValueError("explicit finite qualification phase required")
+    return ARCHIVE if phase == 14 else PHASE15_ARCHIVE
+
+
+def validate_selection(suite, phase=14):
+    archive = archive_for_phase(phase)
+    if suite not in {"all-security", "recovery", "recovery-current"}:
         raise ValueError("explicit qualification suite required")
+    if suite == "recovery-current" and phase != 15:
+        raise ValueError("current-only recovery requires explicit phase15")
+    return archive
+
+
+def preflight(suite, *, phase=14, run=subprocess.run, fixture_tail=True):
+    archive = validate_selection(suite, phase)
     env = environment()
     tools = {}
     for name, args in (("uv", ["--version"]), ("node", ["--version"]),
@@ -102,14 +118,16 @@ def preflight(suite, *, run=subprocess.run, fixture_tail=True):
             len(fixture["manifest"]["tables"]), len(fixture["manifest"]["identity_state"])) != (3, "0023", 31, 24):
         raise ValueError("exact current31/24 fixture profile required")
     prior = preserved_archive()
-    if suite == "recovery" and ARCHIVE.parent.exists():
+    prior14 = preserved_phase14_archive() if phase == 15 else None
+    if suite != "all-security" and archive.parent.exists():
         raise ValueError("exclusive new recovery archive directory must be absent")
     if fixture_tail:
         run(["bash", "deploy/tests/test-db-config.sh"], cwd=ROOT,
-            env={**env, "BIRJA_TEST_PROJECT": "birja-p14-16-preflight"}, check=True, timeout=300)
-    return {"ok": True, "suite": suite, "tools": tools,
+            env={**env, "BIRJA_TEST_PROJECT": "birja-p14-16-preflight" if phase == 14 else "birja-p15-01-preflight"}, check=True, timeout=300)
+    return {"ok": True, "suite": suite, "phase": phase, "archive": str(archive), "tools": tools,
             "fixture_tail": "passed" if fixture_tail else "not-run-offline-diagnostic",
-            "preserved_archive_sha256": prior, "path": env["PATH"]}
+            "preserved_archive_sha256": prior, "preserved_phase14_archive_sha256": prior14,
+            "path": env["PATH"]}
 
 
 def security_commands():
@@ -300,6 +318,17 @@ def preserved_archive():
     return value
 
 
+def preserved_phase14_archive():
+    if ARCHIVE.is_symlink() or ARCHIVE.parent.is_symlink():
+        raise ValueError("preserved Phase14 archive symlink")
+    if not ARCHIVE.exists():
+        return None
+    value = hashlib.sha256(ARCHIVE.read_bytes()).hexdigest()
+    if value != PHASE14_SHA256:
+        raise ValueError("preserved Phase14 archive changed")
+    return value
+
+
 def write_status(path, value):
     """Publish complete private JSON atomically for concurrent status readers."""
     if path.is_symlink():
@@ -413,21 +442,42 @@ def recovery_operations(ops, archive, expected):
     }
 
 
-def execute_recovery():
+def execute_current_stage(operations, guard):
+    guard()
+    try:
+        authority = operations["current0023-cold"]()
+    finally:
+        guard()
+    if (not isinstance(authority, (tuple, list)) or len(authority) != 3
+            or any(not isinstance(part, str) or not re.fullmatch(r"[0-9a-f]{64}", part)
+                   for part in authority)):
+        raise ValueError("current cold authority missing exact triple")
+    return authority
+
+
+def execute_recovery(*, phase=14, suite="recovery"):
+    archive = validate_selection(suite, phase)
+    if suite == "all-security":
+        raise ValueError("explicit recovery suite required")
     ops = load("ops-fixtures")
     prior_archive = preserved_archive()
+    prior14 = preserved_phase14_archive() if phase == 15 else None
     # Exclusive directory ownership prevents silently reusing an earlier run.
-    ARCHIVE.parent.mkdir(mode=0o700)
-    ops.r.private(ARCHIVE.parent, True)
-    ops.package_current_archive(ARCHIVE)
-    expected = ops.r.digest(ARCHIVE)
-    ops.r.bundle_verify(ARCHIVE, expected, required_profile="deploy-recovery-v4")
+    archive.parent.mkdir(mode=0o700)
+    ops.r.private(archive.parent, True)
+    ops.package_current_archive(archive)
+    expected = ops.r.digest(archive)
+    ops.r.bundle_verify(archive, expected, required_profile="deploy-recovery-v4")
     source = campaign_sources(ops)
     image_records = {}
-    ops.bind_source_archive(ARCHIVE, expected)
-    status = {"ok": False, "archive_sha256": expected, "stages": {}}
-    status_path = ARCHIVE.parent / "status.json"
-    operations = recovery_operations(ops, ARCHIVE, expected)
+    ops.bind_source_archive(archive, expected)
+    full = suite == "recovery"
+    stages = STAGES if full else ("current0023-cold",)
+    status = {"ok": False, "phase": phase, "suite": suite,
+              "archive": str(archive), "archive_sha256": expected, "stages": {},
+              "whole7": False, "same_archive_final_ci": False}
+    status_path = archive.parent / "status.json"
+    operations = recovery_operations(ops, archive, expected)
     def save_status():
         write_status(status_path, status)
     def recorded(name):
@@ -441,34 +491,48 @@ def execute_recovery():
     def guard():
         if preserved_archive() != prior_archive:
             raise ValueError("preserved archive presence changed")
-        authenticate(ops, ARCHIVE, expected, source, image_records)
+        if phase == 15 and preserved_phase14_archive() != prior14:
+            raise ValueError("preserved Phase14 archive presence changed")
+        authenticate(ops, archive, expected, source, image_records)
     try:
-        execute_stages({name: recorded(name) for name in STAGES},
-                       guard)
+        selected = {name: recorded(name) for name in stages}
+        if full:
+            execute_stages(selected, guard)
+        else:
+            status["authority"] = execute_current_stage(selected, guard)
         status["ok"] = True
-        status["stages"] = dict.fromkeys(STAGES, "passed-authenticated")
+        status["stages"] = dict.fromkeys(stages, "passed-authenticated")
+        status["whole7"] = status["same_archive_final_ci"] = full
     finally:
         save_status()
-    print("same_archive_final_ci=true sha256=" + expected, flush=True)
+    print(("same_archive_final_ci=true" if full else
+           "recovery_current_component=true whole7=false same_archive_final_ci=false")
+          + " sha256=" + expected, flush=True)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument("--suite", required=True, choices=["all-security", "recovery"])
+    parser.add_argument("--phase", type=int, choices=[14, 15], default=14)
+    parser.add_argument("--suite", required=True, choices=["all-security", "recovery", "recovery-current"])
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--preflight", action="store_true")
     args = parser.parse_args(argv)
     if args.dry_run and args.preflight:
         parser.error("preflight and dry-run are distinct commands")
+    try:
+        archive = validate_selection(args.suite, args.phase)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.preflight:
-        print(json.dumps(preflight(args.suite), sort_keys=True))
+        print(json.dumps(preflight(args.suite, phase=args.phase), sort_keys=True))
     elif args.dry_run:
         print(json.dumps(security_commands() if args.suite == "all-security" else
-                         {"archive": str(ARCHIVE), "stages": STAGES}, sort_keys=True))
+                         {"phase": args.phase, "suite": args.suite, "archive": str(archive),
+                          "stages": STAGES if args.suite == "recovery" else ("current0023-cold",)}, sort_keys=True))
     elif args.suite == "all-security":
         execute_security()
     else:
-        execute_recovery()
+        execute_recovery(phase=args.phase, suite=args.suite)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,95 @@ spec.loader.exec_module(runner)
 
 
 class CurrentCampaign(unittest.TestCase):
+    def test_finite_phase_selection_and_current_only_dry_run(self):
+        self.assertEqual(runner.archive_for_phase(), runner.ARCHIVE)
+        self.assertEqual(str(runner.archive_for_phase(15)), "/tmp/birja-phase15-proof/recovery.tar.gz")
+        for phase in (13, 16, True, "15"):
+            with self.subTest(phase=phase), self.assertRaises(ValueError):
+                runner.archive_for_phase(phase)
+        with self.assertRaises(ValueError):
+            runner.validate_selection("recovery-current")
+        for argv, stages in ((["--suite", "recovery", "--dry-run"], runner.STAGES),
+                             (["--phase", "15", "--suite", "recovery-current", "--dry-run"], ("current0023-cold",))):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                runner.main(argv)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["stages"], list(stages))
+            self.assertEqual(result["archive"], str(runner.archive_for_phase(result["phase"])))
+        with redirect_stdout(io.StringIO()), patch.object(runner, "execute_recovery", side_effect=AssertionError("execution")):
+            with self.assertRaises(SystemExit):
+                runner.main(["--suite", "recovery-current", "--dry-run"])
+
+    def test_current_stage_authenticates_failure_and_validates_real_result_shape(self):
+        for outcome in (["a" * 64, "b" * 64, "c" * 64], None, RuntimeError("failed current")):
+            events = []
+            def operation():
+                events.append("current")
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+            actions = {"current0023-cold": operation}
+            guard = lambda: events.append("authenticate")
+            if isinstance(outcome, Exception):
+                with self.assertRaisesRegex(RuntimeError, "failed current"):
+                    runner.execute_current_stage(actions, guard)
+            elif outcome is None:
+                with self.assertRaisesRegex(ValueError, "authority"):
+                    runner.execute_current_stage(actions, guard)
+            else:
+                self.assertEqual(runner.execute_current_stage(actions, guard), outcome)
+            self.assertEqual(events, ["authenticate", "current", "authenticate"])
+
+    def test_current_execution_retains_component_only_flags_and_full_marker_boundary(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-current-dispatch-") as tmp:
+            archive = Path(tmp) / "proof/recovery.tar.gz"
+            fake = SimpleNamespace(
+                r=SimpleNamespace(private=lambda *a: None, digest=lambda p: "a" * 64,
+                                  bundle_verify=lambda *a, **k: None),
+                package_current_archive=lambda p: p.write_bytes(b"packaging-boundary"),
+                bind_source_archive=lambda *a: None,
+            )
+            authority = ["a" * 64, "b" * 64, "c" * 64]
+            calls = []
+            def operations(*args):
+                return {name: (lambda name=name: calls.append(name) or authority) for name in runner.STAGES}
+            output = io.StringIO()
+            with patch.object(runner, "PHASE15_ARCHIVE", archive), patch.object(runner, "load", return_value=fake), \
+                 patch.object(runner, "preserved_archive", return_value=None), \
+                 patch.object(runner, "preserved_phase14_archive", return_value=None), \
+                 patch.object(runner, "campaign_sources", return_value={}), \
+                 patch.object(runner, "authenticate"), patch.object(runner, "recovery_operations", side_effect=operations), \
+                 redirect_stdout(output):
+                runner.execute_recovery(phase=15, suite="recovery-current")
+            status = json.loads((archive.parent / "status.json").read_text())
+            self.assertEqual(calls, ["current0023-cold"])
+            self.assertEqual(status["authority"], authority)
+            self.assertTrue(status["ok"])
+            self.assertFalse(status["whole7"])
+            self.assertFalse(status["same_archive_final_ci"])
+            self.assertNotIn("same_archive_final_ci=true", output.getvalue())
+
+    def test_phase14_preserved_archive_must_remain_exact_when_present(self):
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-phase14-preserved-") as tmp:
+            archive = Path(tmp) / "prior.tar"
+            with patch.object(runner, "ARCHIVE", archive), \
+                 patch.object(runner, "PHASE14_SHA256", hashlib.sha256(b"qualified").hexdigest()):
+                self.assertIsNone(runner.preserved_phase14_archive())
+                archive.write_bytes(b"qualified")
+                self.assertEqual(runner.preserved_phase14_archive(), runner.PHASE14_SHA256)
+                archive.write_bytes(b"changed")
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    runner.preserved_phase14_archive()
+
+    def test_consumer_admits_only_exact_new_phase15_archive_path(self):
+        recovery = runner.load("portfolio-smoke").load_recovery()
+        with patch.object(recovery, "private", side_effect=lambda path, *a: path):
+            self.assertEqual(recovery.synthetic_path(runner.PHASE15_ARCHIVE, False), runner.PHASE15_ARCHIVE)
+            with self.assertRaises(ValueError):
+                recovery.synthetic_path(Path("/tmp/birja-phase16-proof/recovery.tar.gz"), False)
+
     def source_tree(self, directory):
         root = Path(directory) / 'checkout'
         root.mkdir()
