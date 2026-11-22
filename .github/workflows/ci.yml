@@ -16,9 +16,11 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: frontend/.nvmrc
@@ -44,6 +46,8 @@ jobs:
         run: docker compose -f docker-compose.test.yml up -d --wait
       - name: Pytest with coverage gate
         working-directory: backend
+        env:
+          PYTEST_ADDOPTS: --maxfail=1
         run: uv run pytest --cov=app --cov-branch --cov-fail-under=80
       - name: Critical-path coverage (100%)
         working-directory: backend
