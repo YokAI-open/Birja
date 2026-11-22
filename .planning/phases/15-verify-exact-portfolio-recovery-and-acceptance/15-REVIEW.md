@@ -59,3 +59,11 @@ LOGIN/grant/ACL/schema or historical path changes. Fixture SHA matches both
 current source associations. Direct runtime-login TLS coverage is inherited
 only. Existing financial assertions are unchanged. Static review only; actual
 14/25affected contract runs pass and encrypted execution remains pending.
+
+## TLS Observation Placement Recheck
+
+Independent bounded recheck reports0blockers/0warnings: TLS is asserted on the
+same owned connection before SET ROLE, with no reconnect or transport change
+before the restricted service session. Effective identity, transaction lifetime
+and finally role reset remain intact. No privileges/TLS settings are relaxed;
+fixture SHA matches both current bindings. Static review only.

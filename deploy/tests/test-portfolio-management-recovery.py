@@ -591,6 +591,8 @@ class ClosureFixtureWriterContracts(unittest.TestCase):
         tree = ast.parse(code)
         restricted = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == 'restricted')
         scope = ast.get_source_segment(code, restricted)
+        self.assertLess(scope.index('SELECT ssl FROM pg_stat_ssl'), scope.index("'SET ROLE ' + role"))
+        self.assertEqual(code.count('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'), 1)
         self.assertLess(scope.index('await conn.commit()'), scope.index('identity ='))
         self.assertLess(scope.index('assert identity'), scope.index('yield db'))
         self.assertLess(scope.index('await conn.commit()', scope.index('assert identity')), scope.index('AsyncSession('))

@@ -123,7 +123,7 @@ CLOSURE_SOURCE_SHA256 = {
     'backend/alembic/versions/0023_portfolio_closure_authority.py': 'd62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5',
     'backend/alembic/sql/0023_portfolio_closure.sql': '59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920',
     'deploy/db/bootstrap-roles.sql': 'e981467f2cbf565140eb78b318b06b201f8007e95d563fe162d70663c47691bb',
-    'deploy/tests/portfolio-closure-recovery-fixture.py': 'd376142e6a1e110a3d552e0cfa71a3fbd3fd7d92b21a804dcd60aef1b5a89c32',
+    'deploy/tests/portfolio-closure-recovery-fixture.py': 'b8ecf20867f61c3dabbba6ab0e55f5db1a08f5c59c220b9c38fa59da6cc3c4d3',
     'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
 }
 

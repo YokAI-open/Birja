@@ -103,3 +103,22 @@ not change, so source-owned JSON remains the actual Plan02generation.
 Affected14management/25smoke contracts pass15.400/6.525s, and independent bounded
 review is0/0. R4will use fresh matching CORE/fixture packaging and an exclusive
 receipt. This is source-proven test harness attenuation, not new auth design.
+
+## Bounded TLS Observation Continuation
+
+After the explicit executor checkpoint, the parent authorized one correction:
+assert actual TLS on the same bound connection before SET ROLE, commit, then
+perform unchanged role attenuation/identity validation and bound service calls.
+The pg_stat_ssl view does not expose the bootstrap-owned session after switching
+to the runtime group; no statistics permission is granted to work around it.
+There is no reconnect/transport change before business calls. The redundant
+post-attenuation statistics query is removed; actual TLS is still required for
+every scoped connection. Role/financial checks are otherwise unchanged.
+
+14management/25smoke contracts pass15.198/6.246s; independent placement recheck
+reports0blockers/0warnings. Current fixture SHA256
+`b8ecf20867f61c3dabbba6ab0e55f5db1a08f5c59c220b9c38fa59da6cc3c4d3`
+matches the two current producer/consumer entries. No old source binding changed.
+R4archive/binding records are preserved at`/tmp/birja-phase15-proof-r4-failed/`
+with original3a68c39c…9e78c SHA/inode943056 and unchanged receipt. One new R5proof
+will use a fresh matching canonical archive; no unrelated campaign is repeated.

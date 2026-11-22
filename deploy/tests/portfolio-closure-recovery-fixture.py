@@ -678,6 +678,10 @@ async def replay_restored(factory, settings, app_engine, scheduler_engine, befor
     async def restricted(engine, role):
         assert role in {'birja_app', 'birja_scheduler'}
         async with engine.connect() as conn:
+            assert (await conn.execute(text(
+                'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
+            ))).scalar_one()
+            await conn.commit()
             await conn.execute(text('SET ROLE ' + role))
             await conn.commit()
             try:
@@ -687,9 +691,6 @@ async def replay_restored(factory, settings, app_engine, scheduler_engine, befor
                     'FROM pg_roles WHERE rolname=current_user'
                 ))).one()
                 assert identity == ('birja_ops_bootstrap', role, True)
-                assert (await conn.execute(text(
-                    'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
-                ))).scalar_one()
                 await conn.commit()
                 async with AsyncSession(bind=conn, expire_on_commit=False) as db:
                     yield db
@@ -708,7 +709,6 @@ async def replay_restored(factory, settings, app_engine, scheduler_engine, befor
         async with sessions() as db:
             assert (await db.execute(text('SELECT current_user'))).scalar_one() == 'birja_'+role
             assert (await db.execute(text('SELECT session_user'))).scalar_one() == 'birja_ops_bootstrap'
-            assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
             await db.rollback()
 
     async def active_lists():
