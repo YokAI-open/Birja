@@ -413,7 +413,7 @@ deletion/purge of retained evidence is included.
 
 **Wave 1**
 
-- [ ] 15-01-PLAN.md — Make installed-verifier recovery and finite Phase15 campaigns reproducible
+- [x] 15-01-PLAN.md — Make installed-verifier recovery and finite Phase15 campaigns reproducible
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -470,7 +470,7 @@ Phase13 is verified complete locally:18plans,11requirements, both owner checks a
 | 12. Preserve Existing Investing Under Portfolio Ownership | v1.2 | 31/31 | Complete locally; owner-accepted advisory in issue35 | 2026-11-17 UTC |
 | 13. Create and Compare Independent Strategies | v1.2 | 18/18 | Complete locally; independent verification passed | 2026-11-19 UTC |
 | 14. End Strategies Safely | v1.2 | 19/19 | Complete locally; owner outcomes and independent verification passed | 2026-11-22 UTC |
-| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 0/4 | Executing Plan01 | - |
+| 15. Verify Exact Portfolio Recovery and Acceptance | v1.2 | 1/4 | Executing; Plan02 next | - |
 
 ## Deferred Follow-up
 
