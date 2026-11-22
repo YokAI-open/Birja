@@ -32,6 +32,64 @@ IMAGE = "sha256:" + "c" * 64
 DOCKERFILE = b"FROM approved-pinned-base AS runtime\nCOPY app /app/app\nUSER app\n"
 
 
+class InstalledVerifierContracts(unittest.TestCase):
+    def test_selected_consumer_and_adjacent_sources_live_until_context_exit(self):
+        for revision in ("0020", "0023"):
+            with self.subTest(revision=revision), tempfile.TemporaryDirectory() as tmp:
+                archive = Path(tmp) / "selected.tar"
+                archive.write_bytes(b"factory-boundary archive")
+                sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+                selected_paths = []
+
+                def install(path, expected, synthetic_root, required_profile=None):
+                    self.assertEqual((path, expected, required_profile),
+                                     (archive, sha, "deploy-recovery-v4"))
+                    host = Path(synthetic_root)
+                    self.assertEqual(host.name, "host")
+                    self.assertEqual(host.stat().st_mode & 0o777, 0o700)
+                    release = host / "var/lib/birja/recovery/releases" / sha
+                    (release / "deploy").mkdir(parents=True)
+                    (release / "sources").mkdir()
+                    (release / "sources" / ("portfolio" + revision + ".tar")).write_bytes(b"adjacent selected source")
+                    selected = release / "deploy/verify-restore.py"
+                    selected.write_text("from pathlib import Path\nHERE = Path(__file__).resolve().parent\n")
+                    selected_paths.append(selected)
+
+                trusted = SimpleNamespace(bundle_verify=mock.Mock(), bundle_install=mock.Mock(side_effect=install))
+                original_loader = smoke.load_recovery
+                with mock.patch.object(smoke, "load_recovery", side_effect=lambda path=None: trusted if path is None else original_loader(path)):
+                    with smoke.installed_recovery_verifier(archive, sha) as actual:
+                        trusted.bundle_verify.assert_called_once_with(archive, sha, required_profile="deploy-recovery-v4")
+                        self.assertEqual(actual.HERE, selected_paths[0].parent)
+                        self.assertEqual((actual.HERE.parent / "sources" / ("portfolio" + revision + ".tar")).read_bytes(), b"adjacent selected source")
+                        self.assertTrue(selected_paths[0].is_file())
+                    self.assertFalse(selected_paths[0].exists())
+
+    def test_archive_refusal_precedes_installation_and_loader_fallback(self):
+        trusted = SimpleNamespace(bundle_verify=mock.Mock(side_effect=ValueError("archive mismatch")), bundle_install=mock.Mock())
+        with mock.patch.object(smoke, "load_recovery", return_value=trusted) as loader:
+            with self.assertRaisesRegex(ValueError, "archive mismatch"):
+                with smoke.installed_recovery_verifier(Path("selected.tar"), "a" * 64):
+                    self.fail("refused archive yielded")
+        trusted.bundle_install.assert_not_called()
+        loader.assert_called_once_with()
+
+    def test_real_cold_calls_stay_inside_installed_consumer_lifetime(self):
+        tree = ast.parse(Path(smoke.__file__).read_text())
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run")
+        installed = [node for node in ast.walk(function) if isinstance(node, ast.With)
+                     and any(isinstance(item.context_expr, ast.Call)
+                             and getattr(item.context_expr.func, "id", None) == "installed_recovery_verifier" for item in node.items)]
+        self.assertEqual(len(installed), 1)
+        calls = [node for node in ast.walk(installed[0]) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute) and getattr(node.func.value, "id", None) == "r"]
+        self.assertTrue({"canonical", "restored", "verify"} <= {node.func.attr for node in calls})
+        verify = next(node for node in calls if node.func.attr == "verify")
+        restored = next(node for node in calls if node.func.attr == "restored")
+        self.assertIn("quarantined", {item.arg for item in verify.keywords})
+        self.assertIn("manifest", {item.arg for item in restored.keywords})
+
+
 class FreshAuthority(unittest.TestCase):
     def test_campaign_alias_and_id_both_bind_exact_image_without_rebuild(self):
         with tempfile.TemporaryDirectory(prefix='birja-backup-test-alias-') as temporary:

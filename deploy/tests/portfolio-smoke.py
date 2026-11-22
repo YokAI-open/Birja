@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import types
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -952,112 +953,112 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                 # and a genuinely new server after the source is destroyed.
                 import shutil
 
-                r = load_recovery()
-                manifest = r.canonical(dc, "birja_source_test")
-                r.recovery_contract().validate_manifest(manifest)
-                stage = root / "backup-input"
-                stage.mkdir(mode=0o700)
-                dump = call(
-                    dc
-                    + [
-                        "exec",
-                        "-T",
-                        "postgres",
-                        "pg_dump",
-                        "-U",
-                        "birja_migrator",
-                        "-d",
-                        "birja_source_test",
-                        "--format=custom",
-                        "--no-owner",
-                        "--no-acl",
+                with installed_recovery_verifier(archive, archive_sha) as r:
+                    manifest = r.canonical(dc, "birja_source_test")
+                    r.recovery_contract().validate_manifest(manifest)
+                    stage = root / "backup-input"
+                    stage.mkdir(mode=0o700)
+                    dump = call(
+                        dc
+                        + [
+                            "exec",
+                            "-T",
+                            "postgres",
+                            "pg_dump",
+                            "-U",
+                            "birja_migrator",
+                            "-d",
+                            "birja_source_test",
+                            "--format=custom",
+                            "--no-owner",
+                            "--no-acl",
+                        ]
+                    )
+                    (stage / "database.dump").write_bytes(dump)
+                    (stage / "manifest.json").write_text(
+                        json.dumps(manifest, sort_keys=True)
+                    )
+                    shutil.copyfile(archive, stage / "recovery.tar")
+                    password = root / "restic-password"
+                    password.write_text(os.urandom(32).hex())
+                    password.chmod(0o600)
+                    restic = Path("/tmp/birja-test-tools/restic-0.19.1/restic")
+                    if r.digest(restic) != r.RESTIC_SHA:
+                        raise ValueError("unverified local restic")
+                    restic_args = [
+                        str(restic),
+                        "--repo",
+                        str(root / "repository"),
+                        "--password-file",
+                        str(password),
+                        "--no-cache",
                     ]
-                )
-                (stage / "database.dump").write_bytes(dump)
-                (stage / "manifest.json").write_text(
-                    json.dumps(manifest, sort_keys=True)
-                )
-                shutil.copyfile(archive, stage / "recovery.tar")
-                password = root / "restic-password"
-                password.write_text(os.urandom(32).hex())
-                password.chmod(0o600)
-                restic = Path("/tmp/birja-test-tools/restic-0.19.1/restic")
-                if r.digest(restic) != r.RESTIC_SHA:
-                    raise ValueError("unverified local restic")
-                restic_args = [
-                    str(restic),
-                    "--repo",
-                    str(root / "repository"),
-                    "--password-file",
-                    str(password),
-                    "--no-cache",
-                ]
-                call(restic_args + ["init"])
-                # Relative paths are fixed: no host/private path may enter backup.
-                result = subprocess.run(
-                    restic_args + ["backup", "--json", "."],
-                    cwd=stage,
-                    env=env,
-                    capture_output=True,
-                    check=True,
-                    timeout=180,
-                )
-                rows = [json.loads(line) for line in result.stdout.splitlines()]
-                ids = [
-                    row["snapshot_id"]
-                    for row in rows
-                    if row.get("message_type") == "summary"
-                ]
-                if len(ids) != 1 or not re.fullmatch("[0-9a-f]{64}", ids[0]):
-                    raise ValueError("missing exact encrypted snapshot")
-                hashes = {p.name: r.digest(p) for p in stage.iterdir()}
-                shutil.rmtree(stage)
-                call(dc + ["down", "-v", "--remove-orphans"])
-                call(restic_args + ["check", "--read-data"])
-                recovered = root / "cold-restored"
-                call(
-                    restic_args
-                    + ["restore", ids[0], "--target", str(recovered), "--verify"]
-                )
-                if {p.name: r.digest(p) for p in recovered.iterdir()} != hashes:
-                    raise ValueError("encrypted cold payload changed")
-                sources.verify_archive_binding(recovered / "recovery.tar", archive_sha)
-                call(clone_dc + ["up", "-d", "--wait"])
-                r.sql(clone_dc, "CREATE DATABASE birja_ops_test;", "birja_source_test")
-                source_manifest = json.loads((recovered / "manifest.json").read_text())
-                with r.restored(clone_dc, (recovered / "database.dump").read_bytes(), manifest=source_manifest):
-                    r.verify(
-                        clone_dc, source_manifest, quarantined=revision != "0023"
+                    call(restic_args + ["init"])
+                    # Relative paths are fixed: no host/private path may enter backup.
+                    result = subprocess.run(
+                        restic_args + ["backup", "--json", "."],
+                        cwd=stage,
+                        env=env,
+                        capture_output=True,
+                        check=True,
+                        timeout=180,
                     )
-                    # Source evidence is checked before finite regrant. The
-                    # current closure family now has its exact runtime ACL;
-                    # historical families retain their original contract.
-                    r.sql(
-                        clone_dc,
-                        "ALTER ROLE birja_migrator LOGIN PASSWORD '"
-                        + passwords["migrator"]
-                        + "';",
-                        "birja_ops_test",
+                    rows = [json.loads(line) for line in result.stdout.splitlines()]
+                    ids = [
+                        row["snapshot_id"]
+                        for row in rows
+                        if row.get("message_type") == "summary"
+                    ]
+                    if len(ids) != 1 or not re.fullmatch("[0-9a-f]{64}", ids[0]):
+                        raise ValueError("missing exact encrypted snapshot")
+                    hashes = {p.name: r.digest(p) for p in stage.iterdir()}
+                    shutil.rmtree(stage)
+                    call(dc + ["down", "-v", "--remove-orphans"])
+                    call(restic_args + ["check", "--read-data"])
+                    recovered = root / "cold-restored"
+                    call(
+                        restic_args
+                        + ["restore", ids[0], "--target", str(recovered), "--verify"]
                     )
-                    client_network = clone_project + "_isolated"
-                    fixture.main(
-                        [
-                            "compare",
-                            "--database",
-                            "birja_restore_test",
-                            "--snapshot",
-                            str(expected),
-                            "--expected-sha256",
-                            digest,
-                        ],
-                        transport=transport,
+                    if {p.name: r.digest(p) for p in recovered.iterdir()} != hashes:
+                        raise ValueError("encrypted cold payload changed")
+                    sources.verify_archive_binding(recovered / "recovery.tar", archive_sha)
+                    call(clone_dc + ["up", "-d", "--wait"])
+                    r.sql(clone_dc, "CREATE DATABASE birja_ops_test;", "birja_source_test")
+                    source_manifest = json.loads((recovered / "manifest.json").read_text())
+                    with r.restored(clone_dc, (recovered / "database.dump").read_bytes(), manifest=source_manifest):
+                        r.verify(
+                            clone_dc, source_manifest, quarantined=revision != "0023"
+                        )
+                        # Source evidence is checked before finite regrant. The
+                        # current closure family now has its exact runtime ACL;
+                        # historical families retain their original contract.
+                        r.sql(
+                            clone_dc,
+                            "ALTER ROLE birja_migrator LOGIN PASSWORD '"
+                            + passwords["migrator"]
+                            + "';",
+                            "birja_ops_test",
+                        )
+                        client_network = clone_project + "_isolated"
+                        fixture.main(
+                            [
+                                "compare",
+                                "--database",
+                                "birja_restore_test",
+                                "--snapshot",
+                                str(expected),
+                                "--expected-sha256",
+                                digest,
+                            ],
+                            transport=transport,
+                        )
+                    print(
+                        "actual_current"
+                        + revision
+                        + "_encrypted_cold_restore=true source_destroyed=true immutable_before_oracle=true quarantine=true",
+                        flush=True,
                     )
-                print(
-                    "actual_current"
-                    + revision
-                    + "_encrypted_cold_restore=true source_destroyed=true immutable_before_oracle=true quarantine=true",
-                    flush=True,
-                )
             assert json.loads(immutable.read_text()) == binding
             print(
                 "actual_current"
@@ -1089,9 +1090,24 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                         raise AssertionError("owned portfolio resources leaked")
 
 
-def load_recovery():
+@contextmanager
+def installed_recovery_verifier(archive, archive_sha):
+    """Keep the authenticated consumer and adjacent retained sources alive."""
+    trusted = load_recovery()
+    trusted.bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v4")
+    with tempfile.TemporaryDirectory(prefix="birja-backup-test-verifier-context-") as temporary:
+        host = Path(temporary) / "host"
+        host.mkdir(mode=0o700)
+        trusted.bundle_install(
+            archive, archive_sha, str(host), required_profile="deploy-recovery-v4"
+        )
+        selected = host / "var/lib/birja/recovery/releases" / archive_sha / "deploy/verify-restore.py"
+        yield load_recovery(selected)
+
+
+def load_recovery(path=None):
     spec = importlib.util.spec_from_file_location(
-        "portfolio_cold_recovery", ROOT / "deploy/verify-restore.py"
+        "portfolio_cold_recovery", path if path is not None else ROOT / "deploy/verify-restore.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
