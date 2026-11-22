@@ -48,7 +48,7 @@ Target develop; feature/milestone-v1.2.
   ex/record dates from current DB time. They then tested an uncertain event.
   The synthetic payable date now follows its cutoff, and an explicit supported
   classification assertion proves the intended temporal path is exercised.
-  No app, SQL, schema, dependency version or recovery payload changes.
+  No application service, schema, dependency version or recovery payload changes.
 
 Fresh110 workflow-contract tests pass after workflow corrections. All11 cases
 in the full affected clock module plus the historical-literal selection pass
@@ -57,7 +57,7 @@ The failed uncorrected reproduction is retained separately. Final exact
 head/run must replace this pending disposition before merge.
 
 Review: separate inline source/diff pass confirms unchanged application gates,
-SQL, source identities, dependency graph, original retry keys and strict coverage.
+migration SQL, source identities, dependency graph, original retry keys and strict coverage.
 This is not an independent-agent review. No external review command is configured.
 
 ## Production read-only preflight
@@ -92,3 +92,21 @@ merge/release git-flow, exact tested-source retained tooling, fresh encrypted
 B2 backup and isolated restore, guarded0008→0023 migration, original-finance
 preservation and origin/public smoke, then post-rollout recovery and custody
 export. No old-app downgrade on0023 or restore over newer activity.
+
+## Rollout smoke compatibility correction
+
+Readiness review found the retained crypto freshness query counted newly seeded
+active stock symbols as crypto, despite deferred stock activation. It now filters
+crypto explicitly, with a JSON-field fallback for genuine0008 rows that have no
+asset_class column. This preserves crypto's priced-count/age requirements; stock
+activation remains separate. No data, grant, migration or runtime service changes.
+
+Four real isolated PostgreSQL cases pass:retained0008-shaped/mixed rows, fully
+priced/missing crypto. An old stock mark and an unpriced stock do not affect
+crypto; missing crypto still reduces the priced count. All18 existing offline
+smoke port/auth cases, Bash syntax, Ruff and diff checks pass. Test stack cleanup
+completed. These are read-only smoke semantics, not production acceptance.
+
+Run45018036764 at77f1a57 began after the earlier four repair commits; frontend
+passed, remaining checks were still running before this correction was published.
+Its eventual canceled/failed outcome must not be called a fullCI pass.
