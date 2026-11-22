@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Phase15 Plan01 complete; Plan02 next
-last_updated: "2026-11-22T08:40:39.638146+00:00"
-last_activity: 2026-11-22 -- Phase15 Plan01 tooling verified; Plan02 next
+stopped_at: Phase15 Plan02 complete; Plan03 affected proof next
+last_updated: "2026-11-22T08:52:47.616737+00:00"
+last_activity: 2026-11-22 -- Phase15 Plan02 fixture/replay verified; Plan03 next
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 72
-  completed_plans: 69
+  completed_plans: 70
   percent: 75
 
 current_phase: 15
@@ -23,7 +23,7 @@ current_phase: 15
 
 See PROJECT.md, updated after Phase14 completion.
 Core value: correct virtual trade and valuation money.
-Current focus: Phase15 — Verify Exact Portfolio Recovery and Acceptance; Plan02 next,1/4plans complete. Phase14 is verified complete locally:19/19plans,5/5outcomes,7/7requirements.
+Current focus: Phase15 — Verify Exact Portfolio Recovery and Acceptance; Plan03 next,2/4plans complete. Phase14 is verified complete locally:19/19plans,5/5outcomes,7/7requirements.
 
 Phase 13 is verified complete locally:18/18plans,5/5roadmap outcomes,
 45/45plan truths and11/11assigned requirements. Independent code/UI review,
@@ -59,7 +59,7 @@ Current Plan: 1
 Status: Executing Phase 15
 Last activity: 2026-11-22 -- Phase 15 execution started
 
-Progress: [███████░░░] 75% milestone (3/4 phases complete;69/72 currently planned plans complete)
+Progress: [███████░░░] 75% milestone (3/4 phases complete;70/72 currently planned plans complete)
 
 ## Phase13 Execution Progress
 
@@ -1170,3 +1170,15 @@ One authorized exact Phase15synthetic archive allowlist addition is documented;
 no app/SQL/dependency/image version changed. No DB/Docker/provider operation.
 Next02 genuine activefill/oracle and restored retry assertions; actual encrypted
 proof remains03 and all three whole requirements remain pending.
+
+## Phase15 Plan02 Complete — 2026-11-22
+
+Task commits8dd790b/1109d25, summary4862abd; independent boundedreview0/0.
+Actual exclusive birja-p15-02 PostgreSQL generation passes31tables/24tails,
+5roots/4closed and genuine Activefill103:cash9860.25,BTC0.00995012,basis100.
+Focused12fixture/11management and final14management/25smokecontracts pass.
+Restored-only real-service replay wiring follows exact before-snapshot compare;
+actual encrypted replay remains03. Authorized currentfixture source entry in
+bothproducer/consumer matchesfinaleb841760…4fc66; nootherpinschange. Prior
+archive/snapshotidentities unchanged,ownedresourcesempty,R1failurepreserved.
+Next03 one currentproof plus sourceboundreuse/scans; no unrelatedwholecampaign.
