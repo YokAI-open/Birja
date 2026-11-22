@@ -1,9 +1,9 @@
 ---
 phase: 15
 slug: verify-exact-portfolio-recovery-and-acceptance
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: execution-complete-goal-review-pending
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-22
 ---
 
@@ -57,15 +57,15 @@ Quick checks use the affected existing contract file:
 
 | Task | Wave | Requirement | Threat | Behavior | Automated command / entrypoint | Existing / created | Result |
 |---|---|---|---|---|---|---|---|
-|15-01-01|1|PSAFE-04/05/06|T-15-01|Actual installed verifier/source lifetime|`python3 deploy/tests/test-portfolio-smoke-image.py`|Existing; task adds context contracts|pending|
-|15-01-02|1|PSAFE-04/05/06|T-15-01-OWN|Finite outputs; distinct current-only/full result|`python3 deploy/tests/test-portfolio-validation-contracts.py`|Existing; task creates phase/suite contracts before use|pending|
-|15-01-03|1|PSAFE-04/05/06|T-15-01-OWN|Immutable request phase/suite propagation and read-only status|same existing validation contracts|Existing; task adds worker/status cases|pending|
-|15-02-01|2|PSAFE-04/06|T-15-02|Genuine active fill and independent31/24oracle|`python3 deploy/tests/test-portfolio-management-recovery.py --write-current-fixture`, then fixture/management offline groups|Task creates finite writer; real owned PostgreSQL exception|pending|
-|15-02-02|2|PSAFE-04/06|T-15-02-FROZEN|Restored-only real original retries after exact compare|`python3 deploy/tests/test-portfolio-management-recovery.py && python3 deploy/tests/test-portfolio-smoke-image.py`|Task creates replay-restored mode/wiring contracts; actual proof03|pending|
-|15-03-01|3|PSAFE-04/05/06|T-15-03|Reviewed unchanged-input reuse and finite proof selection|`python3 deploy/tests/run-portfolio-validation.py --phase 15 --suite recovery-current --dry-run`|New suite created01; review/hash ledger also required|pending|
-|15-03-02|3|PSAFE-04/05/06|T-15-03-R|Actual encrypted current cold restore/retries/authority/images/cleanup|Supported phase15 recovery-current campaign; original status must be passed/exit0, strict scans on exact IDs|01supported supervisor;02assertions; one fresh matching archive|pending|
-|15-04-01|4|PSAFE-04/05/06|T-15-04|Tested support/refusal matrix matches real interfaces|Same finite dry-run and source/reference checks|Existing RUNBOOK updated by task; no live operation|pending|
-|15-04-02|4|PSAFE-04/05/06|T-15-04-E|Actual28requirement/full-lifecycle evidence and honest gate status|`git diff --check`; direct source/receipt comparison and final independent goal verification|Task creates acceptance/security/UI disposition records|pending|
+|15-01-01|1|PSAFE-04/05/06|T-15-01|Actual installed verifier/source lifetime|`python3 deploy/tests/test-portfolio-smoke-image.py`|Existing; task adds context contracts|PASS25smoke contracts5.911s;c640789;15-01-SUMMARY|
+|15-01-02|1|PSAFE-04/05/06|T-15-01-OWN|Finite outputs; distinct current-only/full result|`python3 deploy/tests/test-portfolio-validation-contracts.py`|Existing; task creates phase/suite contracts before use|PASS38validation contracts8.810s;3ddc579;15-01-SUMMARY|
+|15-01-03|1|PSAFE-04/05/06|T-15-01-OWN|Immutable request phase/suite propagation and read-only status|same existing validation contracts|Existing; task adds worker/status cases|PASS42supervisor contracts9.037s;966c10c; later43preflight contracts10.233s;15-03proof|
+|15-02-01|2|PSAFE-04/06|T-15-02|Genuine active fill and independent31/24oracle|`python3 deploy/tests/test-portfolio-management-recovery.py --write-current-fixture`, then fixture/management offline groups|Task creates finite writer; real owned PostgreSQL exception|PASS actual_postgres/owned_resources_clean;8dd790b;12fixture/11management contracts5.756/16.138s;15-02-SUMMARY|
+|15-02-02|2|PSAFE-04/06|T-15-02-FROZEN|Restored-only real original retries after exact compare|`python3 deploy/tests/test-portfolio-management-recovery.py && python3 deploy/tests/test-portfolio-smoke-image.py`|Task creates replay-restored mode/wiring contracts; actual proof03|PASS14management/25smoke contracts16.286/6.295s;1109d25; final adapter groups15.198/6.246s; real R5replay below|
+|15-03-01|3|PSAFE-04/05/06|T-15-03|Reviewed unchanged-input reuse and finite proof selection|`python3 deploy/tests/run-portfolio-validation.py --phase 15 --suite recovery-current --dry-run`|New suite created01; review/hash ledger also required|PASS dry-run; exact input/raw-log/hash reuse at6d7ee7f;7206ddc+repair associations;15-EVIDENCE-REUSE|
+|15-03-02|3|PSAFE-04/05/06|T-15-03-R|Actual encrypted current cold restore/retries/authority/images/cleanup|Supported phase15 recovery-current campaign; original status must be passed/exit0, strict scans on exact IDs|01supported supervisor;02assertions; one fresh matching archive|PASS supportedR5exit0/135.998s, actual31/24restore/replay,139preflight,5strict scans41.220s and empty cleanup;15-RECOVERY-PROOF|
+|15-04-01|4|PSAFE-04/05/06|T-15-04|Tested support/refusal matrix matches real interfaces|Same finite dry-run and source/reference checks|Existing RUNBOOK updated by task; no live operation|PASS actual finite dry-run exit0, source/support matrix references and diffcheck;b092abc|
+|15-04-02|4|PSAFE-04/05/06|T-15-04-E|Actual28requirement/full-lifecycle evidence and honest gate status|`git diff --check`; direct source/receipt comparison and final independent goal verification|Task creates acceptance/security/UI disposition records|PASS28/28assertion rows,4outcomes,9task results, raw receipt/reference and diff checks;15-ACCEPTANCE; independent goal review next|
 
 Task15-03-02 terminal check is explicitly defined in its plan; a still-running
 status or launch exit0 is not proof of completion. Task15-02-01 creates its
@@ -89,10 +89,22 @@ actually changes. Do not generate a new approval gate for unchanged screens.
 
 ## Sign-Off
 
-The planning map is complete: four serial dependency waves, nine concrete
-tasks, existing frameworks and explicit creation owners for missing cases.
-Independent plan checking and later actual execution remain pending. Do not
-set nyquist_compliant/wave_0_complete or task results green from planning alone.
-Source-aware reuse, actual restore receipts, required reviews and independent
-goal verification remain execution prerequisites. No hosted CI or human result
-is invented; actual unchanged12/13/14owner outcomes have explicit provenance.
+Execution sampling complete: nine tasks have concrete results, existing framework
+and creation-before-use contracts. The finite real writer and actual R5encrypted
+proof are distinct; dry-runs/contracts are not relabelled financial results.
+All missing cases were implemented by01/02before use; no Wave0installation.
+
+Source-aware reuse:277backend/155frontend/314browser/139authority/10policy inputs,
+28security/sixrecovery raw log hashes and365render inputs match the qualified
+scope. Reused literal coverage gates are80%overall/100%critical; actual64critical
+modules100%, backend99.87%, frontend96.43%. New exact five-image scans pass.
+Actual owner UI/native200 outcomes remain valid for unchanged surfaces.
+
+R1–R4failed receipts and historical whole-run failures remain failed. R5current
+component flags whole7=false/same_archive_final_ci=false; no fresh complete
+security/browser/seven-stage or hostedCI pass is claimed. Full required CI must
+pass before merge. Issue35scope/expiry and Phase7live deferral are unchanged.
+
+Validation mapping/compliance is complete locally; final independent goal review
+and global requirement advancement belong to the orchestrator. No new human
+interview, provider/production operation or milestone archival was performed.
