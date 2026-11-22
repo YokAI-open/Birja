@@ -39,3 +39,19 @@ Dry-run passed: phase15, suite`recovery-current`, canonical
 `/tmp/birja-phase15-proof/recovery.tar.gz`, only stage`current0023-cold`.
 Task2 will run after this ledger is committed and will keep all tracked files
 unchanged through terminal result/owned cleanup.
+
+## Bounded Preflight Repair
+
+The first supported launch at7206ddc refused in2.668s before any archive or
+long-command work: the existing test-db-config finite project list omitted the
+runner's exactbirja-p15-01-preflight. Both recorded groups and all six owned
+project inventories are empty; R1request/status/logs remain unchanged.
+
+Parent authorized only that exact finite project entry, one affected validation
+contract group and Plan03file-manifest recording. All other ownership, stack,
+archive and financial checks remain. Actual43contracts pass10.233s, including
+actual selected Phase15preflight environment and unchanged finite admission.
+Independent two-file static review finds0blockers/0warnings. This changes only
+the preflight wrapper/test; inherited financial/schema/browser inputs remain
+identical. R2uses a new exclusive receipt, while the canonical archive remains
+absent before its first actual current proof.

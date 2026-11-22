@@ -2,7 +2,9 @@
 """Successor campaign contracts. Command doubles are not qualification receipts."""
 
 import importlib.util
+import ast
 import json
+import re
 import unittest
 import hashlib
 import os
@@ -24,6 +26,22 @@ spec.loader.exec_module(runner)
 
 
 class CurrentCampaign(unittest.TestCase):
+    def test_actual_db_config_admits_exact_phase15_preflight_project(self):
+        script = (ROOT / "deploy/tests/test-db-config.sh").read_text()
+        program = script.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        tree = ast.parse(program)
+        gate = next(node for node in tree.body if isinstance(node, ast.If))
+        self.assertIsInstance(gate.test, ast.UnaryOp)
+        self.assertIsInstance(gate.test.op, ast.Not)
+        call = gate.test.operand
+        self.assertEqual(ast.unparse(call.func), "re.fullmatch")
+        pattern = ast.literal_eval(call.args[0])
+        for accepted in ("birja-test", "birja-p14-16-preflight", "birja-p15-01-preflight"):
+            self.assertIsNotNone(re.fullmatch(pattern, accepted))
+        for refused in ("birja-p15-02-preflight", "birja-p16-01-preflight", "birja-prod"):
+            self.assertIsNone(re.fullmatch(pattern, refused))
+        self.assertIn('"birja-p15-01-preflight"', (ROOT / "deploy/tests/run-portfolio-validation.py").read_text())
+
     def test_finite_phase_selection_and_current_only_dry_run(self):
         self.assertEqual(runner.archive_for_phase(), runner.ARCHIVE)
         self.assertEqual(str(runner.archive_for_phase(15)), "/tmp/birja-phase15-proof/recovery.tar.gz")
@@ -418,6 +436,11 @@ class CurrentCampaign(unittest.TestCase):
         self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p14-16-preflight')
         self.assertNotIn('ALPACA_API_KEY', calls[-1][1]['env'])
         self.assertIn('@127.0.0.1:55432/birja_test', calls[-1][1]['env']['DATABASE_URL'])
+        selected = runner.preflight('recovery-current', phase=15, run=command)
+        self.assertEqual(selected['phase'], 15)
+        self.assertEqual(selected['archive'], str(runner.PHASE15_ARCHIVE))
+        self.assertEqual(calls[-1][0], ['bash', 'deploy/tests/test-db-config.sh'])
+        self.assertEqual(calls[-1][1]['env']['BIRJA_TEST_PROJECT'], 'birja-p15-01-preflight')
 
     def test_untracked_addition_rename_and_link_changes_are_real_source_drift(self):
         with tempfile.TemporaryDirectory(prefix='birja-backup-test-source-git-') as directory:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
 project = os.environ.get("BIRJA_TEST_PROJECT", "birja-test")
-if not re.fullmatch(r"birja-(?:test|p14-15(?:-[a-z0-9]+)?|p14-16-preflight)", project):
+if not re.fullmatch(r"birja-(?:test|p14-15(?:-[a-z0-9]+)?|p14-16-preflight|p15-01-preflight)", project):
     raise ValueError("explicit owned or authenticated campaign test project required")
 compose = ["docker", "compose", "--env-file", "/dev/null", "-p", project,
            "-f", str(root / "docker-compose.test.yml")]
