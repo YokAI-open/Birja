@@ -85,9 +85,10 @@ if [ "$MODE" = local ]; then
 else
   RESOLVE=()
 fi
-# One query: active coin count, how many have a price, age in s of the oldest
-# price (-1 if none). Run inside the postgres container; prints numbers only.
-PRICES_SQL="SELECT count(*), count(p.coin_id), coalesce(floor(extract(epoch FROM now() - min(p.as_of)))::int, -1) FROM coins c LEFT JOIN prices p ON p.coin_id = c.id WHERE c.is_active"
+# Crypto freshness stays independent of gated stock data. The JSON fallback
+# also supports retained0008, whose coin rows have no asset_class column.
+# Prints active/priced counts and oldest age (-1 if none), never account data.
+PRICES_SQL="SELECT count(*), count(p.coin_id), coalesce(floor(extract(epoch FROM now() - min(p.as_of)))::int, -1) FROM coins c LEFT JOIN prices p ON p.coin_id = c.id WHERE c.is_active AND coalesce(to_jsonb(c)->>'asset_class','crypto')='crypto'"
 
 curlq() { curl -sS --max-time 15 "${RESOLVE[@]}" "$@"; }
 

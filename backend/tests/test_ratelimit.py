@@ -15,7 +15,7 @@ from app.services.ratelimit import RateLimited, enforce, hit, ip_bucket
 from tests.helpers import OutboxSender, csrf_headers, request_and_get_code, unique_email
 
 REQ = "/api/v1/auth/request-code"
-VER = "/api/v1/auth/verify-code"
+VER = "/api/v2/auth/verify-code"
 
 
 def _key() -> str:

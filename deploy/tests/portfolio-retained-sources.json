@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "current": {
+    "revision": "0023",
+    "payload_version": 3,
+    "program": "deploy/tests/portfolio-closure-recovery-fixture.py"
+  },
+  "retained": {
+    "commit": "c2c7af17e2cb225fe196c5dbf843a65022a69e37",
+    "app_tree": "f5dd6a5a20dbf07a884d9ec688f621b16f922868",
+    "alembic_tree": "a60941416ac7d38471930306ea4a05bc87141fdc",
+    "archive_sha256": "1f3a8539a796aa8fdedbc79153e449035f90a06d715c6b2e4c667caed019ae85",
+    "files": {
+      "backend/Dockerfile": "91aeb06cd6e78ab1e7837eb5ce2e61bf2142d9cd",
+      "backend/uv.lock": "6bb8ae67951fddd3db5c31c1a2ee5db36724e371",
+      "deploy/tests/stock-execution-fixture.py": "e8af377c6cf391a42638c54e875450977cdd6b79",
+      "deploy/tests/stock-runtime-fixture.py": "18e5feaff7872a4c6e9244a5a7af6e33800a74e6",
+      "deploy/tests/dividend-execution-fixture.py": "74c3fda06e53b141cfcecfa92b082419d208fd95"
+    }
+  },
+  "legacy0008": {
+    "commit": "46d24c8591de2207cf219429aac0768962bed4c3",
+    "archive_sha256": "09ab46937e7da0f8cf6760bd245dd960242c541f7e136b269b3fd7db98c92bdb"
+  },
+  "legacy0007": {
+    "commit": "0107706617b8bbf9c1a069f3e3ccc9c53b9ab2f7",
+    "archive_sha256": "f732a59390add4a7c5e538a5d04fde1b53ec6e026ee26f6a0da3e7ac00c6a312"
+  },
+  "portfolio0017": {
+    "revision": "0017",
+    "payload_version": 1,
+    "commit": "4b4320b4cc373268a8d598612a563cd5ef199700",
+    "archive_sha256": "361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248",
+    "app_tree": "5c77a8dc0972861aa49d18be4fa8618e97557c30",
+    "alembic_tree": "67791e54f8ddc2d9a1ab8ca55562ecf0d1608ac9"
+  },
+  "portfolio0020": {
+    "revision": "0020",
+    "payload_version": 2,
+    "commit": "9527e358bc6953cec7580043703324db194ba396",
+    "archive_sha256": "2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291",
+    "app_tree": "98b64d2ade4519aa566f4ad1832aac9b33485691",
+    "alembic_tree": "eb240860976eb6f3f04ad69cf9d169089c595e02"
+  }
+}

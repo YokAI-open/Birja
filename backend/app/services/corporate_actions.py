@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     literal,
     select,
+    text,
     true,
     update,
 )
@@ -43,6 +44,7 @@ from app.models.corporate_action import (
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.trade import Holding
+from app.models.user import Account
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
     CutoffEvidence,
@@ -59,6 +61,9 @@ from app.services.stock_ownership import (
     acquire_stock_gate,
     append_stock_movement,
     assert_ownership_consistent,
+    assert_stock_terminal_clock,
+    ownership_digest,
+    portfolio_digest_rows,
     reconstruct_stock_quantity,
 )
 from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
@@ -563,17 +568,23 @@ async def apply_due_actions(
     evidence = await _authority(db, account=account, server=server)
     mapping = await _mapping(db, coin_id)
     state, rows = await assert_ownership_consistent(db, coin_id)
+    # Instrument gate precedes deterministic root locks and then holding locks.
+    # Re-read active state after waits; a frozen sibling remains in complete
+    # consistency validation but never receives a later split movement.
+    await db.execute(text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": coin_id})
     holders = list(
         (
             await db.execute(
                 select(Holding)
-                .where(Holding.coin_id == coin_id)
-                .order_by(Holding.user_id, Holding.id)
-                .with_for_update()
+                .join(Account, Account.id == Holding.portfolio_id)
+                .where(Holding.coin_id == coin_id, Account.closed_at.is_(None))
+                .order_by(Holding.portfolio_id, Holding.id)
+                .with_for_update(of=Holding)
                 .execution_options(populate_existing=True)
             )
         ).scalars()
     )
+    state, rows = await assert_ownership_consistent(db, coin_id)
     checked = await _clock(db)
     if (
         state.health != "current"
@@ -626,14 +637,42 @@ async def apply_due_actions(
         ):
             await _hold(db, state, checked)
             break
-        owners = [SplitOwner(h.user_id, h.quantity, h.cost_basis) for h in holders]
+        # Split arithmetic's identifier is opaque; pass roots, not repeated users.
+        owners = [SplitOwner(h.portfolio_id, h.quantity, h.cost_basis) for h in holders]
         plan = plan_forward_split(action, owners)
         if not plan.allowed:
             await _hold(db, state, checked)
             break
         await _authority(db, evidence, account=account, server=server)
-        before = [(h.user_id, str(h.quantity), str(h.cost_basis)) for h in holders]
-        after = [(h.user_id, str(h.quantity), str(h.total_basis)) for h in plan.owners]
+        active_roots = {h.portfolio_id for h in holders}
+        before = portfolio_digest_rows(
+            rows,
+            rows[-1].sequence if rows else 0,
+            coin_id,
+            state.unit_epoch,
+            {r.portfolio_id for r in rows} - active_roots,
+        )
+        adjusted_by_root = {h.user_id: h for h in plan.owners}
+        next_sequence = rows[-1].sequence if rows else 0
+        after = []
+        for pid, uid, cid, qty, basis, sequence, _ in before:
+            adjusted = adjusted_by_root[pid]
+            if Decimal(qty) > 0:
+                next_sequence += 1
+                sequence = next_sequence
+            after.append(
+                (
+                    pid,
+                    uid,
+                    cid,
+                    format(adjusted.quantity, ".8f"),
+                    basis,
+                    sequence,
+                    state.unit_epoch + 1,
+                )
+            )
+        processed_at = await _clock(db)
+        await assert_stock_terminal_clock(db, coin_id, processed_at)
         application = StockSplitApplication(
             coin_id=coin_id,
             economic_event_id=revision.event_id,
@@ -644,9 +683,10 @@ async def apply_due_actions(
             prior_unit_epoch=state.unit_epoch,
             new_unit_epoch=state.unit_epoch + 1,
             sequence_boundary=rows[-1].sequence if rows else 0,
-            before_digest=_digest(before),
-            after_digest=_digest(after),
-            processed_at=await _clock(db),
+            before_digest=ownership_digest(before),
+            after_digest=ownership_digest(after),
+            owner_digest_version=2,
+            processed_at=processed_at,
         )
         db.add(application)
         state.unit_epoch += 1
@@ -664,6 +704,7 @@ async def apply_due_actions(
                         original.cost_basis,
                         "split:" + str(application.id),
                         application_id=application.id,
+                        portfolio_id=original.portfolio_id,
                     ),
                 )
         state, rows = await assert_ownership_consistent(db, coin_id)
@@ -775,6 +816,7 @@ async def persistent_action_holds(db: AsyncSession, coin_id: int) -> tuple[str, 
 class EntitlementSnapshot:
     id: int
     event_id: int
+    portfolio_id: int
     user_id: int
     revision_id: int
     cutoff: datetime
@@ -799,7 +841,7 @@ async def latest_verified_entitlements(
     db: AsyncSession,
     event_id: int,
 ) -> tuple[EntitlementSnapshot, ...]:
-    """Latest per-owner snapshot only; a held replacement never exposes old eligibility."""
+    """Latest active-root snapshot; held replacements never expose old eligibility."""
     event = await db.get(StockActionEvent, event_id, populate_existing=True)
     if event is None:
         raise ActionHeld("unknown_event")
@@ -807,9 +849,14 @@ async def latest_verified_entitlements(
         (
             await db.execute(
                 select(StockDividendEntitlement)
-                .where(StockDividendEntitlement.event_id == event_id)
+                .join(
+                    Account,
+                    (Account.id == StockDividendEntitlement.portfolio_id)
+                    & (Account.user_id == StockDividendEntitlement.user_id),
+                )
+                .where(StockDividendEntitlement.event_id == event_id, Account.closed_at.is_(None))
                 .order_by(
-                    StockDividendEntitlement.user_id,
+                    StockDividendEntitlement.portfolio_id,
                     StockDividendEntitlement.version.desc(),
                     StockDividendEntitlement.id.desc(),
                 )
@@ -819,9 +866,9 @@ async def latest_verified_entitlements(
     seen = set()
     result = []
     for row in latest:
-        if row.user_id in seen:
+        if row.portfolio_id in seen:
             continue
-        seen.add(row.user_id)
+        seen.add(row.portfolio_id)
         if row.state == "eligible" and row.revision_id == event.current_revision_id:
             result.append(_snapshot(row))
     return tuple(result)
@@ -885,11 +932,26 @@ async def derive_dividend_entitlements(
         ).scalars()
     )
     holders = (
-        (await db.execute(select(Holding.user_id).where(Holding.coin_id == event.coin_id)))
+        (await db.execute(select(Holding.portfolio_id).where(Holding.coin_id == event.coin_id)))
         .scalars()
         .all()
     )
-    users = sorted({r.user_id for r in rows} | {r.user_id for r in prior} | set(holders))
+    candidates = {r.portfolio_id for r in rows} | {r.portfolio_id for r in prior} | set(holders)
+    # The instrument gate precedes root locks. The scheduler's private lock-only
+    # routine never grants cash UPDATE; INSERT guards recheck any sold-out root.
+    await db.execute(
+        text("SELECT public.lock_stock_portfolio_roots(:coin)"), {"coin": event.coin_id}
+    )
+    roots = list(
+        (
+            await db.execute(
+                select(Account)
+                .where(Account.id.in_(candidates), Account.closed_at.is_(None))
+                .order_by(Account.id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalars()
+    )
     applications = list(
         (
             await db.execute(
@@ -949,17 +1011,17 @@ async def derive_dividend_entitlements(
     quantities = {}
     if verified:
         try:
-            for uid in users:
-                quantities[uid] = await reconstruct_stock_quantity(
-                    db, uid, event.coin_id, cast(CutoffEvidence, cutoff), units
+            for root in roots:
+                quantities[root.id] = await reconstruct_stock_quantity(
+                    db, root.id, event.coin_id, cast(CutoffEvidence, cutoff), units
                 )
         except OwnershipHeld:
             quantities.clear()
             classification = "held"
     result = []
-    for uid in users:
-        previous = next((r for r in prior if r.user_id == uid), None)
-        quantity = quantities.get(uid)
+    for root in roots:
+        previous = next((r for r in prior if r.portfolio_id == root.id), None)
+        quantity = quantities.get(root.id)
         instant = cutoff.cutoff if cutoff else previous.cutoff if previous else revision.observed_at
         rule = cutoff.rule if cutoff else "unverified-no-eligibility"
         basis = "unit_epoch:" + str(units) if cutoff else "unverified"
@@ -980,6 +1042,8 @@ async def derive_dividend_entitlements(
             continue
         fingerprint = _digest(
             [
+                root.id,
+                root.user_id,
                 revision.id,
                 instant.isoformat(),
                 rule,
@@ -992,7 +1056,8 @@ async def derive_dividend_entitlements(
         )
         existing = StockDividendEntitlement(
             event_id=event_id,
-            user_id=uid,
+            portfolio_id=root.id,
+            user_id=root.user_id,
             revision_id=revision.id,
             cutoff=instant,
             cutoff_rule=rule,

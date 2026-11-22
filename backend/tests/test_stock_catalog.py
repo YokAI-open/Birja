@@ -5,7 +5,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from tests.test_migrations import retained_migration_db
 from tests.test_stock_migrations import migrate
+
+__all__ = ["retained_migration_db"]
 
 EXPECTED = [
     ("AAPL", "Apple", "NASDAQ"),
@@ -83,29 +86,30 @@ async def test_exact_twenty_stock_identities_default_unverified(
 
 
 async def test_seed_repeat_and_rollback_preserve_crypto(
-    engine: AsyncEngine, migrated: None
+    engine: AsyncEngine, retained_migration_db
 ) -> None:
+    await migrate("0010")
     before_crypto = await _crypto(engine)
     before_stocks = await _catalogue(engine)
-    await migrate("head")
+    await migrate("0010")
     assert await _catalogue(engine) == before_stocks
     await migrate("0009", down=True)
     try:
         assert await _catalogue(engine) == []
         assert await _crypto(engine) == before_crypto
     finally:
-        await migrate("head")
+        await migrate("0010")
     assert [row[:3] for row in await _catalogue(engine)] == EXPECTED
     assert await _crypto(engine) == before_crypto
 
 
 @pytest.mark.parametrize("financial_table", ["holdings", "trades"])
 async def test_seed_downgrade_refuses_financial_loss(
-    engine: AsyncEngine, migrated: None, financial_table: str
+    engine: AsyncEngine, retained_migration_db, financial_table: str
 ) -> None:
     # Exercise0010's seed guard specifically. Successor accounting revisions
     # have their own earlier, stricter financial downgrade guard.
-    await migrate("0010", down=True)
+    await migrate("0010")
     async with engine.begin() as conn:
         cid = (
             await conn.execute(
@@ -143,4 +147,4 @@ async def test_seed_downgrade_refuses_financial_loss(
             for table in ("holdings", "trades"):
                 await conn.execute(text(f"DELETE FROM {table} WHERE user_id=:u"), {"u": uid})  # noqa: S608 - fixed allowlist
             await conn.execute(text("DELETE FROM users WHERE id=:u"), {"u": uid})
-        await migrate("head")
+        await migrate("0010")

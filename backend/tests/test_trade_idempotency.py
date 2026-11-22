@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.models.trade import Trade
 from app.services import trading
 from app.services.trade_math import TradeRefused
-from tests.stock_action_fixtures import ownership, synthetic_fill  # noqa: F401
+from tests.stock_action_fixtures import ownership, synthetic_fill, synthetic_owned_portfolio  # noqa: F401
 
 
 async def test_crypto_route_detects_existing_stock_key(ownership, settings):
@@ -22,7 +22,7 @@ async def test_crypto_route_detects_existing_stock_key(ownership, settings):
         with pytest.raises(TradeRefused) as exc:
             await trading.execute(
                 db,
-                user_id=uid,
+                portfolio=await synthetic_owned_portfolio(db, uid),
                 order=trading.Order("BTC", "buy", "quantity", Decimal(2)),
                 expected_mid=Decimal(100),
                 idempotency_key=key,

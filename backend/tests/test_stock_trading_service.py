@@ -7,6 +7,7 @@ import pytest
 
 from app.schemas.stock_trades import QuoteIn
 from app.services import stock_trading
+from tests.stock_action_fixtures import synthetic_owned_portfolio
 from tests.stock_trade_fixtures import ownership, status_case, stock_trade_case  # noqa: F401
 from tests.test_stock_status import financial_snapshot
 
@@ -17,7 +18,7 @@ async def test_stock_preview_is_read_only(stock_trade_case, settings):
     async with factory() as db:
         result = await stock_trading.quote(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=QuoteIn(symbol="AAPL", side="buy", quantity="2"),
             settings=settings,
         )
@@ -45,7 +46,7 @@ async def test_buy_partial_sell_and_sold_out_keep_exact_basis(stock_trade_case, 
     async with factory() as db:
         buy, created = await stock_trading.execute(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=TradeIn(
                 symbol="AAPL",
                 side="buy",
@@ -63,7 +64,7 @@ async def test_buy_partial_sell_and_sold_out_keep_exact_basis(stock_trade_case, 
         ):
             sale, created = await stock_trading.execute(
                 db,
-                user_id=uid,
+                portfolio=await synthetic_owned_portfolio(db, uid),
                 order=TradeIn(
                     symbol="AAPL",
                     side="sell",
@@ -118,12 +119,12 @@ async def test_receipt_replays_after_sale_rename_and_permission_revocation(
     order = trade_order()
     async with factory() as db:
         original, created = await stock_trading.execute(
-            db, user_id=uid, order=order, settings=settings
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
         )
         assert created
         await stock_trading.execute(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=trade_order(side="sell", expected_exec_price="100"),
             settings=settings,
         )
@@ -137,7 +138,7 @@ async def test_receipt_replays_after_sale_rename_and_permission_revocation(
         async with factory() as db:
             again, created = await stock_trading.execute(
                 db,
-                user_id=uid,
+                portfolio=await synthetic_owned_portfolio(db, uid),
                 order=order.model_copy(update={"expected_exec_price": Decimal(999)}),
                 settings=settings,
             )
@@ -167,12 +168,19 @@ async def test_key_payload_change_conflicts_without_effect(
     factory, cid, uid, now = stock_trade_case
     order = trade_order()
     async with factory() as db:
-        await stock_trading.execute(db, user_id=uid, order=order, settings=settings)
+        await stock_trading.execute(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
+        )
     before = await financial_snapshot(factory)
     async with factory() as db:
         changed = trade_order(**{**order.model_dump(mode="json"), **change})
         with pytest.raises(TradeRefused) as exc:
-            await stock_trading.execute(db, user_id=uid, order=changed, settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=changed,
+                settings=settings,
+            )
         assert exc.value.code == code
     assert await financial_snapshot(factory) == before
 
@@ -190,13 +198,18 @@ async def test_reprice_requires_reconfirmation_without_mutation(
     factory, cid, uid, now = stock_trade_case
     async with factory() as db:
         if side == "sell":
-            await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
     before = await financial_snapshot(factory)
     async with factory() as db:
         with pytest.raises(stock_trading.PriceChanged) as exc:
             await stock_trading.execute(
                 db,
-                user_id=uid,
+                portfolio=await synthetic_owned_portfolio(db, uid),
                 order=trade_order(side=side, expected_exec_price=price),
                 settings=settings,
             )
@@ -222,7 +235,10 @@ async def test_refusal_has_no_financial_effect(stock_trade_case, settings, chang
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
             await stock_trading.execute(
-                db, user_id=uid, order=trade_order(**change), settings=settings
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(**change),
+                settings=settings,
             )
         assert exc.value.code == code
     assert await financial_snapshot(factory) == before
@@ -232,7 +248,9 @@ async def test_context_shortcuts_are_read_only(stock_trade_case, settings):
     factory, cid, uid, now = stock_trade_case
     before = await financial_snapshot(factory)
     async with factory() as db:
-        result = await stock_trading.context(db, user_id=uid, symbol="AAPL", settings=settings)
+        result = await stock_trading.context(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), symbol="AAPL", settings=settings
+        )
         assert result.execution_enabled and result.buy_max_quantity == 98
         assert result.held_quantity == 0 and result.quote.bid == 100 and result.quote.ask == 102
         assert result.status.state == "normal" and result.action.state == "current"
@@ -262,7 +280,12 @@ async def test_current_authority_refuses_new_fill(stock_trade_case, settings, mu
     before = await financial_snapshot(factory)
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
-            await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         assert exc.value.code == code
     assert await financial_snapshot(factory) == before
 
@@ -316,14 +339,26 @@ async def test_late_failures_roll_back_all_staged_effects(
             "db": DBAPIError,
         }[failure]
         with pytest.raises(expected):
-            await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         assert not db.in_transaction()
     assert await financial_snapshot(factory) == before
 
 
 @pytest.mark.parametrize(
     "hidden,change,expected",
-    [(1, False, "replay"), (2, False, "replay"), (2, True, "conflict"), (99, False, "integrity")],
+    [
+        (-1, False, "replay"),
+        (0, False, "replay"),
+        (1, False, "replay"),
+        (2, False, "replay"),
+        (2, True, "conflict"),
+        (99, False, "integrity"),
+    ],
 )
 async def test_key_rechecked_under_lock_and_unique_backstop(
     stock_trade_case, settings, monkeypatch, hidden, change, expected
@@ -335,7 +370,9 @@ async def test_key_rechecked_under_lock_and_unique_backstop(
     factory, cid, uid, now = stock_trade_case
     order = trade_order()
     async with factory() as db:
-        original, _ = await stock_trading.execute(db, user_id=uid, order=order, settings=settings)
+        original, _ = await stock_trading.execute(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), order=order, settings=settings
+        )
     before = await financial_snapshot(factory)
     real = stock_trading.find_user_trade
     calls = 0
@@ -343,19 +380,29 @@ async def test_key_rechecked_under_lock_and_unique_backstop(
     async def miss_then_find(*args):
         nonlocal calls
         calls += 1
-        return None if calls <= hidden else await real(*args)
+        # Also exercise a transient miss after initial detection: the second
+        # locked lookup must still return the immutable original, never refill.
+        return None if calls <= hidden or (hidden == -1 and calls == 2) else await real(*args)
 
     monkeypatch.setattr(stock_trading, "find_user_trade", miss_then_find)
     async with factory() as db:
         changed = order.model_copy(update={"quantity": Decimal(3)}) if change else order
         if expected == "replay":
             again, created = await stock_trading.execute(
-                db, user_id=uid, order=changed, settings=settings
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=changed,
+                settings=settings,
             )
             assert not created and again == original
         else:
             with pytest.raises(TradeRefused if expected == "conflict" else IntegrityError) as exc:
-                await stock_trading.execute(db, user_id=uid, order=changed, settings=settings)
+                await stock_trading.execute(
+                    db,
+                    portfolio=await synthetic_owned_portfolio(db, uid),
+                    order=changed,
+                    settings=settings,
+                )
             if expected == "conflict":
                 assert exc.value.code == "idempotency_conflict"
         assert not db.in_transaction()
@@ -377,7 +424,7 @@ async def test_crypto_key_conflicts_in_stock_lane_and_other_users_are_independen
     async with factory() as db:
         await trading.execute(
             db,
-            user_id=uid,
+            portfolio=await synthetic_owned_portfolio(db, uid),
             order=trading.Order("BTC", "buy", "usd", Decimal(100)),
             expected_mid=Decimal(100),
             idempotency_key=key,
@@ -387,14 +434,20 @@ async def test_crypto_key_conflicts_in_stock_lane_and_other_users_are_independen
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
             await stock_trading.execute(
-                db, user_id=uid, order=trade_order(idempotency_key=key), settings=settings
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(idempotency_key=key),
+                settings=settings,
             )
         assert exc.value.code == "idempotency_conflict"
     assert await financial_snapshot(factory) == before
     other = await new_user()
     async with factory() as db:
         fill, created = await stock_trading.execute(
-            db, user_id=other, order=trade_order(idempotency_key=key), settings=settings
+            db,
+            portfolio=await synthetic_owned_portfolio(db, other),
+            order=trade_order(idempotency_key=key),
+            settings=settings,
         )
         assert created and fill.cash_after == Decimal(9796)
 
@@ -428,10 +481,20 @@ async def test_context_denies_safely_without_financial_changes(
     async with factory() as db:
         if change == "quotes":
             with pytest.raises(TradeRefused) as exc:
-                await stock_trading.context(db, user_id=uid, symbol="AAPL", settings=settings)
+                await stock_trading.context(
+                    db,
+                    portfolio=await synthetic_owned_portfolio(db, uid),
+                    symbol="AAPL",
+                    settings=settings,
+                )
             assert exc.value.code == code
         else:
-            result = await stock_trading.context(db, user_id=uid, symbol="AAPL", settings=settings)
+            result = await stock_trading.context(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                symbol="AAPL",
+                settings=settings,
+            )
             assert not result.execution_enabled and result.execution_reason == code
             assert result.buy_max_quantity == 0
             if change != "halted":
@@ -464,7 +527,12 @@ async def test_quote_update_after_helper_rolls_back_old_immutable_metadata(
     monkeypatch.setattr(stock_trading, "append_stock_movement", append_then_update)
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
-            await stock_trading.execute(db, user_id=uid, order=trade_order(), settings=settings)
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
         assert exc.value.code == ("price_changed" if price == "103" else "quote_unavailable")
     assert await financial_snapshot(factory) == before
 
@@ -479,7 +547,10 @@ async def test_historical_rows_without_complete_receipt_never_reconstructed(owne
         key = saved.idempotency_key
         with pytest.raises(TradeRefused) as exc:
             await stock_trading.execute(
-                db, user_id=uid, order=trade_order(idempotency_key=key), settings=settings
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(idempotency_key=key),
+                settings=settings,
             )
         assert exc.value.code == "receipt_unavailable"
 
@@ -496,14 +567,20 @@ async def test_malformed_saved_receipt_is_unavailable(ownership, settings):
         await append_stock_movement(
             db,
             StockMovementInput(
-                uid, cid, Decimal(2), Decimal(20), "fixture-fill", trade_id=saved.id
+                uid,
+                cid,
+                Decimal(2),
+                Decimal(20),
+                "fixture-fill",
+                trade_id=saved.id,
+                portfolio_id=(await synthetic_owned_portfolio(db, uid)).portfolio_id,
             ),
         )
     async with factory() as db:
         with pytest.raises(TradeRefused) as exc:
             await stock_trading.execute(
                 db,
-                user_id=uid,
+                portfolio=await synthetic_owned_portfolio(db, uid),
                 order=trade_order(symbol="SYNTH", idempotency_key=key),
                 settings=settings,
             )
@@ -532,6 +609,8 @@ async def test_halt_context_does_not_disclose_unverified_future_quote(stock_trad
             )
         )
     async with factory() as db:
-        result = await stock_trading.context(db, user_id=uid, symbol="AAPL", settings=settings)
+        result = await stock_trading.context(
+            db, portfolio=await synthetic_owned_portfolio(db, uid), symbol="AAPL", settings=settings
+        )
         assert result.quote is None
         assert not result.execution_enabled and result.execution_reason == "halted"

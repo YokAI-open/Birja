@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useLocation, useOutletContext } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StockAttribution } from "@/components/StockAttribution";
@@ -8,9 +9,13 @@ import { PortfolioFreshness } from "@/components/PortfolioFreshness";
 import { PortfolioHoldings, PortfolioOutcome } from "@/components/PortfolioHoldings";
 import { PortfolioAllocation } from "@/components/PortfolioAllocation";
 import { formatUsd } from "@/lib/money";
+import { PortfolioContext } from "@/components/PortfolioContext";
+import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 
 export default function PortfolioPage() {
-  const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio();
+  const target = useOutletContext<PortfolioTarget>();
+  const { state } = useLocation();
+  const { data, isPending, isError, isFetching, refetch, dataUpdatedAt } = usePortfolio(target);
   const now = useNow();
   const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
   const refreshButton = useRef<HTMLButtonElement | null>(null);
@@ -26,10 +31,7 @@ export default function PortfolioPage() {
   }
   return (
     <div className="my-8 flex flex-col gap-4 text-[15px] leading-[22px]">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-          Portfolio
-        </h1>
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <Button
           ref={refreshButton}
           variant="secondary"
@@ -40,6 +42,12 @@ export default function PortfolioPage() {
           {isFetching ? "Refreshing portfolio…" : "Refresh portfolio"}
         </Button>
       </div>
+      <PortfolioContext name={target.name} />
+      {state?.creationResult?.id === target.portfolioId && (
+        <p role="status">
+          {state.creationResult.replay ? "Original portfolio confirmed." : "Portfolio created."}
+        </p>
+      )}
       {isPending ? (
         <div
           role="status"
@@ -156,6 +164,7 @@ export default function PortfolioPage() {
               </CardContent>
             </Card>
             <PortfolioHoldings
+              target={target}
               holdings={data.holdings}
               elapsed={elapsed}
               freshSeconds={data.fresh_seconds}

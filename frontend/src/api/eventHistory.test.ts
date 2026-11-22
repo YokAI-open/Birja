@@ -87,13 +87,14 @@ it("refuses a response exceeding the requested page bound", async () => {
   vi.stubGlobal("fetch", () =>
     Promise.resolve(new Response(JSON.stringify(page([trade, dividend])))),
   );
-  await expect(fetchEventHistory({ limit: 1 })).rejects.toThrow(
+  await expect(fetchEventHistory("1", { limit: 1 })).rejects.toThrow(
     "Unexpected event history response",
   );
 });
 const token = (raw: string) => btoa(raw).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 const cursorBody = {
-  v: 2,
+  v: 3,
+  portfolio_id: "1",
   recorded_at: "2026-11-12T15:00:00.000001Z",
   kind_rank: 3,
   source_id: "9007199254740993",
@@ -104,8 +105,11 @@ it("retains a canonical bounded cursor and sends it without financial ID coercio
   expect(isEventHistoryPage(body)).toBe(true);
   const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
   vi.stubGlobal("fetch", mock);
-  expect(await fetchEventHistory({ cursor })).toEqual(body);
-  expect(mock).toHaveBeenCalledWith(`/api/v1/history?cursor=${cursor}`, expect.any(Object));
+  expect(await fetchEventHistory("1", { cursor })).toEqual(body);
+  expect(mock).toHaveBeenCalledWith(
+    `/api/v2/portfolios/1/event-history?cursor=${cursor}`,
+    expect.any(Object),
+  );
 });
 it.each([
   "!",
@@ -362,23 +366,23 @@ it("fetches only the isolated read-only endpoint with abort and no-store", async
   const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(page()))));
   vi.stubGlobal("fetch", mock);
   const signal = new AbortController().signal;
-  expect(await fetchEventHistory({ limit: 25 }, signal)).toEqual(page());
+  expect(await fetchEventHistory("1", { limit: 25 }, signal)).toEqual(page());
   expect(mock.mock.calls[0]).toEqual([
-    "/api/v1/history?limit=25",
+    "/api/v2/portfolios/1/event-history?limit=25",
     expect.objectContaining({ signal, cache: "no-store", method: "GET" }),
   ]);
 });
 it("rejects malformed network results and invalid request bounds", async () => {
   const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ items: null }))));
   vi.stubGlobal("fetch", mock);
-  await expect(fetchEventHistory()).rejects.toThrow("Unexpected event history response");
+  await expect(fetchEventHistory("1")).rejects.toThrow("Unexpected event history response");
   for (const args of [{ limit: 0 }, { limit: 101 }, { limit: 1.5 }, { cursor: "a".repeat(513) }])
-    await expect(fetchEventHistory(args)).rejects.toThrow("Invalid event history request");
+    await expect(fetchEventHistory("1", args)).rejects.toThrow("Invalid event history request");
 });
 it("propagates abort and the existing 401 auth error", async () => {
   const controller = new AbortController();
   controller.abort();
-  await expect(fetchEventHistory({}, controller.signal)).rejects.toMatchObject({
+  await expect(fetchEventHistory("1", {}, controller.signal)).rejects.toMatchObject({
     name: "AbortError",
   });
   vi.stubGlobal("fetch", () =>
@@ -386,7 +390,7 @@ it("propagates abort and the existing 401 auth error", async () => {
       new Response(JSON.stringify({ detail: { code: "unauthenticated" } }), { status: 401 }),
     ),
   );
-  await expect(fetchEventHistory()).rejects.toBeInstanceOf(ApiError);
+  await expect(fetchEventHistory("1")).rejects.toBeInstanceOf(ApiError);
 });
 
 it("accepts the unmodified correction baseline before rejection mutations", () => {

@@ -2,6 +2,7 @@ import type { StockTradeQuote, StockFill, StockContext } from "@/api/stockTrades
 
 export function quoteFixture(): StockTradeQuote {
   return {
+    portfolio_id: "1",
     coin_id: "16",
     provider_asset_id: "asset-aapl",
     symbol: "AAPL",
@@ -63,6 +64,7 @@ export function fillFixture(): StockFill {
 export function contextFixture(): StockContext {
   const q = quoteFixture();
   return {
+    portfolio_id: q.portfolio_id,
     coin_id: q.coin_id,
     provider_asset_id: q.provider_asset_id,
     symbol: q.symbol,

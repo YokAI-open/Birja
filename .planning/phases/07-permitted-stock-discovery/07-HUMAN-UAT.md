@@ -1,11 +1,24 @@
 ---
 phase: 07-permitted-stock-discovery
 plan: "14"
-status: ui-accepted-live-verification-pending
+status: passed-owner-confirmed
 prepared: 2026-11-11
 ---
 
 # Phase 7 acceptance record
+
+## Current closure — 2026-11-22
+
+The owner explicitly accepts the prior manual verification and confirms all
+requested product permission/access/display/retention/quota conditions. Phase7
+owner acceptance and Plan14 are complete; see[07-OWNER-CLOSURE.md](07-OWNER-CLOSURE.md)
+and07-14-SUMMARY.md. This is owner-attested final acceptance plus saved actual
+measurements/local proof, not a new independent provider audit or new live run.
+Real stock execution still needs the separately missing live status transport;
+normal runtime admissions, freshness and continuity checks are unchanged.
+
+## Historical preparation and unresolved-state records
+
 
 Current2026-11-14: UI acceptance retained. Old one-shot is no longer active and has no result receipt; live outcome is unverified. See07-VERIFICATION.md and replacement proposal. Original scheduled-wait descriptions below are historical, not current promises.
 
@@ -13,6 +26,12 @@ The owner requested continuing independent preparation and checking the live
 measurement later. On 2026-11-11 the owner explicitly stated “i accept ui”.
 UI acceptance is recorded; live measurement acceptance remains pending. This
 does not finish Plan 14 or enable stock data or execution.
+
+## November16 update
+
+Actual20mapping/10sample evidence is now recorded in07-LIVE-20261116-REVIEW.md.
+UI acceptance remains retained; final live-state/rights acceptance remains pending.
+Old scheduled-wait descriptions below are historical and must not launch a run.
 
 ## Evidence already available
 

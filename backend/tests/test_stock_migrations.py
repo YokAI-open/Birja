@@ -11,7 +11,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from tests.test_migrations import _config, _versions, ensure_dividend_test_owner
+from tests.test_migrations import (
+    _config,
+    _versions,
+    ensure_dividend_test_owner,
+    retained_migration_db,
+    run_test_migration,
+)
+
+__all__ = ["retained_migration_db"]
 
 STOCK_TABLES = {"stock_instruments", "stock_quotes", "stock_sessions", "stock_data_admissions"}
 
@@ -19,7 +27,7 @@ STOCK_TABLES = {"stock_instruments", "stock_quotes", "stock_sessions", "stock_da
 async def migrate(target: str, *, down: bool = False) -> None:
     if not down and target in ("head", "0014"):
         await ensure_dividend_test_owner()
-    await asyncio.to_thread(command.downgrade if down else command.upgrade, _config(), target)
+    await asyncio.to_thread(run_test_migration, target, down=down)
 
 
 async def test_head_has_separate_stock_storage(engine: AsyncEngine, migrated: None) -> None:
@@ -73,9 +81,10 @@ async def _financial_snapshot(engine: AsyncEngine) -> list[list[tuple]]:
         return result
 
 
-async def test_populated_0008_preserves_exact_financial_identity(engine: AsyncEngine) -> None:
-    await migrate("head")
-    await migrate("0008", down=True)
+async def test_populated_0008_preserves_exact_financial_identity(
+    engine: AsyncEngine, retained_migration_db
+) -> None:
+    await migrate("0008")
     try:
         async with engine.begin() as conn:
             uid = (
@@ -107,20 +116,29 @@ async def test_populated_0008_preserves_exact_financial_identity(engine: AsyncEn
                 {"u": uid, "c": cid},
             )
         before = await _financial_snapshot(engine)
+        async with engine.connect() as conn:
+            roles_before = (
+                await conn.execute(
+                    text(
+                        "SELECT rolname FROM pg_roles WHERE rolname IN "
+                        "('birja_app','birja_scheduler') ORDER BY rolname"
+                    )
+                )
+            ).all()
         await migrate("0009")
         assert await _versions(engine) == ["0009"]
         assert await _financial_snapshot(engine) == before
         # Runtime roles are not provisioned by0009. The guarded test bootstrap
         # preprovisions the canonical NOLOGIN owner for0014 independently.
         async with engine.connect() as conn:
-            assert not (
+            assert (
                 await conn.execute(
                     text(
                         "SELECT rolname FROM pg_roles WHERE rolname IN "
-                        "('birja_app','birja_scheduler')"
+                        "('birja_app','birja_scheduler') ORDER BY rolname"
                     )
                 )
-            ).all()
+            ).all() == roles_before
         await migrate("0008", down=True)
         assert await _financial_snapshot(engine) == before
     finally:
@@ -325,10 +343,9 @@ def test_migration_owns_conditional_least_privilege_grants() -> None:
 
 @pytest.mark.parametrize("financial_table", ["holdings", "trades"])
 async def test_schema_downgrade_refuses_stock_financial_references(
-    engine: AsyncEngine, migrated: None, financial_table: str
+    engine: AsyncEngine, retained_migration_db, financial_table: str
 ) -> None:
-    await migrate("head")
-    await migrate("0009", down=True)
+    await migrate("0009")
     async with engine.begin() as conn:
         uid = (
             await conn.execute(

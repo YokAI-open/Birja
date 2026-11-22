@@ -17,6 +17,7 @@ from tests.helpers import (
     holding_of,
     put_holding,
     put_price,
+    selected_portfolio_path,
     set_cash,
     sign_in,
     trade_count,
@@ -24,8 +25,8 @@ from tests.helpers import (
 )
 
 D = Decimal
-QUOTE_URL = "/api/v1/trades/quote"
-TRADE_URL = "/api/v1/trades"
+QUOTE_URL = "/trades/quote"
+TRADE_URL = "/trades"
 MONEY_QUOTE = [
     "input_value",
     "mid",
@@ -56,8 +57,13 @@ QUOTE_FIELDS = set(MONEY_QUOTE) | {
     "as_of",
     "age_seconds",
     "whole_position",
+    "portfolio_id",
 }
-FILL_FIELDS = set(MONEY_FILL) | {"trade_id", "created_at", "symbol", "side", "input_kind", "as_of"}
+FILL_FIELDS = (
+    {"portfolio_id"}
+    | set(MONEY_FILL)
+    | {"trade_id", "created_at", "symbol", "side", "input_kind", "as_of"}
+)
 PLAIN = re.compile(r"^-?\d+(\.\d+)?$")
 
 
@@ -100,13 +106,17 @@ async def test_signed_out_post_is_401(
     auth_client: httpx.AsyncClient, url: str, body: dict[str, Any]
 ) -> None:
     headers = await csrf_headers(auth_client)
-    resp = await auth_client.post(url, json=body, headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, url), json=body, headers=headers
+    )
     assert resp.status_code == 401
     assert resp.json()["detail"]["code"] == "not_authenticated"
 
 
 async def test_signed_out_holdings_is_401(auth_client: httpx.AsyncClient) -> None:
-    assert (await auth_client.get("/api/v1/holdings/BTC")).status_code == 401
+    assert (
+        await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/BTC"))
+    ).status_code == 401
 
 
 async def test_missing_csrf_is_403_and_writes_nothing(
@@ -117,7 +127,11 @@ async def test_missing_csrf_is_403_and_writes_nothing(
 ) -> None:
     user_id, _ = await _trader(auth_client, outbox, engine)
     for url, body in ((QUOTE_URL, _buy()), (TRADE_URL, _trade_body())):
-        resp = await auth_client.post(url, json=body, headers={"X-CSRF-Token": "wrong"})
+        resp = await auth_client.post(
+            await selected_portfolio_path(auth_client, url),
+            json=body,
+            headers={"X-CSRF-Token": "wrong"},
+        )
         assert resp.status_code == 403
         assert resp.json()["detail"]["code"] == "csrf_failed"
     assert await trade_count(engine, user_id) == 0
@@ -131,7 +145,9 @@ async def test_quote_buy_is_read_only_and_typed(
     clean_prices: None,
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
-    resp = await auth_client.post(QUOTE_URL, json=_buy(), headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL), json=_buy(), headers=headers
+    )
 
     assert resp.status_code == 200
     assert resp.headers["cache-control"] == "no-store"
@@ -148,7 +164,9 @@ async def test_quote_buy_is_read_only_and_typed(
     assert D(body["cash_delta"]) == D("-100.00")
     assert D(body["cash_after"]) == D("9900.00")
     assert await trade_count(engine, user_id) == 0
-    assert D((await auth_client.get("/api/v1/me")).json()["cash_usd"]) == D("10000.00")
+    assert D(
+        (await auth_client.get(await selected_portfolio_path(auth_client))).json()["cash"]
+    ) == D("10000.00")
 
 
 async def test_quote_symbol_is_case_insensitive_and_unknown_is_404(
@@ -158,11 +176,19 @@ async def test_quote_symbol_is_case_insensitive_and_unknown_is_404(
     clean_prices: None,
 ) -> None:
     _, headers = await _trader(auth_client, outbox, engine)
-    ok = await auth_client.post(QUOTE_URL, json=_buy() | {"symbol": "btc"}, headers=headers)
+    ok = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL),
+        json=_buy() | {"symbol": "btc"},
+        headers=headers,
+    )
     assert ok.status_code == 200
     assert ok.json()["symbol"] == "BTC"
 
-    nope = await auth_client.post(QUOTE_URL, json=_buy() | {"symbol": "NOPE"}, headers=headers)
+    nope = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL),
+        json=_buy() | {"symbol": "NOPE"},
+        headers=headers,
+    )
     assert nope.status_code == 404
     assert nope.json()["detail"]["code"] == "unknown_coin"
 
@@ -196,7 +222,9 @@ async def test_quote_validation_is_422(
 ) -> None:
     _, headers = await _trader(auth_client, outbox, engine)
     body = {k: v for k, v in (_buy() | patch).items() if v is not None}
-    resp = await auth_client.post(QUOTE_URL, json=body, headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL), json=body, headers=headers
+    )
     assert resp.status_code == 422
     assert not isinstance(resp.json()["detail"], dict)  # pydantic list, no domain code
 
@@ -214,7 +242,9 @@ async def test_trade_validation_is_422(
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
     body = {k: v for k, v in (_trade_body() | patch).items() if v is not None}
-    resp = await auth_client.post(TRADE_URL, json=body, headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL), json=body, headers=headers
+    )
     assert resp.status_code == 422
     assert await trade_count(engine, user_id) == 0
 
@@ -227,7 +257,11 @@ async def test_execute_buy_then_replay_is_byte_identical(
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
     key = uuid.uuid4()
-    resp1 = await auth_client.post(TRADE_URL, json=_trade_body(key), headers=headers)
+    resp1 = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL),
+        json=_trade_body(key),
+        headers=headers,
+    )
 
     assert resp1.status_code == 201
     assert resp1.headers["cache-control"] == "no-store"
@@ -236,16 +270,22 @@ async def test_execute_buy_then_replay_is_byte_identical(
     _assert_plain(fill, MONEY_FILL)
     assert isinstance(fill["trade_id"], int)
     assert D(fill["cash_after"]) == D("9900.00")
-    me = (await auth_client.get("/api/v1/me")).json()
-    assert D(me["cash_usd"]) == D(fill["cash_after"])
+    me = (await auth_client.get(await selected_portfolio_path(auth_client))).json()
+    assert D(me["cash"]) == D(fill["cash_after"])
 
-    resp2 = await auth_client.post(TRADE_URL, json=_trade_body(key), headers=headers)
+    resp2 = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL),
+        json=_trade_body(key),
+        headers=headers,
+    )
     assert resp2.status_code == 200
     assert resp2.json() == resp1.json()
     assert await trade_count(engine, user_id) == 1
 
     other = await auth_client.post(
-        TRADE_URL, json=_trade_body(key, amount_usd="50.00"), headers=headers
+        await selected_portfolio_path(auth_client, TRADE_URL),
+        json=_trade_body(key, amount_usd="50.00"),
+        headers=headers,
     )
     assert other.status_code == 409
     assert other.json()["detail"]["code"] == "idempotency_conflict"
@@ -259,7 +299,11 @@ async def test_price_changed_returns_fresh_quote(
     clean_prices: None,
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
-    resp = await auth_client.post(TRADE_URL, json=_trade_body(mid="99999.00"), headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL),
+        json=_trade_body(mid="99999.00"),
+        headers=headers,
+    )
 
     assert resp.status_code == 409
     detail = resp.json()["detail"]
@@ -277,16 +321,24 @@ async def test_stale_price_boundary(
     clean_prices: None,
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine, age=120)
-    quote = await auth_client.post(QUOTE_URL, json=_buy(), headers=headers)
+    quote = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL), json=_buy(), headers=headers
+    )
     assert quote.status_code == 409
     assert quote.json()["detail"]["code"] == "stale_price"
-    trade = await auth_client.post(TRADE_URL, json=_trade_body(), headers=headers)
+    trade = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL), json=_trade_body(), headers=headers
+    )
     assert trade.status_code == 409
     assert trade.json()["detail"]["code"] == "stale_price"
     assert await trade_count(engine, user_id) == 0
 
     await put_price(engine, "BTC", "100000.00", datetime.now(UTC) - timedelta(seconds=118.5))
-    assert (await auth_client.post(QUOTE_URL, json=_buy(), headers=headers)).status_code == 200
+    assert (
+        await auth_client.post(
+            await selected_portfolio_path(auth_client, QUOTE_URL), json=_buy(), headers=headers
+        )
+    ).status_code == 200
 
 
 async def test_below_minimum_is_422(
@@ -296,7 +348,9 @@ async def test_below_minimum_is_422(
     clean_prices: None,
 ) -> None:
     _, headers = await _trader(auth_client, outbox, engine)
-    small = await auth_client.post(QUOTE_URL, json=_buy("0.99"), headers=headers)
+    small = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL), json=_buy("0.99"), headers=headers
+    )
     assert small.status_code == 422
     assert small.json()["detail"]["code"] == "below_minimum"
 
@@ -309,7 +363,9 @@ async def test_insufficient_cash_is_422(
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
     await set_cash(engine, user_id, "50.00")
-    poor = await auth_client.post(QUOTE_URL, json=_buy(), headers=headers)
+    poor = await auth_client.post(
+        await selected_portfolio_path(auth_client, QUOTE_URL), json=_buy(), headers=headers
+    )
     assert poor.status_code == 422
     assert poor.json()["detail"]["code"] == "insufficient_cash"
     assert poor.json()["detail"]["message"] == "You have $50.00; this order needs $100.00."
@@ -323,7 +379,9 @@ async def test_insufficient_quantity_is_422(
 ) -> None:
     _, headers = await _trader(auth_client, outbox, engine)
     sell = await auth_client.post(
-        QUOTE_URL, json={"symbol": "BTC", "side": "sell", "quantity": "1"}, headers=headers
+        await selected_portfolio_path(auth_client, QUOTE_URL),
+        json={"symbol": "BTC", "side": "sell", "quantity": "1"},
+        headers=headers,
     )
     assert sell.status_code == 422
     assert sell.json()["detail"]["code"] == "insufficient_quantity"
@@ -337,7 +395,7 @@ async def test_order_too_large_is_422(
 ) -> None:
     _, headers = await _trader(auth_client, outbox, engine)
     huge = await auth_client.post(
-        QUOTE_URL,
+        await selected_portfolio_path(auth_client, QUOTE_URL),
         json={"symbol": "BTC", "side": "buy", "quantity": "999999999999"},
         headers=headers,
     )
@@ -352,13 +410,15 @@ async def test_holdings_lifecycle_in_plain_notation(
     clean_prices: None,
 ) -> None:
     user_id, headers = await _trader(auth_client, outbox, engine)
-    before = await auth_client.get("/api/v1/holdings/BTC")
+    before = await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/BTC"))
     assert before.status_code == 200
     assert D(before.json()["quantity"]) == 0
     assert before.json()["symbol"] == "BTC"
 
-    await auth_client.post(TRADE_URL, json=_trade_body(), headers=headers)
-    after = await auth_client.get("/api/v1/holdings/btc")
+    await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL), json=_trade_body(), headers=headers
+    )
+    after = await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/btc"))
     assert after.json()["quantity"] == "0.00099501"
 
     sell = {
@@ -368,8 +428,12 @@ async def test_holdings_lifecycle_in_plain_notation(
         "expected_mid": "100000.00",
         "idempotency_key": str(uuid.uuid4()),
     }
-    assert (await auth_client.post(TRADE_URL, json=sell, headers=headers)).status_code == 201
-    empty = await auth_client.get("/api/v1/holdings/BTC")
+    assert (
+        await auth_client.post(
+            await selected_portfolio_path(auth_client, TRADE_URL), json=sell, headers=headers
+        )
+    ).status_code == 201
+    empty = await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/BTC"))
     assert empty.json()["quantity"] == "0.00000000"
     assert await holding_of(engine, user_id, "BTC") == (D("0"), D("0"))
 
@@ -378,7 +442,7 @@ async def test_unknown_holding_is_404(
     auth_client: httpx.AsyncClient, outbox: OutboxSender, engine: AsyncEngine
 ) -> None:
     await sign_in(auth_client, outbox, unique_email("api"))
-    unknown = await auth_client.get("/api/v1/holdings/NOPE")
+    unknown = await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/NOPE"))
     assert unknown.status_code == 404
     assert unknown.json()["detail"]["code"] == "unknown_coin"
 
@@ -399,7 +463,9 @@ async def test_sub_cent_whole_position_sell_is_plain_zero(
         "expected_mid": "0.08",
         "idempotency_key": str(uuid.uuid4()),
     }
-    resp = await auth_client.post(TRADE_URL, json=body, headers=headers)
+    resp = await auth_client.post(
+        await selected_portfolio_path(auth_client, TRADE_URL), json=body, headers=headers
+    )
 
     assert resp.status_code == 201
     fill = resp.json()

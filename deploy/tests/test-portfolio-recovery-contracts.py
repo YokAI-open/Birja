@@ -1,0 +1,533 @@
+#!/usr/bin/env python3
+"""Offline exact0017 producer/consumer contracts; no provider operations."""
+
+import ast
+import copy
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "deploy" / (name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class PortfolioRecoveryContracts(unittest.TestCase):
+    def test_ops_archive_family_is_authenticated_and_finite(self):
+        spec=importlib.util.spec_from_file_location('ops_contracts',ROOT/'deploy/tests/ops-fixtures.py')
+        ops=importlib.util.module_from_spec(spec);spec.loader.exec_module(ops)
+        for profile,version,revision in (('deploy-recovery-v3',2,'0020'),('deploy-recovery-v4',3,'0023')):
+            inventory={'recovery_profile':profile,'portfolio_payload':{'version':version,'revision':revision}}
+            with mock.patch.object(ops.r,'bundle_verify',return_value=inventory) as authenticate:
+                self.assertEqual(ops.archive_profile(Path('/synthetic/archive'),'digest'),profile)
+                authenticate.assert_called_once_with(Path('/synthetic/archive'),'digest')
+            for field,value in (('version',1),('revision','0022')):
+                changed=copy.deepcopy(inventory);changed['portfolio_payload'][field]=value
+                with mock.patch.object(ops.r,'bundle_verify',return_value=changed),self.assertRaises(ValueError):
+                    ops.archive_profile(Path('/synthetic/archive'),'digest')
+        with mock.patch.object(ops.r,'bundle_verify',side_effect=ValueError('integrity')), \
+             self.assertRaisesRegex(ValueError,'integrity'):
+            ops.archive_profile(Path('/synthetic/archive'),'digest')
+
+    def test_ops_restore_always_supplies_the_saved_source_manifest(self):
+        for name in ('ops-fixtures.py','portfolio-smoke.py'):
+            tree=ast.parse((ROOT/'deploy/tests'/name).read_text())
+            calls=[node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                   and isinstance(node.func,ast.Attribute) and node.func.attr=='restored']
+            self.assertTrue(calls,name)
+            for call in calls:
+                self.assertTrue(any(keyword.arg=='manifest' for keyword in call.keywords),(name,call.lineno))
+
+    def test_v3_consumer_requires_exact_revision_inventory_and_profile(self):
+        producer, consumer = load('backup-snapshot'), load('verify-restore')
+        payload = producer.closure_payload_inventory(ROOT)
+        inventory = {'portfolio_payload': payload}
+        self.assertEqual(consumer.portfolio_payload_files(inventory), producer.PORTFOLIO_PAYLOAD_V3)
+        consumer.verify_portfolio_inventory(inventory, payload['sha256'])
+        for field, value in (('version', True), ('version', 2), ('revision', '0020'),
+                             ('revision', '0022')):
+            changed = copy.deepcopy(inventory)
+            changed['portfolio_payload'][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                consumer.verify_portfolio_inventory(changed, payload['sha256'])
+        for name in producer.PORTFOLIO_PAYLOAD_V3:
+            changed = copy.deepcopy(inventory)
+            del changed['portfolio_payload']['sha256'][name]
+            with self.subTest(missing=name), self.assertRaises(ValueError):
+                consumer.verify_portfolio_inventory(changed, payload['sha256'])
+
+    def test_v3_consumer_checks_every_source_projection_before_regrant(self):
+        consumer = load('verify-restore')
+        saved = json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())
+        for section in ('tables','identity_state','financial','schema','portfolio_state',
+                        'management_state','closure_state','stock_invalid'):
+            changed = copy.deepcopy(saved['quarantined'])
+            if section == 'tables': changed[section]['accounts']['sha256'] = '0'*64
+            elif section == 'identity_state': changed[section][0][1] += 1
+            elif section == 'stock_invalid': changed[section] = 1
+            else: changed[section] = {}
+            with self.subTest(section=section), \
+                 mock.patch.object(consumer,'canonical',return_value=changed), \
+                 mock.patch.object(consumer,'sql',return_value=b'[]') as statement, \
+                 self.assertRaises((ValueError,KeyError)):
+                consumer.restore_closure_authority([],saved['manifest'])
+            self.assertTrue(all('GRANT ' not in call.args[1] for call in statement.call_args_list))
+        with mock.patch.object(consumer,'canonical',side_effect=[saved['quarantined'],saved['quarantined'],saved['manifest']]), \
+             mock.patch.object(consumer,'sql',side_effect=[b'[]',b'0',b'',b'']) as statement:
+            consumer.restore_closure_authority([],saved['manifest'])
+            self.assertIn('GRANT EXECUTE ON FUNCTION public.close_portfolio',statement.call_args_list[-1].args[1])
+        for grants in ([['relation','accounts','birja_app','UPDATE',False]],
+                       [['routine','close_portfolio(bigint,bigint,uuid,text,text)','birja_app','EXECUTE',False]]):
+            with mock.patch.object(consumer,'canonical',return_value=saved['quarantined']), \
+                 mock.patch.object(consumer,'sql',return_value=json.dumps(grants).encode()) as statement, \
+                 self.assertRaises(ValueError):
+                consumer.restore_closure_authority([],saved['manifest'])
+            self.assertEqual(statement.call_count,1)
+
+    def test_retained_contract_import_uses_complete_authenticated_source(self):
+        consumer = load('verify-restore')
+        spec = importlib.util.spec_from_file_location('fixed_recovery_sources',ROOT/'deploy/tests/portfolio-sources.py')
+        sources = importlib.util.module_from_spec(spec);spec.loader.exec_module(sources)
+        with tempfile.TemporaryDirectory(prefix='birja-retained-consumer-') as tmp:
+            root=Path(tmp);(root/'deploy').mkdir();(root/'sources').mkdir()
+            with mock.patch.object(consumer,'HERE',root/'deploy'):
+                for revision in ('0017','0020'):
+                    lane='portfolio'+revision
+                    archive=root/'sources'/(lane+'.tar')
+                    archive.write_bytes(sources.source_archive(lane))
+                    contract=consumer.recovery_contract(revision)
+                    self.assertNotEqual(contract.HERE,ROOT/'deploy')
+                    self.assertTrue((contract.HERE.parent/'backend/app/db/portfolio_bootstrap.py').is_file())
+                    original=json.loads((contract.HERE.parent/('deploy/tests/fixtures/portfolio-recovery-'+revision+'.json')).read_text())
+                    contract.validate_manifest(original)
+                    self.assertNotIn('0023',contract.SUPPORTED_REVISIONS)
+                    archive.write_bytes(archive.read_bytes()+b'coherent alteration')
+                    with self.assertRaises(ValueError):consumer.recovery_contract(revision)
+        for contract in consumer._RETAINED_CONTRACTS.values():contract._retained_directory.cleanup()
+    def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
+        producer = load('backup-snapshot')
+        inventory = producer.closure_payload_inventory(ROOT)
+        self.assertEqual((inventory['version'],inventory['revision']), (3,'0023'))
+        producer.verify_closure_inventory(ROOT,inventory)
+        self.assertEqual(len(producer.contract_columns('0023')),31)
+        self.assertEqual(len(producer.identity_tables('0023')),24)
+        for table in producer.CLOSURE_COLUMNS:
+            self.assertIn(table,producer.contract_columns('0023'))
+        for name in producer.PORTFOLIO_PAYLOAD_V3:
+            damaged=copy.deepcopy(inventory);del damaged['sha256'][name]
+            with self.subTest(omitted=name),self.assertRaises(ValueError):
+                producer.verify_closure_inventory(ROOT,damaged)
+            damaged=copy.deepcopy(inventory);damaged['sha256'][name]='0'*64
+            with self.subTest(changed=name),self.assertRaises(ValueError):
+                producer.verify_closure_inventory(ROOT,damaged)
+        for key,value in (('version',True),('version',2),('revision','0020'),('revision','0022')):
+            damaged=copy.deepcopy(inventory);damaged[key]=value
+            with self.assertRaises(ValueError):producer.verify_closure_inventory(ROOT,damaged)
+        for revision in ('0021','0022'):
+            for command in (producer.contract_columns,producer.identity_tables,producer.manifest_sql):
+                with self.assertRaisesRegex(ValueError,'migration_only'):command(revision)
+
+    def test_current_closure_exact_manifest_and_coherent_mutations_refuse(self):
+        producer=load('backup-snapshot')
+        saved=json.loads((ROOT/'deploy/tests/fixtures/portfolio-recovery-0023.json').read_text())
+        producer.validate_manifest(saved['manifest'])
+        producer.validate_manifest(saved['quarantined'],quarantined=True)
+        with self.assertRaises(ValueError):producer.validate_manifest(saved['quarantined'])
+        mutations=[
+            lambda m:m['tables'].pop('portfolio_lifecycle_closures'),
+            lambda m:m['tables'].pop('portfolio_closure_intents'),
+            lambda m:m['identity_state'].pop(),
+            lambda m:m['schema']['constraints'].pop(),
+            lambda m:m['schema']['indexes'].pop(),
+            lambda m:m['portfolio_authority']['functions'].pop(),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('definition','SELECT true'),
+            lambda m:m['portfolio_authority']['roles'][0].__setitem__(2,True),
+            lambda m:m['closure_contract'].__setitem__('catalogue','0'*64),
+            lambda m:m['closure_contract'].__setitem__('acl','0'*64),
+            lambda m:m['closure_contract'].__setitem__('defaults','0'*64),
+            lambda m:m['closure_state'].__setitem__('invalid',1),
+            lambda m:m['closure_state'].__setitem__('closures',0),
+            lambda m:m['management_state'].__setitem__('initializations',0),
+        ]
+        for original,quarantined in ((saved['manifest'],False),(saved['quarantined'],True)):
+            for mutate in mutations:
+                changed=copy.deepcopy(original);mutate(changed)
+                with self.assertRaises((ValueError,KeyError)):
+                    producer.validate_manifest(changed,quarantined=quarantined)
+
+    def test_current_source_tampering_refuses_before_authority_import(self):
+        producer=load('backup-snapshot')
+        with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
+            root=Path(tmp)
+            for name in producer.CLOSURE_SOURCE_SHA256:
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes((ROOT/name).read_bytes())
+            producer.require_closure_source(root)
+            for name in producer.CLOSURE_SOURCE_SHA256:
+                p=root/name;original=p.read_bytes();p.write_bytes(original+b'\nraise RuntimeError("untrusted import")\n')
+                with self.subTest(name=name),mock.patch.object(producer,'HERE',root/'deploy'), \
+                     mock.patch.object(producer.importlib.util,'spec_from_file_location',side_effect=AssertionError('unsafe import')), \
+                     self.assertRaises(ValueError):
+                    producer.closure_bootstrap()
+                p.write_bytes(original)
+
+    def test_v1_inventory_remains_explicit_and_cannot_inherit_current_revision(self):
+        consumer = load("verify-restore")
+        hashes = {name: "a" * 64 for name in consumer.PORTFOLIO_PAYLOAD_V1}
+        inventory = {"portfolio_payload": {"version": 1, "sha256": hashes}}
+        consumer.verify_portfolio_inventory(inventory, hashes)
+        for field, value in [("version", 2), ("revision", "0020")]:
+            damaged = copy.deepcopy(inventory)
+            damaged["portfolio_payload"][field] = value
+            with self.assertRaises((ValueError, KeyError)):
+                consumer.verify_portfolio_inventory(damaged, hashes)
+
+    def test_final_columns_have_complete_owned_lineage_and_global_marker(self):
+        producer = load("backup-snapshot")
+        columns = producer.contract_columns("0017")
+        self.assertEqual(len(columns), 27)
+        self.assertEqual(columns["portfolio_stock_closures"], {
+            "id", "portfolio_id", "user_id", "coin_id", "closed_at", "closing_sequence", "unit_epoch"
+        })
+        for table in ("holdings", "trades", "stock_fill_facts", "stock_ownership_movements",
+                      "stock_dividend_entitlements", "stock_dividend_payments", "stock_dividend_decisions"):
+            self.assertIn("portfolio_id", columns[table])
+        self.assertTrue({"name", "closed_at"} <= columns["accounts"])
+        self.assertIn("owner_digest_version", columns["stock_split_applications"])
+        self.assertNotIn("portfolio_id", columns["stock_split_applications"])
+        self.assertNotIn("user_id", columns["stock_split_applications"])
+
+    def test_stages_refuse_explicitly(self):
+        producer = load("backup-snapshot")
+        for revision in ("0015", "0016"):
+            for function in (producer.contract_columns, producer.manifest_sql, producer.schema_guard_sql):
+                with self.assertRaisesRegex(ValueError, "migration_only"):
+                    function(revision)
+
+    def test_legacy_manifest_queries_remain_byte_exact(self):
+        producer = load("backup-snapshot")
+        hashes = {
+            "0008": "52753d97387ec491c6494d327a6037d847cdc323bafb571c2dac6bdb0d28b5a5",
+            "0011": "a4917389531c8ded7ba4e080a529490661ffdee1d3058d44efd428aa2004c72d",
+            "0012": "d8ae9ab6d6d307c4b6a37b9871aa0462c6cf593a485d184f6d505ec1f93eba46",
+            "0013": "2306b52d3f9f5a6bfafa60b2d475390e4ce4d7d03d2bf162e44ce338d9d72734",
+        }
+        for revision, expected in hashes.items():
+            self.assertEqual(hashlib.sha256(producer.manifest_sql(revision).encode()).hexdigest(), expected)
+
+    def fixture(self):
+        import json
+        return json.loads((ROOT / 'deploy/tests/fixtures/portfolio-recovery-0017.json').read_text())
+
+    def test_independent_final_catalogue_and_identity_inventory(self):
+        producer = load('backup-snapshot')
+        manifest = self.fixture()
+        producer.validate_manifest(manifest)
+        self.assertEqual(len(manifest['schema']['relations']), 27)
+        self.assertEqual(sum(r[2] == 'f' for r in manifest['schema']['constraints']), 65)
+        self.assertEqual(len(manifest['portfolio_authority']['functions']), 10)
+        self.assertEqual(len(producer.identity_tables('0017')), 20)
+        expected = {'check_portfolio_financial_write()', 'lock_stock_portfolio_roots(bigint)',
+                    'check_stock_split_digest_version()'}
+        self.assertTrue(expected <= {r['signature'] for r in manifest['portfolio_authority']['functions']})
+
+    def test_every_owned_projection_and_terminal_boundary_is_archived(self):
+        producer = load('backup-snapshot')
+        query = producer.manifest_sql('0017')
+        for table in producer.PORTFOLIO_OWNED:
+            line = next(line for line in query.splitlines() if "SELECT '"+table+"'," in line)
+            self.assertIn('portfolio_id::text', line)
+        for name in ('portfolio_stock_closures', 'closing_sequence', 'owner_digest_version',
+                     'pg_get_functiondef', 'has_column_privilege', 'has_sequence_privilege'):
+            self.assertIn(name, query)
+        self.assertEqual(query.count('FROM portfolio_stock_closures_id_seq'), 1)
+
+    def test_mutated_schema_marker_constraints_and_authority_fail_independently(self):
+        producer = load('backup-snapshot')
+        original = self.fixture()
+        mutations = []
+        for index, row in enumerate(original['schema']['columns']):
+            if row[:2] == ['stock_split_applications','owner_digest_version']:
+                for column, value in ((2,'integer'),(3,'NO'),(4,'2')):
+                    mutations.append(lambda m,i=index,c=column,v=value:m['schema']['columns'][i].__setitem__(c,v))
+        mutations += [lambda m:m['schema']['identities'].pop(),
+            lambda m:m['schema']['constraints'].pop(),
+            lambda m:m['schema']['indexes'].pop(),
+            lambda m:m['schema']['relations'].append(['unreviewed','r']),
+            lambda m:m['portfolio_authority']['functions'].pop(),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('definition','SELECT true'),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('owner','birja_app'),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('acl',[['PUBLIC','EXECUTE',False]]),
+            lambda m:m['portfolio_authority']['functions'].append(copy.deepcopy(m['portfolio_authority']['functions'][0])),
+            lambda m:m['portfolio_authority']['triggers'].pop(),
+            lambda m:m['portfolio_authority']['tables'][0].__setitem__(4,True),
+            lambda m:m['portfolio_authority']['columns'][0].__setitem__(5,True),
+            lambda m:m['portfolio_authority']['roles'][0].__setitem__(2,True),
+            lambda m:m['portfolio_state'].__setitem__('invalid',1),
+            lambda m:m['portfolio_state'].__setitem__('closed',1),
+            lambda m:m['portfolio_state'].__setitem__('v2_markers',1),
+            lambda m:m['identity_state'].pop()]
+        for mutation in mutations:
+            candidate = copy.deepcopy(original)
+            mutation(candidate)
+            with self.assertRaises(ValueError):
+                producer.validate_manifest(candidate)
+
+    def quarantined(self, manifest):
+        result = copy.deepcopy(manifest)
+        for function in result['portfolio_authority']['functions']:
+            if function['signature'].split('(')[0] in (
+                'apply_stock_dividend','record_stock_dividend_hold','lock_stock_portfolio_roots'
+            ):
+                function['acl'] = []
+        return result
+
+    def test_consumer_compares_every_projection_before_identity_queries(self):
+        restore, producer = load('verify-restore'), load('backup-snapshot')
+        source = self.fixture()
+        actual = self.quarantined(source)
+        producer.validate_manifest(actual, quarantined=True)
+        with mock.patch.object(restore,'recovery_contract',return_value=producer), \
+             mock.patch.object(restore,'canonical',return_value=actual), \
+             mock.patch.object(restore,'sql',return_value=b't') as sql:
+            restore.verify([],source)
+            self.assertEqual(sql.call_count,20)
+        for table in ('accounts','holdings','trades','stock_fill_facts',
+                      'stock_split_applications','stock_ownership_movements',
+                      'stock_dividend_payments','stock_dividend_decisions',
+                      'portfolio_stock_closures'):
+            changed = copy.deepcopy(actual)
+            changed['tables'][table]['sha256'] = 'f'*64
+            with mock.patch.object(restore,'recovery_contract',return_value=producer), \
+                 mock.patch.object(restore,'canonical',return_value=changed), \
+                 mock.patch.object(restore,'sql') as sql:
+                with self.assertRaises(ValueError):restore.verify([],source)
+                sql.assert_not_called()
+
+    def no_acl(self, manifest):
+        result = copy.deepcopy(manifest)
+        authority = result['portfolio_authority']
+        for function in authority['functions']:
+            function['acl'] = [['PUBLIC','EXECUTE',False]]
+        for key, start in (('tables',2),('columns',3),('sequences',2),('schema_create',1)):
+            for row in authority[key]:row[start:] = [False]*len(row[start:])
+        return result
+
+    def test_no_acl_restore_authenticates_before_any_fixed_grants(self):
+        restore, producer = load('verify-restore'), load('backup-snapshot')
+        source = self.fixture()
+        no_acl = self.no_acl(source)
+        self.assertEqual(producer.canonical_hash(no_acl['portfolio_authority']),producer.PORTFOLIO_NO_ACL_SHA256)
+        for key in ('schema','portfolio_authority'):
+            damaged = copy.deepcopy(no_acl)
+            damaged[key] = {}
+            with mock.patch.object(restore,'recovery_contract',return_value=producer), \
+                 mock.patch.object(restore,'canonical',return_value=damaged), \
+                 mock.patch.object(restore,'sql') as sql:
+                with self.assertRaises(ValueError):restore.restore_portfolio_authority([])
+                self.assertEqual(sql.call_count,1)
+                self.assertNotIn('GRANT',sql.call_args.args[1])
+        with mock.patch.object(restore,'recovery_contract',return_value=producer), \
+             mock.patch.object(restore,'canonical',side_effect=[no_acl,self.quarantined(source)]), \
+             mock.patch.object(restore,'sql') as sql:
+            restore.restore_portfolio_authority([])
+            self.assertEqual(sql.call_count,2)
+            grants=sql.call_args.args[1]
+            self.assertIn('REVOKE ALL ON FUNCTION public.apply_stock_dividend',grants)
+            self.assertNotIn('CREATE FUNCTION',grants)
+
+    def test_final_marker_and_private_helpers_are_pinned_independent_of_archive(self):
+        producer=load('backup-snapshot')
+        source=self.fixture()
+        self.assertEqual({f['signature'] for f in source['portfolio_authority']['functions']},producer.PORTFOLIO_SIGNATURES)
+        for signature in ('check_portfolio_financial_write()','check_stock_split_digest_version()'):
+            function=next(f for f in source['portfolio_authority']['functions'] if f['signature']==signature)
+            self.assertEqual(function['acl'],[])
+            self.assertEqual(function['owner'],'birja_migrator')
+        for mutation in (
+            lambda m:m['portfolio_authority'].__setitem__('unsafe_acl',1),
+            lambda m:m['portfolio_authority']['functions'][0].__setitem__('acl',[['birja_app','EXECUTE',True]]),
+            lambda m:m['identity_state'][0].__setitem__(1,0),
+        ):
+            damaged=copy.deepcopy(source);mutation(damaged)
+            with self.assertRaises(ValueError):producer.validate_manifest(damaged)
+
+    def test_wrapper_import_and_dispatch_have_no_operational_side_effects(self):
+        program = "source deploy/backup.sh; source deploy/restore-check.sh; declare -F backup_main restore_main"
+        result = subprocess.run(['bash','-c',program],cwd=ROOT,capture_output=True,text=True,timeout=5)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout.splitlines(),['backup_main','restore_main'])
+        producer=load('backup-snapshot')
+        for revision in ('0015','0016'):
+            with self.assertRaisesRegex(ValueError,'migration_only'):
+                producer.validate_manifest({'revision':revision})
+
+
+def postgres_proof():
+    """Use the complete authenticated 0017 test/application tree for old readers."""
+    spec = importlib.util.spec_from_file_location('proof_sources', ROOT/'deploy/tests/portfolio-sources.py')
+    sources = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sources)
+    data = sources.source_archive('portfolio0017')
+    with tempfile.TemporaryDirectory(prefix='birja-p14-15-retained-proof-') as tmp:
+        historical = Path(tmp)
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
+            archive.extractall(historical, filter='data')
+        sources.verify_source_tree(historical,data)
+        _postgres_proof(historical)
+
+
+def _postgres_proof(historical):
+    """Actual mixed NULL/2 no-owner/no-ACL restore on the guarded test server.
+
+    This is a logical-contract proof, not the encrypted same-archive/TLS image
+    campaign in18/27. Every writer targets the exact throwaway birja-test stack.
+    """
+    project=os.environ.get('COMPOSE_PROJECT_NAME','birja-test')
+    if project not in ('birja-test','birja-p14-15'):
+        raise ValueError('owned test project required')
+    dc=['docker','compose','--env-file','/dev/null','-p',project,'-f',str(ROOT/'docker-compose.test.yml')]
+    def command(args,data=None):
+        result=subprocess.run(dc+['exec','-T','postgres',*args],input=data,
+                              capture_output=True,timeout=180)
+        if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
+        return result.stdout
+    def query(statement,db='birja_test'):
+        return command(['psql','-XqAt','-v','ON_ERROR_STOP=1','-U','birja_test','-d',db],statement.encode())
+    if query('SELECT current_database(),session_user;').strip()!=b'birja_test|birja_test':
+        raise AssertionError('isolated identity required')
+    clone='birja_restore_test'
+    if query("SELECT 1 FROM pg_database WHERE datname='birja_restore_test';").strip():
+        raise AssertionError('clone must not preexist')
+    env={k:os.environ[k] for k in ('PATH','HOME','LANG') if k in os.environ}
+    env.update(COMPOSE_PROJECT_NAME=project,COMPOSE_DISABLE_ENV_FILE='1')
+    env['PYTHONPATH']=str(historical/'backend')
+    seed="""
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+import tests.conftest
+from tests.portfolio_fixtures import reset_disposable_schema
+from tests.test_portfolio_stock_ownership import test_real_two_user_legacy_digest_reload_preserves_original_bytes
+async def main():
+ engine=create_async_engine(tests.conftest.TEST_DATABASE_URL)
+ try:
+  await reset_disposable_schema(engine)
+  await test_real_two_user_legacy_digest_reload_preserves_original_bytes(engine,True)
+ finally:await engine.dispose()
+asyncio.run(main())
+"""
+    result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',seed],cwd=historical/'backend',
+                          env=env,capture_output=True,timeout=180)
+    if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
+    # Both the retained application and its authority contract come from the
+    # same complete, hash-authenticated source; no current-source overlay.
+    spec=importlib.util.spec_from_file_location('fixed0017_producer',historical/'deploy/backup-snapshot.py')
+    producer=importlib.util.module_from_spec(spec);spec.loader.exec_module(producer)
+    restore=load('verify-restore')
+    current_contract=restore.recovery_contract
+    restore.recovery_contract=lambda revision=None: producer if revision=='0017' else current_contract(revision)
+    # Fixed source-owned grants; no manifest-selected SQL is executed.
+    query(producer.PORTFOLIO_RESTORE_GRANTS)
+    source=json.loads(query("SET TIME ZONE 'UTC';\n"+producer.schema_guard_sql('0017')+producer.manifest_sql('0017')))
+    producer.validate_manifest(source)
+    assert source['portfolio_state']['legacy_markers']==1 and source['portfolio_state']['v2_markers']==1
+    assert source['portfolio_state']['closed']==1
+    archive=command(['pg_dump','-U','birja_test','-d','birja_test','-Fc','--compress=none'])
+    created=False
+    try:
+        query('CREATE DATABASE birja_restore_test OWNER birja_migrator TEMPLATE template0;')
+        created=True
+        query('REVOKE CONNECT ON DATABASE birja_restore_test FROM PUBLIC;')
+        command(['pg_restore','-U','birja_test','-d',clone,'--role=birja_migrator',
+                 '--no-owner','--no-acl','--exit-on-error','--single-transaction'],archive)
+        def clone_sql(_dc,statement,db=restore.CLONE):
+            return query(statement,'birja_test' if db=='birja_ops_test' else clone)
+        with mock.patch.object(restore,'sql',side_effect=clone_sql):
+            try:
+                restore.restore_portfolio_authority([])
+            except ValueError:
+                actual=restore.canonical([])
+                expected=PortfolioRecoveryContracts().quarantined(source)
+                for key in actual['portfolio_authority']:
+                    if actual['portfolio_authority'][key]!=expected['portfolio_authority'][key]:
+                        a=actual['portfolio_authority'][key];b=expected['portfolio_authority'][key]
+                        if isinstance(a,list) and isinstance(b,list):
+                            delta=[r for r in a if r not in b]
+                            raise AssertionError('clone authority mismatch '+key+': '+repr(delta)[:1500]) from None
+                        raise AssertionError('clone authority mismatch '+key) from None
+                raise
+            restore.verify([],source)
+        # Same archived marker/digest rows are admitted; new missing markers
+        # and mutation remain forbidden under actual restricted SQL roles.
+        insert="""BEGIN; SET LOCAL ROLE birja_scheduler;
+INSERT INTO stock_split_applications(coin_id,economic_event_id,revision_id,new_rate,old_rate,
+cutoff,prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at)
+SELECT coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,prior_unit_epoch,
+new_unit_epoch,sequence_boundary,before_digest,after_digest,processed_at FROM stock_split_applications LIMIT 1;"""
+        for statement in (insert,
+            'BEGIN; SET LOCAL ROLE birja_app; UPDATE stock_split_applications SET owner_digest_version=2 WHERE owner_digest_version IS NULL;',
+            'BEGIN; SET LOCAL ROLE birja_migrator; UPDATE stock_split_applications SET owner_digest_version=2 WHERE owner_digest_version IS NULL;'):
+            result=subprocess.run(dc+['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1',
+                '-U','birja_test','-d',clone],input=statement.encode(),capture_output=True,timeout=15)
+            assert result.returncode!=0,'protected marker operation admitted'
+        reader="""
+import asyncio,os
+os.environ.update(ENV='test',DATABASE_URL='postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_test',REDIS_URL='redis://:test@127.0.0.1:56379/0',OTP_HMAC_SECRET='test-only-otp-secret-01234567890123456789',JWT_SECRET='test-only-jwt-secret-01234567890123456789')
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
+from app.services.stock_ownership import assert_ownership_consistent
+async def main():
+ engine=create_async_engine('postgresql+asyncpg://birja_test:test@127.0.0.1:55432/birja_restore_test')
+ try:
+  async with AsyncSession(engine) as db:
+   cid=(await db.execute(text('SELECT min(coin_id) FROM stock_split_applications'))).scalar_one()
+   state,rows=await assert_ownership_consistent(db,cid)
+   assert state.unit_epoch==2 and len({r.portfolio_id for r in rows})==3
+ finally:await engine.dispose()
+asyncio.run(main())
+"""
+        result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',reader],cwd=historical/'backend',
+                              env=env,capture_output=True,timeout=30)
+        if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
+        print('actual mixed0017 logical restore, marker refusal and reader interpretation PASS')
+    finally:
+        if created:query('DROP DATABASE birja_restore_test WITH (FORCE);')
+        # Return the exclusive shared test lane to its current source, rather
+        # than leaving a historical revision for the next current consumer.
+        env['PYTHONPATH']=str(ROOT/'backend')
+        cleanup="""
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+import tests.conftest
+from tests.portfolio_fixtures import restore_current_test_schema
+async def main():
+ engine=create_async_engine(tests.conftest.TEST_DATABASE_URL)
+ try:
+  await restore_current_test_schema(engine)
+ finally:await engine.dispose()
+asyncio.run(main())
+"""
+        result=subprocess.run([str(ROOT/'backend/.venv/bin/python'),'-c',cleanup],cwd=ROOT,
+                              env=env,capture_output=True,timeout=180)
+        if result.returncode:raise AssertionError(result.stderr.decode()[-2000:])
+
+
+if __name__ == "__main__":
+    if '--postgres' in sys.argv:
+        sys.argv.remove('--postgres')
+        postgres_proof()
+    unittest.main()

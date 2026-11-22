@@ -22,8 +22,15 @@ from app.services import trading
 from app.services.portfolio import get_portfolio
 from app.services.prices import AcceptedPrice, list_prices, load_active_coins, upsert_prices
 from app.services.trade_math import TradeRefused
-from tests.helpers import OutboxSender, csrf_headers, put_price, sign_in, unique_email
-from tests.stock_action_fixtures import synthetic_corruption
+from tests.helpers import (
+    OutboxSender,
+    csrf_headers,
+    put_price,
+    selected_portfolio_path,
+    sign_in,
+    unique_email,
+)
+from tests.stock_action_fixtures import synthetic_corruption, synthetic_owned_portfolio
 
 NewUser = Callable[[], Awaitable[int]]
 
@@ -98,12 +105,21 @@ async def test_held_stock_remains_visible_but_cannot_reuse_crypto_price(
     user_id = await new_user()
     await inject_price(engine, stock_id)
     async with engine.begin() as conn:
+        root = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         await conn.execute(
             insert(Holding).values(
-                user_id=user_id, coin_id=stock_id, quantity=D("2"), cost_basis=D("300")
+                user_id=user_id,
+                portfolio_id=root,
+                coin_id=stock_id,
+                quantity=D("2"),
+                cost_basis=D("300"),
             )
         )
-    snapshot = await get_portfolio(db, user_id=user_id, settings=settings, now=NOW)
+    snapshot = await get_portfolio(
+        db, portfolio=await synthetic_owned_portfolio(db, user_id), settings=settings, now=NOW
+    )
     assert not snapshot.valuation_complete
     assert snapshot.total_value is None
     assert snapshot.prices_as_of is None
@@ -115,6 +131,10 @@ async def test_held_stock_remains_visible_but_cannot_reuse_crypto_price(
     assert held.stock_mark is not None and held.stock_mark.mark_mode == "unavailable"
     assert not held.stock_mark.units_safe and held.average_cost is None
     assert held.allocation_percent is snapshot.cash_allocation_percent is None
+    # End this read request before stock_id's independent immutable-fixture
+    # teardown writes holdings. Current valuation keeps its root proof locked
+    # until transaction end, just as production request cleanup does.
+    await db.rollback()
 
 
 async def financial_rows(engine: AsyncEngine, user_id: int) -> tuple:
@@ -141,10 +161,17 @@ async def test_stock_service_calls_refuse_without_financial_mutation(
 ) -> None:
     user_id = await new_user()
     async with engine.begin() as conn:
+        root = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         await conn.execute(update(Coin).where(Coin.id == stock_id).values(is_active=active))
         await conn.execute(
             insert(Holding).values(
-                user_id=user_id, coin_id=stock_id, quantity=D("2"), cost_basis=D("300")
+                user_id=user_id,
+                portfolio_id=root,
+                coin_id=stock_id,
+                quantity=D("2"),
+                cost_basis=D("300"),
             )
         )
     if priced:
@@ -168,12 +195,18 @@ async def test_stock_service_calls_refuse_without_financial_mutation(
     for side in ("buy", "sell"):
         order = trading.Order("AAPL", side, "quantity", D("1"))
         with pytest.raises(TradeRefused, match="Unknown coin") as exc:
-            await trading.quote(db, user_id=user_id, order=order, settings=settings, now=NOW)
+            await trading.quote(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, user_id),
+                order=order,
+                settings=settings,
+                now=NOW,
+            )
         assert exc.value.code == "unknown_coin"
         with pytest.raises(TradeRefused) as exc:
             await trading.execute(
                 db,
-                user_id=user_id,
+                portfolio=await synthetic_owned_portfolio(db, user_id),
                 order=order,
                 settings=settings,
                 now=NOW,
@@ -182,9 +215,11 @@ async def test_stock_service_calls_refuse_without_financial_mutation(
             )
         assert exc.value.code == "unknown_coin"
     with pytest.raises(TradeRefused) as exc:
-        await trading.holding_quantity(db, user_id=user_id, symbol="AAPL")
+        await trading.holding_quantity(
+            db, portfolio=await synthetic_owned_portfolio(db, user_id), symbol="AAPL"
+        )
     assert exc.value.code == "unknown_coin"
-    assert await trading._held(db, user_id, stock_id) == D("0")
+    assert await trading._held(db, await synthetic_owned_portfolio(db, user_id), stock_id) == D("0")
     assert await financial_rows(engine, user_id) == before
 
 
@@ -200,19 +235,32 @@ async def test_symbol_collision_selects_crypto_for_quote_execution_and_holding(
     await put_price(engine, "BTC", "100000", NOW)
     await inject_price(engine, stock_id)
     async with engine.begin() as conn:
+        root = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         await conn.execute(update(Coin).where(Coin.id == stock_id).values(symbol="BTC"))
         await conn.execute(
             insert(Holding).values(
-                user_id=user_id, coin_id=stock_id, quantity=D("99"), cost_basis=D("300")
+                user_id=user_id,
+                portfolio_id=root,
+                coin_id=stock_id,
+                quantity=D("99"),
+                cost_basis=D("300"),
             )
         )
     order = trading.Order("btc", "buy", "usd", D("100"))
-    preview = await trading.quote(db, user_id=user_id, order=order, settings=settings, now=NOW)
+    preview = await trading.quote(
+        db,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
+        order=order,
+        settings=settings,
+        now=NOW,
+    )
     assert preview.plan.mid == D("100000")
     assert preview.plan.held_before == D("0")
     fill, created = await trading.execute(
         db,
-        user_id=user_id,
+        portfolio=await synthetic_owned_portfolio(db, user_id),
         order=order,
         settings=settings,
         now=NOW,
@@ -222,7 +270,9 @@ async def test_symbol_collision_selects_crypto_for_quote_execution_and_holding(
     assert created
     assert fill.cash_after == D("9900")
     assert fill.quantity == D("0.00099501")
-    assert await trading.holding_quantity(db, user_id=user_id, symbol="BTC") == (
+    assert await trading.holding_quantity(
+        db, portfolio=await synthetic_owned_portfolio(db, user_id), symbol="BTC"
+    ) == (
         "BTC",
         fill.quantity,
     )
@@ -247,27 +297,38 @@ async def test_stock_http_bypasses_are_refused_without_mutation(
         user_id = (await conn.execute(select(User.id).where(User.email == email))).scalar_one()
     await inject_price(engine, stock_id, datetime.now(UTC))
     async with engine.begin() as conn:
+        root = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         await conn.execute(
             insert(Holding).values(
-                user_id=user_id, coin_id=stock_id, quantity=D("2"), cost_basis=D("300")
+                user_id=user_id,
+                portfolio_id=root,
+                coin_id=stock_id,
+                quantity=D("2"),
+                cost_basis=D("300"),
             )
         )
     before = await financial_rows(engine, user_id)
     for side in ("buy", "sell"):
         body = {"symbol": "AAPL", "side": side, "quantity": "1"}
-        quote = await auth_client.post("/api/v1/trades/quote", json=body, headers=headers)
+        quote = await auth_client.post(
+            await selected_portfolio_path(auth_client, "/trades/quote"), json=body, headers=headers
+        )
         assert quote.status_code == 404
         assert quote.json()["detail"]["code"] == "unknown_coin"
         trade = await auth_client.post(
-            "/api/v1/trades",
+            await selected_portfolio_path(auth_client, "/trades"),
             json=body | {"expected_mid": "200", "idempotency_key": str(uuid.uuid4())},
             headers=headers,
         )
         assert trade.status_code == 404
         assert trade.json()["detail"]["code"] == "unknown_coin"
-    assert (await auth_client.get("/api/v1/holdings/AAPL")).status_code == 404
+    assert (
+        await auth_client.get(await selected_portfolio_path(auth_client, "/holdings/AAPL"))
+    ).status_code == 404
     forged = await auth_client.post(
-        "/api/v1/trades",
+        await selected_portfolio_path(auth_client, "/trades"),
         json={
             "symbol": "BTC",
             "side": "buy",
@@ -292,11 +353,24 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
     user_id = await new_user()
     key = uuid.uuid4()
     async with engine.begin() as conn:
+        from sqlalchemy import text
+
+        await conn.execute(
+            text(
+                "SELECT pg_advisory_xact_lock(hashtextextended("
+                "'birja.stock.instrument:' || CAST(:c AS text),0))"
+            ),
+            {"c": str(stock_id)},
+        )
+        root = (
+            await conn.execute(select(Account.id).where(Account.user_id == user_id))
+        ).scalar_one()
         trade_id = (
             await conn.execute(
                 insert(Trade)
                 .values(
                     user_id=user_id,
+                    portfolio_id=root,
                     coin_id=stock_id,
                     side="buy",
                     input_kind="quantity",
@@ -318,6 +392,7 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
                 trade_id=trade_id,
                 coin_id=stock_id,
                 user_id=user_id,
+                portfolio_id=root,
                 provider_asset_id="synthetic-aapl",
                 symbol="AAPL",
                 company_name="Synthetic Apple",
@@ -341,6 +416,7 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
             insert(StockOwnershipMovement).values(
                 coin_id=stock_id,
                 user_id=user_id,
+                portfolio_id=root,
                 sequence=1,
                 economic_at=NOW,
                 recorded_at=NOW,
@@ -360,6 +436,7 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
             insert(Holding).values(
                 coin_id=stock_id,
                 user_id=user_id,
+                portfolio_id=root,
                 quantity=D(1),
                 cost_basis=D(200),
             )
@@ -368,7 +445,7 @@ async def test_stock_fill_cannot_be_replayed_through_crypto_execution(
     with pytest.raises(TradeRefused) as exc:
         await trading.execute(
             db,
-            user_id=user_id,
+            portfolio=await synthetic_owned_portfolio(db, user_id),
             order=trading.Order("AAPL", "buy", "quantity", D("1")),
             settings=settings,
             now=NOW,

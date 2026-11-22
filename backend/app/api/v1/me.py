@@ -1,17 +1,19 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from app.core.deps import CurrentUserDep, DbDep
-from app.schemas.auth import MeOut
-from app.services import accounts
+from app.core.deps import CurrentUserDep
 
 router = APIRouter(tags=["me"])
 
 
 @router.get(
     "/me",
-    response_model=MeOut,
-    summary="Current user and cash",
-    description="Returns the signed-in user's email and cash balance.",
+    status_code=409,
+    summary="Refuse obsolete cash-bearing identity",
+    description="Use /api/v2/me for identity and an explicit portfolio for finances.",
 )
-async def get_me(user: CurrentUserDep, db: DbDep) -> MeOut:
-    return await accounts.get_me(db, user.id)
+async def get_me(user: CurrentUserDep) -> None:
+    raise HTTPException(
+        status_code=409,
+        detail={"code": "api_version_required"},
+        headers={"Cache-Control": "no-store"},
+    )

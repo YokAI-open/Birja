@@ -3,7 +3,7 @@
 Both go through ``plan_trade`` so the preview and the fill can never disagree. ``execute`` runs
 in one transaction with a fixed lock order (account row, then holding row) and this check order:
 
-1. lock the account row FOR UPDATE (serialises every trade of one user),
+1. lock the explicit active account row FOR UPDATE (serialises one portfolio),
 2. idempotency replay lookup, before any price check (a replay must not depend on today's price),
 3. Live price only (D-03: the single ``freshness`` definition from Phase 3),
 4. lock the holding row FOR UPDATE, plan the trade,
@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,7 @@ from app.core.config import Settings
 from app.models.price import Coin, Price
 from app.models.trade import Holding, Trade
 from app.models.user import Account
+from app.services.portfolios import OwnedActivePortfolio
 from app.services.prices import age_seconds, freshness
 from app.services.trade_idempotency import find_user_trade, require_same_order
 from app.services.trade_math import (
@@ -54,6 +56,7 @@ class Order:
 
 @dataclass(frozen=True)
 class Quote:
+    portfolio_id: int
     symbol: str
     as_of: datetime
     age_seconds: int
@@ -62,6 +65,7 @@ class Quote:
 
 @dataclass(frozen=True)
 class Fill:
+    portfolio_id: int
     trade_id: int
     created_at: datetime
     symbol: str
@@ -148,7 +152,14 @@ async def _find_trade(db: AsyncSession, user_id: int, key: uuid.UUID) -> tuple[T
         await db.execute(select(Coin.symbol, Coin.asset_class).where(Coin.id == trade.coin_id))
     ).one()
     if coin.asset_class != "crypto":
-        require_same_order(trade, same_instrument=False, side="", kind="", value=_ZERO)
+        require_same_order(
+            trade,
+            same_instrument=False,
+            side="",
+            kind="",
+            value=_ZERO,
+            portfolio_id=trade.portfolio_id,
+        )
     return trade, coin.symbol
 
 
@@ -158,6 +169,7 @@ def _fill(trade: Trade, symbol: str) -> Fill:
     else:
         notional = trade.cash_delta + trade.fee
     return Fill(
+        portfolio_id=trade.portfolio_id,
         trade_id=trade.id,
         created_at=trade.created_at,
         symbol=symbol,
@@ -175,7 +187,9 @@ def _fill(trade: Trade, symbol: str) -> Fill:
     )
 
 
-def _replay(found: tuple[Trade, str], order: Order) -> tuple[Fill, bool]:
+def _replay(
+    found: tuple[Trade, str], order: Order, portfolio: OwnedActivePortfolio
+) -> tuple[Fill, bool]:
     trade, symbol = found
     require_same_order(
         trade,
@@ -183,17 +197,39 @@ def _replay(found: tuple[Trade, str], order: Order) -> tuple[Fill, bool]:
         side=order.side,
         kind=order.kind,
         value=order.value,
+        portfolio_id=portfolio.portfolio_id,
     )
     return _fill(trade, symbol), False
 
 
-async def _held(db: AsyncSession, user_id: int, coin_id: int) -> Decimal:
+async def _account(
+    db: AsyncSession, portfolio: OwnedActivePortfolio, *, lock: bool = False
+) -> Account:
+    query = (
+        select(Account)
+        .where(
+            Account.id == portfolio.portfolio_id,
+            Account.user_id == portfolio.user_id,
+            Account.closed_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+    )
+    if lock:
+        query = query.with_for_update()
+    account = (await db.execute(query)).scalar_one_or_none()
+    if account is None:
+        raise HTTPException(status_code=404, detail={"code": "portfolio_unavailable"})
+    return account
+
+
+async def _held(db: AsyncSession, portfolio: OwnedActivePortfolio, coin_id: int) -> Decimal:
     qty = (
         await db.execute(
             select(Holding.quantity)
             .join(Coin, Coin.id == Holding.coin_id)
             .where(
-                Holding.user_id == user_id,
+                Holding.user_id == portfolio.user_id,
+                Holding.portfolio_id == portfolio.portfolio_id,
                 Holding.coin_id == coin_id,
                 Coin.asset_class == "crypto",
             )
@@ -205,37 +241,40 @@ async def _held(db: AsyncSession, user_id: int, coin_id: int) -> Decimal:
 async def quote(
     db: AsyncSession,
     *,
-    user_id: int,
+    portfolio: OwnedActivePortfolio,
     order: Order,
     settings: Settings,
     now: datetime | None = None,
 ) -> Quote:
     """Price an order without locking or writing anything."""
+    account = await _account(db, portfolio)
     coin, price = await _load_coin_price(db, order.symbol)
     age = _require_fresh(coin.symbol, price.as_of, now or datetime.now(UTC), settings)
-    cash = (await db.execute(select(Account.cash).where(Account.user_id == user_id))).scalar_one()
     plan = plan_trade(
         symbol=coin.symbol,
         side=order.side,
         kind=order.kind,
         value=order.value,
         mid=price.mid,
-        cash=cash,
-        held=await _held(db, user_id, coin.id),
+        cash=account.cash,
+        held=await _held(db, portfolio, coin.id),
         costs=_costs(settings),
     )
-    return Quote(symbol=coin.symbol, as_of=price.as_of, age_seconds=age, plan=plan)
+    return Quote(portfolio.portfolio_id, coin.symbol, price.as_of, age, plan)
 
 
-async def holding_quantity(db: AsyncSession, *, user_id: int, symbol: str) -> tuple[str, Decimal]:
+async def holding_quantity(
+    db: AsyncSession, *, portfolio: OwnedActivePortfolio, symbol: str
+) -> tuple[str, Decimal]:
+    await _account(db, portfolio)
     coin = await _load_coin(db, symbol)
-    return coin.symbol, await _held(db, user_id, coin.id)
+    return coin.symbol, await _held(db, portfolio, coin.id)
 
 
 async def execute(
     db: AsyncSession,
     *,
-    user_id: int,
+    portfolio: OwnedActivePortfolio,
     order: Order,
     expected_mid: Decimal,
     idempotency_key: uuid.UUID,
@@ -245,19 +284,12 @@ async def execute(
     """Execute one market order. Returns (fill, True) when new, (original fill, False) on replay."""
     try:
         # (1) account lock first, always; holding lock second.
-        account = (
-            await db.execute(
-                select(Account)
-                .where(Account.user_id == user_id)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-        ).scalar_one()
+        account = await _account(db, portfolio, lock=True)
 
         # (2) replay precedes every price check.
-        existing = await _find_trade(db, user_id, idempotency_key)
+        existing = await _find_trade(db, portfolio.user_id, idempotency_key)
         if existing is not None:
-            replayed = _replay(existing, order)  # build before the rollback expires the row
+            replayed = _replay(existing, order, portfolio)
             await db.rollback()
             return replayed
 
@@ -269,7 +301,11 @@ async def execute(
         holding = (
             await db.execute(
                 select(Holding)
-                .where(Holding.user_id == user_id, Holding.coin_id == coin.id)
+                .where(
+                    Holding.user_id == portfolio.user_id,
+                    Holding.portfolio_id == portfolio.portfolio_id,
+                    Holding.coin_id == coin.id,
+                )
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
@@ -287,7 +323,7 @@ async def execute(
 
         # (5) the user confirmed a different mid: show the new total instead of filling.
         if price.mid != expected_mid:
-            raise PriceChanged(Quote(coin.symbol, price.as_of, age, plan))
+            raise PriceChanged(Quote(portfolio.portfolio_id, coin.symbol, price.as_of, age, plan))
 
         # (6) apply.
         basis = cost_basis_after(
@@ -301,14 +337,19 @@ async def execute(
         if holding is None:  # only buys get here; plan_trade refuses a sell with nothing held
             db.add(
                 Holding(
-                    user_id=user_id, coin_id=coin.id, quantity=plan.held_after, cost_basis=basis
+                    portfolio_id=portfolio.portfolio_id,
+                    user_id=portfolio.user_id,
+                    coin_id=coin.id,
+                    quantity=plan.held_after,
+                    cost_basis=basis,
                 )
             )
         else:
             holding.quantity = plan.held_after
             holding.cost_basis = basis
         trade = Trade(
-            user_id=user_id,
+            portfolio_id=portfolio.portfolio_id,
+            user_id=portfolio.user_id,
             coin_id=coin.id,
             side=plan.side,
             input_kind=plan.kind,
@@ -328,18 +369,24 @@ async def execute(
         fill = _fill(trade, coin.symbol)
         side = plan.side
         await db.commit()
-    except TradeRefused:
+    except TradeRefused, HTTPException:
         await db.rollback()  # release the row locks now
         raise
     except IntegrityError as exc:
         await db.rollback()
         if "uq_trades_user_idempotency_key" in str(exc.orig):
-            raced = await _find_trade(db, user_id, idempotency_key)
+            await _account(db, portfolio, lock=True)
+            raced = await _find_trade(db, portfolio.user_id, idempotency_key)
             if raced is not None:
-                replayed = _replay(raced, order)
-                await db.rollback()
+                try:
+                    replayed = _replay(raced, order, portfolio)
+                finally:
+                    await db.rollback()
                 return replayed
+            await db.rollback()
         raise
 
-    logger.info("trade executed trade_id=%s user_id=%s side=%s", fill.trade_id, user_id, side)
+    logger.info(
+        "trade executed trade_id=%s user_id=%s side=%s", fill.trade_id, portfolio.user_id, side
+    )
     return fill, True

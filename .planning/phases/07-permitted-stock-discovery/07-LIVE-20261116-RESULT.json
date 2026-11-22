@@ -1,0 +1,1057 @@
+{
+  "status": "measured",
+  "attempts": 30,
+  "permission_source": "owner-attested 2026-11-11; not independently provider-verified",
+  "grant_duration": "undisclosed; admission window limits only this campaign",
+  "common_stock_basis": "owner-approved curated common-stock catalogue; SEC identity/listing corroboration; not an API subtype field",
+  "usd_basis": "documented USD stock quote product; not an absent Asset currency field",
+  "quota_basis": "internal conservative 60 attempts/minute, 20 symbols/batch; 30 aggregate; provider 401/403/429 stops; not independently account-quota verified",
+  "product_sources": [
+    "https://docs.alpaca.markets/us/docs/about-market-data-api",
+    "https://docs.alpaca.markets/us/reference/stocklatestquotes-1"
+  ],
+  "catalogue_source": "https://www.sec.gov/files/company_tickers_exchange.json",
+  "actions": "disabled",
+  "status_feed": "unverified",
+  "production_activation": false,
+  "started_at": "2026-11-16T15:51:29.628882+00:00",
+  "campaign_authorization": "Owner approved November16 replacement: max30 attempts/900s; one manual campaign only",
+  "reviewed_at": "2026-11-16T15:49:10.388090+00:00",
+  "result": {
+    "attempts": 30,
+    "mappings": [
+      {
+        "symbol": "AAPL",
+        "provider_id": "b0b6dd9d-8b9b-48a9-ba46-b9d54906e415",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "MSFT",
+        "provider_id": "b6d1aa75-5c9c-4353-a305-9e2caa1925ab",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "NVDA",
+        "provider_id": "4ce9353c-66d1-46c2-898f-fce867ab0247",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "AMZN",
+        "provider_id": "f801f835-bfe6-4a9d-a6b1-ccbb84bfd75f",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "GOOGL",
+        "provider_id": "69b15845-7c63-4586-b274-1cfdfe9df3d8",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "META",
+        "provider_id": "fc6a5dcd-4a70-4b8d-b64f-d83a6dae9ba4",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "TSLA",
+        "provider_id": "8ccae427-5dd0-45b3-b5fe-7ba5e422c766",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "AVGO",
+        "provider_id": "7a8b4fcf-0622-47ef-8541-de7f70ffc0c4",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "AMD",
+        "provider_id": "03fb07bb-5db1-4077-8dea-5d711b272625",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "COST",
+        "provider_id": "1f888138-e413-4939-b16b-bdd08bb4debd",
+        "listing": "NASDAQ",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "JPM",
+        "provider_id": "e3047683-637a-4fb2-b71d-805cd6fec95d",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "V",
+        "provider_id": "4f5baf1e-0e9b-4d85-b88a-d874dc4a3c42",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "JNJ",
+        "provider_id": "ef9adcc6-6bce-452b-af5f-4a87e7f19131",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "PG",
+        "provider_id": "f81a406b-a53c-4ea5-ab05-6fb92bfc6bd7",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "KO",
+        "provider_id": "3795cafe-fd54-4f66-a31e-66774be875ca",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "XOM",
+        "provider_id": "0dd35bf7-a49c-4068-bce0-8e40b700454d",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "CVX",
+        "provider_id": "186997ab-b63c-439b-bf62-72275d1c4c27",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "HD",
+        "provider_id": "b6b1ea06-5d71-4146-be77-03f671788940",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "MCD",
+        "provider_id": "e077638f-a5c9-47e4-a7ce-2bfabf5ff698",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      },
+      {
+        "symbol": "DIS",
+        "provider_id": "2f34c0b3-a4aa-4959-b52c-3c41b2c246c4",
+        "listing": "NYSE",
+        "usd_basis": "separate_reviewed_product_evidence",
+        "common_stock_basis": "separate_reviewed_catalogue_evidence",
+        "active": true
+      }
+    ],
+    "observations": [
+      {
+        "sample": 1,
+        "collected_at": "2026-11-16T15:51:52.432618+00:00",
+        "eligible": 18,
+        "missing_or_invalid": 2,
+        "min_age_seconds": 0,
+        "max_age_seconds": 15,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:51:49.970289+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:51:52.022436+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:51:52.101787+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T15:51:51.244571+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:51:52.353315+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:51:51.453847+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:51:51.084025+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:51:52.286280+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:51:49.973649+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:51:46.923041+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:51:36.948815+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:51:52.304158+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:51:52.199475+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:51:52.103561+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:51:51.913390+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:51:39.184327+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:51:45.476939+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:51:51.083717+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 2,
+        "collected_at": "2026-11-16T15:52:52.825280+00:00",
+        "eligible": 18,
+        "missing_or_invalid": 2,
+        "min_age_seconds": 0,
+        "max_age_seconds": 22,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:52:52.755461+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:52:52.759073+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:52:52.657848+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T15:52:52.219768+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:52:52.324850+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:52:48.253354+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:52:47.589421+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:52:52.718416+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:52:46.659247+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:52:51.629947+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:52:43.067807+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:52:52.003601+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:52:52.731590+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:52:52.268717+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:52:51.823821+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:52:30.428092+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:52:43.190415+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:52:52.736571+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 3,
+        "collected_at": "2026-11-16T15:53:53.209295+00:00",
+        "eligible": 18,
+        "missing_or_invalid": 2,
+        "min_age_seconds": 0,
+        "max_age_seconds": 33,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:53:53.020529+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:53:53.145763+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:53:52.822355+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T15:53:52.981605+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:53:51.197876+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:53:53.037341+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:53:53.151611+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:53:50.431679+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:53:43.499127+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:53:52.557557+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:53:52.255233+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:53:50.606604+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:53:53.135846+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:53:51.500807+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:53:52.001498+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:53:36.305428+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:53:19.854315+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:53:52.305160+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 4,
+        "collected_at": "2026-11-16T15:54:53.552094+00:00",
+        "eligible": 17,
+        "missing_or_invalid": 3,
+        "min_age_seconds": 0,
+        "max_age_seconds": 21,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:54:52.863658+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:54:53.493532+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:54:53.185693+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:54:52.930739+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:54:53.381206+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:54:48.164623+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:54:42.907563+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:54:52.229304+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:54:47.004608+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:54:48.234850+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:54:49.002585+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:54:53.418331+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:54:51.985253+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:54:53.004412+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:54:45.024761+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:54:32.444123+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:54:52.103991+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "GOOGL": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 5,
+        "collected_at": "2026-11-16T15:55:53.881157+00:00",
+        "eligible": 17,
+        "missing_or_invalid": 3,
+        "min_age_seconds": 0,
+        "max_age_seconds": 8,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:55:53.563408+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:55:53.701625+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:55:53.609687+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:55:53.506380+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:55:53.243225+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:55:52.938045+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:55:47.510045+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:55:53.295827+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:55:45.008580+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:55:50.018687+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:55:52.393950+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:55:53.760504+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:55:53.626097+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:55:52.948409+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:55:53.208884+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:55:48.957110+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:55:53.554686+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "GOOGL": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 6,
+        "collected_at": "2026-11-16T15:56:54.269046+00:00",
+        "eligible": 17,
+        "missing_or_invalid": 3,
+        "min_age_seconds": 0,
+        "max_age_seconds": 11,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:56:54.209747+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:56:54.209905+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:56:54.153679+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:56:54.195733+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:56:53.870166+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:56:54.167998+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:56:54.041759+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:56:52.753874+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:56:48.387325+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:56:53.832463+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:56:52.902654+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:56:54.071503+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:56:54.098233+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:56:53.673147+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:56:43.265031+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:56:50.444776+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:56:54.125412+00:00"
+          }
+        ],
+        "rejected": {
+          "MSFT": "invalid",
+          "GOOGL": "invalid",
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 7,
+        "collected_at": "2026-11-16T15:57:54.639456+00:00",
+        "eligible": 19,
+        "missing_or_invalid": 1,
+        "min_age_seconds": 0,
+        "max_age_seconds": 24,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:57:54.466869+00:00"
+          },
+          {
+            "symbol": "MSFT",
+            "event_at": "2026-11-16T15:57:54.034497+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:57:54.414068+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:57:54.569701+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T15:57:54.410964+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:57:53.576285+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:57:53.987006+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:57:51.010155+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:57:54.350662+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:57:54.468050+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:57:54.458488+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:57:51.672827+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:57:52.908321+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:57:54.457369+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:57:54.132137+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:57:52.592778+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:57:30.264306+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:57:40.660697+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:57:54.509826+00:00"
+          }
+        ],
+        "rejected": {
+          "META": "invalid"
+        }
+      },
+      {
+        "sample": 8,
+        "collected_at": "2026-11-16T15:58:55.013282+00:00",
+        "eligible": 20,
+        "missing_or_invalid": 0,
+        "min_age_seconds": 0,
+        "max_age_seconds": 8,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:58:54.846464+00:00"
+          },
+          {
+            "symbol": "MSFT",
+            "event_at": "2026-11-16T15:58:54.625146+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:58:54.770438+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:58:54.775523+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T15:58:53.570832+00:00"
+          },
+          {
+            "symbol": "META",
+            "event_at": "2026-11-16T15:58:54.050727+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:58:53.375775+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:58:54.767393+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:58:51.039708+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:58:52.009191+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:58:51.724854+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:58:53.760761+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:58:46.418615+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:58:50.348628+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:58:54.519611+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:58:51.306764+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:58:52.500453+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:58:51.874069+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:58:49.145479+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:58:54.686676+00:00"
+          }
+        ],
+        "rejected": {}
+      },
+      {
+        "sample": 9,
+        "collected_at": "2026-11-16T15:59:55.397111+00:00",
+        "eligible": 19,
+        "missing_or_invalid": 1,
+        "min_age_seconds": 0,
+        "max_age_seconds": 15,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T15:59:55.018777+00:00"
+          },
+          {
+            "symbol": "MSFT",
+            "event_at": "2026-11-16T15:59:55.325306+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T15:59:55.338898+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T15:59:55.282022+00:00"
+          },
+          {
+            "symbol": "META",
+            "event_at": "2026-11-16T15:59:54.006404+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T15:59:54.681298+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T15:59:55.268645+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T15:59:52.928239+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T15:59:54.797255+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T15:59:53.103465+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T15:59:55.135190+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T15:59:39.936408+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T15:59:55.062420+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T15:59:54.957196+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T15:59:53.833391+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T15:59:55.007362+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T15:59:52.529422+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T15:59:40.508731+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T15:59:54.997193+00:00"
+          }
+        ],
+        "rejected": {
+          "GOOGL": "invalid"
+        }
+      },
+      {
+        "sample": 10,
+        "collected_at": "2026-11-16T16:00:55.757484+00:00",
+        "eligible": 20,
+        "missing_or_invalid": 0,
+        "min_age_seconds": 0,
+        "max_age_seconds": 41,
+        "accepted": [
+          {
+            "symbol": "AAPL",
+            "event_at": "2026-11-16T16:00:55.686919+00:00"
+          },
+          {
+            "symbol": "MSFT",
+            "event_at": "2026-11-16T16:00:55.571378+00:00"
+          },
+          {
+            "symbol": "NVDA",
+            "event_at": "2026-11-16T16:00:55.700709+00:00"
+          },
+          {
+            "symbol": "AMZN",
+            "event_at": "2026-11-16T16:00:55.692558+00:00"
+          },
+          {
+            "symbol": "GOOGL",
+            "event_at": "2026-11-16T16:00:55.680456+00:00"
+          },
+          {
+            "symbol": "META",
+            "event_at": "2026-11-16T16:00:54.974169+00:00"
+          },
+          {
+            "symbol": "TSLA",
+            "event_at": "2026-11-16T16:00:55.664326+00:00"
+          },
+          {
+            "symbol": "AVGO",
+            "event_at": "2026-11-16T16:00:54.243248+00:00"
+          },
+          {
+            "symbol": "AMD",
+            "event_at": "2026-11-16T16:00:54.801757+00:00"
+          },
+          {
+            "symbol": "COST",
+            "event_at": "2026-11-16T16:00:44.620960+00:00"
+          },
+          {
+            "symbol": "JPM",
+            "event_at": "2026-11-16T16:00:53.929255+00:00"
+          },
+          {
+            "symbol": "V",
+            "event_at": "2026-11-16T16:00:55.378652+00:00"
+          },
+          {
+            "symbol": "JNJ",
+            "event_at": "2026-11-16T16:00:53.206865+00:00"
+          },
+          {
+            "symbol": "PG",
+            "event_at": "2026-11-16T16:00:50.341267+00:00"
+          },
+          {
+            "symbol": "KO",
+            "event_at": "2026-11-16T16:00:55.573231+00:00"
+          },
+          {
+            "symbol": "XOM",
+            "event_at": "2026-11-16T16:00:53.940579+00:00"
+          },
+          {
+            "symbol": "CVX",
+            "event_at": "2026-11-16T16:00:53.309675+00:00"
+          },
+          {
+            "symbol": "HD",
+            "event_at": "2026-11-16T16:00:43.629866+00:00"
+          },
+          {
+            "symbol": "MCD",
+            "event_at": "2026-11-16T16:00:14.613253+00:00"
+          },
+          {
+            "symbol": "DIS",
+            "event_at": "2026-11-16T16:00:55.584173+00:00"
+          }
+        ],
+        "rejected": {}
+      }
+    ],
+    "status": "unverified",
+    "actions": "disabled"
+  },
+  "finished_at": "2026-11-16T16:00:55.760742+00:00"
+}

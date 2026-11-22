@@ -1,0 +1,559 @@
+"""Real ownership and retry scenario matrix; domain plans extend these proofs."""
+
+from decimal import Decimal
+
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import UniqueConstraint, text
+from sqlalchemy.exc import IntegrityError
+
+from tests.portfolio_fixtures import (
+    portfolio_session,
+    portfolio_world,
+    seed_owned_crypto_trade,
+)
+
+__all__ = ["portfolio_world"]
+
+
+def test_model_metadata_root_retains_identity_economics_and_owned_candidate_key():
+    from sqlalchemy import BigInteger, DateTime, Numeric, Text
+
+    from app.models.user import Account
+
+    table = Account.__table__
+    assert isinstance(table.c.id.type, BigInteger)
+    assert table.c.id.primary_key and table.c.id.identity.always
+    assert isinstance(table.c.name.type, Text)
+    assert not table.c.name.nullable
+    assert table.c.name.server_default.arg == "My portfolio"
+    assert isinstance(table.c.closed_at.type, DateTime)
+    assert table.c.closed_at.type.timezone and table.c.closed_at.nullable
+    assert table.c.closed_at.default is None and table.c.closed_at.server_default is None
+    unique = {
+        tuple(c.name for c in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("id", "user_id") in unique
+    assert ("user_id",) not in unique
+    assert any(tuple(index.columns.keys()) == ("user_id",) for index in table.indexes)
+    assert isinstance(table.c.description.type, Text)
+    assert not table.c.description.nullable and table.c.description.server_default.arg == ""
+    assert isinstance(table.c.name_key.type, Text)
+    assert not table.c.name_key.nullable and table.c.name_key.type.collation == "C"
+    for column in (table.c.cash, table.c.starting_cash):
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable
+        assert column.default is None and column.server_default is None
+    assert table.c.created_at.type.timezone
+
+
+@pytest.mark.parametrize("cash", ["0.00", "8765.43", "999999999999.99"])
+def test_model_metadata_existing_cash_schema_serializes_exact_decimal_strings(cash):
+    import json
+
+    from app.schemas.auth import MeOut
+
+    payload = MeOut(email="synthetic@example.test", cash_usd=Decimal(cash))
+    assert json.loads(payload.model_dump_json())["cash_usd"] == cash
+
+
+@pytest.mark.parametrize("model_name", ["Holding", "Trade"])
+def test_model_metadata_financial_rows_require_paired_owned_root_without_cascade(model_name):
+    from sqlalchemy import BigInteger
+
+    from app.models.trade import Holding, Trade
+
+    table = {"Holding": Holding, "Trade": Trade}[model_name].__table__
+    assert isinstance(table.c.portfolio_id.type, BigInteger)
+    assert not table.c.portfolio_id.nullable
+    assert table.c.portfolio_id.default is None
+    assert table.c.portfolio_id.server_default is None
+    paired = [
+        fk
+        for fk in table.foreign_key_constraints
+        if tuple(fk.column_keys) == ("portfolio_id", "user_id")
+    ]
+    assert len(paired) == 1
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "accounts.id",
+        "accounts.user_id",
+    )
+    assert all(fk.ondelete is None and fk.onupdate is None for fk in table.foreign_key_constraints)
+    assert any(tuple(idx.columns.keys())[0] == "user_id" for idx in table.indexes) or any(
+        tuple(c.columns.keys())[0] == "user_id"
+        for c in table.constraints
+        if isinstance(c, UniqueConstraint)
+    )
+
+
+def test_model_metadata_holdings_unique_per_root_and_preserve_exact_basis():
+    from sqlalchemy import Numeric
+
+    from app.models.trade import Holding
+
+    table = Holding.__table__
+    unique = {tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)}
+    assert ("portfolio_id", "coin_id") in unique
+    assert ("user_id", "coin_id") not in unique
+    for column in (table.c.quantity, table.c.cost_basis):
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable
+    checks = {c.name for c in table.constraints}
+    assert {
+        "ck_holdings_quantity_non_negative",
+        "ck_holdings_cost_basis_non_negative",
+        "ck_holdings_cost_basis_cents",
+        "ck_holdings_empty_has_no_cost",
+    } <= checks
+
+
+def test_model_metadata_trade_owned_cause_key_keeps_user_global_retry_and_fill_fields():
+    from sqlalchemy import Numeric
+
+    from app.models.trade import Trade
+
+    table = Trade.__table__
+    unique = {tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)}
+    assert ("id", "portfolio_id", "coin_id", "user_id") in unique
+    assert ("user_id", "idempotency_key") in unique
+    assert ("portfolio_id", "idempotency_key") not in unique
+    assert ("portfolio_id", "created_at", "id") in {
+        tuple(idx.columns.keys()) for idx in table.indexes
+    }
+    for name in (
+        "input_value",
+        "quantity",
+        "mid_price",
+        "exec_price",
+        "fee",
+        "cash_delta",
+        "cash_after",
+    ):
+        column = table.c[name]
+        assert isinstance(column.type, Numeric)
+        assert (column.type.precision, column.type.scale) == (20, 8)
+        assert not column.nullable and column.default is None and column.server_default is None
+    for name in ("price_as_of", "created_at"):
+        assert table.c[name].type.timezone
+    assert set(table.c.keys()) == {
+        "id",
+        "portfolio_id",
+        "user_id",
+        "coin_id",
+        "side",
+        "input_kind",
+        "input_value",
+        "quantity",
+        "mid_price",
+        "price_as_of",
+        "exec_price",
+        "fee",
+        "cash_delta",
+        "cash_after",
+        "idempotency_key",
+        "created_at",
+    }
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "StockFillFacts",
+        "StockOwnershipMovement",
+        "StockDividendEntitlement",
+        "PortfolioStockClosure",
+    ],
+)
+def test_model_metadata_stock_rows_pair_root_and_owner(model_name):
+    from sqlalchemy import BigInteger
+
+    from app.models.corporate_action import (
+        PortfolioStockClosure,
+        StockDividendEntitlement,
+        StockOwnershipMovement,
+    )
+    from app.models.stock_execution import StockFillFacts
+
+    table = {
+        model.__name__: model
+        for model in (
+            StockFillFacts,
+            StockOwnershipMovement,
+            StockDividendEntitlement,
+            PortfolioStockClosure,
+        )
+    }[model_name].__table__
+    assert isinstance(table.c.portfolio_id.type, BigInteger)
+    assert not table.c.portfolio_id.nullable
+    assert table.c.portfolio_id.default is None and table.c.portfolio_id.server_default is None
+    paired = [
+        fk
+        for fk in table.foreign_key_constraints
+        if tuple(fk.column_keys) == ("portfolio_id", "user_id")
+    ]
+    assert len(paired) == 1
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "accounts.id",
+        "accounts.user_id",
+    )
+    assert all(fk.ondelete is None and fk.onupdate is None for fk in table.foreign_key_constraints)
+
+
+@pytest.mark.parametrize("model_name", ["StockFillFacts", "StockOwnershipMovement"])
+def test_model_metadata_stock_trade_causes_include_same_portfolio(model_name):
+    from app.models.corporate_action import StockOwnershipMovement
+    from app.models.stock_execution import StockFillFacts
+
+    table = {model.__name__: model for model in (StockFillFacts, StockOwnershipMovement)}[
+        model_name
+    ].__table__
+    cause = [fk for fk in table.foreign_key_constraints if "trade_id" in fk.column_keys]
+    paired = [fk for fk in cause if len(fk.column_keys) > 1]
+    assert len(paired) == 1
+    assert tuple(paired[0].column_keys) == ("trade_id", "portfolio_id", "coin_id", "user_id")
+    assert tuple(e.target_fullname for e in paired[0].elements) == (
+        "trades.id",
+        "trades.portfolio_id",
+        "trades.coin_id",
+        "trades.user_id",
+    )
+
+
+def test_model_metadata_split_application_global_marker_and_owned_movements():
+    from sqlalchemy import CheckConstraint, SmallInteger
+
+    from app.models.corporate_action import StockOwnershipMovement, StockSplitApplication
+
+    application = StockSplitApplication.__table__
+    assert "portfolio_id" not in application.c and "user_id" not in application.c
+    assert isinstance(application.c.owner_digest_version.type, SmallInteger)
+    assert application.c.owner_digest_version.nullable
+    assert application.c.owner_digest_version.default is None
+    assert application.c.owner_digest_version.server_default is None
+    checks = {str(c.sqltext) for c in application.constraints if isinstance(c, CheckConstraint)}
+    assert "owner_digest_version IS NULL OR owner_digest_version=2" in checks
+    unique = {
+        tuple(c.columns.keys()) for c in application.constraints if isinstance(c, UniqueConstraint)
+    }
+    assert ("economic_event_id",) in unique
+    assert ("id", "coin_id", "new_unit_epoch") in unique
+    movement = StockOwnershipMovement.__table__
+    unique = {
+        tuple(c.columns.keys()) for c in movement.constraints if isinstance(c, UniqueConstraint)
+    }
+    assert ("application_id", "portfolio_id") in unique
+    assert ("application_id", "user_id") not in unique
+    assert ("coin_id", "sequence") in unique
+    assert ("coin_id", "causal_key", "portfolio_id") in unique
+    cause = next(
+        fk
+        for fk in movement.foreign_key_constraints
+        if tuple(fk.column_keys) == ("application_id", "coin_id", "unit_epoch")
+    )
+    assert tuple(e.target_fullname for e in cause.elements) == (
+        "stock_split_applications.id",
+        "stock_split_applications.coin_id",
+        "stock_split_applications.new_unit_epoch",
+    )
+
+
+def test_model_metadata_terminal_stock_boundary_does_not_partition_global_epochs():
+    from sqlalchemy import CheckConstraint
+
+    from app.models.corporate_action import PortfolioStockClosure, StockActionState
+
+    table = PortfolioStockClosure.__table__
+    assert set(table.c.keys()) == {
+        "id",
+        "portfolio_id",
+        "user_id",
+        "coin_id",
+        "closed_at",
+        "closing_sequence",
+        "unit_epoch",
+    }
+    assert table.c.id.identity.always and table.c.id.primary_key
+    assert not table.c.closed_at.nullable and table.c.closed_at.type.timezone
+    assert ("portfolio_id", "coin_id") in {
+        tuple(c.columns.keys()) for c in table.constraints if isinstance(c, UniqueConstraint)
+    }
+    checks = {str(c.sqltext) for c in table.constraints if isinstance(c, CheckConstraint)}
+    assert "closing_sequence BETWEEN 0 AND 9007199254740991" in checks
+    assert "unit_epoch BETWEEN 0 AND 9007199254740991" in checks
+    assert "portfolio_id" not in StockActionState.__table__.c
+    assert tuple(StockActionState.__table__.primary_key.columns.keys()) == ("coin_id",)
+
+
+async def test_final_sql_terminal_stock_boundary_rejects_foreign_owner(portfolio_world):
+    conn, world = portfolio_world
+    stock = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO portfolio_stock_closures "
+                    "(portfolio_id,user_id,coin_id,closed_at,closing_sequence,unit_epoch) "
+                    "VALUES (:p,:u,:c,clock_timestamp(),0,0)"
+                ),
+                {"p": world.foreign, "u": world.owner, "c": stock},
+            )
+    assert err.value.orig.sqlstate == "23503"
+
+
+@pytest.mark.parametrize("marker", [None, 1, 3])
+async def test_final_sql_new_split_requires_explicit_supported_digest_marker(
+    portfolio_world, marker
+):
+    from tests.test_stock_action_migrations import event
+
+    conn, _ = portfolio_world
+    stock = (await conn.execute(text("SELECT min(coin_id) FROM stock_instruments"))).scalar_one()
+    eid, _, rid = await event(conn, stock)
+    with pytest.raises(IntegrityError):
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO stock_split_applications "
+                    "(coin_id,economic_event_id,revision_id,new_rate,old_rate,cutoff,"
+                    "prior_unit_epoch,new_unit_epoch,sequence_boundary,before_digest,after_digest,"
+                    "processed_at,owner_digest_version) VALUES "
+                    "(:c,:e,:r,'2','1',now(),0,1,0,:d,:d,now(),:v)"
+                ),
+                {"c": stock, "e": eid, "r": rid, "d": "a" * 64, "v": marker},
+            )
+
+
+async def test_final_sql_same_root_coin_holding_is_unique(portfolio_world):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings (portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,1,1)"
+                ),
+                {"p": world.first, "u": world.owner, "c": world.crypto},
+            )
+    assert err.value.orig.sqlstate == "23505"
+
+
+async def test_final_sql_foreign_owner_tuple_cannot_link_trade(portfolio_world):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await seed_owned_crypto_trade(conn, world, world.foreign)
+    assert err.value.orig.sqlstate == "23503"
+
+
+@pytest.mark.parametrize("target", [None, 9223372036854775807])
+async def test_final_sql_missing_or_unknown_root_cannot_link_holding(portfolio_world, target):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings (portfolio_id,user_id,coin_id,quantity,cost_basis) "
+                    "VALUES (:p,:u,:c,1,1)"
+                ),
+                {"p": target, "u": world.owner, "c": world.crypto},
+            )
+    assert err.value.orig.sqlstate == ("23502" if target is None else "23503")
+
+
+async def test_final_sql_root_metadata_preserves_named_active_and_closed_roots(portfolio_world):
+    conn, world = portfolio_world
+    rows = (
+        await conn.execute(
+            text("SELECT id,name,closed_at,cash,starting_cash FROM accounts WHERE user_id=:u"),
+            {"u": world.owner},
+        )
+    ).all()
+    roots = {row.id: row for row in rows}
+    assert roots[world.first].name
+    assert roots[world.sibling].name
+    assert roots[world.first].closed_at is None
+    assert roots[world.sibling].closed_at is None
+    assert roots[world.closed].closed_at is not None
+    assert roots[world.first].cash == Decimal("1234.56")
+    assert roots[world.sibling].cash == Decimal("4321.09")
+
+
+async def test_final_sql_owner_counts_and_sibling_finances_are_independent(portfolio_world):
+    conn, world = portfolio_world
+    rows = (
+        await conn.execute(
+            text(
+                "SELECT user_id,count(*) FROM accounts "
+                "WHERE closed_at IS NULL GROUP BY user_id ORDER BY user_id"
+            )
+        )
+    ).all()
+    counts = dict(rows)
+    assert counts.get(world.empty_owner, 0) == 0
+    assert counts[world.single_owner] == 1
+    assert counts[world.owner] == 2
+    assert counts[world.foreign_owner] == 1
+    assert (
+        await conn.execute(
+            text("SELECT id,cash FROM accounts WHERE id IN (:a,:b) ORDER BY id"),
+            {"a": world.first, "b": world.sibling},
+        )
+    ).all() == [(world.first, Decimal("1234.56")), (world.sibling, Decimal("4321.09"))]
+    assert (
+        await conn.execute(
+            text(
+                "SELECT portfolio_id,quantity,cost_basis FROM holdings "
+                "WHERE user_id=:u ORDER BY portfolio_id"
+            ),
+            {"u": world.owner},
+        )
+    ).all() == [
+        (world.first, Decimal("0.1"), Decimal("123.00")),
+        (world.sibling, Decimal("0.2"), Decimal("456.00")),
+    ]
+
+
+async def test_final_sql_foreign_owner_tuple_cannot_link_holding(portfolio_world):
+    conn, world = portfolio_world
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await conn.execute(
+                text(
+                    "INSERT INTO holdings "
+                    "(portfolio_id,user_id,coin_id,quantity,cost_basis) VALUES (:p,:u,:c,1,1)"
+                ),
+                {"p": world.foreign, "u": world.owner, "c": world.crypto},
+            )
+    assert err.value.orig.sqlstate == "23503"
+
+
+async def test_final_sql_retry_key_is_global_across_sibling_roots(portfolio_world):
+    conn, world = portfolio_world
+    _, key = await seed_owned_crypto_trade(conn, world, world.first)
+    with pytest.raises(IntegrityError) as err:
+        async with conn.begin_nested():
+            await seed_owned_crypto_trade(conn, world, world.sibling, key)
+    assert err.value.orig.sqlstate == "23505"
+    assert (
+        await conn.execute(
+            text("SELECT count(*) FROM trades WHERE user_id=:u AND idempotency_key=:k"),
+            {"u": world.owner, "k": key},
+        )
+    ).scalar_one() == 1
+
+
+async def test_original_retry_lookup_keeps_active_root_when_sibling_is_closed(portfolio_world):
+    from app.services.trade_idempotency import find_user_trade
+    from tests.portfolio_fixtures import seed_owned_crypto_trade
+
+    conn, world = portfolio_world
+    tid, key = await seed_owned_crypto_trade(conn, world, world.first)
+    async with portfolio_session(conn) as db:
+        original = await find_user_trade(db, world.owner, key)
+        assert original is not None
+        assert (original.id, original.portfolio_id, original.user_id) == (
+            tid,
+            world.first,
+            world.owner,
+        )
+        assert original.cash_delta == Decimal("-50.25")
+        assert original.portfolio_id != world.closed
+
+
+@pytest.mark.parametrize("target", ["foreign", "closed", "unknown"])
+async def test_resolver_refuses_unavailable_targets_without_retargeting(portfolio_world, target):
+    from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
+
+    conn, world = portfolio_world
+    root = {"foreign": world.foreign, "closed": world.closed, "unknown": 9223372036854775807}[
+        target
+    ]
+    async with portfolio_session(conn) as db:
+        with pytest.raises(HTTPException) as err:
+            await resolve_owned_active_portfolio(db, User(id=world.owner), root)
+    assert err.value.status_code == 404
+    assert err.value.detail == {"code": "portfolio_unavailable"}
+
+
+async def test_resolver_returns_only_explicit_owned_active_root(portfolio_world):
+    from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
+
+    conn, world = portfolio_world
+    async with portfolio_session(conn) as db:
+        resolved = await resolve_owned_active_portfolio(db, User(id=world.owner), world.sibling)
+        assert (resolved.portfolio_id, resolved.user_id) == (world.sibling, world.owner)
+
+
+async def test_identity_contract_metadata_is_ordered_private_and_string_serialized(portfolio_world):
+    import json
+
+    from app.models.user import User
+    from app.schemas.auth import IdentityOut
+    from app.services.portfolios import list_active_portfolios
+
+    conn, world = portfolio_world
+    async with portfolio_session(conn) as db:
+        rows = await list_active_portfolios(db, User(id=world.owner))
+        assert [r.id for r in rows] == sorted([world.first, world.sibling])
+        assert [json.loads(r.model_dump_json()) for r in rows] == [
+            {"id": str(world.first), "name": "Strategy A"},
+            {"id": str(world.sibling), "name": "Strategy B"},
+        ]
+        assert await list_active_portfolios(db, User(id=world.empty_owner)) == []
+    assert IdentityOut(email="owner@example.test").model_dump() == {"email": "owner@example.test"}
+    assert set(IdentityOut.model_fields) == {"email"}
+
+
+async def test_resolver_value_is_frozen_and_does_not_change_root_economics(portfolio_world):
+    from dataclasses import FrozenInstanceError
+
+    from app.models.user import User
+    from app.services.portfolios import resolve_owned_active_portfolio
+
+    conn, world = portfolio_world
+    before = (
+        await conn.execute(text("SELECT id,cash,starting_cash FROM accounts ORDER BY id"))
+    ).all()
+    async with portfolio_session(conn) as db:
+        root = await resolve_owned_active_portfolio(db, User(id=world.owner), world.first)
+        with pytest.raises(FrozenInstanceError):
+            root.portfolio_id = world.sibling
+    after = (
+        await conn.execute(text("SELECT id,cash,starting_cash FROM accounts ORDER BY id"))
+    ).all()
+    assert before == after
+
+
+@pytest.mark.parametrize("target", ["0", "-1", "abc", "1.5", "9223372036854775808"])
+async def test_malformed_target_fails_path_validation(portfolio_world, target):
+    import httpx
+    from fastapi import FastAPI
+
+    from app.core.deps import OwnedActivePortfolioDep, get_current_user, get_db
+    from app.models.user import User
+
+    conn, world = portfolio_world
+    app = FastAPI()
+
+    @app.get("/portfolios/{portfolio_id}")
+    async def probe(root: OwnedActivePortfolioDep):
+        return {"portfolio_id": str(root.portfolio_id)}
+
+    async def db_override():
+        async with portfolio_session(conn) as db:
+            yield db
+
+    app.dependency_overrides[get_db] = db_override
+    app.dependency_overrides[get_current_user] = lambda: User(id=world.owner)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://test"
+    ) as c:
+        response = await c.get(f"/portfolios/{target}")
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["path", "portfolio_id"]

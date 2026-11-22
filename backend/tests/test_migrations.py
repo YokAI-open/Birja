@@ -1,15 +1,23 @@
 import asyncio
 import io
+import json
+import os
+import secrets
+import subprocess
+import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 import app.models  # noqa: F401
@@ -17,17 +25,170 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0014"
+EXPECTED_HEAD = "0023"
+
+# Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
+MIGRATION_TABLES = frozenset(
+    {
+        "alembic_version",
+        "users",
+        "accounts",
+        "coins",
+        "prices",
+        "holdings",
+        "trades",
+        "auth_sessions",
+        "refresh_tokens",
+        "stock_instruments",
+        "stock_quotes",
+        "stock_sessions",
+        "stock_data_admissions",
+        "stock_action_events",
+        "stock_action_sources",
+        "stock_action_revisions",
+        "stock_action_observations",
+        "stock_action_state",
+        "stock_split_applications",
+        "stock_ownership_movements",
+        "stock_dividend_entitlements",
+        "stock_action_resolutions",
+        "stock_fill_facts",
+        "stock_status_evidence",
+        "stock_dividend_payments",
+        "stock_dividend_decisions",
+        "portfolio_stock_closures",
+        "portfolio_creations",
+        "portfolio_initializations",
+    }
+)
+MIGRATION_FUNCTIONS = frozenset(
+    {
+        "reject_stock_action_mutation()",
+        "reject_stock_record_mutation()",
+        "reject_stock_dividend_mutation()",
+        "check_stock_fill_integrity()",
+        "assert_stock_execution_current(bigint,bigint,jsonb)",
+        "apply_stock_action_resolution(bigint,bigint,bigint,bigint,bigint,text,text,text,jsonb,text)",
+        "stock_dividend_authority(bigint,bigint,text,text,boolean,jsonb)",
+        "apply_stock_dividend(bigint,bigint,text,text)",
+        "record_stock_dividend_hold(bigint,text)",
+        "associate_legacy_portfolio_only()",
+        "check_stock_split_digest_version()",
+        "check_portfolio_financial_write()",
+        "lock_stock_portfolio_roots(bigint)",
+        "portfolio_display_name(text)",
+        "portfolio_name_key(text)",
+        "portfolio_description(text)",
+        "check_portfolio_management_metadata()",
+        "create_portfolio(bigint,uuid,text,text)",
+        "initialize_portfolio(bigint)",
+        "update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean)",
+    }
+)
+_MIGRATOR_PASSWORD = secrets.token_hex(32)
+
+# Successor migration-only ownership profiles are finite and revision indexed.
+# The historical allowlist above remains unchanged; never admit new objects
+# merely because another revision eventually knows their names.
+_CLOSURE_TABLES = frozenset({"portfolio_lifecycle_closures", "portfolio_closure_intents"})
+_CLOSURE_FUNCTIONS = frozenset({"check_portfolio_lifecycle_integrity()"})
+
+
+def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
+    if revision in {"0021", "0022", "0023"}:
+        # The qualified0020 catalogue already dropped these historical helpers;
+        # its old permissive union cannot serve as an exact successor profile.
+        retired = {
+            "associate_legacy_portfolio_only()",
+            "reject_stock_action_mutation()",
+            "reject_stock_record_mutation()",
+        }
+        functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
+        if revision in {"0022", "0023"}:
+            functions |= {"check_portfolio_terminal_root()"}
+        if revision == "0023":
+            functions |= {
+                "close_portfolio(bigint,bigint,uuid,text,text)",
+                "check_stock_terminal_clock()",
+            }
+        return MIGRATION_TABLES | _CLOSURE_TABLES, frozenset(functions)
+    if revision is not None and revision not in {f"{n:04}" for n in range(1, 21)}:
+        raise RuntimeError("unexpected disposable migration revision inventory")
+    return MIGRATION_TABLES, MIGRATION_FUNCTIONS
+
+
+_MIGRATION_CHILD = """
+import json, sys
+from alembic import command
+from alembic.config import Config
+from sqlalchemy.exc import DBAPIError
+try:
+    getattr(command, sys.argv[1])(Config('alembic.ini'), sys.argv[2])
+except Exception as exc:
+    print(json.dumps({'database': isinstance(exc, DBAPIError),
+        'message': str(exc), 'sqlstate': getattr(getattr(exc, 'orig', None), 'sqlstate', None)}))
+    sys.exit(1)
+"""
+
+
+class MigrationDatabaseError(RuntimeError):
+    def __init__(self, message: str, sqlstate: str | None):
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
+def test_migration_url(database_url: str | None = None, redis_url: str | None = None) -> str:
+    """A private in-memory child DSN; reject even otherwise valid alternate test DBs."""
+    from tests.guard import ensure_test_stack
+
+    database_url = database_url or os.environ["DATABASE_URL"]
+    redis_url = redis_url or os.environ["REDIS_URL"]
+    ensure_test_stack(database_url, redis_url)
+    url = make_url(database_url)
+    if url.username != "birja_test" or url.database != "birja_test" or url.query:
+        raise RuntimeError("migration bootstrap requires exact disposable test admin")
+    return url.set(username="birja_migrator", password=_MIGRATOR_PASSWORD).render_as_string(
+        hide_password=False
+    )
+
+
+test_migration_url.__test__ = False
+
+
+def run_test_migration(target: str, *, down: bool = False) -> None:
+    """Authenticate a fresh interpreter; never mutate parent Settings or environment."""
+    child_env = {**os.environ, "DATABASE_URL": test_migration_url(), "ENV": "test"}
+    result = subprocess.run(  # noqa: S603 - fixed local interpreter, no shell
+        [
+            sys.executable,
+            "-c",
+            _MIGRATION_CHILD,
+            "downgrade" if down else "upgrade",
+            target,
+        ],
+        cwd=BACKEND_DIR,
+        env=child_env,
+        text=True,
+        capture_output=True,
+        timeout=120,
+    )
+    if result.returncode:
+        # Child diagnostics may include connection arguments; redact the in-memory credential.
+        detail = (
+            json.loads(result.stdout)
+            if result.stdout.strip()
+            else {"message": result.stderr, "database": False}
+        )
+        message = detail["message"].replace(_MIGRATOR_PASSWORD, "[redacted]")
+        if detail["database"]:
+            raise DBAPIError(None, None, MigrationDatabaseError(message, detail.get("sqlstate")))
+        raise RuntimeError(message)
 
 
 async def ensure_dividend_test_owner() -> None:
     """Only guarded disposable DB administration, no production provisioning."""
-    import os
-
-    from tests.guard import ensure_test_stack
-
     url = os.environ["DATABASE_URL"]
-    ensure_test_stack(url, os.environ["REDIS_URL"])
+    test_migration_url(url)
     engine = create_async_engine(url)
     try:
         async with engine.begin() as conn:
@@ -39,6 +200,15 @@ async def ensure_dividend_test_owner() -> None:
                     )
                 )
             ).scalar_one()
+            schema_owner = (
+                await conn.execute(
+                    text(
+                        "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname='public'"
+                    )
+                )
+            ).scalar_one()
+            if schema_owner not in {"birja_test", "birja_migrator", "pg_database_owner"}:
+                raise RuntimeError("unexpected disposable migration schema owner")
             await conn.execute(
                 text("""DO $test$ BEGIN
               IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator') THEN
@@ -46,11 +216,133 @@ async def ensure_dividend_test_owner() -> None:
                   NOCREATEROLE NOREPLICATION NOBYPASSRLS;
               END IF;
               IF EXISTS(SELECT FROM pg_roles WHERE rolname='birja_migrator' AND
-                (rolcanlogin OR rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
                  OR rolreplication OR rolbypassrls)) THEN
                 RAISE EXCEPTION 'unsafe disposable migration owner'; END IF;
+              IF EXISTS(SELECT FROM pg_auth_members WHERE
+                member=(SELECT oid FROM pg_roles WHERE rolname='birja_migrator') OR
+                roleid=(SELECT oid FROM pg_roles WHERE rolname='birja_migrator')) THEN
+                RAISE EXCEPTION 'unsafe disposable migration membership'; END IF;
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_action_operator') THEN
+                CREATE ROLE birja_action_operator NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_app') THEN
+                CREATE ROLE birja_app NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='birja_scheduler') THEN
+                CREATE ROLE birja_scheduler NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+                  NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+              END IF;
+              IF EXISTS(SELECT FROM pg_roles WHERE rolname IN ('birja_app','birja_scheduler')
+                AND (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole
+                  OR rolreplication OR rolbypassrls)) THEN
+                RAISE EXCEPTION 'unsafe disposable runtime role'; END IF;
             END $test$""")
             )
+            # Validate every object before any ownership transfer. Index ownership follows tables.
+            relations = (
+                await conn.execute(
+                    text("""SELECT c.relname,c.relkind::text,
+                pg_get_userbyid(c.relowner) FROM pg_class c JOIN pg_namespace n
+                ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','S')
+                ORDER BY c.relkind,c.relname""")
+                )
+            ).all()
+            revisions = (
+                (await conn.execute(text("SELECT version_num FROM alembic_version")))
+                .scalars()
+                .all()
+                if any(name == "alembic_version" and kind == "r" for name, kind, _ in relations)
+                else []
+            )
+            if len(revisions) > 1:
+                raise RuntimeError("unexpected disposable migration revision inventory")
+            allowed_tables, allowed_functions = migration_inventory(
+                revisions[0] if revisions else None
+            )
+            for name, kind, owner in relations:
+                allowed = allowed_tables if kind == "r" else {f"{t}_id_seq" for t in allowed_tables}
+                if name not in allowed or owner not in {"birja_test", "birja_migrator"}:
+                    raise RuntimeError("unexpected disposable migration relation inventory")
+            functions = (
+                await conn.execute(
+                    text("""SELECT p.oid::regprocedure::text,
+                pg_get_userbyid(p.proowner) FROM pg_proc p JOIN pg_namespace n
+                ON n.oid=p.pronamespace WHERE n.nspname='public'""")
+                )
+            ).all()
+            for signature, owner in functions:
+                if signature.replace(" ", "") not in allowed_functions or owner not in {
+                    "birja_test",
+                    "birja_migrator",
+                }:
+                    raise RuntimeError("unexpected disposable migration function inventory")
+            if revisions and revisions[0] in {"0021", "0022", "0023"}:
+                # A stamped historical schema is not a current migration profile.
+                if {name for name, kind, _ in relations if kind == "r"} != allowed_tables:
+                    raise RuntimeError("incomplete disposable migration relation inventory")
+                if {sig.replace(" ", "") for sig, _ in functions} != allowed_functions:
+                    raise RuntimeError("incomplete disposable migration function inventory")
+                nonidentity = {
+                    "alembic_version",
+                    "prices",
+                    "stock_instruments",
+                    "stock_quotes",
+                    "stock_action_state",
+                    "stock_fill_facts",
+                    "stock_status_evidence",
+                }
+                expected_sequences = {f"{t}_id_seq" for t in allowed_tables - nonidentity}
+                if {name for name, kind, _ in relations if kind == "S"} != expected_sequences:
+                    raise RuntimeError("unexpected disposable migration sequence inventory")
+            await conn.execute(text("GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator"))
+            await conn.execute(text("GRANT USAGE ON SCHEMA public TO birja_app,birja_scheduler"))
+            # Password is generated as hex and never emitted or persisted outside the disposable DB.
+            await conn.execute(
+                text(
+                    f"ALTER ROLE birja_migrator LOGIN PASSWORD '{_MIGRATOR_PASSWORD}'"  # noqa: S608
+                )
+            )
+            for name, kind, _ in relations:
+                if kind == "r":
+                    await conn.execute(text(f'ALTER TABLE public."{name}" OWNER TO birja_migrator'))  # noqa: S608
+            for name, kind, _ in relations:
+                if kind == "S":
+                    await conn.execute(
+                        text(f'ALTER SEQUENCE public."{name}" OWNER TO birja_migrator')
+                    )  # noqa: S608
+            for signature, _ in functions:
+                await conn.execute(
+                    text(f"ALTER FUNCTION public.{signature} OWNER TO birja_migrator")
+                )  # noqa: S608
+    finally:
+        await engine.dispose()
+
+
+async def install_current_test_grants() -> None:
+    """Explicit test bootstrap after final migration; partial revisions never admit app."""
+    from app.db.portfolio_bootstrap import (
+        GRANTS_0023_SQL as GRANTS_SQL,
+    )
+    from app.db.portfolio_bootstrap import (
+        PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+    )
+
+    test_migration_url()
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
+            )
+            await conn.execute(text(PREFLIGHT_SQL))
+            raw = await conn.get_raw_connection()
+            await raw.driver_connection.execute(GRANTS_SQL)
+            for role in ("birja_app", "birja_scheduler"):
+                password = secrets.token_hex(32)
+                await conn.execute(text(f"ALTER ROLE {role} LOGIN PASSWORD '{password}'"))  # noqa: S608
     finally:
         await engine.dispose()
 
@@ -68,17 +360,32 @@ async def _versions(engine: AsyncEngine) -> list[str]:
         return []
 
 
-async def test_upgrade_downgrade_roundtrip(engine: AsyncEngine) -> None:
-    cfg = _config()
+@pytest_asyncio.fixture
+async def retained_migration_db(engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
+    # Import at fixture execution to avoid a cycle with the shared authentic
+    # migration/bootstrap helpers used by the independent portfolio oracle.
+    from tests.portfolio_fixtures import reset_disposable_schema
+
+    await reset_disposable_schema(engine)
+    try:
+        yield engine
+    finally:
+        await reset_disposable_schema(engine)
+        await asyncio.to_thread(run_test_migration, "head")
+        await install_current_test_grants()
+
+
+async def test_retained_empty_roundtrip_and_final_upgrade(retained_migration_db) -> None:
+    engine = retained_migration_db
     # Alembic's async env.py calls asyncio.run, so run it in a worker thread
     # with no running loop; the session loop is never touched.
-    await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _versions(engine) == [EXPECTED_HEAD]
+    await asyncio.to_thread(run_test_migration, "0014")
+    assert await _versions(engine) == ["0014"]
 
-    await asyncio.to_thread(command.downgrade, cfg, "base")
+    await asyncio.to_thread(run_test_migration, "base", down=True)
     assert await _versions(engine) == []
 
-    await asyncio.to_thread(command.upgrade, cfg, "head")
+    await asyncio.to_thread(run_test_migration, "head")
     assert await _versions(engine) == [EXPECTED_HEAD]
 
 
@@ -87,10 +394,33 @@ def test_baseline_is_head() -> None:
     assert script.get_heads() == [EXPECTED_HEAD]
 
 
-async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
-    cfg = _config()
-    await asyncio.to_thread(command.upgrade, cfg, "head")
-    await asyncio.to_thread(command.downgrade, cfg, "0007")
+async def test_current_fixture_installs_exact_restricted_authority(engine, migrated) -> None:
+    from app.db.portfolio_bootstrap import ACL_0023_SHA256, ACL_SQL
+    from app.db.schema_contract import require_schema
+
+    async with engine.connect() as conn:
+        assert await require_schema(conn) == "0023"
+        assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0023_SHA256
+        roles = (
+            await conn.execute(
+                text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,
+            rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles
+            WHERE rolname IN ('birja_app','birja_scheduler','birja_migrator')
+            ORDER BY rolname""")
+            )
+        ).all()
+        assert len(roles) == 3
+        assert all(row[1] and not any(row[2:]) for row in roles)
+        assert not (
+            await conn.execute(
+                text("SELECT rolcanlogin FROM pg_roles WHERE rolname='birja_action_operator'")
+            )
+        ).scalar_one()
+
+
+async def test_populated_history_index_roundtrip(retained_migration_db) -> None:
+    engine = retained_migration_db
+    await asyncio.to_thread(run_test_migration, "0007")
 
     async def snapshot():
         async with engine.connect() as conn:
@@ -148,7 +478,7 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
                 {"u": uid, "c": cid},
             )
         before = await snapshot()
-        await asyncio.to_thread(command.upgrade, cfg, "0008")
+        await asyncio.to_thread(run_test_migration, "0008")
         assert await _versions(engine) == ["0008"]
         async with engine.connect() as conn:
             index = (
@@ -168,18 +498,21 @@ async def test_populated_history_index_roundtrip(engine: AsyncEngine) -> None:
         )
         assert index[3] == ["user_id", "created_at", "id"]
         assert await snapshot() == before
-        await asyncio.to_thread(command.downgrade, cfg, "0007")
+        await asyncio.to_thread(run_test_migration, "0007", down=True)
         assert await _versions(engine) == ["0007"]
         async with engine.connect() as conn:
             assert (
                 await conn.execute(text("SELECT to_regclass('ix_trades_user_created_id')"))
             ).scalar_one() is None
         assert await snapshot() == before
-        await asyncio.to_thread(command.upgrade, cfg, "head")
-        assert await _versions(engine) == [EXPECTED_HEAD]
+        # This exact retained crypto/index proof has no portfolio columns.
+        # Final ownership preservation is independently proven by the genuine
+        # populated0014→0017 oracle, not by erasing successor metadata here.
+        await asyncio.to_thread(run_test_migration, "0014")
+        assert await _versions(engine) == ["0014"]
         assert await snapshot() == before
     finally:
-        await asyncio.to_thread(command.upgrade, cfg, "head")
+        await asyncio.to_thread(run_test_migration, "0014")
 
 
 def test_history_index_offline_transactions() -> None:
@@ -201,10 +534,9 @@ def test_history_index_offline_transactions() -> None:
     assert sql.index("COMMIT;") < sql.index("DROP INDEX CONCURRENTLY") < sql.rindex("BEGIN;")
 
 
-async def test_earlier_revision_commits_before_later_guard_failure(engine: AsyncEngine) -> None:
-    cfg = _config()
-    await asyncio.to_thread(command.upgrade, cfg, "head")
-    await asyncio.to_thread(command.downgrade, cfg, "0005")
+async def test_earlier_revision_commits_before_later_guard_failure(retained_migration_db) -> None:
+    engine = retained_migration_db
+    await asyncio.to_thread(run_test_migration, "0005")
     try:
         async with engine.begin() as conn:
             uid = (
@@ -219,7 +551,7 @@ async def test_earlier_revision_commits_before_later_guard_failure(engine: Async
                 {"u": uid},
             )
         with pytest.raises(RuntimeError, match="sub-cent cash"):
-            await asyncio.to_thread(command.upgrade, cfg, "head")
+            await asyncio.to_thread(run_test_migration, "head")
         # 0006 must stay committed even though 0007's validation failed.
         assert await _versions(engine) == ["0006"]
         async with engine.connect() as conn:
@@ -229,14 +561,13 @@ async def test_earlier_revision_commits_before_later_guard_failure(engine: Async
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM accounts WHERE cash != round(cash, 2)"))
-        await asyncio.to_thread(command.upgrade, cfg, "head")
+        await asyncio.to_thread(run_test_migration, "head")
 
 
-async def test_cents_migration_refuses_sub_cent_cash(engine: AsyncEngine) -> None:
-    cfg = _config()
+async def test_cents_migration_refuses_sub_cent_cash(retained_migration_db) -> None:
+    engine = retained_migration_db
     email = unique_email("subcent")
-    await asyncio.to_thread(command.upgrade, cfg, "head")
-    await asyncio.to_thread(command.downgrade, cfg, "0006")
+    await asyncio.to_thread(run_test_migration, "0006")
     try:
         async with engine.begin() as conn:
             user_id = (
@@ -251,21 +582,21 @@ async def test_cents_migration_refuses_sub_cent_cash(engine: AsyncEngine) -> Non
                 {"u": user_id},
             )
         with pytest.raises(RuntimeError, match="sub-cent cash"):
-            await asyncio.to_thread(command.upgrade, cfg, "0007")
+            await asyncio.to_thread(run_test_migration, "0007")
         assert await _versions(engine) == ["0006"]
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM accounts WHERE user_id = :u"), {"u": user_id})
             await conn.execute(text("DELETE FROM users WHERE id = :u"), {"u": user_id})
-        await asyncio.to_thread(command.upgrade, cfg, "0007")
+        await asyncio.to_thread(run_test_migration, "0007")
         assert await _versions(engine) == ["0007"]
     finally:
         async with engine.begin() as conn:
             await conn.execute(text("DELETE FROM accounts WHERE cash != round(cash, 2)"))
-        await asyncio.to_thread(command.upgrade, cfg, "head")
+        await asyncio.to_thread(run_test_migration, "head")
 
 
 async def test_models_match_schema(engine: AsyncEngine) -> None:
-    await asyncio.to_thread(command.upgrade, _config(), "head")
+    await asyncio.to_thread(run_test_migration, "head")
 
     def _diff(sync_conn):  # type: ignore[no-untyped-def]
         ctx = MigrationContext.configure(sync_conn, opts={"compare_type": True})

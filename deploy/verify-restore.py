@@ -48,11 +48,110 @@ CORE = [
     "docker-compose.ops-test.yml",
 ]
 UNITS = ["deploy/systemd/birja-backup.service", "deploy/systemd/birja-backup.timer"]
+# Versioned, exact successor payload. Absence preserves old archive semantics.
+PORTFOLIO_PAYLOAD_V1 = [
+    "backend/alembic/versions/0015_portfolio_expansion.py",
+    "backend/alembic/versions/0016_portfolio_association.py",
+    "backend/alembic/versions/0017_portfolio_ownership.py",
+    "backend/alembic/sql/0017_dividend_portfolio.sql",
+    "backend/alembic/sql/0017_stock_portfolio.sql",
+    "backend/app/db/portfolio_bootstrap.py",
+    "backend/app/db/portfolio_migrate.py",
+    "backend/app/db/dev_bootstrap.py",
+    "deploy/tests/portfolio-execution-fixture.py",
+    "deploy/tests/portfolio-smoke.py",
+    "deploy/tests/portfolio-sources.py",
+    "deploy/tests/portfolio-retained-sources.json",
+    "deploy/tests/run-portfolio-validation.py",
+    "deploy/tests/ops-fixtures.py",
+    "deploy/tests/selected-cutover.py",
+    "deploy/tests/test-rollback-db-security.sh",
+]
 PROVENANCE = {
     "SHA256SUMS": "fb520966ee01d2a3d4219c66762c66efa56300833b6f639f36082b7462f91cb8",
     "SHA256SUMS.asc": "649f3a48d322c3d7a457ef58e2dc4c5094b1f823192cdbac3f092ea23e194d9a",
     "gpg-key-alex.asc": "e4f09134173fdd60ece4454d30e38459d172f3ea9a97b32a37324b4f0515a289",
 }
+PORTFOLIO_PAYLOAD_V2 = PORTFOLIO_PAYLOAD_V1 + [
+    'backend/alembic/versions/0018_portfolio_management_expansion.py',
+    'backend/alembic/versions/0019_portfolio_management_backfill.py',
+    'backend/alembic/versions/0020_portfolio_management_authority.py',
+    'backend/alembic/sql/0019_portfolio_metadata.sql',
+    'backend/alembic/sql/0020_portfolio_management.sql',
+    'backend/app/models/user.py', 'backend/app/models/portfolio_creation.py',
+    'backend/app/db/schema_contract.py', 'backend/app/services/accounts.py',
+    'deploy/db/bootstrap-roles.sql',
+    'deploy/tests/portfolio-management-recovery-fixture.py',
+    'deploy/tests/fixtures/portfolio-recovery-0020.json',
+]
+MANAGEMENT_SOURCE_SHA256 = {
+    'app/db/portfolio_bootstrap.py': 'b2f3326a7b19392491c7133fcc9cc34816dcf5b29360a1fc9fdd44ec68ec117c',
+    'alembic/versions/0018_portfolio_management_expansion.py': '8e63586555c85b6f6495d0da1bad4b8a455e5de71249a0f08e2c758e4b22b0b0',
+    'alembic/versions/0019_portfolio_management_backfill.py': '75f40d134e05ebdf06b15bff677d866474aa34ac64bdf66ec412bc8e0615f66d',
+    'alembic/versions/0020_portfolio_management_authority.py': 'b6e304a0d3b610468caa93a893f300138269efcc5c80f014fa7c77a58eafcc9c',
+    'alembic/sql/0019_portfolio_metadata.sql': 'a26d4230843f75af9202fce71a771818d0bd7f041777a8a01a0d53a8df7a7c65',
+    'alembic/sql/0020_portfolio_management.sql': '9fe1fd5706df5ac319f7a70dcfe73a437f0886ba7e4a827758fa8c414106963d',
+}
+
+
+PORTFOLIO_PAYLOAD_V3 = PORTFOLIO_PAYLOAD_V2 + [
+    'backend/alembic/versions/0021_portfolio_closure_schema.py',
+    'backend/alembic/versions/0022_portfolio_closure_provenance.py',
+    'backend/alembic/versions/0023_portfolio_closure_authority.py',
+    'backend/alembic/sql/0023_portfolio_closure.sql',
+    'backend/app/models/portfolio_lifecycle.py',
+    'backend/app/models/__init__.py',
+    'backend/app/models/corporate_action.py',
+    'backend/app/services/portfolio_closure.py',
+    'backend/app/services/stock_ownership.py',
+    'backend/app/services/corporate_actions.py',
+    'deploy/tests/portfolio-closure-recovery-fixture.py',
+    'deploy/tests/fixtures/portfolio-recovery-0023.json',
+]
+CLOSURE_SOURCE_SHA256 = {
+    'backend/app/db/portfolio_bootstrap.py': 'fa17d8546265f8e7eccb23838a8989b0b905a342a0d3e7b8eebf725c31c3bbc6',
+    'backend/app/db/portfolio_migrate.py': 'bfc2990eca9e70993b228b7ca52ab7c47fb17610719944779ad97b94dd57cd17',
+    'backend/app/db/schema_contract.py': 'c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6f75a30fdffbbfd4542',
+    'backend/app/models/portfolio_lifecycle.py': 'ffa11aeeee35f0843135808f60c412fb9e327e8a1dc672a1f86bb0d5f416951c',
+    'backend/app/models/__init__.py': '6856ecbbdfe51305caf3ab0fa1061b08d9f105a6eb73beb4240510508232ae9d',
+    'backend/app/models/corporate_action.py': 'ec268ad87ef8b1df2509da3513932c50a6b9f007786298694f97377a23eb8077',
+    'backend/app/services/portfolio_closure.py': 'ef21a9be97efdda0989e55cede877ea624ae654f0bdc74984ea118c76703e025',
+    'backend/app/services/stock_ownership.py': 'fe4a317f806998a4804abcf0dbb53e5bd891227440abaa834f8a91b391ad052d',
+    'backend/app/services/corporate_actions.py': 'da69ac8e46daf54bb6751bd414248402931b4693b51ec2594ecc8a1aa2a95e2e',
+    'backend/alembic/versions/0021_portfolio_closure_schema.py': '737446365d1304dc3721ced552102cde4d386b07031823eaf33967961732c81c',
+    'backend/alembic/versions/0022_portfolio_closure_provenance.py': '0c3467650b7b308e7e4bb3f03f1e8f58d1f1ee8fe09c3361353a9036fea48cdb',
+    'backend/alembic/versions/0023_portfolio_closure_authority.py': 'd62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5',
+    'backend/alembic/sql/0023_portfolio_closure.sql': '59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920',
+    'deploy/db/bootstrap-roles.sql': 'e981467f2cbf565140eb78b318b06b201f8007e95d563fe162d70663c47691bb',
+    'deploy/tests/portfolio-closure-recovery-fixture.py': 'b8ecf20867f61c3dabbba6ab0e55f5db1a08f5c59c220b9c38fa59da6cc3c4d3',
+    'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
+}
+
+
+def closure_source(root=None):
+    """Authenticate successor code before importing authority helpers."""
+    root = Path(root) if root is not None else HERE.parent
+    for name, expected in CLOSURE_SOURCE_SHA256.items():
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        require(digest(path) == expected)
+
+
+def management_source(root=None):
+    """Fixed source pins precede importing any current authority constants."""
+    root = Path(root) if root is not None else HERE.parent / 'backend'
+    for name, expected in MANAGEMENT_SOURCE_SHA256.items():
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        require(digest(path) == expected)
+
+
+def portfolio_payload_files(inventory):
+    payload = inventory['portfolio_payload']
+    version = payload.get('version')
+    require(type(version) is int and version in (1, 2, 3))
+    return {1: PORTFOLIO_PAYLOAD_V1, 2: PORTFOLIO_PAYLOAD_V2,
+            3: PORTFOLIO_PAYLOAD_V3}[version]
 
 
 def require(value):
@@ -82,7 +181,11 @@ def synthetic_path(path, exists=True):
     require(
         len(p.parts) >= 4
         and p.parts[1] == "tmp"
-        and p.parts[2].startswith("birja-backup-test-")
+        and (p.parts[2].startswith("birja-backup-test-")
+             or p in (Path("/tmp/birja-phase12-proof/recovery.tar.gz"),
+                      Path("/tmp/birja-phase13-proof/recovery.tar.gz"),
+                      Path("/tmp/birja-phase14-proof/recovery.tar.gz"),
+                      Path("/tmp/birja-phase15-proof/recovery.tar.gz")))
     )
     private(Path(*p.parts[:3]), True)
     for component in [p, *list(p.parents)[:-1]]:
@@ -372,6 +475,23 @@ def bundle_verify(archive, sha, required_profile=None):
         names = tar_members(t)
         require({"INVENTORY.json", "SHA256SUMS"} <= names)
         inventory = json.load(t.extractfile("INVENTORY.json"))
+        if inventory.get('portfolio_payload', {}).get('version') == 3:
+            require({'schema_contract', 'retained_source_payloads'} <= inventory.keys())
+            require(inventory['recovery_profile'] == 'deploy-recovery-v4')
+            require(inventory['retained_source_payloads'] == RETAINED_CLOSURE_SOURCE_PAYLOADS)
+            require(set(inventory['schema_contract']) == {'revisions', 'payload_sha256'})
+            require(set(inventory['schema_contract']['payload_sha256']) == set(CONTRACT_PAYLOAD))
+        if inventory.get('portfolio_payload', {}).get('version') == 2:
+            # Successor completeness is mandatory, even when an archive has
+            # been coherently repackaged with new inventory/checksum bytes.
+            require({'schema_contract', 'retained_source_payloads'} <= inventory.keys())
+            retained = dict(RETAINED_SOURCE_PAYLOADS)
+            retained['sources/portfolio0017.tar'] = '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248'
+            require(inventory['retained_source_payloads'] == retained)
+            require(set(inventory['schema_contract']) == {'revisions', 'payload_sha256'})
+            require(inventory['schema_contract']['revisions'] ==
+                    ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020'])
+            require(set(inventory['schema_contract']['payload_sha256']) == set(CONTRACT_PAYLOAD))
         allowed = set(
             CORE
             + [
@@ -386,6 +506,20 @@ def bundle_verify(archive, sha, required_profile=None):
         )
         require(inventory["units"] == UNITS)
         allowed.update(inventory["units"])
+        if "retained_source_payloads" in inventory:
+            retained = dict(RETAINED_SOURCE_PAYLOADS)
+            if inventory.get('portfolio_payload', {}).get('version') == 2:
+                retained['sources/portfolio0017.tar'] = '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248'
+            elif inventory.get('portfolio_payload', {}).get('version') == 3:
+                retained = RETAINED_CLOSURE_SOURCE_PAYLOADS
+            require(inventory["retained_source_payloads"] == retained)
+            allowed.update(retained)
+        if "portfolio_payload" in inventory:
+            payload_files = portfolio_payload_files(inventory)
+            if inventory['portfolio_payload']['version'] == 2:
+                require(inventory.get('recovery_profile') == 'deploy-recovery-v3')
+            require(set(inventory["portfolio_payload"]["sha256"]) == set(payload_files))
+            allowed.update(payload_files)
         require(
             names == allowed
             and inventory["files"] == sorted(allowed - {"SHA256SUMS", "INVENTORY.json"})
@@ -406,7 +540,10 @@ def bundle_verify(archive, sha, required_profile=None):
         require(set(expected) == names - {"SHA256SUMS"})
         for name, h in expected.items():
             require(hashlib.file_digest(t.extractfile(name), "sha256").hexdigest() == h)
+        if "retained_source_payloads" in inventory:
+            require(all(expected[name] == value for name, value in retained.items()))
         verify_contract_inventory(inventory, expected)
+        verify_portfolio_inventory(inventory, expected)
         require(expected["tools/restic"] == RESTIC_SHA)
         require(expected["docker-compose.ops-test.yml"] == COMPOSE_SHA)
         require(all(expected["provenance/" + n] == h for n, h in PROVENANCE.items()))
@@ -427,9 +564,13 @@ def bundle_verify(archive, sha, required_profile=None):
         )
         if required_profile is not None:
             require(
-                required_profile == "deploy-recovery-v2"
+                required_profile in ("deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4")
                 and inventory.get("recovery_profile") == required_profile
             )
+            require((required_profile == 'deploy-recovery-v3') ==
+                    (inventory.get('portfolio_payload', {}).get('version') == 2))
+            require((required_profile == 'deploy-recovery-v4') ==
+                    (inventory.get('portfolio_payload', {}).get('version') == 3))
     runtime()
     return inventory
 
@@ -438,14 +579,61 @@ CONTRACT_PAYLOAD = [
     "deploy/backup-manifest.sql", "deploy/backup-snapshot.py", "deploy/verify-restore.py"
 ]
 
+# Complete immutable source payloads are separate from executable recovery CORE.
+# Old archives without this successor field retain their exact existing layout.
+RETAINED_SOURCE_PAYLOADS = {
+    "sources/retained.tar": "1f3a8539a796aa8fdedbc79153e449035f90a06d715c6b2e4c667caed019ae85",
+    "sources/legacy0008.tar": "09ab46937e7da0f8cf6760bd245dd960242c541f7e136b269b3fd7db98c92bdb",
+    "sources/legacy0007.tar": "f732a59390add4a7c5e538a5d04fde1b53ec6e026ee26f6a0da3e7ac00c6a312",
+}
+
+RETAINED_CLOSURE_SOURCE_PAYLOADS = {
+    **RETAINED_SOURCE_PAYLOADS,
+    'sources/portfolio0017.tar': '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248',
+    'sources/portfolio0020.tar': '2ecec604674c7b18ef864b32883b9a6f67d42f9a3080b949b6e126dd47810291',
+}
+
 
 def verify_contract_inventory(inventory, expected):
     """Old immutable artifacts remain readable; successor metadata is exact."""
     if "schema_contract" in inventory:
+        revisions = inventory["schema_contract"].get("revisions")
+        if inventory.get('portfolio_payload', {}).get('version') == 3:
+            require(inventory['schema_contract'] == {
+                'revisions': ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023'],
+                'payload_sha256': {name: expected[name] for name in CONTRACT_PAYLOAD},
+            })
+            return
+        # Exact released v0.5.0 inventory; no prefix/range/latest acceptance.
+        legacy = ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
+        supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r != '0023']
+        require(revisions in (legacy, supported, [r for r in supported if r != '0020']))
+        if '0020' in revisions:
+            require(inventory.get('portfolio_payload', {}).get('version') == 2)
+        if "portfolio_payload" in inventory:
+            supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r != '0023']
+            if inventory['portfolio_payload']['version'] == 1:
+                supported.remove('0020')
+            require(revisions == supported)
         require(inventory["schema_contract"] == {
-            "revisions": list(recovery_contract().SUPPORTED_REVISIONS),
+            "revisions": revisions,
             "payload_sha256": {name: expected[name] for name in CONTRACT_PAYLOAD},
         })
+
+
+def verify_portfolio_inventory(inventory, expected):
+    """An absent field is legacy; a present field has no permissive fallback."""
+    if "portfolio_payload" in inventory:
+        files = portfolio_payload_files(inventory)
+        require(all(name in expected for name in files))
+        payload = {'version': inventory['portfolio_payload']['version'], 'sha256':
+                   {name: expected[name] for name in files}}
+        if payload['version'] == 2:
+            payload['revision'] = '0020'
+        elif payload['version'] == 3:
+            payload['revision'] = '0023'
+            require(all(expected[name] == value for name, value in CLOSURE_SOURCE_SHA256.items()))
+        require(inventory['portfolio_payload'] == payload)
 
 
 def bundle_package(output, units=False):
@@ -459,13 +647,26 @@ def bundle_package(output, units=False):
     index_bytes, manifest_bytes = registry_manifests()
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
-        files = CORE + UNITS
+        files = CORE + UNITS + PORTFOLIO_PAYLOAD_V1
         for name in files:
             src = HERE.parent / name
             require(src.is_file() and not src.is_symlink())
             dest = stage / name
             dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             shutil.copyfile(src, dest)
+        source_helper = HERE.parent / "deploy/tests/portfolio-sources.py"
+        source_payloads = {}
+        if source_helper.is_file():
+            source_spec = importlib.util.spec_from_file_location("retained_archive_sources", source_helper)
+            source_module = importlib.util.module_from_spec(source_spec)
+            source_spec.loader.exec_module(source_module)
+            source_payloads = source_module.archive_payloads()
+            require(set(source_payloads) == set(RETAINED_SOURCE_PAYLOADS))
+            for name, data in source_payloads.items():
+                require(hashlib.sha256(data).hexdigest() == RETAINED_SOURCE_PAYLOADS[name])
+                destination = stage / name
+                destination.parent.mkdir(mode=0o700, exist_ok=True)
+                destination.write_bytes(data)
         for directory in ["tools", "images", "provenance"]:
             (stage / directory).mkdir(mode=0o700)
         shutil.copyfile(tools / "restic", stage / "tools/restic")
@@ -503,6 +704,8 @@ def bundle_package(output, units=False):
         )
         inventory = {
             "format": 1,
+            "portfolio_payload": {"version": 1, "sha256":
+                {name: digest(stage / name) for name in PORTFOLIO_PAYLOAD_V1}},
             "recovery_profile": "deploy-recovery-v2",
             "files": files,
             "units": UNITS,
@@ -517,13 +720,15 @@ def bundle_package(output, units=False):
                 "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
             },
         }
+        if source_payloads:
+            inventory["retained_source_payloads"] = RETAINED_SOURCE_PAYLOADS
         (stage / "INVENTORY.json").write_text(json.dumps(inventory, sort_keys=True))
         files.append("INVENTORY.json")
         (stage / "SHA256SUMS").write_text(
             "".join(digest(stage / n) + "  " + n + "\n" for n in sorted(files))
         )
         files.append("SHA256SUMS")
-        with tarfile.open(output, "w", format=tarfile.USTAR_FORMAT) as t:
+        with tarfile.open(output, "x", format=tarfile.USTAR_FORMAT) as t:
             for name in sorted(files):
                 p = stage / name
                 info = tarfile.TarInfo(name)
@@ -629,7 +834,7 @@ def bundle(args):
     p.add_argument("--output")
     p.add_argument("--synthetic-root")
     p.add_argument("--include-units", action="store_true")
-    p.add_argument("--require-profile", choices=["deploy-recovery-v2"])
+    p.add_argument("--require-profile", choices=["deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4"])
     a = p.parse_args(args)
     if a.mode == "package":
         require(a.output and not a.archive and not a.sha and not a.synthetic_root)
@@ -758,7 +963,35 @@ def check_running(dc):
     require(network["Internal"] is True)
 
 
-def recovery_contract():
+_RETAINED_CONTRACTS = {}
+
+
+def recovery_contract(revision=None):
+    """Retained authority is imported only from its complete fixed source."""
+    lane = {'0017': 'portfolio0017', '0020': 'portfolio0020'}.get(revision)
+    if lane:
+        archive = HERE.parent / ('sources/' + lane + '.tar')
+        if archive.exists():
+            require(archive.is_file() and not archive.is_symlink())
+            require(digest(archive) == RETAINED_CLOSURE_SOURCE_PAYLOADS['sources/' + lane + '.tar'])
+            if lane not in _RETAINED_CONTRACTS:
+                directory = tempfile.TemporaryDirectory(prefix='birja-retained-contract-')
+                with tarfile.open(archive, 'r:') as source:
+                    for member in source.getmembers():
+                        require(member.isfile() or member.isdir() or member.issym())
+                        require(not Path(member.name).is_absolute() and '..' not in Path(member.name).parts)
+                        if member.issym():
+                            target = Path(directory.name) / Path(member.name).parent / member.linkname
+                            require(not Path(member.linkname).is_absolute() and
+                                    target.resolve().is_relative_to(Path(directory.name)))
+                    source.extractall(directory.name, filter='data')
+                path = Path(directory.name) / 'deploy/backup-snapshot.py'
+                spec = importlib.util.spec_from_file_location('fixed_' + lane + '_contract', path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                module._retained_directory = directory
+                _RETAINED_CONTRACTS[lane] = module
+            return _RETAINED_CONTRACTS[lane]
     spec = importlib.util.spec_from_file_location("recovery_contract", HERE / "backup-snapshot.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -766,8 +999,12 @@ def recovery_contract():
 
 
 def canonical(dc, db=CLONE):
-    contract = recovery_contract()
     revision = sql(dc, "SELECT version_num FROM alembic_version ORDER BY version_num;", db).decode().strip()
+    contract = recovery_contract(revision)
+    if revision == '0023':
+        closure_source()
+    elif revision == '0020':
+        management_source(contract.HERE.parent / 'backend')
     return json.loads(
         sql(
             dc,
@@ -778,9 +1015,24 @@ def canonical(dc, db=CLONE):
 
 
 def verify(dc, manifest, *, quarantined=True):
-    contract = recovery_contract()
+    contract = recovery_contract(manifest['revision'])
     contract.validate_manifest(manifest)
     actual = canonical(dc)
+    if manifest['revision'] in ('0017', '0020', '0023'):
+        contract.validate_manifest(actual, quarantined=quarantined)
+        keys = ['tables','financial','revision','schema','portfolio_state','identity_state']
+        if manifest['revision'] == '0020':
+            keys += ['management_state']
+        elif manifest['revision'] == '0023':
+            keys += ['management_state', 'closure_state', 'stock_invalid']
+        for key in keys:
+            require(actual[key] == manifest[key])
+        for table in contract.identity_tables(manifest['revision']):
+            # Fixed identifiers only; never execute a manifest-provided name.
+            require(sql(dc, "SELECT last_value + CASE WHEN is_called THEN 1 ELSE 0 END > "
+                "(SELECT coalesce(max(id),0) FROM public."+table+") FROM public."+table+"_id_seq;").strip() == b't')
+        print('equality=true invariants=true identities=true')
+        return
     contract.validate_manifest(actual,quarantined=quarantined and manifest['revision']=='0014')
     if manifest['revision'] in ('0012','0013','0014'):
         require(actual['resolution_authority'] == manifest['resolution_authority'])
@@ -983,8 +1235,147 @@ def restore_dividend_authority(dc):
     contract.validate_dividend_authority(json.loads(sql(dc,'SELECT '+contract.dividend_authority_sql())),quarantined=True)
 
 
+def restore_portfolio_authority(dc):
+    """Authenticate a no-owner/no-ACL isolated0017 clone before fixed grants.
+
+    No function body, role, grant or identifier is selected by an archive. The
+    clone has no public CONNECT. Fresh fixed NOLOGIN roles are preprovisioned
+    only by the trusted ops connection; unsafe existing attributes/memberships
+    are refused, never repaired. Economic definer EXECUTE stays quarantined.
+    """
+    contract = recovery_contract('0017')
+    sql(dc, """DO $$ DECLARE n text; BEGIN
+      FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler','birja_action_operator'] LOOP
+        IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+          EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+        END IF;
+        IF EXISTS(SELECT FROM pg_roles WHERE rolname=n AND
+          (rolinherit OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls))
+        OR EXISTS(SELECT FROM pg_auth_members m JOIN pg_roles a ON a.oid=m.roleid
+          JOIN pg_roles b ON b.oid=m.member WHERE a.rolname=n OR b.rolname=n)
+        THEN RAISE EXCEPTION 'unsafe restored portfolio role'; END IF;
+      END LOOP; END $$;""", 'birja_ops_test')
+    actual = canonical(dc)
+    require(contract.canonical_hash(actual['schema']) == contract.PORTFOLIO_SCHEMA_SHA256)
+    require(contract.canonical_hash(actual['portfolio_authority']) == contract.PORTFOLIO_NO_ACL_SHA256)
+    # Validate the data/identity shape without disguising the no-ACL boundary
+    # as an admitted source. Full quarantined admission runs after fixed grants.
+    authority = actual['portfolio_authority']
+    source_functions = {row['signature']: row for row in authority['functions']}
+    require(len(source_functions) == 10)
+    for signature in source_functions:
+        # Hash authentication above establishes these fixed catalogue names.
+        require(signature in contract.PORTFOLIO_SIGNATURES)
+    revokes = ''.join('REVOKE ALL ON FUNCTION public.'+signature+
+        ' FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;\n'
+        for signature in sorted(contract.PORTFOLIO_SIGNATURES))
+    sql(dc, revokes + contract.PORTFOLIO_RESTORE_GRANTS + """
+      REVOKE ALL ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),
+        public.record_stock_dividend_hold(bigint,text),public.lock_stock_portfolio_roots(bigint)
+        FROM birja_scheduler;
+    """)
+    contract.validate_manifest(canonical(dc), quarantined=True)
+
+
+def restore_management_authority(dc):
+    """Authenticate fixed0020 noACL state before transactionally rebuilding ACLs."""
+    contract = recovery_contract('0020')
+    management_source(contract.HERE.parent / 'backend')
+    actual = canonical(dc)
+    require(actual['revision'] == '0020')
+    require(contract.canonical_hash(actual['schema']) == contract.MANAGEMENT_SCHEMA_SHA256)
+    require(contract.canonical_hash(actual['portfolio_authority']) == contract.MANAGEMENT_NO_ACL_SHA256)
+    require(actual['management_contract']['acl'] == contract.MANAGEMENT_NO_ACL_PRIVILEGES_SHA256)
+    require(actual['management_contract']['unsafe'] == 0)
+    require(actual['management_contract']['catalogue'] == '535cacb140a3a1753b5cf27e2eadcb80bc272a9b12772defd3936a3edc6c2209')
+    require(set(actual['tables']) == set(contract.contract_columns('0020')))
+    state = actual['management_state']
+    require(set(state) == {'invalid', 'creations', 'initializations'})
+    require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
+    require(state['creations'] == actual['tables']['portfolio_creations']['count'])
+    require(state['initializations'] == actual['tables']['portfolio_initializations']['count'] == actual['tables']['users']['count'])
+    states = actual['identity_state']
+    require([r[0] for r in states] == contract.identity_tables('0020'))
+    for _, last, called in states:
+        require(type(last) is int and 1 <= last <= 9223372036854775807 and type(called) is bool)
+    require(actual['portfolio_state']['invalid'] == 0 and actual['stock_invalid'] == 0)
+    require(all(actual['financial'][key] == 0 for key in ('negative_cash','fractional_cents','negative_holdings')))
+    bootstrap = contract.management_bootstrap()
+    # Every catalogue identifier/body was authenticated above. Revoke all
+    # seventeen exact signatures, including validators/triggers and economic
+    # definers, before granting the reviewed runtime profile in one transaction.
+    signatures = sorted(row['signature'] for row in actual['portfolio_authority']['functions'])
+    require(len(signatures) == 17 and len(set(signatures)) == 17)
+    revokes = ''.join('REVOKE ALL ON FUNCTION public.' + signature +
+        ' FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;\n'
+        for signature in signatures)
+    quarantine = """
+      REVOKE EXECUTE ON FUNCTION public.create_portfolio(bigint,uuid,text,text),
+        public.initialize_portfolio(bigint),
+        public.update_portfolio_metadata(bigint,bigint,text,text,boolean,boolean) FROM birja_app;
+      REVOKE EXECUTE ON FUNCTION public.apply_stock_dividend(bigint,bigint,text,text),
+        public.record_stock_dividend_hold(bigint,text),public.lock_stock_portfolio_roots(bigint)
+        FROM birja_scheduler;
+    """
+    sql(dc, 'BEGIN;\n' + revokes + bootstrap.PREFLIGHT_SQL + bootstrap.GRANTS_SQL + quarantine + '\nCOMMIT;')
+    contract.validate_manifest(canonical(dc), quarantined=True)
+
+
+def closure_evidence_matches(actual, expected):
+    """Compare immutable source evidence, never a reconstructed expectation."""
+    for key in ('tables', 'identity_state', 'financial', 'schema', 'revision',
+                'portfolio_state', 'management_state', 'closure_state', 'stock_invalid'):
+        require(actual[key] == expected[key])
+
+
+def restore_closure_authority(dc, manifest):
+    """Authenticate complete no-ACL0023 evidence BEFORE any runtime regrant."""
+    closure_source()
+    contract = recovery_contract()
+    contract.validate_manifest(manifest)
+    require(manifest['revision'] == '0023')
+    bootstrap = contract.closure_bootstrap()
+    actual = canonical(dc)
+    require(actual['revision'] == '0023')
+    require(actual['closure_contract']['catalogue'] == contract.CLOSURE_CATALOGUE_SHA256)
+    # pg_restore --no-acl can leave the built-in PUBLIC function default. Only
+    # that finite permission is normalized; unexpected non-owner ACLs refuse.
+    privilege_query = "SELECT coalesce(json_agg(v ORDER BY v::text),'[]'::json) FROM ("
+    grants = json.loads(sql(dc, privilege_query + bootstrap.ACL_SQL.split('FROM (', 1)[1]))
+    signatures = {r['signature'] for r in manifest['portfolio_authority']['functions']}
+    require(len(signatures) == 21)
+    require(all(row in [['routine', signature, 'PUBLIC', 'EXECUTE', False]
+                        for signature in signatures] for row in grants))
+    require(sql(dc, "SELECT count(*) FROM pg_default_acl d,LATERAL aclexplode(d.defaclacl) x "
+                "WHERE d.defaclrole='birja_migrator'::regrole AND x.grantee<>d.defaclrole;").strip() == b'0')
+    normalized = json.loads(json.dumps(actual))
+    for function in normalized['portfolio_authority']['functions']:
+        require(function['acl'] in ([], [['PUBLIC', 'EXECUTE', False]]))
+        function['acl'] = []
+    normalized['closure_contract']['acl'] = contract.CLOSURE_EMPTY_ACL_SHA256
+    normalized['closure_contract']['defaults'] = contract.CLOSURE_EMPTY_ACL_SHA256
+    normalized['management_contract']['acl'] = contract.CLOSURE_EMPTY_ACL_SHA256
+    contract.validate_manifest(normalized, quarantined=True)
+    closure_evidence_matches(normalized, manifest)
+    defaults = ''.join('ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator' + scope +
+                       ' REVOKE ALL ON ' + kind +
+                       ' FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;\n'
+                       for scope in ('', ' IN SCHEMA public')
+                       for kind in ('TABLES', 'SEQUENCES', 'FUNCTIONS'))
+    sql(dc, 'BEGIN; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;\n' +
+        defaults + bootstrap.PREFLIGHT_0023_SQL + '\nCOMMIT;')
+    quarantined = canonical(dc)
+    contract.validate_manifest(quarantined, quarantined=True)
+    closure_evidence_matches(quarantined, manifest)
+    sql(dc, 'BEGIN;\n' + bootstrap.PREFLIGHT_0023_SQL +
+        bootstrap.GRANTS_0023_SQL + '\nCOMMIT;')
+    final = canonical(dc)
+    contract.validate_manifest(final)
+    closure_evidence_matches(final, manifest)
+
+
 @contextlib.contextmanager
-def restored(dc, dump):
+def restored(dc, dump, *, manifest=None):
     created = False
     try:
         call(dc + ["exec", "-T", "postgres", "pg_restore", "--list"], dump)
@@ -1038,7 +1429,29 @@ def restored(dc, dump):
             dump,
         )
         revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
-        if revision == b'0014':
+        if revision in (b'0020', b'0023'):
+            # Current admission forbids migrator ownership of database/schema.
+            # Keep relation/routine ownership with the restricted migrator;
+            # administrative container identity owns only these boundaries.
+            sql(dc, f'ALTER DATABASE {CLONE} OWNER TO {BOOT}; GRANT CONNECT ON DATABASE {CLONE} TO birja_migrator;', 'birja_ops_test')
+            call(dc + ['exec','-T','postgres','psql','-XqAt','-v','ON_ERROR_STOP=1',
+                       '-U',BOOT,'-d',CLONE],
+                 b'ALTER SCHEMA public OWNER TO pg_database_owner; REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator;')
+            # Fixed roles are created outside the clone, with no runtime login.
+            sql(dc, """DO $$ DECLARE n text; BEGIN
+              FOREACH n IN ARRAY ARRAY['birja_app','birja_scheduler','birja_action_operator'] LOOP
+                IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname=n) THEN
+                  EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
+                END IF;
+              END LOOP; END $$;""", 'birja_ops_test')
+            if revision == b'0023':
+                require(manifest is not None)
+                restore_closure_authority(dc, manifest)
+            else:
+                restore_management_authority(dc)
+        if revision == b'0017':
+            restore_portfolio_authority(dc)
+        elif revision == b'0014':
             restore_dividend_authority(dc)
         if revision in (b'0012',b'0013',b'0014'):
             if revision in (b'0013',b'0014'):
@@ -1135,10 +1548,10 @@ def restore(args):
                         and p.stat().st_size <= c["max_stage_bytes"]
                     )
                 manifest = json.loads((target / "manifest.json").read_text())
-                recovery_contract().validate_manifest(manifest)
+                recovery_contract(manifest['revision']).validate_manifest(manifest)
                 require(digest(target / "database.dump") == manifest["archive_sha256"])
-                with restored(dc, (target / "database.dump").read_bytes()):
-                    verify(dc, manifest)
+                with restored(dc, (target / "database.dump").read_bytes(), manifest=manifest):
+                    verify(dc, manifest, quarantined=manifest['revision'] != '0023')
                 attempt.update(
                     binding,
                     source_release=manifest["release"],

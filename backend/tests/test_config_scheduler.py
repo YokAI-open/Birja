@@ -46,7 +46,8 @@ def test_secrets_in_env_are_ignored_not_loaded(monkeypatch: pytest.MonkeyPatch) 
     assert "jwt_secret" not in s.model_dump()
 
 
-def test_defaults_match_backend_settings() -> None:
+def test_defaults_match_backend_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PRICE_SOURCE", raising=False)
     s = _settings()
     assert s.price_source == "kraken"
     assert s.price_poll_interval_seconds == 60

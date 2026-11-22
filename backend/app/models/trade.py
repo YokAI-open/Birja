@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Numeric,
@@ -21,12 +22,18 @@ from app.db.base import Base
 
 
 class Holding(Base):
-    """One row per user and coin: quantity held and its USD cost basis (D-07)."""
+    """One row per portfolio and coin: quantity and its USD cost basis (D-07)."""
 
     __tablename__ = "holdings"
-    # The UNIQUE index serves the (user, coin) lookup and covers the user_id FK.
+    # The root-first UNIQUE index also covers owned portfolio lookups.
     __table_args__ = (
-        UniqueConstraint("user_id", "coin_id", name="uq_holdings_user_coin"),
+        UniqueConstraint("portfolio_id", "coin_id", name="uq_holdings_portfolio_coin"),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_holdings_portfolio_owner",
+        ),
+        Index("ix_holdings_user_id", "user_id"),
         CheckConstraint("quantity >= 0", name="quantity_non_negative"),
         CheckConstraint("cost_basis >= 0", name="cost_basis_non_negative"),
         CheckConstraint("cost_basis = round(cost_basis, 2)", name="cost_basis_cents"),
@@ -34,6 +41,7 @@ class Holding(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     coin_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("coins.id"), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
@@ -44,9 +52,18 @@ class Trade(Base):
     """Append-only fill record with the exact price and as-of used (D-03)."""
 
     __tablename__ = "trades"
-    # Equality on user first, then the history seek/order boundary.
+    # History seeks use the explicit root; retry keys remain global to the user.
     __table_args__ = (
         UniqueConstraint("id", "coin_id", "user_id", name="uq_trades_id_coin_user"),
+        UniqueConstraint(
+            "id", "portfolio_id", "coin_id", "user_id", name="uq_trades_id_portfolio_coin_user"
+        ),
+        ForeignKeyConstraint(
+            ["portfolio_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_trades_portfolio_owner",
+        ),
+        Index("ix_trades_portfolio_created_id", "portfolio_id", "created_at", "id"),
         Index("ix_trades_user_created_id", "user_id", "created_at", "id"),
         UniqueConstraint("user_id", "idempotency_key", name="uq_trades_user_idempotency_key"),
         CheckConstraint("side IN ('buy', 'sell')", name="side_known"),
@@ -70,6 +87,7 @@ class Trade(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    portfolio_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     coin_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("coins.id"), nullable=False)
     side: Mapped[str] = mapped_column(Text, nullable=False)

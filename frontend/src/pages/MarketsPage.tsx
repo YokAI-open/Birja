@@ -3,12 +3,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { StockSection } from "@/components/StockSection";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { formatAge, freshnessStatus } from "@/lib/age";
 import { formatUnitPrice } from "@/lib/money";
 
-function MarketsPage() {
+function MarketsPage({
+  portfolioId,
+  authenticated = false,
+}: {
+  portfolioId?: string;
+  authenticated?: boolean;
+}) {
   const { data, isPending, isError, refetch, dataUpdatedAt } = usePrices();
   const now = useNow(1000);
   // Server age plus local elapsed time since the response; never browser clock vs as_of.
@@ -96,7 +103,10 @@ function MarketsPage() {
                   </td>
                   <td className="pl-4 text-right">
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/trade/${item.symbol}`} aria-label={`Trade ${item.symbol}`}>
+                      <Link
+                        to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/${encodeURIComponent(item.symbol)}`}
+                        aria-label={`Trade ${item.symbol}`}
+                      >
                         Trade
                       </Link>
                     </Button>
@@ -117,6 +127,7 @@ function MarketsPage() {
           Markets
         </h1>
       </div>
+      {authenticated && <PortfolioSwitcher portfolioId={portfolioId} />}
       <section aria-labelledby="crypto-heading" className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h2 id="crypto-heading" className="font-medium">
@@ -137,7 +148,7 @@ function MarketsPage() {
           <CardContent>{body}</CardContent>
         </Card>
       </section>
-      <StockSection />
+      <StockSection portfolioId={portfolioId} />
     </div>
   );
 }

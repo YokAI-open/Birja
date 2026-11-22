@@ -1,9 +1,12 @@
 import { ApiError, apiFetch } from "./client";
+import { isPortfolioId } from "./portfolios";
 import { stockInstant, stockTimestamp } from "./stocks";
 import type { Side } from "./trades";
 
 export type StockOrder = { symbol: string; side: Side; quantity: string };
-export type StockAttempt = StockOrder & { expected_exec_price: string; idempotency_key: string };
+export type StockAttempt = Readonly<
+  StockOrder & { portfolio_id: string; expected_exec_price: string; idempotency_key: string }
+>;
 export type AdmissionIdentity = {
   product: "reference" | "quotes" | "actions" | "status" | "calendar";
   generation: number;
@@ -20,6 +23,7 @@ export type AuthorityIdentity = {
   status_sequence: number;
 };
 export type StockEconomics = {
+  portfolio_id: string;
   coin_id: string;
   provider_asset_id: string;
   symbol: string;
@@ -90,7 +94,13 @@ export type QuoteFacts = Pick<
 > & { admission_generation: number; unit_epoch: number };
 export type StockContext = Pick<
   StockEconomics,
-  "coin_id" | "provider_asset_id" | "symbol" | "company_name" | "listing_exchange" | "observed_at"
+  | "portfolio_id"
+  | "coin_id"
+  | "provider_asset_id"
+  | "symbol"
+  | "company_name"
+  | "listing_exchange"
+  | "observed_at"
 > & {
   cash: string;
   held_quantity: string;
@@ -196,7 +206,8 @@ export function isStockOrder(v: unknown): v is StockOrder {
 export function isStockAttempt(v: unknown): v is StockAttempt {
   return (
     stockRecord(v) &&
-    stockExact(v, "symbol side quantity expected_exec_price idempotency_key") &&
+    stockExact(v, "portfolio_id symbol side quantity expected_exec_price idempotency_key") &&
+    isPortfolioId(v.portfolio_id) &&
     isStockOrder({ symbol: v.symbol, side: v.side, quantity: v.quantity }) &&
     price(v.expected_exec_price) !== null &&
     typeof v.idempotency_key === "string" &&
@@ -250,9 +261,10 @@ function approvedAuthority(v: AuthorityIdentity, at: string): boolean {
   );
 }
 const ECONOMIC =
-  "coin_id provider_asset_id symbol company_name listing_exchange currency side quantity bid ask exact_mid exec_price source feed event_at collected_at observed_at age_seconds notional fee cash_delta cash_before cash_after held_before held_after session_date session_opens_at session_closes_at authority";
+  "portfolio_id coin_id provider_asset_id symbol company_name listing_exchange currency side quantity bid ask exact_mid exec_price source feed event_at collected_at observed_at age_seconds notional fee cash_delta cash_before cash_after held_before held_after session_date session_opens_at session_closes_at authority";
 function identity(v: Record<string, unknown>): boolean {
   return (
+    isPortfolioId(v.portfolio_id) &&
     id(v.coin_id) &&
     text(v.provider_asset_id, 128) &&
     symbol(v.symbol) &&
@@ -391,7 +403,7 @@ export function isStockContext(v: unknown): v is StockContext {
     !stockRecord(v) ||
     !stockExact(
       v,
-      "coin_id provider_asset_id symbol company_name listing_exchange observed_at cash held_quantity buy_max_quantity quote session status action authority execution_enabled execution_reason valid_until",
+      "portfolio_id coin_id provider_asset_id symbol company_name listing_exchange observed_at cash held_quantity buy_max_quantity quote session status action authority execution_enabled execution_reason valid_until",
     ) ||
     !identity(v) ||
     !stockTimestamp(v.observed_at) ||
@@ -567,6 +579,7 @@ function failure(error: unknown, started: number, order?: StockAttempt): never {
       error.status === 409 &&
       isStockPriceChanged(error.detail) &&
       order &&
+      error.detail.quote.portfolio_id === order.portfolio_id &&
       sameOrder(error.detail.quote, order) &&
       price(error.detail.previous_exec_price) === price(order.expected_exec_price)
     )
@@ -597,19 +610,24 @@ function failure(error: unknown, started: number, order?: StockAttempt): never {
   throw new StockTradeError("unknown");
 }
 export async function fetchStockQuote(
+  portfolioId: string,
   order: StockOrder,
   signal?: AbortSignal,
 ): Promise<TimedStockQuote> {
   const started = performance.now();
+  if (!isPortfolioId(portfolioId)) throw new StockTradeError("unknown");
   if (!isStockOrder(order)) throw new StockTradeError("refused", "invalid_quantity");
   try {
-    const value = await apiFetch("/api/v1/stock-trades/quote", {
-      method: "POST",
-      body: JSON.stringify(order),
-      signal,
-      cache: "no-store",
-    });
-    if (!isStockTradeQuote(value) || !sameOrder(value, order))
+    const value = await apiFetch(
+      `/api/v2/portfolios/${encodeURIComponent(portfolioId)}/stock-trades/quote`,
+      {
+        method: "POST",
+        body: JSON.stringify(order),
+        signal,
+        cache: "no-store",
+      },
+    );
+    if (!isStockTradeQuote(value) || value.portfolio_id !== portfolioId || !sameOrder(value, order))
       throw new Error("Unexpected stock quote response");
     signal?.throwIfAborted();
     return timed(value, started);
@@ -618,17 +636,23 @@ export async function fetchStockQuote(
   }
 }
 export async function fetchStockContext(
+  portfolioId: string,
   symbolValue: string,
   signal?: AbortSignal,
 ): Promise<TimedStockContext> {
   const started = performance.now();
+  if (!isPortfolioId(portfolioId)) throw new StockTradeError("unknown");
   if (!symbol(symbolValue)) throw new StockTradeError("refused", "quote_unavailable");
   try {
     const value = await apiFetch(
-      `/api/v1/stock-trades/${encodeURIComponent(symbolValue)}/context`,
+      `/api/v2/portfolios/${encodeURIComponent(portfolioId)}/stock-trades/${encodeURIComponent(symbolValue)}/context`,
       { signal, cache: "no-store" },
     );
-    if (!isStockContext(value) || value.symbol !== symbolValue)
+    if (
+      !isStockContext(value) ||
+      value.portfolio_id !== portfolioId ||
+      value.symbol !== symbolValue
+    )
       throw new Error("Unexpected stock context response");
     signal?.throwIfAborted();
     return timed(value, started);
@@ -637,19 +661,27 @@ export async function fetchStockContext(
   }
 }
 export async function executeStockTrade(
+  portfolioId: string,
   order: StockAttempt,
   signal?: AbortSignal,
 ): Promise<StockFill> {
   const started = performance.now();
+  if (!isPortfolioId(portfolioId) || order?.portfolio_id !== portfolioId)
+    throw new StockTradeError("unknown");
   if (!isStockAttempt(order)) throw new StockTradeError("refused", "invalid_quantity");
   try {
-    const value = await apiFetch("/api/v1/stock-trades", {
-      method: "POST",
-      body: JSON.stringify(order),
-      signal,
-      cache: "no-store",
-    });
-    if (!isStockFill(value) || !sameOrder(value, order))
+    const { portfolio_id: originalPortfolio, ...payload } = order;
+    void originalPortfolio;
+    const value = await apiFetch(
+      `/api/v2/portfolios/${encodeURIComponent(portfolioId)}/stock-trades`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+        signal,
+        cache: "no-store",
+      },
+    );
+    if (!isStockFill(value) || value.portfolio_id !== portfolioId || !sameOrder(value, order))
       throw new Error("Unexpected stock fill response");
     signal?.throwIfAborted();
     return value;

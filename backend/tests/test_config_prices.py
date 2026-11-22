@@ -39,7 +39,8 @@ def test_stale_must_exceed_fresh(stale: int) -> None:
         _settings(price_fresh_seconds=120, price_stale_seconds=stale)
 
 
-def test_scheduler_defaults() -> None:
+def test_scheduler_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PRICE_SOURCE", raising=False)
     s = _settings()
     assert s.price_source == "kraken"
     assert s.price_poll_interval_seconds == 60

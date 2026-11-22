@@ -2,7 +2,6 @@ import type { Me } from "@/api/auth";
 import { useLogout } from "@/hooks/useAuthMutations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatUsd } from "@/lib/money";
 
 function AccountPage({ me }: { me: Me }) {
   const logout = useLogout();
@@ -13,12 +12,6 @@ function AccountPage({ me }: { me: Me }) {
         <div>
           <p className="text-[13px] leading-[18px] font-medium text-muted-foreground">Email</p>
           <p className="font-medium">{me.email}</p>
-        </div>
-        <div>
-          <p className="text-[13px] leading-[18px] font-medium text-muted-foreground">Cash</p>
-          <p className="text-[32px] leading-9 font-medium tracking-[-0.02em] tabular-nums">
-            {formatUsd(me.cash_usd)}
-          </p>
         </div>
         {logout.isError ? (
           <p role="alert" className="text-loss-text">

@@ -52,6 +52,9 @@ def make_settings(kind: type[Settings] | type[SchedulerSettings], **kw: object):
         "env": "prod",
         "database_url": "postgresql+asyncpg://synthetic:UrlSecret@postgres/synthetic",
         "redis_url": "redis://localhost/0",
+        # These trust-policy tests use a production-valid source; the outer
+        # offline campaign deliberately exports PRICE_SOURCE=fake.
+        "price_source": "kraken",
         **kw,
     }
     if kind is Settings:

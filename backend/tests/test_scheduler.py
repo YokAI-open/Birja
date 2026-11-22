@@ -113,7 +113,8 @@ def _router() -> respx.MockRouter:
 
 @pytest.fixture(scope="session")
 def sched_settings() -> SchedulerSettings:
-    return SchedulerSettings()
+    # Provider HTTP is mocked; select the source whose behavior these cases prove.
+    return SchedulerSettings(price_source="kraken")
 
 
 @pytest_asyncio.fixture

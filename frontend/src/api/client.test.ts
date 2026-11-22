@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiFetch, readCookie } from "./client";
+import { ApiError, apiFetch, readCookie, guardedJsonRequest } from "./client";
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers });
@@ -309,5 +309,84 @@ describe("apiFetch cancellation boundaries", () => {
     controller.abort();
     release({ detail: { code: "old" }, private: "A" });
     expect(await pending).toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("guardedJsonRequest opt-in boundaries", () => {
+  const strictJson = (body: unknown, status = 200) =>
+    json(body, status, { "Content-Type": "application/json; charset=utf-8" });
+  it("refuses stale captures before CSRF, fetch or JSON", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      guardedJsonRequest("/api/v2/portfolios/1", { method: "DELETE" }, () => false),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("rechecks owner after awaited CSRF and never sends the mutation", async () => {
+    let current = true;
+    const fetcher = vi.fn(async () => {
+      current = false;
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      guardedJsonRequest("/api/v2/portfolios/1", { method: "DELETE" }, () => current),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetcher.mock.calls).toHaveLength(1);
+  });
+  it("checks captured context after auth recovery before an identical retry", async () => {
+    document.cookie = "bj_csrf=tok; path=/";
+    let current = true;
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        strictJson({ detail: { code: "not_authenticated", message: "private" } }, 401),
+      )
+      .mockImplementationOnce(async () => {
+        current = false;
+        return new Response(null, { status: 204 });
+      });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      guardedJsonRequest("/api/v2/portfolios/1", { method: "DELETE", body: "{}" }, () => current),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+      "/api/v2/portfolios/1",
+      "/api/v1/auth/refresh",
+    ]);
+  });
+  it.each([200, 409])("checks owner after awaited HTTP %s body parsing", async (status) => {
+    let current = true;
+    const response = strictJson({ detail: { code: "portfolio_confirmation_changed" } }, status);
+    vi.spyOn(response, "json").mockImplementation(async () => {
+      current = false;
+      return {};
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
+    await expect(
+      guardedJsonRequest("/api/v2/portfolios/1", {}, () => current),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+  it("redacts auth messages and never retries a 5xx or malformed auth response", async () => {
+    document.cookie = "bj_csrf=tok; path=/";
+    const fetcher = vi.fn(async () => strictJson({ detail: { code: "service_unavailable" } }, 503));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      guardedJsonRequest("/api/v2/portfolios/1", { method: "DELETE" }, () => true),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    fetcher
+      .mockReset()
+      .mockResolvedValue(
+        strictJson({ detail: { code: "not_authenticated", token: "private" } }, 401),
+      );
+    await expect(guardedJsonRequest("/api/v2/portfolios/1", {}, () => true)).rejects.toThrow(
+      "Unexpected response",
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

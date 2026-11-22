@@ -71,6 +71,13 @@ beforeEach(() => {
   state.refetch.mockReset();
 });
 
+it("keeps verified portfolio identity on desktop and mobile stock links", () => {
+  renderWithClient(<StockSection portfolioId="7" />);
+  const links = screen.getAllByRole("link", { name: "View stock AA" });
+  expect(links).toHaveLength(2);
+  for (const link of links) expect(link).toHaveAttribute("href", "/portfolios/7/trade/stocks/AA");
+});
+
 it("preserves twenty identities, separate listing/source, exact money and semantic source time without stock controls", () => {
   renderWithClient(<StockSection />);
   expect(screen.getByRole("heading", { name: "US stocks · 20" })).toBeVisible();

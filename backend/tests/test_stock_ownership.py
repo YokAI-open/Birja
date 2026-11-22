@@ -4,7 +4,6 @@ import asyncio
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select, text, update
@@ -22,17 +21,59 @@ from app.services.stock_ownership import (
     reconstruct_stock_quantity,
     require_supported_transaction_epoch,
 )
+from tests.stock_action_fixtures import current_runtime_roles as _runtime_roles
 from tests.stock_action_fixtures import ownership as _ownership_fixture
 from tests.stock_action_fixtures import (
     synthetic_corruption,
     synthetic_fill,
     synthetic_opening,
+    synthetic_portfolio_id,
     synthetic_split,
 )
-from tests.test_stock_action_migrations import runtime_roles as _runtime_roles
 
 ownership = _ownership_fixture
 runtime_roles = _runtime_roles
+
+
+async def test_synthetic_seeds_require_explicit_root_when_owner_has_siblings(ownership, new_user):
+    from app.models.user import Account
+
+    factory, cid, uid = ownership
+    foreign = await new_user()
+    async with factory() as db:
+        original = await synthetic_portfolio_id(db, uid)
+        sibling = Account(
+            user_id=uid,
+            name="Fixture sibling",
+            name_key="fixture sibling",
+            cash=10000,
+            starting_cash=10000,
+        )
+        db.add(sibling)
+        await db.flush()
+        with pytest.raises(AssertionError, match="Multi-root"):
+            await synthetic_portfolio_id(db, uid)
+        with pytest.raises(AssertionError, match="intended owner"):
+            await synthetic_portfolio_id(db, foreign, original)
+        now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
+        for sequence, root, quantity in ((1, original, Decimal(2)), (2, sibling.id, Decimal(4))):
+            movement = await synthetic_opening(
+                db, cid, uid, now, sequence=sequence, quantity=quantity, portfolio_id=root
+            )
+            assert movement.portfolio_id == root
+        holdings = (
+            (
+                await db.execute(
+                    select(Holding).where(Holding.coin_id == cid).order_by(Holding.portfolio_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [(h.portfolio_id, h.quantity) for h in holdings] == [
+            (original, Decimal(2)),
+            (sibling.id, Decimal(4)),
+        ]
 
 
 async def test_movement_updates_holding_once_and_replays(ownership):
@@ -40,7 +81,13 @@ async def test_movement_updates_holding_once_and_replays(ownership):
     async with factory.begin() as db:
         trade = await synthetic_fill(db, coin_id, user_id)
         movement = StockMovementInput(
-            user_id, coin_id, Decimal(2), Decimal(20), "fill:" + str(trade.id), trade.id
+            user_id,
+            coin_id,
+            Decimal(2),
+            Decimal(20),
+            "fill:" + str(trade.id),
+            trade.id,
+            portfolio_id=trade.portfolio_id,
         )
         first = await append_stock_movement(db, movement)
         replay = await append_stock_movement(db, movement)
@@ -58,7 +105,13 @@ async def filled(ownership):
     async with factory.begin() as db:
         trade = await synthetic_fill(db, coin_id, user_id)
         movement = StockMovementInput(
-            user_id, coin_id, Decimal(2), Decimal(20), "fill:" + str(trade.id), trade.id
+            user_id,
+            coin_id,
+            Decimal(2),
+            Decimal(20),
+            "fill:" + str(trade.id),
+            trade.id,
+            portfolio_id=trade.portfolio_id,
         )
         await append_stock_movement(db, movement)
         return movement
@@ -143,7 +196,13 @@ async def test_lock_race_reads_post_lock_expiry(ownership, engine, expired):
         await acquire_stock_gate(blocker, coin_id)
         trade = await synthetic_fill(waiter, coin_id, ownership[2])
         movement = StockMovementInput(
-            ownership[2], coin_id, Decimal(2), Decimal(20), "expiry-fill", trade.id
+            ownership[2],
+            coin_id,
+            Decimal(2),
+            Decimal(20),
+            "expiry-fill",
+            trade.id,
+            portfolio_id=trade.portfolio_id,
         )
         pid = (await waiter.execute(select(func.pg_backend_pid()))).scalar_one()
         task = asyncio.create_task(append_stock_movement(waiter, movement))
@@ -182,7 +241,16 @@ async def test_movement_rollback_and_actual_clock_ignore_ingestion(ownership):
         before = (await db.execute(select(func.clock_timestamp()))).scalar_one()
         trade = await synthetic_fill(db, coin_id, user_id, created_at=before - timedelta(days=4))
         row = await append_stock_movement(
-            db, StockMovementInput(user_id, coin_id, Decimal(2), Decimal(20), "fill", trade.id)
+            db,
+            StockMovementInput(
+                user_id,
+                coin_id,
+                Decimal(2),
+                Decimal(20),
+                "fill",
+                trade.id,
+                portfolio_id=trade.portfolio_id,
+            ),
         )
         assert row.economic_at >= before > trade.created_at
         await db.rollback()
@@ -261,7 +329,9 @@ async def test_reconstruction_exclusive_cutoff(ownership, offset, expected):
         now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
         cutoff = cutoff_at(now - timedelta(days=1))
         await synthetic_opening(db, coin_id, user_id, cutoff.cutoff + timedelta(seconds=offset))
-        result = await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 0)
+        result = await reconstruct_stock_quantity(
+            db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 0
+        )
         assert result.quantity == Decimal(expected)
         assert result.cutoff == cutoff
 
@@ -274,9 +344,20 @@ async def test_reconstruction_sold_out_retains_past_entitlement(ownership):
         await synthetic_opening(db, coin_id, user_id, cutoff.cutoff - timedelta(seconds=1))
         trade = await synthetic_fill(db, coin_id, user_id, side="sell")
         await append_stock_movement(
-            db, StockMovementInput(user_id, coin_id, Decimal(-2), Decimal(0), "sell", trade.id)
+            db,
+            StockMovementInput(
+                user_id,
+                coin_id,
+                Decimal(-2),
+                Decimal(0),
+                "sell",
+                trade.id,
+                portfolio_id=trade.portfolio_id,
+            ),
         )
-        result = await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 0)
+        result = await reconstruct_stock_quantity(
+            db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 0
+        )
         assert result.quantity == Decimal(2)
         holding = (await db.execute(select(Holding).where(Holding.coin_id == coin_id))).scalar_one()
         assert holding.quantity == 0
@@ -290,7 +371,13 @@ async def split_history(db, coin_id, user_id):
     await append_stock_movement(
         db,
         StockMovementInput(
-            user_id, coin_id, Decimal(2), Decimal(20), "split:" + str(app.id), application_id=app.id
+            user_id,
+            coin_id,
+            Decimal(2),
+            Decimal(20),
+            "split:" + str(app.id),
+            application_id=app.id,
+            portfolio_id=await synthetic_portfolio_id(db, user_id),
         ),
     )
     return cutoff, app
@@ -300,8 +387,12 @@ async def test_reconstruction_split_units_and_immutable_replay(ownership):
     factory, coin_id, user_id = ownership
     async with factory.begin() as db:
         cutoff, app = await split_history(db, coin_id, user_id)
-        before = await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 0)
-        after = await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 1)
+        before = await reconstruct_stock_quantity(
+            db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 0
+        )
+        after = await reconstruct_stock_quantity(
+            db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 1
+        )
         assert (before.quantity, after.quantity) == (Decimal(2), Decimal(4))
         assert before.last_movement_sequence == 1 and after.last_movement_sequence == 2
         row = await append_stock_movement(
@@ -313,16 +404,25 @@ async def test_reconstruction_split_units_and_immutable_replay(ownership):
                 Decimal(20),
                 "split:" + str(app.id),
                 application_id=app.id,
+                portfolio_id=await synthetic_portfolio_id(db, user_id),
             ),
         )
         assert row.sequence == 2
         later = await reconstruct_stock_quantity(
-            db, user_id, coin_id, cutoff_at(cutoff.cutoff + timedelta(seconds=1)), 1
+            db,
+            await synthetic_portfolio_id(db, user_id),
+            coin_id,
+            cutoff_at(cutoff.cutoff + timedelta(seconds=1)),
+            1,
         )
         assert later.quantity == 4
         with pytest.raises(OwnershipHeld, match="ambiguous_units"):
             await reconstruct_stock_quantity(
-                db, user_id, coin_id, cutoff_at(cutoff.cutoff + timedelta(seconds=1)), 0
+                db,
+                await synthetic_portfolio_id(db, user_id),
+                coin_id,
+                cutoff_at(cutoff.cutoff + timedelta(seconds=1)),
+                0,
             )
 
 
@@ -347,12 +447,19 @@ async def test_reconstruction_multi_owner_partial_split_is_held(ownership, new_u
                     Decimal(20),
                     "split:" + str(app.id),
                     application_id=app.id,
+                    portfolio_id=await synthetic_portfolio_id(db, uid),
                 ),
             )
             if uid == user_id:
                 with pytest.raises(OwnershipHeld, match="unit_gap"):
-                    await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 1)
-        assert (await reconstruct_stock_quantity(db, other, coin_id, cutoff, 1)).quantity == 4
+                    await reconstruct_stock_quantity(
+                        db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 1
+                    )
+        assert (
+            await reconstruct_stock_quantity(
+                db, await synthetic_portfolio_id(db, other), coin_id, cutoff, 1
+            )
+        ).quantity == 4
 
 
 @pytest.mark.parametrize(
@@ -388,19 +495,31 @@ async def test_reconstruction_corrupt_units_or_causality_held(ownership, new_use
             async with synthetic_corruption(db, "stock_ownership_movements"):
                 rows[0].unit_epoch = 1
         elif damage == "boundary":
-            app.sequence_boundary = 3
+            async with synthetic_corruption(
+                db, "stock_split_applications", trigger="portfolio_record_immutable"
+            ):
+                app.sequence_boundary = 3
         elif damage == "split_time":
             async with synthetic_corruption(db, "stock_ownership_movements"):
                 rows[1].economic_at += timedelta(seconds=1)
         elif damage == "split_ratio":
-            app.new_rate = "3"
+            async with synthetic_corruption(
+                db, "stock_split_applications", trigger="portfolio_record_immutable"
+            ):
+                app.new_rate = "3"
         elif damage == "epoch":
             (await db.get(StockActionState, coin_id)).unit_epoch = 2
         elif damage == "state_sequence":
             (await db.get(StockActionState, coin_id)).sequence = 9
         elif damage == "uncharted_owner":
             db.add(
-                Holding(coin_id=coin_id, user_id=other, quantity=Decimal(1), cost_basis=Decimal(10))
+                Holding(
+                    coin_id=coin_id,
+                    user_id=other,
+                    quantity=Decimal(1),
+                    cost_basis=Decimal(10),
+                    portfolio_id=await synthetic_portfolio_id(db, other),
+                )
             )
         else:
             trade = await synthetic_fill(db, coin_id, other)
@@ -408,7 +527,9 @@ async def test_reconstruction_corrupt_units_or_causality_held(ownership, new_use
             assert trade.id > 0
         await db.flush()
         with pytest.raises(OwnershipHeld):
-            await reconstruct_stock_quantity(db, user_id, coin_id, cutoff, 0)
+            await reconstruct_stock_quantity(
+                db, await synthetic_portfolio_id(db, user_id), coin_id, cutoff, 0
+            )
 
 
 @pytest.mark.parametrize(
@@ -428,7 +549,11 @@ async def test_reconstruction_invalid_cutoff(ownership, changes):
         now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
         with pytest.raises(OwnershipHeld, match="invalid_cutoff"):
             await reconstruct_stock_quantity(
-                db, user_id, coin_id, replace(cutoff_at(now), **changes), 0
+                db,
+                await synthetic_portfolio_id(db, user_id),
+                coin_id,
+                replace(cutoff_at(now), **changes),
+                0,
             )
 
 
@@ -439,7 +564,11 @@ async def test_reconstruction_unknown_coverage_or_future(ownership, days):
         now = (await db.execute(select(func.clock_timestamp()))).scalar_one()
         with pytest.raises(OwnershipHeld, match="missing_baseline"):
             await reconstruct_stock_quantity(
-                db, user_id, coin_id, cutoff_at(now + timedelta(days=days)), 0
+                db,
+                await synthetic_portfolio_id(db, user_id),
+                coin_id,
+                cutoff_at(now + timedelta(days=days)),
+                0,
             )
 
 
@@ -451,7 +580,15 @@ async def test_movement_committed_unmatched_fill_refused(ownership):
             synthetic_corruption(db, "stock_fill_facts", trigger="stock_fill_integrity"),
         ):
             trade = await synthetic_fill(db, coin_id, user_id)
-        movement = StockMovementInput(user_id, coin_id, Decimal(2), Decimal(20), "late", trade.id)
+        movement = StockMovementInput(
+            user_id,
+            coin_id,
+            Decimal(2),
+            Decimal(20),
+            "late",
+            trade.id,
+            portfolio_id=trade.portfolio_id,
+        )
     async with factory() as db:
         with pytest.raises(OwnershipHeld, match="non_atomic_fill"):
             await append_stock_movement(db, movement)
@@ -460,7 +597,7 @@ async def test_movement_committed_unmatched_fill_refused(ownership):
 async def test_movement_real_app_append_replay_and_authority_denied(
     engine, runtime_roles, new_user
 ):
-    # Exact existing source statements; no widened test grants or schema change.
+    # Actual final bootstrap fixture; no ad-hoc widened grants or schema change.
     from sqlalchemy import delete
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -470,23 +607,7 @@ async def test_movement_real_app_append_replay_and_authority_denied(
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     uid = await new_user()
-    source = (Path(__file__).parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
-    grant_lines = [
-        line
-        for line in source.splitlines()
-        if line.startswith("GRANT ") and line.endswith(" TO birja_app;")
-    ]
     async with factory.begin() as db:
-        for statement in grant_lines:
-            await db.execute(text(statement))
-        # Actual0009 conditional grant, already verified by02; use its source verbatim.
-        statement = next(
-            line.strip()
-            for line in source.splitlines()
-            if line.strip().startswith("GRANT SELECT ON stock_instruments,")
-            and line.strip().endswith(" TO birja_app;")
-        )
-        await db.execute(text(statement))
         cid = (
             (await db.execute(select(StockInstrument.coin_id).order_by(StockInstrument.coin_id)))
             .scalars()
@@ -508,12 +629,24 @@ async def test_movement_real_app_append_replay_and_authority_denied(
         async with factory.begin() as db:
             await db.execute(text("SET LOCAL ROLE birja_app"))
             trade = await synthetic_fill(db, cid, uid)
-            request = StockMovementInput(uid, cid, Decimal(2), Decimal(20), "role-fill", trade.id)
+            request = StockMovementInput(
+                uid,
+                cid,
+                Decimal(2),
+                Decimal(20),
+                "role-fill",
+                trade.id,
+                portfolio_id=trade.portfolio_id,
+            )
             first = await append_stock_movement(db, request)
             assert first.sequence == 1
             assert (await append_stock_movement(db, request)).id == first.id
             cutoff = cutoff_at((await db.execute(select(func.clock_timestamp()))).scalar_one())
-            assert (await reconstruct_stock_quantity(db, uid, cid, cutoff, 0)).quantity == 2
+            assert (
+                await reconstruct_stock_quantity(
+                    db, await synthetic_portfolio_id(db, uid), cid, cutoff, 0
+                )
+            ).quantity == 2
             with pytest.raises(DBAPIError) as error:
                 async with db.begin_nested():
                     await db.execute(
@@ -540,19 +673,15 @@ async def test_movement_real_app_append_replay_and_authority_denied(
     "damage", ["quantity", "side", "basis", "owner", "oversell", "emptybasis", "account"]
 )
 async def test_movement_fill_must_match_real_cause_and_result(ownership, new_user, damage):
-    from sqlalchemy import delete
-
-    from app.models.user import Account
-
     factory, cid, uid = ownership
     other = await new_user()
     async with factory() as db:
-        if damage == "account":
-            await db.execute(delete(Account).where(Account.user_id == uid))
         trade = await synthetic_fill(
             db, cid, uid, side="sell" if damage in ("oversell", "emptybasis", "side") else "buy"
         )
-        request = StockMovementInput(uid, cid, Decimal(2), Decimal(20), "bad-fill", trade.id)
+        request = StockMovementInput(
+            uid, cid, Decimal(2), Decimal(20), "bad-fill", trade.id, portfolio_id=trade.portfolio_id
+        )
         if damage == "quantity":
             request = replace(request, quantity=Decimal(3))
         elif damage == "side":
@@ -561,6 +690,10 @@ async def test_movement_fill_must_match_real_cause_and_result(ownership, new_use
             request = replace(request, after_basis=Decimal(21))
         elif damage == "owner":
             request = replace(request, user_id=other)
+        elif damage == "account":
+            # Paired FKs now prohibit orphan causes; unknown explicit roots
+            # still refuse before any journal mutation or fallback.
+            request = replace(request, portfolio_id=9007199254740991)
         elif damage in ("oversell", "emptybasis"):
             request = replace(request, quantity=Decimal(-2), after_basis=Decimal(0))
         with pytest.raises(OwnershipHeld):
@@ -583,6 +716,7 @@ async def test_movement_split_mismatch_held(ownership, damage):
             Decimal(21) if damage == "basis" else Decimal(20),
             "bad-split",
             application_id=app.id if app else 9007199254740991,
+            portfolio_id=await synthetic_portfolio_id(db, uid),
         )
         if damage == "ratio":
             request = replace(request, quantity=Decimal(3))
@@ -594,16 +728,29 @@ async def test_reconstruction_split_boundary_precedes_existing_movement_held(own
     factory, cid, uid = ownership
     async with factory.begin() as db:
         cutoff, app = await split_history(db, cid, uid)
-        app.cutoff -= timedelta(seconds=2)
+        async with synthetic_corruption(
+            db, "stock_split_applications", trigger="portfolio_record_immutable"
+        ):
+            app.cutoff -= timedelta(seconds=2)
         with pytest.raises(OwnershipHeld, match="unit_gap"):
-            await reconstruct_stock_quantity(db, uid, cid, cutoff, 0)
+            await reconstruct_stock_quantity(
+                db, await synthetic_portfolio_id(db, uid), cid, cutoff, 0
+            )
 
 
 async def test_movement_first_commit_duplicate_causal_lock_race(ownership, engine):
     factory, cid, uid = ownership
     async with factory() as first, factory() as second:
         trade = await synthetic_fill(first, cid, uid)
-        request = StockMovementInput(uid, cid, Decimal(2), Decimal(20), "first-commit", trade.id)
+        request = StockMovementInput(
+            uid,
+            cid,
+            Decimal(2),
+            Decimal(20),
+            "first-commit",
+            trade.id,
+            portfolio_id=trade.portfolio_id,
+        )
         original = await append_stock_movement(first, request)
         pid = (await second.execute(select(func.pg_backend_pid()))).scalar_one()
         waiting = asyncio.create_task(append_stock_movement(second, request))
@@ -626,7 +773,9 @@ async def test_movement_concurrent_gap_commit_is_not_hidden_by_snapshot(ownershi
     async with factory() as blocker, factory() as waiter:
         await acquire_stock_gate(blocker, cid)
         trade = await synthetic_fill(waiter, cid, uid)
-        request = StockMovementInput(uid, cid, Decimal(2), Decimal(40), "gap-race", trade.id)
+        request = StockMovementInput(
+            uid, cid, Decimal(2), Decimal(40), "gap-race", trade.id, portfolio_id=trade.portfolio_id
+        )
         pid = (await waiter.execute(select(func.pg_backend_pid()))).scalar_one()
         task = asyncio.create_task(append_stock_movement(waiter, request))
         await wait_blocked(engine, pid)
@@ -665,7 +814,13 @@ async def test_movement_committed_partial_split_not_adopted(ownership):
         await synthetic_opening(db, cid, uid, now - timedelta(days=2))
         app = await synthetic_split(db, cid, now - timedelta(days=1))
         request = StockMovementInput(
-            uid, cid, Decimal(2), Decimal(20), "late-split", application_id=app.id
+            uid,
+            cid,
+            Decimal(2),
+            Decimal(20),
+            "late-split",
+            application_id=app.id,
+            portfolio_id=await synthetic_portfolio_id(db, uid),
         )
     async with factory() as db:
         with pytest.raises(OwnershipHeld, match="non_atomic_split"):
@@ -680,7 +835,15 @@ async def test_movement_same_transaction_savepoint_is_atomic(ownership):
             trade = await synthetic_fill(db, cid, uid)
             row = await append_stock_movement(
                 db,
-                StockMovementInput(uid, cid, Decimal(2), Decimal(20), "savepoint-fill", trade.id),
+                StockMovementInput(
+                    uid,
+                    cid,
+                    Decimal(2),
+                    Decimal(20),
+                    "savepoint-fill",
+                    trade.id,
+                    portfolio_id=trade.portfolio_id,
+                ),
             )
             assert row.sequence == 1
         _, rows = await assert_ownership_consistent(db, cid)
@@ -689,15 +852,7 @@ async def test_movement_same_transaction_savepoint_is_atomic(ownership):
 
 async def test_real_scheduler_can_validate_shared_ownership(engine, runtime_roles, ownership):
     factory, cid, _ = ownership
-    source = (Path(__file__).parents[2] / "deploy/db/bootstrap-roles.sql").read_text()
     async with factory.begin() as db:
-        statement = next(
-            line.strip()
-            for line in source.splitlines()
-            if line.strip().startswith("GRANT SELECT ON stock_instruments,")
-            and line.strip().endswith(" TO birja_scheduler;")
-        )
-        await db.execute(text(statement))
         await db.execute(text("SET LOCAL ROLE birja_scheduler"))
         state, rows = await assert_ownership_consistent(db, cid)
         assert state.unit_epoch == 0 and rows == []
@@ -737,6 +892,7 @@ async def test_reconstruction_old_unit_fill_exact_split_boundary_is_held(ownersh
                 cause_kind="fill",
                 trade_id=trade.id,
                 causal_key="synthetic-same-boundary-fill",
+                portfolio_id=await synthetic_portfolio_id(db, uid),
             )
         )
         holding = (
@@ -761,12 +917,15 @@ async def test_reconstruction_old_unit_fill_exact_split_boundary_is_held(ownersh
                 cause_kind="split",
                 application_id=app.id,
                 causal_key="synthetic-same-boundary-split",
+                portfolio_id=await synthetic_portfolio_id(db, uid),
             )
         )
         holding.quantity = quantity * 2
         await db.flush()
         with pytest.raises(OwnershipHeld, match="unit_gap"):
-            await reconstruct_stock_quantity(db, uid, cid, cutoff, 1)
+            await reconstruct_stock_quantity(
+                db, await synthetic_portfolio_id(db, uid), cid, cutoff, 1
+            )
 
 
 @pytest.mark.parametrize("full_xid", [False, 0, 2, 4294967296, 4294967297, 8589934592])
@@ -780,12 +939,23 @@ def test_atomic_cause_first_transaction_epoch_supported(full_xid):
     assert require_supported_transaction_epoch(full_xid) is None
 
 
-async def test_movement_other_transactions_pending_fill_is_not_owned(ownership):
+async def test_movement_other_transactions_pending_fill_is_not_owned(ownership, engine):
     factory, cid, uid = ownership
     async with factory() as other, factory() as db:
         trade = await synthetic_fill(other, cid, uid)
-        request = StockMovementInput(uid, cid, Decimal(2), Decimal(20), "other-pending", trade.id)
-        with pytest.raises(OwnershipHeld, match="non_atomic_fill"):
-            await append_stock_movement(db, request)
-        await db.rollback()
+        request = StockMovementInput(
+            uid,
+            cid,
+            Decimal(2),
+            Decimal(20),
+            "other-pending",
+            trade.id,
+            portfolio_id=trade.portfolio_id,
+        )
+        pid = (await db.execute(select(func.pg_backend_pid()))).scalar_one()
+        task = asyncio.create_task(append_stock_movement(db, request))
+        await wait_blocked(engine, pid)
         await other.rollback()
+        with pytest.raises(OwnershipHeld, match="non_atomic_fill"):
+            await asyncio.wait_for(task, 5)
+        await db.rollback()

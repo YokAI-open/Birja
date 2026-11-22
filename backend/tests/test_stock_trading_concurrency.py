@@ -14,16 +14,21 @@ from app.models.stock_execution import StockFillFacts
 from app.models.trade import Holding, Trade
 from app.models.user import Account
 from app.services import stock_trading, trading
+from app.services.portfolios import OwnedActivePortfolio
 from app.services.trade_math import TradeRefused
 from tests.helpers import put_price
+from tests.stock_action_fixtures import synthetic_portfolio_id
 from tests.stock_trade_fixtures import ownership, status_case, stock_pair_case, stock_trade_case  # noqa: F401
 from tests.test_stock_trading_service import trade_order
 
 
-async def stock_request(factory, uid, settings, order):
+async def stock_request(factory, uid, settings, order, *, portfolio_id=None):
     async with factory() as db:
+        root = await synthetic_portfolio_id(db, uid, portfolio_id)
         try:
-            return await stock_trading.execute(db, user_id=uid, order=order, settings=settings)
+            return await stock_trading.execute(
+                db, portfolio=OwnedActivePortfolio(root, uid), order=order, settings=settings
+            )
         except TradeRefused as exc:
             return exc.code
 
@@ -136,7 +141,7 @@ async def test_stock_crypto_competing_spends_and_keys(
             try:
                 return await trading.execute(
                     db,
-                    user_id=uid,
+                    portfolio=OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid),
                     order=trading.Order("BTC", "buy", "usd", Decimal(102)),
                     expected_mid=Decimal(100),
                     idempotency_key=key if same_key else uuid4(),
@@ -211,7 +216,7 @@ async def test_stock_sale_cash_is_immediately_reusable(
         async with factory() as db:
             fill, created = await trading.execute(
                 db,
-                user_id=uid,
+                portfolio=OwnedActivePortfolio(await synthetic_portfolio_id(db, uid), uid),
                 order=trading.Order("BTC", "buy", "usd", Decimal(200)),
                 expected_mid=Decimal(100),
                 idempotency_key=uuid4(),
