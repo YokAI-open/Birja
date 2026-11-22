@@ -76,3 +76,30 @@ Because smoke is archived CORE, R2archive and binding records are preserved at
 all hashes/inodes/devices match before/after preservation. R3will package new
 matching CORE in a fresh canonical directory and a new exclusive receipt.
 This is a narrow test credential correction, not an authentication bypass.
+
+## Existing Effective-Role Adapter — Final Runtime Identity
+
+R3 reached the exact restored comparison but exposed the clone's intentional
+NOLOGIN app/scheduler roles (exit1/129.014s). No real replay pass is inferred.
+All owned groups/resources are empty. Its archive/bindings are preserved at
+`/tmp/birja-phase15-proof-r3-failed/`, SHA256
+`627ec6403301c8a3a16329cf4b1c0d641e513f15ad54367a93731dd6f6512add`,
+with all file hashes/inodes/devices unchanged.
+
+The parent authorized the existing real-test adapter from strategy_lifecycle
+and scoped_history: owned bootstrap TLS login, finite SET ROLE, commit, verify
+exact effective app/scheduler/nonprivileged identity and TLS, commit validation
+transaction, then AsyncSession bound to that connection. Finally rollback,
+RESET ROLE and commit before pool return. The migrator remains only the
+independent read-only oracle. Financial services never execute at bootstrap
+current_user; no role LOGIN, grants, ACL, schema or historical behavior changes.
+The ineffective PASSWORD setup is removed. The report explicitly identifies
+`owned-login-set-role`; direct runtime-login TLS remains inherited evidence.
+
+All original financial retry/frozen/sibling/zero assertions remain. Current
+fixture source is SHA256`d376142e6a1e110a3d552e0cfa71a3fbd3fd7d92b21a804dcd60aef1b5a89c32`
+in both producer/consumer current entries only. The fixture's economic seed did
+not change, so source-owned JSON remains the actual Plan02generation.
+Affected14management/25smoke contracts pass15.400/6.525s, and independent bounded
+review is0/0. R4will use fresh matching CORE/fixture packaging and an exclusive
+receipt. This is source-proven test harness attenuation, not new auth design.

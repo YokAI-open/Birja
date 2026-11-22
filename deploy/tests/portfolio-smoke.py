@@ -823,6 +823,7 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                 "PRICE_SOURCE": "fake",
                 "FIXTURE_APP_PASSWORD": passwords["app"],
                 "FIXTURE_SCHEDULER_PASSWORD": passwords["scheduler"],
+                "FIXTURE_BOOT_PASSWORD": "synthetic-only-ops",
             }
 
             if upgraded_bootstrap and upgraded_from == "0014":
@@ -1060,17 +1061,6 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                             transport=transport,
                         )
                         if revision == '0023':
-                            # Restore roles/ACL first; only then provision this
-                            # owned clone's credentials for real service replay.
-                            r.sql(
-                                clone_dc,
-                                "".join(
-                                    "ALTER ROLE birja_" + role + " PASSWORD '"
-                                    + passwords[role] + "';\n"
-                                    for role in ("app", "scheduler")
-                                ),
-                                "birja_ops_test",
-                            )
                             fixture.main(
                                 ['replay-restored', '--database', 'birja_restore_test',
                                  '--snapshot', str(expected), '--expected-sha256', digest],

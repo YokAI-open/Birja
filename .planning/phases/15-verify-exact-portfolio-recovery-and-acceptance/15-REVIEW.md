@@ -48,3 +48,14 @@ verification/exact comparison and precedes real restricted replay. Existing
 synthetic map only; no LOGIN/grant/ACL/schema or historical change. Static review
 only; actual executor affected contracts14/25pass. No broader audit or financial
 replay result is inferred from this recheck.
+
+## Effective-Role Adapter Review
+
+Independent bounded five-file review reports0blockers/0warnings. The owned TLS
+adapter enters only finite app/scheduler roles, verifies current_user and
+nonprivileged flags before yielding actual service sessions, commits validation
+transactions before AsyncSession binding, and resets roles in finally. No
+LOGIN/grant/ACL/schema or historical path changes. Fixture SHA matches both
+current source associations. Direct runtime-login TLS coverage is inherited
+only. Existing financial assertions are unchanged. Static review only; actual
+14/25affected contract runs pass and encrypted execution remains pending.

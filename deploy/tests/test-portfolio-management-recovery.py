@@ -2,6 +2,7 @@
 """0020 producer/oracle contracts; offline tests never claim encrypted proof."""
 
 import contextlib
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -578,6 +579,22 @@ class ClosureFixtureWriterContracts(unittest.TestCase):
         self.assertIn("paid.outcome == 'original'", code)
         self.assertIn("assert after['tables'] == tables", code)
         self.assertIn('assert await active_lists() == lists_before', code)
+        self.assertIn("identity == ('birja_ops_bootstrap', role, True)", code)
+        self.assertIn("SELECT current_user", code)
+        self.assertIn("'SET ROLE ' + role", code)
+        self.assertIn("text('RESET ROLE')", code)
+        self.assertIn('AsyncSession(bind=conn, expire_on_commit=False)', code)
+        self.assertIn("'restricted_identity_mode': 'owned-login-set-role'", code)
+        self.assertIn("if MODE=='replay-restored':", code)
+        self.assertIn("os.environ['FIXTURE_BOOT_PASSWORD']", code)
+        self.assertNotIn('ALTER ROLE', code)
+        tree = ast.parse(code)
+        restricted = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == 'restricted')
+        scope = ast.get_source_segment(code, restricted)
+        self.assertLess(scope.index('await conn.commit()'), scope.index('identity ='))
+        self.assertLess(scope.index('assert identity'), scope.index('yield db'))
+        self.assertLess(scope.index('await conn.commit()', scope.index('assert identity')), scope.index('AsyncSession('))
+        self.assertIn("await conn.rollback()\n                await conn.execute(text('RESET ROLE'))\n                await conn.commit()", scope)
         self.assertNotIn('setval(', code)
 
     def test_restored_replay_is_cold_only_after_exact_compare(self):
@@ -596,13 +613,10 @@ class ClosureFixtureWriterContracts(unittest.TestCase):
             and "'replay-restored'" in ast.get_source_segment(source, n)
         )
         provisioned = ast.get_source_segment(source, provisioning)
-        self.assertIn('for role in ("app", "scheduler")', provisioned)
-        self.assertIn('passwords[role]', provisioned)
-        self.assertIn('" PASSWORD \'"', provisioned)
+        self.assertNotIn('ALTER ROLE', provisioned)
         self.assertNotIn(' LOGIN ', provisioned)
         self.assertNotIn('GRANT ', provisioned)
-        self.assertLess(text.index('r.verify('), text.index('for role in ("app", "scheduler")'))
-        self.assertLess(provisioned.index('r.sql('), provisioned.index("'replay-restored'"))
+        self.assertLess(text.index('r.verify('), text.index("'replay-restored'"))
         self.assertIn("if revision == '0023':", text)
         self.assertIn("'birja_restore_test'", text)
         self.assertIn("'--expected-sha256', digest", text)

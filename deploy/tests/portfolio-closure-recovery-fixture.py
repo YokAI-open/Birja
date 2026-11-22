@@ -657,13 +657,14 @@ async def project(db, *, columns=None, identities=None):
 async def replay_restored(factory, settings, app_engine, scheduler_engine, before,
                           *, columns, identities):
     """Retry actual original services after the complete restored comparison."""
+    from contextlib import asynccontextmanager
     from dataclasses import asdict
     from datetime import datetime
     from decimal import Decimal
     from uuid import UUID
     from fastapi import HTTPException
     from sqlalchemy import text
-    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
     from app.models.user import User
     from app.schemas.portfolios import PortfolioCreate
     from app.services.portfolios import create_portfolio, list_active_portfolios, OwnedActivePortfolio
@@ -673,11 +674,40 @@ async def replay_restored(factory, settings, app_engine, scheduler_engine, befor
     tables = before['tables']
     roots = {row['name']: row for row in tables['accounts']}
     active, closed = roots['Active'], roots['Mixed']
-    app = async_sessionmaker(app_engine, expire_on_commit=False)
-    scheduler = async_sessionmaker(scheduler_engine, expire_on_commit=False)
+    @asynccontextmanager
+    async def restricted(engine, role):
+        assert role in {'birja_app', 'birja_scheduler'}
+        async with engine.connect() as conn:
+            await conn.execute(text('SET ROLE ' + role))
+            await conn.commit()
+            try:
+                identity = (await conn.execute(text(
+                    'SELECT session_user,current_user,NOT (rolsuper OR rolinherit OR '
+                    'rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) '
+                    'FROM pg_roles WHERE rolname=current_user'
+                ))).one()
+                assert identity == ('birja_ops_bootstrap', role, True)
+                assert (await conn.execute(text(
+                    'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
+                ))).scalar_one()
+                await conn.commit()
+                async with AsyncSession(bind=conn, expire_on_commit=False) as db:
+                    yield db
+            finally:
+                await conn.rollback()
+                await conn.execute(text('RESET ROLE'))
+                await conn.commit()
+
+    def app():
+        return restricted(app_engine, 'birja_app')
+
+    def scheduler():
+        return restricted(scheduler_engine, 'birja_scheduler')
+
     for role, sessions in (('app', app), ('scheduler', scheduler)):
         async with sessions() as db:
-            assert (await db.execute(text('SELECT session_user'))).scalar_one() == 'birja_'+role
+            assert (await db.execute(text('SELECT current_user'))).scalar_one() == 'birja_'+role
+            assert (await db.execute(text('SELECT session_user'))).scalar_one() == 'birja_ops_bootstrap'
             assert (await db.execute(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))).scalar_one()
             await db.rollback()
 
@@ -772,7 +802,8 @@ async def replay_restored(factory, settings, app_engine, scheduler_engine, befor
             changes[name] = {'before': [last, called], 'after': [actual_last, actual_called]}
     return after, {'restored_original_retries': True, 'active_creation_id': metadata.id,
         'active_fill_id': fill.trade_id, 'active_payment_id': paid.payment_id,
-        'closed_refusals': 3, 'sequence_changes': changes}
+        'closed_refusals': 3, 'sequence_changes': changes,
+        'restricted_identity_mode': 'owned-login-set-role'}
 
 
 def private_snapshot(path, existing):
@@ -893,8 +924,15 @@ asyncio.run(declared())
     code += r"""
 async def run():
  settings,engine,factory,args=setup()
- app=create_async_engine(engine.url.set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD']),connect_args=args)
- scheduler=create_async_engine(engine.url.set(username='birja_scheduler',password=os.environ['FIXTURE_SCHEDULER_PASSWORD']),connect_args=args)
+ if MODE=='replay-restored':
+  # Owned login enters existing NOLOGIN SQL authority for each service session.
+  # The migrator factory remains the independent read-only oracle.
+  replay_url=engine.url.set(username='birja_ops_bootstrap',password=os.environ['FIXTURE_BOOT_PASSWORD'])
+  app=create_async_engine(replay_url,connect_args=args)
+  scheduler=create_async_engine(replay_url,connect_args=args)
+ else:
+  app=create_async_engine(engine.url.set(username='birja_app',password=os.environ['FIXTURE_APP_PASSWORD']),connect_args=args)
+  scheduler=create_async_engine(engine.url.set(username='birja_scheduler',password=os.environ['FIXTURE_SCHEDULER_PASSWORD']),connect_args=args)
  try:
   if MODE=='create':
    from alembic import command
