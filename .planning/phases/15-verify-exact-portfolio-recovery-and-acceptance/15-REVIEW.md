@@ -39,3 +39,12 @@ stack validation and cleanup remain intact. Contracts inspect the actual regex
 and selected Phase15environment. Static review only; no reviewer test/service
 operation or broad re-audit. Actual executor43contract results are in
 `/tmp/birja-phase15-plan03/preflight-contracts-final.log`.
+
+## Restored Credential Setup Recheck
+
+Independent bounded review of smoke.py and its existing management contract
+reports0blockers/0warnings. Current0023 cold-only PASSWORD setup follows restore
+verification/exact comparison and precedes real restricted replay. Existing
+synthetic map only; no LOGIN/grant/ACL/schema or historical change. Static review
+only; actual executor affected contracts14/25pass. No broader audit or financial
+replay result is inferred from this recheck.

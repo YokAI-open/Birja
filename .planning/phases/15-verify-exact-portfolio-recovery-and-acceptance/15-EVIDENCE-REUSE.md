@@ -55,3 +55,24 @@ Independent two-file static review finds0blockers/0warnings. This changes only
 the preflight wrapper/test; inherited financial/schema/browser inputs remain
 identical. R2uses a new exclusive receipt, while the canonical archive remains
 absent before its first actual current proof.
+
+## Restored Synthetic Credential Setup Repair
+
+R2 at25872e4 completed preflight139tests and reached the new actual restored
+retry helper after source-destroyed restore/exact comparison, then failed the
+owned birja_app connection: cold setup had provisioned only the migrator's
+synthetic password. No replay pass is inferred. Original receipt remains failed
+exit1/134.551s; process groups and all owned resources are empty.
+
+Parent authorized current0023 cold-only PASSWORD provisioning for app/scheduler
+from the existing synthetic map, after verifier/exact compare and before replay.
+No LOGIN/grant/ACL/schema or historical path changes. The fixture source and
+producer/consumer source pins are unchanged. Affected14management/25smoke
+contracts pass15.921/6.401s; independent two-file static review is clean0/0.
+
+Because smoke is archived CORE, R2archive and binding records are preserved at
+`/tmp/birja-phase15-proof-r2-failed/`, unchanged SHA256
+`daf671137572a98fd37953c3cdee40bfaf48e6095a4baadb8987f0323af0a190`;
+all hashes/inodes/devices match before/after preservation. R3will package new
+matching CORE in a fresh canonical directory and a new exclusive receipt.
+This is a narrow test credential correction, not an authentication bypass.
