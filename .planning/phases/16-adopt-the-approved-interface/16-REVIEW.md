@@ -1,7 +1,7 @@
 # Phase 16 Code Review
 
-**Status:** Initial independent findings addressed in the working tree.
-Updated-source test and review outcomes are tracked separately.
+**Status:** Independent findings addressed. Owner UI and native 200% checks passed.
+The complete integration run is tracked separately.
 
 | Severity | Finding | Disposition |
 |---|---|---|
@@ -16,3 +16,12 @@ Updated-source test and review outcomes are tracked separately.
 
 The scope was the application and affected tests. Backend source, schema,
 dependency locks and live-provider configuration match the released base.
+
+
+After the independent re-review, the unavailable-History chooser was aligned
+with the scoped History route, and the holding disclosure gained the exact
+fresh price timestamp. The current phone and desktop layouts were
+then checked at 320, 375, 768 and 1280 CSS pixels with normal-size header,
+long stock name and 200%-sized History text checks. The real-backend focused
+suite passed all 11 cases on matching source inputs. Frontend lint, format,
+build and all 1,332 unit tests passed.

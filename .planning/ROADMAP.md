@@ -40,6 +40,11 @@
 
 **Requirements:** QA-02, QA-03
 
+**Plans:** 2 plans
+
+- [ ] 17-01 — Qualify and review the exact candidate (wave 1).
+- [ ] 17-02 — Audit, prepare the PR, and check CI after publication approval (wave 2).
+
 **Success criteria:**
 
 1. Code review, frontend and backend checks, and isolated browser journeys verify session, portfolio ownership, real trade economics, deletion and History. Necessary fixes are reviewed and retested.
@@ -50,7 +55,7 @@
 
 | Phase | Milestone | Status |
 |---|---|---|
-| 16. Adopt the Approved Interface | v1.3 | Planned |
+| 16. Adopt the Approved Interface | v1.3 | Owner UI and native zoom pass. Full integration in progress. |
 | 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Depends on Phase 16 |
 
 All 10 requirements are assigned once in [REQUIREMENTS.md](REQUIREMENTS.md).

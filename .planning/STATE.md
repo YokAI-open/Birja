@@ -8,7 +8,7 @@ last_activity: 2026-11-23
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 2
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -26,7 +26,7 @@ Current focus: qualify the approved Birja interface using the existing full stac
 
 Phase: 16 — Adopt the Approved Interface
 Plan: 16-01 integration in progress
-Status: Phase 16 plans checked. Isolated backend and browser qualification in progress.
+Status: Phase 16 owner UI and native 200% pass. Full integration checks in progress.
 Last activity: 2026-11-23 — v1.2 archived and v1.3 approved.
 
 ## Accumulated Context
@@ -54,3 +54,16 @@ Last activity: 2026-11-23 — v1.2 archived and v1.3 approved.
 - The first backend run used a noncanonical project name and hit the suite's
   hard-coded test container selector. The canonical disposable rerun is
   underway. This is a test harness setup failure, not a backend pass.
+
+## Phase 16 Owner and Focused Browser Evidence
+
+- The owner accepted the integrated interface and confirmed native 200% zoom.
+  The [UAT record](phases/16-adopt-the-approved-interface/16-HUMAN-UAT.md)
+  binds the evidence archive and outcome.
+- The source-matching focused isolated browser run passed 11 journeys, including
+  responsive views and stock restriction cases. The captured HTML embeds
+  self-hosted fonts and brand assets. The whole browser run was started on
+  `ef60a64` and remains in progress.
+- Phase 17 plans have been prepared. The release plan checker finding was
+  addressed by naming the requirement-level milestone audit and exact PR CI
+  binding. Release and publication still follow the existing approvals.
