@@ -5,7 +5,7 @@ milestone_name: Birja Interface Redesign
 current_phase: 17
 current_plan: 2
 status: awaiting_ci_fix_publication
-last_updated: "2026-11-23T10:52:54+00:00"
+last_updated: "2026-11-23T12:37:00+00:00"
 last_activity: 2026-11-23
 progress:
   total_phases: 2
@@ -23,14 +23,14 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and the
 [candidate audit](v1.3-MILESTONE-AUDIT.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: publish the tested CI corrections for redesign PR #41 after approval.
+Current focus: publish the verified Markets browser correction for redesign PR #41 after approval.
 
 ## Current Position
 
 Phase: 17 — Verify Full-Stack Behavior and Prepare Release
 Plan: 17-02 required CI
-Status: PR #41 is open into develop at approved head 5993ae44f7243758b564a38682e258fcbab9cfd5. Initial CI was blocked. The browser focus setup and bounded ops setup corrections pass their local checks and await publication.
-Last activity: 2026-11-23 — Validated the corrections for [PR #41](https://github.com/YokAI-open/Birja/pull/41).
+Status: PR #41 is open into develop at 5be70d58e5134cb921299bba14e33f9bdc790dc5. The hosted History Back and complete ops checks passed. Four narrow-viewport Markets keyboard cases failed. The local test correction passes all 93 runnable cases. Required CI needs to run again after publication approval.
+Last activity: 2026-11-23 — Reproduced and corrected Markets test focus timing for [PR #41](https://github.com/YokAI-open/Birja/pull/41).
 
 ## Evidence
 
@@ -51,3 +51,5 @@ Last activity: 2026-11-23 — Validated the corrections for [PR #41](https://git
 Hosted CI: [run 45160029262](https://github.com/YokAI-open/Birja/actions/runs/45160029262).
 
 See [CI diagnosis and local proof](debug/pr41-hosted-qualification.md).
+
+Replacement hosted CI: [run 45169702553](https://github.com/YokAI-open/Birja/actions/runs/45169702553).

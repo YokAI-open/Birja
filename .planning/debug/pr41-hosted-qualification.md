@@ -27,4 +27,25 @@ Docker setup now uses an explicit list of signed HTTPS Ubuntu and Docker
 sources, bounded package retries and an 8-minute step timeout. It keeps the
 Docker and Compose pins, platform preflight and the complete recovery suite.
 Its Bash syntax and APT source selection passed local checks, along with all
-111 CI and ops contracts. Hosted package installation and recovery are pending.
+111 CI and ops contracts. The hosted ops job passed in 34 minutes 38 seconds
+on run 45169702553, including package installation, Docker platform
+verification, PostgreSQL recovery, TLS, old-image rollback and staging the
+verified recovery tooling.
+
+## Markets keyboard activation
+
+Run 45169702553 passed the real History Back check and reported four failures
+opening the BTC trade ticket from Markets at a narrow effective viewport.
+The tests set focus on the trade link while the asset-selection focus callback
+could still be pending. Local Chromium reproduced lost activation in six of
+six trials when the callback ran between focusing the link and pressing Enter.
+Waiting for the Bitcoin heading to receive focus passed all six corrected trials.
+The affected tests now wait for that heading on narrow viewports and assert
+focus on the trade link before pressing Enter. Application code is unchanged.
+All nine catalogue and corporate-action cases passed against the isolated
+stack in 47 seconds, including the zoom case. Cleanup, TypeScript, ESLint and
+touched-file formatting checks passed.
+The complete isolated Chromium suite then passed all 93 runnable scenarios
+in 18.2 minutes, with one expected deployed-only CSP skip and clean teardown.
+The local suite log is at
+`/tmp/birja-phase09-browser-ba0j1zsi/browser-all.log`.

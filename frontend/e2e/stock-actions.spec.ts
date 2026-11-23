@@ -114,8 +114,14 @@ for (const width of [320, 375, 768, 1280]) {
       .screenshot({ path: testInfo.outputPath(`actions-${width}-first-stock.png`) });
     await page.getByRole("button", { name: "Crypto", exact: true }).click();
     await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
+    if (width < 768) {
+      await expect(
+        page.getByRole("heading", { name: "Bitcoin", exact: true, level: 2 }),
+      ).toBeFocused();
+    }
     const trade = page.getByRole("link", { name: "Trade BTC" });
     await trade.focus();
+    await expect(trade).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/trade\/BTC$/);
   });
