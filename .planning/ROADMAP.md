@@ -10,7 +10,7 @@
 
 ## Phases
 
-- [ ] **Phase 16: Adopt the Approved Interface**
+- [x] **Phase 16: Adopt the Approved Interface**
 - [ ] **Phase 17: Verify Full-Stack Behavior and Prepare Release**
 
 ## Phase Details
@@ -23,8 +23,8 @@
 
 **Plans:** 2 plans
 
-- [ ] 16-01 — Adopt and integrate the approved redesign (wave 1).
-- [ ] 16-02 — Verify the integrated UI and capture owner acceptance (wave 2).
+- [x] 16-01 — Adopt and integrate the approved redesign (wave 1).
+- [x] 16-02 — Verify the integrated UI and capture owner acceptance (wave 2).
 
 **Success criteria:**
 
@@ -42,7 +42,7 @@
 
 **Plans:** 2 plans
 
-- [ ] 17-01 — Qualify and review the exact candidate (wave 1).
+- [x] 17-01 — Qualify and review the exact candidate (wave 1).
 - [ ] 17-02 — Audit, prepare the PR, and check CI after publication approval (wave 2).
 
 **Success criteria:**
@@ -55,8 +55,8 @@
 
 | Phase | Milestone | Status |
 |---|---|---|
-| 16. Adopt the Approved Interface | v1.3 | Owner UI and native zoom pass. Full integration in progress. |
-| 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Depends on Phase 16 |
+| 16. Adopt the Approved Interface | v1.3 | Verified complete |
+| 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Local qualification complete. PR publication and CI pending. |
 
 All 10 requirements are assigned once in [REQUIREMENTS.md](REQUIREMENTS.md).
 The [deferred register](DEFERRED.md) retains the separate stock activation work.

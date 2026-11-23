@@ -1,9 +1,9 @@
 ---
 phase: 17
 slug: verify-full-stack-behavior-and-prepare-release
-status: planned
+status: local-complete-ci-pending
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-11-23
 ---
 
