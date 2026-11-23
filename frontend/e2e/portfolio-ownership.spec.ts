@@ -320,7 +320,12 @@ test("lost actual response recovers only original portfolio key without duplicat
     .click();
   await expect(page.getByRole("heading", { name: "Markets", exact: true })).toBeVisible();
   await inApp(page, `/portfolios/${sibling}/trade/BTC`);
-  await expect(page.getByText("Sibling strategy", { exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByRole("definition")
+      .filter({ hasText: /^Sibling strategy$/ })
+      .first(),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Check order result", exact: true })).toHaveCount(
     0,
   );

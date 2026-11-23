@@ -266,7 +266,11 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   ]) {
     await expect(row).toContainText(value);
   }
-  await expect(row.locator("time")).toHaveAttribute("datetime", held.as_of!);
+  await expect(row.locator(":scope > time").first()).toHaveAttribute("datetime", held.as_of!);
+  const cost = row.locator("details");
+  await cost.locator("summary").click();
+  await expect(cost.getByText("Cost basis", { exact: true })).toBeVisible();
+  await expect(cost.locator("time")).toHaveAttribute("datetime", held.as_of!);
   const refresh = page.getByRole("button", { name: "Update portfolio" });
   await refresh.click();
   await expect(refresh).toBeEnabled();
