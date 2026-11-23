@@ -1,6 +1,6 @@
 # Project Milestones: Birja
 
-## v1.2 Multiple Strategy Portfolios (Archived: 2026-11-23)
+## v1.2 Multiple Strategy Portfolios (Shipped: 2026-11-22)
 
 Software v0.6.2 was deployed on 2026-11-22 at main `7d236e4`, schema 0023.
 The back-merge to develop completed at `5029c8e`. All 28 requirements,

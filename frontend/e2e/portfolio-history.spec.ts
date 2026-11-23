@@ -150,11 +150,7 @@ for (const width of [375, 768, 1024, 1440]) {
           : records.locator("summary").first();
       await action.focus();
       await expect(action).toBeFocused();
-      await expect
-        .poll(async () =>
-          Number(await action.evaluate("node => getComputedStyle(node).outlineWidth.slice(0, -2)")),
-        )
-        .toBeGreaterThanOrEqual(2);
+      await expect(action).toHaveCSS("outline-width", /^(?:[2-9]|[1-9]\d+)(?:\.\d+)?px$/);
       if (name === "History") {
         await action.press("Enter");
         await expect(records.getByText("Execution price", { exact: true })).toBeVisible();

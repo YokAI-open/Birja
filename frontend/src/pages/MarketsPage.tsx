@@ -98,7 +98,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   return (
     <div className="markets mx-auto my-7 max-w-[1280px] md:my-12 lg:my-16">
       <h1 className="sr-only">Markets</h1>
-      <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:gap-10 lg:gap-16">
+      <div className="grid min-w-0 grid-cols-1 gap-8 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:gap-10 lg:gap-16">
         <section
           aria-label="Find an asset"
           className={showAsset && asset ? "hidden md:block" : undefined}
@@ -301,7 +301,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
         )}
         {stockMarket && (
           <details
-            className={showAsset && asset ? "hidden md:block md:col-span-2" : "md:col-span-2"}
+            className={`min-w-0 md:col-span-2 ${showAsset && asset ? "hidden md:block" : ""}`}
             onToggle={(event) => setShowStockDetails(event.currentTarget.open)}
           >
             <summary className="min-h-11 cursor-pointer py-3 text-sm underline">

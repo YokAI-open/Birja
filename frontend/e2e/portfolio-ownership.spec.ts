@@ -458,7 +458,8 @@ for (const width of [320, 768, 1280])
     await page.goto(`/portfolios/${id}/trade/BTC`);
     await expect(
       page
-        .getByText("<Strategy>& UnbrokenPortfolioNameUnbrokenPortfolioName", { exact: true })
+        .getByRole("definition")
+        .filter({ hasText: "<Strategy>& UnbrokenPortfolioNameUnbrokenPortfolioName" })
         .first(),
     ).toBeVisible();
     await snapshot(page, info, `crypto-draft-${width}`);
