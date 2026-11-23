@@ -689,8 +689,16 @@ class CI(unittest.TestCase):
         self.assertLess(verify, build)
         preparation = ops[setup:verify]
         for required in [
+            "timeout-minutes: 8",
             "https://download.docker.com/linux/ubuntu/gpg",
             "signed-by=/etc/apt/keyrings/docker.asc",
+            "signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg",
+            '-o "Dir::Etc::sourcelist=$sources"',
+            "-o Dir::Etc::sourceparts=-",
+            "-o Acquire::Retries=2",
+            "-o Acquire::https::Timeout=30",
+            'sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update',
+            'sudo apt-get "${apt_options[@]}" install',
             "docker_version=5:29.2.1-1~ubuntu.24.04~noble",
             '"docker-ce=$docker_version"',
             '"docker-ce-cli=$docker_version"',

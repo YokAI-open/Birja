@@ -25,6 +25,7 @@ test("a signed-in user buys $100 of BTC and sells the whole position", async ({ 
   await signInNewUser(page);
   const id = await portfolioId(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC" }).click();
   await expect(page).toHaveURL((url) => url.pathname === `/portfolios/${id}/trade/BTC`);
   await expect(page.getByRole("heading", { level: 1, name: "Trade BTC" })).toBeVisible();

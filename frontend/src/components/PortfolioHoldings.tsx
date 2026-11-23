@@ -1,15 +1,14 @@
-import type { ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
+import { stockFixed } from "@/api/stockTrades";
 import type { PortfolioHolding } from "@/api/portfolio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
 import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { PortfolioContext } from "@/components/PortfolioContext";
 
 export function PortfolioOutcome({ value, dollars = false }: { value: string; dollars?: boolean }) {
   const state = outcome(value);
@@ -58,132 +57,116 @@ function PriceUpdated({
   const status = freshnessStatus(age, freshSeconds, staleSeconds);
   const local = fullLocalTimestamp(holding.as_of);
   return (
-    <div className="flex flex-col items-start gap-1 text-[13px] leading-[18px] font-medium">
-      <Badge
-        variant={status === "fresh" ? "success" : status === "aging" ? "warning" : "danger"}
-        className="h-auto whitespace-normal text-[13px] leading-[18px] font-medium"
-      >
-        {statusLabel(status)} · {formatAge(age)}
-      </Badge>
-      <time
-        dateTime={holding.as_of}
-        title={holding.as_of}
-        aria-label={local}
-        className="wrap-anywhere"
-      >
-        {local}
-      </time>
-    </div>
+    <time
+      className={status === "fresh" ? "sr-only" : "text-sm text-warn-text"}
+      dateTime={holding.as_of}
+      title={local}
+    >
+      {statusLabel(status)} · {formatAge(age)}
+    </time>
   );
 }
 
 function Return({ holding }: { holding: PortfolioHolding }) {
+  const direction = holding.unrealized_pl === null ? "zero" : outcome(holding.unrealized_pl);
   return (
-    <div className="flex flex-col items-start gap-1">
-      {holding.unrealized_pl === null ? (
-        "Unavailable"
-      ) : (
-        <PortfolioOutcome value={holding.unrealized_pl} dollars />
-      )}
-      {holding.unrealized_pl_percent === null ? (
-        holding.mid !== null && outcome(holding.cost_basis) === "zero" ? (
-          <>
-            <span>Not applicable</span>
-            <span className="text-[13px] leading-[18px] font-medium text-muted-foreground">
-              Percentage return is unavailable because cost basis is zero.
-            </span>
-          </>
-        ) : (
-          <span>Unavailable</span>
-        )
-      ) : (
-        <PortfolioOutcome value={holding.unrealized_pl_percent} />
-      )}
-    </div>
+    <span
+      className={
+        direction === "gain"
+          ? "text-gain-text"
+          : direction === "loss"
+            ? "text-loss-text"
+            : "text-muted-foreground"
+      }
+    >
+      {holding.unrealized_pl === null ? "Unavailable" : signedUsd(holding.unrealized_pl)}
+      {holding.unrealized_pl_percent !== null &&
+        ` · ${signedPercent(holding.unrealized_pl_percent)}`}
+      {holding.unrealized_pl_percent === null &&
+        holding.mid !== null &&
+        outcome(holding.cost_basis) === "zero" && (
+          <span className="sr-only">
+            Percentage return not applicable because cost basis is zero.
+          </span>
+        )}
+    </span>
   );
 }
 
 function Trade({ holding, target }: { holding: PortfolioHolding; target: PortfolioTarget }) {
   return holding.is_active ? (
-    <Button asChild variant="secondary" className="min-h-11 min-w-11">
+    <Button asChild variant="secondary" className="min-h-11 min-w-11 px-4">
       <Link
+        aria-label={`Trade ${holding.symbol}`}
         to={
           holding.asset_class === "stock"
             ? `/portfolios/${target.portfolioId}/trade/stocks/${encodeURIComponent(holding.symbol)}`
             : `/portfolios/${target.portfolioId}/trade/${encodeURIComponent(holding.symbol)}`
         }
       >
-        Trade {holding.symbol}
+        Trade
       </Link>
     </Button>
   ) : (
     <span>Inactive · trading unavailable</span>
   );
 }
-function Asset({
-  target,
+function HoldingStatus({
   holding,
   elapsed,
   freshSeconds,
   staleSeconds,
 }: {
-  target: PortfolioTarget;
   holding: PortfolioHolding;
   elapsed: number;
   freshSeconds: number;
   staleSeconds: number;
 }) {
-  const m = holding.stock_mark;
-  const historical = m?.mark_mode === "closed" || m?.mark_mode === "halted";
-  return (
-    <div className="flex min-w-0 flex-col items-start gap-2 wrap-anywhere">
-      <span className="font-medium">{holding.symbol}</span>
-      <span>{holding.name}</span>
-      <Badge variant="neutral">{holding.asset_class === "stock" ? "Stock" : "Crypto"}</Badge>
-      {holding.mid !== null && (
-        <span>
-          {holding.asset_class === "stock" ? "IEX midpoint" : "Mid price"}:{" "}
-          {formatUnitPrice(holding.mid)}
-        </span>
-      )}
-      {historical ? (
-        <>
-          <Badge variant="warning">{m.mark_mode === "halted" ? "Halted" : "Market closed"}</Badge>
-          <span>
-            Last verified midpoint ·{" "}
-            <time dateTime={holding.as_of!} title={holding.as_of!}>
-              {fullLocalTimestamp(holding.as_of!)}
+  const mark = holding.stock_mark;
+  if (mark?.mark_mode === "closed" || mark?.mark_mode === "halted") {
+    return (
+      <p className="text-sm text-warn-text">
+        <span>{mark.mark_mode === "halted" ? "Halted" : "Market closed"}</span>
+        {holding.as_of && (
+          <>
+            {" · Last verified midpoint"}
+            {holding.mid !== null && ` ${formatUnitPrice(holding.mid)}`}
+            {" · "}
+            <time dateTime={holding.as_of} title={fullLocalTimestamp(holding.as_of)}>
+              {fullLocalTimestamp(holding.as_of)}
             </time>
-          </span>
-        </>
-      ) : (
-        <PriceUpdated
-          holding={holding}
-          elapsed={elapsed}
-          freshSeconds={freshSeconds}
-          staleSeconds={staleSeconds}
-        />
-      )}
-      {m?.mark_mode === "unavailable" && (
-        <span>
-          {m.valuation_reason === "action_unavailable" || m.valuation_reason === "units_changed"
-            ? "Suspended for corporate-action review. Units and valuation are unavailable."
-            : "Stock valuation unavailable. A verified permitted price is required."}
-        </span>
-      )}
-      <Trade holding={holding} target={target} />
-    </div>
+          </>
+        )}
+      </p>
+    );
+  }
+  if (mark?.mark_mode === "unavailable") {
+    return (
+      <p className="text-sm text-warn-text">
+        {mark.valuation_reason === "action_unavailable" || mark.valuation_reason === "units_changed"
+          ? "Suspended for corporate-action review. Units and valuation are unavailable."
+          : "Stock valuation unavailable. A verified permitted price is required."}
+      </p>
+    );
+  }
+  return (
+    <PriceUpdated
+      holding={holding}
+      elapsed={elapsed}
+      freshSeconds={freshSeconds}
+      staleSeconds={staleSeconds}
+    />
   );
 }
-const columns = [
-  "Asset",
-  "Quantity",
-  "Average cost",
-  "Cost basis",
-  "Current value",
-  "Gain/loss",
-  "Allocation",
-];
+function compareAmountDescending(first: string | null, second: string | null) {
+  const a = stockFixed(first, true);
+  const b = stockFixed(second, true);
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a > b ? -1 : 1;
+}
+
 export function PortfolioHoldings({
   target,
   holdings,
@@ -197,116 +180,151 @@ export function PortfolioHoldings({
   freshSeconds: number;
   staleSeconds: number;
 }) {
-  const sorted = [...holdings].sort((a, b) =>
-    a.symbol < b.symbol
-      ? -1
-      : a.symbol > b.symbol
-        ? 1
-        : BigInt(a.coin_id) < BigInt(b.coin_id)
-          ? -1
-          : 1,
-  );
-  function fields(h: PortfolioHolding): ReactNode[] {
-    return [
-      h.stock_mark && !h.stock_mark.units_safe
-        ? "Unavailable"
-        : h.asset_class === "stock"
-          ? h.quantity.split(".")[0]
-          : formatQuantity(h.quantity),
-      h.average_cost === null ? "Unavailable" : formatUnitPrice(h.average_cost),
-      formatUsd(h.cost_basis),
-      h.current_value === null ? "Unavailable" : formatUsd(h.current_value),
-      <Return holding={h} />,
-      h.allocation_percent === null ? "Unavailable" : `${h.allocation_percent}%`,
-    ];
-  }
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("symbol");
+  const results = holdings
+    .filter((holding) => filter === "all" || holding.asset_class === filter)
+    .sort((a, b) => {
+      const byAmount =
+        sort === "value"
+          ? compareAmountDescending(a.current_value, b.current_value)
+          : sort === "return"
+            ? compareAmountDescending(a.unrealized_pl, b.unrealized_pl)
+            : 0;
+      if (byAmount) return byAmount;
+      if (a.symbol !== b.symbol) return a.symbol < b.symbol ? -1 : 1;
+      return BigInt(a.coin_id) < BigInt(b.coin_id) ? -1 : 1;
+    });
+  const filterClass =
+    "min-h-11 min-w-0 rounded-control border border-input bg-background px-2 text-sm sm:px-3";
+
   return (
-    <Card className="min-w-0 md:col-span-2 lg:col-span-12">
-      <CardContent>
-        <h2 className="font-medium">Holdings</h2>
-        <PortfolioContext name={target.name} />
-        <p className="text-muted-foreground">
-          Average cost includes crypto buy fees. Values use market mid prices.
-        </p>
-        {sorted.length === 0 ? (
-          <div className="flex flex-col items-start gap-3">
-            <h3 className="font-medium">No holdings yet</h3>
-            <p>Explore Markets to buy your first stock or crypto.</p>
-            <Button asChild className="min-h-11">
-              <Link to="/">Explore Markets</Link>
-            </Button>
+    <section className="flex min-w-0 flex-col gap-5" aria-labelledby="holdings-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="holdings-heading" className="text-2xl font-semibold">
+          Holdings
+        </h2>
+        {holdings.length > 0 && (
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <select
+              aria-label="Filter holdings"
+              className={filterClass}
+              value={filter}
+              onChange={(event) => setFilter(event.currentTarget.value)}
+            >
+              <option value="all">All assets</option>
+              <option value="crypto">Crypto</option>
+              <option value="stock">Stocks</option>
+            </select>
+            <select
+              aria-label="Sort holdings"
+              className={filterClass}
+              value={sort}
+              onChange={(event) => setSort(event.currentTarget.value)}
+            >
+              <option value="symbol">Symbol A–Z</option>
+              <option value="value">Highest value</option>
+              <option value="return">Highest gain</option>
+            </select>
           </div>
-        ) : (
-          <>
-            <div className="hidden min-w-0 lg:block">
-              <table aria-label="Holdings" className="w-full table-fixed border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-border">
-                    {columns.map((c, i) => (
-                      <th
-                        key={c}
-                        scope="col"
-                        className={`px-2 py-3 text-[13px] leading-[18px] font-medium text-muted-foreground ${i ? "text-right" : "w-[24%]"}`}
-                      >
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((h) => (
-                    <tr
-                      key={h.coin_id}
-                      className="border-b border-border align-top hover:bg-accent"
-                    >
-                      <th scope="row" className="px-2 py-3 text-[13px] leading-[18px] font-normal">
-                        <Asset
-                          target={target}
-                          holding={h}
-                          elapsed={elapsed}
-                          freshSeconds={freshSeconds}
-                          staleSeconds={staleSeconds}
-                        />
-                      </th>
-                      {fields(h).map((v, i) => (
-                        <td
-                          key={columns[i + 1]}
-                          className="min-w-0 px-2 py-3 text-right wrap-anywhere tabular-nums [&>div]:items-end"
-                        >
-                          {v}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ol aria-label="Holdings" className="flex flex-col gap-3 lg:hidden">
-              {sorted.map((h) => (
-                <li key={h.coin_id} className="min-w-0 rounded-control border border-border p-4">
-                  <Asset
-                    target={target}
-                    holding={h}
-                    elapsed={elapsed}
-                    freshSeconds={freshSeconds}
-                    staleSeconds={staleSeconds}
-                  />
-                  <dl className="mt-4 flex flex-col gap-3">
-                    {fields(h).map((v, i) => (
-                      <div key={columns[i + 1]} className="flex flex-wrap justify-between gap-2">
-                        <dt className="text-[13px] leading-[18px] font-medium text-muted-foreground">
-                          {columns[i + 1]}
-                        </dt>
-                        <dd className="min-w-0 max-w-full wrap-anywhere tabular-nums">{v}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </li>
-              ))}
-            </ol>
-          </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+      {holdings.length === 0 ? (
+        <div className="flex flex-col items-start gap-3">
+          <h3 className="font-medium">No holdings yet</h3>
+          <Button asChild className="min-h-11">
+            <Link to="/">Explore Markets</Link>
+          </Button>
+        </div>
+      ) : results.length === 0 ? (
+        <p role="status" className="text-muted-foreground">
+          No holdings match this filter.
+        </p>
+      ) : (
+        <ul aria-label="Holdings" className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {results.map((h) => (
+            <li
+              key={h.coin_id}
+              className="flex min-w-0 flex-col gap-5 rounded-card border border-border bg-card p-5"
+            >
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <h3 className="text-xl leading-tight font-semibold tracking-tight wrap-anywhere">
+                    {h.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {h.symbol === h.name ? "" : `${h.symbol} · `}
+                    {h.asset_class === "stock" ? "Stock" : "Crypto"}
+                  </p>
+                </div>
+                <p className="text-2xl leading-tight font-medium tracking-tight wrap-anywhere tabular-nums">
+                  <span className="sr-only">Current value: </span>
+                  <span>
+                    {h.current_value === null ? "Unavailable" : formatUsd(h.current_value)}
+                  </span>
+                </p>
+              </div>
+              <HoldingStatus
+                holding={h}
+                elapsed={elapsed}
+                freshSeconds={freshSeconds}
+                staleSeconds={staleSeconds}
+              />
+              <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-border pt-3">
+                <div className="min-w-0 space-y-1 text-sm wrap-anywhere tabular-nums">
+                  <p className="text-muted-foreground">
+                    <span className="sr-only">Quantity: </span>
+                    {h.stock_mark && !h.stock_mark.units_safe
+                      ? "Quantity unavailable"
+                      : `${h.asset_class === "stock" ? h.quantity.split(".")[0] : formatQuantity(h.quantity)} ${h.symbol}`}
+                  </p>
+                  <p>
+                    <span className="sr-only">Gain/loss: </span>
+                    <Return holding={h} />
+                  </p>
+                </div>
+                <Trade holding={h} target={target} />
+              </div>
+              <details className="group">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                  <ChevronDown aria-hidden="true" className="size-4 group-open:rotate-180" />
+                  Cost and price<span className="sr-only"> for {h.symbol}</span>
+                </summary>
+                <dl className="grid grid-cols-2 gap-3 pt-2 text-sm wrap-anywhere tabular-nums">
+                  <div>
+                    <dt className="text-muted-foreground">Average cost</dt>
+                    <dd>
+                      {h.average_cost === null ? "Unavailable" : formatUnitPrice(h.average_cost)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Cost basis</dt>
+                    <dd>{formatUsd(h.cost_basis)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Price used</dt>
+                    <dd>{h.mid === null ? "Unavailable" : formatUnitPrice(h.mid)}</dd>
+                    {h.mid !== null &&
+                      h.as_of &&
+                      h.stock_mark?.mark_mode !== "closed" &&
+                      h.stock_mark?.mark_mode !== "halted" && (
+                        <dd className="text-muted-foreground">
+                          <time dateTime={h.as_of}>{fullLocalTimestamp(h.as_of)}</time>
+                        </dd>
+                      )}
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Allocation</dt>
+                    <dd>
+                      {h.allocation_percent === null ? "Unavailable" : `${h.allocation_percent}%`}
+                    </dd>
+                  </div>
+                </dl>
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

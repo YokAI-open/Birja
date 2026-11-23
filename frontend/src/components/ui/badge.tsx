@@ -13,7 +13,7 @@ const badgeVariants = cva(
         destructive: "bg-loss-soft text-loss-text",
         outline: "border-border text-foreground",
         ghost: "text-foreground hover:bg-muted",
-        link: "text-data-blue-text underline-offset-4 hover:underline",
+        link: "text-link underline-offset-4 hover:underline",
         success: "bg-gain-soft text-gain-text",
         danger: "bg-loss-soft text-loss-text",
         neutral: "bg-muted text-muted-foreground",

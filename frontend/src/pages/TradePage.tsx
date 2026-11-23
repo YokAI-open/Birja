@@ -60,9 +60,11 @@ const signedUsd = (value: string) => (value.startsWith("-") ? "" : "+") + format
 
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("tabular-nums", strong && "text-[17px] font-semibold")}>{value}</dd>
+      <dd className={cn("wrap-anywhere tabular-nums", strong && "text-[17px] font-semibold")}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -327,23 +329,30 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   }
 
   return (
-    <div className="mx-auto my-8 flex min-w-0 max-w-5xl flex-col gap-4 text-[15px] leading-[22px]">
-      <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-        Trade {symbol}
-      </h1>
-      <PortfolioContext name={target.name} />
-      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12">
-        <Card className="min-w-0 lg:col-span-7">
+    <div className="app-page flex flex-col gap-7 text-base md:gap-9">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 space-y-2 wrap-anywhere">
+          <h1 className="app-heading">Trade {symbol}</h1>
+          <PortfolioContext name={target.name} />
+        </div>
+        <Button asChild variant="secondary">
+          <Link to="/">Back to Markets</Link>
+        </Button>
+      </header>
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+        <Card className="min-w-0 lg:col-span-7 lg:self-start">
           <CardContent className="flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2 border-b border-border pb-5">
               {coin ? (
                 <>
                   <p className="text-muted-foreground">{coin.name}</p>
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-[32px] leading-9 font-semibold tabular-nums">
+                    <span className="text-4xl leading-tight font-semibold tracking-tight tabular-nums md:text-5xl">
                       {formatUnitPrice(coin.price)}
                     </span>
-                    {status && <FreshnessBadge status={status} ageSeconds={age} />}
+                    {status && (
+                      <FreshnessBadge status={status} ageSeconds={age} asOf={coin.as_of} />
+                    )}
                   </div>
                 </>
               ) : (
@@ -357,7 +366,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               </p>
             )}
 
-            <form onSubmit={confirm} className="flex flex-col gap-4" id="trade-form" noValidate>
+            <form onSubmit={confirm} className="flex flex-col gap-5" id="trade-form" noValidate>
               <div
                 role="radiogroup"
                 aria-label="Side"
@@ -382,7 +391,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               </div>
 
               {side === "buy" && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(
                     [
                       ["usd", "Amount (USD)"],
@@ -460,7 +469,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <Card
           role="region"
           aria-labelledby={summaryHeadingId}
-          className="min-w-0 lg:col-span-5 lg:self-start"
+          className="min-w-0 bg-muted lg:col-span-5 lg:self-start"
         >
           <CardContent className="flex flex-col gap-4">{preview}</CardContent>
         </Card>

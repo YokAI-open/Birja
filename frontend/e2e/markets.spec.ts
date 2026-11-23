@@ -6,45 +6,42 @@ import { portfolioId, signInNewUser } from "./helpers.js";
 test("a signed-in user sees live prices for the curated coins", async ({ page, browser }) => {
   test.setTimeout(90_000);
 
-  const email = await signInNewUser(page);
+  await signInNewUser(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/");
 
-  const table = page.getByRole("table", { name: "Markets" });
-  await expect(table.getByRole("row")).toHaveCount(16);
-  await expect(table.getByRole("row", { name: /BTC/ })).toBeVisible();
-  await expect(table.getByRole("row", { name: /ETH/ })).toBeVisible();
-  await expect(table.getByRole("row", { name: /DOGE/ })).toBeVisible();
-
-  const priceCol = (await table.getByRole("columnheader").allTextContents()).findIndex((t) =>
-    /^Price$/.test(t.trim()),
-  );
-  expect(priceCol).toBeGreaterThanOrEqual(0);
-  const prices = await table.locator(`tbody tr td:nth-child(${priceCol + 1})`).allTextContents();
-  expect(prices).toHaveLength(15);
-  for (const price of prices) {
-    expect(price.trim()).toMatch(/^\$[\d,]+\.\d{2,}$/);
+  const assets = page.getByRole("list", { name: "Crypto" });
+  const rows = assets.getByRole("button");
+  await expect(rows).toHaveCount(15);
+  for (const symbol of ["BTC", "ETH", "DOGE"]) {
+    await expect(rows.filter({ hasText: symbol })).toBeVisible();
+  }
+  for (const row of await rows.all()) {
+    await expect(row).toContainText(/\$[\d,]+\.\d{2,}/);
   }
 
-  await expect(page.getByText(/^Live · \d+s ago$/).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Crypto", exact: true })).toBeVisible();
-  await expect(page.getByText(/^Oldest crypto price /)).toBeVisible();
-  const stocks = page.getByRole("region", { name: "US stocks · 20" });
-  await expect(stocks.getByRole("heading", { name: "US stocks · 20" })).toBeVisible();
-  await expect(stocks.getByRole("note", { name: "Stock price source" })).toContainText(
-    "IEX prices",
-  );
-  await expect(stocks.getByRole("link")).toHaveCount(20);
+  const search = page.getByRole("searchbox", { name: "Search by name or symbol" });
+  await search.fill("ethereum");
+  await expect(rows).toHaveCount(1);
+  await rows.first().click();
+  await expect(page.getByRole("heading", { name: "Ethereum" })).toBeVisible();
+  await expect(page.getByText(/^Updated \d+s ago$/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Trade ETH" })).toHaveAttribute("href", "/trade/ETH");
+  const back = page.getByRole("button", { name: "All assets" });
+  if (await back.isVisible()) await back.click();
+
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  const stocks = page.getByRole("list", { name: "US stocks", exact: true });
+  await expect(stocks.getByRole("button")).toHaveCount(20);
+  await stocks.getByRole("button", { name: /AAPL/ }).click();
+  await expect(page.getByRole("note", { name: "Stock price source" })).toContainText("IEX prices");
 
   // Refetch without reload (PRICE-03).
   await page.waitForResponse((r) => r.url().endsWith("/api/v1/prices") && r.status() === 200, {
     timeout: 45_000,
   });
 
-  await page.getByRole("link", { name: "Account" }).click();
-  await expect(page).toHaveURL((url) => url.pathname === "/account");
-  await expect(page.getByText("$10,000.00")).toHaveCount(0);
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
   const id = await portfolioId(page);
   await page.goto(`/portfolios/${id}`);
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$10,000.00");

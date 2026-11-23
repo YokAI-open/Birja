@@ -78,10 +78,10 @@ const ok = (items: EventHistoryItem[] = [item], next_cursor: string | null = nul
       }),
     ),
   );
-it("renders the mixed Account activity heading", async () => {
+it("keeps the History page heading for navigation", async () => {
   historyFetch(() => ok([]));
   renderWithClient(<HistoryPage />);
-  expect(await screen.findByRole("heading", { name: "Account activity" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "History" })).toBeVisible();
 });
 afterEach(() => vi.unstubAllGlobals());
 it("reserves the initial loading region", async () => {
@@ -118,19 +118,19 @@ it("keeps Refresh focusable and blocks repeated activation during an in-flight r
     );
   historyFetch(fetch);
   const { user } = renderWithClient(<HistoryPage />);
-  await screen.findByRole("table");
-  await user.click(screen.getByRole("button", { name: "Refresh history" }));
-  const refresh = screen.getByRole("button", { name: "Refreshing history…" });
+  await screen.findByRole("list");
+  await user.click(screen.getByRole("button", { name: "Update history" }));
+  const refresh = screen.getByRole("button", { name: "Updating history…" });
   expect(refresh).toBeEnabled();
   expect(refresh).toHaveAttribute("aria-disabled", "true");
   expect(refresh).toHaveFocus();
   await user.click(refresh);
   await user.keyboard("{Enter} ");
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
+  expect(screen.getByRole("list")).toHaveTextContent("−$100.00");
   resolve(new Response(JSON.stringify({ items: [item], next_cursor: null })));
   await vi.waitFor(() =>
-    expect(screen.getByRole("button", { name: "Refresh history" })).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Update history" })).toBeEnabled(),
   );
   await vi.waitFor(() => expect(refresh).toHaveAttribute("aria-disabled", "false"));
   expect(refresh).toHaveFocus();
@@ -154,12 +154,12 @@ it.each([
     historyFetch(fetch);
     const { user } = renderWithClient(<HistoryPage />);
     if (label === "Retry refresh") {
-      await screen.findByRole("table");
-      await user.click(screen.getByRole("button", { name: "Refresh history" }));
+      await screen.findByRole("list");
+      await user.click(screen.getByRole("button", { name: "Update history" }));
     }
     const retry = await screen.findByRole("button", { name: label });
     await user.click(retry);
-    const refresh = screen.getByRole("button", { name: "Refreshing history…" });
+    const refresh = screen.getByRole("button", { name: "Updating history…" });
     expect(refresh).toHaveAttribute("aria-disabled", "true");
     const count = fetch.mock.calls.length;
     if (label === "Retry refresh") {
@@ -180,7 +180,7 @@ it.each([
   },
 );
 
-it("renders stored values in desktop and labelled mobile views without a false end message", async () => {
+it("keeps entry details collapsed until opened without a false end message", async () => {
   const fetch = vi.fn(() =>
     ok(
       [
@@ -192,24 +192,20 @@ it("renders stored values in desktop and labelled mobile views without a false e
     ),
   );
   historyFetch(fetch);
-  renderWithClient(<HistoryPage />);
-  const table = await screen.findByRole("table", { name: "Account activity" });
-  const mobile = screen.getByRole("list", { name: "Account activity" });
-  for (const view of [table, mobile]) {
-    expect(view).toHaveTextContent("Bitcoin");
-    expect(view).toHaveTextContent("Buy");
-    expect(view).toHaveTextContent("Sell");
-    expect(view).toHaveTextContent("−$100.00");
-    expect(view).toHaveTextContent("+$99.50");
-    expect(view).toHaveTextContent("$0.00");
-    expect(view).toHaveTextContent("0.00000001");
-    expect(view).toHaveTextContent("$123.46");
-    expect(view).toHaveTextContent("$0.25");
-    expect(within(view).getAllByRole("time")[0]).toHaveAttribute("title", item.recorded_at);
+  const { user } = renderWithClient(<HistoryPage />);
+  const cards = await screen.findByRole("list", { name: "Account activity" });
+  const [first] = within(cards).getAllByRole("listitem");
+  for (const text of ["Buy", "Sell", "−$100.00", "+$99.50", "$0.00"]) {
+    expect(cards).toHaveTextContent(text);
   }
-  for (const label of ["Recorded", "Event", "Asset", "Details", "Cash change"]) {
-    expect(within(mobile).getAllByText(label, { selector: "dt" })).toHaveLength(3);
+  const summary = first!.querySelector("summary")!;
+  expect(first!.querySelector("details")).not.toHaveAttribute("open");
+  expect(within(first!).getByText("Quantity")).not.toBeVisible();
+  await user.click(summary);
+  for (const text of ["Bitcoin", "0.00000001", "$123.46", "$0.25"]) {
+    expect(within(first!).getByText(text)).toBeVisible();
   }
+  expect(within(first!).getAllByRole("time")[0]).toHaveAttribute("title", item.recorded_at);
   expect(screen.queryByText("All events loaded.")).toBeNull();
   expect(fetch).toHaveBeenCalledTimes(1);
 });
@@ -232,7 +228,7 @@ it("retries an initial error", async () => {
   );
   expect(screen.queryByText("No activity yet")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Try again" }));
-  expect(await screen.findByRole("table", { name: "Account activity" })).toHaveTextContent(
+  expect(await screen.findByRole("list", { name: "Account activity" })).toHaveTextContent(
     "−$100.00",
   );
 });
@@ -244,12 +240,12 @@ it("retains fills after failed refresh and can retry", async () => {
     .mockImplementation(() => ok());
   historyFetch(fetch);
   const { user } = renderWithClient(<HistoryPage />);
-  await screen.findByRole("table");
-  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  await screen.findByRole("list");
+  await user.click(screen.getByRole("button", { name: "Update history" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Couldn't refresh your history. Showing the last successful update.",
   );
-  expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
+  expect(screen.getByRole("list")).toHaveTextContent("−$100.00");
   await user.click(screen.getByRole("button", { name: "Retry refresh" }));
   await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
@@ -288,7 +284,7 @@ it("appends three ordered pages once, retries the same cursor and transfers fina
   expect(
     screen.queryByText("Couldn't refresh your history. Showing the last successful update."),
   ).toBeNull();
-  expect(screen.getByRole("table")).toHaveTextContent("−$100.00");
+  expect(screen.getByRole("list")).toHaveTextContent("−$100.00");
   await user.click(screen.getByRole("button", { name: "Try loading more" }));
   await vi.waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent("1 more events loaded. 2 events shown."),
@@ -300,9 +296,8 @@ it("appends three ordered pages once, retries the same cursor and transfers fina
   expect(end).toHaveFocus();
   expect(end).toHaveAttribute("tabindex", "-1");
   expect(
-    within(screen.getByRole("table"))
-      .getAllByRole("row")
-      .slice(1)
+    within(screen.getByRole("list"))
+      .getAllByRole("listitem")
       .map((row) => row.textContent),
   ).toEqual([
     expect.stringContaining("Bitcoin"),
@@ -333,7 +328,7 @@ it("disables append during background refresh and preserves focus elsewhere on e
   );
   const { user } = renderWithClient(<HistoryPage />);
   await screen.findByRole("button", { name: "Load more" });
-  const refresh = screen.getByRole("button", { name: "Refresh history" });
+  const refresh = screen.getByRole("button", { name: "Update history" });
   await user.click(refresh);
   expect(screen.getByRole("button", { name: "Load more" })).toBeDisabled();
   finish(new Response(JSON.stringify({ items: [item], next_cursor: null })));
@@ -409,17 +404,27 @@ it("keeps focus on another control when append finishes and refresh announces th
   );
   const { user } = renderWithClient(<HistoryPage />);
   await user.click(await screen.findByRole("button", { name: "Load more" }));
-  const region = screen.getByRole("region", { name: "Account activity table" });
+  const region = within(screen.getByRole("list", { name: "Account activity" })).getAllByRole(
+    "listitem",
+  )[0]!;
   region.focus();
   finish(new Response(JSON.stringify({ items: [{ ...item, id: "trade:2" }], next_cursor: null })));
   await screen.findByText("All events loaded.");
   expect(region).toHaveFocus();
   expect(screen.getByRole("status")).toHaveTextContent("1 more events loaded. 2 events shown.");
-  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  await user.click(screen.getByRole("button", { name: "Update history" }));
   await vi.waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent(/^1 events shown\.$/),
   );
 });
+
+async function viewOriginal(user: ReturnType<typeof renderWithClient>["user"], list: HTMLElement) {
+  const correction = within(list)
+    .getAllByRole("listitem")
+    .find((item) => item.querySelector("summary")?.textContent?.includes("Dividend correction"));
+  await user.click(correction!.querySelector("summary")!);
+  await user.click(within(correction!).getByRole("button", { name: "View original dividend" }));
+}
 
 const dividend: EventDividend = {
   kind: "dividend",
@@ -459,7 +464,7 @@ const held: EventDividendCorrection = {
   original: dividend,
 };
 
-it("renders all mixed kinds in server order with the five approved columns and loaded original navigation", async () => {
+it("renders all mixed kinds in server order and opens a loaded original dividend", async () => {
   const crypto = { ...item, recorded_at: dividend.recorded_at, filled_at: dividend.recorded_at };
   const split = {
     kind: "split",
@@ -479,18 +484,13 @@ it("renders all mixed kinds in server order with the five approved columns and l
   } as const;
   historyFetch(() => ok([crypto, dividend, split, held]));
   const { user } = renderWithClient(<HistoryPage />);
-  const table = await screen.findByRole("table");
-  expect(
-    within(table)
-      .getAllByRole("columnheader")
-      .map((node) => node.textContent),
-  ).toEqual(["Recorded", "Event", "Asset", "Details", "Cash change"]);
-  const rows = within(table).getAllByRole("row").slice(1);
+  const table = await screen.findByRole("list");
+  const rows = within(table).getAllByRole("listitem");
   expect(rows.map((row) => row.id)).toEqual([
-    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${crypto.id}$`)),
-    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${dividend.id}$`)),
-    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${split.id}$`)),
-    expect.stringMatching(new RegExp(`^history-1-\\d+-desktop-${held.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-${crypto.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-${dividend.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-${split.id}$`)),
+    expect.stringMatching(new RegExp(`^history-1-\\d+-${held.id}$`)),
   ]);
   expect(table).toHaveTextContent("USD 0.00000001 per share");
   expect(table).toHaveTextContent("Held when recorded");
@@ -500,8 +500,9 @@ it("renders all mixed kinds in server order with the five approved columns and l
   expect(table).toHaveTextContent("Crypto");
   expect(table).toHaveTextContent("Stock");
   expect(rows[1]).toHaveTextContent(dividend.name.trim());
-  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  await viewOriginal(user, table);
   expect(rows[1]).toHaveFocus();
+  expect(rows[1]?.querySelector("details")).toHaveAttribute("open");
   expect(screen.queryByRole("button", { name: "Back to correction" })).not.toBeInTheDocument();
 });
 
@@ -518,12 +519,12 @@ it("removes offpage original details immediately on logout", async () => {
       <SignOut />
     </>,
   );
-  const table = await screen.findByRole("table");
-  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  const table = await screen.findByRole("list");
+  await viewOriginal(user, table);
   const heading = screen.getByRole("heading", { name: /^Original dividend/ });
   expect(heading).toHaveFocus();
   await user.click(screen.getByRole("button", { name: "Test sign out" }));
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.queryByRole("list")).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: /^Original dividend/ })).not.toBeInTheDocument();
   expect(screen.queryByText(dividend.payment_reference)).not.toBeInTheDocument();
 });
@@ -532,15 +533,10 @@ it("shows the full escaped portfolio context on History and original details", a
   const name = ("<strong>Strategy</strong> " + "Long name ".repeat(4)).slice(0, 60).trim();
   historyFetch(() => ok([held]), [{ id: "1", name }]);
   const { user } = renderWithClient(<HistoryPage />);
-  const table = await screen.findByRole("table");
-  expect(screen.getByText(name)).toHaveClass("[overflow-wrap:anywhere]");
+  const table = await screen.findByRole("list");
+  expect(screen.getByRole("combobox", { name: "History portfolio" })).toHaveDisplayValue(name);
   expect(document.querySelector("strong")).toBeNull();
-  expect(
-    screen.getByText(
-      "Cash change is the amount actually added to or taken from this portfolio's USD balance.",
-    ),
-  ).toBeVisible();
-  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  await viewOriginal(user, table);
   const region = screen.getByRole("region", { name: /^Original dividend/ });
   expect(within(region).getByText(name)).toHaveClass("min-w-0", "[overflow-wrap:anywhere]");
   expect(region.querySelector("strong")).toBeNull();
@@ -562,19 +558,15 @@ it("resets original detail state for a sibling sharing the same global event and
     { id: "2", name: "Sibling" },
   ]);
   const { user } = renderWithClient(<HistoryPage />);
-  await user.click(
-    within(await screen.findByRole("table")).getByRole("button", {
-      name: "View original dividend",
-    }),
-  );
+  await viewOriginal(user, await screen.findByRole("list", { name: "Account activity" }));
   const oldHeading = screen.getByRole("heading", { name: /^Original dividend/ });
   expect(oldHeading).toHaveFocus();
   await user.click(screen.getByRole("link", { name: "Open sibling" }));
-  const table = await screen.findByRole("table");
+  const table = await screen.findByRole("list");
   expect(screen.queryByRole("heading", { name: /^Original dividend/ })).toBeNull();
   expect(oldHeading).not.toBeInTheDocument();
   expect(screen.getAllByText("Sibling")).toHaveLength(1);
-  await user.click(within(table).getByRole("button", { name: "View original dividend" }));
+  await viewOriginal(user, table);
   const originalRegion = screen.getByRole("region", { name: /^Original dividend/ });
   expect(originalRegion).toHaveTextContent("+$0.50");
   expect(originalRegion).not.toHaveTextContent("+$1.00");
@@ -605,9 +597,9 @@ it("discards an old-root append and its focus/announcement after switching roots
   const { user } = renderWithClient(<HistoryPage />);
   await user.click(await screen.findByRole("button", { name: "Load more" }));
   await user.click(screen.getByRole("link", { name: "Open sibling" }));
-  expect(await screen.findByRole("table")).toHaveTextContent("Sibling fill");
+  expect(await screen.findByRole("list")).toHaveTextContent("Sibling fill");
   await act(async () => finish(await ok([{ ...item, id: "trade:2", name: "Old root append" }])));
-  expect(screen.getByRole("table")).not.toHaveTextContent("Old root append");
+  expect(screen.getByRole("list")).not.toHaveTextContent("Old root append");
   expect(screen.getByRole("status")).toHaveTextContent("1 events shown.");
   expect(screen.queryByText(/more events loaded/)).toBeNull();
   expect(screen.getByRole("link", { name: "Open sibling" })).toHaveFocus();
@@ -639,16 +631,12 @@ it("removes open originals and pending page data immediately when root authority
       <RemoveRoot />
     </>,
   );
-  await user.click(
-    within(await screen.findByRole("table")).getByRole("button", {
-      name: "View original dividend",
-    }),
-  );
-  await user.click(screen.getByRole("button", { name: "Refresh history" }));
+  await viewOriginal(user, await screen.findByRole("list", { name: "Account activity" }));
+  await user.click(screen.getByRole("button", { name: "Update history" }));
   await user.click(screen.getByRole("button", { name: "Test root unavailable" }));
   expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
   await act(async () => finish(await ok([held])));
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("list")).toBeNull();
   expect(screen.queryByRole("heading", { name: /^Original dividend/ })).toBeNull();
   expect(screen.queryByText(dividend.payment_reference)).toBeNull();
 });
@@ -673,7 +661,7 @@ it.each([2, 3])(
     );
     renderWithClient(<HistoryPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Can't load your history right now");
-    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
     expect(screen.queryByText("No activity yet")).toBeNull();
   },
 );

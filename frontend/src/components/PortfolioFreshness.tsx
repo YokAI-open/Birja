@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Portfolio } from "@/api/portfolio";
-import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
-import { fullLocalTimestamp } from "@/lib/financialDisplay";
+import { freshnessStatus, oldestHoldingAge, statusLabel } from "@/lib/age";
 
 export function PortfolioFreshness({
   portfolio,
@@ -20,10 +19,7 @@ export function PortfolioFreshness({
   const historical = portfolio.holdings.some(
     (h) => h.stock_mark?.mark_mode === "closed" || h.stock_mark?.mark_mode === "halted",
   );
-  const ages = portfolio.holdings.flatMap((h) =>
-    h.age_seconds === null ? [] : [h.age_seconds + elapsed],
-  );
-  const oldest = ages.length ? Math.max(...ages) : null;
+  const oldest = oldestHoldingAge(portfolio.holdings, elapsed);
   const status =
     oldest === null
       ? null
@@ -49,53 +45,11 @@ export function PortfolioFreshness({
     ? "Refreshing portfolio…"
     : `${!isError && dataUpdatedAt !== firstUpdate ? "Portfolio refreshed. " : ""}${state}. ${warning ?? ""}`;
   return (
-    <div className="flex flex-col gap-2 text-[13px] leading-[18px] font-medium">
+    <>
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
       </span>
-      {warning && <p className="rounded-control bg-warn-soft p-4 text-warn-text">{warning}</p>}
-      <p>
-        {incomplete
-          ? "Valuation incomplete"
-          : historical
-            ? "Values include dated stock marks."
-            : status
-              ? "Values use market mid prices."
-              : "No market prices needed"}
-      </p>
-      {oldest !== null && (
-        <p className="wrap-anywhere">
-          {incomplete
-            ? "Oldest available price"
-            : status === "fresh"
-              ? "Oldest price"
-              : "Last-known valuation · oldest price"}{" "}
-          {formatAge(oldest)}
-          {portfolio.prices_as_of !== null && (
-            <>
-              {" "}
-              ·{" "}
-              <time
-                dateTime={portfolio.prices_as_of}
-                title={portfolio.prices_as_of}
-                aria-label={fullLocalTimestamp(portfolio.prices_as_of)}
-              >
-                {fullLocalTimestamp(portfolio.prices_as_of)}
-              </time>
-            </>
-          )}
-        </p>
-      )}
-      <p className="wrap-anywhere">
-        Calculated at{" "}
-        <time
-          dateTime={portfolio.valued_at}
-          title={portfolio.valued_at}
-          aria-label={fullLocalTimestamp(portfolio.valued_at)}
-        >
-          {fullLocalTimestamp(portfolio.valued_at)}
-        </time>
-      </p>
-    </div>
+      {warning && !incomplete && <p className="text-sm text-warn-text">{warning}</p>}
+    </>
   );
 }

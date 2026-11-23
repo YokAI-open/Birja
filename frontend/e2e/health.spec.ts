@@ -3,7 +3,7 @@ import { signInNewUser } from "./helpers.js";
 
 test("shows the backend, database and Redis as connected", async ({ page }) => {
   await signInNewUser(page);
-  await page.goto("/account");
+  await page.goto("/health");
   await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
 
   const services = page.getByRole("list", { name: "Service status" });

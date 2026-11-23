@@ -10,56 +10,46 @@
 
 :root {
   /* Neutrals and surfaces */
-  --background: #f2f2f2;
-  --foreground: #111113;
-  --card: #fafafa;
-  --card-foreground: #111113;
+  --background: #faf9f6;
+  --foreground: #201f1d;
+  --card: #fdfcf9;
+  --card-foreground: #201f1d;
   --popover: #ffffff;
-  --popover-foreground: #111113;
-  --muted: #ededed;
-  --muted-foreground: #6b6b70;
-  --border: #e6e6e6;
-  --input: #e0e0e0;
-  --ring: #3451d1;
+  --popover-foreground: #201f1d;
+  --muted: #f0ebe4;
+  --muted-foreground: #625e53;
+  --border: #dedad0;
+  --input: #9d988c;
+  --ring: #a52317;
 
   /* Brand and actions */
-  --primary: #18181b;
+  --primary: #201f1d;
   --primary-foreground: #ffffff;
   --secondary: #ffffff;
-  --secondary-foreground: #111113;
-  --accent: #eef1fe;
-  --accent-foreground: #3451d1;
-  --brand: #f07a1a;
-  --destructive: #b83270;
+  --secondary-foreground: #201f1d;
+  --accent: #f2ede7;
+  --accent-foreground: #201f1d;
+  --brand: #a52317;
+  --destructive: #9c3025;
 
   /* Data and state */
-  --data-blue: #4a6bf0;
-  --data-blue-text: #3451d1;
-  --data-blue-soft: #eef1fe;
+  --data-fill: #776d5f;
+  --link: #853428;
   --gain: #56a342;
   --gain-text: #2e7a2e;
   --gain-soft: #eaf5e7;
-  --loss: #d64c87;
-  --loss-text: #b83270;
-  --loss-soft: #fbeaf2;
+  --loss: #ad483d;
+  --loss-text: #9c3025;
+  --loss-soft: #fbeeea;
   --warn: #f5a524;
   --warn-text: #8f5200;
   --warn-soft: #fef4e2;
-
-  /* One highlight card per page, at most */
-  --highlight-gradient:
-    radial-gradient(120% 90% at 85% 10%, #f0a36b 0%, transparent 55%),
-    radial-gradient(90% 80% at 100% 60%, #eadeac 0%, transparent 60%),
-    linear-gradient(160deg, #3a4fc4 0%, #212c69 70%);
 
   --radius: 14px;
 }
 
 @theme {
   /* Plain @theme (not inline) so the var() references resolve where they are used. */
-  --shadow-card:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 0 0 1px var(--border),
-    0 1px 2px rgba(17, 17, 19, 0.04);
   --shadow-pop: 0 0 0 1px var(--border), 0 8px 24px rgba(17, 17, 19, 0.08);
   --shadow-pill: 0 1px 2px rgba(17, 17, 19, 0.12), 0 4px 10px rgba(17, 17, 19, 0.1);
 }
@@ -87,9 +77,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-brand: var(--brand);
   --color-destructive: var(--destructive);
-  --color-data-blue: var(--data-blue);
-  --color-data-blue-text: var(--data-blue-text);
-  --color-data-blue-soft: var(--data-blue-soft);
+  --color-data-fill: var(--data-fill);
+  --color-link: var(--link);
   --color-gain: var(--gain);
   --color-gain-text: var(--gain-text);
   --color-gain-soft: var(--gain-soft);
@@ -104,10 +93,18 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
-  --radius-card: 24px;
-  --radius-control: 14px;
+  --radius-card: 14px;
+  --radius-control: 8px;
   --radius-pill: 9999px;
   --radius-bar: 6px;
+}
+
+@utility app-page {
+  @apply mx-auto my-8 w-full min-w-0 max-w-[1280px] md:my-12 lg:my-16;
+}
+
+@utility app-heading {
+  @apply text-3xl leading-tight font-semibold tracking-tight wrap-anywhere md:text-4xl lg:text-[2.75rem];
 }
 
 @layer base {
@@ -120,8 +117,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-size: 15px;
-    line-height: 22px;
+    font-size: 16px;
+    line-height: 1.5;
   }
   /* Focus ring is never removed: 2px ring with a 2px offset. */
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {

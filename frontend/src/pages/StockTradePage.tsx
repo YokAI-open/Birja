@@ -81,11 +81,16 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       : /^0(?:\.0+)?$/.test(c.held_quantity));
   if (!target.isCurrent()) return null;
   return (
-    <div className="my-8 flex min-w-0 flex-col gap-4 text-[15px] leading-[22px]">
-      <h1 className="text-[32px] leading-9 font-medium wrap-anywhere md:text-[40px] md:leading-[44px]">
-        Trade {t.symbol}
-      </h1>
-      <PortfolioContext name={target.name} />
+    <div className="app-page flex flex-col gap-7 text-base md:gap-9">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 space-y-2 wrap-anywhere">
+          <h1 className="app-heading">Trade {t.symbol}</h1>
+          <PortfolioContext name={target.name} />
+        </div>
+        <Button asChild variant="secondary">
+          <Link to="/">Back to Markets</Link>
+        </Button>
+      </header>
       <p
         role="status"
         aria-live="polite"
@@ -98,12 +103,12 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       >
         {message}
       </p>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-12">
-        <Card className="min-w-0 lg:col-span-7">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-12 lg:gap-8">
+        <Card className="min-w-0 lg:col-span-7 lg:self-start">
           <CardContent>
             {c ? (
               <>
-                <h2 className="text-[24px] leading-7 font-medium wrap-anywhere">
+                <h2 className="text-2xl leading-tight font-semibold wrap-anywhere">
                   {c.company_name}
                 </h2>
                 <p>
@@ -152,7 +157,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 return (
                   <div
                     key={side}
-                    className={`min-w-0 rounded-control p-4 ${selected ? "bg-accent text-accent-foreground" : "bg-muted"}`}
+                    className={`min-w-0 rounded-control border p-4 md:p-5 ${selected ? "border-ring bg-accent text-accent-foreground" : "border-border bg-card"}`}
                   >
                     <p className="font-medium">IEX {side}</p>
                     <p className="text-[24px] leading-7 wrap-anywhere tabular-nums">
@@ -169,7 +174,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               </p>
             )}
             <form
-              className="flex min-w-0 flex-col gap-4"
+              className="flex min-w-0 flex-col gap-5 border-t border-border pt-5"
               onSubmit={(e) => {
                 e.preventDefault();
                 setPreviewName(target.name);
@@ -260,7 +265,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
             <StockDisclosure />
           </CardContent>
         </Card>
-        <Card className="min-w-0 lg:col-span-5">
+        <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">
           <CardContent>
             {t.fill ? (
               <StockTradeReceipt
@@ -271,7 +276,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               />
             ) : (
               <>
-                <h2 className="text-[24px] leading-7 font-medium">Trade preview</h2>
+                <h2 className="text-xl leading-7 font-semibold">Trade preview</h2>
                 <PortfolioContext
                   name={
                     t.attempt
@@ -363,12 +368,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
           </CardContent>
         </Card>
       </div>
-      <Link
-        to="/"
-        className="min-h-11 self-start rounded-control px-2 py-3 text-data-blue-text underline focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Back to Markets
-      </Link>
     </div>
   );
 }
@@ -377,8 +376,8 @@ export default function StockTradePage() {
   const target = useOutletContext<PortfolioTarget>();
   if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol))
     return (
-      <div className="my-8">
-        <h1 className="text-[32px] leading-9 font-medium">Unknown stock</h1>
+      <div className="app-page flex flex-col items-start gap-4">
+        <h1 className="app-heading">Unknown stock</h1>
         <Link to="/">Back to Markets</Link>
       </div>
     );

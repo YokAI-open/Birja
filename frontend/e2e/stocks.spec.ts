@@ -27,6 +27,8 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
         }),
   );
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
   failed = true;
   await page.clock.fastForward(30_001);
@@ -42,6 +44,8 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
   await page.keyboard.press("Enter");
   await expect(section(page).getByRole("status")).not.toContainText("Couldn’t refresh");
   await expect(section(page).getByRole("heading", { name: "US stocks · 20" })).toBeFocused();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await expect(page.getByRole("link", { name: "Trade BTC" })).toBeVisible();
 });
 
@@ -52,8 +56,10 @@ for (const width of [320, 375, 768, 1280])
     await page.setViewportSize({ width, height: 900 });
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks() }));
     await signInNewUser(page);
+    await page.getByRole("button", { name: "US stocks", exact: true }).click();
+    await page.getByText("Stock market details", { exact: true }).click();
     await expect(records(page)).toHaveCount(20);
-    await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
+    await expect(section(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
     await expect(section(page).getByRole("link")).toHaveCount(20);
     await expect(section(page).getByRole("button")).toHaveCount(0);
     await expect(section(page).getByRole("table", { name: "US stocks" })).toHaveCount(
@@ -81,8 +87,16 @@ for (const width of [320, 375, 768, 1280])
       await expect(section(page).getByRole("listitem")).toHaveCount(20);
       expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     }
+    await page.getByRole("button", { name: "Crypto", exact: true }).click();
+    await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
+    if (width < 768 || width === 1280) {
+      await expect(
+        page.getByRole("heading", { name: "Bitcoin", exact: true, level: 2 }),
+      ).toBeFocused();
+    }
     const trade = page.getByRole("link", { name: "Trade BTC" });
     await trade.focus();
+    await expect(trade).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/trade\/BTC$/);
   });
@@ -94,6 +108,8 @@ test("denied, admitted and revoked generations retain identities and purge provi
   let body = stocks({ state: "unavailable" });
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
   await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
   await expect(section(page).getByText("$100.00")).toHaveCount(0);
@@ -106,7 +122,7 @@ test("denied, admitted and revoked generations retain identities and purge provi
   await page.clock.runFor(100);
   await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
   await expect(section(page).getByText("$100.00")).toHaveCount(0);
-  await expect(section(page).locator("time")).toHaveCount(80); // session bounds are public, quote times absent
+  await expect(section(page).locator("time")).toHaveCount(0); // compact unavailable catalog omits per-stock times
   await expect(records(page)).toHaveCount(20);
 });
 
@@ -122,6 +138,8 @@ test("local admission expiry and a late expired response cannot reintroduce quot
     await route.fulfill({ json: stocks({ lifetime: expiredResponse ? -1 : 5 }) });
   });
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page).first()).toContainText("$100.00");
   const initialCalls = calls;
   expiredResponse = true;
@@ -142,6 +160,8 @@ test("source 119.999 to120 stays nonexecutable and does not announce each second
     route.fulfill({ json: stocks({ age: 119.999 }) }),
   );
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page).first()).not.toContainText("$100.00"); // full RTT cannot extend source age
   await expect(section(page).getByRole("status")).toContainText("Out of date");
   await expect(section(page).getByRole("button")).toHaveCount(0);
@@ -157,6 +177,8 @@ test("source age crossing120 changes the contextual announcement only at the bou
   await page.clock.install();
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks({ age: 119 }) }));
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page).first()).toContainText("Recent · 1m ago");
   const recent = await section(page).getByRole("status").textContent();
   await page.clock.runFor(1000);
@@ -204,6 +226,8 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   body.items[3].quote_reason = "session_unavailable";
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
   await expect(records(page).nth(0)).toContainText("Waiting for an IEX quote");
   await expect(records(page).nth(1)).not.toContainText("$100.00");

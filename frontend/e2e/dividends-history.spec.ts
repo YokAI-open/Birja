@@ -36,27 +36,30 @@ const cents = (value: string) => {
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0").slice(0, 2));
 };
 const activity = (page: Page) =>
-  page.getByRole(page.viewportSize()!.width >= 1024 ? "table" : "list", {
+  page.getByRole("list", {
     name: "Account activity",
     exact: true,
   });
+async function openEvent(page: Page, title: string) {
+  const summary = activity(page).locator("summary").filter({ hasText: title }).first();
+  await expect(summary).toBeVisible();
+  if (!(await summary.evaluate((element) => element.closest("details")?.open))) {
+    await summary.click();
+  }
+}
 async function focusedInView(page: Page, target: Locator) {
   await expect(target).toBeFocused();
   const box = await target.boundingBox();
   expect(box).not.toBeNull();
   const viewport = page.viewportSize()!;
-  const nav =
-    viewport.width < 768
-      ? await page.getByRole("navigation", { name: "Main" }).boundingBox()
-      : null;
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
   expect(box!.y).toBeGreaterThanOrEqual(0);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(nav?.y ?? viewport.height);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
 }
 async function history(page: Page) {
   await page.goto("/history");
-  await expect(page.getByRole("heading", { name: "Account activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "History", exact: true })).toBeAttached();
   return (await page.request.get(await portfolioApi(page, "/event-history"))).json();
 }
 async function cryptoFill(page: Page, side: "buy" | "sell", amount: string) {
@@ -126,7 +129,8 @@ test("real restricted worker credits once and publishes uncertainty with no cash
   expect(evidence("cycle", email)).toEqual(paid);
   const data = await history(page);
   expect(data.items.filter((item: { kind: string }) => item.kind === "dividend")).toHaveLength(1);
-  await expect(activity(page)).toContainText("Gross ordinary USD dividend");
+  await openEvent(page, "Dividend ·");
+  await expect(activity(page).getByText(/Gross ordinary USD dividend/)).toBeVisible();
   await expect(activity(page)).toContainText("+$10,000.00");
   await snapshot(page, info, "dividend-original");
   // Spend more than the original10000 grant, so these actual purchases need
@@ -152,9 +156,10 @@ test("real restricted worker credits once and publishes uncertainty with no cash
   expect(held.decisions.at(-1)?.outcome).toBe("held_unaffordable");
   expect(evidence("cycle", email)).toEqual(held);
   await history(page);
-  await expect(activity(page)).toContainText(
-    "Not enough available cash for this correction. No cash changed.",
-  );
+  await openEvent(page, "Dividend correction held ·");
+  await expect(
+    activity(page).getByText(/Not enough available cash for this correction/),
+  ).toBeVisible();
   await snapshot(page, info, "dividend-held-unaffordable");
   const sold = await cryptoFill(page, "sell", bought.quantity);
   const decreased = evidence("cycle", email);
@@ -166,9 +171,10 @@ test("real restricted worker credits once and publishes uncertainty with no cash
   expect(uncertain.decisions.at(-1)?.outcome).toBe("held_uncertain");
   expect(evidence("cycle", email)).toEqual(uncertain);
   await history(page);
-  await expect(activity(page)).toContainText(
-    "The corrected dividend terms need verification. No cash changed.",
-  );
+  await openEvent(page, "Dividend correction held ·");
+  await expect(
+    activity(page).getByText(/The corrected dividend terms need verification/),
+  ).toBeVisible();
   await snapshot(page, info, "dividend-held-uncertain");
   const resolved = evidence("reconcile", email);
   expect(cents(resolved.cash)).toBe(cents(decreased.cash) + 1000300n);
@@ -229,11 +235,10 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(activity(page)).toBeVisible();
-    await expect(
-      page.getByRole(width >= 1024 ? "list" : "table", { name: "Account activity", exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Account activity", exact: true })).toHaveCount(0);
     expect(await page.evaluate("document.documentElement.scrollWidth<=innerWidth")).toBe(true);
     await expect(activity(page)).toContainText("USD 0.00000001 per share");
+    await openEvent(page, "Dividend correction ·");
     const original = activity(page)
       .getByRole("button", { name: "View original dividend", exact: true })
       .first();
@@ -247,11 +252,7 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
     expect(box!.height).toBeGreaterThanOrEqual(44);
     await back.focus();
     await back.scrollIntoViewIfNeeded();
-    if (width < 768) {
-      const nav = await page.getByRole("navigation", { name: "Main" }).boundingBox();
-      const target = await back.boundingBox();
-      expect(target!.y + target!.height).toBeLessThanOrEqual(nav!.y);
-    }
+    await focusedInView(page, back);
     await snapshot(page, info, `mixed-history-${width}`);
     await page.keyboard.press("Enter");
     await expect(original).toBeFocused();
@@ -291,7 +292,7 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await page.route("**" + (await portfolioApi(page, "/event-history*")), (route) =>
     route.fulfill({ status: 503, json: { detail: "synthetic unavailable" } }),
   );
-  await page.getByRole("button", { name: "Refresh history", exact: true }).click();
+  await page.getByRole("button", { name: "Update history", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Showing the last successful update");
   await expect(activity(page)).toContainText("Forward split");
   await snapshot(page, info, "history-refresh-error");
@@ -325,14 +326,13 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
   await page.getByRole("button", { name: "Load more", exact: true }).click();
   await expect(page.getByText("All events loaded.", { exact: true })).toBeFocused();
   const identities = await activity(page)
-    .locator("tbody tr, :scope > li")
+    .getByRole("listitem")
     .evaluateAll((nodes) => nodes.map((node) => node.id));
   const id = await portfolioId(page);
-  for (const identity of identities)
-    expect(identity).toMatch(new RegExp(`^history-${id}-\\d+-(desktop|mobile)-`));
-  expect(
-    identities.map((identity) => identity.replace(/^history-\d+-\d+-(desktop|mobile)-/, "")),
-  ).toEqual(tied.map((item) => item.id));
+  for (const identity of identities) expect(identity).toMatch(new RegExp(`^history-${id}-\\d+-`));
+  expect(identities.map((identity) => identity.replace(/^history-\d+-\d+-/, ""))).toEqual(
+    tied.map((item) => item.id),
+  );
   await snapshot(page, info, "history-tied-read-only");
   await page.unroute("**" + (await portfolioApi(page, "/event-history*")));
   // Supplementary enlarged text only; owner native browser zoom remains pending.
@@ -384,9 +384,8 @@ test("pre-anchor uncertainty has no Dividend and late previous-owner reads canno
       /* Navigation aborted the old real read. */
     }
   });
-  await page.getByRole("button", { name: "Refresh history", exact: true }).click();
+  await page.getByRole("button", { name: "Update history", exact: true }).click();
   await observed;
-  await page.getByRole("link", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
   release();

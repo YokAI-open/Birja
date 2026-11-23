@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: Released deployment preflight flags healthy built-in C collation as drift
 created: 2026-11-22
 updated: 2026-11-22
@@ -99,3 +99,13 @@ predicates are unchanged. PostgreSQL18 primary documentation was independently
 checked. First-party0.6.2 metadata changes no dependency graph; frontend audit
 bindings match actual bytes and retain advisory scope/expiry. git diff --check
 passes. No database operations or new campaigns were run during review.
+
+## Actual production confirmation
+
+All six hosted checks passed run45069245874 at1a9f9e8;3,703backend tests and
+criticalcoverage100%. PR39published main7d236e4/v0.6.2. Exact qualified source
+probe and full canonical bootstrap passed, original finances remained unchanged,
+and actual deployment completed. Pre-start and post-rollout exact isolated B2
+restores, current-API origin41/41, public9/9 and verified encrypted custody export
+pass. See[production receipt](../releases/0.6.2/PRODUCTION.md). Earlier isolated-only
+scope and paused-production statements above describe the investigation history.
