@@ -81,7 +81,8 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-v1.2 is archived. Software v0.6.2 is deployed, with the release back-merged into develop.
+- [ ] Adopt the approved branded, minimal interface across Markets, Portfolios, trade, History, and sign-in.
+- [ ] Verify the redesigned flows with authenticated browser journeys, backend and frontend checks, and code review.
 
 
 
@@ -284,14 +285,27 @@ inherited migration/concurrency/browser/TLS/owner evidence. All implementation
 requirements are complete. The audit and archive are linked above.
 Phase 7 owner acceptance is closed and live stock activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
-zero accepted scanner findings are not a dependency remediation claim. No new
-production actions were part of the local phase verification. The later deployment is recorded above.
+zero accepted scanner findings are not a dependency remediation claim. The later deployment is recorded above.
 No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio
 funding limit with independent per-portfolio starting grants. Creating a new
 strategy after deletion is allowed. No existing portfolio is reset, and virtual
 funds are isolated rather than transferable across portfolios.
+
+## Current Milestone: v1.3 Birja Interface Redesign
+
+**Goal:** Deliver the approved low-clutter design over the existing trading simulator and qualify the result with the real app stack.
+
+- Keep the approved Birja branding, Inter and warm light theme. Place Markets, Portfolios, History and the door control on one row.
+- Use a focused Markets view, clickable portfolio cards, a compact portfolio workspace, expandable History cards and restrained trade and sign-in layouts.
+- Reuse the current authenticated APIs and financial rules. Fix any frontend or backend integration defects found in the approved flows.
+- Verify with code review, automated unit and integration suites, real-browser tests on an isolated stack, and owner review of the integrated interface.
+
+The owner approved the scope, requirements and two-phase roadmap on 2026-11-23.
+Software v0.6.2 is the released baseline. Live stock activation remains separate.
+See [requirements](REQUIREMENTS.md), [roadmap](ROADMAP.md) and
+[deferred work](DEFERRED.md).
 
 ## Constraints
 
