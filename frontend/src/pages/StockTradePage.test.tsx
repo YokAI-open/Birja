@@ -7,10 +7,12 @@ import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixt
 import StockTradePage from "./StockTradePage";
 import App from "@/App";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { stocks } from "../../e2e/stock-fixtures";
 const clients: QueryClient[] = [];
 function setup(
   options: {
     context?: () => Response;
+    catalogue?: () => Response;
     trade?: (body: Record<string, unknown>) => Response | Promise<Response>;
     route?: string;
     app?: boolean;
@@ -33,6 +35,8 @@ function setup(
       const path = String(input),
         body = init?.body ? JSON.parse(String(init.body)) : null;
       calls.push({ path, body });
+      if (path === "/api/v1/stocks")
+        return options.catalogue?.() ?? new Response("{}", { status: 404 });
       if (path.endsWith("/context"))
         return scoped(options.context?.() ?? new Response(JSON.stringify(contextFixture())));
       if (path.endsWith("/quote")) return scoped(new Response(JSON.stringify(quoteFixture())));
@@ -136,11 +140,48 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
   await user.type(input, "3");
   expect(input).toHaveValue("3");
   expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
-  expect(
-    screen.getByText("Market closed. You can edit a draft; no order is queued."),
-  ).toBeVisible();
+  expect(screen.getByText("Market closed.")).toBeVisible();
+  expect(screen.queryByText("Unavailable", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
   expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
+});
+it("uses the verified catalogue opening in local time if trade context cannot load", async () => {
+  const now = Date.now();
+  const nextOpen = new Date(now + 119.75 * 60_000);
+  const catalogue = stocks({ state: "unavailable", now: new Date(now).toISOString() });
+  const stock = catalogue.items[0]!;
+  Object.assign(stock, { session_reason: "closed" });
+  Object.assign(stock.session, {
+    state: "closed",
+    opens_at: null,
+    closes_at: null,
+    next_open_at: nextOpen.toISOString(),
+  });
+  setup({
+    catalogue: () => Response.json(catalogue),
+    context: () => Response.json({ detail: { code: "permission_unavailable" } }, { status: 409 }),
+  });
+  expect(await screen.findByText(/Market closed\. Opens in 2 hr/)).toBeVisible();
+  expect(
+    screen.getByText(
+      nextOpen.toLocaleString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+      }),
+    ),
+  ).toHaveAttribute("dateTime", nextOpen.toISOString());
+  expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+  expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+});
+it("shows a single retry message when the stock and its schedule cannot load", async () => {
+  setup({ context: () => Response.json({}, { status: 503 }) });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this stock.");
+  expect(screen.getAllByText("Couldn't load this stock.")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Retry stock" })).toBeEnabled();
 });
 it("keeps an unresolvable saved receipt as an uncertain attempt instead of allowing a new order", async () => {
   const { user, calls } = setup({
@@ -274,10 +315,10 @@ it("unknown response keeps fields frozen and checks the same original body after
     .map((c) => c.body);
   expect(bodies[1]).toEqual(bodies[0]);
 });
-it("invalid route symbols show a safe return to Markets without stock requests", async () => {
+it("invalid route symbols show an error without stock requests or duplicate navigation", async () => {
   const { calls } = setup({ route: "/trade/stocks/invalid!" });
   expect(await screen.findByRole("heading", { name: "Unknown stock" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Back to Markets" })).toHaveAttribute("href", "/");
+  expect(screen.queryByRole("link", { name: "Back to Markets" })).toBeNull();
   expect(calls.some((c) => c.path.includes("/stock-trades"))).toBe(false);
 });
 
@@ -295,7 +336,7 @@ it("names the stock ticket, preview and original receipt and keeps scoped destin
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
   await waitFor(() => expect(confirm).toBeEnabled());
-  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
+  expect(screen.getAllByText("Strategy one")).toHaveLength(1);
   await user.click(confirm);
   const receipt = within(await screen.findByRole("region", { name: "Order filled" }));
   expect(receipt.getByText("Strategy one")).toBeVisible();

@@ -71,7 +71,7 @@ export function StockTradeReceipt({
       >
         Order filled
       </h2>
-      <PortfolioContext name={portfolioName} />
+      <PortfolioContext name={portfolioName} compact />
       <p className="wrap-anywhere">
         {f.company_name} · {f.symbol} · {f.listing_exchange} · Stock
       </p>

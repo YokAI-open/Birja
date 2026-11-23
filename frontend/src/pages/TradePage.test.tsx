@@ -550,7 +550,8 @@ describe("TradePage", () => {
 it("names the ticket, confirmation and focused original receipt with scoped links", async () => {
   const { user } = show();
   await previewReady(user);
-  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
+  expect(screen.getAllByText("Strategy one")).toHaveLength(1);
+  expect(screen.queryByRole("link", { name: "Back to Markets" })).toBeNull();
   expect(previewCard().getByText("Strategy one")).toBeVisible();
   await user.click(confirmButton());
   const heading = await screen.findByRole("heading", { name: "Order filled" });
