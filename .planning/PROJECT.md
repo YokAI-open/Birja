@@ -81,11 +81,11 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-No implementation requirement remains in v1.2. Milestone audit/archive and publication decisions are separate.
+v1.2 is archived. Software v0.6.2 is deployed, with the release back-merged into develop.
 
 
 
-### Carried Work Outside v1.2
+### Carried Work Across Milestones
 
 Phase7's six owner acceptance items are closed as of2026-11-22: explicit owner
 confirmation of prior manual checks and applicable product rights/access/retention/
@@ -241,7 +241,13 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 
 </details>
 
-## Current Milestone: v1.2 Multiple Strategy Portfolios
+## Closed Milestone: v1.2 Multiple Strategy Portfolios
+
+The milestone audit passed all 28 requirements on 2026-11-23. Software
+v0.6.2 is deployed at main `7d236e4` and the back-merge is complete.
+See the [audit](milestones/v1.2-MILESTONE-AUDIT.md) and
+[production receipt](releases/0.6.2/PRODUCTION.md). The work below records
+the original approved scope and its implementation evidence.
 
 **Goal:** Let users try independent investing strategies with separately funded,
 private portfolios while preserving existing accounts and financial records.
@@ -275,11 +281,11 @@ failed and full CI before merge remains required. Phase15 passes all four
 outcomes and three requirements:actual new encrypted restore/original retries
 with unchanged financial state, five strict image scans and source-bound
 inherited migration/concurrency/browser/TLS/owner evidence. All implementation
-requirements are complete; milestone audit/archive remain. See STATE.md.
-Phase7's six live obligations stay separately deferred and activation remains gated.
+requirements are complete. The audit and archive are linked above.
+Phase 7 owner acceptance is closed and live stock activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
 zero accepted scanner findings are not a dependency remediation claim. No new
-publication or production deployment occurred; v1.2 awaits milestone audit/archive.
+production actions were part of the local phase verification. The later deployment is recorded above.
 No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio

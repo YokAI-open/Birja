@@ -2,12 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Multiple Strategy Portfolios
-current_phase: 15
-current_plan: 4
-status: milestone_ready_for_audit
-stopped_at: Software v0.6.2 deployed; release back-merge complete; milestone audit next
-last_updated: "2026-11-22T23:16:35.453655+00:00"
-last_activity: 2026-11-22 UTC -- Production and exact recovery verified; PR40 merged after all six checks passed
+status: Awaiting next milestone
+stopped_at: v1.2 audited and archived; begin v1.3 planning
+last_updated: "2026-11-23T09:58:31.047Z"
+last_activity: 2026-11-23 — Milestone v1.2 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -56,23 +54,12 @@ production statements below describe historical phase checkpoints.
 
 ## Current Position
 
-Owner process preference (2026-11-21): balance development speed and security,
-for this phase and future milestones. CLAUDE.md now requires proportionate
-verification: targeted rechecks after small fixes, reuse of valid evidence for
-unchanged components, and follow-up debt for nonblocking hardening. For Plan18,
-avoid repeating unaffected backend qualification after browser-fixture-only
-repairs or reopening resolved findings without new evidence. Required CI,
-financial/authentication/data safeguards and truthful result reporting remain.
-This instruction records no new test pass or completed plan; any change to an
-explicit remaining qualification gate must be documented in the plan.
+Phase: 15 complete
+Plan: 72 of 72 complete across v1.2
+Status: v1.2 audit passed and milestone archived
+Last activity: 2026-11-23
 
-Phase: 15
-Plan: All4complete (Phase15 verified)
-Current Plan: None — awaiting milestone audit
-Status: Local implementation complete; milestone audit next
-Last activity: 2026-11-22
-
-Progress: [██████████] 100% local implementation (4/4 phases complete;72/72plans complete)
+The [archive](milestones/v1.2-STATE.md) preserves the full pre-audit state and release history.
 
 ## Phase13 Execution Progress
 
@@ -1310,3 +1297,7 @@ Production remains main7d236e4/v0.6.2, healthy at the final public check. See
 [back-merge receipt](releases/0.6.2/BACKMERGE.md). All software shipping work is
 complete. Earlier pending-publication/back-merge statements are historical.
 Stock activation and v1.2 milestone audit/archive remain separate.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

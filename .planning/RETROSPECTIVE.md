@@ -68,11 +68,13 @@ bounded compatibility/CI rehearsals before requesting live changes.
 
 ## Cross-Milestone Trends
 
-Only one milestone is complete; no cross-milestone trend is established yet.
+Across milestones, source-bound evidence and isolated recovery have been most valuable at ownership and deployment boundaries. Reuse applicable evidence and rerun checks when affected inputs change.
 
 | Milestone | Phases | Plans | Accepted execution evidence |
 |---|---|---|---|
-| v1.0 MVP | 7 | 69 | Backend 616; frontend 264; browser/ops/image CI; live owner acceptance and exact recovery |
+| v1.0 MVP | 7 | 69 | Backend 616, frontend 264, browser/ops/image CI, live owner acceptance and exact recovery |
+| v1.1 US Stock Trading | 5 | 63 of 64 | Six green release checks. Live work had accepted gaps at close. |
+| v1.2 Multiple Strategy Portfolios | 4 | 72 | All 28 requirements, six release and back-merge checks, exact production recovery |
 
 ## Milestone: v1.1 — US Stock Trading
 
@@ -111,3 +113,22 @@ one-shot produced no durable result receipt; live outcome remains unknown.
 
 No reliable token/model cost total is available; none is invented. Expensive
 campaigns should follow stable source and small failure-focused diagnostics.
+
+
+## Milestone: v1.2 — Multiple Strategy Portfolios
+
+**Deployed:** 2026-11-22. **Archived:** 2026-11-23. Four phases, 72 plans.
+
+Portfolio-level owner authority preserves original finance while supporting
+separately funded named strategies, exact comparison, and confirmed closure
+with frozen retained records. Encrypted cold recovery preserves active and
+frozen portfolios, original requests and financial lineage.
+
+The most useful checks exercised actual PostgreSQL contention, restricted
+roles, recovery and independent economic assertions. Legacy deploy gates
+needed extra rehearsal for inherited migration grants and unversioned C/POSIX
+collations. Future changes should isolate affected components and keep failed
+whole-run outcomes distinct from successful component evidence. Record
+requirements metadata consistently to reduce manual closeout cross-checks.
+
+No model mix or cost measurements were available.
