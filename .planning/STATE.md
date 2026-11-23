@@ -8,7 +8,7 @@ last_activity: 2026-11-23
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -25,8 +25,8 @@ Current focus: qualify the approved Birja interface using the existing full stac
 ## Current Position
 
 Phase: 16 — Adopt the Approved Interface
-Plan: Pending
-Status: Roadmap approved. Ready for phase planning.
+Plan: 16-01 integration in progress
+Status: Phase 16 plans checked. Isolated backend and browser qualification in progress.
 Last activity: 2026-11-23 — v1.2 archived and v1.3 approved.
 
 ## Accumulated Context
@@ -42,3 +42,15 @@ Last activity: 2026-11-23 — v1.2 archived and v1.3 approved.
   retained items are tracked in [DEFERRED.md](DEFERRED.md).
 - Prioritize affected behavior and reuse still-valid evidence. Preserve required
   CI and financial, session, ownership and recovery guarantees.
+
+## Current Evidence
+
+- Both Phase 16 plans pass SDK structure checks. The independent plan and UI
+  check findings were addressed in the plan and contract.
+- Independent source review found missing selected-stock status and editor
+  focus. The application and target checks were updated.
+- The first full-stack browser run was interrupted. Its observed test failures
+  and owned-resource cleanup are retained, and a focused rerun is underway.
+- The first backend run used a noncanonical project name and hit the suite's
+  hard-coded test container selector. The canonical disposable rerun is
+  underway. This is a test harness setup failure, not a backend pass.

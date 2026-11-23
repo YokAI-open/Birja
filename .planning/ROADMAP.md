@@ -21,6 +21,11 @@
 
 **Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05, UI-06, UI-07, QA-01
 
+**Plans:** 2 plans
+
+- [ ] 16-01 — Adopt and integrate the approved redesign (wave 1).
+- [ ] 16-02 — Verify the integrated UI and capture owner acceptance (wave 2).
+
 **Success criteria:**
 
 1. The shared header, door control, Markets and trade tickets match the approved style and retain existing quote, order and session behavior.
@@ -45,7 +50,7 @@
 
 | Phase | Milestone | Status |
 |---|---|---|
-| 16. Adopt the Approved Interface | v1.3 | Ready to plan |
+| 16. Adopt the Approved Interface | v1.3 | Planned |
 | 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Depends on Phase 16 |
 
 All 10 requirements are assigned once in [REQUIREMENTS.md](REQUIREMENTS.md).
