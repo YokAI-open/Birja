@@ -81,11 +81,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-No implementation requirement remains in v1.2. Milestone audit/archive and publication decisions are separate.
+- [ ] Adopt the approved branded, minimal interface across Markets, Portfolios, trade, History, and sign-in.
+- [ ] Verify the redesigned flows with authenticated browser journeys, backend and frontend checks, and code review.
 
 
 
-### Carried Work Outside v1.2
+### Carried Work Across Milestones
 
 Phase7's six owner acceptance items are closed as of2026-11-22: explicit owner
 confirmation of prior manual checks and applicable product rights/access/retention/
@@ -241,7 +242,13 @@ v1 advisory debt remains separately recorded, not added to this scope by default
 
 </details>
 
-## Current Milestone: v1.2 Multiple Strategy Portfolios
+## Closed Milestone: v1.2 Multiple Strategy Portfolios
+
+The milestone audit passed all 28 requirements on 2026-11-23. Software
+v0.6.2 is deployed at main `7d236e4` and the back-merge is complete.
+See the [audit](milestones/v1.2-MILESTONE-AUDIT.md) and
+[production receipt](releases/0.6.2/PRODUCTION.md). The work below records
+the original approved scope and its implementation evidence.
 
 **Goal:** Let users try independent investing strategies with separately funded,
 private portfolios while preserving existing accounts and financial records.
@@ -275,17 +282,30 @@ failed and full CI before merge remains required. Phase15 passes all four
 outcomes and three requirements:actual new encrypted restore/original retries
 with unchanged financial state, five strict image scans and source-bound
 inherited migration/concurrency/browser/TLS/owner evidence. All implementation
-requirements are complete; milestone audit/archive remain. See STATE.md.
-Phase7's six live obligations stay separately deferred and activation remains gated.
+requirements are complete. The audit and archive are linked above.
+Phase 7 owner acceptance is closed and live stock activation remains gated.
 Issue35 remains the unchanged owner-accepted risk through2026-12-17UTC; final
-zero accepted scanner findings are not a dependency remediation claim. No new
-publication or production deployment occurred; v1.2 awaits milestone audit/archive.
+zero accepted scanner findings are not a dependency remediation claim. The later deployment is recorded above.
 No historical performance chart is included.
 
 **Funding policy change:** The owner explicitly replaces the single-portfolio
 funding limit with independent per-portfolio starting grants. Creating a new
 strategy after deletion is allowed. No existing portfolio is reset, and virtual
 funds are isolated rather than transferable across portfolios.
+
+## Current Milestone: v1.3 Birja Interface Redesign
+
+**Goal:** Deliver the approved low-clutter design over the existing trading simulator and qualify the result with the real app stack.
+
+- Keep the approved Birja branding, Inter and warm light theme. Place Markets, Portfolios, History and the door control on one row.
+- Use a focused Markets view, clickable portfolio cards, a compact portfolio workspace, expandable History cards and restrained trade and sign-in layouts.
+- Reuse the current authenticated APIs and financial rules. Fix any frontend or backend integration defects found in the approved flows.
+- Verify with code review, automated unit and integration suites, real-browser tests on an isolated stack, and owner review of the integrated interface.
+
+The owner approved the scope, requirements and two-phase roadmap on 2026-11-23.
+Software v0.6.2 is the released baseline. Live stock activation remains separate.
+See [requirements](REQUIREMENTS.md), [roadmap](ROADMAP.md) and
+[deferred work](DEFERRED.md).
 
 ## Constraints
 
@@ -340,4 +360,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-22 after independently verified Phase15 completion; v1.2 local implementation complete, milestone audit next; production unchanged.*
+*Last updated: 2026-11-23 for the approved v1.3 interface redesign.*

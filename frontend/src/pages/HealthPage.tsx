@@ -31,23 +31,23 @@ function HealthPage() {
   }
 
   return (
-    <Card className="mx-auto my-8 max-w-xl">
-      <CardContent className="flex flex-col gap-4">
-        <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
+    <Card role="region" aria-labelledby="health-title">
+      <CardContent className="gap-5">
+        <h1 id="health-title" className="text-2xl leading-tight font-semibold">
           System status
         </h1>
         <p className="text-muted-foreground">{summary}</p>
-        <ul aria-label="Service status" aria-busy={isPending}>
+        <ul aria-label="Service status" aria-busy={isPending} className="border-y border-border">
           {isPending
             ? ["API", "Database", "Redis"].map((name) => (
-                <li key={name} className="flex h-[52px] items-center border-b border-border">
+                <li key={name} className="flex min-h-15 items-center border-b border-border">
                   <span className="h-4 w-full rounded-control bg-muted" />
                 </li>
               ))
             : services.map(({ name, label }) => (
                 <li
                   key={name}
-                  className="flex h-[52px] items-center justify-between border-b border-border last:border-b-0"
+                  className="flex min-h-15 items-center justify-between border-b border-border last:border-b-0"
                 >
                   <span>{name}</span>
                   <Badge variant={VARIANT[label]}>{label}</Badge>
@@ -59,15 +59,20 @@ function HealthPage() {
             Can&apos;t reach the backend. It will retry automatically.
           </p>
         )}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           {data ? (
-            <p className="text-xs leading-4 text-muted-foreground tabular-nums">
+            <p className="text-sm text-muted-foreground tabular-nums">
               Last checked {timeFormat.format(dataUpdatedAt)}
             </p>
           ) : (
             <span />
           )}
-          <Button aria-label="Check again" disabled={isFetching} onClick={() => void refetch()}>
+          <Button
+            variant="secondary"
+            aria-label="Check again"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
             {isFetching ? "Checking…" : "Check again"}
           </Button>
         </div>

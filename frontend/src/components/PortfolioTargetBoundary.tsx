@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useLocation, useParams } from "react-router";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePortfolioTarget, type PortfolioTarget } from "@/hooks/usePortfolioTarget";
@@ -18,9 +19,11 @@ import { usePortfolioMetadataLifetime } from "@/hooks/usePortfolioManagement";
 export function PortfolioTargetBoundary({
   children,
   legacyDestination,
+  tradeSymbol,
   primaryHeading,
 }: {
   children?: (target: PortfolioTarget) => ReactNode;
+  tradeSymbol?: string;
   legacyDestination?: (portfolioId: string) => string;
   /** A detail layout can own its heading before persistent management content. */
   primaryHeading?: RefObject<HTMLHeadingElement | null>;
@@ -121,19 +124,21 @@ export function PortfolioTargetBoundary({
     result.status === "empty"
       ? "You're signed in, but no portfolio is available. You can still browse Markets or sign out."
       : result.status === "ambiguous"
-        ? "Open a portfolio-specific link to continue. No portfolio was selected."
+        ? tradeSymbol
+          ? `Choose a portfolio to continue to ${tradeSymbol}.`
+          : "Open a portfolio-specific link to continue. No portfolio was selected."
         : result.status === "required"
           ? "Open a portfolio-specific link to continue."
           : result.status === "error"
             ? "Can't load this portfolio right now. Try again."
             : "This portfolio is unavailable. Choose another portfolio from Portfolios.";
   return (
-    <section className="mx-auto my-8 flex min-w-0 max-w-xl flex-col gap-4" aria-live="polite">
+    <section className="app-page flex max-w-2xl flex-col gap-6" aria-live="polite">
       {!primaryHeading && (
         <h1
           ref={heading}
           tabIndex={-1}
-          className="break-words text-[32px] leading-9 font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-[40px] md:leading-[44px]"
+          className="app-heading focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           {title}
         </h1>
@@ -152,9 +157,13 @@ export function PortfolioTargetBoundary({
               won&apos;t be retried in another portfolio.
             </p>
           )}
-          <Button asChild variant="secondary" className="min-h-11 whitespace-normal">
-            <Link to="/portfolios">Portfolios</Link>
-          </Button>
+          {result.status === "ambiguous" && tradeSymbol && legacyDestination ? (
+            <PortfolioSwitcher destination={legacyDestination} />
+          ) : (
+            <Button asChild variant="secondary" className="min-h-11 whitespace-normal">
+              <Link to="/portfolios">Portfolios</Link>
+            </Button>
+          )}
           {result.status === "error" ? (
             <Button variant="secondary" onClick={() => void result.refetch().catch(() => {})}>
               Try again

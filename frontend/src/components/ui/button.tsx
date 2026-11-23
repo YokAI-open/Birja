@@ -4,7 +4,7 @@ import { cn } from "cn";
 import { Slot } from "radix-ui";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center rounded-pill border border-transparent text-[15px] font-medium whitespace-nowrap transition-all duration-150 outline-none select-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "inline-flex shrink-0 items-center justify-center rounded-pill border border-transparent text-[15px] font-medium whitespace-nowrap transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 select-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
@@ -13,12 +13,12 @@ const buttonVariants = cva(
         outline: "border-border bg-background text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
         destructive: "bg-destructive text-primary-foreground hover:bg-destructive/90",
-        link: "text-data-blue-text underline-offset-4 hover:underline",
+        link: "text-link underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-11 gap-2 px-5",
-        sm: "h-10 gap-1.5 px-4",
-        lg: "h-12 gap-2 px-6",
+        default: "min-h-12 gap-2 px-5",
+        sm: "min-h-11 gap-1.5 px-4",
+        lg: "min-h-13 gap-2 px-6",
         icon: "size-10 border-border bg-secondary",
       },
     },

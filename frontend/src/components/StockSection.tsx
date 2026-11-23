@@ -11,8 +11,7 @@ import { useStocks } from "@/hooks/useStocks";
 import { formatAge } from "@/lib/age";
 import { formatUnitPrice } from "@/lib/money";
 
-const permissionNotice =
-  "Stock prices are unavailable while data permissions are being verified. Crypto trading is available.";
+const permissionNotice = "Stock prices are unavailable while data permissions are being verified.";
 const refreshNotice =
   "Couldn’t refresh stocks. Only still-permitted, currently verified prices are shown.";
 
@@ -169,18 +168,26 @@ export function StockSection({ portfolioId }: { portfolioId?: string }) {
     <section aria-labelledby="stocks-heading" className="min-w-0">
       <Card>
         <CardContent className="gap-4">
-          <h2 ref={heading} tabIndex={-1} id="stocks-heading" className="font-medium">
+          <h2
+            ref={heading}
+            tabIndex={-1}
+            id="stocks-heading"
+            className="text-xl leading-7 font-semibold"
+          >
             US stocks · 20
           </h2>
-          <StockAttribution context="listing" required_text={data?.attribution.required_text} />
-          <p>
-            Whole-share stock orders use your existing USD balance. Availability is verified
-            separately for each stock. Crypto trading remains independent.
-          </p>
-          <p className="text-[13px] leading-[18px] text-muted-foreground">
-            IEX quotes are checked about every minute. A check may return an older quote; the time
-            shown is the source quote time.
-          </p>
+          {allowed && (
+            <>
+              <p>
+                Whole-share stock orders use your existing USD balance. Availability is verified
+                separately for each stock. Crypto trading remains independent.
+              </p>
+              <p className="text-[13px] leading-[18px] text-muted-foreground">
+                IEX quotes are checked about every minute. A check may return an older quote; the
+                time shown is the source quote time.
+              </p>
+            </>
+          )}
           <p
             role="status"
             aria-atomic="true"
@@ -189,11 +196,12 @@ export function StockSection({ portfolioId }: { portfolioId?: string }) {
             className={
               data && allowed && !failed
                 ? "sr-only"
-                : "text-[13px] leading-[18px] text-muted-foreground"
+                : "rounded-control bg-muted px-4 py-3 text-sm text-foreground"
             }
           >
             {message}
           </p>
+          <StockAttribution context="listing" required_text={data?.attribution.required_text} />
           {data && failed && (
             <Button
               ref={retryButton}
@@ -221,6 +229,34 @@ export function StockSection({ portfolioId }: { portfolioId?: string }) {
             >
               {isFetching ? "Retrying stock prices…" : "Retry stock prices"}
             </Button>
+          ) : !allowed ? (
+            <table aria-label="US stocks" className="w-full border-collapse text-left">
+              <thead className="sr-only">
+                <tr>
+                  <th scope="col">Stock</th>
+                  <th scope="col">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b border-border last:border-b-0">
+                    <td className="py-3 pr-3">
+                      <Identity item={item} />
+                    </td>
+                    <td className="w-px py-3 text-right">
+                      <Button asChild variant="secondary" className="px-3">
+                        <Link
+                          to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/stocks/${encodeURIComponent(item.symbol)}`}
+                          aria-label={`View stock ${item.symbol}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : (
             <>
               {allowed && !items.some((item) => item.quote) && (

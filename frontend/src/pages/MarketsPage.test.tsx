@@ -53,86 +53,57 @@ const payload = (items = COINS) => ({
 const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 
 describe("MarketsPage", () => {
-  it("offers authenticated portfolio choices while public prices stay browsable", async () => {
-    const fetch = vi.fn((url: string) =>
-      url === "/api/v2/me"
-        ? ok({ email: "alice@example.test" })
-        : url === "/api/v2/portfolios"
-          ? ok([
-              { id: "1", name: "First" },
-              { id: "2", name: "Second" },
-            ])
-          : ok(payload()),
-    );
-    vi.stubGlobal("fetch", fetch);
-    const { user } = renderWithClient(<MarketsPage authenticated portfolioId="1" />);
-    const select = await screen.findByRole("combobox", { name: "Open portfolio" });
-    await vi.waitFor(() => expect(select).toBeEnabled());
-    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
-      "href",
-      "/portfolios/1/trade/BTC",
-    );
-    await user.selectOptions(select, "2");
-    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
-      "href",
-      "/portfolios/1/trade/BTC",
-    );
-    expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
-    expect(fetch.mock.calls.filter(([url]) => url === "/api/v1/prices")).toHaveLength(1);
-  });
-  it("shows zero active choices without creating a root or hiding public Markets", async () => {
-    const fetch = vi.fn((url: string) =>
-      url === "/api/v2/me"
-        ? ok({ email: "alice@example.test" })
-        : url === "/api/v2/portfolios"
-          ? ok([])
-          : ok(payload()),
-    );
-    vi.stubGlobal("fetch", fetch);
-    renderWithClient(<MarketsPage authenticated />);
-    expect(
-      await screen.findByText("No portfolios yet. Create a portfolio from Portfolios."),
-    ).toBeVisible();
-    expect(await screen.findByRole("table", { name: "Markets" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
-    expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
-    expect(
-      fetch.mock.calls.every(([url]) =>
-        ["/api/v2/me", "/api/v2/portfolios", "/api/v1/prices"].includes(url),
-      ),
-    ).toBe(true);
-  });
-  it("renders one row per coin in order with formatted prices", async () => {
+  it("shows the curated coins in source order with formatted prices", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => ok(payload())),
     );
     renderWithClient(<MarketsPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
-    const table = await screen.findByRole("table", { name: "Markets" });
-    const rows = within(table).getAllByRole("row").slice(1);
+    const assets = await screen.findByRole("list", { name: "Crypto" });
+    const rows = within(assets).getAllByRole("button");
     expect(rows).toHaveLength(15);
-    expect(within(rows[0]!).getByText("BTC")).toBeVisible();
-    expect(within(rows[0]!).getByText("Bitcoin")).toBeVisible();
-    expect(within(rows[0]!).getByText("$81,042.35")).toBeVisible();
-    expect(within(rows[4]!).getByText("$0.07998")).toBeVisible();
-    expect(within(rows[11]!).getByText("$1.01")).toBeVisible();
-    expect(within(rows[14]!).getByText("UNI")).toBeVisible();
+    expect(rows[0]).toHaveAccessibleName(/Bitcoin BTC.*81,042.35/);
+    expect(rows[4]).toHaveAccessibleName(/Dogecoin DOGE.*0.07998/);
+    expect(rows[11]).toHaveAccessibleName(/Cosmos ATOM.*1.01/);
+    expect(rows[14]).toHaveAccessibleName(/Uniswap UNI/);
   });
 
-  it("links every row to its trade page", async () => {
+  it("searches by name or symbol and only offers the selected asset action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => ok(payload())),
+    );
+    const { user } = renderWithClient(<MarketsPage portfolioId="1" />);
+    const search = screen.getByRole("searchbox", { name: "Search by name or symbol" });
+    const trade = await screen.findByRole("link", { name: "Trade BTC" });
+    expect(trade).toHaveAttribute("href", "/portfolios/1/trade/BTC");
+    await user.type(search, "ethERE");
+    const assets = screen.getByRole("list", { name: "Crypto" });
+    expect(within(assets).getAllByRole("button")).toHaveLength(1);
+    await user.click(within(assets).getByRole("button", { name: /Ethereum ETH/ }));
+    expect(screen.getByRole("link", { name: "Trade ETH" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/ETH",
+    );
+    expect(screen.queryByRole("link", { name: "Trade BTC" })).toBeNull();
+    await user.clear(search);
+    await user.type(search, "DOGE");
+    expect(within(assets).getByRole("button", { name: /Dogecoin DOGE/ })).toBeVisible();
+    await user.type(search, "missing");
+    expect(screen.getByText("No assets match your search.")).toBeVisible();
+  });
+
+  it("keeps asset intent in the unscoped trade route", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => ok(payload())),
     );
     renderWithClient(<MarketsPage />);
-    const table = await screen.findByRole("table", { name: "Markets" });
-    expect(within(table).getByRole("columnheader", { name: "Trade" })).toBeVisible();
-    expect(within(table).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
       "href",
       "/trade/BTC",
     );
-    expect(within(table).getAllByRole("link")).toHaveLength(15);
   });
 
   it("shows a loading state while pending", () => {
@@ -141,7 +112,7 @@ describe("MarketsPage", () => {
       vi.fn(() => new Promise<Response>(() => {})),
     );
     renderWithClient(<MarketsPage />);
-    expect(screen.getByRole("status", { name: "Loading prices" })).toBeVisible();
+    expect(screen.getByText("Loading prices…")).toBeVisible();
   });
 
   it("shows the empty message", async () => {
@@ -165,9 +136,9 @@ describe("MarketsPage", () => {
       }),
     );
     const { user } = renderWithClient(<MarketsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Can't load prices right now.");
+    expect(await screen.findByText("Couldn’t load this market.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("table", { name: "Markets" })).toBeVisible();
+    expect(await screen.findByRole("list", { name: "Crypto" })).toBeVisible();
   });
 
   it("keeps the last prices with a warning when a background refetch fails", async () => {
@@ -181,30 +152,30 @@ describe("MarketsPage", () => {
       }),
     );
     renderWithClient(<MarketsPage />);
-    await screen.findByRole("table", { name: "Markets" });
-    expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
+    await screen.findByRole("list", { name: "Crypto" });
+    expect(screen.queryByText(/Couldn’t refresh/)).toBeNull();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(calls).toBe(2);
     expect(
-      await screen.findByText("Couldn't refresh prices. Showing the last update."),
+      await screen.findByText("Couldn’t refresh. Showing the last available update."),
     ).toBeVisible();
-    const table = screen.getByRole("table", { name: "Markets" });
-    expect(within(table).getAllByRole("row").slice(1)).toHaveLength(15);
+    const table = screen.getByRole("list", { name: "Crypto" });
+    expect(within(table).getAllByRole("button")).toHaveLength(15);
     expect(within(table).getByText("$81,042.35")).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(calls).toBe(3);
     await vi.waitFor(() => {
-      expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
+      expect(screen.queryByText(/Couldn’t refresh/)).toBeNull();
     });
-    expect(screen.getByRole("table", { name: "Markets" })).toBeVisible();
+    expect(screen.getByRole("list", { name: "Crypto" })).toBeVisible();
   });
 
   it("shows only the full error, no refresh warning, when nothing ever loaded", async () => {
@@ -213,9 +184,9 @@ describe("MarketsPage", () => {
       vi.fn(() => Promise.resolve(new Response("{}", { status: 500 }))),
     );
     renderWithClient(<MarketsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Can't load prices right now.");
-    expect(screen.queryByText(/Couldn't refresh prices/)).toBeNull();
-    expect(screen.queryByRole("table", { name: "Markets" })).toBeNull();
+    expect(await screen.findByText("Couldn’t load this market.")).toBeVisible();
+    expect(screen.queryByText(/Couldn’t refresh/)).toBeNull();
+    expect(screen.queryByRole("list", { name: "Crypto" })).toBeNull();
   });
 
   it("refetches every 30 seconds", async () => {
@@ -223,7 +194,7 @@ describe("MarketsPage", () => {
     const fetchMock = vi.fn(() => ok(payload()));
     vi.stubGlobal("fetch", fetchMock);
     renderWithClient(<MarketsPage />);
-    await screen.findByRole("table", { name: "Markets" });
+    await screen.findByRole("list", { name: "Crypto" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
@@ -250,7 +221,7 @@ describe("MarketsPage", () => {
         await vi.advanceTimersByTimeAsync(ms);
       });
 
-    it("labels each row and shows the oldest age", async () => {
+    it("flags delayed and stale prices and shows selected freshness", async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       vi.stubGlobal(
         "fetch",
@@ -265,10 +236,10 @@ describe("MarketsPage", () => {
         ),
       );
       renderWithClient(<MarketsPage />);
-      expect(await screen.findByText("Live · 42s ago")).toBeVisible();
-      expect(screen.getByText("Delayed · 2m ago")).toBeVisible();
-      expect(screen.getByText("Stale · 7m ago")).toBeVisible();
-      expect(screen.getByText("Oldest crypto price 7m ago")).toBeVisible();
+      expect(await screen.findByText("Updated 42s ago")).toBeVisible();
+      expect(screen.getByText("Delayed")).toBeVisible();
+      expect(screen.getByText("Stale")).toBeVisible();
+      expect(screen.getByRole("link", { name: "Trade BTC" })).toBeVisible();
     });
 
     it("ticks ages and recomputes status from API thresholds", async () => {
@@ -285,10 +256,10 @@ describe("MarketsPage", () => {
         ),
       );
       renderWithClient(<MarketsPage />);
-      await screen.findByText("Live · 42s ago");
+      await screen.findByText("Updated 42s ago");
       await tick(10_000);
-      expect(screen.getByText("Live · 52s ago")).toBeVisible();
-      expect(screen.getByText("Delayed · 2m ago")).toBeVisible();
+      expect(screen.getByText("Updated 52s ago")).toBeVisible();
+      expect(screen.getByText("Delayed")).toBeVisible();
     });
 
     it("resets after a refetch", async () => {
@@ -302,9 +273,9 @@ describe("MarketsPage", () => {
         }),
       );
       renderWithClient(<MarketsPage />);
-      await screen.findByText("Live · 42s ago");
+      await screen.findByText("Updated 42s ago");
       await tick(30_000);
-      expect(await screen.findByText(/^Live · [0-9]s ago$/)).toBeVisible();
+      expect(await screen.findByText(/^Updated [0-9]s ago$/)).toBeVisible();
     });
   });
 });

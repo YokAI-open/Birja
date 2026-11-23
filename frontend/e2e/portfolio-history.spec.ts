@@ -39,11 +39,11 @@ async function openOwnedPortfolio(page: Page) {
   await expect(overview).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeFocused();
   await page
-    .getByRole("link", { name: "Open portfolio", exact: true })
+    .getByRole("link")
     .and(page.locator(`[href="/portfolios/${id}"]`))
     .click();
   await expect(page).toHaveURL(`/portfolios/${id}`);
-  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
 }
 
 for (const width of [375, 768, 1024, 1440]) {
@@ -128,7 +128,7 @@ for (const width of [375, 768, 1024, 1440]) {
     const nav = page.getByRole("navigation", { name: "Main" });
     await expect(nav).toHaveCount(1);
     await expect(nav.getByRole("link")).toHaveCount(3);
-    await expect(nav.getByRole("link", { name: "Account" })).toHaveCount(0);
+    await expect(nav.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
     for (const name of ["Portfolio", "History"]) {
       if (name === "Portfolio") await openOwnedPortfolio(page);
       else {
@@ -138,53 +138,26 @@ for (const width of [375, 768, 1024, 1440]) {
           "page",
         );
       }
-      await expect(page.getByRole("heading", { name, level: 1 })).toBeFocused();
+      await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
       const label = name === "Portfolio" ? "Holdings" : "Account activity";
-      const mobile = width < 1024;
-      const records = page.getByRole(mobile ? "list" : "table", { name: label, exact: true });
+      const records = page.getByRole("list", { name: label, exact: true });
       await expect(records).toBeVisible();
-      await expect(
-        page.getByRole(mobile ? "table" : "list", { name: label, exact: true }),
-      ).toHaveCount(0);
-      const fields =
-        name === "Portfolio"
-          ? ["Quantity", "Average cost", "Cost basis", "Current value", "Gain/loss", "Allocation"]
-          : ["Recorded", "Event", "Asset", "Details", "Cash change"];
-      for (const field of fields)
-        await expect(records.getByText(field, { exact: true })).toBeVisible();
+      await expect(page.getByRole("table", { name: label, exact: true })).toHaveCount(0);
       await expect(records.locator("time").first()).toHaveAttribute("datetime", timestamp);
+      const action =
+        name === "Portfolio"
+          ? records.getByRole("link", { name: "Trade BTC" })
+          : records.locator("summary").first();
+      await action.focus();
+      await expect(action).toBeFocused();
+      await expect(action).toHaveCSS("outline-width", /^(?:[2-9]|[1-9]\d+)(?:\.\d+)?px$/);
+      if (name === "History") {
+        await action.press("Enter");
+        await expect(records.getByText("Execution price", { exact: true })).toBeVisible();
+      }
       await expect
         .poll(() => page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
         .toBe(true);
-      if (width >= 1024 && name === "History") {
-        const scroll = page.getByRole("region", {
-          name: "Account activity table",
-          exact: true,
-        });
-        await page.keyboard.press("Tab");
-        await scroll.focus();
-        await expect(scroll).toBeFocused();
-        await expect(scroll).toHaveCSS("outline-width", "2px");
-        const overflows = await scroll.evaluate((node) => node.scrollWidth > node.clientWidth);
-        if (overflows) {
-          await page.keyboard.press("ArrowRight");
-          await expect.poll(() => scroll.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
-        }
-      } else {
-        if (width < 768) await expect(nav).toHaveCSS("position", "fixed");
-        const last =
-          name === "Portfolio"
-            ? records.getByRole("link", { name: "Trade BTC" })
-            : page.getByText("All events loaded.", { exact: true });
-        await page.keyboard.press("Tab");
-        await last.focus();
-        await last.scrollIntoViewIfNeeded();
-        await expect(last).toBeFocused();
-        await expect(last).toHaveCSS("outline-width", "2px");
-        const bottom = await last.boundingBox();
-        const tabs = await nav.boundingBox();
-        if (width < 768) expect(bottom!.y + bottom!.height).toBeLessThanOrEqual(tabs!.y);
-      }
     }
     // Browser-equivalent enlarged text; subjective 200% browser zoom remains 05-08.
     await page.addStyleTag({ content: "html { font-size: 200%; }" });
@@ -201,13 +174,13 @@ test("a new user opens their real cash-only portfolio from Markets", async ({ pa
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await openOwnedPortfolio(page);
   await expect(page).toHaveURL((url) => url.pathname === `/portfolios/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Portfolio" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "My portfolio" })).toBeVisible();
   await expect(page.getByText("Compared with your $10,000.00 start")).toBeVisible();
   await expect(page.getByRole("region", { name: "Total portfolio value" })).toContainText(
     "$10,000.00",
   );
   await expect(page.getByRole("region", { name: "Cash" })).toContainText("$10,000.00");
-  const cashOnlyMessage = page.getByText("No market prices needed", { exact: true });
+  const cashOnlyMessage = page.getByRole("status").filter({ hasText: "No market prices needed" });
   await expect(cashOnlyMessage).toHaveCount(1);
   await expect(cashOnlyMessage).toBeVisible();
 });
@@ -245,6 +218,7 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   await openOwnedPortfolio(page);
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$10,000.00");
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await page.getByLabel("Amount").fill("100");
   const { fill: buy, request: originalBuy } = await confirmFill(page, "buy");
@@ -262,7 +236,7 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
     const response = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint && r.ok());
     await openOwnedPortfolio(page);
     const data = (await (await response).json()) as Portfolio;
-    await expect(page.getByRole("heading", { name: "Portfolio", level: 1 })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText(
       formatUsd(data.cash),
     );
@@ -280,20 +254,24 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   expect(formatQuantity(held.quantity)).toBe(formatQuantity(buy.quantity));
   expect(formatUsd(held.cost_basis)).toBe("$100.00");
   expect(portfolio.prices_as_of).toBe(held.as_of);
-  const row = page.getByRole("table", { name: "Holdings", exact: true }).getByRole("row").nth(1);
+  const row = page
+    .getByRole("list", { name: "Holdings", exact: true })
+    .getByRole("listitem")
+    .first();
   for (const value of [
     formatQuantity(held.quantity),
-    formatUnitPrice(held.average_cost),
-    formatUnitPrice(held.mid!),
     formatUsd(held.current_value!),
     formatUsd(held.unrealized_pl!.replace(/^-/, "")),
     `${held.unrealized_pl_percent!.replace(/^-/, "")}%`,
-    `${held.allocation_percent}%`,
   ]) {
     await expect(row).toContainText(value);
   }
-  await expect(row.locator("time")).toHaveAttribute("datetime", held.as_of!);
-  const refresh = page.getByRole("button", { name: "Refresh portfolio" });
+  await expect(row.locator(":scope > time").first()).toHaveAttribute("datetime", held.as_of!);
+  const cost = row.locator("details");
+  await cost.locator("summary").click();
+  await expect(cost.getByText("Cost basis", { exact: true })).toBeVisible();
+  await expect(cost.locator("time")).toHaveAttribute("datetime", held.as_of!);
+  const refresh = page.getByRole("button", { name: "Update portfolio" });
   await refresh.click();
   await expect(refresh).toBeEnabled();
   await expect(refresh).toBeFocused();
@@ -310,8 +288,8 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
       expected.map((fill) => `trade:${fill.trade_id}`),
     );
     const rows = page
-      .getByRole("table", { name: "Account activity", exact: true })
-      .getByRole("row");
+      .getByRole("list", { name: "Account activity", exact: true })
+      .getByRole("listitem");
     for (const [index, fill] of expected.entries()) {
       const item = data.items[index]!;
       expect(item).toMatchObject({
@@ -322,7 +300,9 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
         filled_at: fill.created_at,
         side: fill.side,
       });
-      const row = rows.nth(index + 1);
+      const row = rows.nth(index);
+      await row.locator("summary").click();
+      await expect(row.getByText("Execution price", { exact: true })).toBeVisible();
       for (const value of [
         fill.side === "buy" ? "Buy" : "Sell",
         formatQuantity(fill.quantity),
@@ -333,10 +313,11 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
         await expect(row).toContainText(value);
       await expect(row.locator("time").first()).toHaveAttribute("datetime", fill.created_at);
     }
-    await expect(page.getByText("All events loaded.", { exact: true })).toBeVisible();
+    await expect(page.getByText("All events loaded.", { exact: true })).toBeAttached();
   }
   await openHistory([buy]);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   // Leaving during post-fill invalidations can retain the original as unknown.
   // Only explicit recovery may resend that exact attempt, never a replacement.
@@ -373,12 +354,19 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
   expect(liquidated.total_value).toBe(liquidated.cash);
   expect(liquidated.prices_as_of).toBeNull();
   await expect(page.getByText("No holdings yet", { exact: true })).toBeVisible();
-  await expect(page.getByText("No market prices needed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "No market prices needed" }),
+  ).toBeVisible();
   await openHistory([sell, buy]);
   await page.reload();
   await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeFocused();
-  await page.getByRole("link", { name: "Account", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolios", exact: true })
+    .click();
+  // Wait for Portfolios to render before traversing back. The persistent header
+  // is already visible while React is still committing the route transition.
+  await expect(page.getByRole("heading", { name: "Portfolios", level: 1 })).toBeFocused();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeFocused();
 });

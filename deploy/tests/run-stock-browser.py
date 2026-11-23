@@ -43,7 +43,9 @@ def require_browser_specs(specs, *, directory=None):
 def source_snapshot():
     """Bind rendered review evidence to actual source, including uncommitted files."""
     paths = [ROOT / 'frontend/package-lock.json', ROOT / 'backend/uv.lock', Path(__file__),
-             ROOT / 'deploy/tests/dividend-execution-fixture.py']
+             ROOT / 'deploy/tests/dividend-execution-fixture.py',
+             ROOT / 'frontend/index.html', ROOT / 'frontend/public/brand/icon-96.png',
+             ROOT / 'frontend/public/brand/logo-240.webp']
     for directory in ('frontend/src', 'frontend/e2e', 'backend/app', 'backend/alembic'):
         paths.extend(p for p in (ROOT / directory).rglob('*')
                      if p.is_file() and p.suffix in {'.ts', '.tsx', '.css', '.py', '.sql'})

@@ -220,18 +220,32 @@ jobs:
         with:
           fetch-depth: 0
       - name: Prepare Docker platform API for recovery fixtures
+        timeout-minutes: 8
         run: |
           set -Eeuo pipefail
           # Recovery uses /usr/bin/docker and the default socket under a clean root env.
           sudo install -m 0755 -d /etc/apt/keyrings
           curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 120 https://download.docker.com/linux/ubuntu/gpg -o "$RUNNER_TEMP/docker.asc"
           sudo install -m 0644 "$RUNNER_TEMP/docker.asc" /etc/apt/keyrings/docker.asc
-          printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          sudo apt-get update
+          # Use only the signed sources needed for this installation. Runner mirrors
+          # and unrelated preinstalled repositories need not respond for this job.
+          sources="$RUNNER_TEMP/birja-docker.sources.list"
+          printf '%s\n' \
+            'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu noble main universe' \
+            'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu noble-updates main universe' \
+            'deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu noble-security main universe' \
+            'deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable' > "$sources"
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$sources"
+            -o Dir::Etc::sourceparts=-
+            -o Acquire::Retries=2
+            -o Acquire::https::Timeout=30
+          )
+          sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
           docker_version=5:29.2.1-1~ubuntu.24.04~noble
           # Includes exact retained Dockerfile paths in Bake filesystem consent.
           compose_version=5.7.0-1~ubuntu.24.04~noble
-          sudo apt-get install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version" "docker-compose-plugin=$compose_version"
+          sudo apt-get "${apt_options[@]}" install --yes --no-install-recommends "docker-ce=$docker_version" "docker-ce-cli=$docker_version" "docker-compose-plugin=$compose_version"
           sudo python3 -c '
           import json
           from pathlib import Path

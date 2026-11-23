@@ -14,6 +14,8 @@ test("retry remains available after failed refresh and permission expiry", async
     return route.fulfill({ json: stocks({ lifetime: 35 }) });
   });
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   const section = page.getByRole("region", { name: "US stocks · 20" });
   await expect(section.getByText("$100.00").first()).toBeVisible();
   fail = true;
@@ -68,8 +70,10 @@ for (const width of [320, 375, 768, 1280]) {
     hold(body, 0, "conflicting");
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
     await signInNewUser(page);
+    await page.getByRole("button", { name: "US stocks", exact: true }).click();
+    await page.getByText("Stock market details", { exact: true }).click();
     await expect(records(page)).toHaveCount(20);
-    await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
+    await expect(region(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
     await expect(records(page).first()).toContainText("Suspended for corporate-action review.");
     await expect(records(page).first()).toContainText("has changed or conflicts and needs review");
     await expect(records(page).first()).toContainText("Valuation unavailable");
@@ -79,6 +83,13 @@ for (const width of [320, 375, 768, 1280]) {
     await expect(records(page).first()).toContainText("View stock AAPL");
     await expect(region(page).getByRole("status")).toContainText("AAPL:");
     await expect(region(page).getByRole("note")).toContainText("IEX prices");
+    await page.getByRole("button", { name: /AAPL/ }).first().click();
+    const selected = page.getByRole("region", { name: /^Apple Long Company Name/ });
+    await expect(selected).toContainText("Suspended for corporate-action review.");
+    await expect(selected).toContainText("Price unavailable");
+    await expect(selected.getByRole("link", { name: "View details AAPL" })).toBeVisible();
+    const allAssets = page.getByRole("button", { name: "All assets" });
+    if (await allAssets.isVisible()) await allAssets.click();
     await expect(region(page).getByRole("note")).toContainText("one US exchange");
     await expect(region(page).getByRole("note")).toContainText("simulated execution");
     await expect(region(page).getByRole("button")).toHaveCount(0);
@@ -101,8 +112,16 @@ for (const width of [320, 375, 768, 1280]) {
     await records(page)
       .first()
       .screenshot({ path: testInfo.outputPath(`actions-${width}-first-stock.png`) });
+    await page.getByRole("button", { name: "Crypto", exact: true }).click();
+    await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
+    if (width < 768) {
+      await expect(
+        page.getByRole("heading", { name: "Bitcoin", exact: true, level: 2 }),
+      ).toBeFocused();
+    }
     const trade = page.getByRole("link", { name: "Trade BTC" });
     await trade.focus();
+    await expect(trade).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/trade\/BTC$/);
   });
@@ -116,6 +135,8 @@ test("global monitor loss and repeated healthy refresh cannot clear a persistent
   hold(body);
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   const first = records(page).first();
   await expect(first).toContainText("Suspended for corporate-action review.");
   const announcement = await region(page).getByRole("status").textContent();
@@ -143,7 +164,7 @@ test("global monitor loss and repeated healthy refresh cannot clear a persistent
   await poll(page);
   await expect(region(page).getByText("$100.00")).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
-  await expect(page.getByRole("link", { name: /^Trade / })).toHaveCount(15);
+  await expect(region(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
   await expect(first).toContainText("Corporate-action checks unavailable.");
   body = snapshot(93);
   for (const item of body.items) item.action.epoch = 4;
@@ -161,6 +182,8 @@ test("a post-split waiting mark recovers only through a newer compatible respons
   hold(body, 0, "post_split_quote_missing", 2);
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page).first()).toContainText("Waiting for a post-split quote.");
   await expect(records(page).first()).not.toContainText("$100.00");
   body = snapshot(31);
@@ -190,6 +213,8 @@ test("nearest action deadline removes prices before polling and stale replies ca
     return route.fulfill({ json: body });
   });
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page).first()).toContainText("$100.00");
   const initialCalls = calls;
   await page.clock.runFor(3000);
@@ -217,6 +242,8 @@ test("source 119.999/120 boundary cannot retain numeric marks or source times", 
     await route.fulfill({ json: body });
   });
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   await page.clock.runFor(1);
   await expect(region(page).getByText("$100.00")).toHaveCount(0);
   await expect(records(page).first()).not.toContainText("Recent ·");
@@ -235,6 +262,8 @@ test("keyboard retry preserves failed focus and restores the heading only on suc
       : route.fulfill({ json: snapshot() }),
   );
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page.getByText("Stock market details", { exact: true }).click();
   const retry = region(page).getByRole("button", { name: "Retry stock prices" });
   await retry.focus();
   const failedRetry = page.waitForResponse(
@@ -265,6 +294,8 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
     hold(body, 0, "identity_change");
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
     await signInNewUser(page);
+    await page.getByRole("button", { name: "US stocks", exact: true }).click();
+    await page.getByText("Stock market details", { exact: true }).click();
     await expect(records(page)).toHaveCount(20);
     await expect(records(page).first()).toContainText(
       "This stock’s identity is changing and needs review.",
@@ -312,6 +343,8 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
     await records(page)
       .first()
       .screenshot({ path: testInfo.outputPath("actions-css-zoom-200pct-first-stock.png") });
+    await page.getByRole("button", { name: "Crypto", exact: true }).click();
+    await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
     const trade = page.getByRole("link", { name: "Trade BTC" });
     await trade.focus();
     await page.keyboard.press("Enter");

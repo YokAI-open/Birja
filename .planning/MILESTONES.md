@@ -1,5 +1,28 @@
 # Project Milestones: Birja
 
+## v1.2 Multiple Strategy Portfolios (Shipped: 2026-11-22)
+
+Software v0.6.2 was deployed on 2026-11-22 at main `7d236e4`, schema 0023.
+The back-merge to develop completed at `5029c8e`. All 28 requirements,
+4 phases and 72 plans passed milestone verification.
+
+- Existing financial records migrated to the owner's first strategy without a second grant.
+- Users can create, name, describe, compare and switch independently funded strategies.
+- Confirmed deletion freezes the original strategy, including holdings and future corporate-action effects.
+- The restricted-role migration and exact encrypted recovery preserved active and frozen records, lineage and original retries.
+- The release and back-merge passed all required CI checks. Exact pre-start and post-rollout recovery were verified.
+
+[Roadmap](milestones/v1.2-ROADMAP.md) ·
+[Requirements](milestones/v1.2-REQUIREMENTS.md) ·
+[Audit](milestones/v1.2-MILESTONE-AUDIT.md) ·
+[State](milestones/v1.2-STATE.md) ·
+[Production receipt](releases/0.6.2/PRODUCTION.md)
+
+Accepted advisory, live stock status transport and operator follow-up remain
+in [DEFERRED.md](DEFERRED.md). The historical pre-close inventory contained
+14 records, including status variants for seven UAT records with zero open
+scenarios. The audit documents their disposition.
+
 ## v1.1 US Stock Trading (Closed with accepted gaps: 2026-11-14)
 
 **Delivered locally:** Protected stock discovery/trading/accounting and exact
