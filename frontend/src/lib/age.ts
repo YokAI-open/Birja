@@ -24,3 +24,14 @@ export function statusLabel(status: PriceStatus): "Live" | "Delayed" | "Stale" {
   if (status === "aging") return "Delayed";
   return "Stale";
 }
+
+/** Age of the oldest priced holding, or null for a cash-only statement. */
+export function oldestHoldingAge(
+  holdings: readonly { age_seconds: number | null }[],
+  elapsed: number,
+) {
+  const ages = holdings.flatMap(({ age_seconds }) =>
+    age_seconds === null ? [] : [age_seconds + elapsed],
+  );
+  return ages.length ? Math.max(...ages) : null;
+}

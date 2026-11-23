@@ -130,7 +130,7 @@ function OwnedEventDetails({
   if (!target.isCurrent()) return null;
   return (
     <div className="flex min-w-0 flex-col gap-4 text-[13px] leading-[18px]">
-      <dl className="grid min-w-0 gap-2">
+      <dl className="grid min-w-0 gap-x-6 gap-y-3 sm:grid-cols-2">
         {item.kind === "trade" ? (
           <>
             <Detail label={item.asset_type === "stock" ? "Shares" : "Quantity"}>
@@ -229,6 +229,8 @@ function OwnedEventDetails({
               if (!target.isCurrent()) return;
               const loaded = document.getElementById(`${anchorPrefix}${item.payment_reference}`);
               if (loaded) {
+                const details = loaded.querySelector("details");
+                if (details) details.open = true;
                 loaded.focus();
                 return;
               }

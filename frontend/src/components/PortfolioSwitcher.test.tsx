@@ -53,15 +53,14 @@ it("omits an original unknown root from choices without selecting or opening its
     "1",
   );
   const select = await screen.findByRole("combobox");
-  await screen.findByRole("option", { name: "Sibling · #2" });
+  await screen.findByRole("option", { name: "Sibling" });
   await waitFor(() => expect(select).toBeEnabled());
   expect(screen.queryByText(/Original private/)).toBeNull();
-  expect(screen.getByRole("option", { name: "Sibling · #2" })).toHaveValue("2");
+  expect(screen.getByRole("option", { name: "Sibling" })).toHaveValue("2");
   expect(select).toHaveValue("");
-  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Open selected portfolio" })).toBeNull();
   expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
   await user.selectOptions(select, "2");
-  await user.click(screen.getByRole("button", { name: "Open selected portfolio" }));
   expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
 });
 
@@ -74,7 +73,11 @@ it.each([0, 1, 10])(
     }));
     const { fetch } = setup(items);
     const select = await screen.findByRole("combobox", { name: "Open portfolio" });
-    await waitFor(() => expect(select).toBeEnabled());
+    await screen.findByRole("option", {
+      name: count ? "Choose a portfolio" : "No portfolios available",
+    });
+    if (count) expect(select).toBeEnabled();
+    else expect(select).toBeDisabled();
     expect(screen.getAllByRole("option")).toHaveLength(count + 1);
     expect(
       screen
@@ -83,13 +86,13 @@ it.each([0, 1, 10])(
         .map((option) => option.getAttribute("value")),
     ).toEqual(items.map((item) => item.id));
     expect(select).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Open selected portfolio" })).toBeNull();
     expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
-    expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+    expect(screen.queryByRole("link", { name: "Portfolios" })).toBeNull();
     expect(fetch.mock.calls).toHaveLength(1);
   },
 );
-it("keeps native selection and Escape separate from explicit keyboard Open", async () => {
+it("uses one labelled dropdown and opens only a selected choice", async () => {
   const name = "<script>" + "Long".repeat(10) + "</script>";
   const { user } = setup(
     [
@@ -100,48 +103,42 @@ it("keeps native selection and Escape separate from explicit keyboard Open", asy
   );
   const select = await screen.findByRole("combobox", { name: "Open portfolio" });
   await waitFor(() => expect(select).toBeEnabled());
-  expect(screen.getByRole("option", { name: `${name} · #1` })).toHaveValue("1");
-  const current = screen.getByText(name);
-  expect(current).toHaveClass("min-w-0");
-  expect(current.className).toContain("overflow-wrap:anywhere");
+  expect(screen.getByRole("option", { name: `${name}` })).toHaveValue("1");
+  expect(select).toHaveValue("1");
   expect(document.querySelector("script")).toBeNull();
-  select.focus();
-  await user.keyboard("{ArrowDown}{Escape}");
+  await user.tab();
+  expect(select).toHaveFocus();
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.queryByRole("link")).toBeNull();
+  await user.keyboard("{Escape}");
+  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
   await user.selectOptions(select, "2");
-  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
-  expect(current).toHaveTextContent(name);
-  await user.tab();
-  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toHaveFocus();
-  await user.tab();
-  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveFocus();
-  await user.tab({ shift: true });
-  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toHaveFocus();
-  expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
-  await user.keyboard("{Enter}");
   expect(screen.getByTestId("location")).toHaveTextContent(/^\/portfolios\/2$/);
 });
 it("revokes a removed choice and does not select its replacement", async () => {
-  const { user, client } = setup([
-    { id: "1", name: "First" },
-    { id: "2", name: "Second" },
-  ]);
+  const { client } = setup(
+    [
+      { id: "1", name: "First" },
+      { id: "2", name: "Second" },
+    ],
+    "1",
+  );
   const select = await screen.findByRole("combobox");
-  await waitFor(() => expect(select).toBeEnabled());
-  await user.selectOptions(select, "1");
-  vi.stubGlobal("fetch", () => Promise.resolve(json([{ id: "2", name: "Second" }])));
+  await waitFor(() => expect(select).toHaveValue("1"));
+  vi.stubGlobal("fetch", () => Promise.resolve(json([{ id: "2", name: "Second strategy" }])));
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["portfolios"] });
   });
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled(),
-  );
+  await screen.findByRole("option", { name: "Second strategy" });
+  expect(select).toHaveValue("");
+  expect(screen.queryByRole("option", { name: "First" })).toBeNull();
   expect(screen.getByTestId("location")).toHaveTextContent("/portfolios/1/trade/BTC");
 });
 it("hides old owner labels and selection immediately across session loss", async () => {
-  const { user, client } = setup([{ id: "1", name: "Private Alice" }]);
+  const { client } = setup([{ id: "1", name: "Private Alice" }], "1");
   const select = await screen.findByRole("combobox");
   await waitFor(() => expect(select).toBeEnabled());
-  await user.selectOptions(select, "1");
+  expect(select).toHaveValue("1");
   act(() => client.setQueryData(["me"], null));
   await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   expect(screen.queryByText(/Private Alice/)).toBeNull();
@@ -154,18 +151,17 @@ it("masks choices on failed discovery refresh rather than using stale labels", a
   await act(async () => {
     await client.invalidateQueries({ queryKey: ["portfolios"] });
   });
-  await screen.findByRole("alert");
+  await screen.findByRole("option", { name: "Couldn’t load portfolios" });
   expect(screen.queryByText(/Private label/)).toBeNull();
   expect(screen.getByRole("combobox")).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
-  expect(screen.getByRole("link", { name: "Portfolios" })).toHaveAttribute("href", "/portfolios");
+  expect(screen.queryByRole("button", { name: "Open selected portfolio" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Portfolios" })).toBeNull();
 });
 
-it("discards late old-owner discovery and never restores its draft in a replacement session", async () => {
-  const { client, user } = setup([{ id: "1", name: "Alice private" }]);
+it("discards late old-owner discovery without opening a replacement portfolio", async () => {
+  const { client } = setup([{ id: "1", name: "Alice private" }]);
   const select = await screen.findByRole("combobox");
   await waitFor(() => expect(select).toBeEnabled());
-  await user.selectOptions(select, "1");
   let release!: (response: Response) => void;
   let calls = 0;
   vi.stubGlobal("fetch", () =>
@@ -181,14 +177,12 @@ it("discards late old-owner discovery and never restores its draft in a replacem
   });
   await waitFor(() => expect(release).toBeTypeOf("function"));
   act(() => client.setQueryData(["me"], { email: "bob@example.test" }));
-  await waitFor(() =>
-    expect(screen.getByRole("option", { name: "Bob strategy · #2" })).toBeVisible(),
-  );
+  await waitFor(() => expect(screen.getByRole("option", { name: "Bob strategy" })).toBeVisible());
   await act(async () => {
     release(json([{ id: "1", name: "Alice private" }]));
     await pending;
   });
   expect(screen.queryByText(/Alice private/)).toBeNull();
   expect(screen.getByRole("combobox")).toHaveValue("");
-  expect(screen.getByRole("button", { name: "Open selected portfolio" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Open selected portfolio" })).toBeNull();
 });

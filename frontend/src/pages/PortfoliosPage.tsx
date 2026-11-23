@@ -1,46 +1,15 @@
-import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PortfolioCreateForm } from "@/components/PortfolioCreateForm";
-import { PortfolioOutcome } from "@/components/PortfolioHoldings";
 import { usePortfolioOverview } from "@/hooks/usePortfolioOverview";
 import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { formatUsd } from "@/lib/money";
+import { fullLocalTimestamp, outcome, signedPercent, signedUsd } from "@/lib/financialDisplay";
 import type { PortfolioOverview } from "@/api/portfolioOverview";
-import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { usePortfolioDeletion } from "@/hooks/usePortfolioDeletion";
-const subscribe = (notify: () => void) => {
-  const media = window.matchMedia?.("(min-width: 768px)");
-  media?.addEventListener("change", notify);
-  return () => media?.removeEventListener("change", notify);
-};
-const wide = () => window.matchMedia?.("(min-width: 768px)").matches ?? false;
-function Times({ row }: { row: PortfolioOverview }) {
-  const timestamp = fullLocalTimestamp;
-  return (
-    <div className="flex flex-col gap-1 text-sm text-muted-foreground tabular-nums">
-      <p>Starting cash: {formatUsd(row.starting_cash)}</p>
-      <p>
-        Calculated at <time dateTime={row.valued_at}>{timestamp(row.valued_at)}</time>
-      </p>
-      {row.holdings.some(
-        (holding) =>
-          holding.stock_mark?.mark_mode === "closed" || holding.stock_mark?.mark_mode === "halted",
-      ) && <p>Values include dated stock marks.</p>}
-      <p>
-        {row.prices_as_of ? (
-          <>
-            Oldest source <time dateTime={row.prices_as_of}>{timestamp(row.prices_as_of)}</time>
-          </>
-        ) : row.holdings.length === 0 ? (
-          "No market prices needed."
-        ) : (
-          "Source time unavailable — refresh required."
-        )}
-      </p>
-    </div>
-  );
-}
+
 function Value({ row }: { row: PortfolioOverview }) {
   return (
     <>
@@ -61,17 +30,25 @@ function Value({ row }: { row: PortfolioOverview }) {
   );
 }
 function Outcome({ row }: { row: PortfolioOverview }) {
-  return !row.valuation_complete || row.total_pl === null ? (
-    <span>Return unavailable</span>
-  ) : (
-    <div className="flex flex-wrap gap-2">
-      <PortfolioOutcome value={row.total_pl} dollars />
-      {row.total_pl_percent === null ? (
-        <span>Not applicable</span>
-      ) : (
-        <PortfolioOutcome value={row.total_pl_percent} />
-      )}
-    </div>
+  if (!row.valuation_complete || row.total_pl === null) {
+    return <span className="text-muted-foreground">Return unavailable</span>;
+  }
+
+  const direction = outcome(row.total_pl);
+  return (
+    <span
+      className={
+        direction === "gain"
+          ? "text-gain-text"
+          : direction === "loss"
+            ? "text-loss-text"
+            : "text-muted-foreground"
+      }
+    >
+      <span className="sr-only">Return: </span>
+      {signedUsd(row.total_pl)}
+      {row.total_pl_percent !== null && ` · ${signedPercent(row.total_pl_percent)}`}
+    </span>
   );
 }
 export default function PortfoliosPage() {
@@ -80,14 +57,14 @@ export default function PortfoliosPage() {
   const deletion = usePortfolioDeletion();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
   const restoring = useRef(false);
   useLayoutEffect(() => {
     if (!open && restoring.current) {
       restoring.current = false;
-      trigger.current?.focus();
+      (trigger.current ?? reviewTrigger.current)?.focus();
     }
   }, [open]);
-  const desktop = useSyncExternalStore(subscribe, wide, () => false);
   const navigate = useNavigate();
   const location = useLocation();
   const [acknowledgement] = useState(() => location.state?.deletionConfirmed === true);
@@ -116,37 +93,8 @@ export default function PortfoliosPage() {
     setOpen(false);
   };
   return (
-    <div className="my-8 flex min-w-0 max-w-[1440px] flex-col gap-4 text-base leading-6 wrap-anywhere">
-      <div className="flex min-w-0 flex-col justify-between gap-4 md:flex-row md:flex-wrap md:items-center">
-        <div>
-          <h1 className="text-[32px] leading-10 font-medium">Portfolios</h1>
-          {capKnown && (
-            <p className="text-sm tabular-nums">{rows.length} of 10 active portfolios</p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 min-[375px]:flex-row min-[375px]:flex-wrap">
-          <Button
-            variant="secondary"
-            className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
-            aria-disabled={query.isFetching}
-            onClick={refresh}
-          >
-            {query.isFetching ? "Refreshing portfolios…" : "Refresh portfolios"}
-          </Button>
-          <Button
-            ref={trigger}
-            className="min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
-            disabled={open || (!original && (!capKnown || limit))}
-            aria-describedby={limit ? "portfolio-cap" : undefined}
-            onClick={() => setOpen(true)}
-          >
-            Create portfolio
-          </Button>
-        </div>
-      </div>
-      <p>
-        Compare each portfolio with its own starting cash. Returns are since each portfolio began.
-      </p>
+    <div className="app-page flex flex-col gap-7 md:gap-9 text-base leading-6 wrap-anywhere">
+      <h1 className="sr-only">Portfolios</h1>
       {acknowledgement && <p role="status">Portfolio deleted.</p>}
       {deletion.deletion.attempt && (
         <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
@@ -173,13 +121,13 @@ export default function PortfoliosPage() {
           <Button
             className="mt-2 min-h-11 text-base motion-reduce:transform-none motion-reduce:transition-none"
             variant="secondary"
+            ref={reviewTrigger}
             onClick={() => setOpen(true)}
           >
             Review original creation
           </Button>
         </div>
       )}
-      {open && <PortfolioCreateForm count={rows?.length} onClose={close} onCreated={created} />}
       {query.isPending ? (
         <div role="status" aria-busy="true">
           <p>Loading portfolios…</p>
@@ -219,110 +167,98 @@ export default function PortfoliosPage() {
               </Button>
             </div>
           )}
-          {rows.length === 0 && query.membershipUncertain ? (
-            <p>
-              Checking portfolio membership. Review any original deletion request before using an
-              unavailable portfolio.
-            </p>
-          ) : rows.length === 0 ? (
-            <div className="rounded-card bg-card p-4 md:p-6">
-              <h2 className="text-xl font-medium">No portfolios yet</h2>
+          {rows.length === 0 &&
+            (query.membershipUncertain ? (
               <p>
-                Create a portfolio to start an independent strategy with $10,000.00 in virtual cash.
+                Checking portfolio membership. Review any original deletion request before using an
+                unavailable portfolio.
               </p>
-            </div>
-          ) : desktop ? (
-            <table className="w-full table-fixed rounded-card bg-card text-left">
-              <caption className="sr-only">
-                Your independent portfolios in ascending ID order
-              </caption>
-              <thead>
-                <tr>
-                  {["Portfolio", "Cash", "Total / known value", "Return", "Open"].map((label) => (
-                    <th key={label} scope="col" className="p-3 text-sm font-medium">
-                      {label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="min-h-[52px] border-t border-border align-top">
-                    <td className="p-3">
-                      <Link
-                        className="flex min-h-11 items-center text-xl font-medium underline"
-                        to={`/portfolios/${row.id}`}
+            ) : (
+              <h2 className="sr-only">No portfolios yet</h2>
+            ))}
+          <ul
+            aria-label="Portfolios"
+            className="grid min-w-0 auto-rows-[minmax(13rem,auto)] grid-cols-1 gap-4 md:grid-cols-2 lg:auto-rows-[minmax(15rem,auto)] lg:gap-6"
+          >
+            {rows.map((row) => (
+              <li key={row.id} className="min-w-0">
+                <Link
+                  to={`/portfolios/${row.id}`}
+                  aria-labelledby={`portfolio-card-${row.id}`}
+                  className="group flex h-full min-w-0 flex-col gap-6 rounded-card border border-border bg-card p-5 hover:border-ring/50 lg:p-7"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <h2
+                        id={`portfolio-card-${row.id}`}
+                        className="min-w-0 text-[26px] leading-tight font-semibold tracking-tight lg:text-[32px]"
                       >
                         {row.name}
-                      </Link>
-                      <p className="mb-3 whitespace-pre-wrap">
-                        {row.description || "No description."}
+                      </h2>
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="mt-1 size-5 shrink-0 text-muted-foreground group-focus-visible:text-ring group-hover:text-ring"
+                      />
+                    </div>
+                    {row.description && (
+                      <p className="mt-2 line-clamp-2 text-sm whitespace-pre-line text-muted-foreground">
+                        {row.description}
                       </p>
-                      <Times row={row} />
-                    </td>
-                    <td className="p-3 tabular-nums">{formatUsd(row.cash)}</td>
-                    <td className="p-3 tabular-nums">
-                      <Value row={row} />
-                    </td>
-                    <td className="p-3 tabular-nums">
-                      <Outcome row={row} />
-                    </td>
-                    <td className="p-3">
-                      <Link
-                        className="flex min-h-11 items-center underline"
-                        to={`/portfolios/${row.id}`}
-                      >
-                        Open portfolio
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <ul className="grid min-w-0 gap-3">
-              {rows.map((row) => (
-                <li key={row.id} className="flex min-w-0 flex-col gap-3 rounded-card bg-card p-4">
-                  <h2 className="text-xl leading-7 font-medium">
-                    <Link
-                      className="flex min-h-11 items-center underline"
-                      to={`/portfolios/${row.id}`}
+                    )}
+                  </div>
+                  <div className="mt-auto border-t border-border pt-4 tabular-nums">
+                    <div
+                      className={
+                        row.valuation_complete && row.total_value !== null
+                          ? "text-[30px] leading-tight font-medium tracking-tight lg:text-[38px]"
+                          : "font-medium"
+                      }
                     >
-                      {row.name}
-                    </Link>
-                  </h2>
-                  <p className="whitespace-pre-wrap">{row.description || "No description."}</p>
-                  <dl className="flex min-w-0 flex-col gap-3 tabular-nums">
-                    <div>
-                      <dt className="text-sm">Cash</dt>
-                      <dd>{formatUsd(row.cash)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm">Total / known value</dt>
-                      <dd className="text-xl leading-7 font-medium">
+                      {row.valuation_complete && row.total_value !== null && (
+                        <span className="sr-only">Total value: </span>
+                      )}
+                      <div>
                         <Value row={row} />
-                      </dd>
+                      </div>
                     </div>
-                    <div>
-                      <dt className="text-sm">Return</dt>
-                      <dd>
-                        <Outcome row={row} />
-                      </dd>
+                    <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+                      <span className="text-muted-foreground">
+                        <span>{formatUsd(row.cash)}</span> cash
+                      </span>
+                      <Outcome row={row} />
                     </div>
-                  </dl>
-                  <Times row={row} />
-                  <Link
-                    className="flex min-h-11 items-center underline"
-                    to={`/portfolios/${row.id}`}
-                  >
-                    Open portfolio
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                    {row.prices_as_of &&
+                      row.holdings.some(
+                        ({ stock_mark }) =>
+                          stock_mark?.mark_mode === "closed" || stock_mark?.mark_mode === "halted",
+                      ) && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Includes dated stock prices
+                          <time className="sr-only" dateTime={row.prices_as_of}>
+                            {fullLocalTimestamp(row.prices_as_of)}
+                          </time>
+                        </p>
+                      )}
+                  </div>
+                </Link>
+              </li>
+            ))}
+            <li className="min-w-0">
+              <button
+                ref={trigger}
+                type="button"
+                className="flex h-full w-full items-center justify-center rounded-card border border-border bg-accent/60 p-6 text-xl font-semibold text-ring enabled:cursor-pointer enabled:hover:border-ring/50 enabled:hover:bg-accent disabled:opacity-50 lg:text-2xl"
+                disabled={open || (!original && (!capKnown || limit))}
+                aria-describedby={limit ? "portfolio-cap" : undefined}
+                onClick={() => setOpen(true)}
+              >
+                New portfolio
+              </button>
+            </li>
+          </ul>
         </>
       )}
+      {open && <PortfolioCreateForm count={rows?.length} onClose={close} onCreated={created} />}
     </div>
   );
 }

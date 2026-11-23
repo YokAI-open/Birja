@@ -26,25 +26,26 @@ test("a new user signs in, stays signed in, signs out and signs in again", async
 
   await expect(page.getByRole("heading", { name: "Markets" })).toBeVisible();
   await fundedPortfolio();
-  await page.getByRole("link", { name: "Account" }).click();
-  await expect(page.getByText("$10,000.00")).toHaveCount(0);
-  await expect(page.getByText(email)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
 
-  await page.goto("/account");
-  await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
+  // Use the stable status route before simulating expiration. In-flight
+  // portfolio reads can otherwise race the deliberate cookie removal.
+  await page.goto("/health");
+  await expect(page.getByText("All systems operational")).toBeVisible();
 
   // Access cookie gone: the app refreshes silently and stays signed in.
   await context.clearCookies({ name: "bj_access" });
-  await page.goto("/account");
-  await expect(page.getByText(email)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
   await fundedPortfolio();
-  await page.goto("/account");
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
-  await page.goto("/account");
-  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Cash", exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "Go to sign-in form" }).click();
+  await expect(page.getByLabel("Email")).toBeFocused();
 
   // Signing in again never adds cash.
   await page.getByLabel("Email").fill(email);
@@ -52,7 +53,7 @@ test("a new user signs in, stays signed in, signs out and signs in again", async
   const code2 = await readCodeFromLogs(email, code);
   await page.getByLabel("6-digit code").fill(code2);
   await page.getByRole("button", { name: "Sign in" }).click();
-  // The protected account URL is restored after successful verification.
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(`/portfolios/${id}`);
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
   await fundedPortfolio();
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { Link, useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EventHistoryItem } from "@/api/eventHistory";
@@ -12,24 +13,58 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { eventHistorySession, useEventHistory } from "@/hooks/useEventHistory";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { PortfolioContext } from "@/components/PortfolioContext";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 
-function fields(item: EventHistoryItem, prefix: string, target: PortfolioTarget) {
-  return [
-    ["Recorded", <HistoryEventTime value={item.recorded_at} />],
-    ["Event", <HistoryEventTitle item={item} />],
-    [
-      "Asset",
-      <span className="wrap-anywhere">
-        <span className="block text-[13px] text-muted-foreground">
-          {item.asset_type === "stock" ? "Stock" : "Crypto"}
-        </span>
-        <span className="font-medium">{item.symbol}</span> · {item.name}
-      </span>,
-    ],
-    ["Details", <HistoryEventDetails item={item} target={target} anchorPrefix={prefix} />],
-    ["Cash change", <HistoryEventCash item={item} />],
-  ] as const;
+function EventCard({
+  item,
+  target,
+  prefix,
+}: {
+  item: EventHistoryItem;
+  target: PortfolioTarget;
+  prefix: string;
+}) {
+  return (
+    <li
+      id={`${prefix}${item.id}`}
+      tabIndex={-1}
+      className="min-w-0 scroll-mt-4 rounded-card border border-border bg-card"
+    >
+      <details className="group">
+        <summary className="grid min-h-20 cursor-pointer list-none grid-cols-[minmax(0,1fr)_fit-content(45%)_auto] items-start gap-3 rounded-card px-4 py-4 hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:items-center sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0 wrap-anywhere">
+            <span className="block text-lg leading-tight">
+              <HistoryEventTitle item={item} />
+              {" · "}
+              <span className="font-semibold">{item.symbol}</span>
+            </span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              <HistoryEventTime value={item.recorded_at} />
+            </span>
+          </span>
+          <span className="min-w-0 text-right text-base sm:text-lg">
+            <span className="sr-only">Cash change: </span>
+            <HistoryEventCash item={item} />
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className="mt-1 size-4 shrink-0 text-muted-foreground group-open:rotate-180 sm:mt-0"
+          />
+        </summary>
+        <div className="mx-4 border-t border-border py-4 sm:mx-6 sm:py-5">
+          {item.name !== item.symbol && (
+            <p className="mb-3 text-sm font-medium wrap-anywhere">
+              {item.name}{" "}
+              <span className="font-normal text-muted-foreground">
+                · {item.asset_type === "stock" ? "Stock" : "Crypto"}
+              </span>
+            </p>
+          )}
+          <HistoryEventDetails item={item} target={target} anchorPrefix={prefix} />
+        </div>
+      </details>
+    </li>
+  );
 }
 
 export default function HistoryPage() {
@@ -120,22 +155,29 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
     }
   }
   return (
-    <div className="my-8 flex min-w-0 flex-col gap-4 pb-24 text-[15px] leading-[22px]">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-          History
-        </h1>
+    <div className="mx-auto my-6 flex w-full min-w-0 max-w-[1280px] flex-col gap-7 text-base md:gap-9">
+      <h1 className="sr-only">History</h1>
+      <div className="flex min-w-0 items-center gap-3">
+        <PortfolioSwitcher
+          portfolioId={target.portfolioId}
+          destination={(id) => `/portfolios/${id}/history`}
+          label="History portfolio"
+          prominent
+          inline
+        />
         <Button
           ref={refreshButton}
           variant="secondary"
-          className="min-h-11 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 motion-reduce:transform-none motion-reduce:transition-none"
+          aria-label={isFetching && !isFetchingNextPage ? "Updating history…" : "Update history"}
+          title="Update history"
+          className="min-h-11 min-w-11 gap-2 px-3 aria-disabled:opacity-40 sm:px-4"
           aria-disabled={isFetching}
           onClick={refresh}
         >
-          {isFetching && !isFetchingNextPage ? "Refreshing history…" : "Refresh history"}
+          <RefreshCw aria-hidden="true" className="size-4" />
+          <span className="hidden sm:inline">Update</span>
         </Button>
       </div>
-      <PortfolioContext name={target.name} />
       {isPending ? (
         <Card role="status" aria-label="Loading history" aria-busy="true">
           <CardContent>
@@ -172,107 +214,20 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
               </Button>
             </div>
           )}
-          <Card className="min-w-0">
-            <CardContent>
-              <h2 className="font-medium">Account activity</h2>
-              <p className="text-muted-foreground">
-                Newest recorded first. Times are shown in your local timezone.
-              </p>
-              <p className="text-muted-foreground">
-                Cash change is the amount actually added to or taken from this portfolio&apos;s USD
-                balance.
-              </p>
-              {items.length === 0 ? (
-                <div className="flex flex-col items-start gap-4">
-                  <h2 className="font-medium">No activity yet</h2>
-                  <p>
-                    Your trades, dividends, splits and corrections will appear here. Browse markets
-                    to make your first trade.
-                  </p>
-                  <Button asChild>
-                    <Link to="/">Browse markets</Link>
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div
-                    className="hidden min-w-0 lg:block"
-                    role="region"
-                    aria-label="Account activity table"
-                    tabIndex={0}
-                  >
-                    <table aria-label="Account activity" className="w-full table-fixed text-left">
-                      <colgroup>
-                        <col className="w-[15%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[18%]" />
-                        <col className="w-[37%]" />
-                        <col className="w-[15%]" />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          {fields(items[0]!, `${prefix}desktop-`, target).map(([label], index) => (
-                            <th
-                              key={label}
-                              scope="col"
-                              className={`p-4 text-[13px] font-medium text-muted-foreground ${index === 4 ? "text-right" : ""}`}
-                            >
-                              {label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item) => (
-                          <tr
-                            key={item.id}
-                            id={`${prefix}desktop-${item.id}`}
-                            tabIndex={-1}
-                            className="h-[52px] scroll-mb-24 border-t border-border align-top wrap-anywhere hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
-                          >
-                            {fields(item, `${prefix}desktop-`, target).map(
-                              ([label, value], index) =>
-                                index === 2 ? (
-                                  <th key={label} scope="row" className="min-w-0 p-4 font-normal">
-                                    {value}
-                                  </th>
-                                ) : (
-                                  <td
-                                    key={label}
-                                    className={`min-w-0 p-4 tabular-nums ${index === 4 ? "text-right" : ""}`}
-                                  >
-                                    {value}
-                                  </td>
-                                ),
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <ol aria-label="Account activity" className="min-w-0 lg:hidden">
-                    {items.map((item) => (
-                      <li
-                        key={item.id}
-                        id={`${prefix}mobile-${item.id}`}
-                        tabIndex={-1}
-                        className="scroll-mb-24 border-t border-border py-4 focus-visible:outline-2 focus-visible:outline-ring"
-                      >
-                        <dl className="flex flex-col gap-4">
-                          {fields(item, `${prefix}mobile-`, target).map(([label, value]) => (
-                            <div key={label} className="flex min-w-0 flex-col items-start gap-2">
-                              <dt className="text-muted-foreground">{label}</dt>
-                              <dd className="w-full min-w-0 wrap-anywhere tabular-nums">{value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      </li>
-                    ))}
-                  </ol>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          {items.length === 0 ? (
+            <div className="flex flex-col items-start gap-4 border-t border-border py-8">
+              <h2 className="text-xl font-semibold">No activity yet</h2>
+              <Button asChild>
+                <Link to="/">Browse markets</Link>
+              </Button>
+            </div>
+          ) : (
+            <ol aria-label="Account activity" className="grid min-w-0 gap-3">
+              {items.map((item) => (
+                <EventCard key={item.id} item={item} target={target} prefix={prefix} />
+              ))}
+            </ol>
+          )}
           {items.length > 0 &&
             (hasNextPage ? (
               <div className="flex flex-col items-start gap-4">
@@ -297,7 +252,7 @@ function OwnedHistory({ target }: { target: PortfolioTarget }) {
             ) : (
               <p
                 tabIndex={-1}
-                className="scroll-mb-24 text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="sr-only text-muted-foreground focus:not-sr-only focus-visible:outline-2 focus-visible:outline-ring"
                 ref={(node) => {
                   if (node && focusEnd.current) {
                     const intent = focusEnd.current;

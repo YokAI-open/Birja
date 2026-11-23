@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,24 +12,40 @@ import {
 import { useNow } from "@/hooks/useNow";
 import { PortfolioDeleteForm } from "@/components/PortfolioDeleteForm";
 
+type ExternalEdit = {
+  active: boolean;
+  trigger: RefObject<HTMLButtonElement | null>;
+  close: () => void;
+};
+
 export function PortfolioMetadataForm({
   portfolioId,
   available = true,
   lastPortfolio = false,
+  removeSlot,
+  externalEdit,
 }: {
   portfolioId: string;
   available?: boolean;
   lastPortfolio?: boolean;
+  removeSlot?: HTMLElement | null;
+  externalEdit?: ExternalEdit;
 }) {
   const management = usePortfolioManagement(portfolioId);
   const [editing, setEditing] = useState(false);
   return (
     <>
       {available && (
-        <PortfolioMetadataEditor portfolioId={portfolioId} onEditingChange={setEditing} />
+        <PortfolioMetadataEditor
+          portfolioId={portfolioId}
+          onEditingChange={setEditing}
+          showName={!externalEdit}
+          externalEdit={externalEdit}
+        />
       )}
       <PortfolioDeleteForm
         portfolioId={portfolioId}
+        triggerSlot={removeSlot}
         metadata={management.metadata}
         metadataError={management.metadataError}
         metadataBusy={
@@ -49,9 +65,13 @@ export function PortfolioMetadataForm({
 function PortfolioMetadataEditor({
   portfolioId,
   onEditingChange,
+  showName,
+  externalEdit,
 }: {
   portfolioId: string;
   onEditingChange: (editing: boolean) => void;
+  showName: boolean;
+  externalEdit?: ExternalEdit;
 }) {
   const management = usePortfolioManagement(portfolioId);
   const [editing, setEditing] = useState(false);
@@ -59,6 +79,7 @@ function PortfolioMetadataEditor({
     management.metadataSaved ? "Portfolio updated." : "",
   );
   const trigger = useRef<HTMLButtonElement>(null);
+  const editor = useRef<HTMLDivElement>(null);
   const [restore, setRestore] = useState(!!management.metadataSaved);
   const restored = useRef(false);
   const saving = useRef(false);
@@ -77,7 +98,16 @@ function PortfolioMetadataEditor({
           1000,
     });
   const waiting = now < timing.until;
-  const expanded = editing || draft !== null;
+  const expanded = editing || draft !== null || !!externalEdit?.active;
+  useLayoutEffect(() => {
+    if (externalEdit?.active) {
+      restored.current = false;
+      editor.current?.focus();
+    }
+  }, [externalEdit?.active]);
+  useLayoutEffect(() => {
+    if (externalEdit?.active && management.metadataSaved) externalEdit.close();
+  }, [externalEdit, management.metadataSaved]);
   useLayoutEffect(() => {
     onEditingChange(expanded);
     return () => onEditingChange(false);
@@ -85,10 +115,10 @@ function PortfolioMetadataEditor({
   useLayoutEffect(() => {
     if (!expanded && restore && !restored.current && metadata && !metadataPending) {
       restored.current = true;
-      trigger.current?.focus();
+      (externalEdit?.trigger.current ?? trigger.current)?.focus();
       management.acknowledgeMetadataSaved?.();
     }
-  }, [expanded, restore, metadata, metadataPending, management]);
+  }, [expanded, restore, metadata, metadataPending, management, externalEdit]);
   const name = draft?.name ?? metadata?.name ?? "";
   const description = draft?.description ?? metadata?.description ?? "";
   const valid =
@@ -120,12 +150,26 @@ function PortfolioMetadataEditor({
     setAnnouncement("Portfolio updated.");
     setRestore(true);
   }
+  if (externalEdit && !expanded) {
+    return announcement ? (
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
+    ) : null;
+  }
   return (
-    <Card className="min-w-0 p-4 md:p-6">
+    <Card
+      ref={editor}
+      tabIndex={externalEdit?.active ? -1 : undefined}
+      role={externalEdit?.active ? "region" : undefined}
+      aria-label={externalEdit?.active ? "Edit portfolio" : undefined}
+    >
       <CardContent className="min-w-0 text-base leading-6 wrap-anywhere">
-        <Link to="/portfolios" className="flex min-h-11 items-center underline">
-          Back to Portfolios
-        </Link>
+        {!externalEdit && (
+          <Link to="/portfolios" className="flex min-h-11 items-center underline">
+            Back to Portfolios
+          </Link>
+        )}
         <p role={announcement ? "status" : undefined} aria-live="polite">
           {announcement}
         </p>
@@ -230,6 +274,7 @@ function PortfolioMetadataEditor({
                 disabled={metadataPending}
                 onClick={() => {
                   management.discardMetadata();
+                  externalEdit?.close();
                   setRestore(true);
                   restored.current = false;
                   setEditing(false);
@@ -242,22 +287,24 @@ function PortfolioMetadataEditor({
           </form>
         ) : (
           <div className="flex min-w-0 flex-col gap-3">
-            <h2 className="text-xl leading-7 font-medium">{metadata.name}</h2>
+            {showName && <h2 className="text-2xl leading-tight font-semibold">{metadata.name}</h2>}
             <p className="whitespace-pre-wrap">{metadata.description || "No description."}</p>
-            <Button
-              ref={trigger}
-              variant="secondary"
-              className="min-h-11 self-start text-base"
-              disabled={metadataPending || management.metadataBlocked}
-              onClick={() => {
-                setAnnouncement("");
-                setRestore(false);
-                restored.current = false;
-                setEditing(true);
-              }}
-            >
-              Edit portfolio
-            </Button>
+            {!externalEdit && (
+              <Button
+                ref={trigger}
+                variant="secondary"
+                className="min-h-11 self-start text-base"
+                disabled={metadataPending || management.metadataBlocked}
+                onClick={() => {
+                  setAnnouncement("");
+                  setRestore(false);
+                  restored.current = false;
+                  setEditing(true);
+                }}
+              >
+                Edit portfolio
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

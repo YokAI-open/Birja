@@ -1,156 +1,316 @@
+import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { FreshnessBadge } from "@/components/FreshnessBadge";
+import { StockAttribution } from "@/components/StockAttribution";
 import { StockSection } from "@/components/StockSection";
-import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
+import type { StockItem } from "@/api/stocks";
+import { stockActionSummary } from "@/lib/stockActionCopy";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
-import { formatAge, freshnessStatus } from "@/lib/age";
+import { useStocks } from "@/hooks/useStocks";
+import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
 import { formatUnitPrice } from "@/lib/money";
+import "./markets.css";
 
-function MarketsPage({
-  portfolioId,
-  authenticated = false,
-}: {
-  portfolioId?: string;
-  authenticated?: boolean;
-}) {
-  const { data, isPending, isError, refetch, dataUpdatedAt } = usePrices();
+type Market = "crypto" | "stock";
+
+const stockRestrictions: Record<StockItem["execution_reason"], string> = {
+  available: "Market open",
+  phase_disabled: "Stock trading is unavailable.",
+  permission_unavailable: "Stock data permissions are being verified.",
+  action_unavailable: "Corporate-action checks unavailable.",
+  units_changed: "Stock units changed. Waiting for a new quote.",
+  halted: "Trading halted.",
+  frozen: "Trading frozen.",
+  status_unavailable: "Stock status is unverified.",
+  session_unavailable: "Session unavailable.",
+  market_closed: "Market closed.",
+  quote_unavailable: "Waiting for a verified IEX quote.",
+  quote_stale: "This quote is out of date.",
+  receipt_unavailable: "Check the previous order result before trading again.",
+};
+
+export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
+  const [market, setMarket] = useState<Market>("crypto");
+  const [search, setSearch] = useState("");
+  const [selection, setSelection] = useState<string>();
+  const [showAsset, setShowAsset] = useState(false);
+  const [showStockDetails, setShowStockDetails] = useState(false);
+  const assetHeading = useRef<HTMLHeadingElement>(null);
+  const selectedRow = useRef<HTMLButtonElement>(null);
+  const prices = usePrices();
+  const stocks = useStocks();
+  const stockMarket = market === "stock";
+  const query = stockMarket ? stocks : prices;
   const now = useNow(1000);
-  // Server age plus local elapsed time since the response; never browser clock vs as_of.
-  const elapsed = Math.max(0, Math.floor((now - dataUpdatedAt) / 1000));
-  const ages = data ? data.items.map((item) => item.age_seconds + elapsed) : [];
-  const maxAge = ages.length > 0 ? Math.max(...ages) : null;
+  const permitted = stocks.data?.admission.state === "approved";
+  const coins = prices.data?.items ?? [];
+  const stockItems = stocks.data?.items ?? [];
+  const assets = stockMarket
+    ? stockItems.map((item) => ({
+        symbol: item.symbol,
+        name: item.company_name,
+        age_seconds: undefined,
+        price: permitted ? item.quote?.mid : undefined,
+      }))
+    : coins;
+  const term = search.trim().toLowerCase();
+  const results = assets.filter(
+    ({ symbol, name }) => symbol.toLowerCase().includes(term) || name.toLowerCase().includes(term),
+  );
+  const asset = results.find(({ symbol }) => symbol === selection) ?? results[0];
+  const coin = stockMarket ? undefined : coins.find(({ symbol }) => symbol === asset?.symbol);
+  const stock = stockMarket ? stockItems.find(({ symbol }) => symbol === asset?.symbol) : undefined;
+  const elapsed = Math.max(0, Math.floor((now - prices.dataUpdatedAt) / 1000));
+  const age = coin ? coin.age_seconds + elapsed : null;
+  const fresh =
+    age !== null &&
+    prices.data &&
+    freshnessStatus(age, prices.data.fresh_seconds, prices.data.stale_seconds) === "fresh";
+  const stockQuote = permitted ? stock?.quote : null;
+  const stockRestriction = stock
+    ? !permitted
+      ? stockRestrictions.permission_unavailable
+      : stock.action.state !== "current"
+        ? stockActionSummary(stock.action)
+        : stock.session.state === "closed"
+          ? stockRestrictions.market_closed
+          : stockRestrictions[stock.execution_reason]
+    : null;
+  const action = stock
+    ? stock.execution_enabled && permitted
+      ? "Trade"
+      : "View details"
+    : fresh
+      ? "Trade"
+      : "Check price";
+  const prefix = portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : "";
+  const price = asset?.price ? formatUnitPrice(asset.price) : "Price unavailable";
 
-  let body;
-  if (isPending) {
-    body = (
-      <div role="status" aria-busy="true" aria-label="Loading prices" className="flex flex-col">
-        {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className="flex h-[52px] items-center border-b border-border">
-            <span className="h-4 w-full rounded-control bg-muted" />
-          </div>
-        ))}
-      </div>
-    );
-  } else if (!data) {
-    // Only when there is nothing to show: a failed background refetch keeps the last
-    // good data (TanStack sets isError but keeps data), so badges age toward Stale.
-    body = (
-      <div className="flex flex-col items-start gap-4">
-        <p role="alert" className="text-loss-text">
-          Can&apos;t load prices right now.
-        </p>
-        <Button variant="secondary" onClick={() => void refetch()}>
-          Try again
-        </Button>
-      </div>
-    );
-  } else if (data.items.length === 0) {
-    body = (
-      <p className="text-muted-foreground">Prices are loading. They appear within a minute.</p>
-    );
-  } else {
-    body = (
-      <div className="overflow-x-auto">
-        <table aria-label="Markets" className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-border">
-              <th
-                scope="col"
-                className="h-10 text-[13px] leading-[18px] font-medium text-muted-foreground"
-              >
-                Coin
-              </th>
-              <th
-                scope="col"
-                className="h-10 text-right text-[13px] leading-[18px] font-medium text-muted-foreground"
-              >
-                Price
-              </th>
-              <th
-                scope="col"
-                className="h-10 pl-4 text-[13px] leading-[18px] font-medium text-muted-foreground"
-              >
-                Updated
-              </th>
-              <th
-                scope="col"
-                className="h-10 pl-4 text-right text-[13px] leading-[18px] font-medium text-muted-foreground"
-              >
-                Trade
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((item, i) => {
-              const ageNow = ages[i] ?? item.age_seconds;
-              return (
-                <tr key={item.symbol} className="h-[52px] border-b border-border hover:bg-accent">
-                  <td>
-                    <span className="block font-medium">{item.symbol}</span>
-                    <span className="block text-[13px] leading-[18px] text-muted-foreground">
-                      {item.name}
-                    </span>
-                  </td>
-                  <td className="text-right tabular-nums">{formatUnitPrice(item.price)}</td>
-                  <td className="pl-4">
-                    <FreshnessBadge
-                      status={freshnessStatus(ageNow, data.fresh_seconds, data.stale_seconds)}
-                      ageSeconds={ageNow}
-                    />
-                  </td>
-                  <td className="pl-4 text-right">
-                    <Button asChild variant="secondary" size="sm">
-                      <Link
-                        to={`${portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : ""}/trade/${encodeURIComponent(item.symbol)}`}
-                        aria-label={`Trade ${item.symbol}`}
-                      >
-                        Trade
-                      </Link>
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
+  function selectMarket(next: Market) {
+    if (next === market) return;
+    setMarket(next);
+    setSearch("");
+    setSelection(undefined);
+    setShowAsset(false);
+    setShowStockDetails(false);
   }
 
   return (
-    <div className="mx-auto my-8 flex min-w-0 max-w-6xl flex-col gap-6">
-      <div className="flex items-baseline justify-between gap-4">
-        <h1 className="text-[32px] leading-9 font-medium tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
-          Markets
-        </h1>
-      </div>
-      {authenticated && <PortfolioSwitcher portfolioId={portfolioId} />}
-      <section aria-labelledby="crypto-heading" className="flex min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <h2 id="crypto-heading" className="font-medium">
-            Crypto
-          </h2>
-          {maxAge !== null && (
-            <p className="text-[13px] leading-[18px] text-muted-foreground">
-              Oldest crypto price {formatAge(maxAge)}
+    <div className="markets mx-auto my-7 max-w-[1280px] md:my-12 lg:my-16">
+      <h1 className="sr-only">Markets</h1>
+      <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:gap-10 lg:gap-16">
+        <section
+          aria-label="Find an asset"
+          className={showAsset && asset ? "hidden md:block" : undefined}
+        >
+          <div
+            role="group"
+            aria-label="Asset class"
+            className="mb-5 flex gap-7 border-b md:gap-9 border-[var(--market-line)]"
+          >
+            <button
+              type="button"
+              aria-pressed={!stockMarket}
+              className="market-tab"
+              onClick={() => selectMarket("crypto")}
+            >
+              Crypto
+            </button>
+            <button
+              type="button"
+              aria-pressed={stockMarket}
+              className="market-tab"
+              onClick={() => selectMarket("stock")}
+            >
+              US stocks
+            </button>
+          </div>
+          <label htmlFor="market-search" className="sr-only">
+            Search by name or symbol
+          </label>
+          <input
+            id="market-search"
+            type="search"
+            value={search}
+            placeholder="Search by name or symbol"
+            className="mb-5 min-h-13 w-full rounded-sm border border-[var(--market-input)] px-4 placeholder:text-[var(--market-muted)] md:min-h-14"
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setShowAsset(false);
+            }}
+          />
+          {query.isPending ? (
+            <p role="status">Loading {stockMarket ? "stocks" : "prices"}…</p>
+          ) : query.isError ? (
+            <div role="status" className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+              <p>
+                {query.data
+                  ? "Couldn’t refresh. Showing the last available update."
+                  : "Couldn’t load this market."}
+              </p>
+              <button
+                type="button"
+                className="min-h-11 underline"
+                disabled={query.isFetching}
+                onClick={() => void query.refetch()}
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
+          {stockMarket && stocks.data && !permitted && (
+            <p className="mb-3 text-sm text-[var(--market-muted)]">
+              Stock prices and trading are currently unavailable. You can still browse companies.
             </p>
           )}
-        </div>
-        {isError && data && (
-          <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
-            Couldn&apos;t refresh prices. Showing the last update.
-          </p>
+          {stockMarket && permitted && stockItems.some((item) => item.quote) && (
+            <p className="mb-2 text-xs text-[var(--market-muted)]">
+              IEX prices · Midpoint
+              {stocks.data?.attribution.required_text && (
+                <span className="block">{stocks.data.attribution.required_text}</span>
+              )}
+            </p>
+          )}
+          {results.length > 0 ? (
+            <ul
+              aria-label={stockMarket ? "US stocks" : "Crypto"}
+              className="border-t border-[var(--market-ink)]"
+            >
+              {results.map((item) => {
+                const { symbol, name, price: value } = item;
+                const status =
+                  item.age_seconds !== undefined && prices.data
+                    ? freshnessStatus(
+                        item.age_seconds + elapsed,
+                        prices.data.fresh_seconds,
+                        prices.data.stale_seconds,
+                      )
+                    : undefined;
+                return (
+                  <li key={symbol} className="border-b border-[var(--market-line)]">
+                    <button
+                      type="button"
+                      ref={asset?.symbol === symbol ? selectedRow : undefined}
+                      aria-current={asset?.symbol === symbol ? true : undefined}
+                      className="market-row grid min-h-17 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-3 text-left md:min-h-20 md:px-5 md:text-lg"
+                      onClick={() => {
+                        setSelection(symbol);
+                        setShowAsset(true);
+                        if (window.matchMedia?.("(max-width: 767px)").matches) {
+                          requestAnimationFrame(() => assetHeading.current?.focus());
+                        }
+                      }}
+                    >
+                      <span className="min-w-0 wrap-anywhere">
+                        <span className="block font-semibold">{name}</span>{" "}
+                        {symbol !== name && (
+                          <span className="block text-sm text-[var(--market-muted)]">{symbol}</span>
+                        )}
+                      </span>
+                      {value && (
+                        <>
+                          {" "}
+                          <span className="text-right tabular-nums">
+                            {formatUnitPrice(value)}
+                            {status && status !== "fresh" && (
+                              <span className="block text-sm text-[var(--market-muted)]">
+                                {" "}
+                                {statusLabel(status)}
+                              </span>
+                            )}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : !query.isPending && !query.isError ? (
+            <p role="status">
+              {term
+                ? "No assets match your search."
+                : "Prices are loading. They appear within a minute."}
+            </p>
+          ) : null}
+        </section>
+        {asset && (
+          <section
+            aria-labelledby="market-asset"
+            className={`${showAsset ? "" : "hidden md:block"} min-w-0 border-t border-[var(--market-line)] pt-5 md:sticky md:top-8 md:self-start md:border-t-0 md:border-l md:pt-6 md:pl-9 lg:pl-12`}
+          >
+            <button
+              type="button"
+              className="mb-3 min-h-11 underline md:hidden"
+              onClick={() => {
+                setShowAsset(false);
+                requestAnimationFrame(() => selectedRow.current?.focus());
+              }}
+            >
+              All assets
+            </button>
+            <h2
+              id="market-asset"
+              ref={assetHeading}
+              tabIndex={-1}
+              className="text-3xl font-semibold tracking-tight wrap-anywhere lg:text-4xl"
+            >
+              {asset.name}
+            </h2>
+            <p className="mt-2 text-[var(--market-muted)]">
+              {asset.symbol} · {stock?.listing_exchange ?? "USD"}
+            </p>
+            <div className="my-7 border-y border-[var(--market-line)] py-5 md:py-7">
+              <p className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
+                {price}
+              </p>
+              {coin && age !== null && (
+                <p className="mt-2 text-[var(--market-muted)]">
+                  <time dateTime={coin.as_of} title={coin.as_of}>
+                    Updated {formatAge(age)}
+                  </time>
+                  {!fresh && " · Trading needs a fresh price"}
+                </p>
+              )}
+              {stockQuote && (
+                <p className="mt-2 text-[var(--market-muted)]">
+                  IEX midpoint ·{" "}
+                  <time dateTime={stockQuote.event_at} title={stockQuote.event_at}>
+                    Updated {formatAge(stockQuote.age_seconds)}
+                  </time>
+                </p>
+              )}
+              {stock && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-[var(--market-muted)]">{stockRestriction}</p>
+                  <StockAttribution
+                    context="listing"
+                    required_text={stocks.data?.attribution.required_text}
+                  />
+                </div>
+              )}
+            </div>
+            <Link
+              className="market-action inline-flex min-h-13 w-full items-center justify-center rounded-sm px-8 py-3 font-semibold md:w-auto"
+              to={`${prefix}/trade/${stockMarket ? "stocks/" : ""}${encodeURIComponent(asset.symbol)}`}
+              aria-label={`${action} ${asset.symbol}`}
+            >
+              {action}
+            </Link>
+          </section>
         )}
-        <Card>
-          <CardContent>{body}</CardContent>
-        </Card>
-      </section>
-      <StockSection portfolioId={portfolioId} />
+        {stockMarket && (
+          <details
+            className={showAsset && asset ? "hidden md:block md:col-span-2" : "md:col-span-2"}
+            onToggle={(event) => setShowStockDetails(event.currentTarget.open)}
+          >
+            <summary className="min-h-11 cursor-pointer py-3 text-sm underline">
+              Stock market details
+            </summary>
+            {showStockDetails && <StockSection portfolioId={portfolioId} />}
+          </details>
+        )}
+      </div>
     </div>
   );
 }
-
-export default MarketsPage;

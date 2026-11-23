@@ -65,11 +65,11 @@ async function openOwnedPortfolio(page: Page) {
   await expect(overview).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeFocused();
   await page
-    .getByRole("link", { name: "Open portfolio", exact: true })
+    .getByRole("link")
     .and(page.locator(`[href="/portfolios/${id}"]`))
     .click();
   await expect(page).toHaveURL(`/portfolios/${id}`);
-  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
 }
 async function ticket(page: Page) {
   await signInNewUser(page);
@@ -166,7 +166,9 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(mixed.starting_cash).toBe("10000.00");
   expect(mixed.holdings.map((h: { symbol: string }) => h.symbol)).toEqual(["AAPL", "BTC"]);
   await expect(
-    page.getByRole("table", { name: "Holdings", exact: true }).getByText("BTC", { exact: true }),
+    page
+      .getByRole("list", { name: "Holdings", exact: true })
+      .getByRole("heading", { name: "Bitcoin", exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: info.outputPath("actual-stock-and-crypto-portfolio.png"),
@@ -277,21 +279,21 @@ test("real historical closed/halted marks survive execution age while uncertain 
   await openOwnedPortfolio(page);
   await expect(
     page
-      .getByRole("table", { name: "Holdings", exact: true })
+      .getByRole("list", { name: "Holdings", exact: true })
       .getByText("Market closed", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("table", { name: "Holdings", exact: true }).getByText(/Last verified midpoint/),
+    page.getByRole("list", { name: "Holdings", exact: true }).getByText(/Last verified midpoint/),
   ).toBeVisible();
   await page.screenshot({ path: info.outputPath("stock-closed-portfolio.png"), fullPage: true });
   stockFixture("halt");
-  await page.getByRole("button", { name: "Refresh portfolio", exact: true }).click();
+  await page.getByRole("button", { name: "Update portfolio", exact: true }).click();
   await expect(
-    page.getByRole("table", { name: "Holdings", exact: true }).getByText("Halted", { exact: true }),
+    page.getByRole("list", { name: "Holdings", exact: true }).getByText("Halted", { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: info.outputPath("stock-halted-portfolio.png"), fullPage: true });
   stockFixture("hold");
-  await page.getByRole("button", { name: "Refresh portfolio", exact: true }).click();
+  await page.getByRole("button", { name: "Update portfolio", exact: true }).click();
   await expect(
     page.getByText("Known value: $9,796.00 — incomplete", { exact: true }),
   ).toBeVisible();
@@ -328,12 +330,7 @@ for (const width of [320, 375, 768, 1024, 1440]) {
     await page.screenshot({ path: info.outputPath(`stock-receipt-${width}.png`), fullPage: true });
     if (width === 1440) await reviewSnapshot(page, info, "stock-receipt-review");
     await openOwnedPortfolio(page);
-    await expect(page.getByRole("table", { name: "Holdings", exact: true })).toHaveCount(
-      width >= 1024 ? 1 : 0,
-    );
-    await expect(page.getByRole("list", { name: "Holdings", exact: true })).toHaveCount(
-      width < 1024 ? 1 : 0,
-    );
+    await expect(page.getByRole("list", { name: "Holdings", exact: true })).toHaveCount(1);
     await noOverflow(page);
     await page.screenshot({
       path: info.outputPath(`mixed-portfolio-${width}.png`),
@@ -388,7 +385,6 @@ test("a late actual fill response cannot leak into another signed-in account", a
   });
   await page.getByRole("button", { name: "Confirm buy", exact: true }).click();
   await expect.poll(() => committed).toBe(true);
-  await page.goto("/account");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Send code", exact: true })).toBeVisible();
   await signInNewUser(page);

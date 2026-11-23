@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type Ref } from "react";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +40,7 @@ function errorMessage(error: unknown, step: "email" | "code"): string {
 
 const LABEL = "text-[13px] leading-[18px] font-medium text-muted-foreground";
 
-function SignInPage() {
+function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -84,17 +84,18 @@ function SignInPage() {
     const empty = email.trim() === "";
     const describedBy = error ? "email-error" : empty ? "email-help" : undefined;
     return (
-      <Card className="mx-auto my-8 max-w-xl">
-        <CardContent className="flex flex-col gap-4">
-          <h2 className="text-xl leading-7 font-semibold tracking-[-0.01em]">Sign in</h2>
-          <p className="text-muted-foreground">
+      <Card className="mx-auto my-10 w-full max-w-lg md:my-20">
+        <CardContent className="gap-6">
+          <h1 className="app-heading">Sign in</h1>
+          <p className="wrap-anywhere text-muted-foreground">
             Enter your email and we will send you a one-time code. No password needed.
           </p>
-          <form onSubmit={onSendCode} className="flex flex-col gap-3" noValidate>
+          <form onSubmit={onSendCode} className="flex flex-col gap-4" noValidate>
             <label htmlFor="email" className={LABEL}>
               Email
             </label>
             <Input
+              ref={inputRef}
               id="email"
               type="email"
               autoComplete="email"
@@ -110,7 +111,7 @@ function SignInPage() {
               </p>
             ) : (
               empty && (
-                <p id="email-help" className="text-xs leading-4 text-muted-foreground">
+                <p id="email-help" className="text-sm text-muted-foreground">
                   Enter your email to get a code.
                 </p>
               )
@@ -130,17 +131,18 @@ function SignInPage() {
       ? errorMessage(requestCode.error, "code")
       : null;
   return (
-    <Card className="mx-auto my-8 max-w-xl">
-      <CardContent className="flex flex-col gap-4">
-        <h2 className="text-xl leading-7 font-semibold tracking-[-0.01em]">Enter your code</h2>
-        <p className="text-muted-foreground">
+    <Card className="mx-auto my-10 w-full max-w-lg md:my-20">
+      <CardContent className="gap-6">
+        <h1 className="app-heading">Enter your code</h1>
+        <p className="wrap-anywhere text-muted-foreground">
           We sent a code to {sentTo}. It expires in 10 minutes.
         </p>
-        <form onSubmit={onVerify} className="flex flex-col gap-3" noValidate>
+        <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
           <label htmlFor="code" className={LABEL}>
             6-digit code
           </label>
           <Input
+            ref={inputRef}
             id="code"
             type="text"
             autoComplete="one-time-code"

@@ -40,20 +40,19 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-it("does not present uncertain masked membership as a zero count or grant capacity", () => {
+it("does not present uncertain masked membership as empty or grant capacity", () => {
   show([], { membershipUncertain: true });
   expect(screen.queryByText("No portfolios yet")).toBeNull();
-  expect(screen.queryByText("0 of 10 active portfolios")).toBeNull();
-  expect(screen.getByRole("button", { name: "Create portfolio" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "New portfolio" })).toBeDisabled();
 });
 it("shows genuine zero-book empty state and restores create trigger focus", () => {
   show([]);
   expect(screen.getByText("No portfolios yet")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Create portfolio" }));
+  fireEvent.click(screen.getByRole("button", { name: "New portfolio" }));
   fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
-  expect(screen.getByRole("button", { name: "Create portfolio" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "New portfolio" })).toHaveFocus();
 });
-it("renders exact server values, stored baseline, incomplete return and source times", () => {
+it("shows server values and incomplete returns without a valuation disclosure", () => {
   show([
     { ...cashPortfolio(), id: "2", name: "<script>safe</script>", description: "Line\nTwo" },
     {
@@ -73,10 +72,17 @@ it("renders exact server values, stored baseline, incomplete return and source t
   expect(document.querySelector("script")).toBeNull();
   expect(screen.getByText(/Known value: \$9,000.12/)).toBeInTheDocument();
   expect(screen.getByText("Return unavailable")).toBeInTheDocument();
-  expect(screen.getAllByText(/Calculated at/)).toHaveLength(2);
-  expect(
-    screen.getAllByRole("link", { name: "Open portfolio" }).map((a) => a.getAttribute("href")),
-  ).toEqual(["/portfolios/2", "/portfolios/10"]);
+  expect(screen.queryByText("Valuation details")).toBeNull();
+  expect(screen.queryByText(/of 10 active portfolios/)).toBeNull();
+  const links = screen.getAllByRole("link");
+  expect(links).toHaveLength(2);
+  expect(links[0]).toHaveAccessibleName("<script>safe</script>");
+  expect(links[1]).toHaveAccessibleName("Unpriced");
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "/portfolios/2",
+    "/portfolios/10",
+  ]);
+  expect(screen.queryByText("No description.")).toBeNull();
 });
 it("distinguishes loading, initial error and failed refresh without hiding permitted rows", () => {
   const view = show(undefined, { isPending: true });
@@ -122,25 +128,31 @@ it("shows ten books and the visible cap reason", () => {
       description: "",
     })),
   );
-  expect(screen.getByText("10 of 10 active portfolios")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Create portfolio" })).toBeDisabled();
+  expect(screen.getAllByRole("link")).toHaveLength(10);
+  expect(screen.getByRole("button", { name: "New portfolio" })).toBeDisabled();
   expect(screen.getByText(/You have 10 active portfolios/)).toBeInTheDocument();
 });
-it("exposes only one desktop table representation and preserves numeric ID order", () => {
-  vi.stubGlobal(
-    "matchMedia",
-    vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-  );
+it("links each card once and preserves numeric ID order", () => {
   show([
     { ...cashPortfolio(), id: "2", name: "Two", description: "" },
     { ...cashPortfolio(), id: "10", name: "Ten", description: "" },
   ]);
-  expect(screen.getAllByRole("table")).toHaveLength(1);
-  expect(screen.queryByRole("list")).toBeNull();
-  expect(
-    screen.getAllByRole("link", { name: "Open portfolio" }).map((a) => a.getAttribute("href")),
-  ).toEqual(["/portfolios/2", "/portfolios/10"]);
-  vi.unstubAllGlobals();
+  expect(screen.queryByRole("table")).toBeNull();
+  const cards = screen.getAllByRole("listitem");
+  expect(cards).toHaveLength(3);
+  const create = screen.getByRole("button", { name: "New portfolio" });
+  expect(cards[2]).toContainElement(create);
+  expect(create).toHaveTextContent(/^New portfolio$/);
+  expect(screen.queryByRole("button", { name: "Refresh portfolios" })).toBeNull();
+  const links = screen.getAllByRole("link");
+  expect(links).toHaveLength(2);
+  expect(links[0]).toHaveAccessibleName("Two");
+  expect(links[1]).toHaveAccessibleName("Ten");
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "/portfolios/2",
+    "/portfolios/10",
+  ]);
+  expect(screen.queryByText("No description.")).toBeNull();
 });
 it("keeps unknown creation notice after close and allows original retry at cap", () => {
   show(
@@ -161,7 +173,6 @@ it("keeps unknown creation notice after close and allows original retry at cap",
     },
     retryCreation: retry,
   } as unknown as ReturnType<typeof usePortfolioManagement>);
-  fireEvent.click(screen.getByRole("button", { name: "Refresh portfolios" }));
   // Updating the query state represents the next hook publication, not optimistic data.
   cleanup();
   render(
@@ -174,7 +185,7 @@ it("keeps unknown creation notice after close and allows original retry at cap",
   fireEvent.click(screen.getByRole("button", { name: "Review original creation" }));
   fireEvent.click(screen.getByRole("button", { name: "Close creation" }));
   expect(screen.getByText(/An original creation request is unresolved/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Create portfolio" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "New portfolio" })).toHaveFocus();
   fireEvent.click(screen.getByRole("button", { name: "Review original creation" }));
   fireEvent.click(screen.getByRole("button", { name: "Retry creation" }));
   expect(retry).toHaveBeenCalledOnce();

@@ -83,10 +83,10 @@ async function closeAllThroughApi(page: Page) {
 async function overview(page: Page) {
   await page.goto("/portfolios");
   await expect(page.getByRole("heading", { name: "Portfolios", exact: true })).toBeVisible();
-  await expect(button(page, "Refresh portfolios")).toBeVisible();
+  await expect(button(page, "New portfolio")).toBeVisible();
 }
 async function openCreate(page: Page, name: string, description = "") {
-  await button(page, "Create portfolio").click();
+  await button(page, "New portfolio").click();
   await expect(
     page.getByLabel("Portfolio name", { exact: true }),
     JSON.stringify(
@@ -152,7 +152,7 @@ test("Phase13 create view edit clear and escaped astral metadata preserve immuta
   const initial = await portfolioId(page);
   expect((await statement(page, initial)).cash).toBe("10000.00");
   await overview(page);
-  await expect(page.getByText("1 of 10 active portfolios")).toBeVisible();
+  await expect(page.getByRole("link", { name: "My portfolio", exact: true })).toBeVisible();
   const name = "<Strategy>& " + "🚀".repeat(48);
   await openCreate(page, name, "Plain <script> text & \n" + "🚀".repeat(977));
   await expect(page.getByText("1000 / 1,000 characters", { exact: true })).toBeVisible();
@@ -172,10 +172,13 @@ test("Phase13 create view edit clear and escaped astral metadata preserve immuta
   await button(page, "Edit portfolio").click();
   await page.getByLabel("Description (optional)").fill("");
   await button(page, "Save changes").click();
-  await expect(page.getByText("No description.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No description.", { exact: true })).toHaveCount(0);
   expect(fixture("economic", email)).toEqual(before);
-  await page.getByRole("link", { name: "Back to Portfolios", exact: true }).click();
-  await expect(page.getByText("2 of 10 active portfolios")).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolios", exact: true })
+    .click();
+  await expect(page.getByRole("link", { name: "Renamed strategy", exact: true })).toBeVisible();
   expect((await list(page)).map((p) => p.id)).toEqual([initial, id]);
   await expect(page.getByRole("button", { name: /delete|reset|deposit|transfer/i })).toHaveCount(0);
 });
@@ -241,8 +244,8 @@ test("Phase13 duplicate name and concurrent tenth-slot refusal retain draft and 
   await expect(page.getByLabel("Description (optional)")).toHaveValue("Keep this draft");
   for (let n = 0; n < 8; n++) await create(page, `Race seed ${n}`);
   await button(page, "Discard draft").click();
-  await button(page, "Refresh portfolios").click();
-  await expect(page.getByText("9 of 10 active portfolios")).toBeVisible();
+  await overview(page);
+  await expect(page.getByRole("link", { name: "Race seed 7", exact: true })).toBeVisible();
   await openCreate(page, "Race loser", "Retain after cap race");
   // Both real writes race while the UI still has its nine-book observation.
   const h = await headers(page);
@@ -264,7 +267,7 @@ test("Phase13 duplicate name and concurrent tenth-slot refusal retain draft and 
     await expect(page).toHaveURL(/\/portfolios\/\d+$/);
   }
   await overview(page);
-  await expect(button(page, "Create portfolio")).toBeDisabled();
+  await expect(button(page, "New portfolio")).toBeDisabled();
 });
 
 test("Phase13 zero-book returning identity gets no implicit grant and closed name frees new identity", async ({
@@ -276,7 +279,6 @@ test("Phase13 zero-book returning identity gets no implicit grant and closed nam
   const before = fixture("economic", email);
   await overview(page);
   await expect(page.getByRole("heading", { name: "No portfolios yet", exact: true })).toBeVisible();
-  await page.goto("/account");
   await button(page, "Sign out").click();
   await signIn(page, email);
   expect(await list(page)).toEqual([]);
@@ -374,7 +376,7 @@ test("Phase13 a late committed creation callback cannot navigate away from anoth
   await openCreate(page, "Late created identity");
   await submitCreate(page);
   await committed;
-  await page.getByRole("link", { name: "Open portfolio", exact: true }).first().click();
+  await page.getByRole("link", { name: "My portfolio", exact: true }).click();
   await expect(page).toHaveURL(`/portfolios/${original}`);
   release();
   await expect(page.getByRole("heading", { name: "My portfolio", exact: true })).toBeVisible();
@@ -412,12 +414,10 @@ test("Phase13 API-created same-asset strategies keep cash basis history and expl
     "200.00",
   );
   await page.goto(`/portfolios/${a.id}`);
-  await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
-  await expect(page).toHaveURL(`/portfolios/${a.id}`);
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$9,696.00");
-  await button(page, "Open selected portfolio").press("Enter");
+  await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
   await expect(page).toHaveURL(`/portfolios/${b.id}`);
-  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText("$9,698.00");
   await page.goBack();
   await expect(page).toHaveURL(`/portfolios/${a.id}`);
@@ -492,7 +492,6 @@ test("Phase13 renewal and logout cannot replay private unresolved creation into 
   await openCreate(page, "Owner private unresolved");
   await submitCreate(page);
   await expect(button(page, "Retry creation")).toBeVisible();
-  await page.goto("/account");
   await button(page, "Sign out").click();
   await signInNewUser(page);
   await overview(page);
@@ -524,7 +523,6 @@ test("Phase13 late actual old-root response cannot publish over explicit newly c
   await page.goto(`/portfolios/${a.id}`);
   await started;
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
-  await button(page, "Open selected portfolio").click();
   await expect(page).toHaveURL(`/portfolios/${b.id}`);
   release();
   await expect(page.getByRole("heading", { name: "Current root", exact: true })).toBeVisible();
@@ -565,13 +563,15 @@ test("Phase13 renamed original unknown trade recovers identical payload without 
   }
   await expect(button(page, "Check order result")).toBeVisible();
   await patch(page, a.id, { name: "Renamed current order root" });
-  await page.getByRole("link", { name: "Markets", exact: true }).click();
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
-  await button(page, "Open selected portfolio").click();
+  await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
+  await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/portfolios/${b.id}/trade/BTC$`));
   await expect(button(page, "Check order result")).toHaveCount(0);
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(a.id);
-  await button(page, "Open selected portfolio").click();
-  // Enter the original ticket via the actual scoped trade link.
+  await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await expect(button(page, "Check order result")).toBeVisible();
   await button(page, "Check order result").click();
@@ -610,12 +610,12 @@ test("Phase13 real incomplete strategy and failed refresh preserve sibling and s
     "prices_as_of",
   ])
     expect(row[key]).toEqual(first[key]);
+  await page.clock.install();
   await overview(page);
   await expect(page.getByText(/Known value: .* incomplete/)).toBeVisible();
   await expect(page.getByText("Return unavailable", { exact: true })).toBeVisible();
-  expect(await page.locator("time[datetime]").count()).toBeGreaterThan(0);
   await page.route(`**${api}/overview`, (route) => route.abort("failed"));
-  await button(page, "Refresh portfolios").click();
+  await page.clock.fastForward(31_000);
   await expect(page.getByRole("alert")).toContainText("Couldn't refresh your portfolios");
   await expect(
     page.getByRole("link", { name: "Cash remains complete", exact: true }),
@@ -639,22 +639,21 @@ test("Phase13 failed refresh suppresses expired stock proof while cash sibling r
   await page.clock.install();
   await overview(page);
   await page.route(`**${api}/overview`, (route) => route.abort("failed"));
-  await button(page, "Refresh portfolios").click();
+  await page.clock.fastForward(31_000);
   await expect(page.getByRole("alert")).toContainText("Couldn't refresh");
   await page.clock.fastForward(Math.max(1, Date.parse(mark.valid_until) - Date.now() + 2000));
   await expect(page.getByText("Return unavailable", { exact: true })).toBeVisible();
-  const expired = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("link", { name: "Expiring stock evidence", exact: true }) });
-  await expect(
-    expired.getByRole("cell").filter({ hasText: /^Value unavailable — refresh required/ }),
-  ).toBeVisible();
-  await expect(expired.getByRole("cell", { name: "$9,898.00", exact: true })).toHaveCount(1);
-  await expect(expired.getByRole("cell", { name: "$9,999.00", exact: true })).toHaveCount(0);
-  const cashSibling = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("link", { name: "Unaffected cash", exact: true }) });
-  await expect(cashSibling.getByRole("cell", { name: "$10,000.00", exact: true })).toHaveCount(2);
+  const cards = page.getByRole("list", { name: "Portfolios", exact: true }).getByRole("listitem");
+  const expired = cards.filter({
+    has: page.getByRole("link", { name: "Expiring stock evidence", exact: true }),
+  });
+  await expect(expired.getByText("Value unavailable — refresh required")).toBeVisible();
+  await expect(expired.getByText("$9,898.00", { exact: true })).toHaveCount(1);
+  await expect(expired.getByText("$9,999.00", { exact: true })).toHaveCount(0);
+  const cashSibling = cards.filter({
+    has: page.getByRole("link", { name: "Unaffected cash", exact: true }),
+  });
+  await expect(cashSibling.getByText("$10,000.00", { exact: true })).toHaveCount(2);
   await expect(page.getByRole("link", { name: "Unaffected cash", exact: true })).toHaveAttribute(
     "href",
     `/portfolios/${b.id}`,
@@ -666,29 +665,17 @@ async function reviewedLayout(page: Page, state: string, width: number) {
   const navigation = page.getByRole("region", { name: "Portfolio navigation", exact: true });
   if (width < 768 && (await navigation.isVisible())) {
     const select = navigation.getByLabel("Open portfolio", { exact: true });
-    const label = navigation.locator("label");
-    const open = navigation.getByRole("button", { name: "Open selected portfolio", exact: true });
-    const link = navigation.getByRole("link", { name: "Portfolios", exact: true });
-    const [regionBox, fieldBox, labelBox, openBox, linkBox] = await Promise.all([
+    const [regionBox, fieldBox] = await Promise.all([
       navigation.boundingBox(),
       select.boundingBox(),
-      label.boundingBox(),
-      open.boundingBox(),
-      link.boundingBox(),
     ]);
     expect(fieldBox!.width).toBeGreaterThanOrEqual(regionBox!.width - 1);
     expect(fieldBox!.height).toBeGreaterThanOrEqual(48);
-    expect(labelBox!.height).toBeLessThanOrEqual(24);
-    for (const action of [openBox!, linkBox!]) {
-      expect(action.width).toBeGreaterThanOrEqual(44);
-      expect(action.height).toBeGreaterThanOrEqual(44);
-      expect(action.y).toBeGreaterThanOrEqual(fieldBox!.y + fieldBox!.height + 7.5);
-    }
+    await expect(navigation.getByRole("button")).toHaveCount(0);
+    await expect(navigation.getByRole("link")).toHaveCount(0);
     Object.assign(dimensions, {
       select_width: fieldBox!.width,
       select_height: fieldBox!.height,
-      label_height: labelBox!.height,
-      open_gap: openBox!.y - fieldBox!.y - fieldBox!.height,
     });
   }
   if (state === "unknown") {
@@ -760,14 +747,6 @@ async function capture(page: Page, info: TestInfo, state: string, width: number)
     const viewport = page.viewportSize()!;
     await page.setViewportSize({ width: Math.floor(width / 2), height: 480 });
     await expect.poll(() => page.evaluate("matchMedia('(min-width: 768px)').matches")).toBe(false);
-    // Wait for the actual React conditional table-to-card render as well as CSS.
-    if (
-      state === "overview" ||
-      state === "incomplete" ||
-      state === "failed-refresh" ||
-      state === "cap"
-    )
-      await expect(page.getByRole("table")).toHaveCount(0);
     await noOverflow(page);
     await reviewedLayout(page, state, Math.floor(width / 2));
     const narrow = await render();
@@ -886,20 +865,20 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
     await button(page, "Discard changes").click();
     await page.getByLabel("Open portfolio", { exact: true }).selectOption(id);
     await capture(page, info, "switch", width);
-    await button(page, "Open selected portfolio").press("Enter");
     await stockBuy(page, id, "1");
     stockFixture("hold");
+    await page.clock.install();
     await overview(page);
     await expect(page.getByText(/Known value: .* incomplete/)).toBeVisible();
     await capture(page, info, "incomplete", width);
     await page.route(`**${api}/overview`, (route) => route.abort("failed"));
-    await button(page, "Refresh portfolios").click();
+    await page.clock.fastForward(31_000);
     await expect(page.getByRole("alert")).toContainText("Couldn't refresh");
     await capture(page, info, "failed-refresh", width);
     await page.unroute(`**${api}/overview`);
     for (let n = 0; n < 8; n++) await create(page, `Capture cap ${width} ${n}`);
-    await button(page, "Refresh portfolios").click();
-    await expect(page.getByText("10 of 10 active portfolios")).toBeVisible();
+    await overview(page);
+    await expect(page.getByText("You have 10 active portfolios.", { exact: false })).toBeVisible();
     await capture(page, info, "cap", width);
     await page.route(`**${api}/overview`, (route) => route.abort("failed"));
     await page.reload();

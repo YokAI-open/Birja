@@ -77,10 +77,10 @@ async function close(page: Page, id: string, name: string, intentKey = crypto.ra
 }
 async function detail(page: Page, id: string) {
   await page.goto("/portfolios/" + id);
-  await expect(button(page, "Delete portfolio…")).toBeEnabled();
+  await expect(button(page, "Remove portfolio")).toBeEnabled();
 }
 async function review(page: Page) {
-  await button(page, "Delete portfolio…").click();
+  await button(page, "Remove portfolio").click();
   await expect(button(page, "Cancel")).toBeFocused();
   await expect(button(page, "Delete portfolio")).toBeEnabled();
 }
@@ -122,7 +122,6 @@ async function buyStock(page: Page, id: string) {
   expect((await received).status()).toBe(201);
 }
 async function logout(page: Page) {
-  await page.goto("/account");
   await button(page, "Sign out").click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
 }
@@ -198,12 +197,12 @@ test("Phase14 deletion named Cancel is a no-op; holdings freeze, stale paths ref
     page.getByText("Nothing will be sold or moved to another portfolio.", { exact: false }),
   ).toBeVisible();
   await button(page, "Cancel").press("Enter");
-  await expect(button(page, "Delete portfolio…")).toBeFocused();
+  await expect(button(page, "Remove portfolio")).toBeFocused();
   expect(deletes).toBe(0);
   expect(oracle(email)).toEqual(before);
   await review(page);
   await page.keyboard.press("Escape");
-  await expect(button(page, "Delete portfolio…")).toBeFocused();
+  await expect(button(page, "Remove portfolio")).toBeFocused();
   expect(deletes).toBe(0);
   expect(oracle(email)).toEqual(before);
   await review(page);
@@ -304,7 +303,7 @@ test("Phase14 deletion last portfolio preserves signed-in zero through reload si
   expect(await books(page)).toEqual([]);
   expect(oracle(email)).toEqual(frozen);
   await page.goto("/portfolios");
-  await button(page, "Create portfolio").click();
+  await button(page, "New portfolio").click();
   await page.getByLabel("Portfolio name", { exact: true }).fill("My portfolio");
   await page.locator("form").getByRole("button", { name: "Create portfolio", exact: true }).click();
   await expect(page).toHaveURL(/\/portfolios\/\d+$/);
@@ -453,7 +452,7 @@ test("Phase14 deletion rename refusal is durable until explicit latest-name revi
   expect(oracle(email).roots[id].holdings).toEqual(before.holdings);
   expect(oracle(email).roots[id].trades).toEqual(before.trades);
   await button(page, "Review latest portfolio").click();
-  await expect(button(page, "Delete portfolio…")).toBeEnabled();
+  await expect(button(page, "Remove portfolio")).toBeEnabled();
   expect(requests).toHaveLength(1);
   await review(page);
   await expect(
@@ -520,7 +519,6 @@ test("Phase14 deletion two-tab revocation hides committed unknown trade without 
   await expect(page.getByText("Old confidential strategy", { exact: true })).toHaveCount(0);
   const frozen = oracle(email).roots[id];
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(sibling.id);
-  await button(page, "Open selected portfolio").click();
   await buy(page, sibling.id, "10");
   expect(posts).toBe(1);
   expect(oracle(email).roots[id]).toEqual(frozen);
@@ -596,7 +594,7 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await expect(page.getByText(/This is your last active portfolio/)).toBeVisible();
       await capture("last-confirmation");
       await button(page, "Cancel").click();
-      await expect(button(page, "Delete portfolio…")).toBeFocused();
+      await expect(button(page, "Remove portfolio")).toBeFocused();
       await capture("cancel");
       const longName = "<Long>&" + "🚀".repeat(53);
       expect([...longName]).toHaveLength(60);
@@ -626,7 +624,7 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await capture("rename-conflict");
       await page.unroute("**" + api + "/" + id);
       await button(page, "Review latest portfolio").click();
-      await expect(button(page, "Delete portfolio…")).toBeEnabled();
+      await expect(button(page, "Remove portfolio")).toBeEnabled();
       const observed = latch(),
         release = latch();
       await page.clock.install();
@@ -674,7 +672,7 @@ for (const width of [320, 375, 768, 1024, 1280, 1440]) {
       await capture("confirmed-overview");
       await page.unroute("**" + api + "/" + id);
       await page.route("**" + api + "/overview", (route) => route.abort("failed"));
-      await button(page, "Refresh portfolios").click();
+      await page.clock.fastForward(31_000);
       await expect(page.getByRole("alert")).toContainText("Couldn't refresh");
       await capture("discovery-error");
       await page.unroute("**" + api + "/overview");

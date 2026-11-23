@@ -151,16 +151,22 @@ describe("SignInPage code step", () => {
     expect(screen.getByLabelText("Email")).toBeVisible();
   });
 
-  it("puts the user in the me cache so the account shows without another /me fetch", async () => {
+  it("puts the user in the me cache so Markets opens without another /me fetch", async () => {
     const fetchMock = stubApi({});
-    const view = renderWithClient(<App />, { route: "/account" });
-    await view.user.type(await screen.findByLabelText("Email"), "a@example.com");
+    const view = renderWithClient(<App />);
+    const door = await screen.findByRole("button", { name: "Go to sign-in form" });
+    await view.user.click(door);
+    const email = screen.getByLabelText("Email");
+    expect(email).toHaveFocus();
+    await view.user.type(email, "a@example.com");
     await view.user.click(screen.getByRole("button", { name: "Send code" }));
-    await view.user.type(await screen.findByLabelText("6-digit code"), "123456");
+    const code = await screen.findByLabelText("6-digit code");
+    await view.user.click(door);
+    expect(code).toHaveFocus();
+    await view.user.type(code, "123456");
     await view.user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByRole("heading", { name: "Your account" })).toBeVisible();
-    expect(screen.getByText("a@example.com")).toBeVisible();
-    expect(screen.queryByText("$10,000.00")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Markets" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
     const meCalls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v2/me");
     // The signed-out /me is tried twice (401, silent refresh, retry); sign-in adds none.
     expect(meCalls).toHaveLength(2);

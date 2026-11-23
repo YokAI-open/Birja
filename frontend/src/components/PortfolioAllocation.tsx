@@ -9,13 +9,14 @@ function validAllocation(value: string | null): value is string {
 export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
   const rows = [
     { key: "cash", label: "Cash", percent: portfolio.class_allocation_percent.cash },
-    { key: "stocks", label: "Stocks", percent: portfolio.class_allocation_percent.stocks },
     { key: "crypto", label: "Crypto", percent: portfolio.class_allocation_percent.crypto },
+    { key: "stocks", label: "Stocks", percent: portfolio.class_allocation_percent.stocks },
   ];
   return (
-    <section aria-label="Portfolio allocation" className="flex min-w-0 flex-col gap-3">
-      <h3 className="font-medium">Allocation</h3>
-      <p className="text-muted-foreground">Share of total portfolio value, including cash.</p>
+    <section
+      aria-label="Portfolio allocation"
+      className="flex min-w-0 flex-col gap-3 border-t border-border pt-4 md:border-t-0 md:border-l md:pt-0 md:pl-7"
+    >
       {portfolio.valuation_complete &&
         portfolio.cash_allocation_percent === null &&
         portfolio.total_value !== null &&
@@ -43,7 +44,7 @@ export function PortfolioAllocation({ portfolio }: { portfolio: Portfolio }) {
                 {valid && (
                   <div
                     data-allocation-fill
-                    className="h-full rounded-[var(--radius-bar)] bg-data-blue"
+                    className="h-full rounded-[var(--radius-bar)] bg-data-fill"
                     style={{ width: `${percent}%` }}
                   />
                 )}

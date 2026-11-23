@@ -12,6 +12,7 @@ import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import type { PortfolioSummary } from "@/api/portfolios";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
 import { PortfolioRoute } from "@/App";
+
 const clients: QueryClient[] = [];
 it.each(["reject-abort", "late-response", "late-response-new-save", "late-response-logout"])(
   "interrupts a routed pending PATCH for review without accepting its obsolete outcome (%s)",
@@ -321,7 +322,7 @@ it("cancels a pending original-name financial refresh before accepting a rename"
   const { user, client } = mount({ metadata, management });
   await screen.findByRole("region", { name: "Cash" });
   defer = true;
-  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  await user.click(screen.getByRole("button", { name: "Update portfolio" }));
   await waitFor(() => expect(release).toBeTypeOf("function"));
   await user.click(await screen.findByRole("button", { name: "Edit portfolio" }));
   await user.clear(screen.getByLabelText("Portfolio name"));
@@ -340,7 +341,7 @@ it("cancels a pending original-name financial refresh before accepting a rename"
       .filter((q) => q.queryKey[0] === "portfolio")
       .every((q) => q.state.error === null),
   ).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  await user.click(screen.getByRole("button", { name: "Update portfolio" }));
   await waitFor(() =>
     expect(screen.getByRole("region", { name: "Cash" })).toHaveTextContent("$10,000.00"),
   );
@@ -373,7 +374,7 @@ it("renames and clears descriptions through actual management hooks without alte
   expect(await screen.findByText("Portfolio updated.")).toBeInTheDocument();
   expect(patches).toEqual([{ name: "Long-term <b>plan</b>", description: "" }]);
   expect(screen.getByRole("button", { name: "Edit portfolio" })).toHaveFocus();
-  expect(screen.getByText("No description.")).toBeInTheDocument();
+  expect(screen.queryByText("No description.")).toBeNull();
   expect(screen.getByRole("heading", { name: "Long-term <b>plan</b>" })).toBeInTheDocument();
   expect(document.querySelector("b")).toBeNull();
   expect(await screen.findByRole("region", { name: "Cash" })).toHaveTextContent("$10,000.00");
@@ -508,53 +509,24 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
-it("shows direct stock figures, seven semantic columns and labelled mobile cards", async () => {
-  show();
-  const table = await screen.findByRole("table", { name: "Holdings" });
-  expect(
-    within(table)
-      .getAllByRole("columnheader")
-      .map((h) => h.textContent),
-  ).toEqual([
-    "Asset",
-    "Quantity",
-    "Average cost",
-    "Cost basis",
-    "Current value",
-    "Gain/loss",
-    "Allocation",
-  ]);
-  expect(table.parentElement).toHaveClass("hidden", "lg:block");
-  const mobile = screen.getByRole("list", { name: "Holdings" });
-  expect(mobile).toHaveClass("lg:hidden");
-  for (const view of [table, mobile]) {
-    expect(view).toHaveTextContent("Stock");
-    expect(view).toHaveTextContent("Apple Inc.");
-    for (const text of [
-      "$102.00",
-      "$204.00",
-      "$202.00",
-      "−$2.00",
-      "−0.98%",
-      "2.02%",
-      "IEX midpoint",
-    ])
-      expect(view).toHaveTextContent(text);
-    expect(within(view).getByRole("link", { name: "Trade AAPL" })).toHaveAttribute(
-      "href",
-      "/portfolios/1/trade/stocks/AAPL",
-    );
-    expect(view.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
+it("shows stock identity, quantity, value, return and the scoped trade action on the card", async () => {
+  const { user } = show();
+  const cards = await screen.findByRole("list", { name: "Holdings" });
+  const stockCard = within(cards).getByText("Apple Inc.").closest("li")!;
+  const cost = within(stockCard).getByText("Average cost");
+  expect(cost).not.toBeVisible();
+  const details = stockCard.querySelector("summary")!;
+  await user.click(details);
+  expect(cost).toBeVisible();
+  expect(within(stockCard).getByText("Cost basis")).toBeVisible();
+  for (const text of ["Apple Inc.", "2 AAPL", "$202.00", "−$2.00", "−0.98%"]) {
+    expect(cards).toHaveTextContent(text);
   }
-  for (const label of [
-    "Quantity",
-    "Average cost",
-    "Cost basis",
-    "Current value",
-    "Gain/loss",
-    "Allocation",
-  ])
-    expect(within(mobile).getByText(label, { selector: "dt" })).toBeInTheDocument();
+  expect(within(cards).getByRole("link", { name: "Trade AAPL" })).toHaveAttribute(
+    "href",
+    "/portfolios/1/trade/stocks/AAPL",
+  );
+  expect(cards.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
   expect(screen.getByRole("note", { name: "Stock valuation price source" })).toHaveTextContent(
     "IEX prices",
   );
@@ -569,10 +541,10 @@ it("shows exact server incomplete subtotal with no allocation fills or overall r
   ).toBeVisible();
   const summary = screen.getByRole("region", { name: "Total portfolio value" });
   expect(summary).not.toHaveTextContent("−$2.00");
-  const table = screen.getByRole("table", { name: "Holdings" });
+  const table = screen.getByRole("list", { name: "Holdings" });
   expect(table).toHaveTextContent("Suspended for corporate-action review");
   expect(table).not.toHaveTextContent("$102.00");
-  expect(table).toHaveTextContent("$204.00");
+  expect(table).toHaveTextContent("Quantity unavailable");
   expect(document.querySelector("[data-allocation-fill]")).toBeNull();
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
@@ -582,11 +554,11 @@ it.each(["closed", "halted"] as const)(
     const p = mixedPortfolio();
     p.holdings[0].stock_mark!.mark_mode = mode;
     show(p);
-    const table = await screen.findByRole("table", { name: "Holdings" });
+    const table = await screen.findByRole("list", { name: "Holdings" });
     expect(table).toHaveTextContent(mode === "closed" ? "Market closed" : "Halted");
     expect(table).toHaveTextContent("Last verified midpoint");
     expect(table).not.toHaveTextContent("Live");
-    expect(table.querySelector("time")?.textContent).toMatch(/2026/);
+    expect(table.querySelector("time")?.getAttribute("title")).toMatch(/2026/);
   },
 );
 it("uses exactly three server allocation bars and no balancing arithmetic", async () => {
@@ -596,8 +568,8 @@ it("uses exactly three server allocation bars and no balancing arithmetic", asyn
   expect(rows).toHaveLength(3);
   for (const [i, label, percent] of [
     [0, "Cash", "97.98"],
-    [1, "Stocks", "2.02"],
-    [2, "Crypto", "0.00"],
+    [1, "Crypto", "0.00"],
+    [2, "Stocks", "2.02"],
   ] as const) {
     expect(rows[i]).toHaveTextContent(label + percent + "%");
     expect(rows[i].querySelector("[data-allocation-fill]")).toHaveStyle({ width: percent + "%" });
@@ -614,21 +586,27 @@ it("keeps crypto fees, fractional units and route independent, with alphabetical
       provider_asset_id: null,
       stock_mark: null,
       quantity: "0.12345678",
+      current_value: "300.00",
     };
   p.holdings = [crypto, p.holdings[0]];
-  show(p);
-  const table = await screen.findByRole("table", { name: "Holdings" });
+  const { user } = show(p);
+  const table = await screen.findByRole("list", { name: "Holdings" });
   expect(
     within(table)
-      .getAllByRole("rowheader")
-      .map((h) => h.textContent?.slice(0, 4)),
-  ).toEqual(["AAPL", "BTCB"]);
+      .getAllByRole("listitem")
+      .map((row) => within(row).getByRole("link").getAttribute("aria-label")),
+  ).toEqual(["Trade AAPL", "Trade BTC"]);
   expect(table).toHaveTextContent("Crypto");
   expect(table).toHaveTextContent("0.12345678");
   expect(within(table).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
     "href",
     "/portfolios/1/trade/BTC",
   );
+  await user.selectOptions(screen.getByRole("combobox", { name: "Sort holdings" }), "value");
+  expect(within(table).getAllByRole("link")[0]).toHaveAccessibleName("Trade BTC");
+  await user.selectOptions(screen.getByRole("combobox", { name: "Filter holdings" }), "stock");
+  expect(within(table).getAllByRole("listitem")).toHaveLength(1);
+  expect(within(table).getByRole("link")).toHaveAccessibleName("Trade AAPL");
 });
 it("preserves stored starting cash, realised cash and a truthful empty state", async () => {
   const p = cashPortfolio();
@@ -660,7 +638,7 @@ it("hides unvalidated financial projections after refresh failure and preserves 
   );
   const { user } = mount();
   await screen.findByRole("region", { name: "Cash" });
-  const refresh = screen.getByRole("button", { name: "Refresh portfolio" });
+  const refresh = screen.getByRole("button", { name: "Update portfolio" });
   await user.click(refresh);
   expect(await screen.findByRole("alert")).toHaveTextContent("Can't load your portfolio right now");
   expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
@@ -708,8 +686,8 @@ it("in-flight refresh cannot be submitted twice and keeps cash visible", async (
   vi.stubGlobal("fetch", fetch);
   const { user } = mount();
   await screen.findByRole("region", { name: "Cash" });
-  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
-  const refresh = screen.getByRole("button", { name: "Refreshing portfolio…" });
+  await user.click(screen.getByRole("button", { name: "Update portfolio" }));
+  const refresh = screen.getByRole("button", { name: "Updating portfolio…" });
   expect(refresh).toHaveAttribute("aria-disabled", "true");
   await user.click(refresh);
   await user.keyboard("{Enter} ");
@@ -749,8 +727,7 @@ it("long names and huge server values wrap and untrusted names stay escaped", as
   p.holdings[0].name = '<img src=x onerror="alert(1)">' + "Long company name ".repeat(25);
   p.holdings[0].current_value = "12345678901234567890123456789012345678.99";
   show(p);
-  const table = await screen.findByRole("table", { name: "Holdings" });
-  expect(table).toHaveClass("table-fixed");
+  const table = await screen.findByRole("list", { name: "Holdings" });
   expect(table.querySelector("img")).toBeNull();
   expect(table).toHaveTextContent("12,345,678,901,234,567,890,123,456,789,012,345,678.99");
 });
@@ -764,9 +741,8 @@ it("retains undefined zero-basis return, inactive holdings and rounded-zero loss
     is_active: false,
   });
   show(p);
-  const table = await screen.findByRole("table", { name: "Holdings" });
-  expect(table).toHaveTextContent("Not applicable");
-  expect(table).toHaveTextContent("Percentage return is unavailable because cost basis is zero.");
+  const table = await screen.findByRole("list", { name: "Holdings" });
+  expect(table).toHaveTextContent("Percentage return not applicable because cost basis is zero.");
   expect(table).toHaveTextContent("Inactive · trading unavailable");
   expect(within(table).queryByRole("link")).toBeNull();
 });
@@ -803,7 +779,7 @@ it("positive raw crypto value rounded to zero keeps server allocation instead of
   ).toBeNull();
 });
 
-it("labels the statement and holdings with the full escaped portfolio name", async () => {
+it("uses the full escaped portfolio name as the page heading", async () => {
   const name = ("<b>Portfolio</b> " + "Long name ".repeat(4) + "four").slice(0, 60);
   const p = { ...mixedPortfolio(), name };
   vi.stubGlobal(
@@ -811,15 +787,11 @@ it("labels the statement and holdings with the full escaped portfolio name", asy
     vi.fn(() => Promise.resolve(new Response(JSON.stringify(p)))),
   );
   mount({ metadata: [{ id: "1", name }] });
-  await screen.findByRole("table", { name: "Holdings" });
-  const contexts = screen.getAllByText(name).filter((node) => node.tagName === "DD");
-  expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
-  expect(contexts).toHaveLength(2);
-  for (const context of contexts) {
-    expect(context.tagName).toBe("DD");
-    expect(context).toHaveClass("min-w-0", "[overflow-wrap:anywhere]");
-    expect(context.querySelector("b")).toBeNull();
-  }
+  await screen.findByRole("list", { name: "Holdings" });
+  const heading = screen.getByRole("heading", { level: 1, name });
+  expect(heading).toBeVisible();
+  expect(heading.querySelector("b")).toBeNull();
+  expect(screen.getAllByText(name).filter((node) => node.tagName === "DD")).toHaveLength(0);
 });
 
 it("uses the actual unequal baseline and retains one root's figures", async () => {
@@ -853,7 +825,7 @@ it("does not issue financial requests or create a portfolio for a zero-root lega
   expect(await screen.findByRole("heading", { name: "No portfolio available" })).toBeVisible();
   expect(finance).not.toHaveBeenCalled();
   expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("list", { name: "Holdings" })).toBeNull();
   expect(screen.getByRole("link", { name: "Browse markets" })).toHaveAttribute("href", "/");
 });
 
@@ -863,7 +835,8 @@ it("does not fall back from an explicit unavailable root to the sole valid sibli
   mount({ route: "/portfolios/2" });
   expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
   expect(finance).not.toHaveBeenCalled();
-  expect(screen.queryByText("My portfolio")).toBeNull();
+  expect(screen.getByRole("combobox", { name: "Open portfolio" })).toHaveValue("");
+  expect(screen.queryByRole("heading", { name: "My portfolio" })).toBeNull();
 });
 
 it("suppresses a delayed old-root statement after switching to a same-symbol sibling", async () => {
@@ -905,7 +878,8 @@ it("suppresses a delayed old-root statement after switching to a same-symbol sib
   expect(cash).toHaveTextContent("$300.00");
   await act(async () => finish(new Response(JSON.stringify(mixedPortfolio()))));
   expect(cash).toHaveTextContent("$300.00");
-  expect(screen.queryByText("My portfolio")).toBeNull();
+  expect(screen.getByRole("combobox", { name: "Open portfolio" })).toHaveValue("2");
+  expect(screen.queryByRole("heading", { name: "My portfolio" })).toBeNull();
   expect(screen.getByRole("region", { name: "Total portfolio value" })).toHaveTextContent(
     "$400.00 start",
   );
@@ -928,13 +902,13 @@ it("hides accepted holdings and a delayed refresh when the root becomes unavaila
       ),
   );
   const { user, client } = mount();
-  await screen.findByRole("table");
-  await user.click(screen.getByRole("button", { name: "Refresh portfolio" }));
+  await screen.findByRole("list", { name: "Holdings" });
+  await user.click(screen.getByRole("button", { name: "Update portfolio" }));
   await act(async () => {
     client.setQueryData(["portfolios", "first@example.test"], []);
   });
   expect(await screen.findByRole("heading", { name: "Portfolio unavailable" })).toBeVisible();
   await act(async () => finish(new Response(JSON.stringify(mixedPortfolio()))));
   expect(screen.queryByRole("region", { name: "Cash" })).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("list", { name: "Holdings" })).toBeNull();
 });

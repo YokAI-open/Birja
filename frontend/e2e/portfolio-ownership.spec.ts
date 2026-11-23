@@ -164,19 +164,35 @@ async function snapshot(page: Page, info: TestInfo, name: string) {
       `url("data:font/woff2;base64,${(await response.body()).toString("base64")}")`,
     );
   }
-  const html = await page.evaluate<string>(`(styles=>{
+  const brandImages = await Promise.all(
+    [
+      ["/brand/icon-96.png", "image/png"],
+      ["/brand/logo-240.webp", "image/webp"],
+    ].map(async ([url, type]) => {
+      const image = await page.request.get(url);
+      expect(image.ok()).toBe(true);
+      return [url, `data:${type};base64,${(await image.body()).toString("base64")}`];
+    }),
+  );
+  const html = await page.evaluate<string>(`(([styles,brandImages])=>{
     const d=document.cloneNode(true);
     const values=document.querySelectorAll('input');
     d.querySelectorAll('input').forEach((n,i)=>{n.setAttribute('value',values[i].value);if(values[i].checked)n.setAttribute('checked','');n.setAttribute('readonly','');});
     d.querySelectorAll('script,link,style,iframe').forEach(n=>n.remove());
+    const assets=new Map(brandImages);
+    d.querySelectorAll('picture img, picture source').forEach(n=>{
+      const attribute=n.tagName==='SOURCE'?'srcset':'src';
+      const data=assets.get(n.getAttribute(attribute));
+      if(data)n.setAttribute(attribute,data);
+    });
     d.querySelectorAll('form').forEach(n=>{const v=d.createElement('div');v.className=n.className;v.replaceChildren(...n.childNodes);n.replaceWith(v);});
     d.querySelectorAll('a').forEach(n=>n.setAttribute('href','#'));
     d.querySelectorAll('button').forEach(n=>n.setAttribute('type','button'));
     const s=d.createElement('style');s.textContent=styles;d.head.append(s);
     const c=d.createElement('meta');c.httpEquiv='Content-Security-Policy';c.content="default-src 'none';style-src 'unsafe-inline';font-src data:;img-src data:;base-uri 'none';form-action 'none'";d.head.prepend(c);
-    const note=d.createElement('p');note.textContent='Read-only synthetic Phase12 source ${process.env.BIRJA_PHASE12_SOURCE ?? "unbound"}. Actions do not execute. Check your browser menu at native 200% zoom.';note.style.padding='16px';d.body.prepend(note);
+    const note=d.createElement('p');note.textContent='Read-only synthetic review source ${process.env.BIRJA_PHASE12_SOURCE ?? "unbound"}. Actions do not execute. Check your browser menu at native 200% zoom.';note.style.padding='16px';d.body.prepend(note);
     return '<!doctype html>\\n'+d.documentElement.outerHTML;
-  })(${JSON.stringify(css)})`);
+  })(${JSON.stringify([css, brandImages])})`);
   expect(html).not.toMatch(/<script|<form|\s(?:src|href|action)=["']https?:/);
   await writeFile(
     destination ? `${destination}/${name}.html` : info.outputPath(`${name}.html`),
@@ -208,10 +224,9 @@ test("actual migrated original survives sign-in and reused-browser owner switch"
   expect(before.starting_cash).toBe("9999.00");
   await page.goto(`/portfolios/${id}`);
   await expect(page.getByText("My portfolio", { exact: true }).first()).toBeVisible();
-  await page.goto("/account");
-  await expect(page.getByText("Cash", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cash", { exact: true })).toHaveCount(0);
   await signInNewUser(page);
   await page.goto(`/portfolios/${id}`);
   await expect(
@@ -393,7 +408,7 @@ test("late actual sibling projection cannot replace current root", async ({ page
   await inApp(page, `/portfolios/${sibling}`);
   await expect(page.getByText("Sibling strategy", { exact: true }).first()).toBeVisible();
   release();
-  await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByText("$2,000.00", { exact: true }).first()).toBeVisible();
 });
 
@@ -405,12 +420,13 @@ test("actual mixed dividend corrections retain same-root original details", asyn
   income("up", email);
   income("uncertain", email);
   await page.goto(`/portfolios/${id}/history`);
-  await expect(page.getByRole("heading", { name: "Account activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "History", exact: true, level: 1 })).toBeVisible();
   const response = await page.request.get(`/api/v2/portfolios/${id}/event-history?limit=100`);
   const value = await response.json();
   const original = value.items.find(
     (item: { kind: string }) => item.kind === "dividend_correction",
   ).payment_reference;
+  await page.locator("summary").filter({ hasText: "Dividend correction" }).first().click();
   await page.getByRole("button", { name: "View original dividend", exact: true }).first().click();
   await expect
     .poll(() => page.evaluate("document.activeElement?.id ?? ''"))
@@ -430,7 +446,13 @@ for (const width of [320, 768, 1280])
   }, info) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 960 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Go to sign-in form" }).press("Enter");
+    await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
+    await snapshot(page, info, `sign-in-${width}`);
     const email = await signInNewUser(page);
+    await expect(page.getByRole("list", { name: "Crypto", exact: true })).toBeVisible();
+    await snapshot(page, info, `markets-${width}`);
     const id = await only(page);
     fixture("name", email);
     await page.goto(`/portfolios/${id}/trade/BTC`);
@@ -450,7 +472,7 @@ for (const width of [320, 768, 1280])
     await stockFill(page, id);
     await snapshot(page, info, `stock-receipt-${width}`);
     await page.goto(`/portfolios/${id}`);
-    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByRole("link", { name: "Trade AAPL", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Trade BTC", exact: true })).toBeVisible();
     await snapshot(page, info, `holdings-${width}`);
@@ -460,12 +482,13 @@ for (const width of [320, 768, 1280])
     await snapshot(page, info, `incomplete-${width}`);
     await page.goto(`/portfolios/${id}/history`);
     await expect(
-      page.getByRole("heading", { name: "Account activity", exact: true }),
+      page.getByRole("heading", { name: "History", exact: true, level: 1 }),
     ).toBeVisible();
     await snapshot(page, info, `history-${width}`);
     income("seed", email);
     income("up", email);
     await page.reload();
+    await page.locator("summary").filter({ hasText: "Dividend correction" }).first().click();
     await page.getByRole("button", { name: "View original dividend", exact: true }).first().click();
     await snapshot(page, info, `mixed-original-${width}`);
     income("uncertain", email);
@@ -478,9 +501,6 @@ for (const width of [320, 768, 1280])
     ).toBeVisible();
     await snapshot(page, info, `held-correction-${width}`);
     income("reconcile", email);
-    await page.goto("/account");
-    await expect(page.getByText("Your account", { exact: true })).toBeVisible();
-    await snapshot(page, info, `account-${width}`);
     await page.goto("/portfolios/9223372036854775807");
     await expect(
       page.getByRole("heading", { name: "Portfolio unavailable", exact: true }),
