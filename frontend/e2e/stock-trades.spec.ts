@@ -73,6 +73,11 @@ async function openOwnedPortfolio(page: Page) {
 }
 async function ticket(page: Page) {
   await signInNewUser(page);
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await page
+    .getByRole("list", { name: "US stocks", exact: true })
+    .getByRole("button", { name: /AAPL/ })
+    .click();
   const link = page.getByRole("link", { name: "Trade AAPL", exact: true });
   await expect(link).toBeVisible();
   await link.click();
