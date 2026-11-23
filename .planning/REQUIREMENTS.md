@@ -16,7 +16,7 @@
 
 - [x] **QA-01** — Keyboard, phone and desktop workflows, and enlarged-text layouts pass verification. Owner-accepted design decisions and representative release-candidate evidence are recorded.
 - [x] **QA-02** — Changed code passes review and the existing frontend, backend and isolated browser checks. Tests cover session, portfolio ownership and deletion, trade economics and History across the redesigned flows.
-- [ ] **QA-03** — A milestone audit links requirements to actual verification. The reviewed release candidate has the required PR and CI evidence before merge. Release and production actions follow the established approval workflow.
+- [x] **QA-03** — A milestone audit links requirements to actual verification. The reviewed release candidate has the required PR and CI evidence before merge. Release and production actions follow the established approval workflow.
 
 ## Future requirements
 
@@ -39,4 +39,4 @@ New trading behavior, provider activation, speculative API or schema changes, pr
 | UI-07 | Phase 16 | Complete |
 | QA-01 | Phase 16 | Complete |
 | QA-02 | Phase 17 | Complete |
-| QA-03 | Phase 17 | Pending |
+| QA-03 | Phase 17 | Complete |
