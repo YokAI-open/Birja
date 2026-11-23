@@ -4,8 +4,8 @@ milestone: v1.3
 milestone_name: Birja Interface Redesign
 current_phase: 17
 current_plan: 2
-status: awaiting_pr_approval
-last_updated: "2026-11-23T10:48:11+00:00"
+status: awaiting_ci_fix_publication
+last_updated: "2026-11-23T10:52:54+00:00"
 last_activity: 2026-11-23
 progress:
   total_phases: 2
@@ -23,14 +23,14 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and the
 [candidate audit](v1.3-MILESTONE-AUDIT.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: publish the locally verified interface after approval and check the required CI.
+Current focus: publish the tested CI corrections for redesign PR #41 after approval.
 
 ## Current Position
 
 Phase: 17 — Verify Full-Stack Behavior and Prepare Release
-Plan: 17-02 publication checkpoint
-Status: Phase 16 and the local Phase 17 qualification passed. Awaiting explicit PR publication approval.
-Last activity: 2026-11-23 — Follow-up isolated browser checks pass.
+Plan: 17-02 required CI
+Status: PR #41 is open into develop at approved head 5993ae44f7243758b564a38682e258fcbab9cfd5. Initial CI was blocked. The browser focus setup and bounded ops setup corrections pass their local checks and await publication.
+Last activity: 2026-11-23 — Validated the corrections for [PR #41](https://github.com/YokAI-open/Birja/pull/41).
 
 ## Evidence
 
@@ -47,3 +47,7 @@ Last activity: 2026-11-23 — Follow-up isolated browser checks pass.
 - Owner integrated UI and native 200% passed. See [UAT](phases/16-adopt-the-approved-interface/16-HUMAN-UAT.md).
 - v1.2 is archived and production is v0.6.2. Phase 7 owner acceptance is
   closed. Live stock activation and other follow-ups stay in [DEFERRED.md](DEFERRED.md).
+
+Hosted CI: [run 45160029262](https://github.com/YokAI-open/Birja/actions/runs/45160029262).
+
+See [CI diagnosis and local proof](debug/pr41-hosted-qualification.md).

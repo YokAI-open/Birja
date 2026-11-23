@@ -364,7 +364,9 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Portfolios", exact: true })
     .click();
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  // Wait for Portfolios to render before traversing back. The persistent header
+  // is already visible while React is still committing the route transition.
+  await expect(page.getByRole("heading", { name: "Portfolios", level: 1 })).toBeFocused();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeFocused();
 });
