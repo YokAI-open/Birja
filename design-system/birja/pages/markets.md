@@ -16,6 +16,6 @@ shared header. Store the originals and web-ready assets in
 - Show one action for the selected asset. Use **Trade** when trading is
   available, **Check price** for older crypto quotes and **View details**
   for read-only stocks. Carry the symbol forward when choosing a portfolio.
-- Identify IEX midpoint prices where they appear. Keep detailed stock
-  status, bid and ask, session information and attribution accessible from
-  **Stock market details**.
+- Identify IEX midpoint prices where they appear. Show attribution and the
+  reason trading is restricted in the selected stock pane. Open the stock
+  ticket for bid, ask and regular-session details.

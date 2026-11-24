@@ -2,13 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { signInNewUser } from "./helpers.js";
 import { stocks } from "./stock-fixtures.js";
 
-const section = (page: Page) => page.getByRole("region", { name: "US stocks · 20" });
-const records = (page: Page) =>
-  page.viewportSize()!.width >= 1024
-    ? section(page)
-        .getByRole("row")
-        .filter({ has: page.locator("td") })
-    : section(page).getByRole("listitem");
+const section = (page: Page) => page.getByRole("region", { name: "Find an asset" });
+const records = (page: Page) => page.getByRole("list", { name: "US stocks" }).getByRole("listitem");
+const selected = (page: Page) => page.locator('section[aria-labelledby="market-asset"]');
+const midpoint = "$101.00";
 async function refocus(page: Page) {
   // Exercise the real TanStack focus/refetch path without reloading its cache.
   await page.evaluate('window.dispatchEvent(new Event("visibilitychange"))');
@@ -28,22 +25,21 @@ test("independent stock HTTP errors can retry while crypto remains usable", asyn
   );
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
   failed = true;
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
-  await expect(section(page).getByRole("status")).toContainText("Couldn’t refresh stocks");
-  await expect(records(page).first()).toContainText("$100.00");
-  const retry = section(page).getByRole("button", { name: "Retry stock prices" });
+  await expect(section(page).getByRole("status")).toContainText("Couldn’t refresh");
+  await expect(records(page).first()).toContainText(midpoint);
+  const retry = section(page).getByRole("button", { name: "Try again" });
   await expect(retry).toBeVisible();
   await retry.focus();
   await expect(retry).toBeFocused();
   failed = false;
   recovered = true;
   await page.keyboard.press("Enter");
-  await expect(section(page).getByRole("status")).not.toContainText("Couldn’t refresh");
-  await expect(section(page).getByRole("heading", { name: "US stocks · 20" })).toBeFocused();
+  await expect(section(page).getByText(/Couldn’t refresh/)).toHaveCount(0);
+  await expect(records(page)).toHaveCount(20);
   await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await expect(page.getByRole("link", { name: "Trade BTC" })).toBeVisible();
@@ -57,33 +53,27 @@ for (const width of [320, 375, 768, 1280])
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks() }));
     await signInNewUser(page);
     await page.getByRole("button", { name: "US stocks", exact: true }).click();
-    await page.getByText("Stock market details", { exact: true }).click();
     await expect(records(page)).toHaveCount(20);
-    await expect(section(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
-    await expect(section(page).getByRole("link")).toHaveCount(20);
-    await expect(section(page).getByRole("button")).toHaveCount(0);
-    await expect(section(page).getByRole("table", { name: "US stocks" })).toHaveCount(
-      width >= 1024 ? 1 : 0,
-    );
-    await expect(section(page).getByRole("list", { name: "US stocks" })).toHaveCount(
-      width < 1024 ? 1 : 0,
-    );
-    await expect(section(page).getByRole("note")).toContainText("IEX prices");
-    await expect(section(page).getByRole("note")).toContainText("Fixture provider attribution");
-    await expect(
-      section(page).getByText(/Whole-share stock orders use your existing USD balance/),
-    ).toBeVisible();
-    await expect(records(page).first()).toContainText("NASDAQ");
-    await expect(records(page).last()).toContainText("NYSE");
-    await expect(records(page).first().locator("time").first()).toHaveAttribute(
+    await expect(page.getByText("Stock market details", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "US stocks" })).toHaveCount(0);
+    await expect(records(page).first()).toContainText(midpoint);
+    await records(page).first().getByRole("button").click();
+    await expect(selected(page)).toContainText("NASDAQ");
+    await expect(selected(page).getByRole("link", { name: "View details AAPL" })).toBeVisible();
+    await expect(selected(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
+    await expect(selected(page).getByRole("note")).toContainText("IEX prices");
+    await expect(selected(page).getByRole("note")).toContainText("Fixture provider attribution");
+    await expect(selected(page).locator("time")).toHaveAttribute(
       "datetime",
       "2026-11-10T14:59:50.000Z",
     );
+    if (width < 768) await page.getByRole("button", { name: "All assets" }).click();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`stocks-${width}.png`), fullPage: true });
     // Half the effective viewport width is the browser-zoom reflow equivalent.
     if (width === 1280) {
       await page.setViewportSize({ width: 640, height: 450 });
+      await page.getByRole("button", { name: "All assets" }).click();
       await expect(section(page).getByRole("listitem")).toHaveCount(20);
       expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     }
@@ -109,20 +99,19 @@ test("denied, admitted and revoked generations retain identities and purge provi
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
-  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
-  await expect(section(page).getByText("$100.00")).toHaveCount(0);
+  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
+  await expect(section(page).getByText(midpoint)).toHaveCount(0);
   body = stocks({ generation: 2, now: "2026-11-10T15:00:31Z" });
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
-  await expect(records(page).first()).toContainText("$100.00");
+  await expect(records(page).first()).toContainText(midpoint);
   body = stocks({ state: "unavailable", generation: 3, now: "2026-11-10T15:01:02Z" });
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
-  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
-  await expect(section(page).getByText("$100.00")).toHaveCount(0);
-  await expect(section(page).locator("time")).toHaveCount(0); // compact unavailable catalog omits per-stock times
+  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
+  await expect(section(page).getByText(midpoint)).toHaveCount(0);
+  await expect(selected(page).locator("time")).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
 });
 
@@ -139,17 +128,16 @@ test("local admission expiry and a late expired response cannot reintroduce quot
   });
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
-  await expect(records(page).first()).toContainText("$100.00");
+  await expect(records(page).first()).toContainText(midpoint);
   const initialCalls = calls;
   expiredResponse = true;
   await page.clock.fastForward(6000);
   await page.clock.runFor(100);
-  await expect(section(page).getByRole("status")).toContainText("permissions are being verified");
+  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
   await page.clock.fastForward(30_001);
   await refocus(page);
   await expect.poll(() => calls).toBeGreaterThan(initialCalls);
-  await expect(section(page).getByText("$100.00")).toHaveCount(0);
+  await expect(section(page).getByText(midpoint)).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
 });
 
@@ -161,14 +149,13 @@ test("source 119.999 to120 stays nonexecutable and does not announce each second
   );
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
-  await expect(records(page).first()).not.toContainText("$100.00"); // full RTT cannot extend source age
-  await expect(section(page).getByRole("status")).toContainText("Out of date");
-  await expect(section(page).getByRole("button")).toHaveCount(0);
+  await expect(records(page).first()).not.toContainText(midpoint); // full RTT cannot extend source age
+  await expect(selected(page).getByRole("status")).toContainText("This quote is out of date");
+  await expect(selected(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
   await page.clock.install();
-  const before = await section(page).getByRole("status").textContent();
+  const before = await selected(page).getByRole("status").textContent();
   await page.clock.fastForward(1000);
-  expect(await section(page).getByRole("status").textContent()).toBe(before);
+  expect(await selected(page).getByRole("status").textContent()).toBe(before);
 });
 
 test("source age crossing120 changes the contextual announcement only at the boundary", async ({
@@ -178,16 +165,15 @@ test("source age crossing120 changes the contextual announcement only at the bou
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: stocks({ age: 119 }) }));
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
-  await expect(records(page).first()).toContainText("Recent · 1m ago");
-  const recent = await section(page).getByRole("status").textContent();
+  await expect(records(page).first()).toContainText(midpoint);
+  const recent = await selected(page).getByRole("status").textContent();
   await page.clock.runFor(1000);
-  await expect(records(page).first()).not.toContainText("$100.00");
-  await expect(section(page).getByRole("status")).toContainText("Out of date");
-  const stale = await section(page).getByRole("status").textContent();
+  await expect(records(page).first()).not.toContainText(midpoint);
+  await expect(selected(page).getByRole("status")).toContainText("This quote is out of date");
+  const stale = await selected(page).getByRole("status").textContent();
   expect(stale).not.toBe(recent);
   await page.clock.runFor(1000);
-  expect(await section(page).getByRole("status").textContent()).toBe(stale);
+  expect(await selected(page).getByRole("status").textContent()).toBe(stale);
 });
 
 test("missing, previous-session, early-close, DST and unknown calendars remain separate from status", async ({
@@ -227,18 +213,22 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
-  await page.getByText("Stock market details", { exact: true }).click();
   await expect(records(page)).toHaveCount(20);
-  await expect(records(page).nth(0)).toContainText("Waiting for an IEX quote");
-  await expect(records(page).nth(1)).not.toContainText("$100.00");
-  await expect(records(page).nth(1)).toContainText("Valuation unavailable");
-  await expect(records(page).nth(2)).toContainText("Session unavailable");
-  await expect(records(page).nth(3)).toContainText("Last quote");
-  await expect(records(page).nth(4)).toContainText("Market open");
-  await expect(records(page).nth(4)).toContainText("America/New_York");
-  await expect(records(page).nth(4)).toContainText("Stock status unverified");
+  await expect(selected(page).getByRole("status")).toContainText(
+    "Waiting for a verified IEX quote",
+  );
+  await expect(records(page).nth(1)).not.toContainText(midpoint);
+  await records(page).nth(2).getByRole("button").click();
+  await expect(selected(page).getByRole("status")).toContainText("Session unavailable");
+  await records(page).nth(3).getByRole("button").click();
+  await expect(selected(page).getByRole("status")).toContainText("Market closed");
+  await records(page).nth(4).getByRole("button").click();
+  await expect(selected(page).locator("time")).toHaveAttribute(
+    "datetime",
+    body.items[4].quote!.event_at,
+  );
   await page.clock.fastForward(2000);
   await page.clock.runFor(100);
-  await expect(records(page).nth(4)).toContainText("Market closed");
-  await expect(records(page).nth(4)).toContainText("Last quote");
+  await expect(selected(page).getByRole("status")).toContainText("Market closed");
+  await expect(selected(page).getByRole("link", { name: "View details GOOGL" })).toBeVisible();
 });

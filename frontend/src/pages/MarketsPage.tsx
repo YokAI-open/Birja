@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { StockAttribution } from "@/components/StockAttribution";
-import { StockSection } from "@/components/StockSection";
 import type { StockItem } from "@/api/stocks";
 import { stockActionSummary } from "@/lib/stockActionCopy";
 import { useNow } from "@/hooks/useNow";
@@ -34,7 +33,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<string>();
   const [showAsset, setShowAsset] = useState(false);
-  const [showStockDetails, setShowStockDetails] = useState(false);
   const assetHeading = useRef<HTMLHeadingElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const prices = usePrices();
@@ -70,11 +68,19 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const stockRestriction = stock
     ? !permitted
       ? stockRestrictions.permission_unavailable
-      : stock.action.state !== "current"
-        ? stockActionSummary(stock.action)
-        : stock.session.state === "closed"
-          ? stockRestrictions.market_closed
-          : stockRestrictions[stock.execution_reason]
+      : stock.session.state === "unknown" && stock.action.state === "unknown"
+        ? stockRestrictions.session_unavailable
+        : stock.action.state !== "current"
+          ? stockActionSummary(stock.action)
+          : stock.session.state === "closed"
+            ? stockRestrictions.market_closed
+            : stock.session.state === "unknown"
+              ? stockRestrictions.session_unavailable
+              : stock.execution_reason === "phase_disabled" && stock.quote_reason === "stale"
+                ? stockRestrictions.quote_stale
+                : stock.execution_reason === "phase_disabled" && stock.quote_reason === "missing"
+                  ? stockRestrictions.quote_unavailable
+                  : stockRestrictions[stock.execution_reason]
     : null;
   const action = stock
     ? stock.execution_enabled && permitted
@@ -92,7 +98,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
     setSearch("");
     setSelection(undefined);
     setShowAsset(false);
-    setShowStockDetails(false);
   }
 
   return (
@@ -141,12 +146,14 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
           />
           {query.isPending ? (
             <p role="status">Loading {stockMarket ? "stocks" : "prices"}…</p>
-          ) : query.isError ? (
+          ) : query.isError || (stockMarket && stocks.data && !permitted) ? (
             <div role="status" className="mb-3 flex flex-wrap items-center gap-3 text-sm">
               <p>
-                {query.data
-                  ? "Couldn’t refresh. Showing the last available update."
-                  : "Couldn’t load this market."}
+                {query.isError
+                  ? query.data
+                    ? "Couldn’t refresh. Showing the last available update."
+                    : "Couldn’t load this market."
+                  : "Stock prices and trading are currently unavailable. You can still browse companies."}
               </p>
               <button
                 type="button"
@@ -158,7 +165,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               </button>
             </div>
           ) : null}
-          {stockMarket && stocks.data && !permitted && (
+          {stockMarket && stocks.data && !permitted && query.isError && (
             <p className="mb-3 text-sm text-[var(--market-muted)]">
               Stock prices and trading are currently unavailable. You can still browse companies.
             </p>
@@ -282,7 +289,9 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               )}
               {stock && (
                 <div className="mt-2 space-y-2">
-                  <p className="text-[var(--market-muted)]">{stockRestriction}</p>
+                  <p role="status" className="text-[var(--market-muted)]">
+                    {stockRestriction}
+                  </p>
                   <StockAttribution
                     context="listing"
                     required_text={stocks.data?.attribution.required_text}
@@ -298,17 +307,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               {action}
             </Link>
           </section>
-        )}
-        {stockMarket && (
-          <details
-            className={`min-w-0 md:col-span-2 ${showAsset && asset ? "hidden md:block" : ""}`}
-            onToggle={(event) => setShowStockDetails(event.currentTarget.open)}
-          >
-            <summary className="min-h-11 cursor-pointer py-3 text-sm underline">
-              Stock market details
-            </summary>
-            {showStockDetails && <StockSection portfolioId={portfolioId} />}
-          </details>
         )}
       </div>
     </div>
