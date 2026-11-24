@@ -179,6 +179,7 @@ it.each([true, false])(
     expect(await screen.findByText("Market closed.")).toBeVisible();
     expect(screen.getByText("Opens in 2 hr")).toHaveAttribute("dateTime", nextOpen.toISOString());
     expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
     expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
     if (retainedQuote) {

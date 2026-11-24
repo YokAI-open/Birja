@@ -158,19 +158,21 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   : "Couldn't load this stock."}
               </p>
             )}
-            <Button
-              variant="secondary"
-              className="min-h-11 self-start"
-              aria-disabled={retrying}
-              onClick={() => {
-                if (!retrying) {
-                  setRetrying(true);
-                  void t.refreshContext().finally(() => setRetrying(false));
-                }
-              }}
-            >
-              {retrying ? "Retrying stock…" : "Retry stock"}
-            </Button>
+            {!marketClosed && (
+              <Button
+                variant="secondary"
+                className="min-h-11 self-start"
+                aria-disabled={retrying}
+                onClick={() => {
+                  if (!retrying) {
+                    setRetrying(true);
+                    void t.refreshContext().finally(() => setRetrying(false));
+                  }
+                }}
+              >
+                {retrying ? "Retrying stock…" : "Retry stock"}
+              </Button>
+            )}
             {lastQuote && (
               <div>
                 <p className="text-2xl font-semibold tabular-nums">

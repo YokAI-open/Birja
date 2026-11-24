@@ -258,12 +258,14 @@ test("actual malformed success preserves the original attempt for safe result re
 test("closed drafts retain quantity and require a fresh explicit preview after reopening", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   await preview(page);
   stockFixture("close");
   await page.getByRole("button", { name: "Retry stock", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(page.getByText("Market closed.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Retry stock", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("2");
   await page.getByLabel("Whole-share quantity").fill("3");
   await page.getByLabel("Whole-share quantity").press("Enter");
@@ -272,7 +274,8 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   await expect(page.getByText("Enter a quantity to preview this trade.")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("stock-closed-draft.png"), fullPage: true });
   stockFixture("open");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await page.bringToFront();
+  await page.clock.runFor(15_100);
   await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toBeEnabled();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("3");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
