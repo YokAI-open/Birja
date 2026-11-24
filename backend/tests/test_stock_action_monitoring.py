@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -20,8 +21,27 @@ from app.models.corporate_action import (
     StockDividendEntitlement,
 )
 from app.models.stock import StockDataAdmission, StockInstrument
+from app.models.stock_catalog import StockCatalogAdmission
+from app.models.stock_catalog_finance import StockCatalogActionCoverage
+from app.services.alpaca_actions import ActionBudget, fetch_action_snapshot
+from app.services.corporate_action_rules import classify_action
+from app.services.stock_catalog_actions import load_catalog_action_authority
+from app.services.stock_catalog_promotion import CATALOG_ACTION_FIELDS
+from app.services.stock_quote_rules import StockMapping
+from app.services.stock_sessions import build_sessions
 from app.tasks import stock_actions, stock_scheduler
 from tests.test_stock_admission import action_admitted, admitted
+from tests.test_stock_catalog_promotion import (
+    ACCOUNT,
+    FIRST_ASSET,
+    SERVER,
+    _listing,
+    _promote,
+    _reviewed_grant,
+)
+from tests.test_stock_catalog_promotion import finance_0025 as finance_0025
+from tests.test_stock_catalog_promotion import finance_0026 as finance_0026
+from tests.test_stock_catalog_publish import _manifest, _publish
 from tests.test_stock_sessions import evidence
 
 
@@ -101,6 +121,205 @@ async def states(factory):
             .scalars()
             .all()
         )
+
+
+@pytest_asyncio.fixture
+async def catalog_monitor(engine, finance_0026, redis_client):
+    now = datetime.now(UTC)
+    origin = now - timedelta(minutes=4)
+    generation = await _publish(finance_0026, _manifest(origin), None, now=origin)
+    listing = await _listing(finance_0026, generation.generation_id, "FQA")
+    execution = await _reviewed_grant(finance_0026, listing, FIRST_ASSET, origin)
+    binding = await _promote(finance_0026, listing, execution, origin)
+    async with finance_0026.begin() as db:
+        db.add(StockDataAdmission(**asdict(evidence(now))))
+        admission = StockCatalogAdmission(
+            artifact="catalog_actions",
+            reference="Fixture expanded monitoring rights",
+            is_fixture=True,
+            reviewed_at=origin,
+            valid_until=now + timedelta(hours=2),
+            fields=CATALOG_ACTION_FIELDS,
+            scope={
+                "account": ACCOUNT,
+                "server": SERVER,
+                "feed": "alpaca-corporate-actions",
+                "catalog_id": str(binding.catalog_id),
+                "listing_id": str(binding.listing_id),
+                "provider_asset_id": binding.provider_asset_id,
+                "history_start": origin.date().isoformat(),
+                "future_through": (now.date() + timedelta(days=90)).isoformat(),
+                "mutation_start": origin.isoformat(),
+                "rest_symbols": ["FQA"],
+                "symbols_per_request": 8,
+                "requests_per_minute": 200,
+                "max_response_bytes": 262144,
+                "known_id_recheck": True,
+                "all_us_replay_ingress": True,
+                "replay_region": "us",
+            },
+        )
+        db.add(admission)
+        await db.flush()
+        admission_id = admission.id
+        grant = await db.get(StockCatalogAdmission, execution)
+        assert grant is not None
+        grant.revoked_at = now
+    settings = SchedulerSettings(
+        env="test",
+        database_url=str(engine.url),
+        redis_url="redis://:test@127.0.0.1:56379/0",
+        alpaca_api_key="synthetic",
+        alpaca_secret_key="synthetic",
+        stock_actions_enabled=True,
+        stock_actions_coverage_start=origin,
+    ).model_copy(update={"stock_actions_segment_days": 100})
+    try:
+        yield finance_0026, settings, origin, binding, admission_id
+    finally:
+        for key in (stock_actions.LOCK_KEY, stock_actions.WINDOW_KEY):
+            await redis_client.delete(key)
+
+
+async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
+    catalog_monitor, redis_client
+):
+    factory, settings, origin, binding, admission = catalog_monitor
+    settings.stock_actions_max_attempts = 1
+    page = "resume-catalog-page"
+
+    def rest_reply(request):
+        assert request.url.params["symbols"] == "FQA"
+        assert request.url.params["data_quality"] == "all"
+        continuation = None if request.url.params.get("page_token") == page else page
+        return httpx.Response(200, json={"corporate_actions": {}, "next_page_token": continuation})
+
+    with respx.mock(assert_all_called=False) as router:
+        rest = router.get("https://data.alpaca.markets/v1/corporate-actions").mock(
+            side_effect=rest_reply
+        )
+        replay = router.get(url__startswith="https://stream.data.alpaca.markets/").respond(
+            200,
+            content=b"",
+            headers={"content-type": "text/event-stream"},
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+            async with factory() as db:
+                coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+                state = await db.get(StockActionState, binding.coin_id)
+                assert (
+                    coverage is not None
+                    and coverage.cursor == page
+                    and coverage.valid_until is None
+                )
+                assert (
+                    state is not None
+                    and state.health == "reconciling"
+                    and state.valid_until is None
+                )
+            assert rest.call_count == 1 and replay.call_count == 0
+            settings.stock_actions_max_attempts = 4
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (await cycle((factory, settings, origin), redis_client, http)).status == "ok"
+    assert rest.call_count == 2 and rest.calls.last.request.url.params["page_token"] == page
+    assert replay.call_count == 1
+    async with factory() as db:
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        state = await db.get(StockActionState, binding.coin_id)
+        assert coverage is not None and state is not None and state.health == "current"
+        assert coverage.journal_origin == state.journal_start_at == origin
+        assert coverage.admission_id == state.admission_generation == admission
+        assert coverage.valid_until == state.valid_until and coverage.valid_until is not None
+        assert coverage.covered_until == state.covered_until and coverage.covered_until > origin
+
+
+async def test_catalog_action_scope_without_replay_ingress_keeps_first_fill_held(
+    catalog_monitor, redis_client
+):
+    factory, settings, origin, binding, admission = catalog_monitor
+    async with factory.begin() as db:
+        grant = await db.get(StockCatalogAdmission, admission)
+        assert grant is not None
+        grant.scope = {**grant.scope, "all_us_replay_ingress": False}
+    with respx.mock() as router:
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+    assert not router.calls
+    async with factory() as db:
+        state = await db.get(StockActionState, binding.coin_id)
+        assert state is not None and state.health == "unknown" and state.valid_until is None
+        assert await db.get(StockCatalogActionCoverage, binding.coin_id) is None
+
+
+async def test_catalog_action_parser_verifies_explicit_dates_and_keeps_missing_terms_held(
+    catalog_monitor,
+):
+    factory, _, origin, binding, _ = catalog_monitor
+    now = datetime.now(UTC)
+    async with factory() as db:
+        authority = await load_catalog_action_authority(
+            db,
+            binding.coin_id,
+            now,
+            account=ACCOUNT,
+            server=SERVER,
+            allow_fixture=True,
+        )
+    assert authority is not None
+    day = next(
+        row.session_date
+        for row in build_sessions(now, authority.calendar)
+        if row.exchange == binding.listing_exchange
+        and row.opens_at is not None
+        and row.session_date >= origin.date()
+    )
+    terms = {
+        "id": str(uuid4()),
+        "symbol": "FQA",
+        "process_date": day.isoformat(),
+        "ex_date": day.isoformat(),
+        "record_date": day.isoformat(),
+        "payable_date": day.isoformat(),
+        "currency": "USD",
+        "rate": 0.25,
+        "sub_type": "ordinary",
+        "foreign": False,
+        "special": False,
+        "due_bills": False,
+    }
+    incomplete = {name: value for name, value in terms.items() if name != "special"}
+    incomplete["id"] = str(uuid4())
+    mapping = StockMapping(binding.coin_id, "FQA", binding.provider_asset_id, origin, "NASDAQ")
+    with respx.mock() as router:
+        router.get("https://data.alpaca.markets/v1/corporate-actions").respond(
+            200,
+            json={
+                "corporate_actions": {"cash_dividends": [terms, incomplete]},
+                "next_page_token": None,
+            },
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await fetch_action_snapshot(
+                http,
+                (mapping,),
+                lambda: (authority,),
+                lambda: now,
+                ActionBudget(),
+                start=day,
+                end=day,
+                catalog=(authority,),
+            )
+    assert result.complete and len(result.records) == 2
+    assert all(row.dates_verified for row in result.records)
+    assert [classify_action(row, catalog_symbol="FQA").kind for row in result.records] == [
+        "supported_dividend",
+        "uncertain",
+    ]
 
 
 async def cycle(monitor, redis, http):

@@ -29,7 +29,16 @@ _MARK_FIELDS = {
     field: ["collection", "display", "derivation", "storage", "backup"]
     for field in _EXECUTION_FIELDS
 }
-_FinancialScope = Literal["catalog_execution", "catalog_mark"]
+CATALOG_ACTION_FIELDS = {
+    field: ["collection", "derivation", "storage", "backup"]
+    for field in ("provider_event_id", "symbol", "event_type", "process_date", "terms")
+}
+_FinancialScope = Literal["catalog_execution", "catalog_mark", "catalog_actions"]
+_REQUIRED_FIELDS = {
+    "catalog_execution": _EXECUTION_FIELDS,
+    "catalog_mark": _MARK_FIELDS,
+    "catalog_actions": CATALOG_ACTION_FIELDS,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,15 +147,15 @@ async def _current_promotion_scope(
                 grant.reviewed_at <= now,
                 grant.valid_until > now,
                 grant.revoked_at.is_(None),
-                grant.fields.contains(
-                    _EXECUTION_FIELDS if artifact == "catalog_execution" else _MARK_FIELDS
-                ),
+                grant.fields.contains(_REQUIRED_FIELDS[artifact]),
                 grant.scope.contains(
                     {
                         "catalog_id": str(catalog_id),
                         "listing_id": str(listing_id),
                         "provider_asset_id": asset_id,
-                        "feed": "iex",
+                        "feed": "alpaca-corporate-actions"
+                        if artifact == "catalog_actions"
+                        else "iex",
                     }
                 ),
             )
@@ -203,7 +212,36 @@ async def load_catalog_mark_binding(
     if not _catalog_id(admission_id):
         return None
     return await _load_catalog_binding(
-        db, catalog_id, listing_id, now, allow_fixture, mark_admission_id=admission_id
+        db,
+        catalog_id,
+        listing_id,
+        now,
+        allow_fixture,
+        admission_id=admission_id,
+        artifact="catalog_mark",
+    )
+
+
+async def load_catalog_action_binding(
+    db: AsyncSession,
+    catalog_id: int,
+    listing_id: int,
+    admission_id: int,
+    now: datetime,
+    *,
+    allow_fixture: bool = False,
+) -> CatalogFinancialBinding | None:
+    """Resolve the promoted issue under accounting rights even after execution expires."""
+    if not _catalog_id(admission_id):
+        return None
+    return await _load_catalog_binding(
+        db,
+        catalog_id,
+        listing_id,
+        now,
+        allow_fixture,
+        admission_id=admission_id,
+        artifact="catalog_actions",
     )
 
 
@@ -214,7 +252,8 @@ async def _load_catalog_binding(
     now: datetime,
     allow_fixture: bool,
     *,
-    mark_admission_id: int | None = None,
+    admission_id: int | None = None,
+    artifact: _FinancialScope = "catalog_execution",
 ) -> CatalogFinancialBinding | None:
     if not (_catalog_id(catalog_id) and _catalog_id(listing_id) and utc(now)):
         return None
@@ -226,14 +265,15 @@ async def _load_catalog_binding(
     )
     if binding is None or binding.promoted_at > now:
         return None
+    selected_admission = admission_id if admission_id is not None else binding.admission_id
     scope = await _current_promotion_scope(
         db,
         catalog_id,
         listing_id,
-        mark_admission_id if mark_admission_id is not None else binding.admission_id,
+        selected_admission,
         now,
         allow_fixture,
-        artifact="catalog_mark" if mark_admission_id is not None else "catalog_execution",
+        artifact=artifact,
     )
     if scope is None:
         return None
@@ -249,8 +289,7 @@ async def _load_catalog_binding(
             Coin.symbol == f"@{catalog_id}",
         )
     )
-    admission_id = mark_admission_id if mark_admission_id is not None else binding.admission_id
-    return scope.binding(binding.coin_id, admission_id) if matches is not None else None
+    return scope.binding(binding.coin_id, selected_admission) if matches is not None else None
 
 
 async def promote_catalog_instrument(

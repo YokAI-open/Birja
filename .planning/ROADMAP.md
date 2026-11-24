@@ -104,7 +104,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 
 **Wave 4** *(after Wave 3)*
 - [x] 20-04 — Refresh selected and held quotes and apply reported halts.
-- [ ] 20-05 — Verify scoped corporate-action readiness and effects.
+- [x] 20-05 — Verify scoped corporate-action readiness and effects.
 
 **Wave 5** *(after both Wave 4 plans)*
 - [ ] 20-06 — Connect the owned catalog ticket, fills and receipt replay.
@@ -145,7 +145,7 @@ expanded rights remain open. Phase 21 owns release CI and live acceptance.
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 4/9 | In progress |
+| 20. Trade and value stocks from search | 5/9 | In progress |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

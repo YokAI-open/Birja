@@ -10,7 +10,7 @@ import json
 import logging
 import secrets
 from collections.abc import Callable
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Any, Literal, TypedDict, cast
@@ -27,11 +27,15 @@ from app.models.corporate_action import (
     StockActionRevision,
     StockActionSource,
     StockActionState,
+    StockOwnershipMovement,
 )
+from app.models.stock_catalog_finance import StockCatalogActionCoverage
+from app.models.trade import Holding
 from app.services.alpaca_actions import (
     ActionBatch,
     ActionBudget,
     ActionError,
+    ActionEvidence,
     fetch_action_snapshot,
     recheck_action_ids,
     replay_action_mutations,
@@ -43,8 +47,14 @@ from app.services.corporate_actions import (
     persist_action_batch,
 )
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_catalog_actions import (
+    CatalogActionAuthority,
+    catalog_action_candidates,
+    load_catalog_action_authority,
+    lock_catalog_action_scope,
+)
 from app.services.stock_ownership import acquire_stock_gate, assert_ownership_consistent
-from app.services.stock_quote_rules import CURATED_SYMBOLS, verified_mapping
+from app.services.stock_quote_rules import CURATED_SYMBOLS, StockMapping, verified_mapping
 from app.services.stock_quotes import load_stock_catalog
 from app.tasks.scheduler import CycleResult
 from app.tasks.stock_scheduler import _RELEASE_LUA, _admissions, reserve_account_attempt
@@ -57,6 +67,14 @@ logger = logging.getLogger(__name__)
 class _Scope(TypedDict):
     account: str
     server: str
+
+
+def _cycle_budget(settings: SchedulerSettings) -> ActionBudget:
+    return ActionBudget(
+        max_attempts=settings.stock_actions_max_attempts,
+        total_seconds=settings.stock_actions_cycle_budget_seconds,
+        max_response_bytes=settings.stock_actions_max_response_bytes,
+    )
 
 
 def _allowed(
@@ -94,6 +112,7 @@ async def _refresh(
     settings: SchedulerSettings,
     token: str,
     now: Callable[[], datetime],
+    budget: ActionBudget | None = None,
 ) -> CycleResult:
     baseline = getattr(settings, "stock_actions_coverage_start", None)
     if not isinstance(baseline, datetime) or baseline.tzinfo != UTC:
@@ -129,11 +148,7 @@ async def _refresh(
             sort_keys=True,
         ).encode()
     ).hexdigest()
-    budget = ActionBudget(
-        max_attempts=getattr(settings, "stock_actions_max_attempts", 8),
-        total_seconds=getattr(settings, "stock_actions_cycle_budget_seconds", 30),
-        max_response_bytes=getattr(settings, "stock_actions_max_response_bytes", 262144),
-    )
+    budget = budget or _cycle_budget(settings)
 
     async def lease() -> bool:
         return await redis.get(LOCK_KEY) == token
@@ -220,7 +235,9 @@ async def _refresh(
                 select(StockActionSource.provider_event_id, StockActionEvent.coin_id)
                 .join(StockActionEvent, StockActionEvent.id == StockActionSource.event_id)
                 .where(
-                    StockActionSource.provider == "alpaca", StockActionSource.product == "actions"
+                    StockActionSource.provider == "alpaca",
+                    StockActionSource.product == "actions",
+                    StockActionEvent.coin_id.in_([mapping.coin_id for mapping in mappings]),
                 )
                 .order_by(StockActionSource.id)
                 .limit(1001)
@@ -452,6 +469,451 @@ async def _refresh(
     return CycleResult("ok")
 
 
+@dataclass(frozen=True)
+class _CatalogCheckpoint:
+    epoch: int
+    stage: dict[str, Any]
+    covered_until: datetime | None
+
+
+async def _prepare_catalog_action(
+    db: AsyncSession, authority: CatalogActionAuthority, scope: _Scope
+) -> _CatalogCheckpoint:
+    binding = authority.binding
+    await lock_catalog_action_scope(db)
+    await acquire_stock_gate(db, binding.coin_id)
+    checked = await _clock(db)
+    if authority != await load_catalog_action_authority(
+        db,
+        binding.coin_id,
+        checked,
+        allow_fixture=authority.is_fixture,
+        **scope,
+    ):
+        raise ActionError("admission_changed")
+    state = await db.get(StockActionState, binding.coin_id, populate_existing=True)
+    if state is None:
+        raise ActionError("journal_baseline")
+    origin = authority.journal_origin
+    if state.journal_start_at is None:
+        has_book = await db.scalar(
+            select(
+                select(Holding.id)
+                .where(Holding.coin_id == binding.coin_id, Holding.quantity > 0)
+                .exists()
+                | select(StockOwnershipMovement.id)
+                .where(StockOwnershipMovement.coin_id == binding.coin_id)
+                .exists()
+            )
+        )
+        if has_book:
+            raise ActionError("journal_baseline")
+        state.journal_start_at = state.complete_from = origin
+    if (
+        state.journal_start_at != origin
+        or state.complete_from is None
+        or state.complete_from > origin
+    ):
+        raise ActionError("journal_baseline")
+    await assert_ownership_consistent(db, binding.coin_id)
+    coverage = await db.get(StockCatalogActionCoverage, binding.coin_id, populate_existing=True)
+    same_version = coverage is not None and (
+        coverage.admission_id,
+        coverage.listing_id,
+        coverage.journal_origin,
+    ) == (authority.admission_id, binding.listing_id, origin)
+    stage = dict(state.staged_continuation or {}) if same_version else {}
+    covered_until = state.covered_until if same_version else None
+    if coverage is None:
+        coverage = StockCatalogActionCoverage(
+            coin_id=binding.coin_id,
+            catalog_id=binding.catalog_id,
+            listing_id=binding.listing_id,
+            admission_id=authority.admission_id,
+            journal_origin=origin,
+            observed_at=checked,
+        )
+        db.add(coverage)
+    else:
+        coverage.listing_id = binding.listing_id
+        coverage.admission_id = authority.admission_id
+        if not same_version:
+            coverage.coverage_start = coverage.covered_until = None
+            coverage.cursor = None
+    coverage.observed_at, coverage.valid_until = checked, None
+    state.epoch += 1
+    state.health, state.valid_until = "reconciling", None
+    state.admission_generation = authority.admission_id
+    state.staged_continuation = stage
+    if not same_version:
+        state.coverage_start = state.covered_until = None
+        state.cursor = None
+    return _CatalogCheckpoint(state.epoch, stage, covered_until)
+
+
+@dataclass(frozen=True)
+class _CatalogWindow:
+    target: datetime
+    start: date
+    end: date
+    horizon: date
+    replay_at: datetime
+    replay_end: datetime
+    token: str | None
+
+
+def _catalog_window(
+    stages: tuple[_CatalogCheckpoint, ...],
+    baseline: datetime,
+    at: datetime,
+    key: str,
+    settings: SchedulerSettings,
+) -> _CatalogWindow:
+    progress = stages[0].stage
+    same_stage = progress.get("policy_key") == key and all(p.stage == progress for p in stages)
+    if same_stage and progress.get("target_until"):
+        target = datetime.fromisoformat(progress["target_until"])
+        start = date.fromisoformat(progress["next_date"])
+        replay_at = datetime.fromisoformat(progress["replay_at"])
+        replay_end = datetime.fromisoformat(progress["replay_end"])
+        token = progress.get("continuation")
+    else:
+        baseline = min((p.covered_until or baseline) for p in stages) if same_stage else baseline
+        target, start, replay_at, replay_end, token = at, baseline.date(), baseline, at, None
+    horizon = target.date() + timedelta(days=settings.stock_actions_future_days)
+    end = min(horizon, start + timedelta(days=settings.stock_actions_segment_days - 1))
+    return _CatalogWindow(target, start, end, horizon, replay_at, replay_end, token)
+
+
+async def _catalog_effects(
+    db: AsyncSession,
+    authority: CatalogActionAuthority,
+    scope: _Scope,
+) -> None:
+    coin_id = authority.binding.coin_id
+    await apply_due_actions(db, coin_id, catalog=authority, **scope)
+    event_ids = list(
+        (
+            await db.scalars(
+                select(StockActionEvent.id)
+                .join(
+                    StockActionRevision,
+                    StockActionRevision.id == StockActionEvent.current_revision_id,
+                )
+                .where(
+                    StockActionEvent.coin_id == coin_id,
+                    StockActionRevision.normalized_terms["event_type"].as_string()
+                    == "cash_dividend",
+                )
+                .order_by(StockActionEvent.id)
+                .limit(1001)
+            )
+        ).all()
+    )
+    if len(event_ids) > 1000:
+        raise ActionError("entitlement_budget")
+    for event_id in event_ids:
+        await derive_dividend_entitlements(db, event_id, catalog=authority, **scope)
+
+
+async def _publish_catalog_action_window(
+    db: AsyncSession,
+    authority: CatalogActionAuthority,
+    stage: _CatalogCheckpoint,
+    scope: _Scope,
+    batches: list[ActionBatch],
+    window: _CatalogWindow,
+    progress: dict[str, Any],
+    complete: bool,
+    id_coins: dict[str, int],
+    blocked: set[int],
+    settings: SchedulerSettings,
+) -> None:
+    coin_id = authority.binding.coin_id
+    await lock_catalog_action_scope(db)
+    await acquire_stock_gate(db, coin_id)
+    checked = await _clock(db)
+    current = await load_catalog_action_authority(
+        db,
+        coin_id,
+        checked,
+        allow_fixture=authority.is_fixture,
+        **scope,
+    )
+    state = await db.get(StockActionState, coin_id, populate_existing=True)
+    coverage = await db.get(StockCatalogActionCoverage, coin_id, populate_existing=True)
+    if current != authority or state is None or coverage is None or state.epoch != stage.epoch:
+        raise ActionError("publication_changed")
+
+    for batch in batches:
+        observations = tuple(o for o in batch.observations if o.action.coin_id == coin_id)
+        fragments = tuple(
+            c for c in batch.coverage if c.start not in id_coins or id_coins[c.start] == coin_id
+        )
+        await persist_action_batch(
+            db,
+            replace(
+                batch,
+                observations=observations,
+                records=tuple(o.action for o in observations),
+                coverage=fragments,
+            ),
+            None,
+            catalog=authority,
+            **scope,
+        )
+    checked = await _clock(db)
+    if (
+        checked >= authority.valid_until
+        or (
+            await load_catalog_action_authority(
+                db,
+                coin_id,
+                checked,
+                allow_fixture=authority.is_fixture,
+                **scope,
+            )
+        )
+        != authority
+    ):
+        raise ActionError("publication_changed")
+    cursor = next((b.continuation for b in reversed(batches) if b.continuation), state.cursor)
+    state.cursor = coverage.cursor = cursor
+    state.checked_at = coverage.observed_at = checked
+    if coin_id in blocked:
+        # Re-read the disputed interval rather than advancing beyond it.
+        state.staged_continuation = {"reason": "identity_or_known_id_gap"}
+        state.coverage_start = coverage.coverage_start = None
+        state.covered_until = coverage.covered_until = None
+    elif complete:
+        origin = authority.journal_origin
+        state.coverage_start = coverage.coverage_start = origin
+        state.covered_until = coverage.covered_until = window.target
+        state.valid_until = coverage.valid_until = min(
+            authority.valid_until,
+            checked + timedelta(seconds=settings.stock_actions_health_max_age_seconds),
+        )
+        state.health = "current"
+        state.staged_continuation = {"policy_key": progress["policy_key"], "target_until": None}
+        await db.flush()
+        await _catalog_effects(db, authority, scope)
+    else:
+        state.staged_continuation = progress
+
+
+async def _refresh_catalog(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    redis: Redis,
+    http: httpx.AsyncClient,
+    settings: SchedulerSettings,
+    token: str,
+    now: Callable[[], datetime],
+    budget: ActionBudget,
+    authorities: tuple[CatalogActionAuthority, ...],
+) -> CycleResult:
+    scope: _Scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
+    policies = [a.policy for a in authorities if a.policy is not None]
+    if not policies:
+        raise ActionError("admission")
+    cap = min(p.requests_per_minute for p in policies)
+
+    async def lease() -> bool:
+        return await redis.get(LOCK_KEY) == token
+
+    async def evidence() -> ActionEvidence:
+        budget.remaining()
+        async with sessionmaker() as db:
+            checked = await _clock(db)
+            refreshed = tuple(
+                [
+                    await load_catalog_action_authority(
+                        db,
+                        a.binding.coin_id,
+                        checked,
+                        allow_fixture=a.is_fixture,
+                        **scope,
+                    )
+                    for a in authorities
+                ]
+            )
+        return authorities if refreshed == authorities else None
+
+    async def guard() -> None:
+        if not await lease():
+            raise ActionError("lease")
+        if await evidence() is None:
+            raise ActionError("admission_changed")
+
+    stages = []
+    for authority in authorities:
+        await guard()
+        async with sessionmaker.begin() as db:
+            stages.append(await _prepare_catalog_action(db, authority, scope))
+    baseline = min(a.journal_origin for a in authorities)
+    policy_key = sha256(
+        json.dumps(
+            [
+                sorted(
+                    (a.binding.coin_id, a.binding.listing_id, a.fingerprint, a.calendar.generation)
+                    for a in authorities
+                ),
+                settings.stock_actions_future_days,
+                settings.stock_actions_segment_days,
+            ]
+        ).encode()
+    ).hexdigest()
+    async with sessionmaker() as db:
+        at = await _clock(db)
+        known_rows = (
+            await db.execute(
+                select(StockActionSource.provider_event_id, StockActionEvent.coin_id)
+                .join(StockActionEvent, StockActionEvent.id == StockActionSource.event_id)
+                .where(
+                    StockActionSource.provider == "alpaca",
+                    StockActionSource.product == "actions",
+                    StockActionEvent.coin_id.in_([a.binding.coin_id for a in authorities]),
+                )
+                .order_by(StockActionSource.id)
+                .limit(1001)
+            )
+        ).all()
+    if len(known_rows) > 1000:
+        raise ActionError("known_id_budget")
+    window = _catalog_window(tuple(stages), baseline, at, policy_key, settings)
+    if any(window.horizon > p.future_through for p in policies):
+        raise ActionError("unreviewed_window")
+    names = {a.binding.coin_id: a.ticker for a in authorities}
+    id_coins = {event_id: coin_id for event_id, coin_id in known_rows}
+    ids = {event_id: names[coin_id] for event_id, coin_id in known_rows}
+    mappings = tuple(
+        StockMapping(
+            a.binding.coin_id,
+            a.ticker,
+            a.binding.provider_asset_id,
+            a.journal_origin,
+            a.binding.listing_exchange,
+        )
+        for a in authorities
+    )
+
+    async def before_request(request: httpx.Request) -> None:
+        await guard()
+        async with sessionmaker() as db:
+            grants = await _admissions(db)
+        if not await reserve_account_attempt(redis, settings, grants, at=now(), cap=cap):
+            raise ActionError("account_budget")
+        await guard()
+
+    batches: list[ActionBatch] = []
+    snapshot = known = None
+    rest_complete = window.start > window.horizon
+    replay_complete = window.replay_at >= window.target
+    http.event_hooks["request"].append(before_request)
+    try:
+        if not rest_complete:
+            snapshot = await fetch_action_snapshot(
+                http,
+                mappings,
+                evidence,
+                now,
+                budget,
+                start=window.start,
+                end=window.end,
+                lease=lease,
+                page_token=window.token,
+                catalog=authorities,
+                **scope,
+            )
+            batches.append(snapshot)
+            rest_complete = snapshot.complete and window.end == window.horizon
+        if ids and rest_complete:
+            known = await recheck_action_ids(
+                http,
+                mappings,
+                evidence,
+                now,
+                budget,
+                ids=ids,
+                lease=lease,
+                catalog=authorities,
+                **scope,
+            )
+            batches.append(known)
+        replay = None
+        if rest_complete and not replay_complete:
+            replay = await replay_action_mutations(
+                http,
+                mappings,
+                evidence,
+                now,
+                budget,
+                since=window.replay_at,
+                until=window.replay_end,
+                lease=lease,
+                catalog=authorities,
+                **scope,
+            )
+            batches.append(replay)
+    finally:
+        http.event_hooks["request"].remove(before_request)
+
+    frontier, next_replay_end = window.replay_at, window.replay_end
+    if replay is not None and replay.complete:
+        frontier, next_replay_end = window.replay_end, window.target
+    elif replay is not None and replay.reason in (
+        "response_limit",
+        "byte_budget",
+        "mutation_budget",
+        "cycle_budget",
+    ):
+        next_replay_end = window.replay_at + (window.replay_end - window.replay_at) / 2
+    replay_complete = frontier == window.target
+    missing = {
+        id_coins[c.start]
+        for c in (known.coverage if known is not None else ())
+        if c.kind == "known_id" and not c.complete and c.start in id_coins
+    }
+    known_complete = not ids or bool(
+        known
+        and (
+            known.complete
+            or missing
+            and any(c.kind == "known_id" and c.complete for c in known.coverage)
+        )
+    )
+    blocked = missing | {coin for batch in batches for coin in batch.uncertain_coin_ids}
+    complete = rest_complete and replay_complete and known_complete
+    progress = {
+        "policy_key": policy_key,
+        "target_until": window.target.isoformat(),
+        "next_date": (
+            (window.end + timedelta(days=1)) if snapshot and snapshot.complete else window.start
+        ).isoformat(),
+        "continuation": snapshot.continuation if snapshot is not None else None,
+        "replay_at": frontier.isoformat(),
+        "replay_end": next_replay_end.isoformat(),
+    }
+    for authority, stage in zip(authorities, stages, strict=True):
+        await guard()
+        async with sessionmaker.begin() as db:
+            await _publish_catalog_action_window(
+                db,
+                authority,
+                stage,
+                scope,
+                batches,
+                window,
+                progress,
+                complete,
+                id_coins,
+                blocked,
+                settings,
+            )
+    if not complete or blocked:
+        return CycleResult("source_error")
+    return CycleResult("ok", accepted=len(authorities))
+
+
 async def run_stock_action_cycle(
     *,
     sessionmaker: async_sessionmaker[AsyncSession],
@@ -477,7 +939,48 @@ async def run_stock_action_cycle(
         ):
             return CycleResult("locked")
         async with asyncio.timeout(getattr(settings, "stock_actions_cycle_budget_seconds", 30)):
-            return await _refresh(sessionmaker, redis, http, settings, token, now)
+            scope: _Scope = {
+                "account": settings.stock_data_account,
+                "server": settings.stock_data_server,
+            }
+            async with sessionmaker() as db:
+                at = await _clock(db)
+                authorities = await catalog_action_candidates(
+                    db,
+                    at,
+                    allow_fixture=settings.env == "test",
+                    **scope,
+                )
+                legacy_approved = _allowed(await _admissions(db), settings, at)
+            if not authorities:
+                return await _refresh(sessionmaker, redis, http, settings, token, now)
+            budget = _cycle_budget(settings)
+            original_attempts = budget.max_attempts
+            if legacy_approved and original_attempts > 1:
+                budget.max_attempts = max(1, original_attempts // 2)
+            try:
+                catalog_result = await _refresh_catalog(
+                    sessionmaker,
+                    redis,
+                    http,
+                    settings,
+                    token,
+                    now,
+                    budget,
+                    authorities,
+                )
+            except ActionError as exc:
+                logger.warning("catalog action cycle incomplete: %s", str(exc))
+                catalog_result = CycleResult("source_error")
+            finally:
+                budget.max_attempts = original_attempts
+            if legacy_approved:
+                legacy_result = await _refresh(
+                    sessionmaker, redis, http, settings, token, now, budget
+                )
+                if legacy_result.status != "ok":
+                    return legacy_result
+            return catalog_result
     except Exception as exc:
         logger.warning(
             "action cycle failed: %s",

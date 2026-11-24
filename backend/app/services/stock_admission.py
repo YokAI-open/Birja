@@ -142,6 +142,64 @@ class AdmissionDecision:
     attribution: str = ""
 
 
+@dataclass(frozen=True)
+class CatalogActionPolicy:
+    """Reviewed scope for a promoted issue's finite HTTP collection windows."""
+
+    history_start: date
+    future_through: date
+    mutation_start: datetime
+    rest_symbols: tuple[str, ...]
+    requests_per_minute: int
+    symbols_per_request: int
+    max_response_bytes: int
+
+
+def catalog_action_policy(scope: dict[str, Any]) -> CatalogActionPolicy | None:
+    """Require explicit all-US ingress, ID rechecks and finite reviewed limits."""
+    if (
+        scope.get("all_us_replay_ingress") is not True
+        or scope.get("replay_region") != "us"
+        or scope.get("known_id_recheck") is not True
+    ):
+        return None
+    symbols = scope.get("rest_symbols")
+    if (
+        not isinstance(symbols, list)
+        or not 1 <= len(symbols) <= 8
+        or not all(_text(symbol, 14) and symbol == symbol.strip() for symbol in symbols)
+        or len(set(symbols)) != len(symbols)
+    ):
+        return None
+    limits = (
+        ("requests_per_minute", 200),
+        ("symbols_per_request", 8),
+        ("max_response_bytes", 262144),
+    )
+    if any(
+        type(scope.get(name)) is not int or not 1 <= scope[name] <= maximum
+        for name, maximum in limits
+    ):
+        return None
+    try:
+        history = date.fromisoformat(scope["history_start"])
+        future = date.fromisoformat(scope["future_through"])
+        mutation = datetime.fromisoformat(scope["mutation_start"])
+    except KeyError, TypeError, ValueError:
+        return None
+    if not _utc(mutation) or history > future:
+        return None
+    return CatalogActionPolicy(
+        history,
+        future,
+        mutation,
+        tuple(sorted(symbols)),
+        scope["requests_per_minute"],
+        scope["symbols_per_request"],
+        scope["max_response_bytes"],
+    )
+
+
 def evaluate_admission(
     evidence: ProductAdmission | None,
     product: str,
