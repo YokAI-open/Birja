@@ -22,6 +22,13 @@ from app.models.stock_catalog import (
     StockCatalogListing,
     StockCatalogSecurity,
 )
+from app.models.stock_catalog_finance import (
+    StockCatalogActionCoverage,
+    StockCatalogFillEvidence,
+    StockCatalogFinancialQuote,
+    StockCatalogInstrument,
+    StockCatalogStatus,
+)
 from app.models.stock_execution import StockFillFacts, StockStatusEvidence
 from app.models.trade import Holding, Trade
 from app.models.user import Account, User
@@ -49,6 +56,11 @@ __all__ = [
     "StockCatalogGeneration",
     "StockCatalogListing",
     "StockCatalogSecurity",
+    "StockCatalogActionCoverage",
+    "StockCatalogFillEvidence",
+    "StockCatalogFinancialQuote",
+    "StockCatalogInstrument",
+    "StockCatalogStatus",
     "StockInstrument",
     "StockQuote",
     "StockSession",
