@@ -4,13 +4,13 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 20
 status: executing
-last_updated: "2026-11-24T21:37:11Z"
-last_activity: 2026-11-24 -- Phase 20 scoped corporate actions verified
+last_updated: "2026-11-24T21:53:27Z"
+last_activity: 2026-11-24 -- Phase 20 owned catalog trades and original replay verified
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
   percent: 25
 ---
 
@@ -28,9 +28,9 @@ and corporate actions for stocks found through search.
 ## Current Position
 
 Phase: 20
-Plan: 5 of 9 executed
-Status: Executing Wave 5
-Last activity: 2026-11-24 -- Phase 20 scoped corporate actions verified
+Plan: 6 of 9 executed
+Status: Executing Wave 6
+Last activity: 2026-11-24 -- Phase 20 owned catalog trades and original replay verified
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence

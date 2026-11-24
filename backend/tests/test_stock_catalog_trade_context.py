@@ -15,16 +15,23 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v2 import stock_catalog as routes
+from app.models.corporate_action import StockActionState
 from app.models.stock_catalog import StockCatalogAdmission, StockCatalogGeneration
+from app.models.stock_catalog_finance import StockCatalogFinancialQuote
 from app.services.stock_catalog_quote_demand import catalog_quote_key, pending_catalog_quotes
 from app.services.stock_catalog_quotes import load_catalog_quote_context, publish_catalog_quote
 from app.services.stock_quote_rules import ValidIexQuote
 from tests.helpers import OutboxSender, csrf_headers, sign_in, unique_email
+from tests.test_migrations import install_current_test_grants
 from tests.test_portfolio_closure_api import intent
 from tests.test_portfolio_stock_api import body, headers, private
 from tests.test_stock_catalog_api import _financial_counts
 from tests.test_stock_catalog_publish import NOW, Factory, _manifest, _publish
 from tests.test_stock_catalog_publish import catalog_factory as catalog_factory
+from tests.test_stock_catalog_quote_scheduler import _financial_request_and_tick
+from tests.test_stock_catalog_quote_scheduler import finance_0025 as finance_0025
+from tests.test_stock_catalog_quote_scheduler import finance_0026 as finance_0026
+from tests.test_stock_catalog_quote_scheduler import financial_market as financial_market
 from tests.test_stock_catalog_quotes import seed_catalog_quote_fixture
 
 PORTFOLIOS = "/api/v2/portfolios"
@@ -173,6 +180,9 @@ async def test_read_only_target_and_financial_authority_remain_portfolio_specifi
         private(context)
         assert context.json()["portfolio_id"] == pid
         assert context.json()["read_only"] is True
+        assert Decimal(context.json()["cash"]) == Decimal("10000")
+        assert Decimal(context.json()["held_quantity"]) == 0
+        assert Decimal(context.json()["buy_max_quantity"]) == 0
         assert context.json()["listing"]["catalog_id"] == str(target.catalog_id)
         assert context.json()["listing"]["listing_version"] == str(target.listing_version)
         assert context.json()["quote"] is None
@@ -193,6 +203,18 @@ async def test_read_only_target_and_financial_authority_remain_portfolio_specifi
             "detail": {"code": "quote_unavailable"}
         }
         private(refused)
+    order = {"listing_version": str(target.listing_version), "side": "buy", "quantity": "1"}
+    base = target.context_url().removesuffix("trade-context")
+    for action, payload in (
+        ("preview", order),
+        ("confirm", {**order, "expected_exec_price": "17.26", "idempotency_key": str(uuid4())}),
+    ):
+        denied = await target.client.post(
+            base + action, json=payload, headers=headers(target.client)
+        )
+        assert denied.status_code == 409
+        private(denied)
+        assert denied.json() == {"detail": {"code": "read_only"}}
     async with catalog_factory() as db:
         assert await _financial_counts(db) == before
 
@@ -209,10 +231,11 @@ async def test_selected_wait_releases_sql_and_preserves_source_reason(
         seen.append(db)
         return await load_catalog_quote_context(db, settings, catalog_id, now=now)
 
-    async def wait(redis, *, account, server, catalog_id, listing_version, fingerprint):
+    async def wait(redis, *, account, server, catalog_id, listing_version, fingerprint, purpose):
         assert not seen[-1].in_transaction()
         assert (catalog_id, listing_version) == (target.catalog_id, target.listing_version)
         assert account == server == "birja" and len(fingerprint) == 64
+        assert purpose == "display"
         return state
 
     monkeypatch.setattr(routes, "load_catalog_quote_context", track)
@@ -226,7 +249,7 @@ async def test_selected_wait_releases_sql_and_preserves_source_reason(
         assert response.status_code == 200, response.text
         assert response.json()["quote"] is None
         assert response.json()["reason"] == ("quote_unavailable" if state == "ready" else state)
-    assert len(seen) == 2
+    assert len(seen) == 4
 
 
 async def test_wait_rechecks_revoked_permissions_and_changed_listing(
@@ -377,3 +400,76 @@ async def test_selected_display_price_and_permitted_closed_mark(
     assert cold.status_code == 200, cold.text
     assert cold.json()["reason"] == "market_closed" and cold.json()["quote"] is None
     assert cold.json()["session"]["next_open_at"] is not None
+
+
+@pytest.mark.parametrize("invalid", ["scope", "units", "session"])
+async def test_both_closed_routes_read_the_durable_mark_with_cold_redis(
+    financial_market,
+    auth_client: httpx.AsyncClient,
+    outbox: OutboxSender,
+    running_app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid: str,
+) -> None:
+    market = financial_market
+    instrument = market.instruments[0]
+    _, outcome, requests = await _financial_request_and_tick(market, instrument, market.reply)
+    assert (outcome, requests) == ("ready", 1)
+    await install_current_test_grants()
+    await sign_in(auth_client, outbox, unique_email("closed-mark-owner"))
+    [portfolio] = (await auth_client.get(PORTFOLIOS)).json()
+    marked = Target(
+        auth_client,
+        instrument.catalog_id,
+        instrument.listing_id,
+        portfolio["id"],
+        market.now + timedelta(minutes=4),
+    )
+    monkeypatch.setattr(
+        running_app.state,
+        "settings",
+        running_app.state.settings.model_copy(update={"stock_data_enabled": True}),
+    )
+    monkeypatch.setattr(routes, "datetime", SimpleNamespace(now=lambda _: marked.clock))
+
+    async def no_closed_demand(*args, **kwargs):
+        raise AssertionError("closed market must not enqueue quote work")
+
+    monkeypatch.setattr(routes, "request_catalog_quote", no_closed_demand)
+
+    async def presentation(expected: Decimal | None) -> None:
+        for response in (await marked.quote(), await marked.client.get(marked.context_url())):
+            assert response.status_code == 200, response.text
+            private(response)
+            value = response.json()
+            assert value["reason"] == value["execution_reason"] == "market_closed"
+            assert value["read_only"] is True and value["session"]["state"] == "closed"
+            assert datetime.fromisoformat(value["session"]["next_open_at"]) == (
+                market.now + timedelta(days=1)
+            ).replace(hour=14, minute=30)
+            if expected is None:
+                assert value["quote"] is None
+            else:
+                assert Decimal(value["quote"]["mid"]) == expected
+                assert datetime.fromisoformat(value["quote"]["event_at"]) == market.now
+                assert datetime.fromisoformat(value["quote"]["valid_until"]) == (
+                    market.now + timedelta(minutes=20)
+                )
+
+    await presentation(Decimal("102"))
+    async with market.factory.begin() as db:
+        quote = await db.get(StockCatalogFinancialQuote, instrument.coin_id)
+        assert quote is not None and quote.mark_admission_id is not None
+        if invalid == "scope":
+            scope = await db.get(StockCatalogAdmission, quote.mark_admission_id)
+            assert scope is not None
+            scope.revoked_at = marked.clock
+        elif invalid == "units":
+            await db.execute(
+                update(StockActionState)
+                .where(StockActionState.coin_id == instrument.coin_id)
+                .values(unit_epoch=quote.unit_epoch + 1)
+            )
+        else:
+            quote.calendar_generation += 1
+    await presentation(None)

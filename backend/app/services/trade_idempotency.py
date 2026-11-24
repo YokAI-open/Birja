@@ -28,14 +28,16 @@ def require_same_order(
     kind: str,
     value: Decimal,
     portfolio_id: int,
+    expected_exec_price: Decimal | None = None,
 ) -> None:
-    """Confirmation prices are deliberately excluded from economic identity."""
+    """Catalog confirmations additionally bind the original execution price."""
     if not (
         same_instrument
         and trade.portfolio_id == portfolio_id
         and trade.side == side
         and trade.input_kind == kind
         and trade.input_value == value
+        and (expected_exec_price is None or trade.exec_price == expected_exec_price)
     ):
         raise TradeRefused(
             "idempotency_conflict",

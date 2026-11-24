@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any, cast
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import bindparam, select, text
@@ -222,6 +223,47 @@ def _preview(
     )
 
 
+async def _book_stock_trade(
+    db: AsyncSession,
+    portfolio: OwnedActivePortfolio,
+    coin_id: int,
+    plan: StockTradePlan,
+    event_at: datetime,
+    idempotency_key: UUID,
+) -> tuple[Trade, StockOwnershipMovement]:
+    trade = Trade(
+        user_id=portfolio.user_id,
+        portfolio_id=portfolio.portfolio_id,
+        coin_id=coin_id,
+        side=plan.side,
+        input_kind="quantity",
+        input_value=plan.quantity,
+        quantity=plan.quantity,
+        mid_price=plan.mid,
+        price_as_of=event_at,
+        exec_price=plan.exec_price,
+        fee=ZERO,
+        cash_delta=plan.cash_delta,
+        cash_after=plan.cash_after,
+        idempotency_key=idempotency_key,
+    )
+    db.add(trade)
+    await db.flush()
+    movement = await append_stock_movement(
+        db,
+        StockMovementInput(
+            user_id=portfolio.user_id,
+            portfolio_id=portfolio.portfolio_id,
+            coin_id=coin_id,
+            quantity=plan.quantity if plan.side == "buy" else -plan.quantity,
+            after_basis=plan.cost_basis_after,
+            causal_key=f"trade:{trade.id}",
+            trade_id=trade.id,
+        ),
+    )
+    return trade, movement
+
+
 async def quote(
     db: AsyncSession, *, portfolio: OwnedActivePortfolio, order: QuoteIn, settings: Settings
 ) -> QuoteOut:
@@ -329,7 +371,7 @@ async def _replay(
     facts, executed = row
     require_same_order(
         trade,
-        same_instrument=facts.symbol == order.symbol,
+        same_instrument=facts.symbol == order.symbol and "catalog_id" not in facts.authority,
         portfolio_id=portfolio.portfolio_id,
         side=order.side,
         kind="quantity",
@@ -368,7 +410,10 @@ async def _execute_once(
         historical = await find_user_trade(db, portfolio.user_id, order.idempotency_key)
         if historical is not None:
             stock_cause = await db.scalar(
-                select(StockFillFacts.trade_id).where(StockFillFacts.trade_id == historical.id)
+                select(StockFillFacts.trade_id).where(
+                    StockFillFacts.trade_id == historical.id,
+                    ~StockFillFacts.authority.has_key("catalog_id"),  # noqa: W601
+                )
             )
             if stock_cause is None:
                 require_same_order(
@@ -397,35 +442,13 @@ async def _execute_once(
         plan = _plan(loaded, order, cash, held, basis)
         if plan.exec_price != order.expected_exec_price:
             raise PriceChanged(_preview(loaded, plan, portfolio), order.expected_exec_price)
-        trade = Trade(
-            user_id=portfolio.user_id,
-            portfolio_id=portfolio.portfolio_id,
-            coin_id=cid,
-            side=order.side,
-            input_kind="quantity",
-            input_value=plan.quantity,
-            quantity=plan.quantity,
-            mid_price=plan.mid,
-            price_as_of=loaded.evidence.quote.event_at,
-            exec_price=plan.exec_price,
-            fee=ZERO,
-            cash_delta=plan.cash_delta,
-            cash_after=plan.cash_after,
-            idempotency_key=order.idempotency_key,
-        )
-        db.add(trade)
-        await db.flush()
-        movement = await append_stock_movement(
+        trade, movement = await _book_stock_trade(
             db,
-            StockMovementInput(
-                user_id=portfolio.user_id,
-                portfolio_id=portfolio.portfolio_id,
-                coin_id=cid,
-                quantity=plan.quantity if order.side == "buy" else -plan.quantity,
-                after_basis=plan.cost_basis_after,
-                causal_key=f"trade:{trade.id}",
-                trade_id=trade.id,
-            ),
+            portfolio,
+            cid,
+            plan,
+            cast(datetime, loaded.evidence.quote.event_at),
+            order.idempotency_key,
         )
         current = await load_execution_evidence(db, cid, settings)
         _require(current)
