@@ -12,7 +12,7 @@
 
 - [x] **Phase 18: Make simulated stock trades work** (completed 2026-11-24)
 - [ ] **Phase 19: Search the NYSE and Nasdaq catalog**
-- [ ] **Phase 20: Trade and value stocks from search**
+- [x] **Phase 20: Trade and value stocks from search** (completed 2026-11-24)
 - [ ] **Phase 21: Verify, release and activate stock trading**
 
 ## Phase Details
@@ -91,7 +91,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 
 **Requirements:** SL-01, SL-02, SL-03, SL-04
 
-**Plans:** 9 plans across 8 waves
+**Plans:** 9/9 complete across 8 waves
 
 **Wave 1**
 - [x] 20-01 — Bind catalog issues to permanent financial instruments.
@@ -116,10 +116,11 @@ The simulator runs in a disposable stack for Phase 18 verification.
 - [x] 20-08 — Adapt the stock ticket, Portfolio and History interfaces.
 
 **Wave 8** *(after Wave 7)*
-- [ ] 20-09 — Prove the fixture round trip and encrypted 0025/0026 recovery.
+- [x] 20-09 — Prove the fixture round trip and encrypted 0025/0026 recovery.
 
-Phase 20 runs on disposable fixtures. Phase 19's live catalog coverage and
-expanded rights remain open. Phase 21 owns release CI and live acceptance.
+Phase 20 passed verification on disposable fixtures. Phase 19's live catalog
+coverage and expanded rights remain open. Phase 21 owns release CI and live
+acceptance. [Phase 20 verification](phases/20-trade-and-value-stocks-from-search/20-VERIFICATION.md)
 
 **Success Criteria**
 
@@ -145,7 +146,7 @@ expanded rights remain open. Phase 21 owns release CI and live acceptance.
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 8/9 | In progress |
+| 20. Trade and value stocks from search | 9/9 | Complete on local fixtures 2026-11-24 |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

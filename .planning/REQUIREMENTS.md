@@ -18,10 +18,10 @@ Defined and approved by the owner on 2026-11-24.
 
 ## Held stocks and corporate actions
 
-- [ ] **SL-01** — An eligible stock found through search can be bought and sold. Quote refresh is shared and bounded for actively selected and held stocks, and scales without polling every listed stock.
-- [ ] **SL-02** — Markets and the stock ticket show the latest permitted timestamped price when the market is closed, if a mark exists. Show the local-time opening countdown and disable execution until a fresh in-session quote is available.
-- [ ] **SL-03** — The expanded eligible universe retains exactly-once ordinary USD dividends and supported forward splits. Unresolved or unsupported events pause affected symbols without disturbing other holdings and portfolios.
-- [ ] **SL-04** — Mixed stock and crypto holdings retain the correct cash, basis, quantities and valuations after new-symbol fills, action processing, ticker changes and restarts. An unpriced holding keeps the portfolio aggregate visibly incomplete.
+- [x] **SL-01** — An eligible stock found through search can be bought and sold. Quote refresh is shared and bounded for actively selected and held stocks, and scales without polling every listed stock.
+- [x] **SL-02** — Markets and the stock ticket show the latest permitted timestamped price when the market is closed, if a mark exists. Show the local-time opening countdown and disable execution until a fresh in-session quote is available.
+- [x] **SL-03** — The expanded eligible universe retains exactly-once ordinary USD dividends and supported forward splits. Unresolved or unsupported events pause affected symbols without disturbing other holdings and portfolios.
+- [x] **SL-04** — Mixed stock and crypto holdings retain the correct cash, basis, quantities and valuations after new-symbol fills, action processing, ticker changes and restarts. An unpriced holding keeps the portfolio aggregate visibly incomplete.
 
 ## Release acceptance
 
@@ -49,10 +49,10 @@ public sources. Paid feeds and provider outreach remain separate decisions.
 | SC-02 | 19 | Complete |
 | SC-03 | 19 | Verified on fixtures. Live quote proof pending. |
 | SC-04 | 19 | Complete |
-| SL-01 | 20 | Pending |
-| SL-02 | 20 | Pending |
-| SL-03 | 20 | Pending |
-| SL-04 | 20 | Pending |
+| SL-01 | 20 | Complete on local fixtures |
+| SL-02 | 20 | Complete on local fixtures |
+| SL-03 | 20 | Complete on local fixtures |
+| SL-04 | 20 | Complete on local fixtures |
 | SV-01 | 21 | Pending |
 | SV-02 | 21 | Pending |
 | SV-03 | 21 | Pending |
