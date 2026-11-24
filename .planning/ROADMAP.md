@@ -112,7 +112,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
-| 19. Search the NYSE and Nasdaq catalog | 6/6 | In progress |
+| 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 

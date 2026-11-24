@@ -12,9 +12,9 @@ Defined and approved by the owner on 2026-11-24.
 ## Search and new stock onboarding
 
 - [ ] **SC-01** — Users can search all active NYSE and Nasdaq common stocks by ticker or company name, with exact ticker matches first and a clear empty state. Coverage and exclusions can be checked against the refreshed exchange directory.
-- [ ] **SC-02** — The catalog handles verified ticker aliases and distinct share classes. A listing change or delisting preserves its historical identity and blocks an ambiguous or inactive instrument from new orders.
+- [x] **SC-02** — The catalog handles verified ticker aliases and distinct share classes. A listing change or delisting preserves its historical identity and blocks an ambiguous or inactive instrument from new orders.
 - [ ] **SC-03** — A user can select a result beyond the original 20, see its company and exchange, request a price and open a trade in the chosen portfolio. If the price is missing or the instrument requires review, the reason is visible.
-- [ ] **SC-04** — Search uses local catalog data and bounded results. Selecting a result fetches only the needed price. A failing or rate-limited price source still allows search and keeps the last verified catalog available.
+- [x] **SC-04** — Search uses local catalog data and bounded results. Selecting a result fetches only the needed price. A failing or rate-limited price source still allows search and keeps the last verified catalog available.
 
 ## Held stocks and corporate actions
 
@@ -45,10 +45,10 @@ public sources. Paid feeds and provider outreach remain separate decisions.
 | SX-02 | 18 | Complete |
 | SX-03 | 18 | Complete |
 | SX-04 | 18 | Complete |
-| SC-01 | 19 | Pending |
-| SC-02 | 19 | Pending |
-| SC-03 | 19 | Pending |
-| SC-04 | 19 | Pending |
+| SC-01 | 19 | Live directory coverage pending |
+| SC-02 | 19 | Complete |
+| SC-03 | 19 | Verified on fixtures. Live quote proof pending. |
+| SC-04 | 19 | Complete |
 | SL-01 | 20 | Pending |
 | SL-02 | 20 | Pending |
 | SL-03 | 20 | Pending |
