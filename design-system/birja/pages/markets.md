@@ -19,3 +19,6 @@ shared header. Store the originals and web-ready assets in
 - Identify IEX midpoint prices where they appear. Show attribution and the
   reason trading is restricted in the selected stock pane. Open the stock
   ticket for bid, ask and regular-session details.
+- While the market is closed, keep the last verified price with its timestamp
+  while display permission is current. Show the reopening countdown and time
+  in the user's timezone when the next session is verified.

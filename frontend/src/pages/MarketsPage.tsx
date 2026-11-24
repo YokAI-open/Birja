@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { StockAttribution } from "@/components/StockAttribution";
+import { MarketOpening } from "@/components/MarketOpening";
 import type { StockItem } from "@/api/stocks";
 import { stockActionSummary } from "@/lib/stockActionCopy";
 import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { useStocks } from "@/hooks/useStocks";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
+import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUnitPrice } from "@/lib/money";
 import "./markets.css";
 
@@ -58,6 +60,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const asset = results.find(({ symbol }) => symbol === selection) ?? results[0];
   const coin = stockMarket ? undefined : coins.find(({ symbol }) => symbol === asset?.symbol);
   const stock = stockMarket ? stockItems.find(({ symbol }) => symbol === asset?.symbol) : undefined;
+  const marketClosed = stock?.session.state === "closed";
   const elapsed = Math.max(0, Math.floor((now - prices.dataUpdatedAt) / 1000));
   const age = coin ? coin.age_seconds + elapsed : null;
   const fresh =
@@ -72,18 +75,16 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
         ? stockRestrictions.session_unavailable
         : stock.action.state !== "current"
           ? stockActionSummary(stock.action)
-          : stock.session.state === "closed"
-            ? stockRestrictions.market_closed
-            : stock.session.state === "unknown"
-              ? stockRestrictions.session_unavailable
-              : stock.execution_reason === "phase_disabled" && stock.quote_reason === "stale"
-                ? stockRestrictions.quote_stale
-                : stock.execution_reason === "phase_disabled" && stock.quote_reason === "missing"
-                  ? stockRestrictions.quote_unavailable
-                  : stockRestrictions[stock.execution_reason]
+          : stock.session.state === "unknown"
+            ? stockRestrictions.session_unavailable
+            : stock.execution_reason === "phase_disabled" && stock.quote_reason === "stale"
+              ? stockRestrictions.quote_stale
+              : stock.execution_reason === "phase_disabled" && stock.quote_reason === "missing"
+                ? stockRestrictions.quote_unavailable
+                : stockRestrictions[stock.execution_reason]
     : null;
   const action = stock
-    ? stock.execution_enabled && permitted
+    ? stock.execution_enabled && permitted && !marketClosed
       ? "Trade"
       : "View details"
     : fresh
@@ -268,9 +269,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               {asset.symbol} · {stock?.listing_exchange ?? "USD"}
             </p>
             <div className="my-7 border-y border-[var(--market-line)] py-5 md:py-7">
-              <p className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
-                {price}
-              </p>
+              {(!marketClosed || stockQuote) && (
+                <p className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
+                  {price}
+                </p>
+              )}
               {coin && age !== null && (
                 <p className="mt-2 text-[var(--market-muted)]">
                   <time dateTime={coin.as_of} title={coin.as_of}>
@@ -281,17 +284,31 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               )}
               {stockQuote && (
                 <p className="mt-2 text-[var(--market-muted)]">
-                  IEX midpoint ·{" "}
+                  {marketClosed ? "Last verified IEX midpoint" : "IEX midpoint"} ·{" "}
                   <time dateTime={stockQuote.event_at} title={stockQuote.event_at}>
-                    Updated {formatAge(stockQuote.age_seconds)}
+                    {marketClosed
+                      ? fullLocalTimestamp(stockQuote.event_at)
+                      : `Updated ${formatAge(stockQuote.age_seconds)}`}
                   </time>
                 </p>
               )}
-              {stock && (
-                <div className="mt-2 space-y-2">
-                  <p role="status" className="text-[var(--market-muted)]">
-                    {stockRestriction}
+              {marketClosed && (
+                <div className="mt-2 text-[var(--market-muted)]">
+                  <p role="status" className="font-medium">
+                    Market closed
                   </p>
+                  <p className="empty:hidden">
+                    <MarketOpening nextOpen={stock?.session.next_open_at} now={now} />
+                  </p>
+                </div>
+              )}
+              {stock && (!marketClosed || stockQuote) && (
+                <div className="mt-2 space-y-2">
+                  {!marketClosed && (
+                    <p role="status" className="text-[var(--market-muted)]">
+                      {stockRestriction}
+                    </p>
+                  )}
                   <StockAttribution
                     context="listing"
                     required_text={stocks.data?.attribution.required_text}

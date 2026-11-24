@@ -145,38 +145,59 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
   expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
-it("uses the verified catalogue opening in local time if trade context cannot load", async () => {
-  const now = Date.now();
-  const nextOpen = new Date(now + 119.75 * 60_000);
-  const catalogue = stocks({ state: "unavailable", now: new Date(now).toISOString() });
-  const stock = catalogue.items[0]!;
-  Object.assign(stock, { session_reason: "closed" });
-  Object.assign(stock.session, {
-    state: "closed",
-    opens_at: null,
-    closes_at: null,
-    next_open_at: nextOpen.toISOString(),
-  });
-  setup({
-    catalogue: () => Response.json(catalogue),
-    context: () => Response.json({ detail: { code: "permission_unavailable" } }, { status: 409 }),
-  });
-  expect(await screen.findByText(/Market closed\. Opens in 2 hr/)).toBeVisible();
-  expect(
-    screen.getByText(
-      nextOpen.toLocaleString(undefined, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZoneName: "short",
-      }),
-    ),
-  ).toHaveAttribute("dateTime", nextOpen.toISOString());
-  expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
-  expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
-});
+it.each([true, false])(
+  "uses the catalogue for a closed ticket with retained quote %s if trade context cannot load",
+  async (retainedQuote) => {
+    const now = Date.now();
+    const nextOpen = new Date(now + 119.75 * 60_000);
+    const catalogue = stocks({
+      state: retainedQuote ? "approved" : "unavailable",
+      now: new Date(now).toISOString(),
+      open: new Date(now - 60_000).toISOString(),
+      close: new Date(now + 3_600_000).toISOString(),
+    });
+    const stock = catalogue.items[0]!;
+    Object.assign(stock, { session_reason: "closed" });
+    Object.assign(stock.session, {
+      state: "closed",
+      opens_at: null,
+      closes_at: null,
+      next_open_at: nextOpen.toISOString(),
+    });
+    if (retainedQuote) {
+      stock.quote!.event_at = new Date(now - 300_000).toISOString();
+      stock.quote!.age_seconds = 300;
+      stock.quote_reason = "stale";
+    }
+    setup({
+      catalogue: () => Response.json(catalogue),
+      context: () => Response.json({ detail: { code: "permission_unavailable" } }, { status: 409 }),
+    });
+    expect(await screen.findByText(/Market closed\. Opens in 2 hr/)).toBeVisible();
+    expect(
+      screen.getByText(
+        nextOpen.toLocaleString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        }),
+      ),
+    ).toHaveAttribute("dateTime", nextOpen.toISOString());
+    expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+    if (retainedQuote) {
+      expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
+      expect(screen.getByText(/Last verified IEX midpoint/)).toBeVisible();
+      expect(screen.getByText(catalogue.attribution.required_text)).toBeVisible();
+    } else {
+      expect(screen.queryByText("$101.00", { exact: true })).toBeNull();
+      expect(screen.queryByText(catalogue.attribution.required_text)).toBeNull();
+    }
+    expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  },
+);
 it("shows a single retry message when the stock and its schedule cannot load", async () => {
   setup({ context: () => Response.json({}, { status: 503 }) });
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this stock.");

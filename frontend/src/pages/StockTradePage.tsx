@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StockAttribution } from "@/components/StockAttribution";
+import { MarketOpening } from "@/components/MarketOpening";
 import {
   StockDate,
   StockDisclosure,
@@ -60,19 +61,14 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         : reasons.invalid_quantity;
   // The catalogue has the verified next session even when the ticket cannot
   // load trade context. These facts only affect the copy, never order admission.
-  const catalogueSession = stocks?.items.find((item) => item.symbol === symbol)?.session;
+  const cataloguedStock = stocks?.items.find((item) => item.symbol === symbol);
+  const catalogueSession = cataloguedStock?.session;
   const marketClosed =
     (t.error === "market_closed" && c?.execution_enabled !== true) ||
     c?.execution_reason === "market_closed" ||
     c?.session.state === "closed" ||
     (c?.session.state !== "open" && catalogueSession?.state === "closed");
   const nextOpen = c?.session.next_open_at ?? catalogueSession?.next_open_at;
-  const minutesUntilOpen = nextOpen ? Math.ceil((Date.parse(nextOpen) - now) / 60_000) : 0;
-  const hours = Math.floor(minutesUntilOpen / 60);
-  const minutes = minutesUntilOpen % 60;
-  const timeUntilOpen = [hours > 0 && `${hours} hr`, minutes > 0 && `${minutes} min`]
-    .filter(Boolean)
-    .join(" ");
   const refusal = marketClosed
     ? reasons.market_closed
     : c && c.execution_reason !== "available"
@@ -94,6 +90,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   ? "Preview ready. Review before confirming."
                   : "Enter a quantity to preview this trade."));
   const quote = t.quote;
+  const lastQuote = marketClosed ? cataloguedStock?.quote : null;
   const visible = quote ?? c?.quote;
   const noShortcut =
     !c?.execution_enabled ||
@@ -117,21 +114,10 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         }
       >
         {message}
-        {message === reasons.market_closed && nextOpen && minutesUntilOpen > 0 && (
+        {message === reasons.market_closed && (
           <>
-            {" Opens in "}
-            {timeUntilOpen} (
-            <time dateTime={nextOpen}>
-              {new Date(nextOpen).toLocaleString(undefined, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                timeZoneName: "short",
-              })}
-            </time>
-            ).
+            {" "}
+            <MarketOpening nextOpen={nextOpen} now={now} />
           </>
         )}
       </p>
@@ -179,7 +165,17 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
             >
               {retrying ? "Retrying stock…" : "Retry stock"}
             </Button>
-            {(visible || (c && !marketClosed)) && (
+            {lastQuote && (
+              <div>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatUnitPrice(lastQuote.mid)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Last verified IEX midpoint · <StockDate value={lastQuote.event_at} />
+                </p>
+              </div>
+            )}
+            {!marketClosed && (visible || c) && (
               <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 {(["bid", "ask"] as const).map((side) => {
                   const selected = side === (t.side === "buy" ? "ask" : "bid");
@@ -198,7 +194,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 })}
               </div>
             )}
-            {visible && (
+            {visible && !marketClosed && (
               <p className="text-[13px] leading-[18px]">
                 Source quote: <StockDate value={visible.event_at} />
               </p>
@@ -292,7 +288,10 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
               </Button>
             </form>
-            <StockAttribution context="preview" />
+            <StockAttribution
+              context="preview"
+              required_text={lastQuote ? stocks?.attribution.required_text : undefined}
+            />
             <StockDisclosure />
           </CardContent>
         </Card>

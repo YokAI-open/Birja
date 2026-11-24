@@ -80,7 +80,9 @@ export function projectStocks(data: TimedStocks, now = performance.now()): Stock
         state !== "unknown" &&
         action.state === "current" &&
         item.quote_reason !== "permission_unavailable" &&
-        age < 120;
+        // Closed-session marks use the server's disclosure deadline. The
+        // freshness window still applies to regular-session trading.
+        (state === "closed" || age < 120);
       const quote =
         canDisplay && item.quote
           ? { ...item.quote, age_seconds: Math.max(0, Math.floor(age)) }
@@ -202,7 +204,7 @@ function nextDeadline(data: TimedStocks): number {
     if (item.session.state === "open") add(item.session.closes_at);
     if (item.action.state === "current") add(item.action.valid_until);
     if (item.status.state !== "unknown") add(item.status.valid_until);
-    if (item.quote !== null)
+    if (item.quote !== null && item.session.state !== "closed")
       deadlines.push(
         Math.min(
           floorTime(item.quote.event_at) + 120_000,

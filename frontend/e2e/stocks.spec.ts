@@ -12,6 +12,74 @@ async function refocus(page: Page) {
   await page.evaluate('window.dispatchEvent(new Event("focus"))');
 }
 
+test.describe("market reopening", () => {
+  test.use({ timezoneId: "America/Los_Angeles" });
+
+  for (const retainedQuote of [true, false]) {
+    test(`verified closure shows a local countdown ${retainedQuote ? "with a dated price" : "when IEX prices are missing"}`, async ({
+      page,
+    }) => {
+      await page.clock.install();
+      const now = await page.evaluate(() => Date.now());
+      const nextOpen = new Date(now + 119.75 * 60_000).toISOString();
+      const body = stocks({
+        state: retainedQuote ? "approved" : "unavailable",
+        now: new Date(now).toISOString(),
+        open: new Date(now - 60_000).toISOString(),
+        close: new Date(now + 3_600_000).toISOString(),
+      });
+      const first = body.items[0]!;
+      Object.assign(first, { session_reason: "closed" });
+      Object.assign(first.session, {
+        state: "closed",
+        opens_at: null,
+        closes_at: null,
+        next_open_at: nextOpen,
+      });
+      if (retainedQuote) {
+        first.quote!.event_at = new Date(now - 300_000).toISOString();
+        first.quote!.age_seconds = 300;
+        first.quote_reason = "stale";
+      }
+      await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
+      await signInNewUser(page);
+      await page.getByRole("button", { name: "US stocks", exact: true }).click();
+
+      const detail = selected(page);
+      await expect(detail.getByRole("status")).toHaveText("Market closed");
+      await expect(detail.getByText(/Opens in 2 hr/)).toBeVisible();
+      const opening = detail.locator(`time[datetime="${nextOpen}"]`);
+      const local = await page.evaluate((value) => {
+        return new Date(value).toLocaleString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
+      }, nextOpen);
+      await expect(opening).toHaveAttribute("datetime", nextOpen);
+      await expect(opening).toHaveText(local);
+      await expect(detail.getByText("Price unavailable")).toHaveCount(0);
+      if (retainedQuote) {
+        await expect(detail.getByText(midpoint, { exact: true })).toBeVisible();
+        await expect(detail.getByText(/Last verified IEX midpoint/)).toBeVisible();
+        await expect(detail.locator(`time[datetime="${first.quote!.event_at}"]`)).toBeVisible();
+      } else {
+        await expect(detail.getByText(midpoint, { exact: true })).toHaveCount(0);
+      }
+      await expect(detail.getByRole("link", { name: "View details AAPL" })).toBeVisible();
+      await page.clock.fastForward(60_000);
+      await expect(detail.getByText(/Opens in 1 hr 59 min/)).toBeVisible();
+
+      await records(page).nth(1).getByRole("button").click();
+      await expect(detail.getByText("Market closed")).toHaveCount(0);
+      await expect(opening).toHaveCount(0);
+    });
+  }
+});
+
 test("independent stock HTTP errors can retry while crypto remains usable", async ({ page }) => {
   await page.clock.install();
   let failed = false;
