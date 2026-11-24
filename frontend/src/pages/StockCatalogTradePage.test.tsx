@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "@/App";
-import type { CatalogTradeContext } from "@/api/stockCatalog";
+import type { CatalogFill, CatalogPreview, CatalogTradeContext } from "@/api/stockCatalog";
 import { cashPortfolio } from "@/test/portfolioFixtures";
 
 const catalogId = "9007199254741002";
@@ -20,6 +20,10 @@ function ticket(portfolioId = "1"): CatalogTradeContext {
   return {
     portfolio_id: portfolioId,
     read_only: true,
+    execution_reason: "read_only",
+    cash: portfolioId === "1" ? "10000.00" : "2500.00",
+    held_quantity: "0",
+    buy_max_quantity: "0",
     listing: {
       catalog_id: catalogId,
       listing_version: "9007199254741003",
@@ -60,14 +64,19 @@ function setup({
   route = ticketPath("1"),
   portfolios = [first, second],
   context = (id: string) => Response.json(ticket(id)),
+  order,
 }: {
   route?: string;
   portfolios?: (typeof first)[];
   context?: (id: string) => Response | Promise<Response>;
+  order?: (path: string, body: Record<string, unknown>) => Response | Promise<Response>;
 } = {}) {
   vi.spyOn(Date, "now").mockReturnValue(now);
+  if (order) document.cookie = "bj_csrf=test; path=/";
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
+    if (init?.method === "POST" && order && path.startsWith("/api/v2/"))
+      return order(path, JSON.parse(String(init.body)));
     if (init?.method && init.method !== "GET") return Response.json({}, { status: 405 });
     if (path === "/api/v2/me") return Response.json({ email: "owner@example.test" });
     if (path === "/api/v2/portfolios") return Response.json(portfolios);
@@ -101,7 +110,7 @@ function setup({
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { fetch, user: userEvent.setup() };
+  return { client, fetch, user: userEvent.setup() };
 }
 
 function readOnly(fetch: ReturnType<typeof setup>["fetch"]) {
@@ -117,6 +126,7 @@ afterEach(() => {
   clients.splice(0).forEach((client) => client.clear());
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  document.cookie = "bj_csrf=; Max-Age=0; path=/";
   sessionStorage.clear();
 });
 
@@ -276,4 +286,234 @@ it("discards the former portfolio's late ticket response", async () => {
   expect(screen.queryByText("Obsolete listing response")).not.toBeInTheDocument();
   expect(screen.getByTestId("location")).toHaveTextContent(ticketPath("2"));
   readOnly(fetch);
+});
+
+function openTicket(): CatalogTradeContext {
+  return { ...ticket(), read_only: false, execution_reason: "available", buy_max_quantity: "66" };
+}
+
+function preview(repriced = false): CatalogPreview {
+  return {
+    portfolio_id: "1",
+    catalog_id: catalogId,
+    listing_version: ticket().listing.listing_version,
+    symbol: "FQA",
+    company_name: "Fixture Aerospace",
+    listing_exchange: "NASDAQ",
+    currency: "USD",
+    side: "buy",
+    quantity: "2",
+    bid: "150.00",
+    ask: repriced ? "151.125" : "151.00",
+    exact_mid: repriced ? "150.5625" : "150.50",
+    exec_price: repriced ? "151.125" : "151.00",
+    source: "alpaca",
+    feed: "iex",
+    event_at: at(-8),
+    collected_at: at(-7),
+    observed_at: at(0),
+    age_seconds: 8,
+    notional: repriced ? "302.25" : "302.00",
+    fee: "0",
+    cash_delta: repriced ? "-302.25" : "-302.00",
+    cash_before: "10000.00",
+    cash_after: repriced ? "9697.75" : "9698.00",
+    held_before: "0",
+    held_after: "2",
+    session_date: "2026-11-24",
+    session_opens_at: at(-1800),
+    session_closes_at: at(7200),
+    valid_until: at(45),
+  };
+}
+
+function fill(repriced = false): CatalogFill {
+  const { valid_until, ...values } = preview(repriced);
+  void valid_until;
+  return {
+    ...values,
+    observed_at: at(-5),
+    age_seconds: 3,
+    schema_version: 1,
+    trade_id: "9007199254741004",
+    executed_at: at(1),
+  };
+}
+
+it("uses the existing ticket controls, explicitly reviews repricing, and focuses a 201 receipt", async () => {
+  const confirmations: Record<string, unknown>[] = [];
+  const { user } = setup({
+    context: () => Response.json(openTicket()),
+    order: (path, body) => {
+      if (path.endsWith("/preview")) {
+        expect(body).toEqual({
+          listing_version: ticket().listing.listing_version,
+          side: "buy",
+          quantity: "2",
+        });
+        return Response.json(preview());
+      }
+      confirmations.push(body);
+      if (confirmations.length === 1)
+        return Response.json(
+          {
+            detail: {
+              code: "price_changed",
+              previous_exec_price: "151.00",
+              previous_cash_delta: "-302.00",
+              exec_price_change: "0.125",
+              cash_delta_change: "-0.25",
+              quote: preview(true),
+            },
+          },
+          { status: 409 },
+        );
+      return Response.json(fill(true), { status: 201 });
+    },
+  });
+  const quantity = await screen.findByLabelText("Whole-share quantity");
+  expect(screen.getAllByText("Cash available $10,000.00")).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Buy max" }));
+  expect(quantity).toHaveValue("66");
+  await user.clear(quantity);
+  await user.type(quantity, "1.5");
+  expect(quantity).toHaveAccessibleDescription("Enter a whole number greater than 0.");
+  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+  await user.clear(quantity);
+  await user.type(quantity, "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  expect(confirmations).toHaveLength(0);
+  await user.click(await screen.findByRole("button", { name: "Confirm buy" }));
+  expect(await screen.findByText(/Price updated/)).toBeVisible();
+  expect(screen.getAllByText("$151.125").length).toBeGreaterThan(0);
+  expect(confirmations).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Confirm buy" }));
+  expect(await screen.findByRole("heading", { name: "Order filled" })).toHaveFocus();
+  expect(screen.getByRole("link", { name: /^Portfolio$/ })).toHaveAttribute(
+    "href",
+    "/portfolios/1",
+  );
+  expect(confirmations.map((order) => order.expected_exec_price)).toEqual(["151.00", "151.125"]);
+  expect(confirmations[1].idempotency_key).not.toBe(confirmations[0].idempotency_key);
+  expect(screen.getAllByText("My portfolio")).toEqual([
+    screen.getByRole("option", { name: "My portfolio" }),
+  ]);
+});
+
+it("keeps quantity across a hold and closure, without offering an expired confirmation", async () => {
+  let active = openTicket();
+  const { user, client } = setup({
+    context: () => Response.json(active),
+    order: () => Response.json(preview()),
+  });
+  const quantity = await screen.findByLabelText("Whole-share quantity");
+  await user.type(quantity, "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  expect(await screen.findByRole("button", { name: "Confirm buy" })).toBeEnabled();
+  active = {
+    ...active,
+    read_only: true,
+    execution_reason: "action_unavailable",
+    quote: null,
+    reason: "quote_unavailable",
+    buy_max_quantity: "0",
+  };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
+  });
+  expect(await screen.findByText("Trading paused for corporate-action review.")).toBeVisible();
+  expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("2");
+  expect(screen.queryByRole("button", { name: "Confirm buy" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+
+  active = {
+    ...active,
+    session: { state: "closed", opens_at: at(-3600), closes_at: at(-20), next_open_at: at(7200) },
+    quote: { ...ticket().quote!, event_at: at(-30), collected_at: at(-29), valid_until: at(7200) },
+    execution_reason: "market_closed",
+    reason: "market_closed",
+  };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
+  });
+  expect(await screen.findByText("Opens in 2 hr")).toBeVisible();
+  expect(screen.getByText("$150.50")).toBeVisible();
+  expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("2");
+  expect(screen.queryByRole("button", { name: "Preview trade" })).not.toBeInTheDocument();
+});
+
+it("checks the saved attempt after a rename and shows the original receipt", async () => {
+  const tries: Record<string, unknown>[] = [];
+  let active = openTicket();
+  const { user, client } = setup({
+    context: () => Response.json(active),
+    order: (path, body) => {
+      if (path.endsWith("/preview")) return Response.json(preview());
+      tries.push(body);
+      return tries.length === 1
+        ? Response.json({ detail: { code: "service_unavailable" } }, { status: 503 })
+        : Response.json(fill(), { status: 200 });
+    },
+  });
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  await user.click(await screen.findByRole("button", { name: "Confirm buy" }));
+  expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
+  active = {
+    ...active,
+    listing: {
+      ...active.listing,
+      ticker: "NEWF",
+      company_name: "Renamed Aerospace",
+      listing_version: "9007199254741005",
+    },
+  };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
+  });
+  expect(await screen.findByRole("heading", { name: "Renamed Aerospace" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Check order result" }));
+  expect(await screen.findByRole("heading", { name: "Order filled" })).toHaveFocus();
+  expect(screen.getByText(/Fixture Aerospace · FQA/)).toBeVisible();
+  expect(tries).toHaveLength(2);
+  expect(tries[1]).toEqual(tries[0]);
+});
+
+it("retains the draft when the preview deadline passes without sending a confirmation", async () => {
+  const { user, fetch } = setup({
+    context: () => Response.json(openTicket()),
+    order: () => Response.json(preview()),
+  });
+  const quantity = await screen.findByLabelText("Whole-share quantity");
+  await user.type(quantity, "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  expect(await screen.findByRole("button", { name: "Confirm buy" })).toBeEnabled();
+  vi.mocked(Date.now).mockReturnValue(now + 46_000);
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Confirm buy" })).toBeNull(), {
+    timeout: 2000,
+  });
+  expect(quantity).toHaveValue("2");
+  expect(fetch.mock.calls.some(([path]) => String(path).endsWith("/confirm"))).toBe(false);
+});
+
+it("requests open-session status once before enabling order entry on a direct ticket", async () => {
+  let view: CatalogTradeContext = {
+    ...ticket(),
+    execution_reason: "status_unavailable",
+    quote: null,
+    reason: "quote_unavailable",
+  };
+  const { fetch } = setup({
+    context: () => Response.json(view),
+    order: (path, body) => {
+      expect(path).toBe(`/api/v2/stock-catalog/${catalogId}/quote`);
+      expect(body).toEqual({ listing_version: view.listing.listing_version });
+      view = openTicket();
+      const { portfolio_id, cash, held_quantity, buy_max_quantity, ...price } = view;
+      void [portfolio_id, cash, held_quantity, buy_max_quantity];
+      return Response.json(price);
+    },
+  });
+  expect(await screen.findByLabelText("Whole-share quantity")).toBeVisible();
+  expect(fetch.mock.calls.filter(([path]) => String(path).endsWith("/quote"))).toHaveLength(1);
 });

@@ -322,6 +322,8 @@ function displayed(item: StockCatalogItem, now: number, closed = false): Catalog
   return {
     listing: item,
     reason: closed ? "market_closed" : "ready",
+    read_only: true,
+    execution_reason: closed ? "market_closed" : "read_only",
     session: {
       state: closed ? "closed" : "open",
       opens_at: iso(now - 600_000),
@@ -438,6 +440,38 @@ describe("MarketsPage stock catalog", () => {
     ).toBeVisible();
   });
 
+  it("offers Trade for the eligible listing only while its quote remains current", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stock = listing();
+    const request = vi.fn(() =>
+      catalogOk({
+        ...displayed(stock, Date.now()),
+        read_only: false,
+        execution_reason: "available",
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      stockFetch(() => catalogOk(catalog([stock])), request),
+    );
+    renderWithClient(
+      <SignedIn>
+        <MarketsPage portfolioId="51" />
+      </SignedIn>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "US stocks" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search stocks" }), {
+      target: { value: "FQA" },
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+    fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
+    const href = "/portfolios/51/trade/catalog/9007199254740993";
+    expect(await screen.findByRole("link", { name: "Trade FQA" })).toHaveAttribute("href", href);
+    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    expect(screen.queryByRole("link", { name: "Trade FQA" })).toBeNull();
+    expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute("href", href);
+  });
+
   it("cancels a previous quote and keeps the selected listing through provider failure", async () => {
     const first = listing("71", "FQA");
     const second = { ...listing("72", "FQB"), share_class: "B" };
@@ -505,7 +539,9 @@ describe("MarketsPage stock catalog", () => {
     fireEvent.click(row);
     expect(await screen.findByText("Market closed")).toBeVisible();
     expect(screen.getByText("Opens in 1 hr")).toBeVisible();
-    expect(screen.getByText("$10.20")).toBeVisible();
+    const price = screen.getByText("$10.20");
+    expect(price).toBeVisible();
+    expect(price.querySelector("time.sr-only")).toHaveAttribute("datetime", expect.any(String));
     expect(screen.queryByText(/IEX midpoint/)).toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(4_000));
     expect(screen.queryByText("$10.20")).toBeNull();

@@ -88,15 +88,16 @@ export function useSelectedCatalogPrice(listing: StockCatalogItem | null) {
 export function useCatalogTradeContext(target: PortfolioTarget | null, catalogId: string) {
   const client = useQueryClient();
   const scope = financialScope(client, target);
+  const queryKey = [
+    "stockCatalogTradeContext",
+    scope.owner,
+    scope.epoch,
+    scope.portfolioId,
+    target?.epoch.session ?? null,
+    catalogId,
+  ] as const;
   const query = useQuery({
-    queryKey: [
-      "stockCatalogTradeContext",
-      scope.owner,
-      scope.epoch,
-      scope.portfolioId,
-      target?.epoch.session ?? null,
-      catalogId,
-    ],
+    queryKey,
     enabled: isCatalogId(catalogId) && scope.current(),
     queryFn: async ({ signal }) => {
       if (!target || !scope.current()) throw new Error("Portfolio target changed");
@@ -113,8 +114,55 @@ export function useCatalogTradeContext(target: PortfolioTarget | null, catalogId
     retry: false,
     gcTime: 0,
     staleTime: 0,
+    refetchInterval: (current) => {
+      const view = current.state.data;
+      if (!view || current.state.status !== "success" || view.listing.state !== "active")
+        return false;
+      if (view.session.state === "closed") {
+        return view.session.next_open_at ? 60_000 : false;
+      }
+      return 15_000;
+    },
   });
-  return { ...query, data: scope.current() && !query.isError ? query.data : undefined };
+  return { ...query, queryKey, data: scope.current() && !query.isError ? query.data : undefined };
+}
+
+export function useCatalogOrderQuoteDemand(
+  target: PortfolioTarget,
+  view: CatalogQuoteView | undefined,
+  now: number,
+) {
+  const scope = financialScope(useQueryClient(), target);
+  const listing = view?.listing;
+  return useQuery({
+    queryKey: [
+      "catalogOrderQuote",
+      scope.owner,
+      scope.epoch,
+      target.portfolioId,
+      listing?.catalog_id,
+      listing?.listing_version,
+    ],
+    enabled:
+      scope.current() &&
+      view?.listing.state === "active" &&
+      view.session.state === "open" &&
+      view.session.opens_at !== null &&
+      view.session.closes_at !== null &&
+      Date.parse(view.session.opens_at) <= now &&
+      now < Date.parse(view.session.closes_at) &&
+      ["status_unavailable", "quote_unavailable", "quote_stale"].includes(view.execution_reason),
+    queryFn: ({ signal }) => {
+      if (!listing) throw new Error("No selected stock listing");
+      return requestCatalogPrice(listing, signal, scope.current);
+    },
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    gcTime: 0,
+    staleTime: Infinity,
+  });
 }
 
 const PRICE_MESSAGES: Record<CatalogQuoteView["reason"], string | null> = {

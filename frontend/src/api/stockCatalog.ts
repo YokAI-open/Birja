@@ -1,6 +1,24 @@
-import { guardedJsonRequest } from "./client";
+import { ApiError, guardedJsonRequest } from "./client";
 import { isPortfolioId } from "./portfolios";
 import { stockInstant } from "./stocks";
+
+import {
+  STOCK_ECONOMIC_FIELDS,
+  STOCK_REFUSALS,
+  STOCK_SCALE,
+  stockBalance,
+  stockEconomicValues,
+  stockExact,
+  stockFixed,
+  stockPrice,
+  stockRoundCent,
+  stockShares,
+  type StockEconomicValues,
+  type StockFillValues,
+  type StockRefusal,
+  type StockTransport,
+} from "./stockTrades";
+import type { Side } from "./trades";
 
 const LISTING_REASONS = [
   "reviewed_issue_evidence",
@@ -49,6 +67,22 @@ const QUOTE_REASONS = [
   "failed_check",
   "queue_full",
 ] as const;
+const EXECUTION_REASONS = [
+  "available",
+  "read_only",
+  "permission_unavailable",
+  "market_closed",
+  "session_unavailable",
+  "halted",
+  "status_unavailable",
+  "action_unavailable",
+  "units_changed",
+  "quote_unavailable",
+  "quote_stale",
+] as const;
+export type CatalogExecutionReason = (typeof EXECUTION_REASONS)[number];
+export type CatalogOrderRefusal = StockRefusal | "read_only" | "listing_changed";
+
 export type CatalogPrice = {
   bid: string;
   ask: string;
@@ -71,8 +105,31 @@ export type CatalogQuoteView = {
   quote: CatalogPrice | null;
   session: CatalogSession;
   reason: (typeof QUOTE_REASONS)[number];
+  read_only: boolean;
+  execution_reason: CatalogExecutionReason;
 };
-export type CatalogTradeContext = CatalogQuoteView & { portfolio_id: string; read_only: true };
+export type CatalogTradeContext = CatalogQuoteView & {
+  portfolio_id: string;
+  cash: string;
+  held_quantity: string;
+  buy_max_quantity: string;
+};
+export type CatalogOrder = { listing_version: string; side: Side; quantity: string };
+export type CatalogAttempt = Readonly<
+  CatalogOrder & { expected_exec_price: string; idempotency_key: string }
+>;
+type CatalogIssue = { catalog_id: string; listing_version: string };
+export type CatalogPreview = StockEconomicValues & CatalogIssue & { valid_until: string };
+export type CatalogFill = StockFillValues & CatalogIssue;
+export type TimedCatalogPreview = CatalogPreview & { transport: StockTransport };
+export type CatalogPriceChanged<Q = CatalogPreview> = {
+  code: "price_changed";
+  previous_exec_price: string;
+  previous_cash_delta: string;
+  exec_price_change: string;
+  cash_delta_change: string;
+  quote: Q;
+};
 
 export const isCatalogId = isPortfolioId;
 
@@ -158,7 +215,7 @@ function priceUnits(value: unknown): bigint | null {
   return units === 0n ? null : units;
 }
 
-function isPrice(value: unknown): value is CatalogPrice {
+function isPrice(value: unknown, nextOpen: string | null): value is CatalogPrice {
   if (
     !record(value) ||
     !exact(value, [
@@ -194,7 +251,7 @@ function isPrice(value: unknown): value is CatalogPrice {
     event > collected ||
     collected - event >= 120_000_000_000n ||
     cutoff <= collected ||
-    cutoff - collected > 600_000_000_000n
+    (nextOpen !== null ? cutoff > stockInstant(nextOpen) : cutoff - collected > 600_000_000_000n)
   )
     return false;
   const total = bid + ask;
@@ -223,9 +280,16 @@ function isQuoteView(
     isListing(value.listing) &&
     isSession(value.session) &&
     oneOf(value.reason, QUOTE_REASONS) &&
+    typeof value.read_only === "boolean" &&
+    oneOf(value.execution_reason, EXECUTION_REASONS) &&
+    value.read_only === (value.execution_reason !== "available") &&
+    (value.read_only || (value.listing.state === "active" && value.session.state === "open")) &&
     (value.quote === null
       ? value.reason !== "ready"
-      : isPrice(value.quote) &&
+      : isPrice(
+          value.quote,
+          value.session.state === "closed" ? value.session.next_open_at : null,
+        ) &&
         value.listing.state === "active" &&
         ((value.reason === "ready" && value.session.state === "open") ||
           (value.reason === "market_closed" && value.session.state === "closed")))
@@ -246,6 +310,8 @@ export async function searchStockCatalog(
   return value;
 }
 
+const QUOTE_VIEW_FIELDS = "listing session quote reason read_only execution_reason";
+
 export async function requestCatalogPrice(
   listing: StockCatalogItem,
   signal: AbortSignal,
@@ -260,7 +326,7 @@ export async function requestCatalogPrice(
   );
   if (
     !record(value) ||
-    !exact(value, ["listing", "session", "quote", "reason"]) ||
+    !stockExact(value, QUOTE_VIEW_FIELDS) ||
     !isQuoteView(value) ||
     value.listing.catalog_id !== listing.catalog_id ||
     value.listing.listing_version !== listing.listing_version
@@ -284,11 +350,17 @@ export async function fetchCatalogTradeContext(
   );
   if (
     !record(value) ||
-    !exact(value, ["listing", "session", "quote", "reason", "portfolio_id", "read_only"]) ||
+    !stockExact(value, QUOTE_VIEW_FIELDS + " portfolio_id cash held_quantity buy_max_quantity") ||
     !isQuoteView(value) ||
     value.listing.catalog_id !== catalogId ||
     value.portfolio_id !== portfolioId ||
-    value.read_only !== true
+    typeof value.cash !== "string" ||
+    stockBalance(value.cash) === null ||
+    typeof value.held_quantity !== "string" ||
+    stockShares(value.held_quantity) === null ||
+    typeof value.buy_max_quantity !== "string" ||
+    stockShares(value.buy_max_quantity) === null ||
+    (value.read_only && stockShares(value.buy_max_quantity) !== 0n)
   )
     throw new Error("Unexpected portfolio stock catalog context");
   return {
@@ -297,6 +369,214 @@ export async function fetchCatalogTradeContext(
     session: value.session,
     reason: value.reason,
     portfolio_id: portfolioId,
-    read_only: true,
+    read_only: value.read_only,
+    execution_reason: value.execution_reason,
+    cash: value.cash,
+    held_quantity: value.held_quantity,
+    buy_max_quantity: value.buy_max_quantity,
   };
+}
+
+const ORDER_FIELDS = "listing_version side quantity";
+const ECONOMIC_FIELDS = STOCK_ECONOMIC_FIELDS + " catalog_id listing_version";
+
+export function isCatalogOrder(v: unknown): v is CatalogOrder {
+  return (
+    record(v) &&
+    stockExact(v, ORDER_FIELDS) &&
+    isCatalogId(v.listing_version) &&
+    oneOf(v.side, ["buy", "sell"]) &&
+    typeof v.quantity === "string" &&
+    /^[1-9][0-9]{0,11}$/.test(v.quantity)
+  );
+}
+
+function isCatalogAttempt(v: unknown): v is CatalogAttempt {
+  return (
+    record(v) &&
+    stockExact(v, ORDER_FIELDS + " expected_exec_price idempotency_key") &&
+    isCatalogOrder({ listing_version: v.listing_version, side: v.side, quantity: v.quantity }) &&
+    stockPrice(v.expected_exec_price) !== null &&
+    typeof v.idempotency_key === "string" &&
+    /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(v.idempotency_key)
+  );
+}
+
+function catalogEconomics(
+  v: Record<string, unknown>,
+): v is Record<string, unknown> & StockEconomicValues & CatalogIssue {
+  return (
+    stockEconomicValues(v) &&
+    isCatalogId(v.catalog_id) &&
+    isCatalogId(v.listing_version) &&
+    typeof v.symbol === "string" &&
+    /^[A-Z0-9][A-Z0-9.$^+/=-]{0,13}$/.test(v.symbol)
+  );
+}
+
+export function isCatalogPreview(v: unknown): v is CatalogPreview {
+  if (
+    !record(v) ||
+    !stockExact(v, ECONOMIC_FIELDS + " valid_until") ||
+    !catalogEconomics(v) ||
+    !timestamp(v.valid_until)
+  )
+    return false;
+  const deadline = stockInstant(v.valid_until);
+  return (
+    deadline > stockInstant(v.observed_at) &&
+    deadline <= stockInstant(v.session_closes_at) &&
+    deadline <= stockInstant(v.event_at) + 120_000_000_000n
+  );
+}
+
+function isCatalogFill(v: unknown): v is CatalogFill {
+  if (
+    !record(v) ||
+    !stockExact(v, ECONOMIC_FIELDS + " schema_version trade_id executed_at") ||
+    !catalogEconomics(v) ||
+    v.schema_version !== 1 ||
+    !isCatalogId(v.trade_id) ||
+    !timestamp(v.executed_at)
+  )
+    return false;
+  const filled = stockInstant(v.executed_at);
+  return (
+    stockInstant(v.observed_at) <= filled &&
+    filled < stockInstant(v.session_closes_at) &&
+    filled - stockInstant(v.event_at) < 120_000_000_000n
+  );
+}
+
+function isCatalogReplacement(v: unknown): v is CatalogPriceChanged {
+  if (
+    !record(v) ||
+    !stockExact(
+      v,
+      "code previous_exec_price previous_cash_delta exec_price_change cash_delta_change quote",
+    ) ||
+    v.code !== "price_changed" ||
+    !isCatalogPreview(v.quote)
+  )
+    return false;
+  const price = stockPrice(v.previous_exec_price);
+  if (price === null || price === stockPrice(v.quote.exec_price)) return false;
+  const previousCash =
+    stockRoundCent(price * (stockShares(v.quote.quantity, true)! / STOCK_SCALE)) *
+    (v.quote.side === "buy" ? -1n : 1n);
+  return (
+    stockBalance(v.previous_cash_delta, true) === previousCash &&
+    stockFixed(v.exec_price_change, true) === stockPrice(v.quote.exec_price)! - price &&
+    stockBalance(v.cash_delta_change, true) ===
+      stockBalance(v.quote.cash_delta, true)! - previousCash
+  );
+}
+
+export function withCatalogTiming<T extends { observed_at: string }>(
+  value: T,
+  started: number,
+): T & { transport: StockTransport } {
+  const received = performance.now();
+  return {
+    ...value,
+    transport: {
+      started_at: started,
+      received_at: received,
+      round_trip_ms: Math.max(0, received - started),
+    },
+  };
+}
+
+function matchesOrder(
+  value: StockEconomicValues & CatalogIssue,
+  portfolioId: string,
+  catalogId: string,
+  order: CatalogOrder,
+) {
+  return (
+    value.portfolio_id === portfolioId &&
+    value.catalog_id === catalogId &&
+    value.listing_version === order.listing_version &&
+    value.side === order.side &&
+    stockShares(value.quantity, true) === stockFixed(order.quantity)
+  );
+}
+
+function orderPath(portfolioId: string, catalogId: string, action: "preview" | "confirm") {
+  if (!isPortfolioId(portfolioId) || !isCatalogId(catalogId))
+    throw new Error("Unexpected order target");
+  return `/api/v2/portfolios/${portfolioId}/stock-catalog/${catalogId}/${action}`;
+}
+
+export async function previewCatalogOrder(
+  portfolioId: string,
+  catalogId: string,
+  order: CatalogOrder,
+  signal: AbortSignal,
+  isCurrent: () => boolean,
+): Promise<TimedCatalogPreview> {
+  if (!isCatalogOrder(order)) throw new Error("Unexpected stock order");
+  const started = performance.now();
+  const value = await guardedJsonRequest(
+    orderPath(portfolioId, catalogId, "preview"),
+    { method: "POST", body: JSON.stringify(order), signal, cache: "no-store" },
+    isCurrent,
+  );
+  if (!isCatalogPreview(value) || !matchesOrder(value, portfolioId, catalogId, order))
+    throw new Error("Unexpected stock preview");
+  return withCatalogTiming(value, started);
+}
+
+export async function confirmCatalogOrder(
+  portfolioId: string,
+  catalogId: string,
+  order: CatalogAttempt,
+  isCurrent: () => boolean,
+): Promise<CatalogFill> {
+  if (!isCatalogAttempt(order)) throw new Error("Unexpected stock attempt");
+  const value = await guardedJsonRequest(
+    orderPath(portfolioId, catalogId, "confirm"),
+    { method: "POST", body: JSON.stringify(order), cache: "no-store" },
+    isCurrent,
+    {
+      successStatuses: [200, 201],
+      validateErrorDetail: (status, detail) =>
+        status === 409 &&
+        isCatalogReplacement(detail) &&
+        matchesOrder(detail.quote, portfolioId, catalogId, order) &&
+        stockPrice(detail.previous_exec_price) === stockPrice(order.expected_exec_price),
+    },
+  );
+  if (
+    !isCatalogFill(value) ||
+    !matchesOrder(value, portfolioId, catalogId, order) ||
+    stockPrice(value.exec_price) !== stockPrice(order.expected_exec_price)
+  )
+    throw new Error("Unexpected stock receipt");
+  return value;
+}
+
+export function catalogReplacement(
+  error: unknown,
+  started: number,
+): CatalogPriceChanged<TimedCatalogPreview> | null {
+  if (!(error instanceof ApiError) || error.status !== 409 || !isCatalogReplacement(error.detail))
+    return null;
+  return { ...error.detail, quote: withCatalogTiming(error.detail.quote, started) };
+}
+
+const INPUT_REFUSALS = [
+  "invalid_quantity",
+  "insufficient_cash",
+  "insufficient_holding",
+  "numeric_range",
+];
+export function catalogRefusal(error: unknown): CatalogOrderRefusal | null {
+  if (
+    !(error instanceof ApiError) ||
+    !oneOf(error.code, [...STOCK_REFUSALS, "read_only", "listing_changed"] as const)
+  )
+    return null;
+  const status = INPUT_REFUSALS.includes(error.code) ? 422 : 409;
+  return error.status === status ? error.code : null;
 }

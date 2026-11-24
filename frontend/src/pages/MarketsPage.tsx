@@ -14,6 +14,7 @@ import {
 } from "@/hooks/useStockCatalog";
 import { useStocks } from "@/hooks/useStocks";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
+import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUnitPrice } from "@/lib/money";
 import "./markets.css";
 
@@ -110,6 +111,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const selectedQuote = useSelectedCatalogPrice(versionChanged ? null : (catalogListing ?? null));
   const quoteView = selectedQuote.data;
   const catalogMark = quoteView ? catalogDisplay(quoteView, now) : null;
+  const catalogRestriction = quoteView?.execution_reason;
+  const executionMessage =
+    catalogRestriction && catalogRestriction !== "read_only" && catalogRestriction !== "available"
+      ? stockRestrictions[catalogRestriction]
+      : null;
   const priceError = selectedQuote.error instanceof ApiError ? selectedQuote.error.code : null;
   const listingChanged = versionChanged || priceError === "listing_changed";
   const missingListing = priceError === "stock_catalog_not_found";
@@ -123,7 +129,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
         ? "Stock price requests are temporarily limited."
         : selectedQuote.isError
           ? "Couldn’t load this stock price."
-          : catalogMark?.message;
+          : (catalogMark?.message ?? executionMessage);
   const retryPrice =
     (!listingChanged && !missingListing && selectedQuote.isError) || catalogMark?.retryable;
   const coin = stockMarket ? undefined : coins.find(({ symbol }) => symbol === asset?.symbol);
@@ -155,7 +161,13 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                 : stockRestrictions[stock.execution_reason]
     : null;
   const action = catalogListing
-    ? "View details"
+    ? quoteView?.read_only === false &&
+      catalogRestriction === "available" &&
+      !selectedQuote.isError &&
+      !marketClosed &&
+      catalogMark?.quote
+      ? "Trade"
+      : "View details"
     : stock
       ? stock.execution_enabled && permitted && !marketClosed
         ? "Trade"
@@ -166,6 +178,9 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const prefix = portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : "";
   const rawPrice = catalogMark?.quote?.mid ?? asset?.price;
   const price = rawPrice ? formatUnitPrice(rawPrice) : stockMarket ? null : "Price unavailable";
+  const closingMarkTime = marketClosed
+    ? (catalogMark?.quote?.event_at ?? stockQuote?.event_at)
+    : undefined;
 
   function selectMarket(next: Market) {
     if (next === market) return;
@@ -404,8 +419,17 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
             </p>
             <div className="my-7 border-y border-[var(--market-line)] py-5 md:py-7">
               {price && (
-                <p className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
+                <p
+                  className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums"
+                  title={closingMarkTime ? fullLocalTimestamp(closingMarkTime) : undefined}
+                >
                   {price}
+                  {closingMarkTime && (
+                    <time className="sr-only" dateTime={closingMarkTime}>
+                      {" As of "}
+                      {fullLocalTimestamp(closingMarkTime)}
+                    </time>
+                  )}
                 </p>
               )}
               {coin && age !== null && (

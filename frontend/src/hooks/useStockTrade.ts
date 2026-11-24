@@ -55,10 +55,10 @@ const who = (c: QueryClient) => c.getQueryData<{ email: string } | null>(["me"])
 const floor = (v: string) => Date.parse(v);
 const ceil = (v: string) => floor(v) + (/\.\d{3}\d*[1-9]\d*(?:Z|\+00:00)$/.test(v) ? 1 : 0);
 export function stockUpper(
-  data: TimedStockContext | TimedStockQuote,
+  data: Pick<TimedStockQuote, "observed_at" | "transport"> & { authority_offset_ms?: number },
   now = performance.now(),
 ): number {
-  const offset = "authority_offset_ms" in data ? (data.authority_offset_ms ?? 0) : 0;
+  const offset = data.authority_offset_ms ?? 0;
   return (
     ceil(data.observed_at) +
     Math.ceil(data.transport.round_trip_ms + offset + Math.max(0, now - data.transport.received_at))
@@ -175,7 +175,7 @@ type ContextGuard = {
 };
 type AuthGuard = { email: string | null; version: number; contexts: Map<string, ContextGuard> };
 const guards = new WeakMap<QueryClient, AuthGuard>();
-function authGuard(client: QueryClient): AuthGuard {
+export function stockTradeAuth(client: QueryClient): AuthGuard {
   const existing = guards.get(client);
   if (existing) return existing;
   const g: AuthGuard = { email: who(client), version: 0, contexts: new Map() };
@@ -319,7 +319,7 @@ function quoteCurrent(q: TimedStockQuote, c: TimedStockContext | undefined): boo
 export function useStockTrade(target: PortfolioTarget | null, routeSymbol: string) {
   const client = useQueryClient();
   const scope = useMemo(() => financialScope(client, target), [client, target]);
-  const auth = authGuard(client),
+  const auth = stockTradeAuth(client),
     email = scope.owner,
     portfolioId = scope.portfolioId;
   const stateKey = useMemo(

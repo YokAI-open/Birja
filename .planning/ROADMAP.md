@@ -113,7 +113,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 - [x] 20-07 — Project mixed valuation and historical stock labels.
 
 **Wave 7** *(after Wave 6)*
-- [ ] 20-08 — Adapt the stock ticket, Portfolio and History interfaces.
+- [x] 20-08 — Adapt the stock ticket, Portfolio and History interfaces.
 
 **Wave 8** *(after Wave 7)*
 - [ ] 20-09 — Prove the fixture round trip and encrypted 0025/0026 recovery.
@@ -145,7 +145,7 @@ expanded rights remain open. Phase 21 owns release CI and live acceptance.
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 7/9 | In progress |
+| 20. Trade and value stocks from search | 8/9 | In progress |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

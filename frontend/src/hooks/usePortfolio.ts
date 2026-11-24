@@ -144,6 +144,9 @@ function hide(h: PortfolioHolding): PortfolioHolding {
   };
 }
 function externalRestriction(client: QueryClient, g: Guard, h: PortfolioHolding): boolean {
+  // Catalog valuation has its own admitted issue and mark deadline. The
+  // curated symbol cache cannot assess its provider scope or unit history.
+  if (h.catalog_id !== undefined) return false;
   const a = h.stock_mark?.authority;
   const context = client.getQueryData<TimedStockContext>([
     "stockContext",

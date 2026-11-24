@@ -175,21 +175,21 @@ export function stockFixed(v: unknown, signed = false): bigint | null {
   const result = BigInt(whole + fraction.padEnd(9, "0"));
   return negative ? -result : result;
 }
-const price = (v: unknown) => {
+export const stockPrice = (v: unknown) => {
   const n = stockFixed(v);
   return n !== null && n > 0n && n <= MAX_PRICE && n % 10n === 0n ? n : null;
 };
-const balance = (v: unknown, signed = false) => {
+export const stockBalance = (v: unknown, signed = false) => {
   const n = stockFixed(v, signed);
   return n !== null && n >= -MAX_BAL && n <= MAX_BAL && n % CENT === 0n ? n : null;
 };
-const shares = (v: unknown, positive = false) => {
+export const stockShares = (v: unknown, positive = false) => {
   const n = stockFixed(v);
   return n !== null && n >= 0n && (!positive || n > 0n) && n <= MAX_SHARES && n % STOCK_SCALE === 0n
     ? n
     : null;
 };
-const roundCent = (v: bigint) => {
+export const stockRoundCent = (v: bigint) => {
   const whole = v / CENT,
     rest = v % CENT;
   return (whole + (rest > CENT / 2n || (rest === CENT / 2n && whole % 2n === 1n) ? 1n : 0n)) * CENT;
@@ -210,7 +210,7 @@ export function isStockAttempt(v: unknown): v is StockAttempt {
     stockExact(v, "portfolio_id symbol side quantity expected_exec_price idempotency_key") &&
     isPortfolioId(v.portfolio_id) &&
     isStockOrder({ symbol: v.symbol, side: v.side, quantity: v.quantity }) &&
-    price(v.expected_exec_price) !== null &&
+    stockPrice(v.expected_exec_price) !== null &&
     typeof v.idempotency_key === "string" &&
     /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v.idempotency_key)
   );
@@ -261,21 +261,23 @@ function approvedAuthority(v: AuthorityIdentity, at: string): boolean {
     v.admissions.every((a) => stockInstant(a.valid_until) > stockInstant(at))
   );
 }
-const ECONOMIC =
-  "portfolio_id coin_id provider_asset_id symbol company_name listing_exchange currency side quantity bid ask exact_mid exec_price source feed event_at collected_at observed_at age_seconds notional fee cash_delta cash_before cash_after held_before held_after session_date session_opens_at session_closes_at authority";
-function identity(v: Record<string, unknown>): boolean {
-  return (
-    isPortfolioId(v.portfolio_id) &&
-    id(v.coin_id) &&
-    text(v.provider_asset_id, 128) &&
-    symbol(v.symbol) &&
-    text(v.company_name, 256) &&
-    member(v.listing_exchange, ["NYSE", "NASDAQ"])
-  );
-}
-function economics(v: Record<string, unknown>): v is Record<string, unknown> & StockEconomics {
+export type StockEconomicValues = Omit<
+  StockEconomics,
+  "coin_id" | "provider_asset_id" | "authority"
+>;
+export type StockFillValues = StockEconomicValues &
+  Pick<StockFill, "schema_version" | "trade_id" | "executed_at">;
+export const STOCK_ECONOMIC_FIELDS =
+  "portfolio_id symbol company_name listing_exchange currency side quantity bid ask exact_mid exec_price source feed event_at collected_at observed_at age_seconds notional fee cash_delta cash_before cash_after held_before held_after session_date session_opens_at session_closes_at";
+const ECONOMIC = STOCK_ECONOMIC_FIELDS + " coin_id provider_asset_id authority";
+
+export function stockEconomicValues(
+  v: Record<string, unknown>,
+): v is Record<string, unknown> & StockEconomicValues {
   if (
-    !identity(v) ||
+    !isPortfolioId(v.portfolio_id) ||
+    !text(v.company_name, 256) ||
+    !member(v.listing_exchange, ["NYSE", "NASDAQ"]) ||
     v.currency !== "USD" ||
     !member(v.side, ["buy", "sell"]) ||
     v.source !== "alpaca" ||
@@ -283,8 +285,7 @@ function economics(v: Record<string, unknown>): v is Record<string, unknown> & S
     !integer(v.age_seconds) ||
     ![v.event_at, v.collected_at, v.observed_at, v.session_opens_at, v.session_closes_at].every(
       stockTimestamp,
-    ) ||
-    !isStockAuthority(v.authority)
+    )
   )
     return false;
   const event = stockInstant(v.event_at as string),
@@ -297,22 +298,21 @@ function economics(v: Record<string, unknown>): v is Record<string, unknown> & S
     v.session_date !== (v.event_at as string).slice(0, 10) ||
     v.session_date !== (v.session_opens_at as string).slice(0, 10) ||
     v.age_seconds !== Number((observed - event) / 1_000_000_000n) ||
-    observed - event >= 120_000_000_000n ||
-    !approvedAuthority(v.authority, v.observed_at as string)
+    observed - event >= 120_000_000_000n
   )
     return false;
-  const bid = price(v.bid),
-    ask = price(v.ask),
+  const bid = stockPrice(v.bid),
+    ask = stockPrice(v.ask),
     mid = stockFixed(v.exact_mid),
-    exec = price(v.exec_price),
-    qty = shares(v.quantity, true),
-    notional = balance(v.notional),
-    fee = balance(v.fee),
-    delta = balance(v.cash_delta, true),
-    before = balance(v.cash_before),
-    after = balance(v.cash_after),
-    held = shares(v.held_before),
-    heldAfter = shares(v.held_after);
+    exec = stockPrice(v.exec_price),
+    qty = stockShares(v.quantity, true),
+    notional = stockBalance(v.notional),
+    fee = stockBalance(v.fee),
+    delta = stockBalance(v.cash_delta, true),
+    before = stockBalance(v.cash_before),
+    after = stockBalance(v.cash_after),
+    held = stockShares(v.held_before),
+    heldAfter = stockShares(v.held_after);
   if (
     bid === null ||
     ask === null ||
@@ -333,13 +333,32 @@ function economics(v: Record<string, unknown>): v is Record<string, unknown> & S
     mid * 2n === bid + ask &&
     exec === (v.side === "buy" ? ask : bid) &&
     fee === 0n &&
-    notional === roundCent(exec * (qty / STOCK_SCALE)) &&
+    notional === stockRoundCent(exec * (qty / STOCK_SCALE)) &&
     delta === (v.side === "buy" ? -notional : notional) &&
     (v.side !== "buy" || notional > 0n) &&
     before + delta === after &&
     heldAfter === (v.side === "buy" ? held + qty : held - qty)
   );
 }
+function identity(v: Record<string, unknown>): boolean {
+  return (
+    isPortfolioId(v.portfolio_id) &&
+    id(v.coin_id) &&
+    text(v.provider_asset_id, 128) &&
+    symbol(v.symbol) &&
+    text(v.company_name, 256) &&
+    member(v.listing_exchange, ["NYSE", "NASDAQ"])
+  );
+}
+function economics(v: Record<string, unknown>): v is Record<string, unknown> & StockEconomics {
+  return (
+    stockEconomicValues(v) &&
+    identity(v) &&
+    isStockAuthority(v.authority) &&
+    approvedAuthority(v.authority, v.observed_at)
+  );
+}
+
 export function isStockTradeQuote(v: unknown): v is StockTradeQuote {
   if (
     !stockRecord(v) ||
@@ -380,8 +399,8 @@ function quoteFacts(v: unknown): v is QuoteFacts {
     )
   )
     return false;
-  const bid = price(v.bid),
-    ask = price(v.ask),
+  const bid = stockPrice(v.bid),
+    ask = stockPrice(v.ask),
     mid = stockFixed(v.exact_mid);
   return (
     bid !== null &&
@@ -408,9 +427,9 @@ export function isStockContext(v: unknown): v is StockContext {
     ) ||
     !identity(v) ||
     !stockTimestamp(v.observed_at) ||
-    balance(v.cash) === null ||
-    shares(v.held_quantity) === null ||
-    shares(v.buy_max_quantity) === null ||
+    stockBalance(v.cash) === null ||
+    stockShares(v.held_quantity) === null ||
+    stockShares(v.buy_max_quantity) === null ||
     (v.quote !== null && !quoteFacts(v.quote)) ||
     (v.authority !== null && !isStockAuthority(v.authority)) ||
     typeof v.execution_enabled !== "boolean" ||
@@ -461,7 +480,7 @@ export function isStockContext(v: unknown): v is StockContext {
   if (v.execution_enabled !== (v.execution_reason === "available")) return false;
   if (!v.execution_enabled)
     return (
-      shares(v.buy_max_quantity) === 0n &&
+      stockShares(v.buy_max_quantity) === 0n &&
       (v.valid_until === null ||
         (v.quote !== null && stockInstant(v.valid_until as string) > stockInstant(v.observed_at)))
     );
@@ -509,8 +528,9 @@ export function isStockContext(v: unknown): v is StockContext {
     ].every((x) => until <= stockInstant(x as string)) &&
     (a.next_blocking_at === null || until <= stockInstant(a.next_blocking_at as string)) &&
     until <= stockInstant(q.event_at) + 120_000_000_000n &&
-    shares(v.buy_max_quantity)! <= (balance(v.cash)! / price(q.ask)!) * STOCK_SCALE &&
-    shares(v.held_quantity)! + shares(v.buy_max_quantity)! <= MAX_SHARES &&
+    stockShares(v.buy_max_quantity)! <=
+      (stockBalance(v.cash)! / stockPrice(q.ask)!) * STOCK_SCALE &&
+    stockShares(v.held_quantity)! + stockShares(v.buy_max_quantity)! <= MAX_SHARES &&
     q.admission_generation ===
       v.authority.admissions.find((x) => x.product === "quotes")?.generation &&
     q.unit_epoch === v.authority.unit_epoch
@@ -527,21 +547,21 @@ export function isStockPriceChanged(v: unknown): v is StockPriceChanged {
     !isStockTradeQuote(v.quote)
   )
     return false;
-  const previous = price(v.previous_exec_price),
-    oldDelta = balance(v.previous_cash_delta, true),
+  const previous = stockPrice(v.previous_exec_price),
+    oldDelta = stockBalance(v.previous_cash_delta, true),
     priceChange = stockFixed(v.exec_price_change, true),
-    cashChange = balance(v.cash_delta_change, true);
+    cashChange = stockBalance(v.cash_delta_change, true);
   if (previous === null || oldDelta === null || priceChange === null || cashChange === null)
     return false;
   const q = v.quote,
     old =
-      roundCent(previous * (shares(q.quantity, true)! / STOCK_SCALE)) *
+      stockRoundCent(previous * (stockShares(q.quantity, true)! / STOCK_SCALE)) *
       (q.side === "buy" ? -1n : 1n);
   return (
     old === oldDelta &&
     priceChange !== 0n &&
-    priceChange === price(q.exec_price)! - previous &&
-    cashChange === balance(q.cash_delta, true)! - oldDelta
+    priceChange === stockPrice(q.exec_price)! - previous &&
+    cashChange === stockBalance(q.cash_delta, true)! - oldDelta
   );
 }
 
@@ -578,7 +598,7 @@ const timed = <T>(value: T, started: number): T & { transport: StockTransport } 
 const sameOrder = (v: StockEconomics, order: StockOrder) =>
   v.symbol === order.symbol &&
   v.side === order.side &&
-  shares(v.quantity, true) === stockFixed(order.quantity);
+  stockShares(v.quantity, true) === stockFixed(order.quantity);
 function failure(error: unknown, started: number, order?: StockAttempt): never {
   if (error instanceof ApiError) {
     if (
@@ -587,7 +607,7 @@ function failure(error: unknown, started: number, order?: StockAttempt): never {
       order &&
       error.detail.quote.portfolio_id === order.portfolio_id &&
       sameOrder(error.detail.quote, order) &&
-      price(error.detail.previous_exec_price) === price(order.expected_exec_price)
+      stockPrice(error.detail.previous_exec_price) === stockPrice(order.expected_exec_price)
     )
       throw new StockTradeError("reprice", null, 409, {
         ...error.detail,
