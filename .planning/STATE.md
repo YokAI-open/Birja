@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Searchable Stock Trading
-current_phase: 19
-status: gaps_found
-last_updated: "2026-11-24T19:51:47Z"
-last_activity: 2026-11-24 -- Phase 19 local implementation verified, live coverage open
+current_phase: 20
+status: executing
+last_updated: "2026-11-24T20:21:45.577Z"
+last_activity: 2026-11-24 -- Phase 20 planning complete
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 11
+  total_plans: 20
   completed_plans: 11
   percent: 25
 ---
@@ -22,18 +22,20 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [REQUIREMENTS.md](REQUIREMENTS.md) and [v1.4 research](research/v1.4/SUMMARY.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Phase 19 catalog source qualification, stable identities and
-search by company name or ticker for active NYSE and Nasdaq common stocks.
+Current focus: Phase 20 stable-identity trading, mixed portfolio valuation
+and corporate actions for stocks found through search.
 
 ## Current Position
 
-Phase: 19
-Plan: 6 of 6 executed
-Status: Local implementation verified. Live catalog coverage remains open.
-Last activity: 2026-11-24 -- Independent verification confirmed 14 of 15 checks.
+Phase: 20
+Plan: 0 of 9 executed
+Status: Ready to execute locally
+Last activity: 2026-11-24 -- Phase 20 planning complete
 
-SC-02 and SC-04 are verified. SC-01 awaits complete admitted live exchange
-coverage. SC-03 has fixture evidence and awaits expanded live quote proof.
+Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
+awaits complete admitted live exchange coverage. SC-03 has fixture evidence
+and awaits expanded live quote proof. Phase 20 local planning is complete
+with all four assigned requirements and five inherited decisions covered.
 [Phase 19 verification](phases/19-search-the-nyse-and-nasdaq-catalog/19-VERIFICATION.md)
 
 ## Carried context

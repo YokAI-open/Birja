@@ -91,6 +91,38 @@ The simulator runs in a disposable stack for Phase 18 verification.
 
 **Requirements:** SL-01, SL-02, SL-03, SL-04
 
+**Plans:** 9 plans across 8 waves
+
+**Wave 1**
+- [ ] 20-01 — Bind catalog issues to permanent financial instruments.
+
+**Wave 2** *(after Wave 1)*
+- [ ] 20-02 — Add exact SQL authority for catalog fills and actions.
+
+**Wave 3** *(after Wave 2)*
+- [ ] 20-03 — Admit schema 0026 and preserve retained 0025 compatibility.
+
+**Wave 4** *(after Wave 3)*
+- [ ] 20-04 — Refresh selected and held quotes and apply reported halts.
+- [ ] 20-05 — Verify scoped corporate-action readiness and effects.
+
+**Wave 5** *(after both Wave 4 plans)*
+- [ ] 20-06 — Connect the owned catalog ticket, fills and receipt replay.
+
+**Wave 6** *(after Wave 5)*
+- [ ] 20-07 — Project mixed valuation and historical stock labels.
+
+**Wave 7** *(after Wave 6)*
+- [ ] 20-08 — Adapt the stock ticket, Portfolio and History interfaces.
+
+**Wave 8** *(after Wave 7)*
+- [ ] 20-09 — Prove the fixture round trip and encrypted 0025/0026 recovery.
+
+Phase 20 runs on disposable fixtures. Phase 19's live catalog coverage and
+expanded rights remain open. Phase 21 owns release CI and live acceptance.
+
+**Success Criteria**
+
 1. Users can buy and sell a newly onboarded common stock and see its correct position and cash in a mixed portfolio. Refresh calls scale with selected and held stocks.
 2. Closed stocks show their latest permitted marks and local opening countdown. Missing marks leave the relevant aggregate visibly incomplete.
 3. An ordinary dividend and a supported split apply once to affected active portfolios. Ticker changes, restart and uncertain actions preserve identity, balances and History.
@@ -113,7 +145,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 0/TBD | Not started |
+| 20. Trade and value stocks from search | 0/9 | Ready for local execution |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
