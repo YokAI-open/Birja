@@ -7,10 +7,12 @@ import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixt
 import StockTradePage from "./StockTradePage";
 import App from "@/App";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
+import { stocks } from "../../e2e/stock-fixtures";
 const clients: QueryClient[] = [];
 function setup(
   options: {
     context?: () => Response;
+    catalogue?: () => Response;
     trade?: (body: Record<string, unknown>) => Response | Promise<Response>;
     route?: string;
     app?: boolean;
@@ -33,6 +35,8 @@ function setup(
       const path = String(input),
         body = init?.body ? JSON.parse(String(init.body)) : null;
       calls.push({ path, body });
+      if (path === "/api/v1/stocks")
+        return options.catalogue?.() ?? new Response("{}", { status: 404 });
       if (path.endsWith("/context"))
         return scoped(options.context?.() ?? new Response(JSON.stringify(contextFixture())));
       if (path.endsWith("/quote")) return scoped(new Response(JSON.stringify(quoteFixture())));
@@ -136,11 +140,58 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
   await user.type(input, "3");
   expect(input).toHaveValue("3");
   expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
-  expect(
-    screen.getByText("Market closed. You can edit a draft; no order is queued."),
-  ).toBeVisible();
+  expect(screen.getByText("Market closed.")).toBeVisible();
+  expect(screen.queryByText("Unavailable", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
   expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
+});
+it.each([true, false])(
+  "uses the catalogue for a closed ticket with retained quote %s if trade context cannot load",
+  async (retainedQuote) => {
+    const now = Date.now();
+    const nextOpen = new Date(now + 119.75 * 60_000);
+    const catalogue = stocks({
+      state: retainedQuote ? "approved" : "unavailable",
+      now: new Date(now).toISOString(),
+      open: new Date(now - 60_000).toISOString(),
+      close: new Date(now + 3_600_000).toISOString(),
+    });
+    const stock = catalogue.items[0]!;
+    Object.assign(stock, { session_reason: "closed" });
+    Object.assign(stock.session, {
+      state: "closed",
+      opens_at: null,
+      closes_at: null,
+      next_open_at: nextOpen.toISOString(),
+    });
+    if (retainedQuote) {
+      stock.quote!.event_at = new Date(now - 300_000).toISOString();
+      stock.quote!.age_seconds = 300;
+      stock.quote_reason = "stale";
+    }
+    setup({
+      catalogue: () => Response.json(catalogue),
+      context: () => Response.json({ detail: { code: "permission_unavailable" } }, { status: 409 }),
+    });
+    expect(await screen.findByText("Market closed.")).toBeVisible();
+    expect(screen.getByText("Opens in 2 hr")).toHaveAttribute("dateTime", nextOpen.toISOString());
+    expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+    if (retainedQuote) {
+      expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
+      expect(screen.getByText(/Last verified IEX midpoint/)).toBeVisible();
+      expect(screen.getByText(catalogue.attribution.required_text)).toBeVisible();
+    } else {
+      expect(screen.queryByText("$101.00", { exact: true })).toBeNull();
+      expect(screen.queryByText(catalogue.attribution.required_text)).toBeNull();
+    }
+    expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  },
+);
+it("shows a single retry message when the stock and its schedule cannot load", async () => {
+  setup({ context: () => Response.json({}, { status: 503 }) });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this stock.");
+  expect(screen.getAllByText("Couldn't load this stock.")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Retry stock" })).toBeEnabled();
 });
 it("keeps an unresolvable saved receipt as an uncertain attempt instead of allowing a new order", async () => {
   const { user, calls } = setup({
@@ -274,10 +325,10 @@ it("unknown response keeps fields frozen and checks the same original body after
     .map((c) => c.body);
   expect(bodies[1]).toEqual(bodies[0]);
 });
-it("invalid route symbols show a safe return to Markets without stock requests", async () => {
+it("invalid route symbols show an error without stock requests or duplicate navigation", async () => {
   const { calls } = setup({ route: "/trade/stocks/invalid!" });
   expect(await screen.findByRole("heading", { name: "Unknown stock" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Back to Markets" })).toHaveAttribute("href", "/");
+  expect(screen.queryByRole("link", { name: "Back to Markets" })).toBeNull();
   expect(calls.some((c) => c.path.includes("/stock-trades"))).toBe(false);
 });
 
@@ -286,29 +337,31 @@ it("the authenticated App mounts the distinct stock route", async () => {
   expect(await screen.findByRole("heading", { name: "Trade AAPL", level: 1 })).toBeVisible();
   expect(await screen.findByLabelText("Whole-share quantity")).toBeVisible();
   expect(screen.getByRole("link", { name: "Markets" })).toHaveAttribute("href", "/");
+  const option = await screen.findByRole("option", { name: "Strategy one" });
+  expect(screen.getAllByText("Strategy one")).toEqual([option]);
   expect(screen.queryByLabelText("Amount (USD)")).toBeNull();
 });
 
-it("names the stock ticket, preview and original receipt and keeps scoped destinations", async () => {
+it("omits portfolio names from the stock preview and receipt while retaining the scoped link", async () => {
   const { user, calls } = setup();
   await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
   await waitFor(() => expect(confirm).toBeEnabled());
-  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
+  expect(screen.queryByText("Strategy one")).toBeNull();
   await user.click(confirm);
   const receipt = within(await screen.findByRole("region", { name: "Order filled" }));
-  expect(receipt.getByText("Strategy one")).toBeVisible();
+  expect(receipt.queryByText("Strategy one")).toBeNull();
   expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/portfolios/1");
   await user.click(receipt.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
   expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
 });
-it("wraps and escapes a full60-character stock portfolio name", async () => {
+it("omits even a long portfolio name from the stock ticket", async () => {
   const name = "<script>" + "a".repeat(43) + "</script>";
   setup({ name });
-  const names = await screen.findAllByText(name);
-  expect(names[0]).toHaveClass("[overflow-wrap:anywhere]");
+  await screen.findByLabelText("Whole-share quantity");
+  expect(screen.queryByText(name)).toBeNull();
   expect(document.querySelector("script")).toBeNull();
 });
 it("suppresses every financial field and receipt when the original portfolio is lost during confirmation", async () => {
@@ -355,7 +408,8 @@ it("does not display or relabel a late original stock receipt in a sibling ticke
   await waitFor(() => expect(confirm).toBeEnabled());
   await user.click(confirm);
   await user.click(screen.getByRole("link", { name: "Other strategy" }));
-  expect((await screen.findAllByText("Strategy two"))[0]).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText("Whole-share quantity")).toHaveValue(""));
+  expect(screen.queryByText("Strategy two")).toBeNull();
   await act(async () => {
     resolve(new Response(JSON.stringify(fillFixture())));
   });

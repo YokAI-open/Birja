@@ -547,24 +547,23 @@ describe("TradePage", () => {
   });
 });
 
-it("names the ticket, confirmation and focused original receipt with scoped links", async () => {
+it("keeps the preview and focused receipt free of repeated portfolio names", async () => {
   const { user } = show();
   await previewReady(user);
-  expect(screen.getAllByText("Strategy one")).toHaveLength(2);
-  expect(previewCard().getByText("Strategy one")).toBeVisible();
+  expect(screen.queryByText("Strategy one")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Back to Markets" })).toBeNull();
   await user.click(confirmButton());
   const heading = await screen.findByRole("heading", { name: "Order filled" });
   await waitFor(() => expect(heading).toHaveFocus());
   const receipt = within(screen.getByRole("region", { name: "Order filled" }));
-  expect(receipt.getByText("Strategy one")).toBeVisible();
+  expect(receipt.queryByText("Strategy one")).toBeNull();
   expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/portfolios/1");
 });
-it("renders a long markup-like portfolio name as wrapping plain text", async () => {
+it("omits even a long portfolio name from the crypto ticket", async () => {
   ctx.name = "<img src=x onerror=alert(1)> Strategy " + "a".repeat(22);
   show();
-  const names = await screen.findAllByText(ctx.name);
-  expect(names[0]).toHaveClass("min-w-0");
-  expect(names[0]).toHaveClass("[overflow-wrap:anywhere]");
+  await screen.findByLabelText("Amount");
+  expect(screen.queryByText(ctx.name)).toBeNull();
   expect(document.querySelector("img")).toBeNull();
 });
 it("does not mount prices, holdings, previews or receipts for an unavailable target", async () => {
@@ -584,7 +583,8 @@ it("does not label a late original fill as a sibling portfolio after navigation"
   await user.click(confirmButton());
   await waitFor(() => expect(tradePosts()).toHaveLength(1));
   await user.click(screen.getByRole("link", { name: "Other strategy" }));
-  expect((await screen.findAllByText("Strategy two"))[0]).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText("Amount")).toHaveValue(""));
+  expect(screen.queryByText("Strategy two")).toBeNull();
   await act(async () => {
     resolve(json(fillBody(ctx.mid)));
   });

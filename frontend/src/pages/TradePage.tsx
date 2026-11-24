@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { ApiError } from "@/api/client";
 import { isQuote, type Order, type Quote, type Side } from "@/api/trades";
-import { PortfolioContext } from "@/components/PortfolioContext";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
@@ -251,7 +250,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         >
           Order filled
         </h2>
-        <PortfolioContext name={trade.originalName ?? target.name} />
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -297,9 +295,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
           Preview
         </h2>
-        <PortfolioContext
-          name={trade.attempt ? (trade.originalName ?? target.name) : target.name}
-        />
         {trade.outcomeUnknown && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             We couldn't confirm the result. Check this order before placing another.
@@ -330,14 +325,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
 
   return (
     <div className="app-page flex flex-col gap-7 text-base md:gap-9">
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0 space-y-2 wrap-anywhere">
-          <h1 className="app-heading">Trade {symbol}</h1>
-          <PortfolioContext name={target.name} />
-        </div>
-        <Button asChild variant="secondary">
-          <Link to="/">Back to Markets</Link>
-        </Button>
+      <header>
+        <h1 className="app-heading wrap-anywhere">Trade {symbol}</h1>
       </header>
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
         <Card className="min-w-0 lg:col-span-7 lg:self-start">

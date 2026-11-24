@@ -320,12 +320,9 @@ test("lost actual response recovers only original portfolio key without duplicat
     .click();
   await expect(page.getByRole("heading", { name: "Markets", exact: true })).toBeVisible();
   await inApp(page, `/portfolios/${sibling}/trade/BTC`);
-  await expect(
-    page
-      .getByRole("definition")
-      .filter({ hasText: /^Sibling strategy$/ })
-      .first(),
-  ).toBeVisible();
+  const switcher = page.getByRole("combobox", { name: "Open portfolio" });
+  await expect(switcher).toHaveValue(sibling);
+  await expect(switcher.locator("option:checked")).toHaveText("Sibling strategy");
   await expect(page.getByRole("button", { name: "Check order result", exact: true })).toHaveCount(
     0,
   );
@@ -461,12 +458,11 @@ for (const width of [320, 768, 1280])
     const id = await only(page);
     fixture("name", email);
     await page.goto(`/portfolios/${id}/trade/BTC`);
-    await expect(
-      page
-        .getByRole("definition")
-        .filter({ hasText: "<Strategy>& UnbrokenPortfolioNameUnbrokenPortfolioName" })
-        .first(),
-    ).toBeVisible();
+    const switcher = page.getByRole("combobox", { name: "Open portfolio" });
+    await expect(switcher).toHaveValue(id);
+    await expect(switcher.locator("option:checked")).toContainText(
+      "<Strategy>& UnbrokenPortfolioNameUnbrokenPortfolioName",
+    );
     await snapshot(page, info, `crypto-draft-${width}`);
     await page.getByLabel("Amount", { exact: true }).fill("100");
     await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeEnabled();

@@ -15,17 +15,12 @@ it("displays original recorded balances, identity, source times and disclosure",
     isCurrent: () => true,
   });
   const { user } = renderWithClient(
-    <StockTradeReceipt
-      fill={fill}
-      target={target}
-      portfolioName={target.name}
-      onTradeAgain={again}
-    />,
+    <StockTradeReceipt fill={fill} target={target} onTradeAgain={again} />,
   );
   const receipt = screen.getByRole("region", { name: "Order filled" });
   expect(screen.getByRole("heading", { name: "Order filled" })).toHaveFocus();
   expect(receipt).toHaveTextContent("Apple Inc.");
-  expect(receipt).toHaveTextContent("PortfolioOriginal strategy");
+  expect(receipt).not.toHaveTextContent("Original strategy");
   expect(within(receipt).getByRole("link", { name: "Portfolio" })).toHaveAttribute(
     "href",
     "/portfolios/1",
@@ -54,7 +49,6 @@ it("does not reveal a wrong-root or unavailable receipt", () => {
     <StockTradeReceipt
       fill={{ ...fillFixture(), portfolio_id: "1" }}
       target={target}
-      portfolioName="Original"
       onTradeAgain={() => {}}
     />,
   );
@@ -63,7 +57,6 @@ it("does not reveal a wrong-root or unavailable receipt", () => {
     <StockTradeReceipt
       fill={{ ...fillFixture(), portfolio_id: "2" }}
       target={{ ...target, isCurrent: () => false }}
-      portfolioName="Sibling"
       onTradeAgain={() => {}}
     />,
   );
