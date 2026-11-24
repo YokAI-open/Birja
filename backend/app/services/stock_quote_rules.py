@@ -68,6 +68,30 @@ class RawStockQuote:
 
 
 @dataclass(frozen=True)
+class RawIexQuote:
+    bid: object
+    ask: object
+    event_at: object
+    conditions: object
+    bid_exchange: object = "V"
+    ask_exchange: object = "V"
+    tape: object = "C"
+    bid_size: object = 1
+    ask_size: object = 1
+    source: str = "alpaca"
+    feed: str = "iex"
+
+
+@dataclass(frozen=True)
+class ValidIexQuote:
+    bid: Decimal
+    ask: Decimal
+    mid: Decimal
+    event_at: datetime
+    collected_at: datetime
+
+
+@dataclass(frozen=True)
 class ValidatedStockQuote:
     coin_id: int
     symbol: str
@@ -115,20 +139,19 @@ def _side(value: object) -> Decimal | None:
     return value
 
 
-def validate_quote(
-    raw: RawStockQuote, collected_at: datetime, admission_generation: int
-) -> ValidatedStockQuote | None:
+def validate_iex_quote(
+    raw: RawIexQuote | RawStockQuote, *, listing_exchange: str, collected_at: datetime
+) -> ValidIexQuote | None:
+    """Validate provider prices without granting a listing or order authority."""
     if (
         not utc(collected_at)
-        or not verified_mapping(raw.mapping, collected_at)
-        or type(admission_generation) is not int
-        or admission_generation <= 0
+        or listing_exchange not in ("NYSE", "NASDAQ")
         or raw.source != "alpaca"
         or raw.feed != "iex"
         or raw.conditions not in (["R"], ["R", "R"])
         or raw.bid_exchange != "V"
         or raw.ask_exchange != "V"
-        or raw.tape != ("C" if raw.mapping.listing_exchange == "NASDAQ" else "A")
+        or raw.tape != ("C" if listing_exchange == "NASDAQ" else "A")
         or type(raw.bid_size) is not int
         or type(raw.ask_size) is not int
         or not 0 < raw.bid_size <= 4294967295
@@ -144,15 +167,33 @@ def validate_quote(
     with localcontext() as context:
         context.prec = 40
         mid = ((bid + ask) / 2).quantize(Decimal("1e-8"), rounding=ROUND_HALF_EVEN)
+    return ValidIexQuote(bid, ask, mid, raw.event_at, collected_at)
+
+
+def validate_quote(
+    raw: RawStockQuote, collected_at: datetime, admission_generation: int
+) -> ValidatedStockQuote | None:
+    if (
+        not utc(collected_at)
+        or not verified_mapping(raw.mapping, collected_at)
+        or type(admission_generation) is not int
+        or admission_generation <= 0
+    ):
+        return None
+    quote = validate_iex_quote(
+        raw, listing_exchange=raw.mapping.listing_exchange, collected_at=collected_at
+    )
+    if quote is None:
+        return None
     return ValidatedStockQuote(
         raw.mapping.coin_id,
         raw.mapping.symbol,
-        bid,
-        ask,
-        mid,
-        raw.event_at,
-        collected_at,
-        raw.event_at.date(),
+        quote.bid,
+        quote.ask,
+        quote.mid,
+        quote.event_at,
+        quote.collected_at,
+        quote.event_at.date(),
         admission_generation,
     )
 

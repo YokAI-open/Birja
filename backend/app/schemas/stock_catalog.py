@@ -26,7 +26,9 @@ def _decimal_identity(value: object) -> int:
     return int(value)
 
 
-CatalogIdInput = Annotated[CatalogId, BeforeValidator(_decimal_identity)]
+CatalogIdInput = Annotated[
+    CatalogId, BeforeValidator(_decimal_identity, json_schema_input_type=str)
+]
 
 
 def _search_text(value: object) -> str:

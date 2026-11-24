@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import Exists
 
-from app.core.config import Settings
+from app.core.config import SchedulerSettings, Settings
 from app.models.stock_catalog import (
     StockCatalogAdmission,
     StockCatalogAlias,
@@ -74,7 +74,9 @@ def _permitted_listing(now: datetime, fixture: ColumnElement[bool]) -> ColumnEle
     )
 
 
-def _active_generation(settings: Settings, now: datetime) -> ColumnElement[bool]:
+def _active_generation(
+    settings: Settings | SchedulerSettings, now: datetime
+) -> ColumnElement[bool]:
     generation = StockCatalogGeneration
     modes = ("live",) if settings.env == "prod" else ("live", "fixture")
     return and_(
@@ -106,7 +108,7 @@ def _alias_match(
 
 
 async def search_catalog(
-    db: AsyncSession, settings: Settings, q: str, *, now: datetime | None = None
+    db: AsyncSession, settings: Settings | SchedulerSettings, q: str, *, now: datetime | None = None
 ) -> StockCatalogSearch:
     """Return the current generation and its first twenty exact ranked matches."""
     checked_at = now or datetime.now(UTC)
@@ -236,7 +238,11 @@ async def search_catalog(
 
 
 async def get_catalog_listing(
-    db: AsyncSession, settings: Settings, catalog_id: int, *, now: datetime | None = None
+    db: AsyncSession,
+    settings: Settings | SchedulerSettings,
+    catalog_id: int,
+    *,
+    now: datetime | None = None,
 ) -> StockCatalogListing | None:
     """Resolve a durable identity to its current admitted version, including retirement."""
     checked_at = now or datetime.now(UTC)

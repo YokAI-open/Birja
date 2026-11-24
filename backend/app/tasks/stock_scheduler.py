@@ -53,10 +53,13 @@ async def reserve_account_attempt(
     evidence: dict[str, ProductAdmission],
     *,
     at: datetime | None = None,
+    cap: int | None = None,
 ) -> bool:
     # Ignore denied/unrelated rows; an enable flag cannot make them authority.
     now = at or datetime.now(UTC)
     limits = [settings.stock_account_requests_per_minute]
+    if cap is not None:
+        limits.append(cap)
     for product in ("quotes", "actions"):
         row = evidence.get(product)
         decision = evaluate_admission(
@@ -179,10 +182,9 @@ async def _refresh(
     ):
         return CycleResult("locked")
 
-    async def before_request(request: httpx.Request) -> None:
-        # HTTPX async request hooks run before *each* actual attempt, including
-        # retries. No DB transaction remains open when the network starts.
-        # https://www.python-httpx.org/advanced/event-hooks/
+    async def before_attempt() -> None:
+        # Verify every actual attempt, including retries, without holding a DB
+        # transaction open across HTTP or mutating shared client hooks.
         async with sessionmaker() as db:
             latest = await _admissions(db)
             live_mappings = await load_stock_catalog(db)
@@ -199,26 +201,23 @@ async def _refresh(
         if not await reserve_account_attempt(redis, settings, latest, at=checked):
             raise AlpacaError("account_budget")
 
-    http.event_hooks["request"].append(before_request)
-    try:
-        async with asyncio.timeout(SOURCE_TIMEOUT_S):
-            batch = await fetch_iex_quotes(
-                http,
-                selected,
-                current["quotes"],
-                now,
-                attempts=1 if requested is not None else min(settings.stock_max_retries + 1, quota),
-                max_bytes=settings.stock_max_response_bytes,
-                account=settings.stock_data_account,
-                server=settings.stock_data_server,
-                budget_seconds=min(
-                    10,
-                    settings.stock_cycle_budget_seconds,
-                    settings.stock_request_timeout_seconds * (settings.stock_max_retries + 1),
-                ),
-            )
-    finally:
-        http.event_hooks["request"].remove(before_request)
+    async with asyncio.timeout(SOURCE_TIMEOUT_S):
+        batch = await fetch_iex_quotes(
+            http,
+            selected,
+            current["quotes"],
+            now,
+            attempts=1 if requested is not None else min(settings.stock_max_retries + 1, quota),
+            max_bytes=settings.stock_max_response_bytes,
+            account=settings.stock_data_account,
+            server=settings.stock_data_server,
+            budget_seconds=min(
+                10,
+                settings.stock_cycle_budget_seconds,
+                settings.stock_request_timeout_seconds * (settings.stock_max_retries + 1),
+            ),
+            before_attempt=before_attempt,
+        )
     accepted = 0
     quotes = list(batch.quotes)
     # HTTP has finished. One instrument gate belongs to each short caller-owned
