@@ -20,11 +20,22 @@ from app.db.portfolio_bootstrap import (
     PORTFOLIO_PREFLIGHT_SQL,
     PRE_CLOSURE_MIGRATION_SQL,
     PREFLIGHT_0014_MIGRATION_SQL,
-    PREFLIGHT_0025_SQL,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SOURCE = {
+    "alembic/versions/0026_stock_catalog_finance.py": (
+        "b003b09d70d6ea4df410874015cbe2b8230726fe9f9d5d0c587e65f91b6e1189"
+    ),
+    "alembic/sql/0026_stock_catalog_finance.sql": (
+        "eb4a44fd9a2812aa693607db00d7d53240d8afb4d7e0bd1305035b1e15845a04"
+    ),
+    "alembic/sql/0026_stock_catalog_execution.sql": (
+        "b8cc7ea9d8c9227bf420778912f86d7f2cbddca0494e608cd157f929917630fe"
+    ),
+    "alembic/sql/0026_stock_catalog_actions.sql": (
+        "6aa0c43d7554fdb7ab85ee557bfcbee6a0fc8e286a5b118d999b3937139a28c3"
+    ),
     "alembic/versions/0025_stock_catalog.py": (
         "cd1890bfec3b1dc4b638fd3e86c9217d6eb331be3e895f2443b74fd88d078826"
     ),
@@ -131,7 +142,7 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         versions = (
             (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
         )
-        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 26)}:
+        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 27)}:
             raise ValueError("Unsupported portfolio migration revision")
         revision = versions[0]
     elif not fresh:
@@ -239,7 +250,7 @@ async def migrate(settings: Settings) -> None:
                     raise ValueError("Portfolio finalization failed; diagnostics withheld")
                 if await require_migrator(conn) != CURRENT_PORTFOLIO_REVISION:
                     raise ValueError("Final portfolio revision absent")
-                await conn.execute(text(PREFLIGHT_0025_SQL))
+                await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[CURRENT_PORTFOLIO_REVISION]))
                 await conn.rollback()
             finally:
                 await conn.execute(text("SELECT pg_advisory_unlock(1026016017)"))

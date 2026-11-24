@@ -4,13 +4,13 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 20
 status: executing
-last_updated: "2026-11-24T21:05:14Z"
-last_activity: 2026-11-24 -- Phase 20 catalog fill and action SQL verified
+last_updated: "2026-11-24T21:13:50Z"
+last_activity: 2026-11-24 -- Phase 20 current and retained database roles verified
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 20
-  completed_plans: 13
+  completed_plans: 14
   percent: 25
 ---
 
@@ -28,9 +28,9 @@ and corporate actions for stocks found through search.
 ## Current Position
 
 Phase: 20
-Plan: 2 of 9 executed
-Status: Executing Wave 3
-Last activity: 2026-11-24 -- Phase 20 catalog fill and action SQL verified
+Plan: 3 of 9 executed
+Status: Executing Wave 4
+Last activity: 2026-11-24 -- Phase 20 current and retained database roles verified
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence

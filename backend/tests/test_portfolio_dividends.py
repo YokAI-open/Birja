@@ -31,7 +31,7 @@ __all__ = ["authority", "management_api", "strategy_books", "strategy_events"]
 
 @pytest_asyncio.fixture
 async def dividend_books(strategy_events):
-    """Payment checks on financial roots created through the public path on 0025."""
+    """Payment checks on financial roots created through the public path on 0026."""
     api, roots, cid, now, action, admission, event, engine = strategy_events
     response = await post(api, "Foreign dividend", client=api.other)
     assert response.status_code == 201, response.text
@@ -40,7 +40,7 @@ async def dividend_books(strategy_events):
     async with factory.begin() as db:
         assert (
             await db.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0025"
+        ).scalar_one() == "0026"
         await db.execute(
             text(
                 "SELECT pg_advisory_xact_lock(hashtextextended("

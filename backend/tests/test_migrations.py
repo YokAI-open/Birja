@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0025"
+EXPECTED_HEAD = "0026"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -101,7 +101,27 @@ STOCK_CATALOG_TABLES = frozenset(
         "stock_catalog_securities",
     }
 )
-_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025"}
+_CATALOG_FINANCE_TABLES = frozenset(
+    {
+        "stock_catalog_instruments",
+        "stock_catalog_financial_quotes",
+        "stock_catalog_status",
+        "stock_catalog_action_coverage",
+        "stock_catalog_fill_evidence",
+    }
+)
+_CATALOG_FINANCE_FUNCTIONS = frozenset(
+    {
+        "stock_catalog_scope_current(bigint,text,stock_catalog_instruments,stock_catalog_listings,"
+        "timestampwithtimezone,jsonb)",
+        "stock_catalog_action_context(bigint,bigint,bigint,timestampwithtimezone,"
+        "timestampwithtimezone,boolean)",
+        "check_catalog_stock_fill()",
+        "assert_catalog_stock_execution_current(bigint,bigint,jsonb)",
+        "check_stock_catalog_split_movements()",
+    }
+)
+_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025", "0026"}
 
 
 def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
@@ -114,16 +134,19 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
             "reject_stock_record_mutation()",
         }
         functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
-        if revision in {"0022", "0023", "0024", "0025"}:
+        if revision in {"0022", "0023", "0024", "0025", "0026"}:
             functions |= {"check_portfolio_terminal_root()"}
-        if revision in {"0023", "0024", "0025"}:
+        if revision in {"0023", "0024", "0025", "0026"}:
             functions |= {
                 "close_portfolio(bigint,bigint,uuid,text,text)",
                 "check_stock_terminal_clock()",
             }
         tables = MIGRATION_TABLES | _CLOSURE_TABLES
-        if revision == "0025":
+        if revision in {"0025", "0026"}:
             tables |= STOCK_CATALOG_TABLES
+        if revision == "0026":
+            tables |= _CATALOG_FINANCE_TABLES
+            functions |= _CATALOG_FINANCE_FUNCTIONS
         return tables, frozenset(functions)
     if revision is not None and revision not in {f"{n:04}" for n in range(1, 21)}:
         raise RuntimeError("unexpected disposable migration revision inventory")
@@ -307,7 +330,9 @@ async def ensure_dividend_test_owner() -> None:
                     "stock_fill_facts",
                     "stock_status_evidence",
                 }
-                expected_sequences = {f"{t}_id_seq" for t in allowed_tables - nonidentity}
+                expected_sequences = {
+                    f"{t}_id_seq" for t in allowed_tables - nonidentity - _CATALOG_FINANCE_TABLES
+                }
                 if {name for name, kind, _ in relations if kind == "S"} != expected_sequences:
                     raise RuntimeError("unexpected disposable migration sequence inventory")
             await conn.execute(text("GRANT USAGE,CREATE ON SCHEMA public TO birja_migrator"))
@@ -355,13 +380,19 @@ async def install_current_test_grants() -> None:
 
 
 async def install_runtime_grants_for_revision(conn, revision: str) -> None:
-    from app.db.portfolio_bootstrap import GRANTS_0023_SQL, PORTFOLIO_PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import (
+        GRANTS_0023_SQL,
+        GRANTS_0025_SQL,
+        GRANTS_0026_SQL,
+        PORTFOLIO_PREFLIGHT_SQL,
+    )
 
-    grants_sql = GRANTS_0023_SQL
-    if revision == EXPECTED_HEAD:
-        from app.db.portfolio_bootstrap import GRANTS_0025_SQL
-
-        grants_sql = GRANTS_0025_SQL
+    grants_sql = {
+        "0023": GRANTS_0023_SQL,
+        "0024": GRANTS_0023_SQL,
+        "0025": GRANTS_0025_SQL,
+        "0026": GRANTS_0026_SQL,
+    }[revision]
     await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
     # The grant contract includes a dollar-quoted block.
     raw = await conn.get_raw_connection()
@@ -443,8 +474,8 @@ async def test_catalog_upgrade_preserves_0024_and_guards_retained_evidence(
             return {(name, kind) for name, kind in result}
 
     assert await catalog_objects() == set()
-    await asyncio.to_thread(run_test_migration, "head")
-    assert await _versions(engine) == [EXPECTED_HEAD]
+    await asyncio.to_thread(run_test_migration, "0025")
+    assert await _versions(engine) == ["0025"]
     assert await catalog_objects() == {
         (name, kind)
         for table in STOCK_CATALOG_TABLES
@@ -457,7 +488,7 @@ async def test_catalog_upgrade_preserves_0024_and_guards_retained_evidence(
     assert await catalog_objects() == set()
     assert await _financial_snapshot(engine) == financial_before
 
-    await asyncio.to_thread(run_test_migration, "head")
+    await asyncio.to_thread(run_test_migration, "0025")
     async with engine.begin() as conn:
         await conn.execute(
             text("""INSERT INTO public.stock_catalog_admissions
@@ -467,7 +498,7 @@ async def test_catalog_upgrade_preserves_0024_and_guards_retained_evidence(
         )
     with pytest.raises(RuntimeError, match="catalog evidence is retained"):
         await asyncio.to_thread(run_test_migration, "0024", down=True)
-    assert await _versions(engine) == [EXPECTED_HEAD]
+    assert await _versions(engine) == ["0025"]
     async with engine.connect() as conn:
         assert (
             await conn.execute(text("SELECT count(*) FROM public.stock_catalog_admissions"))
@@ -476,12 +507,12 @@ async def test_catalog_upgrade_preserves_0024_and_guards_retained_evidence(
 
 
 async def test_current_fixture_installs_exact_restricted_authority(engine, migrated) -> None:
-    from app.db.portfolio_bootstrap import ACL_0025_SHA256, ACL_0025_SQL
+    from app.db.portfolio_bootstrap import ACL_0026_SHA256, ACL_0026_SQL
     from app.db.schema_contract import require_schema
 
     async with engine.connect() as conn:
         assert await require_schema(conn) == EXPECTED_HEAD
-        assert (await conn.execute(text(ACL_0025_SQL))).scalar_one() == ACL_0025_SHA256
+        assert (await conn.execute(text(ACL_0026_SQL))).scalar_one() == ACL_0026_SHA256
         roles = (
             await conn.execute(
                 text("""SELECT rolname,rolcanlogin,rolinherit,rolsuper,

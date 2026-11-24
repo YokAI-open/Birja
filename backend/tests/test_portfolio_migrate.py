@@ -519,6 +519,10 @@ def test_successor_source_authentication_pins_every_current_and_retained_asset()
         "alembic/sql/0024_stock_halt_snapshot.sql",
         "alembic/versions/0025_stock_catalog.py",
         "alembic/sql/0025_stock_catalog.sql",
+        "alembic/versions/0026_stock_catalog_finance.py",
+        "alembic/sql/0026_stock_catalog_finance.sql",
+        "alembic/sql/0026_stock_catalog_execution.sql",
+        "alembic/sql/0026_stock_catalog_actions.sql",
     }
     assert required <= migration.SOURCE.keys()
     migration.require_source()
@@ -532,7 +536,7 @@ async def test_successor_authenticated_migrator_accepts_complete_closure_revisio
 
     from tests.test_migrations import run_test_migration
 
-    for revision in ("0020", "0021", "0022", "0023", "0024", "0025"):
+    for revision in ("0020", "0021", "0022", "0023", "0024", "0025", "0026"):
         await asyncio.to_thread(run_test_migration, revision)
         async with portfolio_migration_db.begin() as conn:
             await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
@@ -663,12 +667,12 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
     identity = AsyncMock(
         side_effect=ValueError("identity")
         if outcome == "identity"
-        else ["0014", "0016" if outcome == "revision" else "0025"]
+        else ["0014", "0016" if outcome == "revision" else "0026"]
     )
     if outcome == "preflight":
 
         async def execute(statement):
-            if str(statement) == migration.PREFLIGHT_0025_SQL:
+            if str(statement) == migration.PORTFOLIO_PREFLIGHT_SQL["0026"]:
                 raise ValueError("preflight")
 
         conn.execute.side_effect = execute
@@ -685,7 +689,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
             await migration.migrate(settings)
             assert (
                 capsys.readouterr().out
-                == "portfolio_migration_to_final=true source_revision=0014 final=0025\n"
+                == "portfolio_migration_to_final=true source_revision=0014 final=0026\n"
             )
             conn.rollback.assert_awaited_once()
         else:
@@ -703,7 +707,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
         assert statements[0] == "SELECT pg_advisory_lock(1026016017)"
         assert statements[-1] == "SELECT pg_advisory_unlock(1026016017)"
         assert conn.commit.await_count == 2
-        assert spawn.call_args.args[-2:] == ("upgrade", "0025")
+        assert spawn.call_args.args[-2:] == ("upgrade", "0026")
         assert spawn.call_args.kwargs["cwd"] == migration.BACKEND_DIR
     assert child.kill.call_count == (outcome == "timeout")
     assert child.wait.await_count == (outcome == "timeout")

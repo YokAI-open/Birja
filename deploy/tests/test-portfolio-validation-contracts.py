@@ -409,16 +409,24 @@ class CurrentCampaign(unittest.TestCase):
     def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
         module = runner.load('test-dev-bootstrap')
         code = module.financial_program()
-        compile(code, '<dev0025>', 'exec')
-        self.assertIn("version_num FROM alembic_version\")=='0025'", code)
-        self.assertIn("PREFLIGHT_0025_SQL", code)
+        compile(code, '<dev0026>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0026'", code)
+        self.assertIn("PREFLIGHT_0026_SQL", code)
         self.assertIn("version_num='0018'", code)
-        self.assertIn("version_num='0025'", code)
+        self.assertIn("version_num='0026'", code)
         self.assertIn("D('124.45')", code)
         self.assertIn('7777', code)
         self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))
         source = (ROOT / 'deploy/tests/test-dev-bootstrap.py').read_text()
         self.assertIn('services[name]["volumes"] = "RESET"', source)
+        self.assertLess(source.index('input=stage_program("0024")'),
+                        source.index('input=stage_program("0025")'))
+        self.assertLess(source.index('input=stage_program("0025")'),
+                        source.index('input=retained_catalog_program()'))
+        retained = module.retained_catalog_program()
+        compile(retained, '<retained0025>', 'exec')
+        self.assertIn("require_schema(conn, consumer='retained0025') == '0025'", retained)
+        self.assertIn("exc.reason == 'incompatible_schema'", retained)
 
     def test_preflight_uses_stripped_tools_and_exact_owned_fixture_tail(self):
         from types import SimpleNamespace

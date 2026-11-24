@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.db.portfolio_bootstrap import (
     ACL_0023_SHA256,
     ACL_0025_SHA256,
-    ACL_0025_SQL,
+    ACL_0026_SHA256,
     ACL_SQL,
     CURRENT_PORTFOLIO_REVISION,
     DEFAULT_ACL_0023_SHA256,
@@ -19,6 +19,7 @@ from app.db.portfolio_bootstrap import (
 
 Consumer = Literal[
     "portfolio",
+    "retained0025",
     "retained0024",
     "retained0023",
     "retained0020",
@@ -28,6 +29,7 @@ Consumer = Literal[
 ]
 SUPPORTED = {
     "portfolio": frozenset({CURRENT_PORTFOLIO_REVISION}),
+    "retained0025": frozenset({"0025"}),
     "retained0024": frozenset({"0024"}),
     "retained0023": frozenset({"0023"}),
     "retained0020": frozenset({"0020"}),
@@ -64,14 +66,12 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
     if consumer not in SUPPORTED or revision not in SUPPORTED[consumer]:
         raise SchemaAdmissionError("incompatible_schema")
     if revision in PORTFOLIO_PREFLIGHT_SQL:
-        acl_sql, acl_sha256 = (
-            (ACL_0025_SQL, ACL_0025_SHA256)
-            if revision == CURRENT_PORTFOLIO_REVISION
-            else (ACL_SQL, ACL_0023_SHA256)
+        acl_sha256 = {"0025": ACL_0025_SHA256, "0026": ACL_0026_SHA256}.get(
+            revision, ACL_0023_SHA256
         )
         try:
             await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
-            if (await conn.execute(text(acl_sql))).scalar_one() != acl_sha256:
+            if (await conn.execute(text(ACL_SQL))).scalar_one() != acl_sha256:
                 raise SchemaAdmissionError("incompatible_authority")
             if (
                 await conn.execute(text(DEFAULT_ACL_0023_SQL))

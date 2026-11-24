@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from app.db.connection import database_connect_args
-from app.db.portfolio_migrate import require_migrator
+from app.db.portfolio_migrate import require_migrator, require_source
 from app.models.stock_catalog import StockCatalogAdmission
 from app.services.stock_catalog_promotion import promote_catalog_instrument
 from app.services.stock_catalog_provider import CatalogAssetError, stage_reviewed_assets
@@ -168,6 +168,7 @@ async def _promote_instrument(
     server = os.environ.get("STOCK_DATA_SERVER", "")
     if not account or not server:
         raise CatalogPublishError("Explicit operator provider account and server are required")
+    require_source()
     async with AsyncSession(engine) as db, db.begin():
         await _check_connection(await db.connection(), False, for_finance=True)
         binding = await promote_catalog_instrument(

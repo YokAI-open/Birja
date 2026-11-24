@@ -617,7 +617,7 @@ DEFAULT_ACL_0025_SQL = DEFAULT_ACL_0023_SQL
 DEFAULT_ACL_0025_SHA256 = DEFAULT_ACL_0023_SHA256
 CATALOGUE_0025_SHA256 = "64ae5dbb83bfa0fa764d667a91f09abcf023b39f3e3b032354ce1088c45135a3"
 ACL_0025_SHA256 = "a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f"
-CURRENT_PORTFOLIO_REVISION = "0025"
+CURRENT_PORTFOLIO_REVISION = "0026"
 PREFLIGHT_0025_SQL = (
     PREFLIGHT_0024_SQL.replace("version_num='0024'", "version_num='0025'")
     .replace(CATALOGUE_0024_SHA256, CATALOGUE_0025_SHA256)
@@ -627,10 +627,33 @@ PREFLIGHT_0025_SQL = (
         f" IN ('{ACL_0023_SHA256}','{ACL_0025_SHA256}') AND",
     )
 )
+
+# The new relations and routines are private before explicit runtime grants.
+# This preserves the exact pre-grant ACL pairs recognized by 0025.
+CATALOGUE_0026_SQL = CATALOGUE_0023_SQL
+ACL_0026_SQL = ACL_SQL
+CATALOGUE_0026_SHA256 = "0c855fb80619ed1cd46183b87c3357a9183b3592d4504ebce8c722fb61085cc6"
+ACL_0026_SHA256 = "6995ecd9a65d5bf659480b524e37e236c31a293cb2ab9f1648ea657c15842994"
+PREFLIGHT_0026_SQL = (
+    PREFLIGHT_0025_SQL.replace("version_num='0025'", "version_num='0026'")
+    .replace(CATALOGUE_0025_SHA256, CATALOGUE_0026_SHA256)
+    .replace(f"'{ACL_0025_SHA256}',", f"'{ACL_0025_SHA256}','{ACL_0026_SHA256}',")
+    .replace(f"'{ACL_0025_SHA256}') AND", f"'{ACL_0025_SHA256}','{ACL_0026_SHA256}') AND")
+    .replace(
+        "   (x.grantee='birja_action_operator'::regrole",
+        """   (x.grantee IN ('birja_app'::regrole,'birja_scheduler'::regrole)
+     AND p.oid=to_regprocedure('public.stock_catalog_scope_current(bigint,text,'
+       || 'public.stock_catalog_instruments,public.stock_catalog_listings,timestamptz,jsonb)')) OR
+   (x.grantee='birja_app'::regrole AND p.oid=to_regprocedure(
+    'public.assert_catalog_stock_execution_current(bigint,bigint,jsonb)')) OR
+   (x.grantee='birja_action_operator'::regrole""",
+    )
+)
 PORTFOLIO_PREFLIGHT_SQL = {
     "0023": PREFLIGHT_0023_SQL,
     "0024": PREFLIGHT_0024_SQL,
     "0025": PREFLIGHT_0025_SQL,
+    "0026": PREFLIGHT_0026_SQL,
 }
 CATALOGUE_TABLES = frozenset(
     {
@@ -679,3 +702,26 @@ GRANT SELECT (id,artifact,reviewed_at,valid_until,revoked_at,fields,scope,is_fix
  ON public.stock_catalog_admissions TO birja_app,birja_scheduler;
 """
 GRANTS_0025_SQL = GRANTS_0023_SQL + CATALOGUE_READ_GRANTS_SQL
+
+CATALOGUE_FINANCE_TABLES = frozenset(
+    {
+        "stock_catalog_instruments",
+        "stock_catalog_financial_quotes",
+        "stock_catalog_status",
+        "stock_catalog_action_coverage",
+        "stock_catalog_fill_evidence",
+    }
+)
+CATALOGUE_FINANCE_GRANTS_SQL = r"""
+GRANT SELECT ON public.stock_catalog_instruments,public.stock_catalog_financial_quotes,
+ public.stock_catalog_status,public.stock_catalog_action_coverage TO birja_app,birja_scheduler;
+GRANT INSERT,UPDATE ON public.stock_catalog_financial_quotes,public.stock_catalog_status,
+ public.stock_catalog_action_coverage TO birja_scheduler;
+GRANT SELECT,INSERT ON public.stock_catalog_fill_evidence TO birja_app;
+GRANT EXECUTE ON FUNCTION public.stock_catalog_scope_current(bigint,text,
+ public.stock_catalog_instruments,public.stock_catalog_listings,timestamptz,jsonb)
+ TO birja_app,birja_scheduler;
+GRANT EXECUTE ON FUNCTION public.assert_catalog_stock_execution_current(bigint,bigint,jsonb)
+ TO birja_app;
+"""
+GRANTS_0026_SQL = GRANTS_0025_SQL + CATALOGUE_FINANCE_GRANTS_SQL

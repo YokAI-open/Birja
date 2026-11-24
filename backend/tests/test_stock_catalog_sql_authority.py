@@ -12,9 +12,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from app.db.schema_contract import require_schema
 from app.models.stock_catalog import StockCatalogAdmission
 from tests.portfolio_fixtures import economic_snapshot, seed_portfolio_world
-from tests.test_migrations import run_test_migration
+from tests.test_migrations import install_current_test_grants, run_test_migration
 from tests.test_stock_catalog_promotion import (
     ACCOUNT,
     FIRST_ASSET,
@@ -224,6 +225,25 @@ async def _book_catalog_fill(conn: AsyncConnection, market: dict, case: str) -> 
 _FINAL = text(
     "SELECT public.assert_catalog_stock_execution_current(:t,:u,CAST(:authority AS jsonb))"
 )
+
+
+async def test_catalog_finalizer_executes_under_app_grants(
+    engine: AsyncEngine,
+    execution_market: dict,
+) -> None:
+    await install_current_test_grants()
+    async with engine.begin() as conn:
+        fill = await _book_catalog_fill(conn, execution_market, "valid")
+        await conn.execute(text("SET LOCAL ROLE birja_app"))
+        assert await require_schema(conn) == "0026"
+        await conn.execute(_FINAL, fill)
+        assert (
+            await conn.scalar(
+                text("SELECT report_digest FROM stock_catalog_fill_evidence WHERE trade_id=:t"),
+                fill,
+            )
+            == fill["report"]
+        )
 
 
 async def test_execution_exact_fill_is_retained_and_adjunct_is_immutable(
