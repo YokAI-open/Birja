@@ -7,7 +7,7 @@ amount, preview and receipt. Keep the current layout, type, spacing and palette.
 | State | Behavior |
 |---|---|
 | Fetching an eligible price | Show the existing inline preview loading treatment. Keep the typed whole-share quantity. |
-| Reported halt | Explain that trading is paused in the existing message area. Disable confirmation. |
+| Reported halt | Explain that trading is paused in the existing message area. Disable confirmation. When using the reported-halt feed, show that halt reports can be delayed or incomplete. |
 | Closed | Preserve Market closed and the opening countdown. If a permitted last mark is present, keep it visible. |
 | Price stale or check unavailable | Use one concise reason near the existing preview. Allow a fresh preview when data returns. |
 | Price changed | Reuse the existing old/new price and total review and require confirmation again. |

@@ -38,16 +38,16 @@ A snapshot may contain zero active halts and still be valid if its coverage and
 freshness are established. [NYSE current halts](https://www.nyse.com/trade/trading-halts) ·
 [Nasdaq RSS terms](https://beta.nasdaqtrader.com/content/administrationsupport/agreementstrading/THRSSFeedTermsCond.pdf)
 
-**Open qualification:** a free market-wide source and an authoritative freshness
-contract remain unqualified. The first plan must record a positive decision or a
-specific block. Restrict fixture-based work to isolated environments if sources
-fail. Keep SX-02 and SX-04 open until the needed evidence exists. Provider
-outreach, paid feeds and changing the approved behavior are owner decisions.
+Complete free market-wide coverage and authoritative source age remain
+unproven. The owner accepted a reported-halt simulator rule on November 24.
+See the [source decision](18-SOURCE-DECISION.md) for the measured freshness,
+active halt handling and explicit coverage limitation.
 
 ## Runtime design and patterns
 
 1. **One status snapshot for the existing scope.** Persist a normalized,
-   versioned observation in a new table, separate from legacy stream evidence.
+   source-specific observation in the existing status table with separate
+   constraints for Nasdaq reports and legacy stream evidence.
    Bind scope, source, session, publication/observation timestamps, expiry,
    authority generation, bounded halt states and digest. The scheduler owns
    writes. Reuse existing `status` admissions with a distinct source scope
