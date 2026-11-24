@@ -96,13 +96,19 @@ class BrowserContracts(unittest.TestCase):
 
     def test_default_command_explicitly_retains_every_financial_spec(self):
         expected = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
-                    'stock-trades', 'stock-actions', 'dividends-history',
+                    'stock-trades', 'stock-catalog', 'stock-actions', 'dividends-history',
                     'portfolio-history', 'portfolio-ownership', 'portfolio-strategies',
                     'portfolio-deletion')
         self.assertEqual(runner.browser_specs('all'),
                          ['e2e/' + name + '.spec.ts' for name in expected])
         with self.assertRaises(ValueError):
             runner.browser_specs('unknown')
+
+    def test_catalog_journey_uses_the_disposable_fake_provider_fixture(self):
+        calls = self.command(suite='catalog')
+        browser = next(c for c in calls if c[0].endswith('/playwright'))
+        self.assertEqual([c for c in browser if c.endswith('.spec.ts')],
+                         ['e2e/stock-catalog.spec.ts'])
 
     def test_missing_or_symlinked_journey_refuses_before_collection(self):
         with tempfile.TemporaryDirectory(prefix='birja-browser-spec-contract-') as tmp:

@@ -9,11 +9,14 @@ import asyncio
 import json
 import os
 import sys
+from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
+from uuid import NAMESPACE_URL, uuid5
 
 
 def guard():
@@ -337,6 +340,372 @@ async def prepare(operation, symbol="AAPL", argument=""):
     print("synthetic_fixture_ready=" + operation)
 
 
+CATALOG_OUTAGE = Path("/tmp/birja-e2e-catalog-outage")
+CATALOG_REQUESTS = Path("/tmp/birja-e2e-catalog-requests")
+CATALOG_VENUES = {"FQXA": "NASDAQ", "FQXB": "NASDAQ", "FQX": "NYSE"}
+CATALOG_PRICES = {"FQXA": (17, 19), "FQXB": (24, 26), "FQX": (31, 33)}
+
+
+def catalog_guard():
+    guard()
+    if os.environ.get("BIRJA_E2E_CATALOG") != "1":
+        raise RuntimeError("Requires the catalog browser fixture")
+
+
+def digest(value):
+    return sha256(value.encode()).hexdigest()
+
+
+def catalog_manifest(now, reused):
+    from app.services.stock_catalog_classification import InventoryRow
+    from app.services.stock_catalog_sources import CatalogAlias
+    from app.tasks.stock_catalog_inventory import (
+        CatalogManifest,
+        SourceEvidence,
+        _coverage,
+    )
+
+    long_name = "Quartz Fixture International Research and Materials Holdings"
+    issues = (
+        ("nasdaqlisted", 1, "FQXA", "quartz-a", long_name, "A", "FQOLD"),
+        ("nasdaqlisted", 2, "FQXB", "quartz-b", long_name, "B", None),
+        (
+            "otherlisted",
+            1,
+            "FQX",
+            "replacement" if reused else "original",
+            "Replacement Fixture" if reused else "Original Fixture",
+            None,
+            None,
+        ),
+    )
+    rows = tuple(
+        InventoryRow(
+            source=source,
+            row_key=f"{source}:{position}",
+            row_digest=digest(f"{source}:{ticker}:{identity}"),
+            ticker=ticker,
+            listing_exchange=CATALOG_VENUES[ticker],
+            company_name=name,
+            name_source=source,
+            classification="common_stock",
+            share_class=share_class,
+            identity_key=f"review:{digest(identity)}",
+            aliases=(CatalogAlias(namespace="nasdaq", symbol=alias),) if alias else (),
+            disposition="included",
+            reason="reviewed_issue_evidence",
+            evidence_at=now - timedelta(minutes=1),
+            evidence_digest=digest(f"classification:{identity}"),
+        )
+        for source, position, ticker, identity, name, share_class, alias in issues
+    )
+    return CatalogManifest(
+        mode="fixture",
+        sources=(
+            SourceEvidence(
+                artifact="nasdaqlisted",
+                sha256=digest(f"NASDAQ:{now}"),
+                published_at=now - timedelta(minutes=2),
+                row_count=2,
+            ),
+            SourceEvidence(
+                artifact="otherlisted",
+                sha256=digest(f"NYSE:{now}"),
+                published_at=now - timedelta(minutes=2),
+                row_count=1,
+            ),
+        ),
+        rights=(),
+        rows=rows,
+        coverage=_coverage(rows),
+        complete=True,
+    )
+
+
+async def admit_catalog_mapping(db, listing, now):
+    import httpx
+    from app.models.stock_catalog import StockCatalogAdmission
+    from app.services.stock_catalog_provider import (
+        CatalogAssetAdmission,
+        CatalogAssetTarget,
+        CatalogUnitEvidence,
+        stage_catalog_assets,
+    )
+    from app.services.stock_catalog_publish import promote_catalog_mappings
+
+    target = CatalogAssetTarget(
+        catalog_id=listing.security_id,
+        listing_version=listing.id,
+        listing_exchange=listing.listing_exchange,
+        provider_symbol=listing.ticker,
+    )
+    unit = CatalogUnitEvidence(
+        target=target,
+        currency="USD",
+        units_per_share=1,
+        classification="common_stock",
+        reviewed_at=now - timedelta(minutes=1),
+        valid_until=now + timedelta(hours=2),
+        evidence_digest=digest(f"units:{listing.id}"),
+    )
+    purposes = frozenset(
+        {"collection", "internal_use", "derived_use", "display", "storage", "backup"}
+    )
+    authority = CatalogAssetAdmission(
+        account="birja",
+        server="birja",
+        environment="paper",
+        reviewed_at=unit.reviewed_at,
+        valid_until=unit.valid_until,
+        evidence_digest=digest(f"mapping:{listing.id}"),
+        targets=(target,),
+        purposes=purposes,
+        request_limit=1,
+    )
+    grant = StockCatalogAdmission(
+        artifact="alpaca_assets",
+        reference="Synthetic browser asset mapping",
+        reviewed_at=authority.reviewed_at,
+        valid_until=authority.valid_until,
+        fields={
+            field: sorted(purposes)
+            for field in (
+                "provider_asset_id",
+                "provider_symbol",
+                "asset_evidence",
+                "currency",
+                "units_per_share",
+                "unit_evidence",
+            )
+        },
+        scope={
+            "provider": authority.model_dump(mode="json"),
+            "units": [unit.model_dump(mode="json")],
+        },
+    )
+    db.add(grant)
+    await db.flush()
+
+    def asset_reply(request):
+        if request.url.path != f"/v2/assets/{listing.ticker}":
+            raise ValueError("Unexpected synthetic asset lookup")
+        return httpx.Response(
+            200,
+            json={
+                "id": str(uuid5(NAMESPACE_URL, f"birja-e2e:{listing.security_id}")),
+                "symbol": listing.ticker,
+                "class": "us_equity",
+                "status": "active",
+                "exchange": listing.listing_exchange,
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(asset_reply), trust_env=False
+    ) as client:
+        proofs = await stage_catalog_assets(
+            client,
+            (unit,),
+            authority,
+            account="birja",
+            server="birja",
+            expected_listings={listing.security_id: target},
+            clock=lambda: now,
+        )
+    if (
+        await promote_catalog_mappings(
+            db, grant.id, proofs, now=now, allow_fixture=True
+        )
+        != 1
+    ):
+        raise RuntimeError("Synthetic catalog mapping was not promoted")
+
+
+async def prepare_catalog(reused):
+    catalog_guard()
+    from app.models.stock_catalog import (
+        StockCatalogAdmission,
+        StockCatalogGeneration,
+        StockCatalogListing,
+    )
+    from app.services.stock_catalog_publish import publish_catalog
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory.begin() as db:
+            if await db.scalar(select(func.current_database())) != "birja":
+                raise RuntimeError("Disposable database mismatch")
+            now = await db.scalar(select(func.clock_timestamp()))
+            generation = await db.scalar(
+                select(StockCatalogGeneration.id).where(
+                    StockCatalogGeneration.is_active
+                )
+            )
+            grant = await db.scalar(
+                select(StockCatalogAdmission.id).where(
+                    StockCatalogAdmission.artifact == "alpaca_iex_quotes"
+                )
+            )
+            if grant is None:
+                db.add(
+                    StockCatalogAdmission(
+                        artifact="alpaca_iex_quotes",
+                        reference="Synthetic browser display authority",
+                        reviewed_at=now - timedelta(minutes=1),
+                        valid_until=now + timedelta(hours=2),
+                        fields={
+                            field: ["collection", "display", "cache"]
+                            for field in ("symbol", "bid", "ask", "event_at")
+                        },
+                        scope={
+                            "account": "birja",
+                            "server": "birja",
+                            "feed": "iex",
+                            "currency": "USD",
+                            "listing_exchanges": ["NASDAQ", "NYSE"],
+                            "requests_per_minute": 20,
+                            "max_response_bytes": 32768,
+                            "symbols_per_request": len(CATALOG_VENUES),
+                        },
+                        is_fixture=True,
+                    )
+                )
+            receipt = await publish_catalog(
+                db,
+                catalog_manifest(now, reused),
+                generation,
+                now=now,
+                allow_fixture=True,
+            )
+            listings = await db.scalars(
+                select(StockCatalogListing).where(
+                    StockCatalogListing.generation_id == receipt.generation_id,
+                    StockCatalogListing.state == "active",
+                )
+            )
+            for listing in listings.all():
+                await admit_catalog_mapping(db, listing, now)
+    finally:
+        await engine.dispose()
+
+
+def catalog_reply(request):
+    import httpx
+    from app.services.alpaca import LATEST_QUOTES_URL
+
+    symbols = request.url.params.get("symbols", "").split(",")
+    if (
+        str(request.url.copy_with(query=None)) != LATEST_QUOTES_URL
+        or request.url.params.get("feed") != "iex"
+        or request.url.params.get("currency") != "USD"
+        or not set(symbols) <= CATALOG_VENUES.keys()
+    ):
+        raise ValueError("Unexpected synthetic quote request")
+    with CATALOG_REQUESTS.open("a", encoding="utf-8") as records:
+        records.write(json.dumps(symbols) + "\n")
+    if CATALOG_OUTAGE.exists():
+        return httpx.Response(503)
+    now = datetime.now(UTC).isoformat()
+    return httpx.Response(
+        200,
+        json={
+            "quotes": {
+                ticker: {
+                    "bp": CATALOG_PRICES[ticker][0],
+                    "ap": CATALOG_PRICES[ticker][1],
+                    "t": now,
+                    "c": ["R"],
+                    "bx": "V",
+                    "ax": "V",
+                    "bs": 1,
+                    "as": 1,
+                    "z": "C" if CATALOG_VENUES[ticker] == "NASDAQ" else "A",
+                }
+                for ticker in symbols
+            }
+        },
+    )
+
+
+def catalog_app():
+    catalog_guard()
+    import httpx
+    from app.core.config import SchedulerSettings, Settings
+    from app.main import create_app
+    from app.services.stock_catalog_quote_demand import pending_catalog_quotes
+    from app.tasks.stock_catalog_quotes import run_catalog_quote_cycle
+
+    # This in-process worker runs only in the disposable browser fixture and
+    # receives a mock transport with no network fallback or provider secrets.
+    app = create_app(
+        Settings().model_copy(update={"env": "test", "stock_data_enabled": True})
+    )
+    worker = SchedulerSettings().model_copy(
+        update={
+            "env": "test",
+            "stock_data_enabled": True,
+            "stock_max_retries": 0,
+        }
+    )
+    original_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(application):
+        async with (
+            original_lifespan(application),
+            httpx.AsyncClient(
+                transport=httpx.MockTransport(catalog_reply), trust_env=False
+            ) as client,
+        ):
+
+            async def run():
+                while True:
+                    if await pending_catalog_quotes(
+                        application.state.redis, account="birja", server="birja"
+                    ):
+                        await run_catalog_quote_cycle(
+                            sessionmaker=application.state.sessionmaker,
+                            redis=application.state.redis,
+                            http=client,
+                            settings=worker,
+                        )
+                    await asyncio.sleep(0.1)
+
+            task = asyncio.create_task(run())
+            try:
+                yield
+            finally:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+
+    app.router.lifespan_context = lifespan
+    return app
+
+
+def catalog_command(operation):
+    catalog_guard()
+    if operation in {"catalog-first", "catalog-reuse"}:
+        if operation == "catalog-first":
+            CATALOG_OUTAGE.unlink(missing_ok=True)
+            CATALOG_REQUESTS.unlink(missing_ok=True)
+        asyncio.run(prepare_catalog(reused=operation == "catalog-reuse"))
+    elif operation == "catalog-outage":
+        CATALOG_OUTAGE.touch()
+    elif operation == "catalog-observed":
+        rows = (
+            CATALOG_REQUESTS.read_text().splitlines()
+            if CATALOG_REQUESTS.exists()
+            else []
+        )
+        print(json.dumps([json.loads(row) for row in rows]))
+    else:
+        raise ValueError("Unknown synthetic catalog operation")
+
+
 if __name__ == "__main__":
     guard()
     sys.path.insert(0, "/app")
@@ -344,6 +713,11 @@ if __name__ == "__main__":
     if sys.argv[1] == "serve":
         import uvicorn
 
-        uvicorn.run("app.main:create_app", factory=True, host="0.0.0.0", port=8000)
+        if os.environ.get("BIRJA_E2E_CATALOG") == "1":
+            uvicorn.run(catalog_app(), host="0.0.0.0", port=8000)
+        else:
+            uvicorn.run("app.main:create_app", factory=True, host="0.0.0.0", port=8000)
+    elif sys.argv[1].startswith("catalog-"):
+        catalog_command(sys.argv[1])
     else:
         asyncio.run(prepare(*sys.argv[1:]))

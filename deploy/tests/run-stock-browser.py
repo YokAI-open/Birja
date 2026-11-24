@@ -21,11 +21,12 @@ PROJECT = "birja-phase09-e2e-test"
 
 def browser_specs(suite):
     retained = ('auth', 'csp', 'health', 'markets', 'trade', 'stocks',
-                'stock-trades', 'stock-actions', 'dividends-history',
+                'stock-trades', 'stock-catalog', 'stock-actions', 'dividends-history',
                 'portfolio-history', 'portfolio-ownership', 'portfolio-strategies',
                 'portfolio-deletion')
     selections = {'all': retained, 'stocks': ('stock-trades',),
                   'actions': ('stock-actions',), 'dividends': ('dividends-history',),
+                  'catalog': ('stock-catalog',),
                   'portfolios': ('portfolio-ownership', 'portfolio-strategies', 'portfolio-deletion')}
     if suite not in selections:
         raise ValueError('unsupported browser suite')
@@ -84,7 +85,7 @@ def finish_review(directory, source, commit, phase=12):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "stocks", "actions", "dividends", "portfolios"), default="all")
+    parser.add_argument("--suite", choices=("all", "stocks", "actions", "dividends", "portfolios", "catalog"), default="all")
     parser.add_argument("--review-dir", type=Path, help="Exclusive synthetic Phase12 review directory under /tmp")
     parser.add_argument("--grep", help="Optional bounded Playwright test-name selector")
     args = parser.parse_args()
@@ -116,6 +117,7 @@ def main():
         "STOCK_DATA_ENABLED=false\nSTOCK_ACTIONS_ENABLED=false\n"
     )
     envfile.chmod(0o600)
+    catalog_fixture = "1" if args.suite in ("all", "catalog") else "0"
     services = {
         name: {"restart": "no"}
         for name in ("postgres", "redis", "backend", "scheduler", "frontend")
@@ -141,6 +143,7 @@ def main():
         ],
         environment={
             "BIRJA_E2E_GUARD": "phase09-isolated",
+            "BIRJA_E2E_CATALOG": catalog_fixture,
             "BIRJA_E2E_ANCHOR": datetime.now(UTC).isoformat(),
             "COMPOSE_PROJECT_NAME": PROJECT,
             # The complete synthetic suite sends more than100 console codes.
@@ -274,6 +277,7 @@ def main():
         assert cfg["services"]["frontend"]["ports"][0]["host_ip"] == "127.0.0.1"
         assert cfg["services"]["backend"]["environment"]["EMAIL_BACKEND"] == "console"
         assert cfg["services"]["backend"]["environment"]["ENV"] == "dev"
+        assert cfg["services"]["backend"]["environment"]["BIRJA_E2E_CATALOG"] == catalog_fixture
         assert cfg["services"]["backend"]["environment"]["COMPOSE_PROJECT_NAME"] == PROJECT
         assert cfg["services"]["backend"]["environment"]["RL_SEND_GLOBAL_LIMIT"] == "200"
         assert cfg["services"]["backend"]["environment"]["STOCK_DATA_ENABLED"] == "false"
