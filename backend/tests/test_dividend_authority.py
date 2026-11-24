@@ -700,7 +700,7 @@ async def test_acl_function_identity_exact_and_public_cannot_execute(authority_c
 
 async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority_case):
     conn, _ = authority_case
-    from app.db.portfolio_bootstrap import PREFLIGHT_0024_SQL as PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0025_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     await conn.execute(text(guard))
@@ -882,7 +882,7 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
             "TO birja_scheduler"
         )
     )
-    from app.db.portfolio_bootstrap import PREFLIGHT_0024_SQL as PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0025_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     with pytest.raises(DBAPIError, match="management catalogue mismatch"):
