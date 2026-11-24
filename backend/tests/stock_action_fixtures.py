@@ -47,12 +47,7 @@ async def synthetic_owned_portfolio(db, user_id):
 
 async def install_current_runtime_roles(conn):
     """Install the exact final production contract on this guarded test DB."""
-    from app.db.portfolio_bootstrap import (
-        GRANTS_0023_SQL as GRANTS_SQL,
-    )
-    from app.db.portfolio_bootstrap import (
-        PREFLIGHT_0024_SQL as PREFLIGHT_SQL,
-    )
+    from tests.test_migrations import install_runtime_grants_for_revision
 
     assert (
         await conn.execute(
@@ -62,12 +57,10 @@ async def install_current_runtime_roles(conn):
             )
         )
     ).one() == ("birja_test", "birja_test")
-    await conn.execute(text(PREFLIGHT_SQL))
-    # The current authority includes a dollar-quoted DO block. Use asyncpg's
-    # actual multi-statement protocol, as production bootstrap does; splitting
-    # on semicolons would truncate the block before any grants can be applied.
-    raw = await conn.get_raw_connection()
-    await raw.driver_connection.execute(GRANTS_SQL)
+    revision = (
+        await conn.execute(text("SELECT version_num FROM public.alembic_version"))
+    ).scalar_one()
+    await install_runtime_grants_for_revision(conn, revision)
 
 
 @pytest_asyncio.fixture

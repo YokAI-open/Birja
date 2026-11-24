@@ -15,6 +15,13 @@ from app.models.portfolio_creation import PortfolioCreation, PortfolioInitializa
 from app.models.portfolio_lifecycle import PortfolioClosureIntent, PortfolioLifecycleClosure
 from app.models.price import Coin, Price
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
+from app.models.stock_catalog import (
+    StockCatalogAdmission,
+    StockCatalogAlias,
+    StockCatalogGeneration,
+    StockCatalogListing,
+    StockCatalogSecurity,
+)
 from app.models.stock_execution import StockFillFacts, StockStatusEvidence
 from app.models.trade import Holding, Trade
 from app.models.user import Account, User
@@ -37,6 +44,11 @@ __all__ = [
     "Trade",
     "User",
     "StockDataAdmission",
+    "StockCatalogAdmission",
+    "StockCatalogAlias",
+    "StockCatalogGeneration",
+    "StockCatalogListing",
+    "StockCatalogSecurity",
     "StockInstrument",
     "StockQuote",
     "StockSession",

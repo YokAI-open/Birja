@@ -17,7 +17,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from tests.stock_action_fixtures import install_current_runtime_roles
-from tests.test_migrations import _versions, retained_migration_db
+from tests.test_migrations import EXPECTED_HEAD, _versions, retained_migration_db
 from tests.test_stock_migrations import _financial_snapshot, migrate
 
 __all__ = ["retained_migration_db"]
@@ -162,7 +162,7 @@ async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes
 async def current_root(conn, uid):
     assert (
         await conn.execute(text("SELECT version_num FROM alembic_version"))
-    ).scalar_one() == "0024"
+    ).scalar_one() == EXPECTED_HEAD
     return (
         await conn.execute(
             text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}

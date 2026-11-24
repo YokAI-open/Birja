@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from tests.portfolio_fixtures import close_empty_test_root, portfolio_world
+from tests.test_migrations import EXPECTED_HEAD
 
 __all__ = ["portfolio_world"]
 
@@ -40,7 +41,7 @@ async def stock_authority_case(engine, migrated):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0024"
+        ).scalar_one() == EXPECTED_HEAD
         owners = []
         for label in ("owned", "foreign"):
             owners.append(
