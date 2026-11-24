@@ -34,7 +34,10 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   const stocks = page.getByRole("list", { name: "US stocks", exact: true });
   await expect(stocks.getByRole("button")).toHaveCount(20);
   await stocks.getByRole("button", { name: /AAPL/ }).click();
-  await expect(page.getByRole("note", { name: "Stock price source" })).toContainText("IEX prices");
+  const apple = page.locator('section[aria-labelledby="market-asset"]');
+  await expect(apple.getByRole("link", { name: "View details AAPL" })).toBeVisible();
+  await expect(apple.getByText("Price unavailable")).toHaveCount(0);
+  await expect(apple.getByRole("note", { name: "Stock price source" })).toHaveCount(0);
 
   // Refetch without reload (PRICE-03).
   await page.waitForResponse((r) => r.url().endsWith("/api/v1/prices") && r.status() === 200, {

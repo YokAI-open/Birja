@@ -76,7 +76,7 @@ for (const width of [320, 375, 768, 1280]) {
     const selected = selectedStock(page);
     await expect(selected).toContainText("Suspended for corporate-action review.");
     await expect(selected).toContainText("has changed or conflicts and needs review");
-    await expect(selected).toContainText("Price unavailable");
+    await expect(selected.getByText("Price unavailable")).toHaveCount(0);
     await expect(selected.getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(selected.getByRole("note")).toContainText("IEX prices");
     await expect(selected.getByRole("note")).toContainText("one US exchange");

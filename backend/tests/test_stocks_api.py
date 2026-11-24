@@ -92,6 +92,28 @@ async def test_catalogue_survives_absent_authority(engine, settings, clean_stock
     assert all(row["execution_enabled"] is False for row in result["items"])
 
 
+@pytest.mark.parametrize(
+    ("when", "reopens"),
+    [
+        (datetime(2026, 11, 24, 13, tzinfo=UTC), datetime(2026, 11, 24, 14, 30, tzinfo=UTC)),
+        (datetime(2026, 11, 26, 15, tzinfo=UTC), datetime(2026, 11, 27, 14, 30, tzinfo=UTC)),
+        (datetime(2026, 11, 27, 18, tzinfo=UTC), datetime(2026, 11, 30, 14, 30, tzinfo=UTC)),
+    ],
+)
+async def test_feed_off_shows_scheduled_closure_without_quote_or_execution(
+    engine, settings, clean_stock_discovery, when, reopens
+):
+    async with async_sessionmaker(engine)() as db:
+        result = await stocks.list_stocks(db, settings, now=lambda: when)
+    assert result.admission.state == "unavailable"
+    assert len(result.items) == 20
+    for item in result.items:
+        assert item.session.state == item.session_reason == "closed"
+        assert item.session.next_open_at == item.session.valid_until == reopens
+        assert item.quote is None and not item.execution_enabled
+        assert item.execution_reason == "permission_unavailable"
+
+
 async def test_denied_persisted_row_with_null_times_keeps_metadata(
     engine, settings, clean_stock_discovery
 ):

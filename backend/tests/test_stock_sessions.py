@@ -13,15 +13,30 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.models.stock import StockDataAdmission
+from app.services import stock_sessions
 from app.services.stock_quote_rules import ValidatedStockQuote
 from app.services.stock_sessions import (
     build_sessions,
     discovery_eligibility,
     load_sessions,
     persist_sessions,
+    scheduled_reopening,
     session_at,
 )
 from tests.test_stock_admission import admitted
+
+
+@pytest.mark.parametrize("unusable", [False, True])
+def test_display_schedule_fails_quietly_without_calendar_bounds(monkeypatch, unusable):
+    def bounds(*_args):
+        if unusable:
+            raise ValueError("calendar bounds cannot be calculated")
+        return ()
+
+    now = datetime(2026, 11, 24, 13, tzinfo=UTC)
+    monkeypatch.setattr(stock_sessions, "_calendar_bounds", bounds)
+    assert scheduled_reopening("NASDAQ", now) is None
+    assert scheduled_reopening("Unknown", now) is None
 
 
 def evidence(now: datetime):

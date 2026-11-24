@@ -151,7 +151,13 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 <div className="h-7 rounded-control bg-muted" />
               </div>
             ) : null}
-            {t.contextError && !marketClosed && <p role="alert">Couldn&apos;t load this stock.</p>}
+            {t.contextError && !marketClosed && (
+              <p role="alert">
+                {stocks?.admission.state === "unavailable" && cataloguedStock
+                  ? "Stock data is paused."
+                  : "Couldn't load this stock."}
+              </p>
+            )}
             <Button
               variant="secondary"
               className="min-h-11 self-start"
