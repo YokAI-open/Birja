@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import type { StockFill } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { PortfolioContext } from "./PortfolioContext";
 import { StockAttribution } from "./StockAttribution";
 import { fullLocalTimestamp, signedUsd } from "@/lib/financialDisplay";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
@@ -40,11 +39,9 @@ export function StockTradeReceipt({
   fill: f,
   onTradeAgain,
   target,
-  portfolioName,
 }: {
   fill: StockFill;
   target: PortfolioTarget;
-  portfolioName: string;
   onTradeAgain: () => void;
 }) {
   const id = useId(),
@@ -71,7 +68,6 @@ export function StockTradeReceipt({
       >
         Order filled
       </h2>
-      <PortfolioContext name={portfolioName} compact />
       <p className="wrap-anywhere">
         {f.company_name} · {f.symbol} · {f.listing_exchange} · Stock
       </p>

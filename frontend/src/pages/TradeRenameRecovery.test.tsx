@@ -55,7 +55,7 @@ it.each(
     (["lost", "pending", "filled"] as const).map((mode) => ({ asset, mode })),
   ),
 )(
-  "retains the original $asset label after a $mode order and routed rename/remount",
+  "preserves the original $asset request across a $mode order and routed rename",
   async ({ asset, mode }) => {
     const stock = asset === "stock";
     let name = "Original",
@@ -146,11 +146,11 @@ it.each(
     renewing = false;
     await act(async () => metadata.resolve(json([{ id: "1", name }])));
     await screen.findByRole("heading", { name: stock ? "Trade AAPL" : "Trade BTC" });
-    expect(screen.getAllByText("Renamed")[0]).toBeVisible();
+    expect(screen.queryByText("Renamed")).toBeNull();
     if (mode === "pending") await act(async () => pendingFill.resolve(json(fill)));
     if (mode !== "filled") {
       const retry = await screen.findByRole("button", { name: "Check order result" });
-      expect(screen.getByText("Original")).toBeVisible();
+      expect(screen.queryByText("Original")).toBeNull();
       expect(requests).toHaveLength(1);
       await user.click(retry);
       await waitFor(() => expect(requests).toHaveLength(2));
@@ -160,7 +160,7 @@ it.each(
       expect(original.symbol).toBe(stock ? "AAPL" : "BTC");
     }
     const receipt = within(await screen.findByRole("region", { name: "Order filled" }));
-    expect(receipt.getByText("Original")).toBeVisible();
+    expect(receipt.queryByText("Original")).toBeNull();
     expect(receipt.queryByText("Renamed")).toBeNull();
     expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute(
       "href",
@@ -169,7 +169,7 @@ it.each(
     expect(requests).toHaveLength(mode === "filled" ? 1 : 2);
     await user.click(receipt.getByRole("button", { name: "Trade again" }));
     expect(screen.queryByText("Original")).toBeNull();
-    expect(screen.getAllByText("Renamed")).toHaveLength(1);
+    expect(screen.queryByText("Renamed")).toBeNull();
     expect(screen.getByLabelText(stock ? "Whole-share quantity" : "Amount")).toHaveValue("");
   },
 );

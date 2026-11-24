@@ -327,29 +327,31 @@ it("the authenticated App mounts the distinct stock route", async () => {
   expect(await screen.findByRole("heading", { name: "Trade AAPL", level: 1 })).toBeVisible();
   expect(await screen.findByLabelText("Whole-share quantity")).toBeVisible();
   expect(screen.getByRole("link", { name: "Markets" })).toHaveAttribute("href", "/");
+  const option = await screen.findByRole("option", { name: "Strategy one" });
+  expect(screen.getAllByText("Strategy one")).toEqual([option]);
   expect(screen.queryByLabelText("Amount (USD)")).toBeNull();
 });
 
-it("names the stock ticket, preview and original receipt and keeps scoped destinations", async () => {
+it("omits portfolio names from the stock preview and receipt while retaining the scoped link", async () => {
   const { user, calls } = setup();
   await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
   await waitFor(() => expect(confirm).toBeEnabled());
-  expect(screen.getAllByText("Strategy one")).toHaveLength(1);
+  expect(screen.queryByText("Strategy one")).toBeNull();
   await user.click(confirm);
   const receipt = within(await screen.findByRole("region", { name: "Order filled" }));
-  expect(receipt.getByText("Strategy one")).toBeVisible();
+  expect(receipt.queryByText("Strategy one")).toBeNull();
   expect(receipt.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/portfolios/1");
   await user.click(receipt.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
   expect(calls.filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(1);
 });
-it("wraps and escapes a full60-character stock portfolio name", async () => {
+it("omits even a long portfolio name from the stock ticket", async () => {
   const name = "<script>" + "a".repeat(43) + "</script>";
   setup({ name });
-  const names = await screen.findAllByText(name);
-  expect(names[0]).toHaveClass("[overflow-wrap:anywhere]");
+  await screen.findByLabelText("Whole-share quantity");
+  expect(screen.queryByText(name)).toBeNull();
   expect(document.querySelector("script")).toBeNull();
 });
 it("suppresses every financial field and receipt when the original portfolio is lost during confirmation", async () => {
@@ -396,7 +398,8 @@ it("does not display or relabel a late original stock receipt in a sibling ticke
   await waitFor(() => expect(confirm).toBeEnabled());
   await user.click(confirm);
   await user.click(screen.getByRole("link", { name: "Other strategy" }));
-  expect((await screen.findAllByText("Strategy two"))[0]).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText("Whole-share quantity")).toHaveValue(""));
+  expect(screen.queryByText("Strategy two")).toBeNull();
   await act(async () => {
     resolve(new Response(JSON.stringify(fillFixture())));
   });

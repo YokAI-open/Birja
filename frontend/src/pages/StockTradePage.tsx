@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useOutletContext, useParams } from "react-router";
-import { PortfolioContext } from "@/components/PortfolioContext";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { useNow } from "@/hooks/useNow";
 import { useStocks } from "@/hooks/useStocks";
@@ -46,7 +45,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   const { data: stocks } = useStocks();
   const now = useNow(15_000);
   const [retrying, setRetrying] = useState(false);
-  const [previewName, setPreviewName] = useState(target.name);
   const oldPhase = useRef(t.phase);
   useEffect(() => {
     if (oldPhase.current === "filled" && t.phase === "draft") input.current?.focus();
@@ -96,8 +94,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   ? "Preview ready. Review before confirming."
                   : "Enter a quantity to preview this trade."));
   const quote = t.quote;
-  const orderPortfolioName =
-    t.fill || t.attempt ? (t.originalName ?? target.name) : quote ? previewName : target.name;
   const visible = quote ?? c?.quote;
   const noShortcut =
     !c?.execution_enabled ||
@@ -109,7 +105,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     <div className="app-page flex flex-col gap-7 text-base md:gap-9">
       <header>
         <h1 className="app-heading wrap-anywhere">Trade {t.symbol}</h1>
-        {orderPortfolioName !== target.name && <PortfolioContext name={target.name} compact />}
       </header>
       <p
         role="status"
@@ -212,7 +207,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               className="flex min-w-0 flex-col gap-5 border-t border-border pt-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                setPreviewName(target.name);
                 void t.preview();
               }}
             >
@@ -305,16 +299,10 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">
           <CardContent>
             {t.fill ? (
-              <StockTradeReceipt
-                fill={t.fill}
-                target={target}
-                portfolioName={orderPortfolioName}
-                onTradeAgain={t.tradeAgain}
-              />
+              <StockTradeReceipt fill={t.fill} target={target} onTradeAgain={t.tradeAgain} />
             ) : (
               <>
                 <h2 className="text-xl leading-7 font-semibold">Trade preview</h2>
-                <PortfolioContext name={orderPortfolioName} compact />
                 {t.phase === "loading_preview" && (
                   <div
                     aria-busy="true"
