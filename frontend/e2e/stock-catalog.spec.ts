@@ -12,7 +12,23 @@ const quartz = "Quartz Fixture International Research and Materials Holdings";
 type Listing = { catalog_id: string; listing_version: string; company_name: string; state: string };
 
 function catalogFixture(
-  operation: "catalog-first" | "catalog-reuse" | "catalog-outage" | "catalog-observed",
+  operation:
+    | "catalog-first"
+    | "catalog-reuse"
+    | "catalog-traded-reuse"
+    | "catalog-outage"
+    | "catalog-observed"
+    | "catalog-finance"
+    | "catalog-finance-mixed"
+    | "catalog-cold-close"
+    | "catalog-expire-mark"
+    | "catalog-reprice"
+    | "catalog-halt"
+    | "catalog-resume"
+    | "catalog-stale"
+    | "catalog-hold"
+    | "catalog-dividend"
+    | "catalog-split",
 ) {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return execFileSync(
@@ -57,7 +73,13 @@ function financialWrites(page: Page) {
   const writes: string[] = [];
   page.on("request", (req) => {
     const path = new URL(req.url()).pathname;
-    if (req.method() === "POST" && /\/(stock-trades|trades)(\/|$)/.test(path)) writes.push(path);
+    if (
+      req.method() === "POST" &&
+      (/\/(stock-trades|trades)(\/|$)/.test(path) ||
+        /\/portfolios\/\d+\/stock-catalog\/\d+\/(preview|confirm)$/.test(path))
+    ) {
+      writes.push(path);
+    }
   });
   return writes;
 }
@@ -218,4 +240,296 @@ test("catalog provider outage leaves search, curated stocks and crypto available
   await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await expect(page.getByRole("button", { name: /BTC/ })).toBeVisible();
   expect(observedQuotes()).toEqual([["FQXB"]]);
+});
+
+async function selectPromotedStock(page: Page, symbol = "FQZT") {
+  const [item] = await searchFor(page, symbol);
+  const selected = selectedQuote(page);
+  const row = stock(page, new RegExp(symbol));
+  await row.focus();
+  await row.press("Enter");
+  const response = await selected;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    listing: item,
+    read_only: false,
+    execution_reason: "available",
+    quote: { feed: "iex" },
+  });
+  return item;
+}
+
+test("catalog buys and sells a promoted out-of-list stock with repricing and replay", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const writes = financialWrites(page);
+  catalogFixture("catalog-finance");
+  await openStocks(page);
+  const portfolio = await portfolioId(page);
+  const scope = "/api/v2/portfolios/" + portfolio;
+  const item = await selectPromotedStock(page);
+  const endpoint = scope + "/stock-catalog/" + item.catalog_id;
+  const ticket = "/portfolios/" + portfolio + "/trade/catalog/" + item.catalog_id;
+  await page.getByRole("link", { name: "Trade FQZT", exact: true }).click();
+  await expect(page).toHaveURL(ticket);
+  await expect(page.getByRole("combobox", { name: "Trading portfolio" })).toHaveCount(1);
+  await expect(page.getByText("Cash available $10,000.00", { exact: true })).toBeVisible();
+  const quantity = page.getByLabel("Whole-share quantity");
+  await page.getByRole("button", { name: "Buy max" }).click();
+  await expect(quantity).toHaveValue("97");
+  await quantity.fill("2");
+  await page.getByRole("button", { name: "Preview trade" }).click();
+  const confirm = page.getByRole("button", { name: "Confirm buy" });
+  await expect(confirm).toBeEnabled();
+  catalogFixture("catalog-reprice");
+  const changed = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint + "/confirm");
+  await confirm.click();
+  expect((await changed).status()).toBe(409);
+  await expect(
+    page.getByText("Price updated. Review the changes before confirming again."),
+  ).toBeVisible();
+  let firstBody: unknown;
+  let committed: unknown;
+  const discardResult = "**" + endpoint + "/confirm";
+  await page.route(discardResult, async (route) => {
+    firstBody = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    committed = await response.json();
+    await route.abort("failed");
+  });
+  await confirm.click();
+  const check = page.getByRole("button", { name: "Check order result" });
+  await expect(check).toBeEnabled();
+  await page.unroute(discardResult);
+  const replay = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint + "/receipt");
+  await check.click();
+  const result = await replay;
+  expect(result.status()).toBe(200);
+  expect(result.request().postDataJSON()).toEqual(firstBody);
+  expect(await result.json()).toEqual(committed);
+  expect(writes.filter((path) => path === endpoint + "/confirm")).toHaveLength(2);
+  const receipt = page.getByRole("heading", { name: "Order filled" });
+  await expect(receipt).toBeFocused();
+  await expect(page.getByText("Bought 2 shares", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cash after this trade", { exact: true })).toBeVisible();
+  const bought = await (await page.request.get(scope)).json();
+  expect(Number(bought.cash)).toBe(9791.75);
+  expect(bought.holdings).toEqual([
+    expect.objectContaining({ catalog_id: item.catalog_id, symbol: "FQZT", asset_class: "stock" }),
+  ]);
+  expect(Number(bought.holdings[0].quantity)).toBe(2);
+  expect(Number(bought.holdings[0].cost_basis)).toBe(208.25);
+
+  catalogFixture("catalog-halt");
+  await page.reload();
+  await expect(page.getByText("Trading halted.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Confirm|Preview/ })).toHaveCount(0);
+  catalogFixture("catalog-resume");
+  await page.reload();
+  const sell = page.getByRole("radio", { name: "Sell", exact: true });
+  await sell.click();
+  await expect(sell).toBeChecked();
+  await page.getByRole("button", { name: "Sell all" }).click();
+  await expect(quantity).toHaveValue("2");
+  await page.getByRole("button", { name: "Preview trade" }).click();
+  const sale = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint + "/confirm");
+  await page.getByRole("button", { name: "Confirm sell" }).click();
+  expect((await sale).status()).toBe(201);
+  await expect(page.getByText("Sold 2 shares", { exact: true })).toBeVisible();
+  const sold = await (await page.request.get(scope)).json();
+  expect(Number(sold.cash)).toBe(9993.75);
+  expect(sold.holdings).toEqual([]);
+  expect(observedQuotes()).toEqual([["FQZT"]]);
+
+  catalogFixture("catalog-stale");
+  catalogFixture("catalog-outage");
+  const stale = await page.request.get(endpoint + "/trade-context");
+  expect(stale.status()).toBe(200);
+  expect(await stale.json()).toMatchObject({
+    read_only: true,
+    execution_reason: "quote_stale",
+  });
+  await page.reload();
+  await expect(page.getByText("This quote is out of date.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Confirm|Preview/ })).toHaveCount(0);
+  expect(writes.filter((path) => path === endpoint + "/confirm")).toHaveLength(3);
+
+  const stranger = await browser.newContext();
+  try {
+    const otherPage = await stranger.newPage();
+    await signInNewUser(otherPage);
+    expect((await otherPage.request.get(scope + "/history")).status()).toBe(404);
+    expect((await otherPage.request.get(endpoint + "/trade-context")).status()).toBe(404);
+  } finally {
+    await stranger.close();
+  }
+  catalogFixture("catalog-traded-reuse");
+  await page.goto("/portfolios/" + portfolio + "/history");
+  const summary = page.locator("summary").filter({ hasText: /FQZT/ });
+  await expect(summary).toHaveCount(2);
+  await summary.first().click();
+  const previous = page.getByRole("link", { name: "View stock ticket for FQZT" });
+  await expect(previous).toHaveAttribute("href", ticket);
+  await previous.click();
+  await expect(page.getByRole("heading", { name: item.company_name, exact: true })).toBeVisible();
+  await expect(page.getByText("This listing is no longer active.")).toBeVisible();
+});
+
+test("catalog preserves the SQL closed mark with an empty cache and suppresses expired marks", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const writes = financialWrites(page);
+  catalogFixture("catalog-finance");
+  await openStocks(page);
+  const owned = await portfolioId(page);
+  const item = await selectPromotedStock(page);
+  catalogFixture("catalog-cold-close");
+  await page.goto("/");
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await searchFor(page, "FQZT");
+  const selected = selectedQuote(page);
+  await stock(page, /FQZT/).click();
+  expect(await (await selected).json()).toMatchObject({
+    reason: "market_closed",
+    execution_reason: "market_closed",
+    quote: { feed: "iex" },
+  });
+  await expect(page.getByText(/^\$102\.00/)).toBeVisible();
+  await expect(page.locator("time").filter({ hasText: /^Opens in / })).toBeVisible();
+  const endpoint = "/api/v2/portfolios/" + owned + "/stock-catalog/" + item.catalog_id;
+  const ownedContext = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === endpoint + "/trade-context",
+  );
+  await page.getByRole("link", { name: "View details FQZT" }).click();
+  expect(await (await ownedContext).json()).toMatchObject({
+    portfolio_id: owned,
+    reason: "market_closed",
+    execution_reason: "market_closed",
+    quote: { feed: "iex" },
+  });
+  await expect(page.getByText("$102.00", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Market closed\./)).toBeVisible();
+  const draft = page.getByLabel("Whole-share quantity");
+  await draft.fill("3");
+  await expect(draft).toHaveValue("3");
+  await expect(page.getByRole("button", { name: /Confirm|Preview/ })).toHaveCount(0);
+  for (const width of [390, 640]) {
+    await page.setViewportSize({ width, height: 680 });
+    await noOverflow(page);
+  }
+  catalogFixture("catalog-expire-mark");
+  await page.reload();
+  await expect(page.getByText(/^Market closed\./)).toBeVisible();
+  await expect(page.locator("time").filter({ hasText: /^Opens in / })).toBeVisible();
+  await expect(page.getByText("$102.00", { exact: true })).toHaveCount(0);
+  await page.goto("/");
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  await searchFor(page, "FQZT");
+  const expired = selectedQuote(page);
+  await stock(page, /FQZT/).click();
+  expect(await (await expired).json()).toMatchObject({
+    reason: "market_closed",
+    execution_reason: "market_closed",
+    quote: null,
+  });
+  await expect(page.locator("time").filter({ hasText: /^Opens in / })).toBeVisible();
+  await expect(page.getByText(/^\$102\.00/)).toHaveCount(0);
+  expect(observedQuotes()).toEqual([["FQZT"]]);
+  expect(writes).toEqual([]);
+});
+
+test("catalog posts an ordinary dividend and split into the owned mixed portfolio", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  catalogFixture("catalog-finance-mixed");
+  await signInNewUser(page);
+  const owned = await portfolioId(page);
+  const prefix = "/portfolios/" + owned;
+  const scope = "/api/v2" + prefix;
+  await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
+  await page.getByRole("link", { name: "Trade BTC" }).click();
+  await page.getByLabel("Amount").fill("100");
+  const cryptoFilled = page.getByRole("heading", { name: "Order filled" });
+  const cryptoUpdated = page.getByText("Price updated. Please review again.");
+  for (let attempt = 0; attempt < 3 && !(await cryptoFilled.isVisible()); attempt++) {
+    await page.getByRole("button", { name: "Confirm buy" }).click();
+    await expect(cryptoFilled.or(cryptoUpdated)).toBeVisible();
+  }
+  await expect(cryptoFilled).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "US stocks", exact: true }).click();
+  const item = await selectPromotedStock(page, "FQZM");
+  await page.getByRole("link", { name: "Trade FQZM", exact: true }).click();
+  await page.getByLabel("Whole-share quantity").fill("2");
+  await page.getByRole("button", { name: "Preview trade" }).click();
+  await page.getByRole("button", { name: "Confirm buy" }).click();
+  await expect(page.getByText("Bought 2 shares", { exact: true })).toBeVisible();
+  catalogFixture("catalog-dividend");
+  const paid = await (await page.request.get(scope)).json();
+  expect(Number(paid.cash)).toBe(9695);
+  catalogFixture("catalog-split");
+  const split = await (await page.request.get(scope)).json();
+  const holding = split.holdings.find(
+    (row: { catalog_id?: string }) => row.catalog_id === item.catalog_id,
+  );
+  expect(holding).toMatchObject({ symbol: "FQZM", asset_class: "stock", current_value: null });
+  expect(Number(holding.quantity)).toBe(4);
+  expect(Number(holding.cost_basis)).toBe(206);
+  expect(Number(split.cash)).toBe(9695);
+  expect(split.holdings).toContainEqual(
+    expect.objectContaining({
+      symbol: "BTC",
+      asset_class: "crypto",
+      current_value: expect.any(String),
+    }),
+  );
+
+  catalogFixture("catalog-hold");
+  await page.goto(prefix);
+  await expect(page.getByText(/Known value/).first()).toBeVisible();
+  const incomplete = await (await page.request.get(scope)).json();
+  expect(incomplete).toMatchObject({
+    valuation_complete: false,
+    unvalued_holding_count: 1,
+    total_value: null,
+    total_pl: null,
+    cash_allocation_percent: null,
+  });
+  const btc = incomplete.holdings.find((row: { symbol: string }) => row.symbol === "BTC");
+  expect(Number(incomplete.known_value)).toBeCloseTo(9695 + Number(btc.current_value), 8);
+  await page.goto(prefix + "/history");
+  const dividend = page.locator("summary").filter({ hasText: /Dividend.*FQZM|FQZM.*Dividend/ });
+  const forwardSplit = page.locator("summary").filter({
+    hasText: /Forward split.*FQZM|FQZM.*Forward split/,
+  });
+  await expect(dividend).toHaveCount(1);
+  await expect(forwardSplit).toHaveCount(1);
+  await dividend.click();
+  await expect(page.getByRole("link", { name: "View stock ticket for FQZM" })).toHaveAttribute(
+    "href",
+    prefix + "/trade/catalog/" + item.catalog_id,
+  );
+  await expect(page.locator("summary").filter({ hasText: /BTC/ })).toHaveCount(1);
+  const history = await (await page.request.get(scope + "/event-history")).json();
+  const recorded = history.items.filter((row: { symbol: string }) => row.symbol === "FQZM");
+  expect(recorded).toEqual(
+    expect.arrayContaining(
+      ["dividend", "split", "trade"].map((kind) =>
+        expect.objectContaining({ kind, symbol: "FQZM", catalog_id: item.catalog_id }),
+      ),
+    ),
+  );
+  expect(Number(recorded.find((row: { kind: string }) => row.kind === "dividend").cash_delta)).toBe(
+    1,
+  );
+  const splitEvent = recorded.find((row: { kind: string }) => row.kind === "split");
+  expect(Number(splitEvent.quantity_before)).toBe(2);
+  expect(Number(splitEvent.quantity_after)).toBe(4);
+  expect(observedQuotes()).toEqual([["FQZM"]]);
 });
