@@ -189,6 +189,7 @@ async def test_resume_caps_jobs_attempts_minute_and_run() -> None:
             checkpoints.append,
             clock=clock.read,
             sleeper=clock.sleep,
+            check_scope=lambda _: None,
         )
         assert len(calls) == 100
         assert first.source_digests == starting.source_digests
@@ -201,6 +202,7 @@ async def test_resume_caps_jobs_attempts_minute_and_run() -> None:
             checkpoints.append,
             clock=clock.read,
             sleeper=clock.sleep,
+            check_scope=lambda _: None,
         )
     assert len(second.outcomes) == 1011
     assert len(calls) == 102
@@ -233,6 +235,7 @@ async def test_retry_after_and_incomplete_mapping_do_not_commit_failed_batch() -
                 checkpoints.append,
                 clock=clock.read,
                 sleeper=clock.sleep,
+                check_scope=lambda _: None,
             )
     assert attempts[1] - attempts[0] == timedelta(seconds=5)
     assert not any(state.outcomes for state in checkpoints)
@@ -265,6 +268,7 @@ async def test_refresh_rebinds_unchanged_evidence_and_reclassifies_expired_or_ch
             lambda _: None,
             clock=clock.read,
             sleeper=clock.sleep,
+            check_scope=lambda _: None,
         )
 
     changed = parse_directory(
@@ -282,3 +286,31 @@ async def test_refresh_rebinds_unchanged_evidence_and_reclassifies_expired_or_ch
         snapshots, (), AS_OF + timedelta(days=8), saved.outcomes
     )
     assert not reusable and len(pending) == 2
+
+
+@pytest.mark.asyncio
+async def test_scope_expiry_during_provider_wait_refuses_retry() -> None:
+    clock = FakeClock()
+    snapshot = parse_directory("nasdaqlisted", directory("nasdaqlisted", NASDAQ_COMMON))
+    calls = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(429, headers={"Retry-After": "5"})
+
+    def check_scope(at: datetime) -> None:
+        if at >= AS_OF + timedelta(seconds=3):
+            raise CatalogSourceError("Mapping rights expired")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
+        with pytest.raises(CatalogSourceError, match="Mapping rights expired"):
+            await _resume_mapping(
+                client,
+                list(snapshot.rows),
+                Cursor(source_digests=(snapshot.sha256, "2" * 64)),
+                lambda _: None,
+                clock=clock.read,
+                sleeper=clock.sleep,
+                check_scope=check_scope,
+            )
+    assert len(calls) == 1

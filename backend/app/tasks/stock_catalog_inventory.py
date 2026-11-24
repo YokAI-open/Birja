@@ -390,6 +390,7 @@ async def _resume_mapping(
     *,
     clock: Callable[[], datetime],
     sleeper: Callable[[float], Awaitable[None]],
+    check_scope: Callable[[datetime], None],
 ) -> Cursor:
     attempts = deque(cursor.recent_attempts)
     completed = list(cursor.outcomes)
@@ -427,6 +428,7 @@ async def _resume_mapping(
                     attempts.popleft()
                 if len(attempts) >= MAX_MAPPING_PER_MINUTE:
                     return checkpoint()
+            check_scope(now)
             retry_after = None
             attempts.append(now)
             run_attempts += 1
@@ -534,6 +536,7 @@ async def inventory(
             lambda state: _write_model(args.cursor, state),
             clock=lambda: datetime.now(UTC),
             sleeper=asyncio.sleep,
+            check_scope=lambda at: _rights_required(at, rights, bool(reviews)),
         )
         results.update({row.row_key: row for row in cursor.outcomes})
         now = datetime.now(UTC)
