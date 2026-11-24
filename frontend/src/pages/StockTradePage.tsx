@@ -209,7 +209,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               className="flex min-w-0 flex-col gap-5 border-t border-border pt-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                void t.preview();
+                if (!marketClosed) void t.preview();
               }}
             >
               <fieldset disabled={locked} className="flex gap-3">
@@ -246,7 +246,10 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   onChange={(e) => t.setQuantity(e.target.value)}
                   aria-invalid={quantityError !== null}
                   aria-describedby={
-                    id + "help " + id + "restriction" + (quantityError ? " " + id + "error" : "")
+                    id +
+                    "help" +
+                    (marketClosed ? "" : " " + id + "restriction") +
+                    (quantityError ? " " + id + "error" : "")
                   }
                 />
                 <p id={id + "help"} className="text-[13px] leading-[18px] text-muted-foreground">
@@ -274,25 +277,27 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     : "You do not hold shares of this stock."}
                 </p>
               )}
-              <p
-                id={id + "restriction"}
-                className="text-[13px] leading-[18px] text-muted-foreground"
-              >
-                {marketClosed
-                  ? "Your quantity is a draft. No order will be queued."
-                  : refusal
+              {!marketClosed && (
+                <p
+                  id={id + "restriction"}
+                  className="text-[13px] leading-[18px] text-muted-foreground"
+                >
+                  {refusal
                     ? "Preview unavailable while trading is paused. Your quantity is only a draft."
                     : "A preview does not place an order. Confirm it separately."}
-              </p>
+                </p>
+              )}
               {c && (
                 <dl className="flex flex-col gap-2">
                   <StockFigure label="Cash available">{formatUsd(c.cash)}</StockFigure>
                   <StockFigure label="Shares owned">{c.held_quantity.split(".")[0]}</StockFigure>
                 </dl>
               )}
-              <Button type="submit" disabled={!t.canPreview} className="min-h-11 self-start">
-                {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
-              </Button>
+              {!marketClosed && (
+                <Button type="submit" disabled={!t.canPreview} className="min-h-11 self-start">
+                  {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
+                </Button>
+              )}
             </form>
             <StockAttribution
               context="preview"
@@ -361,13 +366,13 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                       {signedUsd(quote.cash_delta)}
                     </StockFigure>
                   </dl>
-                ) : (
+                ) : t.phase === "unknown" ? (
                   <p>
-                    {t.phase === "unknown"
-                      ? "We couldn't confirm the result. Check this order before placing another."
-                      : "Enter a quantity to preview this trade."}
+                    We couldn&apos;t confirm the result. Check this order before placing another.
                   </p>
-                )}
+                ) : !marketClosed ? (
+                  <p>Enter a quantity to preview this trade.</p>
+                ) : null}
                 {t.phase === "unknown" || t.phase === "submitting" ? (
                   <Button
                     className="min-h-11"
@@ -379,7 +384,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 ) : (
                   <Button
                     className="min-h-11"
-                    disabled={!t.canConfirm}
+                    disabled={marketClosed || !t.canConfirm}
                     onClick={() => void t.confirm()}
                   >
                     {t.side === "buy" ? "Confirm buy" : "Confirm sell"}

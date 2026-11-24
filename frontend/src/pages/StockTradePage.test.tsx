@@ -137,12 +137,15 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
   c.session.state = "closed";
   const { user, calls } = setup({ context: () => new Response(JSON.stringify(c)) });
   const input = await screen.findByLabelText("Whole-share quantity");
-  await user.type(input, "3");
+  await user.type(input, "3{Enter}");
   expect(input).toHaveValue("3");
-  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
+  expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
+  expect(screen.queryByText("Enter a quantity to preview this trade.")).toBeNull();
   expect(screen.getByText("Market closed.")).toBeVisible();
   expect(screen.queryByText("Unavailable", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  expect(calls.some((x) => x.path.endsWith("/stock-trades/quote"))).toBe(false);
   expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
 it.each([true, false])(
@@ -176,6 +179,8 @@ it.each([true, false])(
     expect(await screen.findByText("Market closed.")).toBeVisible();
     expect(screen.getByText("Opens in 2 hr")).toHaveAttribute("dateTime", nextOpen.toISOString());
     expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
+    expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
     if (retainedQuote) {
       expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
       expect(screen.getByText(/Last verified IEX midpoint/)).toBeVisible();
