@@ -96,6 +96,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   ? "Preview ready. Review before confirming."
                   : "Enter a quantity to preview this trade."));
   const quote = t.quote;
+  const orderPortfolioName =
+    t.fill || t.attempt ? (t.originalName ?? target.name) : quote ? previewName : target.name;
   const visible = quote ?? c?.quote;
   const noShortcut =
     !c?.execution_enabled ||
@@ -107,6 +109,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     <div className="app-page flex flex-col gap-7 text-base md:gap-9">
       <header>
         <h1 className="app-heading wrap-anywhere">Trade {t.symbol}</h1>
+        {orderPortfolioName !== target.name && <PortfolioContext name={target.name} compact />}
       </header>
       <p
         role="status"
@@ -305,22 +308,13 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               <StockTradeReceipt
                 fill={t.fill}
                 target={target}
-                portfolioName={t.originalName ?? target.name}
+                portfolioName={orderPortfolioName}
                 onTradeAgain={t.tradeAgain}
               />
             ) : (
               <>
                 <h2 className="text-xl leading-7 font-semibold">Trade preview</h2>
-                <PortfolioContext
-                  compact
-                  name={
-                    t.attempt
-                      ? (t.originalName ?? target.name)
-                      : t.quote
-                        ? previewName
-                        : target.name
-                  }
-                />
+                <PortfolioContext name={orderPortfolioName} compact />
                 {t.phase === "loading_preview" && (
                   <div
                     aria-busy="true"

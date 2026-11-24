@@ -233,9 +233,10 @@ test("buy → portfolio → history → whole-position sell preserves actual ser
 
   async function openPortfolio() {
     const endpoint = await portfolioApi(page);
-    const response = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint && r.ok());
     await openOwnedPortfolio(page);
-    const data = (await (await response).json()) as Portfolio;
+    const response = await page.request.get(endpoint);
+    expect(response.ok()).toBe(true);
+    const data = (await response.json()) as Portfolio;
     await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
     await expect(page.getByRole("region", { name: "Cash", exact: true })).toContainText(
       formatUsd(data.cash),

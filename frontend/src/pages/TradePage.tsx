@@ -238,6 +238,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     (trade.outcomeUnknown || (live && settled && quote !== undefined && !refused));
   const unit = kind === "usd" ? "USD" : symbol;
   const inputLabel = kind === "usd" ? "Amount" : "Quantity";
+  const orderPortfolioName =
+    fill || trade.attempt ? (trade.originalName ?? target.name) : target.name;
 
   let preview;
   if (fill) {
@@ -251,7 +253,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         >
           Order filled
         </h2>
-        <PortfolioContext name={trade.originalName ?? target.name} compact />
+        <PortfolioContext name={orderPortfolioName} compact />
         <dl className="flex flex-col gap-3">
           <Row label="Quantity" value={`${formatQuantity(fill.quantity)} ${symbol}`} />
           <Row label="Price" value={formatUnitPrice(fill.exec_price)} />
@@ -297,10 +299,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         <h2 id={summaryHeadingId} className="text-xl leading-7 font-semibold tracking-[-0.01em]">
           Preview
         </h2>
-        <PortfolioContext
-          name={trade.attempt ? (trade.originalName ?? target.name) : target.name}
-          compact
-        />
+        <PortfolioContext name={orderPortfolioName} compact />
         {trade.outcomeUnknown && (
           <p role="status" className="rounded-control bg-warn-soft px-4 py-2 text-warn-text">
             We couldn't confirm the result. Check this order before placing another.
@@ -333,6 +332,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     <div className="app-page flex flex-col gap-7 text-base md:gap-9">
       <header>
         <h1 className="app-heading wrap-anywhere">Trade {symbol}</h1>
+        {orderPortfolioName !== target.name && <PortfolioContext name={target.name} compact />}
       </header>
       <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
         <Card className="min-w-0 lg:col-span-7 lg:self-start">
