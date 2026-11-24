@@ -78,11 +78,13 @@ for (const width of [320, 375, 768, 1280]) {
     await expect(selected).toContainText("has changed or conflicts and needs review");
     await expect(selected.getByText("Price unavailable")).toHaveCount(0);
     await expect(selected.getByRole("link", { name: "View details AAPL" })).toBeVisible();
-    await expect(selected.getByRole("note")).toContainText("IEX prices");
-    await expect(selected.getByRole("note")).toContainText("one US exchange");
-    await expect(selected.getByRole("note")).toContainText("simulated execution");
+    await expect(selected.getByText(/Quotes come from IEX/)).toHaveCount(0);
     const allAssets = page.getByRole("button", { name: "All assets" });
     if (width < 768) await allAssets.click();
+    await expect(region(page).getByText("IEX prices · Midpoint", { exact: false })).toBeVisible();
+    await expect(
+      region(page).getByText(body.attribution.required_text, { exact: true }),
+    ).toBeVisible();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     expect(
       await region(page)

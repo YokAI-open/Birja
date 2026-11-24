@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { StockAttribution } from "@/components/StockAttribution";
 import { MarketOpening } from "@/components/MarketOpening";
 import type { StockItem } from "@/api/stocks";
 import { stockActionSummary } from "@/lib/stockActionCopy";
@@ -310,12 +309,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                   >
                     {stockRestriction}
                   </p>
-                  {permitted && (
-                    <StockAttribution
-                      context="listing"
-                      required_text={stocks.data?.attribution.required_text}
-                    />
-                  )}
                 </div>
               )}
             </div>
@@ -326,7 +319,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
             >
               {action}
             </Link>
-            {marketClosed && stockQuote && stocks.data?.attribution.required_text && (
+            {stockQuote && stocks.data?.attribution.required_text && (
               <p className="mt-3 text-xs text-[var(--market-muted)] md:hidden">
                 {stocks.data.attribution.required_text}
               </p>

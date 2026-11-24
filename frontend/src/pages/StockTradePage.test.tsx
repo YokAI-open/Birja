@@ -126,6 +126,8 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   expect(calls.filter((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(0);
   expect(screen.getByText("Commission")).toBeVisible();
   expect(screen.getByText("Added spread")).toBeVisible();
+  expect(screen.queryByText(/Quotes come from IEX/)).toBeNull();
+  expect(screen.queryByText(/Stock commission and added spread/)).toBeNull();
   await user.click(confirm);
   const heading = await screen.findByRole("heading", { name: "Order filled" });
   expect(heading).toHaveFocus();

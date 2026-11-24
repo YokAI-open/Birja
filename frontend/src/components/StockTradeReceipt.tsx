@@ -3,17 +3,8 @@ import { Link } from "react-router";
 import type { StockFill } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { StockAttribution } from "./StockAttribution";
 import { fullLocalTimestamp, signedUsd } from "@/lib/financialDisplay";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
-export function StockDisclosure() {
-  return (
-    <p className="text-[13px] leading-[18px] text-muted-foreground">
-      Stock commission and added spread are zero. Regulatory fees are omitted. Virtual sale proceeds
-      are available immediately; real settlement restrictions are not simulated.
-    </p>
-  );
-}
 export function StockFigure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -94,8 +85,6 @@ export function StockTradeReceipt({
       <p className="text-[13px] leading-[18px] text-muted-foreground">
         Balances shown are the recorded balances immediately after this trade.
       </p>
-      <StockAttribution context="preview" />
-      <StockDisclosure />
       <div className="flex flex-wrap gap-3">
         <Button asChild className="min-h-11">
           <Link to={`/portfolios/${f.portfolio_id}`}>Portfolio</Link>

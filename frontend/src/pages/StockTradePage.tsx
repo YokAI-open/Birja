@@ -10,14 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { StockAttribution } from "@/components/StockAttribution";
 import { MarketOpening } from "@/components/MarketOpening";
-import {
-  StockDate,
-  StockDisclosure,
-  StockFigure,
-  StockTradeReceipt,
-} from "@/components/StockTradeReceipt";
+import { StockDate, StockFigure, StockTradeReceipt } from "@/components/StockTradeReceipt";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
 import { signedUsd } from "@/lib/financialDisplay";
 const reasons: Record<StockRefusal, string> = {
@@ -94,6 +88,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   const quote = t.quote;
   const lastQuote = marketClosed ? cataloguedStock?.quote : null;
   const visible = quote ?? c?.quote;
+  const requiredAttribution = stocks?.attribution.required_text;
   const noShortcut =
     !c?.execution_enabled ||
     (t.side === "buy"
@@ -307,11 +302,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 </Button>
               )}
             </form>
-            <StockAttribution
-              context="preview"
-              required_text={lastQuote ? stocks?.attribution.required_text : undefined}
-            />
-            <StockDisclosure />
+            {requiredAttribution && (lastQuote || (!marketClosed && visible) || t.fill) && (
+              <p className="text-[13px] leading-[18px] break-words text-muted-foreground">
+                {requiredAttribution}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">

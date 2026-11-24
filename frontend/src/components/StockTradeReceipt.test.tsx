@@ -4,7 +4,7 @@ import { renderWithClient } from "@/test/render";
 import { fillFixture } from "@/test/stockTradeFixtures";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { StockTradeReceipt } from "./StockTradeReceipt";
-it("displays original recorded balances, identity, source times and disclosure", async () => {
+it("displays recorded balances, identity and IEX execution facts without explanatory copy", async () => {
   const again = vi.fn(),
     fill = { ...fillFixture(), portfolio_id: "1" };
   const target: PortfolioTarget = Object.freeze({
@@ -29,10 +29,11 @@ it("displays original recorded balances, identity, source times and disclosure",
   expect(receipt).toHaveTextContent("Shares after this trade2");
   expect(receipt).toHaveTextContent("9007199254740993");
   expect(receipt.querySelector('time[datetime="2026-11-10T15:00:09Z"]')).not.toBeNull();
-  expect(
-    within(receipt).getByRole("note", { name: "Stock preview price source" }),
-  ).toHaveTextContent("IEX prices");
-  expect(receipt).toHaveTextContent("Regulatory fees are omitted");
+  expect(receipt).toHaveTextContent("IEX bid$100.00");
+  expect(receipt).toHaveTextContent("IEX ask$102.00");
+  expect(receipt).toHaveTextContent("Commission$0.00");
+  expect(within(receipt).queryByText(/Quotes come from IEX/)).toBeNull();
+  expect(within(receipt).queryByText(/Stock commission and added spread/)).toBeNull();
   await user.click(screen.getByRole("button", { name: "Trade again" }));
   expect(again).toHaveBeenCalledOnce();
 });
