@@ -1,62 +1,76 @@
-# Roadmap: Birja
+# Roadmap — Birja
 
 ## Milestones
 
-- [x] **v1.0 Birja MVP** — shipped 2026-11-10 as software v0.4.0; [archive](milestones/v1.0-ROADMAP.md).
-- [x] **v1.1 US Stock Trading** — closed 2026-11-14 with accepted live gaps: 63/64 plans, 130/132 tasks, 20/26 requirements locally satisfied; [archive](milestones/v1.1-ROADMAP.md).
-- [x] **v1.2 Multiple Strategy Portfolios** — shipped as software v0.6.2, 28/28 requirements, 72/72 plans. [Archive](milestones/v1.2-ROADMAP.md) · [Audit](milestones/v1.2-MILESTONE-AUDIT.md).
-
-- [ ] **v1.3 Birja Interface Redesign** — owner-approved on 2026-11-23.
+- [x] **v1.0 Birja MVP** · [Roadmap](milestones/v1.0-ROADMAP.md)
+- [x] **v1.1 US Stock Trading** · Closed with accepted live gaps. [Roadmap](milestones/v1.1-ROADMAP.md)
+- [x] **v1.2 Multiple Strategy Portfolios** · [Roadmap](milestones/v1.2-ROADMAP.md)
+- [x] **v1.3 Birja Interface Redesign** · Phases 16–17 verified and interface deployed. [Roadmap snapshot](milestones/v1.3-ROADMAP.md) · [Audit](v1.3-MILESTONE-AUDIT.md)
+- [ ] **v1.4 Searchable Stock Trading** · Scope and roadmap approved on 2026-11-24.
 
 ## Phases
 
-- [x] **Phase 16: Adopt the Approved Interface**
-- [x] **Phase 17: Verify Full-Stack Behavior and Prepare Release**
+- [ ] **Phase 18: Make simulated stock trades work**
+- [ ] **Phase 19: Search the NYSE and Nasdaq catalog**
+- [ ] **Phase 20: Trade and value stocks from search**
+- [ ] **Phase 21: Verify, release and activate stock trading**
 
 ## Phase Details
 
-### Phase 16: Adopt the Approved Interface
+### Phase 18: Make simulated stock trades work
 
-**Goal:** Turn the approved working-tree redesign into a verified implementation on the existing Birja APIs.
+**Goal:** Complete a real app buy and sell with live market data and the approved simulator eligibility rule.
 
-**Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05, UI-06, UI-07, QA-01
+**Requirements:** SX-01, SX-02, SX-03, SX-04
 
-**Plans:** 2 plans
+1. The approved pricing and halt-data combination supplies usable real data within a measured free-tier request budget and covers individual and market-wide refusal cases.
+2. An isolated portfolio buys at the eligible IEX ask and sells at the eligible bid. Session closure, stale or unavailable data, and reported halts cause a clear refusal.
+3. Repricing requests a fresh confirmation and retry leaves one fill. The selected portfolio and History agree, while crypto continues to work.
 
-- [x] 16-01 — Adopt and integrate the approved redesign (wave 1).
-- [x] 16-02 — Verify the integrated UI and capture owner acceptance (wave 2).
+### Phase 19: Search the NYSE and Nasdaq catalog
 
-**Success criteria:**
+**Goal:** Find and select supported common stocks by name or ticker, including stocks beyond the original 20.
 
-1. The shared header, door control, Markets and trade tickets match the approved style and retain existing quote, order and session behavior.
-2. Portfolio and History cards, switching, management and recovery identify and affect the correct active portfolio and preserve authoritative data.
-3. Keyboard, responsive and enlarged-text checks cover the main flows and their loading, unavailable, error and empty states. The owner can review the release candidate.
+**Depends on:** Phase 18
 
-### Phase 17: Verify Full-Stack Behavior and Prepare Release
+**Requirements:** SC-01, SC-02, SC-03, SC-04
 
-**Goal:** Qualify the redesigned app end to end and produce a reviewed release candidate.
+1. Users can search the loaded catalog with bounded results, see exact ticker matches first and distinguish share classes. A symbol beyond the original 20 opens its own detail and trade entry.
+2. A catalog refresh preserves stable identities and historical links. Stale or failed price access leaves name and ticker search available.
+3. Selecting a result requests market data on demand and shows the actual quote or a precise eligibility reason.
 
-**Depends on:** Phase 16
+### Phase 20: Trade and value stocks from search
 
-**Requirements:** QA-02, QA-03
+**Goal:** Extend the working trade and valuation path to eligible catalog results, with bounded price and corporate-action work.
 
-**Plans:** 2 plans
+**Depends on:** Phase 19
 
-- [x] 17-01 — Qualify and review the exact candidate (wave 1).
-- [x] 17-02 — Audit, prepare the PR, and check CI after publication approval (wave 2).
+**Requirements:** SL-01, SL-02, SL-03, SL-04
 
-**Success criteria:**
+1. Users can buy and sell a newly onboarded common stock and see its correct position and cash in a mixed portfolio. Refresh calls scale with selected and held stocks.
+2. Closed stocks show their latest permitted marks and local opening countdown. Missing marks leave the relevant aggregate visibly incomplete.
+3. An ordinary dividend and a supported split apply once to affected active portfolios. Ticker changes, restart and uncertain actions preserve identity, balances and History.
 
-1. Code review, frontend and backend checks, and isolated browser journeys verify session, portfolio ownership, real trade economics, deletion and History. Necessary fixes are reviewed and retested.
-2. A milestone audit ties each requirement to observed evidence. The review records any approved follow-up.
-3. The release candidate passes required PR CI once publishing is approved. Merge, release and deployment follow their established approval gates.
+### Phase 21: Verify, release and activate stock trading
+
+**Goal:** Deliver a verified production flow for search, buy and sell.
+
+**Depends on:** Phase 20
+
+**Requirements:** SV-01, SV-02, SV-03
+
+1. Browser acceptance covers an out-of-list stock search, simulated round trip, cash, holdings and History, along with market closure, known halts and stale data.
+2. Review, required CI and applicable migration, recovery and rollback checks pass for the release candidate.
+3. After the approved rollout, the designated production test portfolio buys and sells an out-of-list stock against real IEX prices. Record safe totals and exact release identity.
 
 ## Progress
 
-| Phase | Milestone | Status |
+| Phase | Plans complete | Status |
 |---|---|---|
-| 16. Adopt the Approved Interface | v1.3 | Verified complete |
-| 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Verified complete. PR #41 passed CI and merged into develop. |
+| 18. Make simulated stock trades work | 0/TBD | Not started |
+| 19. Search the NYSE and Nasdaq catalog | 0/TBD | Not started |
+| 20. Trade and value stocks from search | 0/TBD | Not started |
+| 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
-All 10 requirements are assigned once in [REQUIREMENTS.md](REQUIREMENTS.md).
-The [deferred register](DEFERRED.md) retains the separate stock activation work.
+All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
+[Research](research/v1.4/SUMMARY.md) · [Deferred work](DEFERRED.md)

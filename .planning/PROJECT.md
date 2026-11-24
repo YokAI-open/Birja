@@ -2,13 +2,10 @@
 
 ## What This Is
 
-A virtual-money investing simulator. Production softwarev0.6.2 now provides
-multiple private strategy portfolios with independent virtual cash, creation,
-names/descriptions, comparison, switching and confirmed terminal deletion.
-Original investing data is preserved. Stock implementation remains available
-locally, with production activation deferred pending supported live-status
-transport; Phase7owner acceptance is closed. See the actual
-[production receipt](releases/0.6.2/PRODUCTION.md).
+Birja is a virtual-money investing simulator for private strategy portfolios.
+Users can trade crypto with independent virtual cash in each portfolio. The
+redesigned interface is deployed. US stock orders remain blocked in production,
+and the current stock catalog is limited to 20 entries.
 
 ## Core Value
 
@@ -81,10 +78,12 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 ### Active
 
-- [ ] Adopt the approved branded, minimal interface across Markets, Portfolios, trade, History, and sign-in.
-- [ ] Verify the redesigned flows with authenticated browser journeys, backend and frontend checks, and code review.
-
-
+- [ ] Make regular-session simulated buys and sells work with fresh on-demand
+  quotes and exchange-reported halt checks.
+- [ ] Let users search active NYSE and Nasdaq common stocks by name or ticker
+  and trade eligible results beyond the original 20.
+- [ ] Preserve exact portfolio and History behavior while qualifying the new
+  stock flow with live data and the existing release process.
 
 ### Carried Work Across Milestones
 
@@ -92,8 +91,9 @@ Phase7's six owner acceptance items are closed as of2026-11-22: explicit owner
 confirmation of prior manual checks and applicable product rights/access/retention/
 limits supplements the preserved measurements and implementation proof. See
 [DEFERRED.md](DEFERRED.md) for provenance. Historical archives remain unchanged.
-The missing live stock-status transport is a separate engineering follow-up;
-no real stock execution or production activation is claimed from acceptance.
+The [live verification](quick/20261124-stock-activation/SUMMARY.md) isolated the
+remaining production blocker. v1.4 owns the stock activation outcome under
+the newly approved simulator rules.
 
 ### Out of Scope
 
@@ -293,7 +293,7 @@ funding limit with independent per-portfolio starting grants. Creating a new
 strategy after deletion is allowed. No existing portfolio is reset, and virtual
 funds are isolated rather than transferable across portfolios.
 
-## Current Milestone: v1.3 Birja Interface Redesign
+## Previous Milestone: v1.3 Birja Interface Redesign
 
 **Goal:** Deliver the approved low-clutter design over the existing trading simulator and qualify the result with the real app stack.
 
@@ -303,9 +303,28 @@ funds are isolated rather than transferable across portfolios.
 - Verify with code review, automated unit and integration suites, real-browser tests on an isolated stack, and owner review of the integrated interface.
 
 The owner approved the scope, requirements and two-phase roadmap on 2026-11-23.
-Software v0.6.2 is the released baseline. Live stock activation remains separate.
-See [requirements](REQUIREMENTS.md), [roadmap](ROADMAP.md) and
-[deferred work](DEFERRED.md).
+Phases 16 and 17 are verified, and the interface is deployed in the `07d3aa5`
+production baseline. See the [verified requirements snapshot](milestones/v1.3-REQUIREMENTS.md),
+[roadmap snapshot](milestones/v1.3-ROADMAP.md) and [audit](v1.3-MILESTONE-AUDIT.md).
+
+## Current Milestone: v1.4 Searchable Stock Trading
+
+**Goal:** A user can find any supported NYSE or Nasdaq common stock and
+complete a simulated buy and sell using current market data.
+
+On 2026-11-24 the owner approved active common-stock discovery by company name
+or ticker and a simulator rule based on on-demand IEX prices and recent exchange
+halt reports. Regular market hours, eligible quotes under 120 seconds old,
+whole shares, zero stock commission and the independent portfolio ledger still
+apply. Newly announced halts can take a minute or more to appear. Keep the
+last permitted, timestamped price visible while closed and show the user's
+local opening countdown.
+
+Alpaca is the first pricing candidate based on verified live REST behavior.
+Confirm coverage, quotas, applicable use and retained data for the broader
+universe in Phase 18. Start with the available free sources and existing
+account. Research and planning use published documentation and existing
+measurements. [Research](research/v1.4/SUMMARY.md)
 
 ## Constraints
 
@@ -360,4 +379,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-23 for the approved v1.3 interface redesign.*
+*Last updated: 2026-11-24 for the approved v1.4 scope.*
