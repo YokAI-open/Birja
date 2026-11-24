@@ -76,10 +76,13 @@ Making a trade at a real, recent market price and then seeing what it's worth no
 
 - [x] Exact active/frozen multi-portfolio recovery, original-request replay, operator support/refusal contract and full lifecycle acceptance — Phase15, independently verified4/4outcomes and3/3requirements.
 
+- [x] Regular-session simulated buys and sells with on-demand IEX quotes,
+  reported-halt checks, and exact receipt replay. Phase 18 verified the
+  isolated live AAPL round trip, crypto control, and affected recovery.
+  [Phase 18 verification](phases/18-make-simulated-stock-trades-work/18-VERIFICATION.md)
+
 ### Active
 
-- [ ] Make regular-session simulated buys and sells work with fresh on-demand
-  quotes and exchange-reported halt checks.
 - [ ] Let users search active NYSE and Nasdaq common stocks by name or ticker
   and trade eligible results beyond the original 20.
 - [ ] Preserve exact portfolio and History behavior while qualifying the new
@@ -320,11 +323,10 @@ apply. Newly announced halts can take a minute or more to appear. Keep the
 last permitted, timestamped price visible while closed and show the user's
 local opening countdown.
 
-Alpaca is the first pricing candidate based on verified live REST behavior.
-Confirm coverage, quotas, applicable use and retained data for the broader
-universe in Phase 18. Start with the available free sources and existing
-account. Research and planning use published documentation and existing
-measurements. [Research](research/v1.4/SUMMARY.md)
+Phase 18 verified live Alpaca IEX pricing and exchange-reported halts for the
+original 20-stock scope. Coverage, quotas, permitted use and retention for
+the broader universe are part of the remaining stock discovery and activation
+work. [Research](research/v1.4/SUMMARY.md)
 
 ## Constraints
 
@@ -379,4 +381,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-24 for the approved v1.4 scope.*
+*Last updated: 2026-11-24 after Phase 18 verification.*

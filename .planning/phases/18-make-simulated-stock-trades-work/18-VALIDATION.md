@@ -1,7 +1,7 @@
 ---
 phase: 18
 slug: make-simulated-stock-trades-work
-status: approved-for-planning
+status: executed
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-24
@@ -32,3 +32,20 @@ valid crawl budget and permitted test-feed use. Record the exact app revision,
 request counts, redacted source timing and fill, cash, holdings and History
 assertions. Public snapshots or historical examples may cover rare halt events.
 Actual production activation belongs to Phase 21.
+
+
+## Execution evidence
+
+- The focused backend suite passed 485 tests. The final targeted additions
+  passed all 17 tests, including missing or expired reports, report/fill
+  serialization and old/new startup admission.
+- Migration and bootstrap runs passed 23 and 52 selected tests respectively.
+  The exact portfolio authority tests passed all 38 cases. Combined targeted
+  branch diagnostics exercised the changed code in the existing critical-path
+  include list. The whole-repository coverage gate is part of release CI.
+- The frontend passed 253 focused tests and all 14 browser stock cases.
+- The real PostgreSQL stock recovery suite passed all 26 tests. See the
+  [recovery summary](18-05-SUMMARY.md) for the 0023/0024 restore results,
+  completed rollback lanes and historical diagnostics interrupted by tool limits.
+- The [live receipt](18-LIVE-RECEIPT.md) records the actual IEX buy and sell,
+  exact receipt retries, and BTC control in the disposable portfolio.

@@ -10,7 +10,7 @@
 
 ## Phases
 
-- [ ] **Phase 18: Make simulated stock trades work**
+- [x] **Phase 18: Make simulated stock trades work** (completed 2026-11-24)
 - [ ] **Phase 19: Search the NYSE and Nasdaq catalog**
 - [ ] **Phase 20: Trade and value stocks from search**
 - [ ] **Phase 21: Verify, release and activate stock trading**
@@ -23,7 +23,7 @@
 
 **Requirements:** SX-01, SX-02, SX-03, SX-04
 
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 
 **Wave 1**
 - [x] 18-01 — Qualify IEX and official halt sources.
@@ -38,7 +38,7 @@
 - [x] 18-04 — Connect the existing trade flow and verify regressions.
 
 **Wave 5** (after Wave 4)
-- [ ] 18-05 — Prove recovery and a live isolated stock buy and sell.
+- [x] 18-05 — Prove recovery and a live isolated stock buy and sell.
 
 Stock execution uses current evidence from the qualified halt and IEX sources.
 The simulator runs in a disposable stack for Phase 18 verification.
@@ -89,7 +89,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 
 | Phase | Plans complete | Status |
 |---|---|---|
-| 18. Make simulated stock trades work | 4/5 | In progress |
+| 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 0/TBD | Not started |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |

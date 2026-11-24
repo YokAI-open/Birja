@@ -4,10 +4,10 @@ Defined and approved by the owner on 2026-11-24.
 
 ## Working simulated stock trading
 
-- [ ] **SX-01** — A user can preview a whole-share stock order during the regular US session using an on-demand eligible IEX ask for buys or bid for sells. Execution requires a current-session quote whose source timestamp is less than 120 seconds old.
-- [ ] **SX-02** — A user sees a specific refusal for closed sessions, exchange-reported halts, or stale or failed market checks. Birja uses a recent official report to block reported stock and market-wide halts. Explain that reporting can lag or omit a halt. The simulator uses fresh regular-session quotes and does not require continuous venue-status verification.
-- [ ] **SX-03** — A confirmed fill updates only the selected portfolio. Repricing requires reconfirmation. A retry recovers the original receipt without a duplicate fill. Shares, cash and History match the receipt and stock commission remains zero.
-- [ ] **SX-04** — The pricing and halt-data combination is qualified with representative live symbols, observed freshness, quotas and applicable use for Birja. Demonstrate a real app buy and sell using live prices in a disposable portfolio while preserving the existing crypto flow.
+- [x] **SX-01** — A user can preview a whole-share stock order during the regular US session using an on-demand eligible IEX ask for buys or bid for sells. Execution requires a current-session quote whose source timestamp is less than 120 seconds old.
+- [x] **SX-02** — A user sees a specific refusal for closed sessions, exchange-reported halts, or stale or failed market checks. Birja uses a recent official report to block reported stock and market-wide halts. Explain that reporting can lag or omit a halt. The simulator uses fresh regular-session quotes and does not require continuous venue-status verification.
+- [x] **SX-03** — A confirmed fill updates only the selected portfolio. Repricing requires reconfirmation. A retry recovers the original receipt without a duplicate fill. Shares, cash and History match the receipt and stock commission remains zero.
+- [x] **SX-04** — The pricing and halt-data combination is qualified with representative live symbols, observed freshness, quotas and applicable use for Birja. Demonstrate a real app buy and sell using live prices in a disposable portfolio while preserving the existing crypto flow.
 
 ## Search and new stock onboarding
 
@@ -41,10 +41,10 @@ public sources. Paid feeds and provider outreach remain separate decisions.
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| SX-01 | 18 | Pending |
-| SX-02 | 18 | Pending |
-| SX-03 | 18 | Pending |
-| SX-04 | 18 | Pending |
+| SX-01 | 18 | Complete |
+| SX-02 | 18 | Complete |
+| SX-03 | 18 | Complete |
+| SX-04 | 18 | Complete |
 | SC-01 | 19 | Pending |
 | SC-02 | 19 | Pending |
 | SC-03 | 19 | Pending |
