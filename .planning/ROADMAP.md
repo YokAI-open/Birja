@@ -23,6 +23,28 @@
 
 **Requirements:** SX-01, SX-02, SX-03, SX-04
 
+**Plans:** 5 plans
+
+**Wave 1**
+- [ ] 18-01 — Qualify IEX and official halt sources.
+
+**Wave 2** (after Wave 1)
+- [ ] 18-02 — Add reported-halt evidence and the final transactional check.
+
+**Wave 3** (after Wave 2)
+- [ ] 18-03 — Fetch eligible quotes on demand through the scheduler.
+
+**Wave 4** (after Wave 3)
+- [ ] 18-04 — Connect the existing trade flow and verify regressions.
+
+**Wave 5** (after Wave 4)
+- [ ] 18-05 — Prove recovery and a live isolated stock buy and sell.
+
+Stock execution uses current evidence from the qualified halt and IEX sources.
+The simulator runs in a disposable stack for Phase 18 verification.
+
+**Success Criteria**:
+
 1. The approved pricing and halt-data combination supplies usable real data within a measured free-tier request budget and covers individual and market-wide refusal cases.
 2. An isolated portfolio buys at the eligible IEX ask and sells at the eligible bid. Session closure, stale or unavailable data, and reported halts cause a clear refusal.
 3. Repricing requests a fresh confirmation and retry leaves one fill. The selected portfolio and History agree, while crypto continues to work.
@@ -67,7 +89,7 @@
 
 | Phase | Plans complete | Status |
 |---|---|---|
-| 18. Make simulated stock trades work | 0/TBD | Not started |
+| 18. Make simulated stock trades work | 0/5 | Planned |
 | 19. Search the NYSE and Nasdaq catalog | 0/TBD | Not started |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
