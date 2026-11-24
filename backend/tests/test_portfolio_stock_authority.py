@@ -40,7 +40,7 @@ async def stock_authority_case(engine, migrated):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0023"
+        ).scalar_one() == "0024"
         owners = []
         for label in ("owned", "foreign"):
             owners.append(
@@ -89,10 +89,11 @@ async def stock_authority_case(engine, migrated):
             await conn.execute(
                 text("""INSERT INTO stock_data_admissions
               (product,state,generation,reviewed_at,valid_from,valid_until,evidence_ref,terms_version,
-              collection_allowed,display_allowed,derived_allowed,retention_allowed,calendar)
+              collection_allowed,display_allowed,derived_allowed,retention_allowed,scope,calendar)
               VALUES (:p,'approved',1,:n,CAST(:n AS timestamptz)-interval '1 hour',
               CAST(:n AS timestamptz)+interval '1 hour','synthetic-only','fixture',
               true,true,true,true,
+              jsonb_build_object('feed','iex'),
               CASE WHEN :p='calendar' THEN jsonb_build_object('review_valid_until',
               CAST(:n AS timestamptz)+interval '1 hour') ELSE '{}'::jsonb END)"""),
                 {"p": product, "n": now},

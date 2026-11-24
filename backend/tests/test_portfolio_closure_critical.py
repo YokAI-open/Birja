@@ -362,10 +362,10 @@ async def test_final_default_acl_check_refuses_actual_post_preflight_change(
     async with engine.connect() as conn:
         assert await conn.scalar(text(DEFAULT_ACL_0023_SQL)) == baseline
         assert await conn.scalar(text(CATALOGUE_0023_SQL)) == catalogue
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn) == "0024"
 
 
-@pytest.mark.parametrize("revision", ["0006", "0024", "", "unknown"])
+@pytest.mark.parametrize("revision", ["0006", "0025", "", "unknown"])
 def test_dev_migration_inventory_refuses_unsupported_revision(revision):
     from app.db.dev_bootstrap import migration_objects
 
@@ -400,7 +400,7 @@ async def test_dev_final_default_acl_recheck_reads_actual_current_authority(engi
                 return await driver.fetchval(query)
 
         with pytest.raises(ValueError, match="Unexpected final closure default privileges"):
-            await dev_bootstrap._authorize_portfolios(ObservedConnection())
+            await dev_bootstrap._authorize_portfolios(ObservedConnection(), "0024")
         assert changed == [True]
         await conn.rollback()
     async with engine.connect() as conn:

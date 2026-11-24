@@ -37,7 +37,7 @@ ECONOMIC_TABLES = ("users", "accounts", *OWNED_TABLES, "stock_split_applications
 
 
 async def migrate_to(revision: str, *, down: bool = False) -> None:
-    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 24))}
+    assert revision in {"base", "head", *(f"{n:04}" for n in range(7, 25))}
     await asyncio.to_thread(run_test_migration, revision, down=down)
 
 

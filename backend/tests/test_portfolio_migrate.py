@@ -509,12 +509,14 @@ async def test_prior_authority_drift_refuses_before_any_migration_child(
         await child.dispose()
 
 
-def test_successor_source_authentication_pins_every_closure_asset():
+def test_successor_source_authentication_pins_every_closure_and_halt_asset():
     required = {
         "alembic/versions/0021_portfolio_closure_schema.py",
         "alembic/versions/0022_portfolio_closure_provenance.py",
         "alembic/versions/0023_portfolio_closure_authority.py",
         "alembic/sql/0023_portfolio_closure.sql",
+        "alembic/versions/0024_stock_halt_snapshot.py",
+        "alembic/sql/0024_stock_halt_snapshot.sql",
     }
     assert required <= migration.SOURCE.keys()
     migration.require_source()
@@ -528,7 +530,7 @@ async def test_successor_authenticated_migrator_accepts_complete_closure_revisio
 
     from tests.test_migrations import run_test_migration
 
-    for revision in ("0020", "0021", "0022", "0023"):
+    for revision in ("0020", "0021", "0022", "0023", "0024"):
         await asyncio.to_thread(run_test_migration, revision)
         async with portfolio_migration_db.begin() as conn:
             await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
@@ -556,7 +558,9 @@ async def test_successor_authenticated_migrator_accepts_complete_closure_revisio
         await child.dispose()
 
 
-@pytest.mark.parametrize("damage", ["relation", "substitution", "function_owner", "operator"])
+@pytest.mark.parametrize(
+    "damage", ["relation", "substitution", "halt_substitution", "function_owner", "operator"]
+)
 async def test_successor_migrator_refuses_unknown_or_substituted_inventory(
     portfolio_migration_db, damage
 ):
@@ -571,6 +575,8 @@ async def test_successor_migrator_refuses_unknown_or_substituted_inventory(
             await conn.execute(text("CREATE TABLE unexpected_successor(id bigint)"))
         elif damage == "substitution":
             await conn.execute(text("UPDATE alembic_version SET version_num='0023'"))
+        elif damage == "halt_substitution":
+            await conn.execute(text("UPDATE alembic_version SET version_num='0024'"))
         elif damage == "function_owner":
             await conn.execute(
                 text(
@@ -655,12 +661,12 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
     identity = AsyncMock(
         side_effect=ValueError("identity")
         if outcome == "identity"
-        else ["0014", "0016" if outcome == "revision" else "0023"]
+        else ["0014", "0016" if outcome == "revision" else "0024"]
     )
     if outcome == "preflight":
 
         async def execute(statement):
-            if str(statement) == migration.PREFLIGHT_SQL:
+            if str(statement) == migration.PREFLIGHT_0024_SQL:
                 raise ValueError("preflight")
 
         conn.execute.side_effect = execute
@@ -677,7 +683,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
             await migration.migrate(settings)
             assert (
                 capsys.readouterr().out
-                == "portfolio_migration_to_final=true source_revision=0014 final=0023\n"
+                == "portfolio_migration_to_final=true source_revision=0014 final=0024\n"
             )
             conn.rollback.assert_awaited_once()
         else:
@@ -695,7 +701,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
         assert statements[0] == "SELECT pg_advisory_lock(1026016017)"
         assert statements[-1] == "SELECT pg_advisory_unlock(1026016017)"
         assert conn.commit.await_count == 2
-        assert spawn.call_args.args[-2:] == ("upgrade", "0023")
+        assert spawn.call_args.args[-2:] == ("upgrade", "0024")
         assert spawn.call_args.kwargs["cwd"] == migration.BACKEND_DIR
     assert child.kill.call_count == (outcome == "timeout")
     assert child.wait.await_count == (outcome == "timeout")

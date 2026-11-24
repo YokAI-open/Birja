@@ -18,7 +18,7 @@ For EACH product (`reference`, `quotes`, `actions`, `status`, `calendar`) record
 | --- | --- |
 | Access | Account/subscription and exact endpoint/feed coverage |
 | Purposes | Separately verified collection, display, derived and retention rights |
-| Scope | application=birja, audience=authenticated-users, exact account/server IDs, feed=iex |
+| Scope | application=birja, audience=authenticated-users, exact account/server IDs, feed=iex or the status scope below |
 | Terms | Secure evidence reference, reviewed version, reviewer/time and validity interval |
 | Fields | Only reviewed fields; quotes require bid/ask/event_at/symbol |
 | Attribution | Exact permitted public text, including the visible IEX prices label |
@@ -31,6 +31,16 @@ symbol/status/event_at; `calendar` requires exchange/session_date/opens_at/close
 Reference metadata independently reviewed from SEC/public sources does not grant
 quote/action/status rights. Additional fields need explicit review, not guessing.
 Evidence fixtures and domain validation cannot determine legal permission.
+
+For the Phase 18 simulator, prepare a new `status` generation with
+`scope.feed=nasdaq-rss` for Nasdaq Trader’s public reported-halt feed. The same
+admission purposes, expiry, scope and quota review apply. Keep the `symbol`,
+`status` and `event_at` fields. In the reported mode, `event_at` is the HTTP
+publication timestamp. Advancing the admission generation prevents old
+observations from carrying over. Reported halts block trading, and the ticket
+explains that reports can be delayed or incomplete. An absent, invalid or stale
+report cannot admit a new fill. Existing Alpaca `status` rows retain their IEX
+stream semantics. Changing this product does not activate stock trading by itself.
 
 Keep original contracts/reviewer records outside source control. DB evidence_ref
 points to the private review record; store no keys or raw contract text in JSON.
@@ -117,9 +127,12 @@ async def import_packet(session, now, *, apply=False, account, server):
         if packet['generation'] != row.generation + 1:
             raise ValueError('stale administrative generation')
         candidate = ProductAdmission(**packet)
+        if not isinstance(candidate.scope, dict):
+            raise ValueError('invalid evidence scope')
+        feed = candidate.scope.get('feed', 'iex')
         for purpose in ('collection', 'display', 'derived', 'retention'):
             decision = evaluate_admission(candidate, candidate.product, purpose,
-                now, account=account, server=server)
+                now, account=account, server=server, feed=feed)
             if getattr(candidate, purpose + '_allowed') and not decision.allowed:
                 raise ValueError('evidence dry-run denied')
         for key, value in packet.items():

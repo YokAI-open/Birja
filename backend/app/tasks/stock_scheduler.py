@@ -17,6 +17,7 @@ from app.core.config import SchedulerSettings
 from app.models.stock import StockDataAdmission
 from app.services.alpaca import AlpacaError, fetch_iex_quotes
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_quote_demand import complete_stock_quotes, pending_stock_quotes
 from app.services.stock_quote_rules import CURATED_SYMBOLS, verified_mapping
 from app.services.stock_quotes import load_stock_catalog, upsert_stock_quotes
 from app.services.stock_sessions import RegularSession, build_sessions, persist_sessions, session_at
@@ -122,6 +123,7 @@ async def _refresh(
     settings: SchedulerSettings,
     now: Callable[[], datetime],
     token: str,
+    requested: frozenset[str] | None = None,
 ) -> CycleResult:
     scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
     async with sessionmaker() as db:
@@ -163,12 +165,16 @@ async def _refresh(
         return CycleResult("ok")
     # Fresh pure check after awaited reads (calendar bounds already warmed above).
     opened &= _open_exchanges(checked, sessions, current["calendar"], **scope)
-    selected = [m for m in mappings if m.listing_exchange in opened]
+    selected = [
+        mapping
+        for mapping in mappings
+        if mapping.listing_exchange in opened and (requested is None or mapping.symbol in requested)
+    ]
     quota = current["quotes"].quota["requests_per_minute"]
     if not selected or quota < 1 or await redis.get(LOCK_KEY) != token:
         return CycleResult("ok")
     # Separate shared cadence guard survives lease release, including failures.
-    if not await redis.set(
+    if requested is None and not await redis.set(
         WINDOW_KEY, token, nx=True, px=settings.stock_poll_interval_seconds * 1000
     ):
         return CycleResult("locked")
@@ -201,7 +207,7 @@ async def _refresh(
                 selected,
                 current["quotes"],
                 now,
-                attempts=min(settings.stock_max_retries + 1, quota),
+                attempts=1 if requested is not None else min(settings.stock_max_retries + 1, quota),
                 max_bytes=settings.stock_max_response_bytes,
                 account=settings.stock_data_account,
                 server=settings.stock_data_server,
@@ -258,30 +264,52 @@ async def run_stock_cycle(
     http: httpx.AsyncClient,
     settings: SchedulerSettings,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    on_demand: bool = False,
 ) -> CycleResult:
     from app.tasks.stock_status import run_stock_status_cycle
 
-    status_result = await run_stock_status_cycle(sessionmaker)
-    if status_result.status != "ok":
-        return status_result
+    if not on_demand:
+        status_result = await run_stock_status_cycle(sessionmaker)
+        if status_result.status != "ok":
+            return status_result
     if not settings.stock_data_enabled:
         return CycleResult("ok")
+    scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
     token = secrets.token_hex(16)
     try:
+        if on_demand and not await pending_stock_quotes(redis, **scope):
+            return CycleResult("ok")
         acquired = await redis.set(LOCK_KEY, token, nx=True, px=LOCK_TTL_MS)
     except RedisError:
         logger.warning("stock cycle: lock unavailable")
         return CycleResult("lock_error")
     if not acquired:
         return CycleResult("locked")
+    requests: dict[str, str | bytes] = {}
     try:
         async with asyncio.timeout(min(CYCLE_TIMEOUT_S, settings.stock_cycle_budget_seconds)):
-            return await _refresh(sessionmaker, redis, http, settings, now, token)
+            if on_demand:
+                requests = await pending_stock_quotes(redis, **scope)
+                if not requests:
+                    return CycleResult("ok")
+            return await _refresh(
+                sessionmaker,
+                redis,
+                http,
+                settings,
+                now,
+                token,
+                requested=frozenset(requests) if on_demand else None,
+            )
     except Exception as exc:
         # No provider bodies, request headers, URLs or private evidence in logs.
         logger.warning("stock cycle failed: %s", type(exc).__name__)
         return CycleResult("source_error")
     finally:
+        try:
+            await complete_stock_quotes(redis, requests, **scope)
+        except RedisError:
+            logger.warning("stock request completion unavailable")
         try:
             await redis.eval(_RELEASE_LUA, 1, LOCK_KEY, token)
         except RedisError:

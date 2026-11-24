@@ -105,10 +105,35 @@ backend/app/db/schema_contract.py c48e0aee909bad9ff263d1ccc2552b17921c9a802ba0b6
 CLOSURE_PINS
 }
 
+reported_halt_source_supported() {
+  local name expected actual
+  while read -r name expected; do
+    actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
+    [ "$actual" = "$expected" ] || return 1
+  done <<'HALT_PINS'
+backend/alembic/versions/0023_portfolio_closure_authority.py d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5
+backend/alembic/sql/0023_portfolio_closure.sql 59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920
+backend/alembic/versions/0024_stock_halt_snapshot.py 792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd
+backend/alembic/sql/0024_stock_halt_snapshot.sql fa19099943dd885cfa3548cd45f25fb5d5150307524ea41d0cae0aa4b2c6e986
+backend/app/db/portfolio_bootstrap.py 2b2fd62abb5fbd7915172de17a3bdee13f5957a00216932f32897ded30547fb5
+backend/app/db/portfolio_migrate.py c604cdd6ba5cdc1c991a1c3783d7af58cd9b416cb731b07bfbda8310047eea35
+backend/app/db/schema_contract.py 3b8c8dee9e2211365a322efe2be44ebb921d640edfdcd9ae0a52bd365092f324
+HALT_PINS
+}
+
 admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && reported_halt_source_supported "$1"; then
+    if [ "${2:-runtime}" = portfolio-upgrade ]; then
+      case "${ADMITTED_REVISION:-}" in
+        0007|0008|0009|0010|0011|0012|0013|0014|0017|0020|0023|0024) return 0 ;;
+        *) application_schema_incompatible; return 1 ;;
+      esac
+    fi
+    case "${ADMITTED_REVISION:-}" in 0023|0024) return 0 ;; esac
+  fi
   if [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && closure_source_supported "$1"; then
     if [ "${2:-runtime}" = portfolio-upgrade ]; then
       case "${ADMITTED_REVISION:-}" in
@@ -482,7 +507,7 @@ do_deploy() {
   fi
   STEP="application schema compatibility"
   admit_application_source "$sha" portfolio-upgrade || return 1
-  # Exact selected source chooses0017 or0023. A retained legacy rollback has its own finite
+  # The exact selected source determines the migration target. A retained legacy rollback has its own finite
   # no-migration lane; a new deploy cannot pair old code with the final schema.
   portfolio_source_supported "$sha" || { application_schema_incompatible; return 1; }
   install -d -m 755 "$STATE_DIR"

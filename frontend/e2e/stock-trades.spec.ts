@@ -128,6 +128,8 @@ async function noOverflow(page: Page) {
 test("actual ask buy and bid sale preserve immutable receipt, shared cash and combined allocation", async ({
   page,
 }, info) => {
+  // This cold-browser flow signs in, places three stock orders and trades BTC.
+  test.setTimeout(60_000);
   await ticket(page);
   await page.getByRole("button", { name: "Buy max", exact: true }).click();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("98");
@@ -157,7 +159,8 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(sell.exec_price).toBe("100.00000000");
   expect(sell.cash_after).toBe("9996.00000000");
   expect(sell.held_after).toBe("0.00000000");
-  await page.goto("/trade/BTC");
+  const selected = await portfolioId(page);
+  await page.goto(`/portfolios/${selected}/trade/BTC`);
   await expect(page.getByRole("heading", { name: /Trade BTC/ })).toBeVisible();
   await page.getByLabel("Amount", { exact: true }).fill("100");
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -169,7 +172,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
     if (await receipt.isVisible()) break;
   }
   await expect(page.getByRole("heading", { name: "Order filled", exact: true })).toBeVisible();
-  await page.goto("/trade/stocks/AAPL");
+  await page.goto(`/portfolios/${selected}/trade/stocks/AAPL`);
   await preview(page, "1");
   const next = await fill(page);
   expect(next.cash_after).toBe("9794.00000000");

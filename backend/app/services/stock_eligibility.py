@@ -21,6 +21,7 @@ from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, St
 from app.models.stock_execution import StockStatusEvidence
 from app.services.corporate_actions import action_hold_queries
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_halts import SOURCE as REPORTED_HALT_SOURCE
 from app.services.stock_quote_rules import CURATED_SYMBOLS
 from app.services.stock_sessions import RegularSession, session_at
 from app.services.stock_trading_rules import (
@@ -266,6 +267,10 @@ def executions_from_snapshot(
         "server": settings.stock_data_server,
     }
     hashes = {row["product"]: row["row_hash"] for row in raw.admissions or []}
+    status_admission = admissions.get("status")
+    reported_mode = bool(
+        status_admission and status_admission.scope.get("feed") == REPORTED_HALT_SOURCE
+    )
     evidence = tuple(
         AdmissionEvidence(
             product,
@@ -282,7 +287,13 @@ def executions_from_snapshot(
                     product,
                     purpose,
                     checked,
-                    feed="alpaca-corporate-actions" if product == "actions" else "iex",
+                    feed=(
+                        "alpaca-corporate-actions"
+                        if product == "actions"
+                        else REPORTED_HALT_SOURCE
+                        if product == "status" and reported_mode
+                        else "iex"
+                    ),
                     **scope,
                 ).allowed
                 for purpose in ("collection", "display", "derived", "retention")
@@ -311,7 +322,11 @@ def executions_from_snapshot(
                 row["quote_source"],
                 row["quote_feed"],
             )
-        status = StatusEvidence(coin_id=cid, provider_asset_id=asset)
+        status = StatusEvidence(
+            coin_id=cid,
+            provider_asset_id=asset,
+            source=REPORTED_HALT_SOURCE if reported_mode else "alpaca",
+        )
         if row["status_coin_id"] is not None:
             fields = {
                 key.removeprefix("status_"): value
@@ -322,13 +337,28 @@ def executions_from_snapshot(
                 fields[key] = _stamp(fields[key])
             if fields["session_date"] is not None:
                 fields["session_date"] = date.fromisoformat(fields["session_date"])
-            status = StatusEvidence(**fields)
+            candidate = StatusEvidence(**fields)
+            if (candidate.source == REPORTED_HALT_SOURCE) == reported_mode:
+                status = candidate
         data_deadlines: dict[str, datetime] = {}
         for product, observed in (("quotes", quote.collected_at), ("status", status.observed_at)):
             permission = admissions.get(product)
             seconds = permission.quota.get("retention_seconds") if permission is not None else None
             if observed is not None and type(seconds) is int and 0 < seconds <= 86400:
                 data_deadlines[product] = observed + timedelta(seconds=seconds)
+        if reported_mode:
+            # Expired observations become absent evidence. Product permissions
+            # still govern a refresh, and neither expired row can authorize a fill.
+            quote_deadline = data_deadlines.get("quotes")
+            if quote_deadline is not None and checked >= quote_deadline:
+                quote = QuoteEvidence()
+                del data_deadlines["quotes"]
+            status_deadline = data_deadlines.get("status")
+            if status_deadline is not None and checked >= status_deadline:
+                status = StatusEvidence(
+                    coin_id=cid, provider_asset_id=asset, source=REPORTED_HALT_SOURCE
+                )
+                del data_deadlines["status"]
         item_admissions = tuple(
             replace(a, approved=False)
             if a.product in data_deadlines and checked >= data_deadlines[a.product]

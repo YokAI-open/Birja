@@ -266,6 +266,9 @@ async def list_stocks(
                         product,
                         purpose,
                         checked_at,
+                        feed="nasdaq-rss"
+                        if product == "status" and facts.source == "nasdaq-rss"
+                        else "iex",
                         **scope,
                     ).allowed
                     for purpose in ("collection", "display", "derived", "retention")
@@ -288,7 +291,10 @@ async def list_stocks(
                 )
                 if checked_at < min(deadlines):
                     status = StockStatus(
-                        state=facts.state, observed_at=facts.observed_at, valid_until=min(deadlines)
+                        state=facts.state,
+                        observed_at=facts.observed_at,
+                        valid_until=min(deadlines),
+                        reported_at=facts.event_at if facts.source == "nasdaq-rss" else None,
                     )
         session = decisions[row["listing_exchange"]]
         current = session.current

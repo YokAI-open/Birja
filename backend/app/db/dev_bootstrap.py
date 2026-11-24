@@ -16,7 +16,7 @@ from app.db.portfolio_bootstrap import (
     DEFAULT_ACL_0023_SHA256,
     DEFAULT_ACL_0023_SQL,
     GRANTS_0023_SQL,
-    PREFLIGHT_0023_SQL,
+    PORTFOLIO_PREFLIGHT_SQL,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -110,9 +110,9 @@ FUNCTION_SIGNATURES = frozenset(
 
 def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
     """Finite migration-only inventories, distinct from runtime admission."""
-    if revision is not None and revision not in {f"{n:04}" for n in range(7, 24)}:
+    if revision is not None and revision not in {f"{n:04}" for n in range(7, 25)}:
         raise ValueError("Unsupported migration revision inventory")
-    if revision not in {"0021", "0022", "0023"}:
+    if revision not in {"0021", "0022", "0023", "0024"}:
         return TABLES, FUNCTION_SIGNATURES
     tables = TABLES | {"portfolio_lifecycle_closures", "portfolio_closure_intents"}
     signatures = FUNCTION_SIGNATURES - {
@@ -122,9 +122,9 @@ def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[s
         "associate_portfolio_metadata_only()",
     }
     signatures |= {"check_portfolio_lifecycle_integrity()"}
-    if revision in {"0022", "0023"}:
+    if revision in {"0022", "0023", "0024"}:
         signatures |= {"check_portfolio_terminal_root()"}
-    if revision == "0023":
+    if revision in PORTFOLIO_PREFLIGHT_SQL:
         signatures |= {
             "close_portfolio(bigint,bigint,uuid,text,text)",
             "check_stock_terminal_clock()",
@@ -137,7 +137,7 @@ def require_complete_migration_inventory(
     relations: list[tuple[str, str, str]],
     signatures: set[str],
 ) -> None:
-    if revision not in {"0021", "0022", "0023"}:
+    if revision not in {"0021", "0022", "0023", "0024"}:
         return
     tables, functions = migration_objects(revision)
     nonidentity = {
@@ -158,8 +158,8 @@ def require_complete_migration_inventory(
         raise ValueError("Incomplete successor migration inventory")
 
 
-async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
-    await conn.execute(PREFLIGHT_0023_SQL)
+async def _authorize_portfolios(conn: asyncpg.Connection, revision: str) -> None:
+    await conn.execute(PORTFOLIO_PREFLIGHT_SQL[revision])
     await conn.execute(GRANTS_0023_SQL)
     if await conn.fetchval(ACL_SQL) != ACL_0023_SHA256:
         raise ValueError("Unexpected final management grants")
@@ -172,7 +172,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 24)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 25)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")
@@ -261,8 +261,8 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
         finally:
             await conn.execute("ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL")
         async with conn.transaction():
-            await _authorize_portfolios(conn)
-        print("dev_final_migration=true source_revision=" + str(revision) + " final=0023")
+            await _authorize_portfolios(conn, "0024")
+        print("dev_final_migration=true source_revision=" + str(revision) + " final=0024")
     finally:
         await conn.execute("SELECT pg_advisory_unlock(1026016001)")
 
@@ -384,8 +384,8 @@ async def bootstrap(
                 revision = await conn.fetchval("SELECT version_num FROM public.alembic_version")
                 if revision in {"0015", "0016", "0018", "0019", "0021", "0022"}:
                     raise ValueError("migration_only; refusing normal dev bootstrap")
-                if revision == "0023":
-                    await _authorize_portfolios(conn)
+                if revision in PORTFOLIO_PREFLIGHT_SQL:
+                    await _authorize_portfolios(conn, revision)
                 elif revision in {"0017", "0020"}:
                     raise ValueError("Retained schema requires explicit forward migration")
                 else:

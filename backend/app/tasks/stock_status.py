@@ -22,6 +22,7 @@ async def _invalidate_all(factory: async_sessionmaker[AsyncSession]) -> int:
             (
                 await db.scalars(
                     select(StockStatusEvidence.coin_id)
+                    .where(StockStatusEvidence.source == "alpaca")
                     .order_by(StockStatusEvidence.coin_id)
                     .limit(21)
                 )

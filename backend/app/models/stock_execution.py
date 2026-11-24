@@ -88,7 +88,16 @@ class StockStatusEvidence(Base):
         bounded("provider_asset_id", 128),
         bounded("source_ref", 2048),
         CheckConstraint("state IN ('normal','halted','frozen','unknown')", name="state_known"),
-        CheckConstraint("source='alpaca'", name="source_known"),
+        CheckConstraint("source IN ('alpaca','nasdaq-rss')", name="source_known"),
+        CheckConstraint(
+            "source <> 'nasdaq-rss' OR (NOT bootstrap_verified AND NOT continuity_current "
+            "AND event_at IS NOT NULL AND observed_at IS NOT NULL AND valid_until IS NOT NULL "
+            "AND session_date IS NOT NULL AND admission_generation > 0 "
+            "AND continuity_generation > 0 "
+            "AND sequence = 0 AND state IN ('normal','halted') AND source_ref ~ '^[a-f0-9]{64}$' "
+            "AND valid_until <= event_at + interval '120 seconds')",
+            name="reported_shape",
+        ),
         safe("admission_generation"),
         safe("continuity_generation"),
         safe("sequence"),
@@ -97,7 +106,9 @@ class StockStatusEvidence(Base):
         ),
         CheckConstraint(
             "valid_until IS NULL OR (observed_at IS NOT NULL AND observed_at<valid_until "
-            "AND valid_until<=observed_at+interval '60 seconds')",
+            "AND valid_until<=observed_at+CASE WHEN source='nasdaq-rss' "
+            "THEN interval '120 seconds' "
+            "ELSE interval '60 seconds' END)",
             name="lease_bound",
         ),
         CheckConstraint(

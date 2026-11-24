@@ -116,6 +116,7 @@ export type StockContext = Pick<
     timezone: "America/New_York";
   };
   status: {
+    source?: "alpaca" | "nasdaq-rss";
     state: "normal" | "halted" | "frozen" | "unknown";
     event_at: string | null;
     observed_at: string | null;
@@ -439,8 +440,10 @@ export function isStockContext(v: unknown): v is StockContext {
     !stockRecord(t) ||
     !stockExact(
       t,
-      "state event_at observed_at valid_until bootstrap_verified continuity_current",
+      "state event_at observed_at valid_until bootstrap_verified continuity_current" +
+        ("source" in t ? " source" : ""),
     ) ||
+    ("source" in t && !member(t.source, ["alpaca", "nasdaq-rss"])) ||
     !member(t.state, ["normal", "halted", "frozen", "unknown"]) ||
     ![t.event_at, t.observed_at, t.valid_until].every(nullableTime) ||
     typeof t.bootstrap_verified !== "boolean" ||
@@ -471,8 +474,9 @@ export function isStockContext(v: unknown): v is StockContext {
     !stockTimestamp(s.closes_at) ||
     !stockTimestamp(s.valid_until) ||
     t.state !== "normal" ||
-    !t.bootstrap_verified ||
-    !t.continuity_current ||
+    (t.source === "nasdaq-rss"
+      ? t.bootstrap_verified || t.continuity_current
+      : !t.bootstrap_verified || !t.continuity_current) ||
     ![t.event_at, t.observed_at, t.valid_until, a.valid_until].every(stockTimestamp) ||
     a.state !== "current" ||
     a.reason !== "available" ||
@@ -492,7 +496,9 @@ export function isStockContext(v: unknown): v is StockContext {
     stockInstant(t.event_at as string) <= stockInstant(t.observed_at as string) &&
     stockInstant(t.observed_at as string) <= at &&
     stockInstant(t.valid_until as string) <=
-      stockInstant(t.observed_at as string) + 60_000_000_000n &&
+      (t.source === "nasdaq-rss"
+        ? stockInstant(t.event_at as string) + 120_000_000_000n
+        : stockInstant(t.observed_at as string) + 60_000_000_000n) &&
     until > at &&
     [
       s.closes_at,

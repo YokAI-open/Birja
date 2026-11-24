@@ -300,7 +300,7 @@ def security_sources():
 
 
 def campaign_sources(ops):
-    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V3
+    names = ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V4
     # Complete current application input, separate from fixed retained sources.
     tracked = subprocess.check_output(["git", "ls-files", "backend", "deploy", "docker-compose.ops-test.yml"], cwd=ROOT).decode().splitlines()
     return {name: ops.r.digest(ROOT / name) for name in sorted(set(names + tracked))}
@@ -358,9 +358,9 @@ def authenticate(ops, archive, expected, source, image_records=None):
         inventory = json.load(retained.extractfile("INVENTORY.json"))
         payload = inventory.get("portfolio_payload", {})
         if (inventory.get("recovery_profile"), payload.get("version"), payload.get("revision")) != (
-                "deploy-recovery-v4", 3, "0023"):
+                "deploy-recovery-v5", 4, "0024"):
             raise ValueError("current campaign requires successor inventory")
-        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V3:
+        for name in ops.r.CORE + ops.r.UNITS + ops.r.PORTFOLIO_PAYLOAD_V4:
             if retained.extractfile(name).read() != (ROOT / name).read_bytes():
                 raise ValueError("packaged/current source substitution")
         for name, digest in ops.r.RETAINED_CLOSURE_SOURCE_PAYLOADS.items():
@@ -467,7 +467,7 @@ def execute_recovery(*, phase=14, suite="recovery"):
     ops.r.private(archive.parent, True)
     ops.package_current_archive(archive)
     expected = ops.r.digest(archive)
-    ops.r.bundle_verify(archive, expected, required_profile="deploy-recovery-v4")
+    ops.r.bundle_verify(archive, expected, required_profile="deploy-recovery-v5")
     source = campaign_sources(ops)
     image_records = {}
     ops.bind_source_archive(archive, expected)

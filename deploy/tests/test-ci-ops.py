@@ -93,7 +93,7 @@ def recovery_policy(ops, runner_source=None):
         "authenticate(ops, archive, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V3", "RETAINED_CLOSURE_SOURCE_PAYLOADS",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "RETAINED_CLOSURE_SOURCE_PAYLOADS",
         "Path(\"/tmp/birja-phase14-proof/recovery.tar.gz\")",
     ):
         if required not in source:
@@ -1050,7 +1050,7 @@ class PortfolioValidation(unittest.TestCase):
                 (root / "current.py").write_bytes(b"current-app")
                 content = {"current.py": b"changed" if mutation == "packaged" else b"current-app",
                            "sources/retained.tar": b"changed" if mutation == "retained" else b"fixed-retained",
-                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 2 if mutation == "inventory" else 3, "revision": "0023"}, "recovery_profile": "deploy-recovery-v4"}).encode()}
+                           "INVENTORY.json": json.dumps({"portfolio_payload": {"version": 3 if mutation == "inventory" else 4, "revision": "0024"}, "recovery_profile": "deploy-recovery-v5"}).encode()}
                 with tarfile.open(archive, "w") as tar:
                     for name, data in content.items():
                         info = tarfile.TarInfo(name)
@@ -1064,7 +1064,7 @@ class PortfolioValidation(unittest.TestCase):
                 if mutation == "source":
                     (root / "current.py").write_bytes(b"changed")
                 actual_image = inspect if mutation != "image" else [{**inspect[0], "RootFS": {"Type": "layers", "Layers": []}}]
-                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V3=[],
+                fake_r = SimpleNamespace(CORE=["current.py"], UNITS=[], PORTFOLIO_PAYLOAD_V4=[],
                     RETAINED_CLOSURE_SOURCE_PAYLOADS={"sources/retained.tar": hashlib.sha256(b"fixed-retained").hexdigest()},
                     digest=r.digest, sha_bytes=r.sha_bytes, private=r.private, call=lambda argv: json.dumps(actual_image))
                 ops = SimpleNamespace(r=fake_r, portfolio_sources=lambda: sources)

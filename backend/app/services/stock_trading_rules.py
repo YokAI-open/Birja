@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, localcontext
 from typing import Literal
 
+from app.services.stock_halts import REPORT_MAX_AGE, SOURCE
 from app.services.stock_quote_rules import utc
 
 MAX_SAFE = 9007199254740991
@@ -167,12 +168,30 @@ def _action_reason(evidence: ExecutionEvidence, now: datetime) -> RefusalReason 
 
 
 def status_current(status: StatusEvidence, now: datetime) -> bool:
-    """Event may be old; only trusted explicit continuity renews a <=60s lease."""
+    """Validate a legacy stream lease or a time-bounded reported-halt observation."""
+    if status.source == SOURCE:
+        trusted = (
+            status.bootstrap_verified is False
+            and status.continuity_current is False
+            and status.sequence == 0
+            and re.fullmatch(r"[a-f0-9]{64}", status.source_ref) is not None
+            and utc(status.event_at)
+            and status.event_at is not None
+            and utc(status.valid_until)
+            and status.valid_until is not None
+            and status.valid_until <= status.event_at + REPORT_MAX_AGE
+        )
+        lease = REPORT_MAX_AGE
+    else:
+        trusted = (
+            status.source == "alpaca"
+            and status.bootstrap_verified is True
+            and status.continuity_current is True
+        )
+        lease = timedelta(seconds=STATUS_LEASE_SECONDS)
     return (
         utc(now)
-        and status.bootstrap_verified is True
-        and status.continuity_current is True
-        and status.source == "alpaca"
+        and trusted
         and 0 < len(status.source_ref) <= 2048
         and type(status.coin_id) is int
         and status.coin_id > 0
@@ -188,9 +207,7 @@ def status_current(status: StatusEvidence, now: datetime) -> bool:
         and status.event_at <= status.observed_at <= now
         and _deadline(status.valid_until, now)
         and status.valid_until is not None
-        and timedelta(0)
-        < status.valid_until - status.observed_at
-        <= timedelta(seconds=STATUS_LEASE_SECONDS)
+        and timedelta(0) < status.valid_until - status.observed_at <= lease
     )
 
 
@@ -223,6 +240,7 @@ def renew_status_continuity(
     """
     if (
         trusted_contiguous is not True
+        or status.source != "alpaca"
         or not status_current(status, observed_at)
         or not _integer(sequence)
         or sequence != status.sequence + 1
@@ -283,13 +301,13 @@ def _price_precision(value: Decimal) -> bool:
         return value == value.quantize(Decimal("0.00000001"))
 
 
-def _deadlines(evidence: ExecutionEvidence) -> list[datetime]:
+def _deadlines(evidence: ExecutionEvidence, *, include_status: bool = True) -> list[datetime]:
     return [row.valid_until for row in evidence.admissions] + [
         value
         for value in (
             evidence.action_valid_until,
             evidence.next_blocking_at,
-            evidence.status.valid_until,
+            evidence.status.valid_until if include_status else None,
             evidence.session_valid_until,
         )
         if value is not None
@@ -297,14 +315,16 @@ def _deadlines(evidence: ExecutionEvidence) -> list[datetime]:
 
 
 def evaluate_execution(evidence: ExecutionEvidence, now: datetime) -> ExecutionDecision:
-    """Strict reason priority: permission -> actions/units -> status -> session -> quote."""
+    """Check rights, actions, exchange session, report and executable quote."""
 
     def refuse(reason: RefusalReason) -> ExecutionDecision:
         return ExecutionDecision(False, reason, now)
 
     if not _admitted(evidence, now):
         return refuse("permission_unavailable")
-    reason = _action_reason(evidence, now) or _status_reason(evidence, now)
+    reason = _action_reason(evidence, now)
+    if evidence.status.source != SOURCE:
+        reason = reason or _status_reason(evidence, now)
     if reason:
         return refuse(reason)
     if (
@@ -328,6 +348,9 @@ def evaluate_execution(evidence: ExecutionEvidence, now: datetime) -> ExecutionD
         return refuse("session_unavailable")
     if not opens <= now < closes:
         return refuse("market_closed")
+    reason = _status_reason(evidence, now)
+    if reason:
+        return refuse(reason)
     quote = evidence.quote
     if (
         not _quote_valid(evidence, now)
@@ -347,7 +370,12 @@ def evaluate_valuation(evidence: ValuationEvidence, now: datetime) -> ValuationD
     execution = evidence.execution
     if not _admitted(execution, now):
         return ValuationDecision("unavailable", "permission_unavailable")
-    reason = _action_reason(execution, now) or _status_reason(execution, now)
+    closed_reported = execution.session_state == "closed" and execution.status.source == SOURCE
+    reason = _action_reason(execution, now)
+    if reason is None:
+        reason = _status_reason(execution, now)
+        if closed_reported and reason == "status_unavailable":
+            reason = None
     if reason not in (None, "halted"):
         return ValuationDecision("unavailable", reason)
     if not _deadline(evidence.retained_until, now) or not _deadline(
@@ -384,7 +412,7 @@ def evaluate_valuation(evidence: ValuationEvidence, now: datetime) -> ValuationD
     with localcontext() as context:
         context.prec = 40
         midpoint = (quote.bid + quote.ask) / 2
-    deadlines = _deadlines(execution) + [
+    deadlines = _deadlines(execution, include_status=mode != "closed" or not closed_reported) + [
         evidence.retained_until,
         evidence.historical_admission_until,
     ]

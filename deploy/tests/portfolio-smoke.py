@@ -1107,12 +1107,12 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
 def installed_recovery_verifier(archive, archive_sha):
     """Keep the authenticated consumer and adjacent retained sources alive."""
     trusted = load_recovery()
-    trusted.bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v4")
+    trusted.bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v5")
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-verifier-context-") as temporary:
         host = Path(temporary) / "host"
         host.mkdir(mode=0o700)
         trusted.bundle_install(
-            archive, archive_sha, str(host), required_profile="deploy-recovery-v4"
+            archive, archive_sha, str(host), required_profile="deploy-recovery-v5"
         )
         selected = host / "var/lib/birja/recovery/releases" / archive_sha / "deploy/verify-restore.py"
         yield load_recovery(selected)

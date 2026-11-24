@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 from app.schemas.stock_trades import AuthorityIdentity
 from app.services.stock_eligibility import LoadedExecution, session_rows
+from app.services.stock_halts import SOURCE as REPORTED_HALT_SOURCE
 from app.services.stock_trading import _authority
 from app.services.stock_trading_rules import (
     ExecutionEvidence,
@@ -94,20 +95,26 @@ def value_stock(
     # Renewed observations may suppress old prices or turn them into dated halt
     # marks, never renew the old snapshot's authority deadline or source price.
     units = _units_safe(e, now) and _units_safe(latest, now)
-    if e.status.continuity_generation != latest.status.continuity_generation:
-        return denied("status_unavailable", units=units)
+    status = latest.status
+    closed_reported = (
+        latest.session_state == "closed"
+        and e.status.source == status.source == REPORTED_HALT_SOURCE
+    )
+    if not closed_reported:
+        if (
+            e.status.continuity_generation != status.continuity_generation
+            or e.status.valid_until is None
+            or status.valid_until is None
+        ):
+            return denied("status_unavailable", units=units)
+        status = replace(status, valid_until=min(e.status.valid_until, status.valid_until))
     if e.action_valid_until is None or latest.action_valid_until is None:
         return denied("action_unavailable")
     if e.session_valid_until is None or latest.session_valid_until is None:
         return denied("session_unavailable")
-    if e.status.valid_until is None or latest.status.valid_until is None:
-        return denied("status_unavailable", units=units)
     e = replace(
         e,
-        status=replace(
-            latest.status,
-            valid_until=min(e.status.valid_until, latest.status.valid_until),
-        ),
+        status=status,
         action_current=e.action_current and latest.action_current,
         action_valid_until=min(e.action_valid_until, latest.action_valid_until),
         session_state=latest.session_state,

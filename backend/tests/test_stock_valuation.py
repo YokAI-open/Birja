@@ -216,8 +216,9 @@ async def test_exact_ninth_decimal_midpoint_is_not_storage_mid(stock_trade_case,
     assert p.holdings[0].mid == Decimal("1.000000005") and p.total_value == 9798
 
 
+@pytest.mark.parametrize("status_source", ["alpaca", "nasdaq-rss"])
 async def test_verified_closed_mark_is_dated_and_never_executes(
-    stock_trade_case, settings, monkeypatch
+    stock_trade_case, settings, monkeypatch, status_source
 ):
     from sqlalchemy import text
 
@@ -251,6 +252,15 @@ async def test_verified_closed_mark_is_dated_and_never_executes(
     stock_sessions._calendar_bounds.cache_clear()
     monkeypatch.setattr(stock_sessions.calendars, "get_calendar", closed_calendar)
     async with factory.begin() as db:
+        if status_source == "nasdaq-rss":
+            await db.execute(
+                text(
+                    "UPDATE stock_data_admissions SET scope=scope || "
+                    "'{\"feed\":\"nasdaq-rss\"}'::jsonb WHERE product='status'"
+                )
+            )
+            # The retained legacy observation cannot establish an independent
+            # report, but the date of the last eligible quote is still known.
         await db.execute(
             text("UPDATE stock_sessions SET closes_at=:close WHERE session_date=:date"),
             {"close": close, "date": now.date()},

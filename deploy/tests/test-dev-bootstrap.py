@@ -56,13 +56,13 @@ def financial_program():
 import asyncio,os
 from decimal import Decimal as D
 import asyncpg
-from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL
+from app.db.portfolio_bootstrap import PREFLIGHT_0024_SQL
 async def main():
  c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
  try:
   assert await c.fetchval("SELECT current_database()='birja' AND session_user='birja'")
-  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0023'
-  await c.execute(PREFLIGHT_0023_SQL)
+  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0024'
+  await c.execute(PREFLIGHT_0024_SQL)
   # Disposable administrative fixture only: retain the original custom-baseline
   # economic oracle without granting ordinary account INSERT or rewriting a baseline.
   uid=await c.fetchval("INSERT INTO users(email) VALUES ('bootstrap@example.test') RETURNING id")
@@ -99,7 +99,7 @@ async def main():
    for change,undo,reason in [
     ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC','Unsafe migration schema'),
     ('ALTER ROLE birja_app CREATEROLE','ALTER ROLE birja_app NOCREATEROLE','Unsafe migration schema'),
-    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0023'",'migration_only')]:
+    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0024'",'migration_only')]:
     await c.execute(change)
     try:
      async with e.connect() as x:

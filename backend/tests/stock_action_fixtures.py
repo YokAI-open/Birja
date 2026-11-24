@@ -51,7 +51,7 @@ async def install_current_runtime_roles(conn):
         GRANTS_0023_SQL as GRANTS_SQL,
     )
     from app.db.portfolio_bootstrap import (
-        PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+        PREFLIGHT_0024_SQL as PREFLIGHT_SQL,
     )
 
     assert (

@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0023"
+EXPECTED_HEAD = "0024"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -95,7 +95,7 @@ _CLOSURE_FUNCTIONS = frozenset({"check_portfolio_lifecycle_integrity()"})
 
 
 def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
-    if revision in {"0021", "0022", "0023"}:
+    if revision in {"0021", "0022", "0023", "0024"}:
         # The qualified0020 catalogue already dropped these historical helpers;
         # its old permissive union cannot serve as an exact successor profile.
         retired = {
@@ -104,9 +104,9 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
             "reject_stock_record_mutation()",
         }
         functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
-        if revision in {"0022", "0023"}:
+        if revision in {"0022", "0023", "0024"}:
             functions |= {"check_portfolio_terminal_root()"}
-        if revision == "0023":
+        if revision in {"0023", "0024"}:
             functions |= {
                 "close_portfolio(bigint,bigint,uuid,text,text)",
                 "check_stock_terminal_clock()",
@@ -279,7 +279,7 @@ async def ensure_dividend_test_owner() -> None:
                     "birja_migrator",
                 }:
                     raise RuntimeError("unexpected disposable migration function inventory")
-            if revisions and revisions[0] in {"0021", "0022", "0023"}:
+            if revisions and revisions[0] in {"0021", "0022", "0023", "0024"}:
                 # A stamped historical schema is not a current migration profile.
                 if {name for name, kind, _ in relations if kind == "r"} != allowed_tables:
                     raise RuntimeError("incomplete disposable migration relation inventory")
@@ -327,7 +327,7 @@ async def install_current_test_grants() -> None:
         GRANTS_0023_SQL as GRANTS_SQL,
     )
     from app.db.portfolio_bootstrap import (
-        PREFLIGHT_0023_SQL as PREFLIGHT_SQL,
+        PORTFOLIO_PREFLIGHT_SQL,
     )
 
     test_migration_url()
@@ -337,7 +337,10 @@ async def install_current_test_grants() -> None:
             await conn.execute(
                 text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
             )
-            await conn.execute(text(PREFLIGHT_SQL))
+            revision = (
+                await conn.execute(text("SELECT version_num FROM public.alembic_version"))
+            ).scalar_one()
+            await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
             raw = await conn.get_raw_connection()
             await raw.driver_connection.execute(GRANTS_SQL)
             for role in ("birja_app", "birja_scheduler"):
@@ -399,7 +402,7 @@ async def test_current_fixture_installs_exact_restricted_authority(engine, migra
     from app.db.schema_contract import require_schema
 
     async with engine.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn) == EXPECTED_HEAD
         assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0023_SHA256
         roles = (
             await conn.execute(

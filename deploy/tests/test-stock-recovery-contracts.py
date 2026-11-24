@@ -938,6 +938,31 @@ INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revisio
             self.assertEqual(proc.wait(timeout=5),0)
 
 
+@unittest.skipUnless("--postgres" in sys.argv, "isolated PostgreSQL and TLS required")
+class ReportedHaltRecoveryContracts(unittest.TestCase):
+    def test_replay_legacy_and_reported_fills_after_verified_restore(self):
+        proof = subprocess.run(
+            ["bash", str(ROOT / "deploy/tests/test-stock-halt-recovery.sh")],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        self.assertEqual(proof.returncode, 0, proof.stderr)
+        self.assertIn("equality=true invariants=true identities=true", proof.stdout)
+        self.assertIn("paired_encrypted_snapshot_integrity=true", proof.stdout)
+        self.assertIn("legacy_stock_receipt_replay=true verified_tls=true", proof.stdout)
+        self.assertIn(
+            "stock_receipt_replay=true retained_reader_exact=true "
+            "expired_report_retained=true verified_tls=true",
+            proof.stdout,
+        )
+        self.assertIn(
+            "evidence_bearing_downgrade_refused=true retained_candidate_revision=0024",
+            proof.stdout,
+        )
+
+
 if __name__ == "__main__":
     unittest.main(
         argv=[value for value in sys.argv if value != "--postgres"], verbosity=2

@@ -1,17 +1,38 @@
 # Birja production runbook
 
-## Portfolio closure schema0023 recovery contract
+## Stock execution schema 0024 recovery contract
 
-The current closure family is payload version3, revision0023 and recovery profile
+Phase 18 adds payload version 4, schema 0024 and recovery profile
+`deploy-recovery-v5`. The physical tables and identity sequences match 0023.
+The new catalogue fingerprint covers the source-specific status constraints
+and final stock authority check. A restore must preserve each report's expiry
+and the exact saved stock receipts. Retain each pre-0024 archive with its own
+source and recovery profile.
+
+Authenticate the 0023 source before migrating to 0024. After 0024 admits writes,
+keep the candidate data on 0024 and use a verified 0024-compatible source for
+recovery or rollback. The deployment preflight refuses a 0023 application on
+0024. Downgrade also refuses when reported-halt evidence is retained. Restoring
+a pre-upgrade snapshot would omit subsequent fills and is inappropriate for
+preserving the current portfolio books.
+
+The Phase 18 local check restores encrypted 0023 and 0024 snapshots in
+isolated databases, verifies the roles over TLS, and replays the exact saved
+receipts. Production activation follows the release-specific rehearsal and
+runtime admission checks. [Stock data admission](STOCK-DATA-ADMISSION.md)
+
+## Retained portfolio closure schema 0023 recovery contract
+
+The retained 0023 closure family is payload version 3 and recovery profile
 `deploy-recovery-v4`. Keep V1/0017 and V2/0020 as distinct retained families, using
 their complete authenticated source archives; never overlay current services on
-an older retained database. A current bundle also binds the fixed complete0020
+an older retained database. A retained 0023 bundle also binds the fixed complete0020
 source9527e35, complete0017source4b4320b and older released source lanes.
 
 Before import, the consumer authenticates the approved archive checksum, exact
 members, image provenance, reviewed current source pins and retained archive
 identities. Missing lifecycle/intent members or coherently rewritten metadata
-must refuse. The current contract includes31tables,24identity tails and the
+must refuse. The 0023 contract includes 31 tables, 24 identity tails and the
 explicit0023 catalogue/object/effective-default privilege fingerprints.
 
 Restore uses `--no-owner --no-acl` into an isolated private clone. Authenticate
@@ -26,7 +47,7 @@ closed records, confirmation names, timestamps, intents, payments or balances.
 
 The supported authenticated forward path from0020 proceeds through migration-only
 0021/22 to complete0023. Normal runtime refuses the intermediate revisions.
-Selected current source must match the retained tested commit and exact reviewed
+Selected 0023 source must match the retained tested commit and exact reviewed
 closure authority assets. Old application rollback on0023 refuses before checkout,
 service start, routing or state changes; schema downgrade cannot discard lifecycle
 evidence. A pending rollback to the same tested0023-compatible source can preserve

@@ -603,6 +603,14 @@ END $closure_identity$;
     )
 )
 
+# The simulator migration changes status constraints and the stock finalizer.
+# The relation, routine and default grants are unchanged.
+CATALOGUE_0024_SHA256 = "b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665"
+PREFLIGHT_0024_SQL = PREFLIGHT_0023_SQL.replace("version_num='0023'", "version_num='0024'").replace(
+    CATALOGUE_0023_SHA256, CATALOGUE_0024_SHA256
+)
+PORTFOLIO_PREFLIGHT_SQL = {"0023": PREFLIGHT_0023_SQL, "0024": PREFLIGHT_0024_SQL}
+
 GRANTS_0023_SQL = (
     GRANTS_SQL
     + r"""

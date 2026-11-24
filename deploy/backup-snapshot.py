@@ -80,7 +80,7 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024")
 CLOSURE_COLUMNS = {
     'portfolio_lifecycle_closures': 'id portfolio_id user_id closed_at policy_version provenance confirmation_name intent_id',
     'portfolio_closure_intents': 'id user_id portfolio_id intent_key confirmation_name policy_version outcome recorded_at',
@@ -131,6 +131,11 @@ PORTFOLIO_PAYLOAD_V3 = PORTFOLIO_PAYLOAD_V2 + [
     'deploy/tests/fixtures/portfolio-recovery-0023.json',
 ]
 
+PORTFOLIO_PAYLOAD_V4 = PORTFOLIO_PAYLOAD_V3 + [
+    'backend/alembic/versions/0024_stock_halt_snapshot.py',
+    'backend/alembic/sql/0024_stock_halt_snapshot.sql',
+]
+
 
 def portfolio_payload_inventory(root):
     root = Path(root).resolve(strict=True)
@@ -144,13 +149,29 @@ def portfolio_payload_inventory(root):
 
 def closure_payload_inventory(root):
     root = Path(root).resolve(strict=True)
-    require_closure_source(root)
+    require_closure_source(root, allow_successor=False)
     hashes = {}
     for name in PORTFOLIO_PAYLOAD_V3:
         path = root / name
         require(path.is_file() and not path.is_symlink() and path.resolve() == path)
         hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return {'version': 3, 'revision': '0023', 'sha256': hashes}
+
+
+def halt_payload_inventory(root):
+    root = Path(root).resolve(strict=True)
+    require_closure_source(root, revision='0024')
+    hashes = {}
+    for name in PORTFOLIO_PAYLOAD_V4:
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {'version': 4, 'revision': '0024', 'sha256': hashes}
+
+
+def verify_halt_inventory(root, inventory):
+    require(type(inventory.get('version')) is int and inventory['version'] == 4)
+    require(inventory == halt_payload_inventory(root))
 
 
 def verify_closure_inventory(root, inventory):
@@ -459,7 +480,7 @@ def validate_resolution_authority(authority, revision='0012'):
 def identity_tables(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision == '0023':
+    if revision in ('0023', '0024'):
         return sorted([*identity_tables('0020'), *CLOSURE_COLUMNS])
     if revision == '0020':
         return sorted([*identity_tables('0017'), *MANAGEMENT_COLUMNS])
@@ -499,7 +520,7 @@ def dump_identity_state(raw, revision="0011"):
 def contract_columns(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision == '0023':
+    if revision in ('0023', '0024'):
         columns = contract_columns('0020')
         columns.update({table: set(value.split()) for table, value in CLOSURE_COLUMNS.items()})
         return columns
@@ -537,8 +558,8 @@ def manifest_sql(revision):
     The standalone SQL remains the byte-identical legacy query plus comments.
     All substitutions are fixed repository fragments, never operator input.
     """
-    if revision == '0023':
-        return closure_manifest_sql()
+    if revision in ('0023', '0024'):
+        return closure_manifest_sql(revision)
     contract_columns(revision)
     if revision == '0020':
         return management_manifest_sql()
@@ -635,7 +656,7 @@ def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
     require(isinstance(manifest.get('tables'), dict) and set(manifest['tables']) == set(expected))
-    if manifest['revision'] == '0023':
+    if manifest['revision'] in ('0023', '0024'):
         validate_closure_manifest(manifest, quarantined=quarantined)
     if manifest['revision'] == '0020':
         validate_management_manifest(manifest, quarantined=quarantined)
@@ -1058,6 +1079,21 @@ CLOSURE_SOURCE_SHA256 = {
     'deploy/tests/portfolio-closure-recovery-fixture.py': 'b8ecf20867f61c3dabbba6ab0e55f5db1a08f5c59c220b9c38fa59da6cc3c4d3',
     'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
 }
+REPORTED_HALT_SOURCE_SHA256 = {
+    **CLOSURE_SOURCE_SHA256,
+    'deploy/tests/portfolio-closure-recovery-fixture.py': '8ff1a41a6efd2ddc144330727dce9f2eac98690e529a36fc08c5dbaac3b7323e',
+    'backend/app/db/portfolio_bootstrap.py': '2b2fd62abb5fbd7915172de17a3bdee13f5957a00216932f32897ded30547fb5',
+    'backend/app/db/portfolio_migrate.py': 'c604cdd6ba5cdc1c991a1c3783d7af58cd9b416cb731b07bfbda8310047eea35',
+    'backend/app/db/schema_contract.py': '3b8c8dee9e2211365a322efe2be44ebb921d640edfdcd9ae0a52bd365092f324',
+    'deploy/db/bootstrap-roles.sql': '07d678d22ef3a75c2539eea33cc0424e0ba9812df773f81e365fce10e2407315',
+    'backend/alembic/versions/0024_stock_halt_snapshot.py': '792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd',
+    'backend/alembic/sql/0024_stock_halt_snapshot.sql': 'fa19099943dd885cfa3548cd45f25fb5d5150307524ea41d0cae0aa4b2c6e986',
+}
+REPORTED_HALT_CATALOGUE_SHA256 = 'b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665'
+REPORTED_HALT_SCHEMA_SHA256 = '484f2c5a329017ea135f1e34c1245788833c456d33d447b4f283f2da05b6016d'
+REPORTED_HALT_AUTHORITY_SHA256 = '823fefcd736891cd0a49517dec780a8776de6937ad2f78a17e6fad8385477d90'
+REPORTED_HALT_QUARANTINE_AUTHORITY_SHA256 = '99c1552d6ca684641a7612784fc1284501679064bc8444dc8d8804aaea822400'
+
 CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
 CLOSURE_AUTHORITY_SHA256 = '62e3776654a98a62bf605355e209884b32ff1247fec463d6b923f48a76f42492'
@@ -1066,16 +1102,27 @@ CLOSURE_ACL_SHA256 = '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad5
 CLOSURE_EMPTY_ACL_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
 
 
-def require_closure_source(root=None):
+def require_closure_source(root=None, *, revision='0023', allow_successor=True):
     root = HERE.parent if root is None else Path(root)
-    for name, expected in CLOSURE_SOURCE_SHA256.items():
-        path = root / name
-        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
-        require(hashlib.sha256(path.read_bytes()).hexdigest() == expected)
+    require(revision in ('0023', '0024'))
+    profiles = [REPORTED_HALT_SOURCE_SHA256] if revision == '0024' else [CLOSURE_SOURCE_SHA256]
+    if revision == '0023' and allow_successor:
+        profiles.append(REPORTED_HALT_SOURCE_SHA256)
+
+    def matches(pins):
+        for name, expected in pins.items():
+            path = root / name
+            if not (path.is_file() and not path.is_symlink() and path.resolve() == path):
+                return False
+            if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                return False
+        return True
+
+    require(any(matches(pins) for pins in profiles))
 
 
-def closure_bootstrap():
-    require_closure_source()
+def closure_bootstrap(revision='0023'):
+    require_closure_source(revision=revision, allow_successor=True)
     path = HERE.parent / 'backend/app/db/portfolio_bootstrap.py'
     spec = importlib.util.spec_from_file_location('authenticated_closure_bootstrap', path)
     module = importlib.util.module_from_spec(spec)
@@ -1083,8 +1130,8 @@ def closure_bootstrap():
     return module
 
 
-def closure_manifest_sql():
-    bootstrap = closure_bootstrap()
+def closure_manifest_sql(revision='0023'):
+    bootstrap = closure_bootstrap(revision)
     query = management_manifest_sql(bootstrap=bootstrap)
     rows = []
     for table, fields in CLOSURE_COLUMNS.items():
@@ -1112,17 +1159,24 @@ def closure_manifest_sql():
 
 
 def validate_closure_manifest(manifest, *, quarantined=False):
-    require(canonical_hash(manifest['schema']) == CLOSURE_SCHEMA_SHA256)
-    require(canonical_hash(manifest['portfolio_authority']) ==
-            (CLOSURE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CLOSURE_AUTHORITY_SHA256))
+    revision = manifest['revision']
+    require(revision in ('0023', '0024'))
+    if revision == '0024':
+        schema, catalogue = REPORTED_HALT_SCHEMA_SHA256, REPORTED_HALT_CATALOGUE_SHA256
+        authority = REPORTED_HALT_QUARANTINE_AUTHORITY_SHA256 if quarantined else REPORTED_HALT_AUTHORITY_SHA256
+    else:
+        schema, catalogue = CLOSURE_SCHEMA_SHA256, CLOSURE_CATALOGUE_SHA256
+        authority = CLOSURE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CLOSURE_AUTHORITY_SHA256
+    require(canonical_hash(manifest['schema']) == schema)
+    require(canonical_hash(manifest['portfolio_authority']) == authority)
     contract = manifest['closure_contract']
     require(set(contract) == {'catalogue', 'acl', 'defaults'})
-    require(contract['catalogue'] == CLOSURE_CATALOGUE_SHA256)
+    require(contract['catalogue'] == catalogue)
     require(contract['acl'] == (CLOSURE_EMPTY_ACL_SHA256 if quarantined else CLOSURE_ACL_SHA256))
     # A no-ACL clone is still required to carry private future defaults. Restore
     # must explicitly establish those defaults before admitting the quarantine.
     require(contract['defaults'] == CLOSURE_EMPTY_ACL_SHA256)
-    require(manifest['schema']['relations'] == [[t, 'r'] for t in sorted(contract_columns('0023'))])
+    require(manifest['schema']['relations'] == [[t, 'r'] for t in sorted(contract_columns(revision))])
     require(len(manifest['schema']['sequences']) == 24)
     for section in ('management_state', 'portfolio_state', 'closure_state'):
         state = manifest[section]
@@ -1133,7 +1187,7 @@ def validate_closure_manifest(manifest, *, quarantined=False):
         require(all(type(v) is int and v >= 0 for v in state.values()) and state['invalid'] == 0)
     management = manifest['management_contract']
     require(set(management) == {'catalogue', 'acl', 'unsafe'})
-    require(management['catalogue'] == CLOSURE_CATALOGUE_SHA256 and management['acl'] == contract['acl'])
+    require(management['catalogue'] == catalogue and management['acl'] == contract['acl'])
     require(type(management['unsafe']) is int and management['unsafe'] == 0)
     require(manifest['management_state']['creations'] == manifest['tables']['portfolio_creations']['count'])
     require(manifest['management_state']['initializations'] == manifest['tables']['users']['count'] ==
@@ -1145,7 +1199,7 @@ def validate_closure_manifest(manifest, *, quarantined=False):
     require(manifest['portfolio_state']['active']+state['closures'] == manifest['tables']['accounts']['count'])
     require(manifest['stock_invalid'] == 0)
     states = manifest['identity_state']
-    require(isinstance(states, list) and [r[0] for r in states] == identity_tables('0023'))
+    require(isinstance(states, list) and [r[0] for r in states] == identity_tables(revision))
     for _, value, called in states:
         require(type(value) is int and 1 <= value <= 9223372036854775807 and type(called) is bool)
 
@@ -1850,7 +1904,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012", "0013", "0014", "0017", "0020", "0023"):
+            if revision in ("0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024"):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
@@ -2055,8 +2109,13 @@ class Job:
 
 def _bundle_package(output, *, recovery=None, payload_version):
     """Stage a finite reviewed family; transport mocks never prove recovery."""
-    require(type(payload_version) is int and payload_version in (2, 3))
-    closure_bootstrap() if payload_version == 3 else management_bootstrap()
+    require(type(payload_version) is int and payload_version in (2, 3, 4))
+    if payload_version == 4:
+        closure_bootstrap('0024')
+    elif payload_version == 3:
+        require_closure_source(allow_successor=False)
+    else:
+        management_bootstrap()
     source_spec = importlib.util.spec_from_file_location('package_sources', HERE / 'tests/portfolio-sources.py')
     source_module = importlib.util.module_from_spec(source_spec)
     source_spec.loader.exec_module(source_module)
@@ -2093,7 +2152,9 @@ def _bundle_package(output, *, recovery=None, payload_version):
     index_bytes, manifest_bytes = registry_manifests()
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
-        files = CORE + UNITS + (PORTFOLIO_PAYLOAD_V3 if payload_version == 3 else PORTFOLIO_PAYLOAD_V2)
+        payload_files = {2: PORTFOLIO_PAYLOAD_V2, 3: PORTFOLIO_PAYLOAD_V3,
+                         4: PORTFOLIO_PAYLOAD_V4}[payload_version]
+        files = CORE + UNITS + payload_files
         for name in files:
             src = HERE.parent / name
             require(src.is_file() and not src.is_symlink())
@@ -2107,7 +2168,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
         if source_payloads:
             RETAINED_SOURCE_PAYLOADS = {name: identity[1] for lane, identity in source_module.FIXED_RELEASES.items()
                                         for name in ['sources/' + lane + '.tar']
-                                        if payload_version == 3 or lane != 'portfolio0020'}
+                                        if payload_version >= 3 or lane != 'portfolio0020'}
             require(set(source_payloads) == set(RETAINED_SOURCE_PAYLOADS))
             for name, data in source_payloads.items():
                 require(hashlib.sha256(data).hexdigest() == RETAINED_SOURCE_PAYLOADS[name])
@@ -2151,8 +2212,9 @@ def _bundle_package(output, *, recovery=None, payload_version):
         )
         inventory = {
             "format": 1,
-            "portfolio_payload": closure_payload_inventory(stage) if payload_version == 3 else portfolio_payload_inventory(stage),
-            "recovery_profile": "deploy-recovery-v4" if payload_version == 3 else "deploy-recovery-v3",
+            "portfolio_payload": {2: portfolio_payload_inventory, 3: closure_payload_inventory,
+                                  4: halt_payload_inventory}[payload_version](stage),
+            "recovery_profile": "deploy-recovery-v" + str(payload_version + 1),
             "files": files,
             "units": UNITS,
             "image_id": IMAGE_ID,
@@ -2163,7 +2225,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
             "runtime": versions,
             "schema_contract": {
                 "revisions": [r for r in recovery_contract().SUPPORTED_REVISIONS
-                              if payload_version == 3 or r != '0023'],
+                              if r not in {2: {'0023', '0024'}, 3: {'0024'}, 4: set()}[payload_version]],
                 "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
             },
         }
@@ -2206,14 +2268,20 @@ def bundle_package_v3(output, *, recovery=None):
     return _bundle_package(output, recovery=recovery, payload_version=3)
 
 
+def bundle_package_v4(output, *, recovery=None):
+    """Package the exact 0024 report and portfolio contracts."""
+    return _bundle_package(output, recovery=recovery, payload_version=4)
+
+
 def main(argv, *, config=None):
     os.umask(0o077)
-    if argv and argv[0] in ('bundle-v2', 'bundle-v3'):
+    if argv and argv[0] in ('bundle-v2', 'bundle-v3', 'bundle-v4'):
         parser = argparse.ArgumentParser(allow_abbrev=False)
         parser.add_argument('--output', required=True)
         parser.add_argument('--include-units', action='store_true')
         args = parser.parse_args(argv[1:])
-        (bundle_package_v3 if argv[0] == 'bundle-v3' else bundle_package_v2)(args.output)
+        {'bundle-v2': bundle_package_v2, 'bundle-v3': bundle_package_v3,
+         'bundle-v4': bundle_package_v4}[argv[0]](args.output)
         return 0
     try:
         require(argv and argv[0] in ["backup", "status", "recovery-gate"])

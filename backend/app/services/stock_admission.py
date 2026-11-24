@@ -196,8 +196,15 @@ def evaluate_admission(
             "server": server,
             "feed": feed,
         }
+        supported_feed = (
+            ("alpaca-corporate-actions",)
+            if product == "actions"
+            else ("iex", "nasdaq-rss")
+            if product == "status"
+            else ("iex",)
+        )
         if (
-            feed != ("alpaca-corporate-actions" if product == "actions" else "iex")
+            feed not in supported_feed
             or not account
             or not server
             or any(evidence.scope.get(key) != value for key, value in expected_scope.items())

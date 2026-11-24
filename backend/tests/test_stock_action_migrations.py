@@ -162,7 +162,7 @@ async def retained_movement(conn: AsyncConnection, cid: int, uid: int, **changes
 async def current_root(conn, uid):
     assert (
         await conn.execute(text("SELECT version_num FROM alembic_version"))
-    ).scalar_one() == "0023"
+    ).scalar_one() == "0024"
     return (
         await conn.execute(
             text("SELECT id FROM accounts WHERE user_id=:u AND closed_at IS NULL"), {"u": uid}

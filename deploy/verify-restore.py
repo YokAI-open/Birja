@@ -108,6 +108,10 @@ PORTFOLIO_PAYLOAD_V3 = PORTFOLIO_PAYLOAD_V2 + [
     'deploy/tests/portfolio-closure-recovery-fixture.py',
     'deploy/tests/fixtures/portfolio-recovery-0023.json',
 ]
+PORTFOLIO_PAYLOAD_V4 = PORTFOLIO_PAYLOAD_V3 + [
+    'backend/alembic/versions/0024_stock_halt_snapshot.py',
+    'backend/alembic/sql/0024_stock_halt_snapshot.sql',
+]
 CLOSURE_SOURCE_SHA256 = {
     'backend/app/db/portfolio_bootstrap.py': '15d84249e11bad99c8e259c54680fdc5303e6771c63b501c71f79601ab0bc071',
     'backend/app/db/portfolio_migrate.py': 'bfc2990eca9e70993b228b7ca52ab7c47fb17610719944779ad97b94dd57cd17',
@@ -127,14 +131,21 @@ CLOSURE_SOURCE_SHA256 = {
     'deploy/tests/portfolio-execution-fixture.py': 'b6f0e486401116535f101f3529e648690d3c7fed6324b94c3e40a06bf5f5e42f',
 }
 
+REPORTED_HALT_SOURCE_SHA256 = {
+    **CLOSURE_SOURCE_SHA256,
+    'deploy/tests/portfolio-closure-recovery-fixture.py': '8ff1a41a6efd2ddc144330727dce9f2eac98690e529a36fc08c5dbaac3b7323e',
+    'backend/app/db/portfolio_bootstrap.py': '2b2fd62abb5fbd7915172de17a3bdee13f5957a00216932f32897ded30547fb5',
+    'backend/app/db/portfolio_migrate.py': 'c604cdd6ba5cdc1c991a1c3783d7af58cd9b416cb731b07bfbda8310047eea35',
+    'backend/app/db/schema_contract.py': '3b8c8dee9e2211365a322efe2be44ebb921d640edfdcd9ae0a52bd365092f324',
+    'deploy/db/bootstrap-roles.sql': '07d678d22ef3a75c2539eea33cc0424e0ba9812df773f81e365fce10e2407315',
+    'backend/alembic/versions/0024_stock_halt_snapshot.py': '792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd',
+    'backend/alembic/sql/0024_stock_halt_snapshot.sql': 'fa19099943dd885cfa3548cd45f25fb5d5150307524ea41d0cae0aa4b2c6e986',
+}
 
-def closure_source(root=None):
+def closure_source(root=None, *, revision='0023', allow_successor=True):
     """Authenticate successor code before importing authority helpers."""
-    root = Path(root) if root is not None else HERE.parent
-    for name, expected in CLOSURE_SOURCE_SHA256.items():
-        path = root / name
-        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
-        require(digest(path) == expected)
+    recovery_contract().require_closure_source(root, revision=revision,
+                                               allow_successor=allow_successor)
 
 
 def management_source(root=None):
@@ -149,9 +160,9 @@ def management_source(root=None):
 def portfolio_payload_files(inventory):
     payload = inventory['portfolio_payload']
     version = payload.get('version')
-    require(type(version) is int and version in (1, 2, 3))
+    require(type(version) is int and version in (1, 2, 3, 4))
     return {1: PORTFOLIO_PAYLOAD_V1, 2: PORTFOLIO_PAYLOAD_V2,
-            3: PORTFOLIO_PAYLOAD_V3}[version]
+            3: PORTFOLIO_PAYLOAD_V3, 4: PORTFOLIO_PAYLOAD_V4}[version]
 
 
 def require(value):
@@ -475,9 +486,10 @@ def bundle_verify(archive, sha, required_profile=None):
         names = tar_members(t)
         require({"INVENTORY.json", "SHA256SUMS"} <= names)
         inventory = json.load(t.extractfile("INVENTORY.json"))
-        if inventory.get('portfolio_payload', {}).get('version') == 3:
+        version = inventory.get('portfolio_payload', {}).get('version')
+        if version in (3, 4):
             require({'schema_contract', 'retained_source_payloads'} <= inventory.keys())
-            require(inventory['recovery_profile'] == 'deploy-recovery-v4')
+            require(inventory['recovery_profile'] == 'deploy-recovery-v' + str(version + 1))
             require(inventory['retained_source_payloads'] == RETAINED_CLOSURE_SOURCE_PAYLOADS)
             require(set(inventory['schema_contract']) == {'revisions', 'payload_sha256'})
             require(set(inventory['schema_contract']['payload_sha256']) == set(CONTRACT_PAYLOAD))
@@ -510,7 +522,7 @@ def bundle_verify(archive, sha, required_profile=None):
             retained = dict(RETAINED_SOURCE_PAYLOADS)
             if inventory.get('portfolio_payload', {}).get('version') == 2:
                 retained['sources/portfolio0017.tar'] = '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248'
-            elif inventory.get('portfolio_payload', {}).get('version') == 3:
+            elif version in (3, 4):
                 retained = RETAINED_CLOSURE_SOURCE_PAYLOADS
             require(inventory["retained_source_payloads"] == retained)
             allowed.update(retained)
@@ -564,13 +576,13 @@ def bundle_verify(archive, sha, required_profile=None):
         )
         if required_profile is not None:
             require(
-                required_profile in ("deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4")
+                required_profile in ("deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4", "deploy-recovery-v5")
                 and inventory.get("recovery_profile") == required_profile
             )
             require((required_profile == 'deploy-recovery-v3') ==
                     (inventory.get('portfolio_payload', {}).get('version') == 2))
-            require((required_profile == 'deploy-recovery-v4') ==
-                    (inventory.get('portfolio_payload', {}).get('version') == 3))
+            require((required_profile == 'deploy-recovery-v4') == (version == 3))
+            require((required_profile == 'deploy-recovery-v5') == (version == 4))
     runtime()
     return inventory
 
@@ -598,20 +610,24 @@ def verify_contract_inventory(inventory, expected):
     """Old immutable artifacts remain readable; successor metadata is exact."""
     if "schema_contract" in inventory:
         revisions = inventory["schema_contract"].get("revisions")
-        if inventory.get('portfolio_payload', {}).get('version') == 3:
+        version = inventory.get('portfolio_payload', {}).get('version')
+        if version in (3, 4):
+            exact_revisions = ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023']
+            if version == 4:
+                exact_revisions.append('0024')
             require(inventory['schema_contract'] == {
-                'revisions': ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023'],
+                'revisions': exact_revisions,
                 'payload_sha256': {name: expected[name] for name in CONTRACT_PAYLOAD},
             })
             return
         # Exact released v0.5.0 inventory; no prefix/range/latest acceptance.
         legacy = ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014"]
-        supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r != '0023']
+        supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r not in ('0023', '0024')]
         require(revisions in (legacy, supported, [r for r in supported if r != '0020']))
         if '0020' in revisions:
             require(inventory.get('portfolio_payload', {}).get('version') == 2)
         if "portfolio_payload" in inventory:
-            supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r != '0023']
+            supported = [r for r in recovery_contract().SUPPORTED_REVISIONS if r not in ('0023', '0024')]
             if inventory['portfolio_payload']['version'] == 1:
                 supported.remove('0020')
             require(revisions == supported)
@@ -633,6 +649,9 @@ def verify_portfolio_inventory(inventory, expected):
         elif payload['version'] == 3:
             payload['revision'] = '0023'
             require(all(expected[name] == value for name, value in CLOSURE_SOURCE_SHA256.items()))
+        elif payload['version'] == 4:
+            payload['revision'] = '0024'
+            require(all(expected[name] == value for name, value in REPORTED_HALT_SOURCE_SHA256.items()))
         require(inventory['portfolio_payload'] == payload)
 
 
@@ -834,7 +853,7 @@ def bundle(args):
     p.add_argument("--output")
     p.add_argument("--synthetic-root")
     p.add_argument("--include-units", action="store_true")
-    p.add_argument("--require-profile", choices=["deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4"])
+    p.add_argument("--require-profile", choices=["deploy-recovery-v2", "deploy-recovery-v3", "deploy-recovery-v4", "deploy-recovery-v5"])
     a = p.parse_args(args)
     if a.mode == "package":
         require(a.output and not a.archive and not a.sha and not a.synthetic_root)
@@ -1001,8 +1020,8 @@ def recovery_contract(revision=None):
 def canonical(dc, db=CLONE):
     revision = sql(dc, "SELECT version_num FROM alembic_version ORDER BY version_num;", db).decode().strip()
     contract = recovery_contract(revision)
-    if revision == '0023':
-        closure_source()
+    if revision in ('0023', '0024'):
+        closure_source(revision=revision, allow_successor=True)
     elif revision == '0020':
         management_source(contract.HERE.parent / 'backend')
     return json.loads(
@@ -1018,12 +1037,12 @@ def verify(dc, manifest, *, quarantined=True):
     contract = recovery_contract(manifest['revision'])
     contract.validate_manifest(manifest)
     actual = canonical(dc)
-    if manifest['revision'] in ('0017', '0020', '0023'):
+    if manifest['revision'] in ('0017', '0020', '0023', '0024'):
         contract.validate_manifest(actual, quarantined=quarantined)
         keys = ['tables','financial','revision','schema','portfolio_state','identity_state']
         if manifest['revision'] == '0020':
             keys += ['management_state']
-        elif manifest['revision'] == '0023':
+        elif manifest['revision'] in ('0023', '0024'):
             keys += ['management_state', 'closure_state', 'stock_invalid']
         for key in keys:
             require(actual[key] == manifest[key])
@@ -1329,15 +1348,17 @@ def closure_evidence_matches(actual, expected):
 
 
 def restore_closure_authority(dc, manifest):
-    """Authenticate complete no-ACL0023 evidence BEFORE any runtime regrant."""
-    closure_source()
+    """Authenticate exact no-ACL evidence before regranting runtime roles."""
+    revision = manifest['revision']
+    require(revision in ('0023', '0024'))
+    closure_source(revision=revision, allow_successor=True)
     contract = recovery_contract()
     contract.validate_manifest(manifest)
-    require(manifest['revision'] == '0023')
-    bootstrap = contract.closure_bootstrap()
+    bootstrap = contract.closure_bootstrap(revision)
+    preflight = getattr(bootstrap, 'PREFLIGHT_' + revision + '_SQL')
     actual = canonical(dc)
-    require(actual['revision'] == '0023')
-    require(actual['closure_contract']['catalogue'] == contract.CLOSURE_CATALOGUE_SHA256)
+    require(actual['revision'] == revision)
+    require(actual['closure_contract']['catalogue'] == manifest['closure_contract']['catalogue'])
     # pg_restore --no-acl can leave the built-in PUBLIC function default. Only
     # that finite permission is normalized; unexpected non-owner ACLs refuse.
     privilege_query = "SELECT coalesce(json_agg(v ORDER BY v::text),'[]'::json) FROM ("
@@ -1363,11 +1384,11 @@ def restore_closure_authority(dc, manifest):
                        for scope in ('', ' IN SCHEMA public')
                        for kind in ('TABLES', 'SEQUENCES', 'FUNCTIONS'))
     sql(dc, 'BEGIN; REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;\n' +
-        defaults + bootstrap.PREFLIGHT_0023_SQL + '\nCOMMIT;')
+        defaults + preflight + '\nCOMMIT;')
     quarantined = canonical(dc)
     contract.validate_manifest(quarantined, quarantined=True)
     closure_evidence_matches(quarantined, manifest)
-    sql(dc, 'BEGIN;\n' + bootstrap.PREFLIGHT_0023_SQL +
+    sql(dc, 'BEGIN;\n' + preflight +
         bootstrap.GRANTS_0023_SQL + '\nCOMMIT;')
     final = canonical(dc)
     contract.validate_manifest(final)
@@ -1429,7 +1450,7 @@ def restored(dc, dump, *, manifest=None):
             dump,
         )
         revision=sql(dc,"SELECT version_num FROM public.alembic_version").strip()
-        if revision in (b'0020', b'0023'):
+        if revision in (b'0020', b'0023', b'0024'):
             # Current admission forbids migrator ownership of database/schema.
             # Keep relation/routine ownership with the restricted migrator;
             # administrative container identity owns only these boundaries.
@@ -1444,7 +1465,7 @@ def restored(dc, dump, *, manifest=None):
                   EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',n);
                 END IF;
               END LOOP; END $$;""", 'birja_ops_test')
-            if revision == b'0023':
+            if revision in (b'0023', b'0024'):
                 require(manifest is not None)
                 restore_closure_authority(dc, manifest)
             else:
@@ -1551,7 +1572,7 @@ def restore(args):
                 recovery_contract(manifest['revision']).validate_manifest(manifest)
                 require(digest(target / "database.dump") == manifest["archive_sha256"])
                 with restored(dc, (target / "database.dump").read_bytes(), manifest=manifest):
-                    verify(dc, manifest, quarantined=manifest['revision'] != '0023')
+                    verify(dc, manifest, quarantined=manifest['revision'] not in ('0023', '0024'))
                 attempt.update(
                     binding,
                     source_release=manifest["release"],

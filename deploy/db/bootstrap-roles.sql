@@ -14,7 +14,7 @@ BEGIN
   IF (SELECT version_num FROM public.alembic_version) IN ('0015','0016','0018','0019','0021','0022') THEN
     RAISE EXCEPTION 'migration_only';
   END IF;
-  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023') THEN
+  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023','0024') THEN
     RAISE EXCEPTION 'unsupported populated revision';
   END IF;
   FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0013','0014','0017','0020') THEN ARRAY['stock_fill_facts','stock_status_evidence'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0014','0017','0020') THEN ARRAY['stock_dividend_payments','stock_dividend_decisions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)IN ('0017','0020') THEN ARRAY['portfolio_stock_closures'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)='0020' THEN ARRAY['portfolio_creations','portfolio_initializations'] ELSE ARRAY[]::text[] END LOOP
@@ -311,12 +311,12 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 END $management_identity$;
 
 
--- Independent complete0023 identity; qualified earlier branches remain unchanged.
+-- Exact closure and reported-halt catalogue identities share the same grants.
 
 DO $closure_identity$
 BEGIN
- IF (SELECT version_num FROM public.alembic_version)<>'0023' THEN RETURN; END IF;
- IF (SELECT count(*)<>1 OR NOT bool_and(version_num='0023') FROM public.alembic_version)
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024') THEN RETURN; END IF;
+ IF (SELECT count(*)<>1 OR NOT bool_and(version_num IN ('0023','0024')) FROM public.alembic_version)
  THEN RAISE EXCEPTION 'management final revision required'; END IF;
  IF EXISTS(SELECT FROM pg_roles WHERE rolname IN
   ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')
@@ -393,7 +393,9 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
   pg_get_userbyid(c.relowner)) FROM pg_class c
   WHERE c.relnamespace='public'::regnamespace AND c.relkind NOT IN ('r','S','i','I')
 ) catalogue
-) IS DISTINCT FROM '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
+) IS DISTINCT FROM (CASE (SELECT version_num FROM public.alembic_version)
+  WHEN '0023' THEN '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
+  WHEN '0024' THEN 'b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665' END)
  THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
  IF EXISTS(SELECT FROM pg_proc p,
   LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
@@ -977,7 +979,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 ) IS DISTINCT FROM '041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e' THEN RAISE EXCEPTION 'management final ACL mismatch'; END IF;
 END $management_grants$;
 DO $closure_grants$ BEGIN
- IF (SELECT version_num FROM public.alembic_version)<>'0023' THEN RETURN; END IF;
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024') THEN RETURN; END IF;
 
 DO $management_reset$
 DECLARE obj record; col record;

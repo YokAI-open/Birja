@@ -358,3 +358,18 @@ def test_projection_defends_against_validator_admitting_missing_side(monkeypatch
     result = evaluate_valuation(mark(evidence), NOW)
     assert result.mode == "unavailable" and result.reason == "quote_unavailable"
     assert result.mid is None and result.event_at is None and result.valid_until is None
+
+
+def test_closed_reported_market_retains_an_admitted_mark_after_the_report_expires() -> None:
+    initial = valid()
+    evidence = replace(
+        initial,
+        session_state="closed",
+        status=replace(initial.status, source="nasdaq-rss", valid_until=NOW),
+    )
+    decision = evaluate_execution(evidence, NOW)
+    assert not decision.allowed and decision.reason == "market_closed"
+    valuation = evaluate_valuation(mark(evidence), NOW)
+    assert valuation.mode == "closed"
+    assert valuation.mid is not None
+    assert valuation.valid_until is not None and valuation.valid_until > NOW

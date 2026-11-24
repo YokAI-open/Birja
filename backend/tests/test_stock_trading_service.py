@@ -290,7 +290,9 @@ async def test_current_authority_refuses_new_fill(stock_trade_case, settings, mu
     assert await financial_snapshot(factory) == before
 
 
-@pytest.mark.parametrize("failure", ["authority", "integrity", "cancel", "ownership", "db"])
+@pytest.mark.parametrize(
+    "failure", ["authority", "market_closed", "integrity", "cancel", "ownership", "db"]
+)
 async def test_late_failures_roll_back_all_staged_effects(
     stock_trade_case, settings, monkeypatch, failure
 ):
@@ -318,6 +320,14 @@ async def test_late_failures_roll_back_all_staged_effects(
                             "WHERE product='quotes'"
                         )
                     )
+                elif failure == "market_closed":
+                    await original(
+                        text(
+                            "UPDATE stock_sessions SET closes_at=clock_timestamp() "
+                            "WHERE session_date=:session_date"
+                        ),
+                        {"session_date": now.date()},
+                    )
                 elif failure == "integrity":
                     await original(
                         text("UPDATE accounts SET cash=-1 WHERE user_id=:uid"), {"uid": uid}
@@ -333,19 +343,79 @@ async def test_late_failures_roll_back_all_staged_effects(
         monkeypatch.setattr(db, "execute", intercept)
         expected = {
             "authority": TradeRefused,
+            "market_closed": TradeRefused,
             "integrity": IntegrityError,
             "cancel": asyncio.CancelledError,
             "ownership": TradeRefused,
             "db": DBAPIError,
         }[failure]
-        with pytest.raises(expected):
+        with pytest.raises(expected) as refused:
             await stock_trading.execute(
                 db,
                 portfolio=await synthetic_owned_portfolio(db, uid),
                 order=trade_order(),
                 settings=settings,
             )
+        if failure == "market_closed":
+            assert refused.value.code == "market_closed"
         assert not db.in_transaction()
+    assert await financial_snapshot(factory) == before
+
+
+async def test_reported_halt_after_stock_staging_denies_fill(
+    stock_trade_case, settings, monkeypatch
+):
+    from sqlalchemy import text
+
+    from app.services.stock_halts import REPORT_LOCK_KEYS
+    from app.services.trade_math import TradeRefused
+
+    factory, cid, uid, _ = stock_trade_case
+    async with factory.begin() as db:
+        await db.execute(
+            text(
+                "UPDATE stock_data_admissions SET scope=scope || "
+                "'{\"feed\":\"nasdaq-rss\"}'::jsonb WHERE product='status'"
+            )
+        )
+        await db.execute(
+            text(
+                "UPDATE stock_status_evidence SET source='nasdaq-rss', source_ref=repeat('a',64), "
+                "bootstrap_verified=false, continuity_current=false, sequence=0, "
+                "event_at=observed_at WHERE coin_id=:cid"
+            ),
+            {"cid": cid},
+        )
+    before = await financial_snapshot(factory)
+    async with factory() as db:
+        execute = db.execute
+        seen = 0
+
+        async def publish_before_final_guard(statement, *args, **kwargs):
+            nonlocal seen
+            if str(statement) == "SET CONSTRAINTS ALL IMMEDIATE":
+                seen += 1
+                async with factory.begin() as writer:
+                    await writer.execute(text(f"SELECT pg_advisory_xact_lock({REPORT_LOCK_KEYS})"))
+                    await writer.execute(
+                        text(
+                            "UPDATE stock_status_evidence SET state='halted', "
+                            "source_ref=repeat('b',64) WHERE coin_id=:cid"
+                        ),
+                        {"cid": cid},
+                    )
+            return await execute(statement, *args, **kwargs)
+
+        monkeypatch.setattr(db, "execute", publish_before_final_guard)
+        with pytest.raises(TradeRefused) as refused:
+            await stock_trading.execute(
+                db,
+                portfolio=await synthetic_owned_portfolio(db, uid),
+                order=trade_order(),
+                settings=settings,
+            )
+        assert refused.value.code == "halted"
+        assert seen == 1 and not db.in_transaction()
     assert await financial_snapshot(factory) == before
 
 

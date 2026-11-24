@@ -17,7 +17,7 @@ const reasons: Record<StockRefusal, string> = {
   market_closed: "Market closed.",
   halted: "Trading halted. New orders are unavailable.",
   frozen: "Trading frozen. New orders are unavailable.",
-  status_unavailable: "Stock status is unverified. New orders are unavailable.",
+  status_unavailable: "The trading status check is unavailable.",
   permission_unavailable: "Stock data access is unavailable. Crypto remains available.",
   action_unavailable: "Suspended for corporate-action review.",
   units_changed: "Stock units changed. Get a fresh preview after checks finish.",
@@ -272,6 +272,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 </Button>
               )}
             </form>
+            {c?.status.source === "nasdaq-rss" && !marketClosed && (
+              <p className="text-[13px] leading-[18px] text-muted-foreground">
+                Halt reports can be delayed or incomplete.
+              </p>
+            )}
             {requiredAttribution && (lastQuote || (!marketClosed && visible) || t.fill) && (
               <p className="text-[13px] leading-[18px] break-words text-muted-foreground">
                 {requiredAttribution}

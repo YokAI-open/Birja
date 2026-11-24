@@ -52,6 +52,7 @@ class StockStatus(FrozenModel):
     state: Literal["normal", "halted", "frozen", "unknown"] = "unknown"
     observed_at: datetime | None = None
     valid_until: datetime | None = None
+    reported_at: AwareDatetime | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class StockActionOut(FrozenModel):

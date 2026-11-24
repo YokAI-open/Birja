@@ -93,6 +93,7 @@ export function projectStockContext(
     result = {
       ...result,
       status: {
+        ...data.status,
         state: "unknown",
         event_at: null,
         observed_at: null,
@@ -129,8 +130,8 @@ export function projectStockContext(
     reason = "action_unavailable";
   else if (
     result.status.state !== "normal" ||
-    !result.status.bootstrap_verified ||
-    !result.status.continuity_current
+    (result.status.source !== "nasdaq-rss" &&
+      (!result.status.bootstrap_verified || !result.status.continuity_current))
   )
     reason =
       result.status.state === "halted"
@@ -290,7 +291,12 @@ function compatible(q: TimedStockQuote, c: TimedStockContext): boolean {
     q.provider_asset_id === c.provider_asset_id &&
     q.authority.safety_epoch === c.authority.safety_epoch &&
     q.authority.unit_epoch === c.authority.unit_epoch &&
-    q.authority.continuity_generation === c.authority.continuity_generation &&
+    (q.authority.continuity_generation === c.authority.continuity_generation ||
+      (c.status.source === "nasdaq-rss" &&
+        q.authority.status_sequence === 0 &&
+        q.authority.status_admission_generation === c.authority.status_admission_generation &&
+        q.authority.continuity_generation > c.authority.continuity_generation &&
+        stockInstant(q.observed_at) >= stockInstant(c.observed_at))) &&
     q.authority.admissions.every((a) =>
       c.authority!.admissions.some(
         (b) =>

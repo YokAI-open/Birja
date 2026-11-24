@@ -11,12 +11,12 @@ from app.db.portfolio_bootstrap import (
     ACL_SQL,
     DEFAULT_ACL_0023_SHA256,
     DEFAULT_ACL_0023_SQL,
-    PREFLIGHT_0023_SQL,
+    PORTFOLIO_PREFLIGHT_SQL,
 )
 
 Consumer = Literal["portfolio", "retained0020", "retained0017", "retained0014", "retained0008"]
 SUPPORTED = {
-    "portfolio": frozenset({"0023"}),
+    "portfolio": frozenset(PORTFOLIO_PREFLIGHT_SQL),
     "retained0020": frozenset({"0020"}),
     "retained0017": frozenset({"0017"}),
     "retained0014": frozenset({"0013", "0014"}),
@@ -52,7 +52,7 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
         raise SchemaAdmissionError("incompatible_schema")
     if consumer == "portfolio":
         try:
-            await conn.execute(text(PREFLIGHT_0023_SQL))
+            await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
             if (await conn.execute(text(ACL_SQL))).scalar_one() != ACL_0023_SHA256:
                 raise SchemaAdmissionError("incompatible_authority")
             if (

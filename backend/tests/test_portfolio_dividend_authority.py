@@ -43,7 +43,7 @@ async def dividend_portfolio_case(engine, migrated):
         try:
             assert (
                 await conn.execute(text("SELECT version_num FROM alembic_version"))
-            ).scalar_one() == "0023"
+            ).scalar_one() == "0024"
             now = (await conn.execute(text("SELECT clock_timestamp()"))).scalar_one()
             owners = []
             for label in ("owner", "foreign"):

@@ -137,7 +137,7 @@ for name in backend/alembic/versions/0023_portfolio_closure_authority.py \
   backend/alembic/sql/0023_portfolio_closure.sql backend/app/db/portfolio_bootstrap.py \
   backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
   mkdir -p "$APP_DIR/$(dirname "$name")"
-  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$HERE/../.." show "v0.7.0:$name" > "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
 done
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m closure-tested
@@ -177,4 +177,25 @@ BIRJA_TESTED_SOURCE=$CLOSURE_MIGRATOR_CORRUPT
 run_case deploy 0023 "$CLOSURE_MIGRATOR_CORRUPT" no refuse
 if admit_application_source "$CLOSURE_MIGRATOR_CORRUPT"; then
   echo 'FAIL corrupted migration authentication admitted'; exit 1
+fi
+
+git -C "$APP_DIR" checkout -q --detach "$CLOSURE_TESTED"
+for name in backend/alembic/versions/0024_stock_halt_snapshot.py \
+  backend/alembic/sql/0024_stock_halt_snapshot.sql backend/app/db/portfolio_bootstrap.py \
+  backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m reported-halt-tested
+HALT_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$HALT_TESTED
+for revision in 0023 0024; do
+  run_case deploy "$revision" "$HALT_TESTED" no pass
+  ADMITTED_REVISION=$revision admit_application_source "$HALT_TESTED"
+done
+run_case rollback 0024 main yes pass
+run_case rollback 0024 main no refuse
+BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
+if ADMITTED_REVISION=0024 admit_application_source "$CLOSURE_TESTED"; then
+  echo 'FAIL predecessor runtime admitted on 0024'; exit 1
 fi

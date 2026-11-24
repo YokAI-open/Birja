@@ -653,7 +653,7 @@ class ClosureFixtureWriterContracts(unittest.TestCase):
 
 
 class ClosureProducerContracts(unittest.TestCase):
-    def test_v3_package_binds_current_lifecycle_and_complete_retained_sources(self):
+    def test_v4_package_binds_current_status_and_lifecycle_and_complete_retained_sources(self):
         recovery=load('current_package_transport','deploy/verify-restore.py')
         original_run=subprocess.run
         def external(argv,**kwargs):
@@ -671,15 +671,15 @@ class ClosureProducerContracts(unittest.TestCase):
              mock.patch.object(recovery,'verify_saved_image',side_effect=saved), \
              mock.patch.object(subprocess,'run',side_effect=external):
             output=Path(tmp)/'closure.tar'
-            producer.bundle_package_v3(output,recovery=recovery)
-            recovery.bundle_verify(output,recovery.digest(output),required_profile='deploy-recovery-v4')
+            producer.bundle_package_v4(output,recovery=recovery)
+            recovery.bundle_verify(output,recovery.digest(output),required_profile='deploy-recovery-v5')
             with tarfile.open(output,'r:') as archive:
                 metadata=json.load(archive.extractfile('INVENTORY.json'))
-                self.assertEqual(metadata['recovery_profile'],'deploy-recovery-v4')
-                self.assertEqual((metadata['portfolio_payload']['version'],metadata['portfolio_payload']['revision']),(3,'0023'))
-                self.assertEqual(metadata['schema_contract']['revisions'][-1],'0023')
-                self.assertEqual(set(metadata['portfolio_payload']['sha256']),set(producer.PORTFOLIO_PAYLOAD_V3))
-                for name in producer.PORTFOLIO_PAYLOAD_V3:
+                self.assertEqual(metadata['recovery_profile'],'deploy-recovery-v5')
+                self.assertEqual((metadata['portfolio_payload']['version'],metadata['portfolio_payload']['revision']),(4,'0024'))
+                self.assertEqual(metadata['schema_contract']['revisions'][-1],'0024')
+                self.assertEqual(set(metadata['portfolio_payload']['sha256']),set(producer.PORTFOLIO_PAYLOAD_V4))
+                for name in producer.PORTFOLIO_PAYLOAD_V4:
                     data=archive.extractfile(name).read()
                     self.assertEqual(hashlib.sha256(data).hexdigest(),metadata['portfolio_payload']['sha256'][name])
                     self.assertEqual(data,(ROOT/name).read_bytes())
@@ -690,12 +690,12 @@ class ClosureProducerContracts(unittest.TestCase):
                     'sources/retained.tar','sources/legacy0007.tar','sources/legacy0008.tar'})
                 stage=Path(tmp)/'stage';stage.mkdir()
                 archive.extractall(stage,filter='data')
-            producer.verify_closure_inventory(stage,metadata['portfolio_payload'])
+            producer.verify_halt_inventory(stage,metadata['portfolio_payload'])
             # Authenticate coherent omissions and critical source tampering
             # BEFORE any image/runtime import. Recompute all outer checksums.
             with tarfile.open(output,'r:') as archive:
                 members={m.name:archive.extractfile(m).read() for m in archive.getmembers() if m.isfile()}
-            for damage in ('sources','schema','lifecycle','source','profile'):
+            for damage in ('sources','schema','lifecycle','source','migration','profile'):
                 content=dict(members);doc=copy.deepcopy(metadata)
                 if damage=='sources':
                     del doc['retained_source_payloads']
@@ -704,8 +704,9 @@ class ClosureProducerContracts(unittest.TestCase):
                 elif damage=='lifecycle':
                     name='backend/app/models/portfolio_lifecycle.py'
                     content.pop(name);doc['portfolio_payload']['sha256'].pop(name)
-                elif damage=='source':
-                    name='backend/app/services/portfolio_closure.py'
+                elif damage in ('source','migration'):
+                    name=('backend/app/services/portfolio_closure.py' if damage=='source'
+                          else 'backend/alembic/sql/0024_stock_halt_snapshot.sql')
                     content[name]+=b'\n# coherent altered source\n'
                     doc['portfolio_payload']['sha256'][name]=hashlib.sha256(content[name]).hexdigest()
                 else:doc['recovery_profile']='deploy-recovery-v3'
@@ -720,13 +721,13 @@ class ClosureProducerContracts(unittest.TestCase):
                 damaged.chmod(0o600)
                 with self.subTest(damage=damage),mock.patch.object(recovery,'verify_saved_image') as image, \
                      mock.patch.object(recovery,'runtime') as runtime,self.assertRaises(ValueError):
-                    recovery.bundle_verify(damaged,recovery.digest(damaged),required_profile='deploy-recovery-v4')
+                    recovery.bundle_verify(damaged,recovery.digest(damaged),required_profile='deploy-recovery-v5')
                 image.assert_not_called();runtime.assert_not_called()
             for name in ('backend/app/models/portfolio_lifecycle.py','backend/alembic/sql/0023_portfolio_closure.sql'):
                 path=stage/name;original=path.read_bytes();path.write_bytes(original+b'\n')
                 coherent=copy.deepcopy(metadata['portfolio_payload'])
                 coherent['sha256'][name]=hashlib.sha256(path.read_bytes()).hexdigest()
-                with self.assertRaises(ValueError):producer.verify_closure_inventory(stage,coherent)
+                with self.assertRaises(ValueError):producer.verify_halt_inventory(stage,coherent)
                 path.write_bytes(original)
 
 

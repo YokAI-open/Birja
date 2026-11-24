@@ -1,12 +1,16 @@
 """Private explicit-portfolio stock adapters using the existing authority."""
 
 from fastapi import APIRouter, Depends, Response
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.stock_trades import PrivateRoute, Symbol, _refusal
-from app.core.deps import DbDep, OwnedActivePortfolioDep, SettingsDep, verify_csrf
+from app.core.config import Settings
+from app.core.deps import DbDep, OwnedActivePortfolioDep, RedisDep, SettingsDep, verify_csrf
 from app.schemas.stock_trades import ContextOut, FillOut, QuoteIn, QuoteOut, TradeIn
 from app.services import stock_trading
 from app.services.portfolios import fence_owned_active_portfolios
+from app.services.stock_quote_demand import request_stock_quote
 from app.services.trade_math import TradeRefused
 
 router = APIRouter(
@@ -14,6 +18,19 @@ router = APIRouter(
     tags=["portfolio stock trades"],
     route_class=PrivateRoute,
 )
+
+
+async def _refresh_quote(
+    db: AsyncSession, redis: Redis, settings: Settings, symbol: str, reason: str
+) -> bool:
+    if not settings.stock_data_enabled or reason not in ("quote_unavailable", "quote_stale"):
+        return False
+    # The initial read and (for confirmation) any failed transaction are over
+    # before the scheduler wait. The retry reauthorizes the fixed portfolio.
+    await db.rollback()
+    return await request_stock_quote(
+        redis, symbol, account=settings.stock_data_account, server=settings.stock_data_server
+    )
 
 
 @router.post(
@@ -24,10 +41,23 @@ router = APIRouter(
     description="Read-only whole-share IEX ask/bid preview in the selected active portfolio.",
 )
 async def post_quote(
-    body: QuoteIn, portfolio: OwnedActivePortfolioDep, db: DbDep, settings: SettingsDep
+    body: QuoteIn,
+    portfolio: OwnedActivePortfolioDep,
+    db: DbDep,
+    settings: SettingsDep,
+    redis: RedisDep,
 ) -> QuoteOut:
     try:
-        result = await stock_trading.quote(db, portfolio=portfolio, order=body, settings=settings)
+        try:
+            result = await stock_trading.quote(
+                db, portfolio=portfolio, order=body, settings=settings
+            )
+        except TradeRefused as exc:
+            if not await _refresh_quote(db, redis, settings, body.symbol, exc.code):
+                raise
+            result = await stock_trading.quote(
+                db, portfolio=portfolio, order=body, settings=settings
+            )
     except TradeRefused as exc:
         await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
@@ -51,12 +81,20 @@ async def post_trade(
     portfolio: OwnedActivePortfolioDep,
     db: DbDep,
     settings: SettingsDep,
+    redis: RedisDep,
     response: Response,
 ) -> FillOut:
     try:
-        fill, created = await stock_trading.execute(
-            db, portfolio=portfolio, order=body, settings=settings
-        )
+        try:
+            fill, created = await stock_trading.execute(
+                db, portfolio=portfolio, order=body, settings=settings
+            )
+        except TradeRefused as exc:
+            if not await _refresh_quote(db, redis, settings, body.symbol, exc.code):
+                raise
+            fill, created = await stock_trading.execute(
+                db, portfolio=portfolio, order=body, settings=settings
+            )
     except TradeRefused as exc:
         await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None
@@ -76,12 +114,20 @@ async def post_trade(
     ),
 )
 async def get_context(
-    symbol: Symbol, portfolio: OwnedActivePortfolioDep, db: DbDep, settings: SettingsDep
+    symbol: Symbol,
+    portfolio: OwnedActivePortfolioDep,
+    db: DbDep,
+    settings: SettingsDep,
+    redis: RedisDep,
 ) -> ContextOut:
     try:
         result = await stock_trading.context(
             db, portfolio=portfolio, symbol=symbol, settings=settings
         )
+        if await _refresh_quote(db, redis, settings, symbol, result.execution_reason):
+            result = await stock_trading.context(
+                db, portfolio=portfolio, symbol=symbol, settings=settings
+            )
     except TradeRefused as exc:
         await fence_owned_active_portfolios(db, portfolio.user_id, [portfolio.portfolio_id])
         raise _refusal(exc) from None

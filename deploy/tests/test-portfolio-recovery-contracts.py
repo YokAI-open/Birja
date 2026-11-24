@@ -31,7 +31,8 @@ class PortfolioRecoveryContracts(unittest.TestCase):
     def test_ops_archive_family_is_authenticated_and_finite(self):
         spec=importlib.util.spec_from_file_location('ops_contracts',ROOT/'deploy/tests/ops-fixtures.py')
         ops=importlib.util.module_from_spec(spec);spec.loader.exec_module(ops)
-        for profile,version,revision in (('deploy-recovery-v3',2,'0020'),('deploy-recovery-v4',3,'0023')):
+        for profile,version,revision in (('deploy-recovery-v3',2,'0020'),('deploy-recovery-v4',3,'0023'),
+                                         ('deploy-recovery-v5',4,'0024')):
             inventory={'recovery_profile':profile,'portfolio_payload':{'version':version,'revision':revision}}
             with mock.patch.object(ops.r,'bundle_verify',return_value=inventory) as authenticate:
                 self.assertEqual(ops.archive_profile(Path('/synthetic/archive'),'digest'),profile)
@@ -53,11 +54,11 @@ class PortfolioRecoveryContracts(unittest.TestCase):
             for call in calls:
                 self.assertTrue(any(keyword.arg=='manifest' for keyword in call.keywords),(name,call.lineno))
 
-    def test_v3_consumer_requires_exact_revision_inventory_and_profile(self):
+    def test_v4_consumer_requires_exact_revision_inventory_and_profile(self):
         producer, consumer = load('backup-snapshot'), load('verify-restore')
-        payload = producer.closure_payload_inventory(ROOT)
+        payload = producer.halt_payload_inventory(ROOT)
         inventory = {'portfolio_payload': payload}
-        self.assertEqual(consumer.portfolio_payload_files(inventory), producer.PORTFOLIO_PAYLOAD_V3)
+        self.assertEqual(consumer.portfolio_payload_files(inventory), producer.PORTFOLIO_PAYLOAD_V4)
         consumer.verify_portfolio_inventory(inventory, payload['sha256'])
         for field, value in (('version', True), ('version', 2), ('revision', '0020'),
                              ('revision', '0022')):
@@ -65,7 +66,7 @@ class PortfolioRecoveryContracts(unittest.TestCase):
             changed['portfolio_payload'][field] = value
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 consumer.verify_portfolio_inventory(changed, payload['sha256'])
-        for name in producer.PORTFOLIO_PAYLOAD_V3:
+        for name in producer.PORTFOLIO_PAYLOAD_V4:
             changed = copy.deepcopy(inventory)
             del changed['portfolio_payload']['sha256'][name]
             with self.subTest(missing=name), self.assertRaises(ValueError):
@@ -119,25 +120,25 @@ class PortfolioRecoveryContracts(unittest.TestCase):
                     archive.write_bytes(archive.read_bytes()+b'coherent alteration')
                     with self.assertRaises(ValueError):consumer.recovery_contract(revision)
         for contract in consumer._RETAINED_CONTRACTS.values():contract._retained_directory.cleanup()
-    def test_current_closure_payload_is_explicit_and_every_required_member_is_bound(self):
+    def test_current_halt_payload_is_explicit_and_every_required_member_is_bound(self):
         producer = load('backup-snapshot')
-        inventory = producer.closure_payload_inventory(ROOT)
-        self.assertEqual((inventory['version'],inventory['revision']), (3,'0023'))
-        producer.verify_closure_inventory(ROOT,inventory)
-        self.assertEqual(len(producer.contract_columns('0023')),31)
-        self.assertEqual(len(producer.identity_tables('0023')),24)
+        inventory = producer.halt_payload_inventory(ROOT)
+        self.assertEqual((inventory['version'],inventory['revision']), (4,'0024'))
+        producer.verify_halt_inventory(ROOT,inventory)
+        self.assertEqual(len(producer.contract_columns('0024')),31)
+        self.assertEqual(len(producer.identity_tables('0024')),24)
         for table in producer.CLOSURE_COLUMNS:
-            self.assertIn(table,producer.contract_columns('0023'))
-        for name in producer.PORTFOLIO_PAYLOAD_V3:
+            self.assertIn(table,producer.contract_columns('0024'))
+        for name in producer.PORTFOLIO_PAYLOAD_V4:
             damaged=copy.deepcopy(inventory);del damaged['sha256'][name]
             with self.subTest(omitted=name),self.assertRaises(ValueError):
-                producer.verify_closure_inventory(ROOT,damaged)
+                producer.verify_halt_inventory(ROOT,damaged)
             damaged=copy.deepcopy(inventory);damaged['sha256'][name]='0'*64
             with self.subTest(changed=name),self.assertRaises(ValueError):
-                producer.verify_closure_inventory(ROOT,damaged)
+                producer.verify_halt_inventory(ROOT,damaged)
         for key,value in (('version',True),('version',2),('revision','0020'),('revision','0022')):
             damaged=copy.deepcopy(inventory);damaged[key]=value
-            with self.assertRaises(ValueError):producer.verify_closure_inventory(ROOT,damaged)
+            with self.assertRaises(ValueError):producer.verify_halt_inventory(ROOT,damaged)
         for revision in ('0021','0022'):
             for command in (producer.contract_columns,producer.identity_tables,producer.manifest_sql):
                 with self.assertRaisesRegex(ValueError,'migration_only'):command(revision)
@@ -174,15 +175,15 @@ class PortfolioRecoveryContracts(unittest.TestCase):
         producer=load('backup-snapshot')
         with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
             root=Path(tmp)
-            for name in producer.CLOSURE_SOURCE_SHA256:
+            for name in producer.REPORTED_HALT_SOURCE_SHA256:
                 p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes((ROOT/name).read_bytes())
-            producer.require_closure_source(root)
-            for name in producer.CLOSURE_SOURCE_SHA256:
+            producer.require_closure_source(root, revision='0024')
+            for name in producer.REPORTED_HALT_SOURCE_SHA256:
                 p=root/name;original=p.read_bytes();p.write_bytes(original+b'\nraise RuntimeError("untrusted import")\n')
                 with self.subTest(name=name),mock.patch.object(producer,'HERE',root/'deploy'), \
                      mock.patch.object(producer.importlib.util,'spec_from_file_location',side_effect=AssertionError('unsafe import')), \
                      self.assertRaises(ValueError):
-                    producer.closure_bootstrap()
+                    producer.closure_bootstrap('0024')
                 p.write_bytes(original)
 
     def test_v1_inventory_remains_explicit_and_cannot_inherit_current_revision(self):

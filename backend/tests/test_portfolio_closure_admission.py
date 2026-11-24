@@ -583,7 +583,7 @@ async def test_fresh_developer_bootstrap_authorizes_only_exact_current(successor
 
     async with successor.begin() as conn:
         raw = await conn.get_raw_connection()
-        await _authorize_portfolios(raw.driver_connection)
+        await _authorize_portfolios(raw.driver_connection, "0023")
         assert await require_schema(conn) == "0023"
         counts = (
             await conn.execute(

@@ -114,11 +114,15 @@ async def invalidate_status(db: AsyncSession, coin_id: int) -> bool:
     """Loss/startup may remove authority without obtaining new collection rights."""
     await acquire_stock_gate(db, coin_id)
     old = await load_status(db, coin_id)
-    if old is None or (
-        old.state == "unknown"
-        and not old.continuity_current
-        and not old.bootstrap_verified
-        and old.valid_until is None
+    if (
+        old is None
+        or old.source != "alpaca"
+        or (
+            old.state == "unknown"
+            and not old.continuity_current
+            and not old.bootstrap_verified
+            and old.valid_until is None
+        )
     ):
         return False
     if old.continuity_generation == MAX_SAFE:
