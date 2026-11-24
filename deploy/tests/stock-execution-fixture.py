@@ -201,6 +201,7 @@ async def reported_receipt_fixture(mode, before=None):
         raise ValueError("Unknown synthetic receipt fixture mode")
     replaying = mode in {"replay", "replay-legacy"}
     revision = "0023" if mode in {"alpaca", "replay-legacy"} else "0024"
+    consumer = "retained0023" if revision == "0023" else "retained0024"
     settings = Settings(stock_data_enabled=True)
     url = urlsplit(settings.database_url)
     database = "/birja_restore_test" if replaying else "/birja_test"
@@ -231,7 +232,7 @@ async def reported_receipt_fixture(mode, before=None):
                 assert await conn.scalar(
                     text("SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()")
                 )
-                assert await require_schema(conn) == revision
+                assert await require_schema(conn, consumer=consumer) == revision
         if not replaying:
             async with client.begin() as db:
                 uid, created = await get_or_create_user(

@@ -80,7 +80,21 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024")
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024", "0025")
+CLOSURE_REVISIONS = ('0023', '0024', '0025')
+CATALOG_COLUMNS = {
+    'stock_catalog_admissions': 'id artifact reference reviewed_at valid_until revoked_at fields scope is_fixture',
+    'stock_catalog_aliases': 'id listing_id security_id namespace symbol normalized_symbol verified_at valid_until',
+    'stock_catalog_generations': 'id manifest_sha256 mode published_at valid_until is_active sources coverage',
+    'stock_catalog_listings': (
+        'id generation_id security_id ticker normalized_ticker company_name normalized_name listing_exchange '
+        'share_class classification state reason source row_key row_digest evidence_digest evidence_at valid_until '
+        'directory_admission_id name_admission_id classification_admission_id provider_asset_id provider_symbol '
+        'provider_evidence_digest provider_verified_at provider_valid_until provider_admission_id unit_evidence_digest '
+        'unit_evidence_at currency units_per_share'
+    ),
+    'stock_catalog_securities': 'id identity_key created_at',
+}
 CLOSURE_COLUMNS = {
     'portfolio_lifecycle_closures': 'id portfolio_id user_id closed_at policy_version provenance confirmation_name intent_id',
     'portfolio_closure_intents': 'id user_id portfolio_id intent_key confirmation_name policy_version outcome recorded_at',
@@ -135,6 +149,11 @@ PORTFOLIO_PAYLOAD_V4 = PORTFOLIO_PAYLOAD_V3 + [
     'backend/alembic/versions/0024_stock_halt_snapshot.py',
     'backend/alembic/sql/0024_stock_halt_snapshot.sql',
 ]
+PORTFOLIO_PAYLOAD_V5 = PORTFOLIO_PAYLOAD_V4 + [
+    'backend/alembic/versions/0025_stock_catalog.py',
+    'backend/alembic/sql/0025_stock_catalog.sql',
+    'backend/app/models/stock_catalog.py',
+]
 
 
 def portfolio_payload_inventory(root):
@@ -160,13 +179,24 @@ def closure_payload_inventory(root):
 
 def halt_payload_inventory(root):
     root = Path(root).resolve(strict=True)
-    require_closure_source(root, revision='0024')
+    require_closure_source(root, revision='0024', allow_successor=False)
     hashes = {}
     for name in PORTFOLIO_PAYLOAD_V4:
         path = root / name
         require(path.is_file() and not path.is_symlink() and path.resolve() == path)
         hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return {'version': 4, 'revision': '0024', 'sha256': hashes}
+
+
+def catalog_payload_inventory(root):
+    root = Path(root).resolve(strict=True)
+    require_closure_source(root, revision='0025', allow_successor=False)
+    hashes = {}
+    for name in PORTFOLIO_PAYLOAD_V5:
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {'version': 5, 'revision': '0025', 'sha256': hashes}
 
 
 def verify_halt_inventory(root, inventory):
@@ -480,7 +510,9 @@ def validate_resolution_authority(authority, revision='0012'):
 def identity_tables(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision in ('0023', '0024'):
+    if revision == '0025':
+        return sorted([*identity_tables('0024'), *CATALOG_COLUMNS])
+    if revision in CLOSURE_REVISIONS:
         return sorted([*identity_tables('0020'), *CLOSURE_COLUMNS])
     if revision == '0020':
         return sorted([*identity_tables('0017'), *MANAGEMENT_COLUMNS])
@@ -520,7 +552,11 @@ def dump_identity_state(raw, revision="0011"):
 def contract_columns(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision in ('0023', '0024'):
+    if revision == '0025':
+        columns = contract_columns('0024')
+        columns.update({table: set(value.split()) for table, value in CATALOG_COLUMNS.items()})
+        return columns
+    if revision in CLOSURE_REVISIONS:
         columns = contract_columns('0020')
         columns.update({table: set(value.split()) for table, value in CLOSURE_COLUMNS.items()})
         return columns
@@ -558,7 +594,7 @@ def manifest_sql(revision):
     The standalone SQL remains the byte-identical legacy query plus comments.
     All substitutions are fixed repository fragments, never operator input.
     """
-    if revision in ('0023', '0024'):
+    if revision in CLOSURE_REVISIONS:
         return closure_manifest_sql(revision)
     contract_columns(revision)
     if revision == '0020':
@@ -656,7 +692,7 @@ def validate_manifest(manifest, *, quarantined=False):
     """Refuse unknown/omitted shape and invalid persisted discovery state."""
     expected = contract_columns(manifest["revision"])
     require(isinstance(manifest.get('tables'), dict) and set(manifest['tables']) == set(expected))
-    if manifest['revision'] in ('0023', '0024'):
+    if manifest['revision'] in CLOSURE_REVISIONS:
         validate_closure_manifest(manifest, quarantined=quarantined)
     if manifest['revision'] == '0020':
         validate_management_manifest(manifest, quarantined=quarantined)
@@ -1094,6 +1130,21 @@ REPORTED_HALT_SCHEMA_SHA256 = '484f2c5a329017ea135f1e34c1245788833c456d33d447b4f
 REPORTED_HALT_AUTHORITY_SHA256 = '823fefcd736891cd0a49517dec780a8776de6937ad2f78a17e6fad8385477d90'
 REPORTED_HALT_QUARANTINE_AUTHORITY_SHA256 = '99c1552d6ca684641a7612784fc1284501679064bc8444dc8d8804aaea822400'
 
+CATALOG_SOURCE_SHA256 = {
+    **REPORTED_HALT_SOURCE_SHA256,
+    'backend/app/db/portfolio_bootstrap.py': '01bec26cbefcf006f2ad3d5ded58a089d270f0afd984c5f1f4193f066d827c1b',
+    'backend/app/db/portfolio_migrate.py': 'cc180f5f87b14acc8cafc85a621f26254bed7ac11bf03cca7c0997714c6ad531',
+    'backend/app/db/schema_contract.py': '8d67928947550073688dbd2ea5713db66c00c1658d31206766588ccce9052b0a',
+    'deploy/db/bootstrap-roles.sql': '78e1c8d9e461b50900c70199ac6f5fc41d997c11c471eb93121e4689afad24ca',
+    'backend/alembic/versions/0025_stock_catalog.py': 'cd1890bfec3b1dc4b638fd3e86c9217d6eb331be3e895f2443b74fd88d078826',
+    'backend/alembic/sql/0025_stock_catalog.sql': '7665f5df6c828f681f6d7db7dda8b4cbf1a19d4f645fa4003fec94c1a5fa32fa',
+    'backend/app/models/__init__.py': 'ef1947864d321d58274f9c5b96b44c0a5b1b52141b9d24cafb4aedfb0ab7171e',
+    'backend/app/models/stock_catalog.py': 'e94848ac242dc234f861d7d2e34d113f4c46c9b5bc14d29c702096a99c00cdda',
+}
+CATALOG_SCHEMA_SHA256 = 'ee9de25d015c568f1bfe0a9afd3b618369a101aa376f6f98b5f74f7fa5c9c75f'
+CATALOG_AUTHORITY_SHA256 = '3b382165f475398c86b70bb2442cb26cc11126582f11044d144e0d204466726c'
+CATALOG_QUARANTINE_AUTHORITY_SHA256 = '77cb2957f8838c5ce18089e11e3e41dc9b58a506fbf7868253e690196e86d793'
+
 CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
 CLOSURE_AUTHORITY_SHA256 = '62e3776654a98a62bf605355e209884b32ff1247fec463d6b923f48a76f42492'
@@ -1104,10 +1155,10 @@ CLOSURE_EMPTY_ACL_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f
 
 def require_closure_source(root=None, *, revision='0023', allow_successor=True):
     root = HERE.parent if root is None else Path(root)
-    require(revision in ('0023', '0024'))
-    profiles = [REPORTED_HALT_SOURCE_SHA256] if revision == '0024' else [CLOSURE_SOURCE_SHA256]
-    if revision == '0023' and allow_successor:
-        profiles.append(REPORTED_HALT_SOURCE_SHA256)
+    require(revision in CLOSURE_REVISIONS)
+    profiles = (CLOSURE_SOURCE_SHA256, REPORTED_HALT_SOURCE_SHA256, CATALOG_SOURCE_SHA256)
+    index = CLOSURE_REVISIONS.index(revision)
+    profiles = profiles[index:] if allow_successor else profiles[index:index + 1]
 
     def matches(pins):
         for name, expected in pins.items():
@@ -1133,17 +1184,23 @@ def closure_bootstrap(revision='0023'):
 def closure_manifest_sql(revision='0023'):
     bootstrap = closure_bootstrap(revision)
     query = management_manifest_sql(bootstrap=bootstrap)
+    tables = {**CLOSURE_COLUMNS, **CATALOG_COLUMNS} if revision == '0025' else CLOSURE_COLUMNS
+    timestamp_columns = {
+        'closed_at', 'recorded_at', 'reviewed_at', 'valid_until', 'revoked_at',
+        'verified_at', 'published_at', 'evidence_at', 'provider_verified_at',
+        'provider_valid_until', 'unit_evidence_at', 'created_at',
+    }
     rows = []
-    for table, fields in CLOSURE_COLUMNS.items():
+    for table, fields in tables.items():
         values = ["to_char("+c+",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
-                  if c in {'closed_at', 'recorded_at'} else c+'::text' for c in fields.split()]
+                  if c in timestamp_columns else c+'::text' for c in fields.split()]
         rows.append(" UNION ALL SELECT '"+table+"',id,json_build_array("+','.join(values)+")::text FROM "+table)
     query = query.replace('\n), names(name) AS (', '\n'+'\n'.join(rows)+'\n), names(name) AS (')
     query = query.replace("('portfolio_initializations')\n", "('portfolio_initializations'),"+
-                          ','.join("('"+t+"')" for t in CLOSURE_COLUMNS)+'\n')
+                          ','.join("('"+t+"')" for t in tables)+'\n')
     query = query.replace("SELECT 'users',last_value,is_called FROM users_id_seq",
                           ' UNION ALL '.join("SELECT '"+t+"',last_value,is_called FROM "+t+'_id_seq'
-                                            for t in CLOSURE_COLUMNS)+
+                                            for t in tables)+
                           " UNION ALL SELECT 'users',last_value,is_called FROM users_id_seq")
     # The same independently pinned catalogue used by runtime admission covers
     # every routine/body/owner, trigger, constraint, rule, policy and relation.
@@ -1155,13 +1212,24 @@ def closure_manifest_sql(revision='0023'):
               "'intents',(SELECT count(*) FROM portfolio_closure_intents)," \
               "'refused',(SELECT count(*) FROM portfolio_closure_intents WHERE outcome='confirmation_changed')," \
               "'invalid',CASE WHEN "+lifecycle+" THEN 1 ELSE 0 END),\n"
+    if revision == '0025':
+        fields += " 'catalog_active_generation',(SELECT id FROM stock_catalog_generations WHERE is_active),\n"
     return query.replace(" 'schema',json_build_object(", fields+" 'schema',json_build_object(")
 
 
 def validate_closure_manifest(manifest, *, quarantined=False):
     revision = manifest['revision']
-    require(revision in ('0023', '0024'))
-    if revision == '0024':
+    require(revision in CLOSURE_REVISIONS)
+    acl = CLOSURE_ACL_SHA256
+    if revision == '0025':
+        bootstrap = closure_bootstrap(revision)
+        schema, catalogue = CATALOG_SCHEMA_SHA256, bootstrap.CATALOGUE_0025_SHA256
+        authority = CATALOG_QUARANTINE_AUTHORITY_SHA256 if quarantined else CATALOG_AUTHORITY_SHA256
+        acl = bootstrap.ACL_0025_SHA256
+        active = manifest['catalog_active_generation']
+        require(active is None or (type(active) is int and active > 0
+                                   and manifest['tables']['stock_catalog_generations']['count'] > 0))
+    elif revision == '0024':
         schema, catalogue = REPORTED_HALT_SCHEMA_SHA256, REPORTED_HALT_CATALOGUE_SHA256
         authority = REPORTED_HALT_QUARANTINE_AUTHORITY_SHA256 if quarantined else REPORTED_HALT_AUTHORITY_SHA256
     else:
@@ -1172,12 +1240,12 @@ def validate_closure_manifest(manifest, *, quarantined=False):
     contract = manifest['closure_contract']
     require(set(contract) == {'catalogue', 'acl', 'defaults'})
     require(contract['catalogue'] == catalogue)
-    require(contract['acl'] == (CLOSURE_EMPTY_ACL_SHA256 if quarantined else CLOSURE_ACL_SHA256))
+    require(contract['acl'] == (CLOSURE_EMPTY_ACL_SHA256 if quarantined else acl))
     # A no-ACL clone is still required to carry private future defaults. Restore
     # must explicitly establish those defaults before admitting the quarantine.
     require(contract['defaults'] == CLOSURE_EMPTY_ACL_SHA256)
     require(manifest['schema']['relations'] == [[t, 'r'] for t in sorted(contract_columns(revision))])
-    require(len(manifest['schema']['sequences']) == 24)
+    require(len(manifest['schema']['sequences']) == len(identity_tables(revision)))
     for section in ('management_state', 'portfolio_state', 'closure_state'):
         state = manifest[section]
         expected = {'creations', 'initializations', 'invalid'} if section == 'management_state' else \
@@ -1904,7 +1972,7 @@ class Job:
                 require(
                     self.call(self.dc + ["pg_restore", "--list"], input_file=f).strip()
                 )
-            if revision in ("0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024"):
+            if revision in ("0011", "0012", "0013", "0014", "0017", "0020", *CLOSURE_REVISIONS):
                 selection = ["--table=" + table + "_id_seq" for table in identity_tables(revision)]
                 with archive.open("rb") as f:
                     raw_states = self.call(self.dc + ["pg_restore", "--data-only", "--file=-", *selection], input_file=f, capture_limit=65536)
@@ -2109,11 +2177,9 @@ class Job:
 
 def _bundle_package(output, *, recovery=None, payload_version):
     """Stage a finite reviewed family; transport mocks never prove recovery."""
-    require(type(payload_version) is int and payload_version in (2, 3, 4))
-    if payload_version == 4:
-        closure_bootstrap('0024')
-    elif payload_version == 3:
-        require_closure_source(allow_successor=False)
+    require(type(payload_version) is int and payload_version in (2, 3, 4, 5))
+    if payload_version >= 3:
+        require_closure_source(revision=CLOSURE_REVISIONS[payload_version - 3], allow_successor=False)
     else:
         management_bootstrap()
     source_spec = importlib.util.spec_from_file_location('package_sources', HERE / 'tests/portfolio-sources.py')
@@ -2153,7 +2219,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
         payload_files = {2: PORTFOLIO_PAYLOAD_V2, 3: PORTFOLIO_PAYLOAD_V3,
-                         4: PORTFOLIO_PAYLOAD_V4}[payload_version]
+                         4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5}[payload_version]
         files = CORE + UNITS + payload_files
         for name in files:
             src = HERE.parent / name
@@ -2213,7 +2279,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
         inventory = {
             "format": 1,
             "portfolio_payload": {2: portfolio_payload_inventory, 3: closure_payload_inventory,
-                                  4: halt_payload_inventory}[payload_version](stage),
+                                  4: halt_payload_inventory, 5: catalog_payload_inventory}[payload_version](stage),
             "recovery_profile": "deploy-recovery-v" + str(payload_version + 1),
             "files": files,
             "units": UNITS,
@@ -2225,7 +2291,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
             "runtime": versions,
             "schema_contract": {
                 "revisions": [r for r in recovery_contract().SUPPORTED_REVISIONS
-                              if r not in {2: {'0023', '0024'}, 3: {'0024'}, 4: set()}[payload_version]],
+                              if r not in CLOSURE_REVISIONS[payload_version - 2:]],
                 "payload_sha256": {name: digest(stage / name) for name in CONTRACT_PAYLOAD},
             },
         }
@@ -2273,15 +2339,20 @@ def bundle_package_v4(output, *, recovery=None):
     return _bundle_package(output, recovery=recovery, payload_version=4)
 
 
+def bundle_package_v5(output, *, recovery=None):
+    """Package the exact 0025 catalog and prior portfolio contracts."""
+    return _bundle_package(output, recovery=recovery, payload_version=5)
+
+
 def main(argv, *, config=None):
     os.umask(0o077)
-    if argv and argv[0] in ('bundle-v2', 'bundle-v3', 'bundle-v4'):
+    if argv and argv[0] in ('bundle-v2', 'bundle-v3', 'bundle-v4', 'bundle-v5'):
         parser = argparse.ArgumentParser(allow_abbrev=False)
         parser.add_argument('--output', required=True)
         parser.add_argument('--include-units', action='store_true')
         args = parser.parse_args(argv[1:])
         {'bundle-v2': bundle_package_v2, 'bundle-v3': bundle_package_v3,
-         'bundle-v4': bundle_package_v4}[argv[0]](args.output)
+         'bundle-v4': bundle_package_v4, 'bundle-v5': bundle_package_v5}[argv[0]](args.output)
         return 0
     try:
         require(argv and argv[0] in ["backup", "status", "recovery-gate"])
