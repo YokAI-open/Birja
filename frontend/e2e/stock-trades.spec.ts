@@ -266,6 +266,7 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   await expect(page.getByText("Market closed.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Retry stock", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Cash available $10,000.00", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("2");
   await page.getByLabel("Whole-share quantity").fill("3");
   await page.getByLabel("Whole-share quantity").press("Enter");

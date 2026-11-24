@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useOutletContext, useParams } from "react-router";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { usePortfolio } from "@/hooks/usePortfolio";
 import { useNow } from "@/hooks/useNow";
 import { useStocks } from "@/hooks/useStocks";
 import { useStockTrade } from "@/hooks/useStockTrade";
@@ -44,6 +45,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     id = useId(),
     input = useRef<HTMLInputElement>(null);
   const { data: stocks } = useStocks();
+  const { data: portfolio } = usePortfolio(target);
   const now = useNow(15_000);
   const [retrying, setRetrying] = useState(false);
   const oldPhase = useRef(t.phase);
@@ -262,6 +264,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     {quantityError}
                   </p>
                 )}
+                {t.side === "buy" && portfolio && (
+                  <p className="text-[13px] leading-[18px] text-muted-foreground">
+                    Cash available {formatUsd(portfolio.cash)}
+                  </p>
+                )}
               </div>
               <Button
                 type="button"
@@ -291,7 +298,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               )}
               {c && (
                 <dl className="flex flex-col gap-2">
-                  <StockFigure label="Cash available">{formatUsd(c.cash)}</StockFigure>
                   <StockFigure label="Shares owned">{c.held_quantity.split(".")[0]}</StockFigure>
                 </dl>
               )}

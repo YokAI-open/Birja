@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Link, MemoryRouter, Route, Routes } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixtures";
+import { cashPortfolio } from "@/test/portfolioFixtures";
 import StockTradePage from "./StockTradePage";
 import App from "@/App";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
@@ -53,6 +54,18 @@ function setup(
             ],
           ),
         );
+      if (path === "/api/v2/portfolios/1") return Response.json(cashPortfolio());
+      if (path === "/api/v2/portfolios/2")
+        return Response.json({
+          ...cashPortfolio(),
+          portfolio_id: "2",
+          name: "Strategy two",
+          cash: "2500.00",
+          starting_cash: "2500.00",
+          total_value: "2500.00",
+          known_value: "2500.00",
+          class_values: { cash: "2500.00", stocks: "0.00", crypto: "0.00" },
+        });
       if (path.endsWith("/me"))
         return new Response(JSON.stringify({ email: "first@example.test" }));
       return new Response("{}", { status: 404 });
@@ -182,6 +195,7 @@ it.each([true, false])(
     expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
     expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
+    expect(await screen.findByText("Cash available $10,000.00")).toBeVisible();
     if (retainedQuote) {
       expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
       expect(screen.getByText(/Last verified IEX midpoint/)).toBeVisible();
@@ -395,7 +409,7 @@ it("suppresses every financial field and receipt when the original portfolio is 
   await screen.findByRole("heading", { name: "Portfolio unavailable" });
   expect(await screen.findByText(/An earlier order's result is unconfirmed/)).toBeVisible();
   expect(screen.queryByLabelText("Whole-share quantity")).toBeNull();
-  expect(screen.queryByText("Cash available")).toBeNull();
+  expect(screen.queryByText(/^Cash available/)).toBeNull();
   expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Check order result" })).toBeNull();
   expect(calls.some((c) => c.path === "/api/v2/portfolios/2/stock-trades")).toBe(false);
@@ -415,6 +429,8 @@ it("does not display or relabel a late original stock receipt in a sibling ticke
   await user.click(confirm);
   await user.click(screen.getByRole("link", { name: "Other strategy" }));
   await waitFor(() => expect(screen.getByLabelText("Whole-share quantity")).toHaveValue(""));
+  expect(await screen.findByText("Cash available $2,500.00")).toBeVisible();
+  expect(screen.queryByText("Cash available $10,000.00")).toBeNull();
   expect(screen.queryByText("Strategy two")).toBeNull();
   await act(async () => {
     resolve(new Response(JSON.stringify(fillFixture())));
