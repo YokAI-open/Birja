@@ -3,8 +3,9 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
@@ -18,9 +19,18 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import SchedulerSettings
-from app.models.stock import StockQuote
+from app.models.corporate_action import StockActionState
+from app.models.stock import StockDataAdmission, StockQuote, StockSession
 from app.models.stock_catalog import StockCatalogAdmission
+from app.models.stock_catalog_finance import StockCatalogFinancialQuote
+from app.models.trade import Holding
 from app.services.alpaca import LATEST_QUOTES_URL
+from app.services.stock_catalog_financial_quotes import (
+    held_catalog_quote_page,
+    load_catalog_financial_quote_context,
+    read_catalog_financial_mark,
+)
+from app.services.stock_catalog_promotion import CatalogFinancialBinding
 from app.services.stock_catalog_quote_demand import (
     CatalogQuoteOutcome,
     catalog_quote_key,
@@ -28,9 +38,24 @@ from app.services.stock_catalog_quote_demand import (
     request_catalog_quote,
 )
 from app.services.stock_catalog_quotes import CatalogQuoteBinding, load_catalog_quote_context
+from app.services.stock_sessions import build_sessions
 from app.tasks import scheduler, stock_catalog_quotes, stock_halts, stock_scheduler
+from tests.portfolio_fixtures import PortfolioWorld, seed_portfolio_world
+from tests.test_stock_catalog_promotion import (
+    ACCOUNT,
+    FIRST_ASSET,
+    OTHER_ASSET,
+    SERVER,
+    _listing,
+    _promote,
+    _reviewed_grant,
+)
+from tests.test_stock_catalog_promotion import finance_0025 as finance_0025
+from tests.test_stock_catalog_promotion import finance_0026 as finance_0026
+from tests.test_stock_catalog_publish import Factory, _manifest, _publish
 from tests.test_stock_catalog_publish import catalog_factory as catalog_factory
 from tests.test_stock_catalog_quotes import seed_catalog_quote_fixture
+from tests.test_stock_sessions import evidence as calendar_evidence
 
 
 @dataclass(frozen=True)
@@ -390,3 +415,288 @@ async def test_catalog_backpressure_keeps_curated_and_crypto_ticks(
     assert started.is_set() and closed.is_set()
     assert len(crypto_ticks) >= 2
     assert len(curated_ticks) == 3
+
+
+@dataclass(frozen=True)
+class FinancialMarket:
+    factory: Factory
+    redis: Redis
+    settings: SchedulerSettings
+    now: datetime
+    world: PortfolioWorld
+    instruments: tuple[CatalogFinancialBinding, ...]
+
+    async def request(self, instrument: CatalogFinancialBinding) -> CatalogQuoteOutcome:
+        async with self.factory() as db:
+            context = await load_catalog_financial_quote_context(
+                db, self.settings, instrument.catalog_id, instrument.listing_id, self.now
+            )
+        assert context is not None
+        return await request_catalog_quote(
+            self.redis,
+            account=ACCOUNT,
+            server=SERVER,
+            catalog_id=instrument.catalog_id,
+            listing_version=instrument.listing_id,
+            fingerprint=context.fingerprint,
+            purpose="financial",
+        )
+
+    async def cycle(self, http: httpx.AsyncClient, *, cursor=None) -> scheduler.CycleResult:
+        return await stock_catalog_quotes.run_catalog_quote_cycle(
+            sessionmaker=self.factory,
+            redis=self.redis,
+            http=http,
+            settings=self.settings,
+            now=lambda: self.now,
+            cursor=cursor,
+        )
+
+    def reply(self, request: httpx.Request) -> httpx.Response:
+        symbols = request.url.params["symbols"].split(",")
+        return httpx.Response(
+            200,
+            json={
+                "quotes": {
+                    symbol: {
+                        "bp": 101,
+                        "ap": 103,
+                        "t": self.now.isoformat(),
+                        "c": ["R"],
+                        "bx": "V",
+                        "ax": "V",
+                        "bs": 1,
+                        "as": 1,
+                        "z": "C" if symbol == "FQA" else "A",
+                    }
+                    for symbol in symbols
+                }
+            },
+        )
+
+
+@pytest_asyncio.fixture
+async def financial_market(
+    finance_0026: Factory, redis_client: Redis, engine: AsyncEngine
+) -> AsyncIterator[FinancialMarket]:
+    now = datetime(2026, 11, 24, 20, 59, tzinfo=UTC)
+    origin = now - timedelta(minutes=10)
+    publication = await _publish(finance_0026, _manifest(origin), None, now=origin)
+    instruments = []
+    for ticker, asset in (("FQA", FIRST_ASSET), ("FQN", OTHER_ASSET)):
+        listing = await _listing(finance_0026, publication.generation_id, ticker)
+        execution = await _reviewed_grant(finance_0026, listing, asset, origin)
+        instruments.append(await _promote(finance_0026, listing, execution, origin))
+    async with finance_0026.begin() as db:
+        world = await seed_portfolio_world(await db.connection())
+        calendar = calendar_evidence(now)
+        db.add(StockDataAdmission(**asdict(calendar)))
+        db.add_all(StockSession(**asdict(session)) for session in build_sessions(now, calendar))
+        for instrument in instruments:
+            db.add(
+                StockCatalogAdmission(
+                    artifact="catalog_mark",
+                    reference="Synthetic financial mark scope",
+                    is_fixture=True,
+                    reviewed_at=origin,
+                    valid_until=now + timedelta(minutes=20),
+                    fields={
+                        key: ["collection", "display", "derivation", "storage", "backup"]
+                        for key in ("bid", "ask", "event_at", "collected_at")
+                    },
+                    scope={
+                        "account": ACCOUNT,
+                        "server": SERVER,
+                        "feed": "iex",
+                        "catalog_id": str(instrument.catalog_id),
+                        "listing_id": str(instrument.listing_id),
+                        "provider_asset_id": instrument.provider_asset_id,
+                        "symbols_per_request": 1,
+                    },
+                )
+            )
+            await db.execute(
+                update(StockActionState)
+                .where(
+                    StockActionState.coin_id == instrument.coin_id,
+                )
+                .values(health="current", checked_at=origin, valid_until=now + timedelta(hours=2))
+            )
+    settings = SchedulerSettings(
+        env="test",
+        database_url=str(engine.url),
+        redis_url="redis://:test@127.0.0.1:56379/0",
+        stock_data_enabled=True,
+        stock_data_account=ACCOUNT,
+        stock_data_server=SERVER,
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+        price_source="fake",
+    )
+    try:
+        yield FinancialMarket(finance_0026, redis_client, settings, now, world, tuple(instruments))
+    finally:
+        digest = sha256(ACCOUNT.encode()).hexdigest()
+        for pattern in (
+            f"sim:stock-catalog-demand:{digest}*",
+            stock_scheduler.ACCOUNT_WINDOW_PREFIX + digest,
+        ):
+            async for key in redis_client.scan_iter(match=pattern):
+                await redis_client.delete(key)
+
+
+async def _financial_request_and_tick(market, instrument, reply, *, cursor=None):
+    with respx.mock as mock:
+        quote = mock.get(LATEST_QUOTES_URL).mock(side_effect=reply)
+        async with httpx.AsyncClient() as http, asyncio.TaskGroup() as group:
+            waiting = group.create_task(market.request(instrument))
+            async with asyncio.timeout(2):
+                while not await pending_catalog_quotes(  # noqa: ASYNC110
+                    market.redis, account=ACCOUNT, server=SERVER
+                ):
+                    await asyncio.sleep(0.01)
+            result = await market.cycle(http, cursor=cursor)
+    return result, waiting.result(), quote.call_count
+
+
+async def test_catalog_financial_selection_retains_closed_mark_with_scope(financial_market):
+    market = financial_market
+    instrument = market.instruments[0]
+    async with market.factory.begin() as db:
+        execution = await db.get(StockCatalogAdmission, instrument.admission_id)
+        assert execution is not None
+        execution.valid_until = market.now + timedelta(minutes=2)
+    assert await _financial_request_and_tick(market, instrument, market.reply) == (
+        scheduler.CycleResult("ok", accepted=1),
+        "ready",
+        1,
+    )
+    async with market.factory.begin() as db:
+        quote = await db.get(StockCatalogFinancialQuote, instrument.coin_id)
+        assert quote is not None and quote.mark_admission_id is not None
+        assert quote.execution_admission_id == instrument.admission_id
+        # The Redis-independent reader has only a dated, permitted mark at close.
+        at_close = market.now + timedelta(minutes=4)
+        mark = await read_catalog_financial_mark(
+            db,
+            instrument.catalog_id,
+            instrument.listing_id,
+            at_close,
+            allow_fixture=True,
+        )
+        assert mark is not None
+        assert (mark.mode, mark.mid, mark.event_at) == ("closed", Decimal("102"), market.now)
+        # The separately approved mark outlives the original execution lease.
+        assert mark.valid_until == market.now + timedelta(minutes=20)
+        assert (
+            await read_catalog_financial_mark(
+                db,
+                instrument.catalog_id,
+                instrument.listing_id,
+                at_close,
+            )
+            is None
+        )
+        await db.execute(
+            update(StockActionState)
+            .where(StockActionState.coin_id == instrument.coin_id)
+            .values(unit_epoch=quote.unit_epoch + 1)
+        )
+        assert (
+            await read_catalog_financial_mark(
+                db,
+                instrument.catalog_id,
+                instrument.listing_id,
+                at_close,
+                allow_fixture=True,
+            )
+            is None
+        )
+        await db.execute(
+            update(StockActionState)
+            .where(StockActionState.coin_id == instrument.coin_id)
+            .values(unit_epoch=quote.unit_epoch)
+        )
+        permission = await db.get(StockCatalogAdmission, quote.mark_admission_id)
+        assert permission is not None
+        permission.revoked_at = at_close
+        await db.flush()
+        assert (
+            await read_catalog_financial_mark(
+                db,
+                instrument.catalog_id,
+                instrument.listing_id,
+                at_close,
+                allow_fixture=True,
+            )
+            is None
+        )
+
+
+async def test_catalog_held_cursor_favors_later_issues_after_first_quote_failure(financial_market):
+    market = financial_market
+    first, later = market.instruments
+    async with market.factory.begin() as db:
+        for instrument in (first, later):
+            db.add(
+                Holding(
+                    coin_id=instrument.coin_id,
+                    portfolio_id=market.world.first,
+                    user_id=market.world.owner,
+                    quantity=Decimal(1),
+                    cost_basis=Decimal(101),
+                )
+            )
+    cursor = stock_catalog_quotes.CatalogQuoteCursor()
+
+    def reply(request):
+        if request.url.params["symbols"] == first.provider_symbol:
+            return httpx.Response(200, json={"quotes": {}})
+        return market.reply(request)
+
+    with respx.mock as mock:
+        route = mock.get(LATEST_QUOTES_URL).mock(side_effect=reply)
+        async with httpx.AsyncClient() as http:
+            assert await market.cycle(http, cursor=cursor) == scheduler.CycleResult(
+                "ok", rejected=1
+            )
+            assert await market.cycle(http, cursor=cursor) == scheduler.CycleResult(
+                "ok", accepted=1
+            )
+            assert await market.cycle(http, cursor=cursor) == scheduler.CycleResult("ok")
+        assert [call.request.url.params["symbols"] for call in route.calls] == ["FQA", "FQN"]
+    async with market.factory.begin() as db:
+        assert await db.get(StockCatalogFinancialQuote, first.coin_id) is None
+        assert await db.get(StockCatalogFinancialQuote, later.coin_id) is not None
+        await db.execute(
+            update(Holding)
+            .where(Holding.coin_id.in_([first.coin_id, later.coin_id]))
+            .values(quantity=0, cost_basis=0)
+        )
+        assert not await held_catalog_quote_page(
+            db,
+            now=market.now + timedelta(minutes=2),
+            after=None,
+            limit=8,
+        )
+
+
+async def test_catalog_financial_transport_discards_quote_after_scope_revocation(financial_market):
+    market = financial_market
+    instrument = market.instruments[0]
+
+    async def reply(request):
+        async with market.factory.begin() as db:
+            await db.execute(
+                update(StockCatalogAdmission)
+                .where(
+                    StockCatalogAdmission.id == instrument.admission_id,
+                )
+                .values(revoked_at=market.now)
+            )
+        return market.reply(request)
+
+    result, outcome, calls = await _financial_request_and_tick(market, instrument, reply)
+    assert (result.rejected, outcome, calls) == (1, "quote_unavailable", 1)
+    async with market.factory() as db:
+        assert await db.get(StockCatalogFinancialQuote, instrument.coin_id) is None

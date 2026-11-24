@@ -1,4 +1,4 @@
-"""Bounded, expiring selection demand for display-only catalog quotes."""
+"""Bounded, expiring selection demand by listing and quote purpose."""
 
 import asyncio
 import secrets
@@ -18,6 +18,7 @@ CatalogQuoteOutcome = Literal[
     "queue_full",
     "failed_check",
 ]
+CatalogQuotePurpose = Literal["display", "financial"]
 _OUTCOMES = frozenset(get_args(CatalogQuoteOutcome))
 _REQUEST_TTL_MS = 10_000
 _WAIT_SECONDS = 7
@@ -82,6 +83,7 @@ class CatalogQuoteRequest:
     listing_version: int
     fingerprint: str
     token: str
+    purpose: CatalogQuotePurpose = "display"
 
 
 def _queue(account: str) -> str:
@@ -92,8 +94,15 @@ def _server(server: str) -> str:
     return sha256(server.encode()).hexdigest() + ":"
 
 
-def _member(server: str, catalog_id: int, listing_version: int, fingerprint: str) -> str:
-    return f"{_server(server)}{catalog_id}:{listing_version}:{fingerprint}"
+def _member(
+    server: str,
+    catalog_id: int,
+    listing_version: int,
+    fingerprint: str,
+    purpose: CatalogQuotePurpose = "display",
+) -> str:
+    member = f"{_server(server)}{catalog_id}:{listing_version}:{fingerprint}"
+    return member if purpose == "display" else member + ":financial"
 
 
 def _text(raw: str | bytes) -> str:
@@ -115,10 +124,11 @@ async def request_catalog_quote(
     catalog_id: int,
     listing_version: int,
     fingerprint: str,
+    purpose: CatalogQuotePurpose = "display",
 ) -> CatalogQuoteOutcome:
     """Coalesce one admitted selection and wait briefly for its exact request."""
     queue = _queue(account)
-    member = _member(server, catalog_id, listing_version, fingerprint)
+    member = _member(server, catalog_id, listing_version, fingerprint, purpose)
     request_key = f"{queue}:pending:{member}"
     try:
         async with asyncio.timeout(_WAIT_SECONDS):
@@ -157,15 +167,27 @@ async def pending_catalog_quotes(
     items = await redis.eval(_PENDING, 1, _queue(account), _server(server), limit)
     result = []
     for member, token in zip(items[::2], items[1::2], strict=True):
-        _, catalog_id, version, fingerprint = _text(member).split(":")
-        result.append(CatalogQuoteRequest(int(catalog_id), int(version), fingerprint, _text(token)))
+        _, catalog_id, version, fingerprint, *purpose = _text(member).split(":")
+        if purpose not in ([], ["financial"]):
+            continue
+        result.append(
+            CatalogQuoteRequest(
+                int(catalog_id),
+                int(version),
+                fingerprint,
+                _text(token),
+                "financial" if purpose else "display",
+            )
+        )
     return tuple(result)
 
 
 async def current_catalog_quote_request(
     redis: Redis, request: CatalogQuoteRequest, *, account: str, server: str
 ) -> bool:
-    member = _member(server, request.catalog_id, request.listing_version, request.fingerprint)
+    member = _member(
+        server, request.catalog_id, request.listing_version, request.fingerprint, request.purpose
+    )
     token = await redis.get(f"{_queue(account)}:pending:{member}")
     return token is not None and _text(token) == request.token
 
@@ -181,9 +203,13 @@ async def complete_catalog_quote(
     quote_ttl_ms: int = 0,
 ) -> bool:
     """Set the result once and discard only the matching pending token."""
-    if quote_json is not None and (reason != "ready" or not 1 <= quote_ttl_ms <= 600_000):
+    if quote_json is not None and (
+        request.purpose != "display" or reason != "ready" or not 1 <= quote_ttl_ms <= 600_000
+    ):
         raise ValueError("invalid catalog quote cache write")
-    member = _member(server, request.catalog_id, request.listing_version, request.fingerprint)
+    member = _member(
+        server, request.catalog_id, request.listing_version, request.fingerprint, request.purpose
+    )
     queue = _queue(account)
     return bool(
         await redis.eval(

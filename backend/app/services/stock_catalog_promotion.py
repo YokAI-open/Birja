@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,11 @@ _EXECUTION_FIELDS = {
     field: ["collection", "execution", "storage", "backup"]
     for field in ("bid", "ask", "event_at", "collected_at")
 }
+_MARK_FIELDS = {
+    field: ["collection", "display", "derivation", "storage", "backup"]
+    for field in _EXECUTION_FIELDS
+}
+_FinancialScope = Literal["catalog_execution", "catalog_mark"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +45,7 @@ class CatalogFinancialBinding:
     provider_symbol: str
     listing_exchange: str
     valid_until: datetime
+    identity_valid_until: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +57,7 @@ class _PromotionScope:
     provider_admission_id: int
     provider_symbol: str
     valid_until: datetime
+    identity_valid_until: datetime
 
     def binding(self, coin_id: int, admission_id: int) -> CatalogFinancialBinding:
         return CatalogFinancialBinding(
@@ -64,6 +72,7 @@ class _PromotionScope:
             self.provider_symbol,
             self.listing.listing_exchange,
             self.valid_until,
+            self.identity_valid_until,
         )
 
 
@@ -78,6 +87,8 @@ async def _current_promotion_scope(
     admission_id: int,
     now: datetime,
     allow_fixture: bool,
+    *,
+    artifact: _FinancialScope = "catalog_execution",
 ) -> _PromotionScope | None:
     listing = StockCatalogListing
     generation = StockCatalogGeneration
@@ -122,12 +133,14 @@ async def _current_promotion_scope(
         await db.execute(
             select(grant.scope, grant.valid_until).where(
                 grant.id == admission_id,
-                grant.artifact == "catalog_execution",
+                grant.artifact == artifact,
                 grant.is_fixture == (mode == "fixture"),
                 grant.reviewed_at <= now,
                 grant.valid_until > now,
                 grant.revoked_at.is_(None),
-                grant.fields.contains(_EXECUTION_FIELDS),
+                grant.fields.contains(
+                    _EXECUTION_FIELDS if artifact == "catalog_execution" else _MARK_FIELDS
+                ),
                 grant.scope.contains(
                     {
                         "catalog_id": str(catalog_id),
@@ -152,6 +165,7 @@ async def _current_promotion_scope(
     if mapping is None:
         return None
     _, mapping_until = mapping
+    identity_until = min(source_until, mapping_until)
     return _PromotionScope(
         current,
         account,
@@ -159,7 +173,8 @@ async def _current_promotion_scope(
         asset_id,
         provider_admission_id,
         symbol,
-        min(source_until, grant_until, mapping_until),
+        min(identity_until, grant_until),
+        identity_until,
     )
 
 
@@ -172,6 +187,35 @@ async def load_catalog_financial_binding(
     allow_fixture: bool = False,
 ) -> CatalogFinancialBinding | None:
     """Check every current identity and grant before admitting financial use."""
+    return await _load_catalog_binding(db, catalog_id, listing_id, now, allow_fixture)
+
+
+async def load_catalog_mark_binding(
+    db: AsyncSession,
+    catalog_id: int,
+    listing_id: int,
+    admission_id: int,
+    now: datetime,
+    *,
+    allow_fixture: bool = False,
+) -> CatalogFinancialBinding | None:
+    """Recheck the same promoted identity under its original mark permission."""
+    if not _catalog_id(admission_id):
+        return None
+    return await _load_catalog_binding(
+        db, catalog_id, listing_id, now, allow_fixture, mark_admission_id=admission_id
+    )
+
+
+async def _load_catalog_binding(
+    db: AsyncSession,
+    catalog_id: int,
+    listing_id: int,
+    now: datetime,
+    allow_fixture: bool,
+    *,
+    mark_admission_id: int | None = None,
+) -> CatalogFinancialBinding | None:
     if not (_catalog_id(catalog_id) and _catalog_id(listing_id) and utc(now)):
         return None
     instrument = StockCatalogInstrument
@@ -183,7 +227,13 @@ async def load_catalog_financial_binding(
     if binding is None or binding.promoted_at > now:
         return None
     scope = await _current_promotion_scope(
-        db, catalog_id, listing_id, binding.admission_id, now, allow_fixture
+        db,
+        catalog_id,
+        listing_id,
+        mark_admission_id if mark_admission_id is not None else binding.admission_id,
+        now,
+        allow_fixture,
+        artifact="catalog_mark" if mark_admission_id is not None else "catalog_execution",
     )
     if scope is None:
         return None
@@ -199,7 +249,8 @@ async def load_catalog_financial_binding(
             Coin.symbol == f"@{catalog_id}",
         )
     )
-    return scope.binding(binding.coin_id, binding.admission_id) if matches is not None else None
+    admission_id = mark_admission_id if mark_admission_id is not None else binding.admission_id
+    return scope.binding(binding.coin_id, admission_id) if matches is not None else None
 
 
 async def promote_catalog_instrument(

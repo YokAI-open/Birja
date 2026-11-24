@@ -312,7 +312,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         background_checks: list[tuple[Callable[[], Awaitable[CycleResult]], float]] = []
         if settings.stock_data_enabled:
             from app.services.stock_quote_demand import POLL_SECONDS
-            from app.tasks.stock_catalog_quotes import run_catalog_quote_cycle
+            from app.tasks.stock_catalog_quotes import CatalogQuoteCursor, run_catalog_quote_cycle
             from app.tasks.stock_scheduler import run_stock_cycle
 
             # Keep credentials out of the crypto client, API and browser.
@@ -346,23 +346,38 @@ async def amain(stop: asyncio.Event | None = None) -> None:
             async def stock_demand_cycle() -> CycleResult:
                 return await stock_cycle(on_demand=True)
 
+            catalog_cursor = CatalogQuoteCursor()
+
             async def catalog_quote_cycle() -> CycleResult:
                 assert stock_http is not None  # noqa: S101 - created before loop
                 return await run_catalog_quote_cycle(
-                    sessionmaker=sessionmaker, redis=redis, http=stock_http, settings=settings
+                    sessionmaker=sessionmaker,
+                    redis=redis,
+                    http=stock_http,
+                    settings=settings,
+                    cursor=catalog_cursor,
                 )
 
             loops.append((stock_cycle, settings.stock_poll_interval_seconds))
             background_checks.append((stock_demand_cycle, POLL_SECONDS))
             background_checks.append((catalog_quote_cycle, POLL_SECONDS))
-            from app.tasks.stock_halts import DUE_CHECK_SECONDS, run_stock_halt_cycle
+            from app.tasks.stock_halts import (
+                DUE_CHECK_SECONDS,
+                CatalogHaltWindow,
+                run_stock_halt_cycle,
+            )
 
             halt_http = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(5.0))
+            catalog_halt_window = CatalogHaltWindow()
 
             async def halt_cycle() -> CycleResult:
                 assert halt_http is not None  # noqa: S101 - created before loop
                 return await run_stock_halt_cycle(
-                    sessionmaker=sessionmaker, redis=redis, http=halt_http, settings=settings
+                    sessionmaker=sessionmaker,
+                    redis=redis,
+                    http=halt_http,
+                    settings=settings,
+                    catalog_window=catalog_halt_window,
                 )
 
             background_checks.append((halt_cycle, DUE_CHECK_SECONDS))
