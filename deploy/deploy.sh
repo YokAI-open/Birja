@@ -141,10 +141,52 @@ deploy/db/bootstrap-roles.sql 78e1c8d9e461b50900c70199ac6f5fc41d997c11c471eb9312
 CATALOG_PINS
 }
 
+stock_catalog_finance_source_supported() {
+  local name expected actual
+  while read -r name expected; do
+    actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
+    [ "$actual" = "$expected" ] || return 1
+  done <<'CATALOG_FINANCE_PINS'
+backend/alembic/versions/0023_portfolio_closure_authority.py d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5
+backend/alembic/sql/0023_portfolio_closure.sql 59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920
+backend/alembic/versions/0024_stock_halt_snapshot.py 792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd
+backend/alembic/sql/0024_stock_halt_snapshot.sql fa19099943dd885cfa3548cd45f25fb5d5150307524ea41d0cae0aa4b2c6e986
+backend/alembic/versions/0025_stock_catalog.py cd1890bfec3b1dc4b638fd3e86c9217d6eb331be3e895f2443b74fd88d078826
+backend/alembic/sql/0025_stock_catalog.sql 7665f5df6c828f681f6d7db7dda8b4cbf1a19d4f645fa4003fec94c1a5fa32fa
+backend/alembic/versions/0026_stock_catalog_finance.py b003b09d70d6ea4df410874015cbe2b8230726fe9f9d5d0c587e65f91b6e1189
+backend/alembic/sql/0026_stock_catalog_finance.sql eb4a44fd9a2812aa693607db00d7d53240d8afb4d7e0bd1305035b1e15845a04
+backend/alembic/sql/0026_stock_catalog_execution.sql b8cc7ea9d8c9227bf420778912f86d7f2cbddca0494e608cd157f929917630fe
+backend/alembic/sql/0026_stock_catalog_actions.sql 6aa0c43d7554fdb7ab85ee557bfcbee6a0fc8e286a5b118d999b3937139a28c3
+backend/app/db/portfolio_bootstrap.py c19b779e6949bad9fafa79ade0f3faf22e38497f56ea4e471348ee1ca6c52225
+backend/app/db/portfolio_migrate.py c33f3569a4bbad31fb21db4b0f30e538936f01fbd36e7903fa2400ec831d77d0
+backend/app/db/schema_contract.py a7342206005e59e6560ebcb90abdb98daef85a984dc5041cc8787197e4e49d65
+backend/app/db/dev_bootstrap.py 414cf383977c21a2c9decc3ae3c85092c8a2acb80855b896c652955d887ecf20
+backend/app/models/__init__.py dfc017825d1faa1cd56a0da35526c1fbb3984b39eee8d0f19f35b81199dbf3e0
+backend/app/models/stock_catalog_finance.py 4ae1034ef17a80133503ea1dc917c929a189997ca13dfe327f6b3a6202a82e11
+backend/app/models/price.py 423c4c3860929d7e6a4500e15a2d80bb8d5b93a87ccccbddf2464c4a7ee078c1
+backend/app/services/corporate_actions.py ec41bd129bb737aa1e9b2f959313be0aee1083bc8d51a07448c1d64410fc5b88
+deploy/db/bootstrap-roles.sql 51ce20003aea6a9c9d4d03f8eae67e708a4571555b56e9de61a6104122dfd128
+CATALOG_FINANCE_PINS
+}
+
 admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0026_stock_catalog_finance.py" 2>/dev/null; then
+    [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_finance_source_supported "$1" || {
+      application_schema_incompatible; return 1;
+    }
+    if [ "${2:-runtime}" = portfolio-upgrade ]; then
+      case "${ADMITTED_REVISION:-}" in
+        0007|0008|0009|0010|0011|0012|0013|0014|0017|0020|0023|0024|0025|0026) return 0 ;;
+        *) application_schema_incompatible; return 1 ;;
+      esac
+    fi
+    [ "${ADMITTED_REVISION:-}" = 0026 ] && return 0
+    application_schema_incompatible
+    return 1
+  fi
   if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0025_stock_catalog.py" 2>/dev/null; then
     [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_source_supported "$1" || {
       application_schema_incompatible; return 1;

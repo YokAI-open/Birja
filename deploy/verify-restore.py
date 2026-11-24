@@ -117,8 +117,16 @@ PORTFOLIO_PAYLOAD_V5 = PORTFOLIO_PAYLOAD_V4 + [
     'backend/alembic/sql/0025_stock_catalog.sql',
     'backend/app/models/stock_catalog.py',
 ]
-CLOSURE_REVISIONS = ('0023', '0024', '0025')
-RECOVERY_PROFILES = tuple('deploy-recovery-v' + str(number) for number in range(2, 7))
+PORTFOLIO_PAYLOAD_V6 = PORTFOLIO_PAYLOAD_V5 + [
+    'backend/alembic/versions/0026_stock_catalog_finance.py',
+    'backend/alembic/sql/0026_stock_catalog_finance.sql',
+    'backend/alembic/sql/0026_stock_catalog_execution.sql',
+    'backend/alembic/sql/0026_stock_catalog_actions.sql',
+    'backend/app/models/stock_catalog_finance.py',
+    'backend/app/models/price.py',
+]
+CLOSURE_REVISIONS = ('0023', '0024', '0025', '0026')
+RECOVERY_PROFILES = tuple('deploy-recovery-v' + str(number) for number in range(2, 8))
 CLOSURE_SOURCE_SHA256 = {
     'backend/app/db/portfolio_bootstrap.py': '15d84249e11bad99c8e259c54680fdc5303e6771c63b501c71f79601ab0bc071',
     'backend/app/db/portfolio_migrate.py': 'bfc2990eca9e70993b228b7ca52ab7c47fb17610719944779ad97b94dd57cd17',
@@ -167,9 +175,10 @@ def management_source(root=None):
 def portfolio_payload_files(inventory):
     payload = inventory['portfolio_payload']
     version = payload.get('version')
-    require(type(version) is int and version in (1, 2, 3, 4, 5))
+    require(type(version) is int and version in (1, 2, 3, 4, 5, 6))
     return {1: PORTFOLIO_PAYLOAD_V1, 2: PORTFOLIO_PAYLOAD_V2,
-            3: PORTFOLIO_PAYLOAD_V3, 4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5}[version]
+            3: PORTFOLIO_PAYLOAD_V3, 4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5,
+            6: PORTFOLIO_PAYLOAD_V6}[version]
 
 
 def require(value):
@@ -494,7 +503,7 @@ def bundle_verify(archive, sha, required_profile=None):
         require({"INVENTORY.json", "SHA256SUMS"} <= names)
         inventory = json.load(t.extractfile("INVENTORY.json"))
         version = inventory.get('portfolio_payload', {}).get('version')
-        if version in (3, 4, 5):
+        if version in (3, 4, 5, 6):
             require({'schema_contract', 'retained_source_payloads'} <= inventory.keys())
             require(inventory['recovery_profile'] == 'deploy-recovery-v' + str(version + 1))
             require(inventory['retained_source_payloads'] == RETAINED_CLOSURE_SOURCE_PAYLOADS)
@@ -529,7 +538,7 @@ def bundle_verify(archive, sha, required_profile=None):
             retained = dict(RETAINED_SOURCE_PAYLOADS)
             if inventory.get('portfolio_payload', {}).get('version') == 2:
                 retained['sources/portfolio0017.tar'] = '361a0fafbb6f1645d7beb9caeadb8bd46c85abc739d957dce7fc439b64eba248'
-            elif version in (3, 4, 5):
+            elif version in (3, 4, 5, 6):
                 retained = RETAINED_CLOSURE_SOURCE_PAYLOADS
             require(inventory["retained_source_payloads"] == retained)
             allowed.update(retained)
@@ -591,6 +600,7 @@ def bundle_verify(archive, sha, required_profile=None):
             require((required_profile == 'deploy-recovery-v4') == (version == 3))
             require((required_profile == 'deploy-recovery-v5') == (version == 4))
             require((required_profile == 'deploy-recovery-v6') == (version == 5))
+            require((required_profile == 'deploy-recovery-v7') == (version == 6))
     runtime()
     return inventory
 
@@ -619,7 +629,7 @@ def verify_contract_inventory(inventory, expected):
     if "schema_contract" in inventory:
         revisions = inventory["schema_contract"].get("revisions")
         version = inventory.get('portfolio_payload', {}).get('version')
-        if version in (3, 4, 5):
+        if version in (3, 4, 5, 6):
             exact_revisions = ['0007','0008','0009','0010','0011','0012','0013','0014','0017','0020']
             exact_revisions.extend(CLOSURE_REVISIONS[:version - 2])
             require(inventory['schema_contract'] == {
@@ -662,6 +672,10 @@ def verify_portfolio_inventory(inventory, expected):
         elif payload['version'] == 5:
             payload['revision'] = '0025'
             pins = recovery_contract().CATALOG_SOURCE_SHA256
+            require(all(expected[name] == value for name, value in pins.items()))
+        elif payload['version'] == 6:
+            payload['revision'] = '0026'
+            pins = recovery_contract().CATALOG_FINANCE_SOURCE_SHA256
             require(all(expected[name] == value for name, value in pins.items()))
         require(inventory['portfolio_payload'] == payload)
 
@@ -1055,8 +1069,10 @@ def verify(dc, manifest, *, quarantined=True):
             keys += ['management_state']
         elif manifest['revision'] in CLOSURE_REVISIONS:
             keys += ['management_state', 'closure_state', 'stock_invalid']
-        if manifest['revision'] == '0025':
+        if manifest['revision'] in ('0025', '0026'):
             keys.append('catalog_active_generation')
+        if manifest['revision'] == '0026':
+            keys.append('catalog_finance_invalid')
         for key in keys:
             require(actual[key] == manifest[key])
         for table in contract.identity_tables(manifest['revision']):
@@ -1358,8 +1374,10 @@ def closure_evidence_matches(actual, expected):
     for key in ('tables', 'identity_state', 'financial', 'schema', 'revision',
                 'portfolio_state', 'management_state', 'closure_state', 'stock_invalid'):
         require(actual[key] == expected[key])
-    if expected['revision'] == '0025':
+    if expected['revision'] in ('0025', '0026'):
         require(actual['catalog_active_generation'] == expected['catalog_active_generation'])
+    if expected['revision'] == '0026':
+        require(actual['catalog_finance_invalid'] == expected['catalog_finance_invalid'])
 
 
 def restore_closure_authority(dc, manifest):
@@ -1379,7 +1397,7 @@ def restore_closure_authority(dc, manifest):
     privilege_query = "SELECT coalesce(json_agg(v ORDER BY v::text),'[]'::json) FROM ("
     grants = json.loads(sql(dc, privilege_query + bootstrap.ACL_SQL.split('FROM (', 1)[1]))
     signatures = {r['signature'] for r in manifest['portfolio_authority']['functions']}
-    require(len(signatures) == 21)
+    require(len(signatures) == (26 if revision == '0026' else 21))
     require(all(row in [['routine', signature, 'PUBLIC', 'EXECUTE', False]
                         for signature in signatures] for row in grants))
     require(sql(dc, "SELECT count(*) FROM pg_default_acl d,LATERAL aclexplode(d.defaclacl) x "
@@ -1403,7 +1421,7 @@ def restore_closure_authority(dc, manifest):
     quarantined = canonical(dc)
     contract.validate_manifest(quarantined, quarantined=True)
     closure_evidence_matches(quarantined, manifest)
-    grants_sql = bootstrap.GRANTS_0025_SQL if revision == '0025' else bootstrap.GRANTS_0023_SQL
+    grants_sql = getattr(bootstrap, 'GRANTS_' + revision + '_SQL') if revision in ('0025', '0026') else bootstrap.GRANTS_0023_SQL
     sql(dc, 'BEGIN;\n' + preflight + grants_sql + '\nCOMMIT;')
     final = canonical(dc)
     contract.validate_manifest(final)

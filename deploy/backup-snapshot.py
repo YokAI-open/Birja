@@ -80,8 +80,8 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024", "0025")
-CLOSURE_REVISIONS = ('0023', '0024', '0025')
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024", "0025", "0026")
+CLOSURE_REVISIONS = ('0023', '0024', '0025', '0026')
 CATALOG_COLUMNS = {
     'stock_catalog_admissions': 'id artifact reference reviewed_at valid_until revoked_at fields scope is_fixture',
     'stock_catalog_aliases': 'id listing_id security_id namespace symbol normalized_symbol verified_at valid_until',
@@ -94,6 +94,24 @@ CATALOG_COLUMNS = {
         'unit_evidence_at currency units_per_share'
     ),
     'stock_catalog_securities': 'id identity_key created_at',
+}
+CATALOG_FINANCE_COLUMNS = {
+    'stock_catalog_instruments': 'catalog_id coin_id listing_id admission_id promoted_at',
+    'stock_catalog_financial_quotes': (
+        'coin_id catalog_id listing_id provider_asset_id provider_admission_id execution_admission_id '
+        'mark_admission_id source feed bid ask unit_epoch event_at collected_at observed_at '
+        'session_date calendar_generation opens_at closes_at valid_until'
+    ),
+    'stock_catalog_status': (
+        'coin_id catalog_id listing_id admission_id report_digest state event_at observed_at valid_until session_date'
+    ),
+    'stock_catalog_action_coverage': (
+        'coin_id catalog_id listing_id admission_id journal_origin coverage_start covered_until cursor observed_at valid_until'
+    ),
+    'stock_catalog_fill_evidence': (
+        'trade_id coin_id catalog_id listing_id provider_admission_id execution_admission_id halt_admission_id '
+        'action_admission_id unit_epoch action_epoch report_digest report_event_at report_valid_until quote_valid_until'
+    ),
 }
 CLOSURE_COLUMNS = {
     'portfolio_lifecycle_closures': 'id portfolio_id user_id closed_at policy_version provenance confirmation_name intent_id',
@@ -154,6 +172,14 @@ PORTFOLIO_PAYLOAD_V5 = PORTFOLIO_PAYLOAD_V4 + [
     'backend/alembic/sql/0025_stock_catalog.sql',
     'backend/app/models/stock_catalog.py',
 ]
+PORTFOLIO_PAYLOAD_V6 = PORTFOLIO_PAYLOAD_V5 + [
+    'backend/alembic/versions/0026_stock_catalog_finance.py',
+    'backend/alembic/sql/0026_stock_catalog_finance.sql',
+    'backend/alembic/sql/0026_stock_catalog_execution.sql',
+    'backend/alembic/sql/0026_stock_catalog_actions.sql',
+    'backend/app/models/stock_catalog_finance.py',
+    'backend/app/models/price.py',
+]
 
 
 def portfolio_payload_inventory(root):
@@ -197,6 +223,17 @@ def catalog_payload_inventory(root):
         require(path.is_file() and not path.is_symlink() and path.resolve() == path)
         hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return {'version': 5, 'revision': '0025', 'sha256': hashes}
+
+
+def catalog_finance_payload_inventory(root):
+    root = Path(root).resolve(strict=True)
+    require_closure_source(root, revision='0026', allow_successor=False)
+    hashes = {}
+    for name in PORTFOLIO_PAYLOAD_V6:
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {'version': 6, 'revision': '0026', 'sha256': hashes}
 
 
 def verify_halt_inventory(root, inventory):
@@ -510,6 +547,8 @@ def validate_resolution_authority(authority, revision='0012'):
 def identity_tables(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
+    if revision == '0026':
+        return identity_tables('0025')
     if revision == '0025':
         return sorted([*identity_tables('0024'), *CATALOG_COLUMNS])
     if revision in CLOSURE_REVISIONS:
@@ -552,6 +591,10 @@ def dump_identity_state(raw, revision="0011"):
 def contract_columns(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
+    if revision == '0026':
+        columns = contract_columns('0025')
+        columns.update({table: set(value.split()) for table, value in CATALOG_FINANCE_COLUMNS.items()})
+        return columns
     if revision == '0025':
         columns = contract_columns('0024')
         columns.update({table: set(value.split()) for table, value in CATALOG_COLUMNS.items()})
@@ -1145,6 +1188,26 @@ CATALOG_SCHEMA_SHA256 = 'ee9de25d015c568f1bfe0a9afd3b618369a101aa376f6f98b5f74f7
 CATALOG_AUTHORITY_SHA256 = '3b382165f475398c86b70bb2442cb26cc11126582f11044d144e0d204466726c'
 CATALOG_QUARANTINE_AUTHORITY_SHA256 = '77cb2957f8838c5ce18089e11e3e41dc9b58a506fbf7868253e690196e86d793'
 
+CATALOG_FINANCE_SOURCE_SHA256 = {
+    **CATALOG_SOURCE_SHA256,
+    'backend/alembic/versions/0026_stock_catalog_finance.py': 'b003b09d70d6ea4df410874015cbe2b8230726fe9f9d5d0c587e65f91b6e1189',
+    'backend/alembic/sql/0026_stock_catalog_finance.sql': 'eb4a44fd9a2812aa693607db00d7d53240d8afb4d7e0bd1305035b1e15845a04',
+    'backend/alembic/sql/0026_stock_catalog_execution.sql': 'b8cc7ea9d8c9227bf420778912f86d7f2cbddca0494e608cd157f929917630fe',
+    'backend/alembic/sql/0026_stock_catalog_actions.sql': '6aa0c43d7554fdb7ab85ee557bfcbee6a0fc8e286a5b118d999b3937139a28c3',
+    'backend/app/db/portfolio_bootstrap.py': 'c19b779e6949bad9fafa79ade0f3faf22e38497f56ea4e471348ee1ca6c52225',
+    'backend/app/db/portfolio_migrate.py': 'c33f3569a4bbad31fb21db4b0f30e538936f01fbd36e7903fa2400ec831d77d0',
+    'backend/app/db/schema_contract.py': 'a7342206005e59e6560ebcb90abdb98daef85a984dc5041cc8787197e4e49d65',
+    'backend/app/db/dev_bootstrap.py': '414cf383977c21a2c9decc3ae3c85092c8a2acb80855b896c652955d887ecf20',
+    'backend/app/models/__init__.py': 'dfc017825d1faa1cd56a0da35526c1fbb3984b39eee8d0f19f35b81199dbf3e0',
+    'backend/app/models/stock_catalog_finance.py': '4ae1034ef17a80133503ea1dc917c929a189997ca13dfe327f6b3a6202a82e11',
+    'backend/app/models/price.py': '423c4c3860929d7e6a4500e15a2d80bb8d5b93a87ccccbddf2464c4a7ee078c1',
+    'backend/app/services/corporate_actions.py': 'ec41bd129bb737aa1e9b2f959313be0aee1083bc8d51a07448c1d64410fc5b88',
+    'deploy/db/bootstrap-roles.sql': '51ce20003aea6a9c9d4d03f8eae67e708a4571555b56e9de61a6104122dfd128',
+}
+CATALOG_FINANCE_SCHEMA_SHA256 = 'd663c6cf07de20685b83d5f58a8a3381157d0b0afb087aa64dc6c34dd40c0626'
+CATALOG_FINANCE_AUTHORITY_SHA256 = '754ee589ad16d56a959a73bc61bdce9f66393a1145838da0826589f11509ab8b'
+CATALOG_FINANCE_QUARANTINE_AUTHORITY_SHA256 = 'f75e5fca14d23799b7492eff89936cd3b6108c81ec8d0d2a6633c97423da7e49'
+
 CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
 CLOSURE_AUTHORITY_SHA256 = '62e3776654a98a62bf605355e209884b32ff1247fec463d6b923f48a76f42492'
@@ -1156,7 +1219,8 @@ CLOSURE_EMPTY_ACL_SHA256 = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f
 def require_closure_source(root=None, *, revision='0023', allow_successor=True):
     root = HERE.parent if root is None else Path(root)
     require(revision in CLOSURE_REVISIONS)
-    profiles = (CLOSURE_SOURCE_SHA256, REPORTED_HALT_SOURCE_SHA256, CATALOG_SOURCE_SHA256)
+    profiles = (CLOSURE_SOURCE_SHA256, REPORTED_HALT_SOURCE_SHA256, CATALOG_SOURCE_SHA256,
+                CATALOG_FINANCE_SOURCE_SHA256)
     index = CLOSURE_REVISIONS.index(revision)
     profiles = profiles[index:] if allow_successor else profiles[index:index + 1]
 
@@ -1184,23 +1248,32 @@ def closure_bootstrap(revision='0023'):
 def closure_manifest_sql(revision='0023'):
     bootstrap = closure_bootstrap(revision)
     query = management_manifest_sql(bootstrap=bootstrap)
-    tables = {**CLOSURE_COLUMNS, **CATALOG_COLUMNS} if revision == '0025' else CLOSURE_COLUMNS
+    is_catalog = revision in ('0025', '0026')
+    identities = {**CLOSURE_COLUMNS, **CATALOG_COLUMNS} if is_catalog else CLOSURE_COLUMNS
+    tables = {**identities, **CATALOG_FINANCE_COLUMNS} if revision == '0026' else identities
     timestamp_columns = {
         'closed_at', 'recorded_at', 'reviewed_at', 'valid_until', 'revoked_at',
         'verified_at', 'published_at', 'evidence_at', 'provider_verified_at',
         'provider_valid_until', 'unit_evidence_at', 'created_at',
     }
+    if revision == '0026':
+        timestamp_columns.update({
+            'promoted_at', 'event_at', 'collected_at', 'observed_at', 'opens_at', 'closes_at',
+            'journal_origin', 'coverage_start', 'covered_until', 'report_event_at',
+            'report_valid_until', 'quote_valid_until',
+        })
     rows = []
     for table, fields in tables.items():
+        columns = fields.split()
         values = ["to_char("+c+",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
-                  if c in timestamp_columns else c+'::text' for c in fields.split()]
-        rows.append(" UNION ALL SELECT '"+table+"',id,json_build_array("+','.join(values)+")::text FROM "+table)
+                  if c in timestamp_columns else c+'::text' for c in columns]
+        rows.append(" UNION ALL SELECT '"+table+"',"+columns[0]+",json_build_array("+','.join(values)+")::text FROM "+table)
     query = query.replace('\n), names(name) AS (', '\n'+'\n'.join(rows)+'\n), names(name) AS (')
     query = query.replace("('portfolio_initializations')\n", "('portfolio_initializations'),"+
                           ','.join("('"+t+"')" for t in tables)+'\n')
     query = query.replace("SELECT 'users',last_value,is_called FROM users_id_seq",
                           ' UNION ALL '.join("SELECT '"+t+"',last_value,is_called FROM "+t+'_id_seq'
-                                            for t in tables)+
+                                            for t in identities)+
                           " UNION ALL SELECT 'users',last_value,is_called FROM users_id_seq")
     # The same independently pinned catalogue used by runtime admission covers
     # every routine/body/owner, trigger, constraint, rule, policy and relation.
@@ -1212,8 +1285,40 @@ def closure_manifest_sql(revision='0023'):
               "'intents',(SELECT count(*) FROM portfolio_closure_intents)," \
               "'refused',(SELECT count(*) FROM portfolio_closure_intents WHERE outcome='confirmation_changed')," \
               "'invalid',CASE WHEN "+lifecycle+" THEN 1 ELSE 0 END),\n"
-    if revision == '0025':
+    if is_catalog:
         fields += " 'catalog_active_generation',(SELECT id FROM stock_catalog_generations WHERE is_active),\n"
+    if revision == '0026':
+        old_source = "source NOT IN ('sec','alpaca')"
+        require(query.count(old_source) == 1)
+        query = query.replace(
+            old_source, "(s.source NOT IN ('sec','alpaca') AND NOT (s.source='stock-catalog'"
+            " AND EXISTS (SELECT FROM stock_catalog_instruments b WHERE b.coin_id=s.coin_id"
+            " AND c.symbol='@'||b.catalog_id::text)))",
+        )
+        fields += """ 'catalog_finance_invalid',
+ (SELECT count(*) FROM coins c LEFT JOIN stock_catalog_instruments b ON b.coin_id=c.id
+  WHERE left(c.symbol,1)='@' AND b.coin_id IS NULL)
+ + (SELECT count(*) FROM stock_catalog_instruments b JOIN coins c ON c.id=b.coin_id
+    JOIN stock_instruments s ON s.coin_id=b.coin_id
+    WHERE c.asset_class<>'stock' OR c.symbol<>'@'||b.catalog_id::text OR c.is_active
+       OR s.source<>'stock-catalog')
+ + (SELECT count(*) FROM trades t JOIN stock_catalog_instruments b ON b.coin_id=t.coin_id
+    LEFT JOIN stock_catalog_fill_evidence e ON e.trade_id=t.id
+    WHERE e.trade_id IS NULL)
+ + (SELECT count(*) FROM stock_catalog_fill_evidence e
+    JOIN stock_fill_facts f ON f.trade_id=e.trade_id JOIN trades t ON t.id=e.trade_id
+    JOIN stock_catalog_listings l ON l.id=e.listing_id
+    WHERE (f.coin_id,t.coin_id) IS DISTINCT FROM (e.coin_id,e.coin_id)
+       OR (f.portfolio_id,f.user_id) IS DISTINCT FROM (t.portfolio_id,t.user_id)
+       OR f.authority->>'portfolio_id' IS DISTINCT FROM t.portfolio_id::text
+       OR f.authority->>'coin_id' IS DISTINCT FROM e.coin_id::text
+       OR f.authority->>'catalog_id' IS DISTINCT FROM e.catalog_id::text
+       OR f.authority->>'listing_id' IS DISTINCT FROM e.listing_id::text
+       OR f.authority->>'provider_asset_id' IS DISTINCT FROM f.provider_asset_id
+       OR e.provider_admission_id IS DISTINCT FROM l.provider_admission_id
+       OR (f.provider_asset_id,f.symbol,f.company_name,f.listing_exchange)
+          IS DISTINCT FROM (l.provider_asset_id,l.ticker,l.company_name,l.listing_exchange)),
+"""
     return query.replace(" 'schema',json_build_object(", fields+" 'schema',json_build_object(")
 
 
@@ -1221,20 +1326,27 @@ def validate_closure_manifest(manifest, *, quarantined=False):
     revision = manifest['revision']
     require(revision in CLOSURE_REVISIONS)
     acl = CLOSURE_ACL_SHA256
-    if revision == '0025':
+    if revision == '0026':
+        bootstrap = closure_bootstrap(revision)
+        schema, catalogue = CATALOG_FINANCE_SCHEMA_SHA256, bootstrap.CATALOGUE_0026_SHA256
+        authority = CATALOG_FINANCE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CATALOG_FINANCE_AUTHORITY_SHA256
+        acl = bootstrap.ACL_0026_SHA256
+        require(type(manifest['catalog_finance_invalid']) is int and manifest['catalog_finance_invalid'] == 0)
+    elif revision == '0025':
         bootstrap = closure_bootstrap(revision)
         schema, catalogue = CATALOG_SCHEMA_SHA256, bootstrap.CATALOGUE_0025_SHA256
         authority = CATALOG_QUARANTINE_AUTHORITY_SHA256 if quarantined else CATALOG_AUTHORITY_SHA256
         acl = bootstrap.ACL_0025_SHA256
-        active = manifest['catalog_active_generation']
-        require(active is None or (type(active) is int and active > 0
-                                   and manifest['tables']['stock_catalog_generations']['count'] > 0))
     elif revision == '0024':
         schema, catalogue = REPORTED_HALT_SCHEMA_SHA256, REPORTED_HALT_CATALOGUE_SHA256
         authority = REPORTED_HALT_QUARANTINE_AUTHORITY_SHA256 if quarantined else REPORTED_HALT_AUTHORITY_SHA256
     else:
         schema, catalogue = CLOSURE_SCHEMA_SHA256, CLOSURE_CATALOGUE_SHA256
         authority = CLOSURE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CLOSURE_AUTHORITY_SHA256
+    if revision in ('0025', '0026'):
+        active = manifest['catalog_active_generation']
+        require(active is None or (type(active) is int and active > 0
+                                   and manifest['tables']['stock_catalog_generations']['count'] > 0))
     require(canonical_hash(manifest['schema']) == schema)
     require(canonical_hash(manifest['portfolio_authority']) == authority)
     contract = manifest['closure_contract']
@@ -2177,7 +2289,7 @@ class Job:
 
 def _bundle_package(output, *, recovery=None, payload_version):
     """Stage a finite reviewed family; transport mocks never prove recovery."""
-    require(type(payload_version) is int and payload_version in (2, 3, 4, 5))
+    require(type(payload_version) is int and payload_version in (2, 3, 4, 5, 6))
     if payload_version >= 3:
         require_closure_source(revision=CLOSURE_REVISIONS[payload_version - 3], allow_successor=False)
     else:
@@ -2219,7 +2331,8 @@ def _bundle_package(output, *, recovery=None, payload_version):
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         stage = Path(tmp)
         payload_files = {2: PORTFOLIO_PAYLOAD_V2, 3: PORTFOLIO_PAYLOAD_V3,
-                         4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5}[payload_version]
+                         4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5,
+                         6: PORTFOLIO_PAYLOAD_V6}[payload_version]
         files = CORE + UNITS + payload_files
         for name in files:
             src = HERE.parent / name
@@ -2279,7 +2392,8 @@ def _bundle_package(output, *, recovery=None, payload_version):
         inventory = {
             "format": 1,
             "portfolio_payload": {2: portfolio_payload_inventory, 3: closure_payload_inventory,
-                                  4: halt_payload_inventory, 5: catalog_payload_inventory}[payload_version](stage),
+                                  4: halt_payload_inventory, 5: catalog_payload_inventory,
+                                  6: catalog_finance_payload_inventory}[payload_version](stage),
             "recovery_profile": "deploy-recovery-v" + str(payload_version + 1),
             "files": files,
             "units": UNITS,
@@ -2344,15 +2458,22 @@ def bundle_package_v5(output, *, recovery=None):
     return _bundle_package(output, recovery=recovery, payload_version=5)
 
 
+def bundle_package_v6(output, *, recovery=None):
+    """Package the exact 0026 catalog financial and retained portfolio contracts."""
+    return _bundle_package(output, recovery=recovery, payload_version=6)
+
+
 def main(argv, *, config=None):
     os.umask(0o077)
-    if argv and argv[0] in ('bundle-v2', 'bundle-v3', 'bundle-v4', 'bundle-v5'):
+    bundles = {'bundle-v2': bundle_package_v2, 'bundle-v3': bundle_package_v3,
+               'bundle-v4': bundle_package_v4, 'bundle-v5': bundle_package_v5,
+               'bundle-v6': bundle_package_v6}
+    if argv and argv[0] in bundles:
         parser = argparse.ArgumentParser(allow_abbrev=False)
         parser.add_argument('--output', required=True)
         parser.add_argument('--include-units', action='store_true')
         args = parser.parse_args(argv[1:])
-        {'bundle-v2': bundle_package_v2, 'bundle-v3': bundle_package_v3,
-         'bundle-v4': bundle_package_v4, 'bundle-v5': bundle_package_v5}[argv[0]](args.output)
+        bundles[argv[0]](args.output)
         return 0
     try:
         require(argv and argv[0] in ["backup", "status", "recovery-gate"])

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -19,13 +20,328 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 RETAINED_0024 = "33b9b5fdc6f89ef810d588bd7c7b2962b2c80352"
+RETAINED_0025 = "31cba00ca3f0c9d4214b6bb0b66892a4c81779fb"
 
 
-def load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "deploy" / (name + ".py"))
+def load(name, root=ROOT):
+    spec = importlib.util.spec_from_file_location(name, root / "deploy" / (name + ".py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def retained_catalog(root, *, runtime=False):
+    if runtime:
+        source = subprocess.check_output(
+            ['git', 'archive', '--format=tar', RETAINED_0025, 'backend'], cwd=ROOT,
+        )
+        with tarfile.open(fileobj=io.BytesIO(source), mode='r:') as archive:
+            archive.extractall(root, filter='data')
+    current = load('backup-snapshot')
+    for name in {
+        *current.PORTFOLIO_PAYLOAD_V5,
+        'deploy/backup-manifest.sql',
+        'deploy/backup-snapshot.py',
+        'deploy/verify-restore.py',
+        'deploy/tests/stock-execution-fixture.py',
+    }:
+        contents = subprocess.check_output(
+            ['git', 'show', RETAINED_0025 + ':' + name], cwd=ROOT,
+        )
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+    current.require_closure_source(root, revision='0025', allow_successor=False)
+
+
+def catalog_snapshot(root, revision, stage, restic_path):
+    import shutil
+
+    producer = load('backup-snapshot', root)
+    producer.require_closure_source(root, revision=revision, allow_successor=False)
+    docker = shutil.which('docker')
+    assert docker
+    job = producer.Job({
+        '_synthetic': True, 'state_dir': str(stage),
+        'password_file': str(stage / 'restic-password'), 'repository': str(stage / 'repository'),
+        'source_project': 'birja-phase20-local-fixture', 'docker_binary': docker,
+        'restic_binary': restic_path, 'db_user': 'birja_test', 'db_name': 'birja_test',
+        'release': 'fixture-phase20', 'timeout_seconds': 60, 'max_stage_bytes': 32 * 1024 * 1024,
+    })
+    job.dc = [docker, 'exec', '-i', os.environ['BIRJA_CATALOG_TEST_CONTAINER']]
+    job.bundle = stage / revision
+    job.start_utc = producer.utc()
+    job.data_epoch = int(time.time())
+    job.snapshot()
+    source = json.loads((job.bundle / 'manifest.json').read_text())
+    assert source['revision'] == revision
+    assert source['tables']['stock_fill_facts']['count'] == (3 if revision == '0025' else 5)
+    if revision == '0026':
+        assert source['catalog_finance_invalid'] == 0
+        assert source['tables']['stock_catalog_fill_evidence']['count'] == 2
+
+
+def catalog_restore(root, manifest):
+    restore = load('verify-restore', root)
+    container = os.environ['BIRJA_CATALOG_TEST_CONTAINER']
+
+    def isolated_sql(dc, query, db=restore.CLONE):
+        assert db == restore.CLONE
+        return subprocess.run(
+            ['docker', 'exec', '-i', container, 'psql', '-XqAt', '-v', 'ON_ERROR_STOP=1',
+             '-U', 'birja_test', '-d', db], input=query.encode(), capture_output=True, check=True,
+        ).stdout
+
+    with mock.patch.object(restore, 'sql', isolated_sql):
+        source = json.loads(manifest.read_text())
+        restore.restore_closure_authority([], source)
+        restore.verify([], source, quarantined=False)
+
+
+def catalog_cache_absent(stage, revision, canary):
+    restored = stage / ('restored-' + revision)
+    for path in (restored / 'manifest.json', restored / 'database.dump', stage / (revision + '.sql')):
+        assert canary.encode() not in path.read_bytes(), path.name
+
+
+async def catalog_economics(mode, receipt_path):
+    """Use the production services and restricted TLS roles on the owned clone."""
+    from dataclasses import asdict, replace
+    from datetime import timedelta
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from urllib.parse import urlsplit, urlunsplit
+
+    from sqlalchemy import delete, text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import Settings
+    from app.db.connection import database_connect_args
+    from app.db.schema_contract import require_schema
+    from app.models.stock import StockDataAdmission, StockSession
+    from app.schemas.stock_catalog_quotes import CatalogConfirmIn
+    from app.services import stock_sessions, stock_catalog_trading
+    from app.services.corporate_actions import apply_due_actions
+    from app.services.dividends import process_dividend
+    from app.services.event_history import list_event_history
+    from app.services.portfolios import OwnedActivePortfolio
+    from app.services.stock_catalog_actions import load_catalog_action_authority, lock_catalog_action_scope
+    from app.services.stock_ownership import acquire_stock_gate
+    from tests.test_stock_catalog_financial_actions import _derive, _dividend, _ingest
+    from tests.test_stock_catalog_promotion import OTHER_ASSET, _listing, _promote, _reviewed_grant
+    from tests.test_stock_catalog_sql_actions import ACTION_FIELDS
+    from tests.test_stock_catalog_sql_authority import execution_market
+    from tests.test_stock_catalog_trading import _confirmation
+    from tests.test_stock_sessions import evidence
+
+    if mode not in {'seed', 'replay'}:
+        raise ValueError('Unknown synthetic economics mode')
+    settings = Settings(stock_data_enabled=True, stock_data_account='birja', stock_data_server='birja')
+    url = urlsplit(settings.database_url)
+    database = '/birja_test' if mode == 'seed' else '/birja_restore_test'
+    if (settings.env != 'test' or url.hostname != '127.0.0.1' or url.port != 55434
+        or url.username != 'birja_test' or url.path != database or url.query
+        or not settings.database_ssl_ca_file):
+        raise ValueError('Owned disposable TLS database required')
+
+    def engine(user, password):
+        target = url._replace(netloc=f'{user}:{password}@127.0.0.1:55434')
+        return create_async_engine(urlunsplit(target), connect_args=database_connect_args(settings))
+
+    app = engine('birja_app', 'test-app')
+    scheduler = engine('birja_scheduler', 'test-scheduler')
+    owner = engine('birja_migrator', 'fixture-migrator-only')
+    app_sessions = async_sessionmaker(app, expire_on_commit=False)
+    scheduler_sessions = async_sessionmaker(scheduler, expire_on_commit=False)
+    owner_sessions = async_sessionmaker(owner, expire_on_commit=False)
+
+    def wire(value):
+        return json.loads(json.dumps(value, default=str))
+
+    async def confirm(market, order):
+        async with app_sessions() as db:
+            fill, created = await stock_catalog_trading.execute(
+                db, catalog_id=market['catalog'], portfolio=OwnedActivePortfolio(market['p'], market['u']),
+                order=order, settings=settings,
+            )
+            return fill.model_dump(mode='json'), created
+
+    async def observe(market, action_coin):
+        portfolio = market['p']
+        async with app_sessions() as db:
+            history = await list_event_history(db, portfolio=OwnedActivePortfolio(portfolio, market['u']))
+        async with owner_sessions() as db:
+            cash = await db.scalar(text('SELECT cash FROM accounts WHERE id=:p'), {'p': portfolio})
+            rows = (await db.execute(text('''
+                SELECT h.coin_id,h.quantity,h.cost_basis FROM holdings h
+                JOIN stock_catalog_instruments b ON b.coin_id=h.coin_id
+                WHERE h.portfolio_id=:p ORDER BY h.coin_id
+            '''), {'p': portfolio})).all()
+            counts = (await db.execute(text('''
+                SELECT (SELECT count(*) FROM stock_catalog_fill_evidence),
+                       (SELECT count(*) FROM stock_dividend_payments WHERE portfolio_id=:p),
+                       (SELECT count(*) FROM stock_dividend_decisions WHERE portfolio_id=:p),
+                       (SELECT count(*) FROM stock_split_applications WHERE coin_id=:c),
+                       (SELECT count(*) FROM stock_ownership_movements WHERE portfolio_id=:p)
+            '''), {'p': portfolio, 'c': action_coin})).one()
+            return wire({'cash': cash, 'holdings': [list(row) for row in rows],
+                         'history': history.model_dump(mode='json')['items'], 'counts': list(counts)})
+
+    async def split_again(action_coin):
+        async with scheduler_sessions.begin() as db:
+            now = await db.scalar(text('SELECT clock_timestamp()'))
+            authority = await load_catalog_action_authority(
+                db, action_coin, now, account='birja', server='birja', allow_fixture=True,
+            )
+            assert authority is not None
+            return list(await apply_due_actions(db, action_coin, catalog=authority))
+
+    async def pay(work):
+        async with scheduler_sessions() as db:
+            return wire(asdict(await process_dividend(db, **work)))
+
+    try:
+        for role in (app, scheduler):
+            async with role.connect() as conn:
+                assert await conn.scalar(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))
+                assert await require_schema(conn) == '0026'
+        if mode == 'replay':
+            saved = json.loads(receipt_path.read_text())
+            market = saved['market']
+            assert await observe(market, saved['action_coin']) == saved['economics']
+            for payload, expected in saved['orders']:
+                assert await confirm(market, CatalogConfirmIn.model_validate(payload)) == (expected, False)
+            for work, expected in saved['payments']:
+                assert await pay(work) == expected
+            assert await split_again(saved['action_coin']) == saved['splits']
+            assert await observe(market, saved['action_coin']) == saved['economics']
+            print('restricted_tls_replay=true buy_sell_dividend_correction_split_exact=true')
+            return
+
+        async with owner_sessions.begin() as db:
+            await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product == 'calendar'))
+            await db.execute(delete(StockSession))
+        market = await execution_market.__wrapped__(owner_sessions)
+        # The shared trade fixture creates already-initialized legacy roots.
+        # The archive also requires their owner initialization lineage.
+        async with owner_sessions.begin() as db:
+            initialized = await db.scalar(text('''
+                WITH added AS (
+                    INSERT INTO portfolio_initializations(user_id,origin)
+                    SELECT u.id,'legacy' FROM users u
+                    JOIN accounts a ON a.user_id=u.id
+                    LEFT JOIN portfolio_initializations i ON i.user_id=u.id
+                    WHERE i.id IS NULL GROUP BY u.id RETURNING id
+                ) SELECT count(*) FROM added
+            '''))
+            assert initialized == 3
+        day = timedelta(days=1)
+        today, opens, end, now = (market[key] for key in ('session', 'opens', 'end', 'now'))
+        bounds = ((today, opens, end), (today + day, opens + day, end + day))
+        stock_sessions._calendar_bounds = lambda *args: bounds
+        reviewed = evidence(now)
+        reviewed = replace(
+            reviewed, generation=1, valid_until=end,
+            calendar={**reviewed.calendar, 'review_valid_until': end.isoformat()},
+            scope={**reviewed.scope, 'durable_accounting': True, 'backup_restore': True,
+                   'retention_mode': 'durable-accounting'},
+        )
+        async with owner_sessions.begin() as db:
+            await db.execute(delete(StockDataAdmission).where(StockDataAdmission.product == 'calendar'))
+            db.add(StockDataAdmission(**asdict(reviewed)))
+            await db.execute(delete(StockSession))
+            db.add_all(StockSession(**asdict(row)) for row in stock_sessions.build_sessions(now, reviewed))
+            await db.execute(text('''
+                INSERT INTO stock_catalog_financial_quotes
+                  (coin_id,catalog_id,listing_id,provider_asset_id,provider_admission_id,
+                   execution_admission_id,bid,ask,unit_epoch,event_at,collected_at,observed_at,
+                   session_date,calendar_generation,opens_at,closes_at,valid_until)
+                VALUES(:c,:catalog,:listing,:asset,:provider,:execution,9.995,10.005,0,
+                       CAST(:now AS timestamptz)-interval '1 second',:now,:now,:session,1,:opens,:end,:end)
+            '''), market)
+        orders = []
+        for order in (_confirmation(market, quantity='3'),
+                      _confirmation(market, side='sell', expected_exec_price='9.995')):
+            original, created = await confirm(market, order)
+            assert created
+            orders.append((order.model_dump(mode='json'), original))
+
+        async with owner_sessions() as db:
+            generation = await db.scalar(text('SELECT id FROM stock_catalog_generations WHERE is_active'))
+        listing = await _listing(owner_sessions, generation, 'FQN')
+        grant = await _reviewed_grant(owner_sessions, listing, OTHER_ASSET, market['origin'])
+        binding = await _promote(owner_sessions, listing, grant, market['origin'])
+        case = SimpleNamespace(binding=binding, listing=listing, now=now, cutoff=opens)
+        async with owner_sessions.begin() as db:
+            await lock_catalog_action_scope(db)
+            await acquire_stock_gate(db, binding.coin_id)
+            conn = await db.connection()
+            scope = {
+                'account': binding.account, 'server': binding.server,
+                'catalog_id': str(binding.catalog_id), 'listing_id': str(binding.listing_id),
+                'provider_asset_id': binding.provider_asset_id, 'feed': 'alpaca-corporate-actions',
+            }
+            grant = await db.scalar(text('''
+                INSERT INTO stock_catalog_admissions
+                  (artifact,reference,reviewed_at,valid_until,fields,scope,is_fixture)
+                VALUES ('catalog_actions','Disposable action recovery review',:origin,:end,
+                        CAST(:fields AS jsonb),CAST(:scope AS jsonb),true) RETURNING id
+            '''), {'origin': market['origin'], 'end': end, 'fields': json.dumps(ACTION_FIELDS),
+                   'scope': json.dumps(scope)})
+            values = market | {'c': binding.coin_id, 'catalog': binding.catalog_id,
+                               'listing': binding.listing_id, 'actions': grant}
+            for query in (
+                '''INSERT INTO stock_catalog_action_coverage
+                   (coin_id,catalog_id,listing_id,admission_id,journal_origin,coverage_start,
+                    covered_until,observed_at,valid_until)
+                   VALUES (:c,:catalog,:listing,:actions,:origin,:origin,:now,:now,:end)''',
+                '''UPDATE stock_action_state SET health='current',admission_generation=:actions,
+                    checked_at=:now,valid_until=:end,journal_start_at=:origin,complete_from=:origin,
+                    coverage_start=:origin,covered_until=:now,sequence=1 WHERE coin_id=:c''',
+                '''INSERT INTO holdings (portfolio_id,coin_id,user_id,quantity,cost_basis)
+                   VALUES (:p,:c,:u,2,87.65)''',
+                '''INSERT INTO stock_ownership_movements
+                   (portfolio_id,coin_id,user_id,sequence,economic_at,recorded_at,quantity,
+                    before_quantity,after_quantity,before_basis,after_basis,unit_epoch,
+                    cause_kind,causal_key)
+                   VALUES (:p,:c,:u,1,:origin,:now,2,0,2,0,87.65,0,'opening','opening')''',
+            ):
+                await conn.execute(text(query), values)
+
+        dividend = _dividend(case)
+        payments = []
+        for action, outcome in ((dividend, 'original'), (replace(dividend, rate=Decimal('0.90')), 'applied')):
+            async with scheduler.begin() as conn:
+                work = await _derive(conn, case, action)
+            result = await pay(work)
+            assert result['outcome'] == outcome
+            payments.append((work, result))
+        split = _dividend(case, event_type='forward_split', rate=None, units='pre_split',
+                          economic_at=opens, new_rate=Decimal(2), old_rate=Decimal(1))
+        async with scheduler_sessions.begin() as db:
+            authority, revision = await _ingest(db, case, split)
+            assert revision.classification == 'supported_forward_split'
+            splits = list(await apply_due_actions(db, binding.coin_id, catalog=authority))
+        assert len(splits) == 1
+        economics = await observe(market, binding.coin_id)
+        assert Decimal(economics['cash']) == Decimal('1216.34')
+        assert [(Decimal(quantity), Decimal(basis)) for _, quantity, basis in economics['holdings']] == [
+            (Decimal(2), Decimal('20.01')), (Decimal(4), Decimal('87.65')),
+        ]
+        assert [row['kind'] for row in economics['history']] == [
+            'split', 'dividend_correction', 'dividend', 'trade', 'trade',
+        ]
+        assert all(row['symbol'] == listing.ticker and row['name'] == listing.company_name
+                   for row in economics['history'][:3])
+        assert economics['counts'] == [2, 1, 1, 1, 4]
+        receipt_path.write_text(json.dumps({
+            'market': {key: market[key] for key in ('catalog', 'p', 'u')},
+            'action_coin': binding.coin_id, 'orders': orders, 'payments': payments,
+            'splits': splits, 'economics': economics,
+        }))
+    finally:
+        for role in (app, scheduler, owner):
+            await role.dispose()
 
 
 class PortfolioRecoveryContracts(unittest.TestCase):
@@ -41,6 +357,10 @@ class PortfolioRecoveryContracts(unittest.TestCase):
         )
         with tarfile.open(fileobj=io.BytesIO(source), mode='r:') as archive:
             archive.extractall(cls.retained_0024, filter='data')
+        directory = tempfile.TemporaryDirectory(prefix='birja-retained-0025-')
+        cls.addClassCleanup(directory.cleanup)
+        cls.retained_0025 = Path(directory.name)
+        retained_catalog(cls.retained_0025)
 
     def test_ops_archive_family_is_authenticated_and_finite(self):
         spec=importlib.util.spec_from_file_location('ops_contracts',ROOT/'deploy/tests/ops-fixtures.py')
@@ -187,19 +507,31 @@ class PortfolioRecoveryContracts(unittest.TestCase):
                     producer.validate_manifest(changed,quarantined=quarantined)
 
     def test_current_source_tampering_refuses_before_authority_import(self):
-        producer=load('backup-snapshot')
-        with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
-            root=Path(tmp)
-            for name in producer.CATALOG_SOURCE_SHA256:
-                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes((ROOT/name).read_bytes())
-            producer.require_closure_source(root, revision='0025')
-            for name in producer.CATALOG_SOURCE_SHA256:
-                p=root/name;original=p.read_bytes();p.write_bytes(original+b'\nraise RuntimeError("untrusted import")\n')
-                with self.subTest(name=name),mock.patch.object(producer,'HERE',root/'deploy'), \
-                     mock.patch.object(producer.importlib.util,'spec_from_file_location',side_effect=AssertionError('unsafe import')), \
-                     self.assertRaises(ValueError):
-                    producer.closure_bootstrap('0025')
-                p.write_bytes(original)
+        current = load('backup-snapshot')
+        historical = load('backup-snapshot', self.retained_0025)
+        profiles = (
+            ('0025', self.retained_0025, historical, current.CATALOG_SOURCE_SHA256),
+            ('0026', ROOT, current, current.CATALOG_FINANCE_SOURCE_SHA256),
+        )
+        for revision, source, producer, pins in profiles:
+            with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
+                root = Path(tmp)
+                for name in pins:
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes((source / name).read_bytes())
+                producer.require_closure_source(root, revision=revision, allow_successor=False)
+                for name in pins:
+                    path = root / name
+                    original = path.read_bytes()
+                    path.write_bytes(original + b'\n# Unreviewed fixture content\n')
+                    with self.subTest(revision=revision, name=name), \
+                         mock.patch.object(producer, 'HERE', root / 'deploy'), \
+                         mock.patch.object(producer.importlib.util, 'spec_from_file_location',
+                                           side_effect=AssertionError('authority import before validation')), \
+                         self.assertRaises(ValueError):
+                        producer.closure_bootstrap(revision)
+                    path.write_bytes(original)
 
     def test_v1_inventory_remains_explicit_and_cannot_inherit_current_revision(self):
         consumer = load("verify-restore")
@@ -543,6 +875,26 @@ asyncio.run(main())
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == '--materialize-catalog':
+        destination = Path(sys.argv[2]).resolve()
+        if not destination.is_dir() or any(destination.iterdir()):
+            raise ValueError('Expected an empty disposable source directory')
+        retained_catalog(destination, runtime=True)
+        sys.exit(0)
+    if len(sys.argv) == 6 and sys.argv[1] == '--catalog-snapshot':
+        catalog_snapshot(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]), sys.argv[5])
+        sys.exit(0)
+    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-restore':
+        catalog_restore(Path(sys.argv[2]), Path(sys.argv[3]))
+        sys.exit(0)
+    if len(sys.argv) == 5 and sys.argv[1] == '--catalog-cache-absent':
+        catalog_cache_absent(Path(sys.argv[2]), sys.argv[3], sys.argv[4])
+        sys.exit(0)
+    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-economics':
+        import asyncio
+
+        asyncio.run(catalog_economics(sys.argv[2], Path(sys.argv[3])))
+        sys.exit(0)
     if '--postgres' in sys.argv:
         sys.argv.remove('--postgres')
         postgres_proof()
