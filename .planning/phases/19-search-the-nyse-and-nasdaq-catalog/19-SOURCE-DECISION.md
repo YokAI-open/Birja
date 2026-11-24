@@ -51,3 +51,12 @@ The official OpenFIGI anonymous ceiling is 25 mapping requests per minute at
 invocation, including retries. A complete initial classification could require
 several invocations and a sample cannot establish completeness. No live
 directory or mapping calls ran during Plan 19-01. [OpenFIGI API limits](https://www.openfigi.com/api/documentation)
+
+## Live activation cache
+
+The planned production Redis service uses a persistent append-only log.
+Expanded IEX prices would remain in that log until it is rewritten even
+after their serving TTL expires. Before live expanded quotes are enabled,
+the selected quote scope must cover this disk retention, or the quotes
+must use a volatile cache. The disposable checks use a volatile Redis
+instance. The encrypted recovery proof concerns PostgreSQL snapshots.

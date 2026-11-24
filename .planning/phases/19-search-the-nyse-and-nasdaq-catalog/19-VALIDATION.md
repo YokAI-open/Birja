@@ -32,6 +32,11 @@ remain Phase 21.
 
 ## Phase 21 release handoff
 
+Before enabling expanded production quotes, qualify the Redis cache for
+the approved data-use scope. Production currently uses a persistent
+append-only log. Verify permission for disk retention through log rewrite,
+or use a volatile cache for these marks.
+
 When qualifying the 0025 release archive, update the current-source profile
 checks in `deploy/tests/run-portfolio-validation.py` and the accepted archive
 inventory in `deploy/tests/ops-fixtures.py`. Their current checks name the

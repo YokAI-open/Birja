@@ -75,7 +75,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 - [x] 19-05 — Fetch selected display quotes and expose the owned trade context.
 
 **Wave 6** *(after Wave 5)*
-- [ ] 19-06 — Integrate Markets search and verify the browser flow.
+- [x] 19-06 — Integrate Markets search and verify the browser flow.
 
 **Success Criteria**:
 
@@ -112,7 +112,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
-| 19. Search the NYSE and Nasdaq catalog | 5/6 | In progress |
+| 19. Search the NYSE and Nasdaq catalog | 6/6 | In progress |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
