@@ -232,12 +232,15 @@ it("shows a permitted closed-market mark and opening countdown", async () => {
     valid_until: at(60),
   };
   closed.reason = "market_closed";
-  const { fetch } = setup({ context: () => Response.json(closed) });
+  const { fetch, user } = setup({ context: () => Response.json(closed) });
   expect(await screen.findByText("Opens in 1 hr 45 min")).toBeVisible();
   expect(screen.getByText(/Market closed/)).toBeVisible();
   expect(screen.getByText("$150.50")).toBeVisible();
   expect(screen.queryByText(/IEX price/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Orders aren't available/)).not.toBeInTheDocument();
+  const quantity = screen.getByLabelText("Whole-share quantity");
+  await user.type(quantity, "3");
+  expect(quantity).toHaveValue("3");
   readOnly(fetch);
 });
 
@@ -324,12 +327,13 @@ function preview(repriced = false): CatalogPreview {
     session_opens_at: at(-1800),
     session_closes_at: at(7200),
     valid_until: at(45),
+    preview_token: "1795532445000000.0." + (repriced ? "b" : "a").repeat(64),
   };
 }
 
 function fill(repriced = false): CatalogFill {
-  const { valid_until, ...values } = preview(repriced);
-  void valid_until;
+  const { valid_until, preview_token, ...values } = preview(repriced);
+  void [valid_until, preview_token];
   return {
     ...values,
     observed_at: at(-5),
@@ -394,6 +398,10 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
     "/portfolios/1",
   );
   expect(confirmations.map((order) => order.expected_exec_price)).toEqual(["151.00", "151.125"]);
+  expect(confirmations.map((order) => order.preview_token)).toEqual([
+    preview().preview_token,
+    preview(true).preview_token,
+  ]);
   expect(confirmations[1].idempotency_key).not.toBe(confirmations[0].idempotency_key);
   expect(screen.getAllByText("My portfolio")).toEqual([
     screen.getByRole("option", { name: "My portfolio" }),
@@ -443,16 +451,19 @@ it("keeps quantity across a hold and closure, without offering an expired confir
 });
 
 it("checks the saved attempt after a rename and shows the original receipt", async () => {
-  const tries: Record<string, unknown>[] = [];
+  const tries: { action: string | undefined; body: Record<string, unknown> }[] = [];
   let active = openTicket();
   const { user, client } = setup({
     context: () => Response.json(active),
     order: (path, body) => {
       if (path.endsWith("/preview")) return Response.json(preview());
-      tries.push(body);
-      return tries.length === 1
-        ? Response.json({ detail: { code: "service_unavailable" } }, { status: 503 })
-        : Response.json(fill(), { status: 200 });
+      const action = path.split("/").at(-1);
+      tries.push({ action, body });
+      if (action === "confirm")
+        return Response.json({ detail: { code: "service_unavailable" } }, { status: 503 });
+      if (tries.length === 2)
+        return Response.json({ detail: { code: "receipt_unavailable" } }, { status: 409 });
+      return Response.json(fill(), { status: 200 });
     },
   });
   await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
@@ -473,10 +484,13 @@ it("checks the saved attempt after a rename and shows the original receipt", asy
   });
   expect(await screen.findByRole("heading", { name: "Renamed Aerospace" })).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Check order result" }));
+  expect(await screen.findByRole("button", { name: "Check order result" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Confirm buy" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Check order result" }));
   expect(await screen.findByRole("heading", { name: "Order filled" })).toHaveFocus();
   expect(screen.getByText(/Fixture Aerospace · FQA/)).toBeVisible();
-  expect(tries).toHaveLength(2);
-  expect(tries[1]).toEqual(tries[0]);
+  expect(tries.map(({ action }) => action)).toEqual(["confirm", "receipt", "receipt"]);
+  expect(tries.map(({ body }) => body)).toEqual([tries[0].body, tries[0].body, tries[0].body]);
 });
 
 it("retains the draft when the preview deadline passes without sending a confirmation", async () => {
@@ -496,14 +510,48 @@ it("retains the draft when the preview deadline passes without sending a confirm
   expect(fetch.mock.calls.some(([path]) => String(path).endsWith("/confirm"))).toBe(false);
 });
 
-it("requests open-session status once before enabling order entry on a direct ticket", async () => {
+it("uses the terminal no-fill lookup to restore the quantity draft without submitting", async () => {
+  const attempts: { action: string | undefined; body: Record<string, unknown> }[] = [];
+  const { user } = setup({
+    context: () => Response.json(openTicket()),
+    order: (path, body) => {
+      const action = path.split("/").at(-1);
+      attempts.push({ action, body });
+      if (action === "preview") return Response.json(preview());
+      if (action === "confirm") return Response.json({}, { status: 503 });
+      return Response.json({ detail: { code: "receipt_missing" } }, { status: 409 });
+    },
+  });
+  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  await user.click(await screen.findByRole("button", { name: "Confirm buy" }));
+  await user.click(await screen.findByRole("button", { name: "Check order result" }));
+  expect(
+    await screen.findByText("This order didn’t fill. Preview again to place a new order."),
+  ).toBeVisible();
+  expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("2");
+  expect(screen.queryByRole("button", { name: "Confirm buy" })).not.toBeInTheDocument();
+  expect(attempts.map(({ action }) => action)).toEqual(["preview", "confirm", "receipt"]);
+  expect(attempts[2].body).toEqual(attempts[1].body);
+  expect(attempts[2].body.preview_token).toBe(preview().preview_token);
+  await user.click(screen.getByRole("button", { name: "Preview trade" }));
+  expect(await screen.findByRole("button", { name: "Confirm buy" })).toBeEnabled();
+  expect(attempts.map(({ action }) => action)).toEqual([
+    "preview",
+    "confirm",
+    "receipt",
+    "preview",
+  ]);
+});
+
+it("requests a quote again after reopening with new units and stays idle while closed", async () => {
   let view: CatalogTradeContext = {
     ...ticket(),
     execution_reason: "status_unavailable",
     quote: null,
     reason: "quote_unavailable",
   };
-  const { fetch } = setup({
+  const { client, fetch } = setup({
     context: () => Response.json(view),
     order: (path, body) => {
       expect(path).toBe(`/api/v2/stock-catalog/${catalogId}/quote`);
@@ -515,5 +563,34 @@ it("requests open-session status once before enabling order entry on a direct ti
     },
   });
   expect(await screen.findByLabelText("Whole-share quantity")).toBeVisible();
-  expect(fetch.mock.calls.filter(([path]) => String(path).endsWith("/quote"))).toHaveLength(1);
+  const requests = () => fetch.mock.calls.filter(([path]) => String(path).endsWith("/quote"));
+  expect(requests()).toHaveLength(1);
+  view = {
+    ...view,
+    read_only: true,
+    buy_max_quantity: "0",
+    execution_reason: "market_closed",
+    session: { state: "closed", opens_at: at(-7200), closes_at: at(-20), next_open_at: at(60) },
+    quote: null,
+    reason: "market_closed",
+  };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
+  });
+  expect(await screen.findByText(/Market closed/)).toBeVisible();
+  expect(requests()).toHaveLength(1);
+  vi.mocked(Date.now).mockReturnValue(now + 61_000);
+  view = {
+    ...ticket(),
+    execution_reason: "units_changed",
+    quote: null,
+    reason: "quote_unavailable",
+  };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
+  });
+  await waitFor(() => {
+    expect(requests()).toHaveLength(2);
+    expect(screen.getByLabelText("Whole-share quantity")).toBeVisible();
+  });
 });

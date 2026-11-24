@@ -4,9 +4,9 @@ import { ApiError } from "@/api/client";
 import {
   catalogRefusal,
   catalogReplacement,
-  confirmCatalogOrder,
   isCatalogOrder,
   previewCatalogOrder,
+  resolveCatalogOrder,
   type CatalogAttempt,
   type CatalogFill,
   type CatalogOrder,
@@ -143,10 +143,17 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
     retry: false,
     gcTime: 0,
   });
-  const confirmMutation = useMutation({
-    mutationKey: [...key, "confirm"],
-    mutationFn: ({ attempt, isCurrent }: { attempt: CatalogAttempt; isCurrent: () => boolean }) =>
-      confirmCatalogOrder(target.portfolioId, catalogId, attempt, isCurrent),
+  const resolutionMutation = useMutation({
+    mutationKey: [...key, "resolution"],
+    mutationFn: ({
+      attempt,
+      action,
+      isCurrent,
+    }: {
+      attempt: CatalogAttempt;
+      action: "confirm" | "receipt";
+      isCurrent: () => boolean;
+    }) => resolveCatalogOrder(target.portfolioId, catalogId, attempt, action, isCurrent),
     retry: false,
     gcTime: 0,
   });
@@ -210,7 +217,7 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
     }
   };
 
-  const resolve = async (attempt: CatalogAttempt) => {
+  const resolve = async (attempt: CatalogAttempt, action: "confirm" | "receipt") => {
     if (!current() || (target.isOriginalCurrent && !target.isOriginalCurrent())) return;
     const entry = client.getQueryCache().find({ queryKey: key, exact: true });
     setState((old) => ({
@@ -239,7 +246,11 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
     };
     const started = performance.now();
     try {
-      const fill = await confirmMutation.mutateAsync({ attempt, isCurrent: ownedAttempt });
+      const fill = await resolutionMutation.mutateAsync({
+        attempt,
+        action,
+        isCurrent: ownedAttempt,
+      });
       if (!ownedAttempt()) {
         preserveUnknown();
         return;
@@ -260,8 +271,17 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
         preserveUnknown();
         return;
       }
-      const replacement = catalogReplacement(error, started);
       const refused = catalogRefusal(error);
+      if (action === "receipt") {
+        if (refused === "receipt_missing") {
+          setState((old) => ({ ...old, phase: "draft", error: refused, attempt: null }));
+          void refreshContext();
+        } else {
+          preserveUnknown();
+        }
+        return;
+      }
+      const replacement = catalogReplacement(error, started);
       if (replacement && matchingQuote(replacement.quote, getContext(), Date.now())) {
         setState((old) => ({
           ...old,
@@ -280,7 +300,7 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
         void refreshContext();
       } else preserveUnknown();
     } finally {
-      confirmMutation.reset();
+      resolutionMutation.reset();
     }
   };
 
@@ -294,7 +314,9 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
         quantity,
         expected_exec_price: quote.exec_price,
         idempotency_key: crypto.randomUUID(),
+        preview_token: quote.preview_token,
       }),
+      "confirm",
     );
   };
   return {
@@ -319,7 +341,7 @@ export function useCatalogStockTrade(target: PortfolioTarget, catalogId: string,
     refreshContext,
     checkResult: () => {
       const saved = getState();
-      if (saved.phase === "unknown" && saved.attempt) void resolve(saved.attempt);
+      if (saved.phase === "unknown" && saved.attempt) void resolve(saved.attempt, "receipt");
     },
     setQuantity: (quantity: string) => edit({ quantity }),
     setSide: (side: Side) => edit({ side }),

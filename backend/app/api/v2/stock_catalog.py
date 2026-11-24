@@ -22,7 +22,7 @@ from app.models.corporate_action import StockActionState
 from app.models.stock_catalog_finance import StockCatalogInstrument
 from app.schemas.stock_catalog import CatalogIdInput, StockCatalogItem
 from app.schemas.stock_catalog_quotes import (
-    CatalogConfirmIn,
+    CatalogConfirmRequest,
     CatalogFillOut,
     CatalogOrderIn,
     CatalogPreviewOut,
@@ -254,7 +254,8 @@ async def post_catalog_quote(
         view.session.state == "open"
         # The halt worker starts tracking a selected issue when it sees a
         # financial request or its stored quote. Missing status still blocks orders.
-        and execution.reason in {"quote_unavailable", "quote_stale", "status_unavailable"}
+        and execution.reason
+        in {"quote_unavailable", "quote_stale", "status_unavailable", "units_changed"}
         and financial is not None
     ):
         purpose, fingerprint = "financial", financial.fingerprint
@@ -324,12 +325,13 @@ async def _refresh_execution(
     listing_version: int,
     reason: str,
 ) -> bool:
-    if reason not in {"quote_unavailable", "quote_stale"}:
+    refreshable = {"quote_unavailable", "quote_stale", "units_changed"}
+    if reason not in refreshable:
         return False
     execution = await stock_catalog_trading.load_catalog_execution(
         db, settings, catalog_id, listing_version, datetime.now(UTC), portfolio=portfolio
     )
-    if execution.financial is None or execution.reason not in {"quote_unavailable", "quote_stale"}:
+    if execution.financial is None or execution.reason not in refreshable:
         return execution.available
     await db.rollback()
     await request_catalog_quote(
@@ -351,7 +353,9 @@ def _order_refusal(exc: TradeRefused) -> HTTPException:
         return HTTPException(409, detail=exc.detail.model_dump(mode="json"))
     if exc.code == "listing_changed":
         return _listing_changed()
-    if exc.code == "read_only":
+    if exc.code == "preview_expired":
+        return _refusal(TradeRefused("quote_stale", exc.message))
+    if exc.code in {"read_only", "receipt_missing"}:
         return HTTPException(409, detail={"code": exc.code})
     return _refusal(exc)
 
@@ -397,7 +401,7 @@ async def post_catalog_preview(
 )
 async def post_catalog_confirm(
     catalog_id: CatalogPath,
-    body: CatalogConfirmIn,
+    body: CatalogConfirmRequest,
     portfolio: OwnedActivePortfolioDep,
     csrf: CsrfDep,
     db: DbDep,
@@ -425,3 +429,24 @@ async def post_catalog_confirm(
     if not created:
         response.status_code = 200
     return fill
+
+
+@router.post(
+    "/portfolios/{portfolio_id}/stock-catalog/{catalog_id}/receipt",
+    response_model=CatalogFillOut,
+    summary="Look up an original catalog order receipt",
+)
+async def post_catalog_receipt(
+    catalog_id: CatalogPath,
+    body: CatalogConfirmRequest,
+    portfolio: OwnedActivePortfolioDep,
+    csrf: CsrfDep,
+    db: DbDep,
+    settings: SettingsDep,
+) -> CatalogFillOut:
+    try:
+        return await stock_catalog_trading.lookup_receipt(
+            db, portfolio=portfolio, catalog_id=catalog_id, order=body, settings=settings
+        )
+    except TradeRefused as exc:
+        raise _order_refusal(exc) from None

@@ -108,7 +108,10 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
   const versionChanged =
     catalogListing !== undefined &&
     catalogListing.listing_version !== catalogIntent?.listing_version;
-  const selectedQuote = useSelectedCatalogPrice(versionChanged ? null : (catalogListing ?? null));
+  const selectedQuote = useSelectedCatalogPrice(
+    versionChanged ? null : (catalogListing ?? null),
+    now,
+  );
   const quoteView = selectedQuote.data;
   const catalogMark = quoteView ? catalogDisplay(quoteView, now) : null;
   const catalogRestriction = quoteView?.execution_reason;

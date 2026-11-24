@@ -553,6 +553,88 @@ describe("MarketsPage stock catalog", () => {
     expect(input).toHaveValue("FQA");
     expect(request).toHaveBeenCalledTimes(1);
   });
+
+  it("checks the selected listing once at its verified closing and once at reopening", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const item = listing();
+    const request = vi.fn(() => catalogOk(displayed(item, Date.now())));
+    let openingAt = "";
+    request.mockImplementationOnce(() => {
+      const initial = displayed(item, Date.now());
+      initial.session.closes_at = iso(Date.now() + 10_000);
+      openingAt = iso(Date.now() + 20_000);
+      initial.session.next_open_at = openingAt;
+      return catalogOk(initial);
+    });
+    request.mockImplementationOnce(() => {
+      const updated = displayed(item, Date.now(), true);
+      updated.session.next_open_at = openingAt;
+      return catalogOk(updated);
+    });
+    vi.stubGlobal(
+      "fetch",
+      stockFetch(() => catalogOk(catalog([item])), request),
+    );
+    renderWithClient(
+      <SignedIn>
+        <MarketsPage />
+      </SignedIn>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "US stocks" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search stocks" }), {
+      target: { value: "FQA" },
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+    fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
+    expect(await screen.findByText("$10.20")).toBeVisible();
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("$10.20")).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(6_000));
+    expect(await screen.findByText("Market closed")).toBeVisible();
+    expect(request).toHaveBeenCalledTimes(2);
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(screen.queryByText("Market closed")).toBeNull();
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(["unchanged", "failed"])(
+    "retries a %s boundary response only once",
+    async (firstRefresh) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const item = listing();
+      const initial = displayed(item, Date.now());
+      initial.session.closes_at = iso(Date.now() + 10_000);
+      const request = vi.fn(() => catalogOk(initial));
+      request
+        .mockImplementationOnce(() => catalogOk(initial))
+        .mockImplementationOnce(() =>
+          firstRefresh === "failed" ? catalogOk({}, 503) : catalogOk(initial),
+        );
+      vi.stubGlobal(
+        "fetch",
+        stockFetch(() => catalogOk(catalog([item])), request),
+      );
+      renderWithClient(
+        <SignedIn>
+          <MarketsPage />
+        </SignedIn>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "US stocks" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search stocks" }), {
+        target: { value: "FQA" },
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(300));
+      fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
+      expect(await screen.findByText("$10.20")).toBeVisible();
+      expect(request).toHaveBeenCalledTimes(1);
+      await act(async () => vi.advanceTimersByTimeAsync(10_500));
+      expect(request).toHaveBeenCalledTimes(2);
+      await act(async () => vi.advanceTimersByTimeAsync(9_000));
+      expect(request).toHaveBeenCalledTimes(3);
+    },
+  );
 });
 
 it("keeps curated stock search and its own ticket when the catalog is unavailable", async () => {

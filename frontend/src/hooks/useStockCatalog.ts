@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/api/client";
 import {
@@ -59,9 +59,10 @@ export function useStockCatalogSearch(search: string | null) {
   };
 }
 
-export function useSelectedCatalogPrice(listing: StockCatalogItem | null) {
+export function useSelectedCatalogPrice(listing: StockCatalogItem | null, now: number) {
   const client = useQueryClient();
   const session = useCatalogSession(client);
+  const enabled = listing?.state === "active" && session.current();
   const query = useQuery({
     queryKey: [
       "stockCatalogPrice",
@@ -70,7 +71,7 @@ export function useSelectedCatalogPrice(listing: StockCatalogItem | null) {
       listing?.catalog_id ?? null,
       listing?.listing_version ?? null,
     ],
-    enabled: listing?.state === "active" && session.current(),
+    enabled,
     queryFn: ({ signal }) => {
       if (listing === null) throw new Error("No selected stock listing");
       return requestCatalogPrice(listing, signal, session.current);
@@ -82,6 +83,42 @@ export function useSelectedCatalogPrice(listing: StockCatalogItem | null) {
     refetchOnWindowFocus: false,
     staleTime: Infinity,
   });
+  const schedule = query.data?.session;
+  const nextOpen = schedule?.state === "unknown" ? null : (schedule?.next_open_at ?? null);
+  const boundaryAt =
+    nextOpen && now >= Date.parse(nextOpen)
+      ? nextOpen
+      : schedule?.state === "open"
+        ? schedule.closes_at
+        : null;
+  const boundary = JSON.stringify([
+    session.epoch,
+    listing?.catalog_id,
+    listing?.listing_version,
+    boundaryAt,
+  ]);
+  const boundaryRefresh = useRef<{
+    key: string;
+    retried: boolean;
+    retryAt: number | null;
+  } | null>(null);
+  const { isFetching, refetch } = query;
+  useEffect(() => {
+    if (!enabled || isFetching || !schedule || !boundaryAt || now < Date.parse(boundaryAt)) return;
+    const prior = boundaryRefresh.current;
+    const sameBoundary = prior?.key === boundary;
+    if (sameBoundary && (prior.retried || prior.retryAt === null || now < prior.retryAt)) return;
+    const attempt = { key: boundary, retried: sameBoundary, retryAt: null as number | null };
+    boundaryRefresh.current = attempt;
+    void refetch().then(({ data, isError }) => {
+      const next = data?.session;
+      const unchanged =
+        next?.state === schedule.state &&
+        next.opens_at === schedule.opens_at &&
+        next.closes_at === schedule.closes_at;
+      if (isError || unchanged) attempt.retryAt = Date.now() + 2_000;
+    });
+  }, [boundary, boundaryAt, enabled, isFetching, now, refetch, schedule]);
   return { ...query, data: session.current() && !query.isError ? query.data : undefined };
 }
 
@@ -151,7 +188,9 @@ export function useCatalogOrderQuoteDemand(
       view.session.closes_at !== null &&
       Date.parse(view.session.opens_at) <= now &&
       now < Date.parse(view.session.closes_at) &&
-      ["status_unavailable", "quote_unavailable", "quote_stale"].includes(view.execution_reason),
+      ["status_unavailable", "quote_unavailable", "quote_stale", "units_changed"].includes(
+        view.execution_reason,
+      ),
     queryFn: ({ signal }) => {
       if (!listing) throw new Error("No selected stock listing");
       return requestCatalogPrice(listing, signal, scope.current);
@@ -161,7 +200,8 @@ export function useCatalogOrderQuoteDemand(
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     gcTime: 0,
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchInterval: 15_000,
   });
 }
 

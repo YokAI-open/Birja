@@ -1,11 +1,12 @@
 """Stable catalog orders using the shared stock ledger and exact SQL authority."""
 
+import hmac
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any, cast
 
-from sqlalchemy import bindparam, func, select, text
+from sqlalchemy import TIMESTAMP, bindparam, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +55,7 @@ from app.services.trade_math import Q2, TradeRefused
 
 ZERO = Decimal(0)
 FRESH = timedelta(seconds=120)
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,47 @@ class CatalogPriceChanged(TradeRefused):
 
 async def _clock(db: AsyncSession) -> datetime:
     return cast(datetime, await db.scalar(select(func.clock_timestamp())))
+
+
+@dataclass(frozen=True)
+class PreviewLease:
+    deadline: datetime
+    unit_epoch: int
+
+    def token(
+        self,
+        settings: Settings,
+        portfolio: OwnedActivePortfolio,
+        catalog_id: int,
+        order: CatalogOrderIn,
+        exec_price: Decimal,
+    ) -> str:
+        remaining = self.deadline - EPOCH
+        micros = (remaining.days * 86400 + remaining.seconds) * 1_000_000 + remaining.microseconds
+        dollars, _, fraction = format(exec_price, "f").partition(".")
+        message = (
+            f"catalog-order-preview-v1:{portfolio.user_id}:{portfolio.portfolio_id}:"
+            f"{catalog_id}:{order.listing_version}:{order.side}:{int(order.quantity)}:"
+            f"{dollars}.{fraction.rstrip('0')}:{micros}:{self.unit_epoch}"
+        )
+        digest = hmac.new(
+            settings.jwt_secret.get_secret_value().encode(), message.encode(), "sha256"
+        ).hexdigest()
+        return f"{micros}.{self.unit_epoch}.{digest}"
+
+
+def _read_preview_lease(
+    settings: Settings, portfolio: OwnedActivePortfolio, catalog_id: int, order: CatalogConfirmIn
+) -> PreviewLease | None:
+    if order.preview_token is None:
+        return None
+    micros, epoch, _ = order.preview_token.split(".")
+    try:
+        lease = PreviewLease(EPOCH + timedelta(microseconds=int(micros)), int(epoch))
+    except ValueError, OverflowError:
+        return None
+    expected = lease.token(settings, portfolio, catalog_id, order, order.expected_exec_price)
+    return lease if hmac.compare_digest(order.preview_token, expected) else None
 
 
 def _has_action_lease(
@@ -326,7 +369,11 @@ def _plan(
 
 
 def _preview(
-    loaded: CatalogExecution, plan: StockTradePlan, portfolio: OwnedActivePortfolio
+    loaded: CatalogExecution,
+    plan: StockTradePlan,
+    portfolio: OwnedActivePortfolio,
+    order: CatalogOrderIn,
+    settings: Settings,
 ) -> CatalogPreviewOut:
     price = _require(loaded)
     listing = loaded.listing
@@ -360,6 +407,9 @@ def _preview(
         session_opens_at=price.opens_at,
         session_closes_at=price.closes_at,
         valid_until=loaded.valid_until,
+        preview_token=PreviewLease(loaded.valid_until, price.unit_epoch).token(
+            settings, portfolio, listing.security_id, order, plan.exec_price
+        ),
     )
 
 
@@ -379,7 +429,7 @@ async def quote(
     )
     price = _require(loaded)
     financial = await _financial(db, portfolio, price.coin_id)
-    return _preview(loaded, _plan(loaded, order, financial), portfolio)
+    return _preview(loaded, _plan(loaded, order, financial), portfolio, order, settings)
 
 
 def _receipt(
@@ -476,6 +526,26 @@ class _QuoteRolled(Exception):
     """Rebuild uncommitted trade metadata after the selected quote changes."""
 
 
+async def lookup_receipt(
+    db: AsyncSession,
+    *,
+    portfolio: OwnedActivePortfolio,
+    catalog_id: int,
+    order: CatalogConfirmIn,
+    settings: Settings,
+) -> CatalogFillOut:
+    """Wait for an in-progress update to this portfolio and read its receipt."""
+    await _account(db, portfolio, lock=True)
+    receipt = await _replay(db, portfolio, catalog_id, order)
+    if receipt is not None:
+        return receipt
+    # The account lock serializes this observation with the final execution check.
+    lease = _read_preview_lease(settings, portfolio, catalog_id, order)
+    if lease is not None and await _clock(db) >= lease.deadline:
+        raise _refuse("receipt_missing")
+    raise _refuse("receipt_unavailable")
+
+
 def _quote_identity(price: StockCatalogFinancialQuote) -> tuple[Any, ...]:
     return (
         price.bid,
@@ -533,14 +603,23 @@ async def _execute_once(
         if prior is not None:
             await db.rollback()
             return prior, False
+        lease = _read_preview_lease(settings, portfolio, catalog_id, order)
+        if order.preview_token is not None and (
+            lease is None or await _clock(db) >= lease.deadline
+        ):
+            raise _refuse("preview_expired")
         financial = await _financial(db, portfolio, coin_id)
         loaded = await load_catalog_execution(
             db, settings, catalog_id, order.listing_version, await _clock(db), portfolio=portfolio
         )
+        price = _require(loaded)
+        if lease is not None and lease.unit_epoch != price.unit_epoch:
+            raise _refuse("units_changed")
         plan = _plan(loaded, order, financial)
         if plan.exec_price != order.expected_exec_price:
-            raise CatalogPriceChanged(_preview(loaded, plan, portfolio), order.expected_exec_price)
-        price = _require(loaded)
+            raise CatalogPriceChanged(
+                _preview(loaded, plan, portfolio, order, settings), order.expected_exec_price
+            )
         identity = _quote_identity(price)
         trade, movement = await _book_stock_trade(
             db, portfolio, coin_id, plan, price.event_at, order.idempotency_key
@@ -551,9 +630,12 @@ async def _execute_once(
         price = _require(current)
         if _quote_identity(price) != identity:
             changed = _plan(current, order, financial)
+            if lease is not None and lease.unit_epoch != price.unit_epoch:
+                raise _refuse("units_changed")
             if changed.exec_price != order.expected_exec_price:
                 raise CatalogPriceChanged(
-                    _preview(current, changed, portfolio), order.expected_exec_price
+                    _preview(current, changed, portfolio, order, settings),
+                    order.expected_exec_price,
                 )
             raise _QuoteRolled
         listing, status = current.listing, current.status
@@ -622,12 +704,23 @@ async def _execute_once(
         await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         await db.execute(text(f"SELECT pg_advisory_xact_lock_shared({REPORT_LOCK_KEYS})"))
         # The final guard and transaction commit follow the last lock wait.
-        await db.execute(
+        authorized = await db.execute(
             text(
                 "SELECT public.assert_catalog_stock_execution_current(:trade,:user,:authority)"
-            ).bindparams(bindparam("authority", type_=JSONB)),
-            {"trade": trade.id, "user": portfolio.user_id, "authority": authority},
+                " WHERE :deadline IS NULL OR clock_timestamp() < :deadline"
+            ).bindparams(
+                bindparam("authority", type_=JSONB),
+                bindparam("deadline", type_=TIMESTAMP(timezone=True)),
+            ),
+            {
+                "trade": trade.id,
+                "user": portfolio.user_id,
+                "authority": authority,
+                "deadline": lease.deadline if lease is not None else None,
+            },
         )
+        if authorized.first() is None:
+            raise _refuse("preview_expired")
         await db.commit()
         return fill, True
     except IntegrityError as exc:

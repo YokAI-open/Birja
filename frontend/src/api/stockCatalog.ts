@@ -81,7 +81,8 @@ const EXECUTION_REASONS = [
   "quote_stale",
 ] as const;
 export type CatalogExecutionReason = (typeof EXECUTION_REASONS)[number];
-export type CatalogOrderRefusal = StockRefusal | "read_only" | "listing_changed";
+export type CatalogOrderRefusal =
+  StockRefusal | "read_only" | "listing_changed" | "receipt_missing";
 
 export type CatalogPrice = {
   bid: string;
@@ -116,10 +117,11 @@ export type CatalogTradeContext = CatalogQuoteView & {
 };
 export type CatalogOrder = { listing_version: string; side: Side; quantity: string };
 export type CatalogAttempt = Readonly<
-  CatalogOrder & { expected_exec_price: string; idempotency_key: string }
+  CatalogOrder & { expected_exec_price: string; idempotency_key: string; preview_token: string }
 >;
 type CatalogIssue = { catalog_id: string; listing_version: string };
-export type CatalogPreview = StockEconomicValues & CatalogIssue & { valid_until: string };
+export type CatalogPreview = StockEconomicValues &
+  CatalogIssue & { valid_until: string; preview_token: string };
 export type CatalogFill = StockFillValues & CatalogIssue;
 export type TimedCatalogPreview = CatalogPreview & { transport: StockTransport };
 export type CatalogPriceChanged<Q = CatalogPreview> = {
@@ -379,6 +381,9 @@ export async function fetchCatalogTradeContext(
 
 const ORDER_FIELDS = "listing_version side quantity";
 const ECONOMIC_FIELDS = STOCK_ECONOMIC_FIELDS + " catalog_id listing_version";
+const previewToken = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[1-9][0-9]{0,18}\.(?:0|[1-9][0-9]{0,15})\.[a-f0-9]{64}$/.test(value);
 
 export function isCatalogOrder(v: unknown): v is CatalogOrder {
   return (
@@ -394,9 +399,10 @@ export function isCatalogOrder(v: unknown): v is CatalogOrder {
 function isCatalogAttempt(v: unknown): v is CatalogAttempt {
   return (
     record(v) &&
-    stockExact(v, ORDER_FIELDS + " expected_exec_price idempotency_key") &&
+    stockExact(v, ORDER_FIELDS + " expected_exec_price idempotency_key preview_token") &&
     isCatalogOrder({ listing_version: v.listing_version, side: v.side, quantity: v.quantity }) &&
     stockPrice(v.expected_exec_price) !== null &&
+    previewToken(v.preview_token) &&
     typeof v.idempotency_key === "string" &&
     /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(v.idempotency_key)
   );
@@ -417,9 +423,10 @@ function catalogEconomics(
 export function isCatalogPreview(v: unknown): v is CatalogPreview {
   if (
     !record(v) ||
-    !stockExact(v, ECONOMIC_FIELDS + " valid_until") ||
+    !stockExact(v, ECONOMIC_FIELDS + " valid_until preview_token") ||
     !catalogEconomics(v) ||
-    !timestamp(v.valid_until)
+    !timestamp(v.valid_until) ||
+    !previewToken(v.preview_token)
   )
     return false;
   const deadline = stockInstant(v.valid_until);
@@ -502,7 +509,11 @@ function matchesOrder(
   );
 }
 
-function orderPath(portfolioId: string, catalogId: string, action: "preview" | "confirm") {
+function orderPath(
+  portfolioId: string,
+  catalogId: string,
+  action: "preview" | "confirm" | "receipt",
+) {
   if (!isPortfolioId(portfolioId) || !isCatalogId(catalogId))
     throw new Error("Unexpected order target");
   return `/api/v2/portfolios/${portfolioId}/stock-catalog/${catalogId}/${action}`;
@@ -527,25 +538,28 @@ export async function previewCatalogOrder(
   return withCatalogTiming(value, started);
 }
 
-export async function confirmCatalogOrder(
+export async function resolveCatalogOrder(
   portfolioId: string,
   catalogId: string,
   order: CatalogAttempt,
+  action: "confirm" | "receipt",
   isCurrent: () => boolean,
 ): Promise<CatalogFill> {
   if (!isCatalogAttempt(order)) throw new Error("Unexpected stock attempt");
   const value = await guardedJsonRequest(
-    orderPath(portfolioId, catalogId, "confirm"),
+    orderPath(portfolioId, catalogId, action),
     { method: "POST", body: JSON.stringify(order), cache: "no-store" },
     isCurrent,
-    {
-      successStatuses: [200, 201],
-      validateErrorDetail: (status, detail) =>
-        status === 409 &&
-        isCatalogReplacement(detail) &&
-        matchesOrder(detail.quote, portfolioId, catalogId, order) &&
-        stockPrice(detail.previous_exec_price) === stockPrice(order.expected_exec_price),
-    },
+    action === "confirm"
+      ? {
+          successStatuses: [200, 201],
+          validateErrorDetail: (status, detail) =>
+            status === 409 &&
+            isCatalogReplacement(detail) &&
+            matchesOrder(detail.quote, portfolioId, catalogId, order) &&
+            stockPrice(detail.previous_exec_price) === stockPrice(order.expected_exec_price),
+        }
+      : { successStatuses: [200] },
   );
   if (
     !isCatalogFill(value) ||
@@ -574,7 +588,12 @@ const INPUT_REFUSALS = [
 export function catalogRefusal(error: unknown): CatalogOrderRefusal | null {
   if (
     !(error instanceof ApiError) ||
-    !oneOf(error.code, [...STOCK_REFUSALS, "read_only", "listing_changed"] as const)
+    !oneOf(error.code, [
+      ...STOCK_REFUSALS,
+      "read_only",
+      "listing_changed",
+      "receipt_missing",
+    ] as const)
   )
     return null;
   const status = INPUT_REFUSALS.includes(error.code) ? 422 : 409;

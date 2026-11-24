@@ -3,7 +3,7 @@
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
@@ -54,9 +54,19 @@ class CatalogOrderIn(CatalogQuoteIn):
     quantity: WholeQuantity
 
 
+PreviewToken = Annotated[
+    str, Field(pattern=r"^[1-9][0-9]{0,18}\.(?:0|[1-9][0-9]{0,15})\.[a-f0-9]{64}$")
+]
+
+
 class CatalogConfirmIn(CatalogOrderIn):
     expected_exec_price: ExpectedPrice
     idempotency_key: UUID
+    preview_token: PreviewToken | None = None
+
+
+class CatalogConfirmRequest(CatalogConfirmIn):
+    preview_token: PreviewToken
 
 
 class CatalogSessionOut(BaseModel):
@@ -130,6 +140,7 @@ class CatalogEconomics(BaseModel):
 
 class CatalogPreviewOut(CatalogEconomics):
     valid_until: AwareDatetime
+    preview_token: PreviewToken
 
 
 class CatalogFillOut(CatalogEconomics):

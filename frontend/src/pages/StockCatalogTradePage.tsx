@@ -37,6 +37,7 @@ const messages: Record<CatalogOrderRefusal, string> = {
   quote_stale: "This quote is out of date.",
   quote_unavailable: "Waiting for a verified IEX quote.",
   receipt_unavailable: "Check the original order to verify its result.",
+  receipt_missing: "This order didn’t fill. Preview again to place a new order.",
   invalid_quantity: "Enter a whole number greater than 0.",
   numeric_range: "Enter a smaller whole number.",
   insufficient_cash: "Not enough cash. Enter a smaller quantity.",
@@ -132,7 +133,11 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
   const closed = display.closed;
   const canDraft =
     listing.state === "active" &&
-    (!context.read_only || order.quantity !== "" || resultUnconfirmed || order.fill !== null);
+    (closed ||
+      !context.read_only ||
+      order.quantity !== "" ||
+      resultUnconfirmed ||
+      order.fill !== null);
   const locked = resultUnconfirmed || order.phase === "filled";
   const visible = order.quote ?? display.quote;
   const contextReason = context.execution_reason;
