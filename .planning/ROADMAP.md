@@ -94,7 +94,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 **Plans:** 9 plans across 8 waves
 
 **Wave 1**
-- [ ] 20-01 — Bind catalog issues to permanent financial instruments.
+- [x] 20-01 — Bind catalog issues to permanent financial instruments.
 
 **Wave 2** *(after Wave 1)*
 - [ ] 20-02 — Add exact SQL authority for catalog fills and actions.
@@ -145,7 +145,7 @@ expanded rights remain open. Phase 21 owns release CI and live acceptance.
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 0/9 | Ready for local execution |
+| 20. Trade and value stocks from search | 1/9 | In progress |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).

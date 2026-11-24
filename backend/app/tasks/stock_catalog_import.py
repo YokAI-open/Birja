@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, c
 from app.db.connection import database_connect_args
 from app.db.portfolio_migrate import require_migrator
 from app.models.stock_catalog import StockCatalogAdmission
+from app.services.stock_catalog_promotion import promote_catalog_instrument
 from app.services.stock_catalog_provider import CatalogAssetError, stage_reviewed_assets
 from app.services.stock_catalog_publish import (
     CatalogPublishError,
@@ -57,18 +58,22 @@ def _database_settings(fixture: bool) -> _OperatorConnection:
     return _OperatorConnection("prod", url, os.environ.get("DATABASE_SSL_CA_FILE"))
 
 
-async def _check_connection(conn: AsyncConnection, fixture: bool) -> None:
+async def _check_connection(
+    conn: AsyncConnection, fixture: bool, *, for_finance: bool = False
+) -> None:
     if fixture:
         database, session_role, current_role = (
             await conn.execute(text("SELECT current_database(), session_user, current_user"))
         ).one()
         if not database.endswith("_test") or session_role != current_role:
             raise CatalogPublishError("Fixtures require the isolated local test database")
-        if (
+        revision = (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() != "0025":
-            raise CatalogPublishError("Catalog import requires schema 0025")
-    elif await require_migrator(conn) != "0025":
+        ).scalar_one()
+    else:
+        revision = await require_migrator(conn)
+    allowed = ("0026",) if for_finance else ("0025", "0026")
+    if revision not in allowed:
         raise CatalogPublishError("Catalog import requires the admitted catalog migration")
 
 
@@ -98,6 +103,13 @@ def _positive_id(value: str) -> int:
     return result
 
 
+def _canonical_id(value: str) -> int:
+    result = _positive_id(value)
+    if value != str(result):
+        raise argparse.ArgumentTypeError("Expected a canonical positive ID")
+    return result
+
+
 def _args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(required=True, dest="command")
@@ -109,6 +121,13 @@ def _args(argv: Sequence[str] | None) -> argparse.Namespace:
     stage = commands.add_parser("stage-assets", help="Stage and promote the exact reviewed assets")
     stage.add_argument("--admission-id", type=_positive_id, required=True)
     stage.set_defaults(fixture=False)
+    promote = commands.add_parser(
+        "promote-instrument", help="Bind an exact reviewed issue to finance"
+    )
+    promote.add_argument("--catalog-id", type=_canonical_id, required=True)
+    promote.add_argument("--listing-id", type=_canonical_id, required=True)
+    promote.add_argument("--admission-id", type=_canonical_id, required=True)
+    promote.set_defaults(fixture=False)
     return parser.parse_args(argv)
 
 
@@ -133,9 +152,40 @@ async def _run(args: argparse.Namespace) -> dict[str, object]:
                     db, manifest, args.expect_generation, now=now, allow_fixture=args.fixture
                 )
             return asdict(receipt)
+        if args.command == "promote-instrument":
+            return await _promote_instrument(
+                engine, args.catalog_id, args.listing_id, args.admission_id
+            )
         return await _stage_assets(engine, args.admission_id)
     finally:
         await engine.dispose()
+
+
+async def _promote_instrument(
+    engine: AsyncEngine, catalog_id: int, listing_id: int, admission_id: int
+) -> dict[str, object]:
+    account = os.environ.get("STOCK_DATA_ACCOUNT", "")
+    server = os.environ.get("STOCK_DATA_SERVER", "")
+    if not account or not server:
+        raise CatalogPublishError("Explicit operator provider account and server are required")
+    async with AsyncSession(engine) as db, db.begin():
+        await _check_connection(await db.connection(), False, for_finance=True)
+        binding = await promote_catalog_instrument(
+            db,
+            catalog_id,
+            listing_id,
+            admission_id,
+            datetime.now(UTC),
+            account=account,
+            server=server,
+        )
+    return {
+        "disposition": "promoted",
+        "catalog_id": str(binding.catalog_id),
+        "coin_id": str(binding.coin_id),
+        "listing_id": str(binding.listing_id),
+        "admission_id": str(binding.admission_id),
+    }
 
 
 async def _stage_assets(engine: AsyncEngine, admission_id: int) -> dict[str, object]:

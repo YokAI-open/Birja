@@ -181,11 +181,13 @@ async def _display_grant(
     return review_id, reviewed_at, valid_until, scope
 
 
-async def _mapping(
+async def load_catalog_asset_mapping(
     db: AsyncSession,
     listing: StockCatalogListing,
-    settings: Settings | SchedulerSettings,
     now: datetime,
+    *,
+    account: str,
+    server: str,
 ) -> tuple[CatalogAssetMapping, datetime] | None:
     if (
         listing.provider_admission_id is None
@@ -226,8 +228,8 @@ async def _mapping(
             return None
         unit = matches[0]
         if (
-            provider.account != settings.stock_data_account
-            or provider.server != settings.stock_data_server
+            provider.account != account
+            or provider.server != server
             or provider.reviewed_at != reviewed_at
             or provider.valid_until != valid_until
             or provider.purposes != _MAPPING_PURPOSES
@@ -360,7 +362,9 @@ async def load_catalog_quote_context(
     if quote_grant is None:
         reason = "market_closed" if session.state == "closed" else "missing_permission"
         return CatalogQuoteContext(listing, session, None, reason)
-    provider = await _mapping(db, listing, settings, now)
+    provider = await load_catalog_asset_mapping(
+        db, listing, now, account=settings.stock_data_account, server=settings.stock_data_server
+    )
     if provider is None:
         reason = "market_closed" if session.state == "closed" else "mapping_review"
         return CatalogQuoteContext(listing, session, None, reason)
