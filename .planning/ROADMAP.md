@@ -11,7 +11,7 @@
 ## Phases
 
 - [x] **Phase 16: Adopt the Approved Interface**
-- [ ] **Phase 17: Verify Full-Stack Behavior and Prepare Release**
+- [x] **Phase 17: Verify Full-Stack Behavior and Prepare Release**
 
 ## Phase Details
 
@@ -43,7 +43,7 @@
 **Plans:** 2 plans
 
 - [x] 17-01 — Qualify and review the exact candidate (wave 1).
-- [ ] 17-02 — Audit, prepare the PR, and check CI after publication approval (wave 2).
+- [x] 17-02 — Audit, prepare the PR, and check CI after publication approval (wave 2).
 
 **Success criteria:**
 
@@ -56,7 +56,7 @@
 | Phase | Milestone | Status |
 |---|---|---|
 | 16. Adopt the Approved Interface | v1.3 | Verified complete |
-| 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Local qualification complete. PR publication and CI pending. |
+| 17. Verify Full-Stack Behavior and Prepare Release | v1.3 | Verified complete. PR #41 passed CI and merged into develop. |
 
 All 10 requirements are assigned once in [REQUIREMENTS.md](REQUIREMENTS.md).
 The [deferred register](DEFERRED.md) retains the separate stock activation work.
