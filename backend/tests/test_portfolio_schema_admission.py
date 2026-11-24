@@ -2,6 +2,7 @@
 
 import httpx
 import pytest
+from sqlalchemy import text
 
 from app.db.schema_contract import SchemaAdmissionError, require_schema
 from app.main import create_app
@@ -55,7 +56,8 @@ async def test_intermediate_request_write_gate_refuses_before_endpoint(
 
 
 @pytest.mark.parametrize(
-    "revision", ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017"]
+    "revision",
+    ["0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0023", "0024"],
 )
 async def test_current_startup_refuses_retained_schema_without_repair(
     portfolio_migration_db, settings, revision
@@ -68,8 +70,6 @@ async def test_current_startup_refuses_retained_schema_without_repair(
             pytest.fail("old schema admitted")
     assert failure.value.reason == "incompatible_schema"
     async with engine.connect() as conn:
-        from sqlalchemy import text
-
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
         ).scalar_one() == revision
@@ -96,21 +96,24 @@ async def test_retained_consumer_refuses_final_schema_without_changes(
         ("0008", "retained0008"),
         ("0013", "retained0014"),
         ("0014", "retained0014"),
+        ("0023", "retained0023"),
+        ("0024", "retained0024"),
     ],
 )
 async def test_retained_lane_admits_only_its_reviewed_schema(
     portfolio_migration_db, revision, consumer
 ):
     await migrate_to(revision)
+    if revision in {"0023", "0024"}:
+        await install_current_test_grants()
     async with portfolio_migration_db.connect() as conn:
         assert await require_schema(conn, consumer=consumer) == revision
 
 
-@pytest.mark.parametrize("revision", ["0023", "0024"])
 async def test_final_startup_and_write_admission_accepts_actual_final_schema(
-    portfolio_migration_db, settings, revision
+    portfolio_migration_db, settings
 ):
-    await migrate_to(revision)
+    await migrate_to("head")
     await install_current_test_grants()
     app = create_app(settings)
     reached = []
@@ -131,6 +134,25 @@ async def test_final_startup_and_write_admission_accepts_actual_final_schema(
     assert reached == [True]
 
 
+@pytest.mark.parametrize(
+    "drift",
+    [
+        "CREATE INDEX unexpected_catalog_index ON public.stock_catalog_listings (provider_symbol)",
+        "REVOKE SELECT ON public.stock_catalog_listings FROM birja_app",
+        "GRANT SELECT (reference) ON public.stock_catalog_admissions TO birja_app",
+    ],
+    ids=["unexpected-index", "missing-read", "additional-read"],
+)
+async def test_catalog_runtime_refuses_schema_or_authority_drift(engine, migrated, drift):
+    async with engine.connect() as conn, conn.begin():
+        assert await require_schema(conn) == "0025"
+        with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
+            async with conn.begin_nested():
+                await conn.execute(text(drift))
+                await require_schema(conn)
+        assert await require_schema(conn) == "0025"
+
+
 async def test_uninitialized_schema_refuses_instead_of_auto_migrating(portfolio_migration_db):
     async with portfolio_migration_db.connect() as conn:
         with pytest.raises(SchemaAdmissionError) as failure:
@@ -140,7 +162,6 @@ async def test_uninitialized_schema_refuses_instead_of_auto_migrating(portfolio_
 
 @pytest.mark.parametrize("malformation", ["multiple", "wrong_column_type"])
 async def test_actual_malformed_revision_metadata_refuses(portfolio_migration_db, malformation):
-    from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine
 
     await migrate_to("0014")
@@ -179,13 +200,23 @@ async def test_actual_malformed_revision_metadata_refuses(portfolio_migration_db
 
 @pytest.mark.parametrize("role", ["birja_app", "birja_scheduler"])
 async def test_restricted_runtime_role_can_read_schema_admission(engine, migrated, role):
-    from sqlalchemy import text
-
     async with engine.connect() as conn, conn.begin():
         await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed role matrix
-        assert await require_schema(conn) == "0024"
+        assert await require_schema(conn) == "0025"
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege(current_user,'alembic_version','UPDATE')")
             )
         ).scalar_one()
+        await conn.execute(text("SELECT id, ticker FROM public.stock_catalog_listings"))
+        await conn.execute(text("SELECT id, fields, scope FROM public.stock_catalog_admissions"))
+        assert (
+            await conn.execute(
+                text("""SELECT
+                  has_column_privilege(current_user,'stock_catalog_admissions','reference','SELECT'),
+                  has_table_privilege(current_user,'stock_catalog_listings','INSERT,UPDATE,DELETE'),
+                  has_sequence_privilege(current_user,'stock_catalog_listings_id_seq','USAGE,UPDATE'),
+                  has_table_privilege(current_user,'stock_catalog_admissions','INSERT,UPDATE,DELETE')
+                """)
+            )
+        ).one() == (False, False, False, False)

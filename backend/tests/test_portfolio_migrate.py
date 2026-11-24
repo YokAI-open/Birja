@@ -432,9 +432,9 @@ async def test_exact_pre_closure_initial_runtime_and_resume_authentication(
         async with child.begin() as conn:
             await conn.execute(text(PREFLIGHT_0023_SQL))
             with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-                await require_schema(conn)
+                await require_schema(conn, consumer="retained0023")
             await sql(conn, GRANTS_0023_SQL)
-            assert await require_schema(conn) == "0023"
+            assert await require_schema(conn, consumer="retained0023") == "0023"
             assert (
                 await conn.execute(
                     text("SELECT cash,starting_cash FROM accounts WHERE id=:p"), {"p": root}
@@ -481,7 +481,7 @@ async def test_prior_authority_drift_refuses_before_any_migration_child(
             patch.object(migration, "database_connect_args", return_value={}),
             patch.object(migration.asyncio, "create_subprocess_exec", AsyncMock()) as spawn,
         ):
-            with pytest.raises(ValueError, match="Unrecognized (?:pre-)?closure"):
+            with pytest.raises(ValueError, match="Unrecognized .*migration authority"):
                 await migration.migrate(SimpleNamespace(env="prod", database_url=URL))
             spawn.assert_not_awaited()
         async with child.connect() as conn:
@@ -509,7 +509,7 @@ async def test_prior_authority_drift_refuses_before_any_migration_child(
         await child.dispose()
 
 
-def test_successor_source_authentication_pins_every_closure_and_halt_asset():
+def test_successor_source_authentication_pins_every_current_and_retained_asset():
     required = {
         "alembic/versions/0021_portfolio_closure_schema.py",
         "alembic/versions/0022_portfolio_closure_provenance.py",
@@ -517,6 +517,8 @@ def test_successor_source_authentication_pins_every_closure_and_halt_asset():
         "alembic/sql/0023_portfolio_closure.sql",
         "alembic/versions/0024_stock_halt_snapshot.py",
         "alembic/sql/0024_stock_halt_snapshot.sql",
+        "alembic/versions/0025_stock_catalog.py",
+        "alembic/sql/0025_stock_catalog.sql",
     }
     assert required <= migration.SOURCE.keys()
     migration.require_source()
@@ -530,7 +532,7 @@ async def test_successor_authenticated_migrator_accepts_complete_closure_revisio
 
     from tests.test_migrations import run_test_migration
 
-    for revision in ("0020", "0021", "0022", "0023", "0024"):
+    for revision in ("0020", "0021", "0022", "0023", "0024", "0025"):
         await asyncio.to_thread(run_test_migration, revision)
         async with portfolio_migration_db.begin() as conn:
             await conn.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
@@ -661,12 +663,12 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
     identity = AsyncMock(
         side_effect=ValueError("identity")
         if outcome == "identity"
-        else ["0014", "0016" if outcome == "revision" else "0024"]
+        else ["0014", "0016" if outcome == "revision" else "0025"]
     )
     if outcome == "preflight":
 
         async def execute(statement):
-            if str(statement) == migration.PREFLIGHT_0024_SQL:
+            if str(statement) == migration.PREFLIGHT_0025_SQL:
                 raise ValueError("preflight")
 
         conn.execute.side_effect = execute
@@ -683,7 +685,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
             await migration.migrate(settings)
             assert (
                 capsys.readouterr().out
-                == "portfolio_migration_to_final=true source_revision=0014 final=0024\n"
+                == "portfolio_migration_to_final=true source_revision=0014 final=0025\n"
             )
             conn.rollback.assert_awaited_once()
         else:
@@ -701,7 +703,7 @@ async def test_child_finalization_and_failure_cleanup(outcome, capsys):
         assert statements[0] == "SELECT pg_advisory_lock(1026016017)"
         assert statements[-1] == "SELECT pg_advisory_unlock(1026016017)"
         assert conn.commit.await_count == 2
-        assert spawn.call_args.args[-2:] == ("upgrade", "0024")
+        assert spawn.call_args.args[-2:] == ("upgrade", "0025")
         assert spawn.call_args.kwargs["cwd"] == migration.BACKEND_DIR
     assert child.kill.call_count == (outcome == "timeout")
     assert child.wait.await_count == (outcome == "timeout")

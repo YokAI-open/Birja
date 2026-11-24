@@ -609,7 +609,38 @@ CATALOGUE_0024_SHA256 = "b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5
 PREFLIGHT_0024_SQL = PREFLIGHT_0023_SQL.replace("version_num='0023'", "version_num='0024'").replace(
     CATALOGUE_0023_SHA256, CATALOGUE_0024_SHA256
 )
-PORTFOLIO_PREFLIGHT_SQL = {"0023": PREFLIGHT_0023_SQL, "0024": PREFLIGHT_0024_SQL}
+
+# Catalog storage adds objects and read-only grants, with the same private defaults.
+CATALOGUE_0025_SQL = CATALOGUE_0023_SQL
+ACL_0025_SQL = ACL_SQL
+DEFAULT_ACL_0025_SQL = DEFAULT_ACL_0023_SQL
+DEFAULT_ACL_0025_SHA256 = DEFAULT_ACL_0023_SHA256
+CATALOGUE_0025_SHA256 = "64ae5dbb83bfa0fa764d667a91f09abcf023b39f3e3b032354ce1088c45135a3"
+ACL_0025_SHA256 = "a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f"
+CURRENT_PORTFOLIO_REVISION = "0025"
+PREFLIGHT_0025_SQL = (
+    PREFLIGHT_0024_SQL.replace("version_num='0024'", "version_num='0025'")
+    .replace(CATALOGUE_0024_SHA256, CATALOGUE_0025_SHA256)
+    .replace(f"'{ACL_0023_SHA256}',", f"'{ACL_0023_SHA256}','{ACL_0025_SHA256}',")
+    .replace(
+        f"='{ACL_0023_SHA256}' AND",
+        f" IN ('{ACL_0023_SHA256}','{ACL_0025_SHA256}') AND",
+    )
+)
+PORTFOLIO_PREFLIGHT_SQL = {
+    "0023": PREFLIGHT_0023_SQL,
+    "0024": PREFLIGHT_0024_SQL,
+    "0025": PREFLIGHT_0025_SQL,
+}
+CATALOGUE_TABLES = frozenset(
+    {
+        "stock_catalog_admissions",
+        "stock_catalog_aliases",
+        "stock_catalog_generations",
+        "stock_catalog_listings",
+        "stock_catalog_securities",
+    }
+)
 
 GRANTS_0023_SQL = (
     GRANTS_SQL
@@ -640,3 +671,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON 
  FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 """
 )
+
+CATALOGUE_READ_GRANTS_SQL = r"""
+GRANT SELECT ON public.stock_catalog_generations,public.stock_catalog_securities,
+ public.stock_catalog_listings,public.stock_catalog_aliases TO birja_app,birja_scheduler;
+GRANT SELECT (id,artifact,reviewed_at,valid_until,revoked_at,fields,scope,is_fixture)
+ ON public.stock_catalog_admissions TO birja_app,birja_scheduler;
+"""
+GRANTS_0025_SQL = GRANTS_0023_SQL + CATALOGUE_READ_GRANTS_SQL

@@ -15,15 +15,22 @@ from app.core.config import Settings, get_settings
 from app.db.connection import database_connect_args
 from app.db.dev_bootstrap import migration_objects, require_complete_migration_inventory
 from app.db.portfolio_bootstrap import (
+    CURRENT_PORTFOLIO_REVISION,
     MIGRATION_SUPPLEMENTAL_INVENTORY_SQL,
     PORTFOLIO_PREFLIGHT_SQL,
     PRE_CLOSURE_MIGRATION_SQL,
     PREFLIGHT_0014_MIGRATION_SQL,
-    PREFLIGHT_0024_SQL,
+    PREFLIGHT_0025_SQL,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SOURCE = {
+    "alembic/versions/0025_stock_catalog.py": (
+        "cd1890bfec3b1dc4b638fd3e86c9217d6eb331be3e895f2443b74fd88d078826"
+    ),
+    "alembic/sql/0025_stock_catalog.sql": (
+        "7665f5df6c828f681f6d7db7dda8b4cbf1a19d4f645fa4003fec94c1a5fa32fa"
+    ),
     "alembic/versions/0024_stock_halt_snapshot.py": (
         "792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd"
     ),
@@ -124,7 +131,7 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         versions = (
             (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
         )
-        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 25)}:
+        if len(versions) != 1 or versions[0] not in {f"{n:04}" for n in range(7, 26)}:
             raise ValueError("Unsupported portfolio migration revision")
         revision = versions[0]
     elif not fresh:
@@ -184,7 +191,7 @@ async def require_migrator(conn: AsyncConnection, *, fresh: bool = False) -> str
         try:
             await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
         except DBAPIError:
-            raise ValueError("Unrecognized closure migration authority") from None
+            raise ValueError("Unrecognized current or retained migration authority") from None
     return revision
 
 
@@ -214,7 +221,7 @@ async def migrate(settings: Settings) -> None:
                     "-m",
                     "alembic",
                     "upgrade",
-                    "0024",
+                    CURRENT_PORTFOLIO_REVISION,
                     cwd=BACKEND_DIR,
                     env=dict(os.environ),
                     stdout=asyncio.subprocess.PIPE,
@@ -230,15 +237,16 @@ async def migrate(settings: Settings) -> None:
                     ) from None
                 if child.returncode:
                     raise ValueError("Portfolio finalization failed; diagnostics withheld")
-                if await require_migrator(conn) != "0024":
+                if await require_migrator(conn) != CURRENT_PORTFOLIO_REVISION:
                     raise ValueError("Final portfolio revision absent")
-                await conn.execute(text(PREFLIGHT_0024_SQL))
+                await conn.execute(text(PREFLIGHT_0025_SQL))
                 await conn.rollback()
             finally:
                 await conn.execute(text("SELECT pg_advisory_unlock(1026016017)"))
                 await conn.commit()
             print(
-                "portfolio_migration_to_final=true source_revision=" + str(revision) + " final=0024"
+                f"portfolio_migration_to_final=true source_revision={revision} "
+                f"final={CURRENT_PORTFOLIO_REVISION}"
             )
     finally:
         await engine.dispose()

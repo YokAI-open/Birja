@@ -17,7 +17,7 @@ down_revision: str | Sequence[str] | None = "0024"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-STOCK_CATALOG_SQL_SHA256 = "75da40156ef710ffa187f10765a0e69b7bd408afa6f85428d9c311fc876604cf"
+STOCK_CATALOG_SQL_SHA256 = "7665f5df6c828f681f6d7db7dda8b4cbf1a19d4f645fa4003fec94c1a5fa32fa"
 CATALOG_TABLES = (
     "stock_catalog_aliases",
     "stock_catalog_listings",

@@ -183,7 +183,7 @@ git -C "$APP_DIR" checkout -q --detach "$CLOSURE_TESTED"
 for name in backend/alembic/versions/0024_stock_halt_snapshot.py \
   backend/alembic/sql/0024_stock_halt_snapshot.sql backend/app/db/portfolio_bootstrap.py \
   backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
-  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$HERE/../.." show "33b9b5fdc6f89ef810d588bd7c7b2962b2c80352:$name" > "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
 done
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m reported-halt-tested
@@ -199,3 +199,33 @@ BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
 if ADMITTED_REVISION=0024 admit_application_source "$CLOSURE_TESTED"; then
   echo 'FAIL predecessor runtime admitted on 0024'; exit 1
 fi
+
+# Exercise the new exact source across the forward and pending-rollback paths.
+git -C "$APP_DIR" checkout -q --detach "$HALT_TESTED"
+for name in backend/alembic/versions/0025_stock_catalog.py \
+  backend/alembic/sql/0025_stock_catalog.sql backend/app/db/portfolio_bootstrap.py \
+  backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py \
+  backend/app/db/dev_bootstrap.py deploy/db/bootstrap-roles.sql; do
+  mkdir -p "$APP_DIR/$(dirname "$name")"
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-tested
+CATALOG_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$CATALOG_TESTED
+run_case deploy 0024 "$CATALOG_TESTED" no pass
+run_case deploy 0025 "$CATALOG_TESTED" no pass
+run_case rollback 0025 main yes pass
+run_case rollback 0025 main no refuse
+if ADMITTED_REVISION=0024 admit_application_source "$CATALOG_TESTED"; then
+  echo 'FAIL catalog runtime admitted before upgrade'; exit 1
+fi
+BIRJA_TESTED_SOURCE=$HALT_TESTED
+run_case deploy 0025 "$HALT_TESTED" no refuse
+run_case rollback 0025 main yes refuse
+printf '\n-- corrupted catalog contract\n' >> "$APP_DIR/backend/alembic/sql/0025_stock_catalog.sql"
+git -C "$APP_DIR" add backend/alembic/sql/0025_stock_catalog.sql
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-corrupt
+BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
+run_case deploy 0024 "$BIRJA_TESTED_SOURCE" no refuse
+run_case deploy 0025 "$BIRJA_TESTED_SOURCE" no refuse

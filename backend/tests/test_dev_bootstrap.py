@@ -160,7 +160,8 @@ def test_postmigration_cli_mode_is_explicit(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "revision", ["0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024"]
+    "revision",
+    ["0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025"],
 )
 async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
     role = DriverRecord({"oid": 123, **dict.fromkeys(FLAGS, False)})
@@ -171,7 +172,7 @@ async def test_postmigration_portfolio_revision_dispatch_is_explicit(revision):
         patch("app.db.dev_bootstrap._authorize_portfolios", new_callable=AsyncMock) as final,
         patch("app.db.dev_bootstrap._authorize_dividends", new_callable=AsyncMock) as legacy,
     ):
-        if revision in {"0023", "0024"}:
+        if revision in {"0023", "0024", "0025"}:
             await bootstrap("dev", URL, after_migrations=True)
             final.assert_awaited_once_with(conn, revision)
         else:
@@ -190,7 +191,7 @@ async def test_current_final_acl_mismatch_refuses_and_closes_transaction():
     """A current revision is not enough when the resulting privileges disagree."""
     role = DriverRecord({"oid": 123, **dict.fromkeys(FLAGS, False)})
     conn = connection(role)
-    conn.fetchval = AsyncMock(side_effect=[True, False, "0024", "0" * 64])
+    conn.fetchval = AsyncMock(side_effect=[True, False, "0025", "0" * 64])
     with (
         patch("app.db.dev_bootstrap.asyncpg.connect", AsyncMock(return_value=conn)),
         pytest.raises(ValueError, match="Unexpected final management grants"),
@@ -200,11 +201,11 @@ async def test_current_final_acl_mismatch_refuses_and_closes_transaction():
         await bootstrap("dev", URL, after_migrations=True)
     assert [call.args[0] for call in conn.execute.call_args_list] == [
         "SELECT pg_catalog.pg_advisory_xact_lock(1026016001)",
-        dev_bootstrap.PORTFOLIO_PREFLIGHT_SQL["0024"],
-        dev_bootstrap.GRANTS_0023_SQL,
+        dev_bootstrap.PORTFOLIO_PREFLIGHT_SQL["0025"],
+        dev_bootstrap.GRANTS_0025_SQL,
     ]
     assert conn.fetchval.await_count == 4
-    assert conn.fetchval.call_args.args == (dev_bootstrap.ACL_SQL,)
+    assert conn.fetchval.call_args.args == (dev_bootstrap.ACL_0025_SQL,)
     assert conn.transaction.return_value.__aexit__.await_args.args[0] is ValueError
     conn.close.assert_awaited_once()
 
@@ -276,10 +277,10 @@ async def test_finite_dev_migration_never_leaves_login_enabled(outcome, capsys):
     ):
         if outcome == "success":
             await dev_bootstrap._migrate_dev(conn, URL)
-            authorize.assert_awaited_once_with(conn, "0024")
+            authorize.assert_awaited_once_with(conn, "0025")
             assert (
                 capsys.readouterr().out
-                == "dev_final_migration=true source_revision=0014 final=0024\n"
+                == "dev_final_migration=true source_revision=0014 final=0025\n"
             )
             assert "birja_migrator:ephemeral@" in spawn.call_args.kwargs["env"]["DATABASE_URL"]
         else:
@@ -326,7 +327,7 @@ async def test_finite_dev_migration_fresh_database_reports_none(capsys):
         patch.object(dev_bootstrap, "_authorize_portfolios", new_callable=AsyncMock),
     ):
         await dev_bootstrap._migrate_dev(conn, URL)
-    assert "source_revision=None final=0024" in capsys.readouterr().out
+    assert "source_revision=None final=0025" in capsys.readouterr().out
 
 
 async def test_portfolio_authorization_runs_actual_final_sql(engine, migrated):
@@ -335,7 +336,7 @@ async def test_portfolio_authorization_runs_actual_final_sql(engine, migrated):
 
     async with engine.connect() as conn, conn.begin():
         raw = await conn.get_raw_connection()
-        await dev_bootstrap._authorize_portfolios(raw.driver_connection, "0024")
+        await dev_bootstrap._authorize_portfolios(raw.driver_connection, "0025")
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege('birja_scheduler','accounts','UPDATE')")

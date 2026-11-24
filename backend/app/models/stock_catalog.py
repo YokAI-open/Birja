@@ -63,7 +63,8 @@ class StockCatalogSecurity(Base):
     __tablename__ = "stock_catalog_securities"
     __table_args__ = (
         CheckConstraint(
-            "length(identity_key) BETWEEN 1 AND 192 AND identity_key = btrim(identity_key)",
+            "length(identity_key) >= 1 AND length(identity_key) <= 192 "
+            "AND identity_key = btrim(identity_key)",
             name="identity_key",
         ),
         CheckConstraint("isfinite(created_at)", name="created_at_finite"),
@@ -81,7 +82,7 @@ class StockCatalogAdmission(Base):
     __table_args__ = (
         CheckConstraint("artifact ~ '^[a-zA-Z0-9_.:-]{1,96}$'", name="artifact_key"),
         CheckConstraint(
-            "length(reference) BETWEEN 1 AND 2048 AND reference = btrim(reference)",
+            "length(reference) >= 1 AND length(reference) <= 2048 AND reference = btrim(reference)",
             name="reference_length",
         ),
         CheckConstraint(
@@ -137,12 +138,13 @@ class StockCatalogListing(Base):
             name="ticker_shape",
         ),
         CheckConstraint(
-            "length(company_name) BETWEEN 1 AND 256 AND length(normalized_name) BETWEEN 1 AND 512 "
+            "length(company_name) >= 1 AND length(company_name) <= 256 "
+            "AND length(normalized_name) BETWEEN 1 AND 512 "
             "AND (share_class IS NULL OR length(share_class) BETWEEN 1 AND 64)",
             name="name_bounds",
         ),
         CheckConstraint(
-            "length(reason) BETWEEN 1 AND 128 AND length(row_key) BETWEEN 1 AND 128 "
+            "length(reason) >= 1 AND length(reason) <= 128 AND length(row_key) BETWEEN 1 AND 128 "
             "AND row_digest ~ '^[0-9a-f]{64}$'",
             name="source_shape",
         ),

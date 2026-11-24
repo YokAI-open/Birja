@@ -121,10 +121,44 @@ backend/app/db/schema_contract.py 3b8c8dee9e2211365a322efe2be44ebb921d640edfdcd9
 HALT_PINS
 }
 
+stock_catalog_source_supported() {
+  local name expected actual
+  while read -r name expected; do
+    actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
+    [ "$actual" = "$expected" ] || return 1
+  done <<'CATALOG_PINS'
+backend/alembic/versions/0023_portfolio_closure_authority.py d62c175438c9b1022771df1cac6e4b9333f77a2b8c3375aa365840daa78ce8b5
+backend/alembic/sql/0023_portfolio_closure.sql 59577ba16c9e9ea9740c2cb0d171b7006931bb6b1b9e5d0408c9a6f673f7c920
+backend/alembic/versions/0024_stock_halt_snapshot.py 792f45724769b22df272a119633bc19a789e8b4153dedc96397b4ba0efcad7fd
+backend/alembic/sql/0024_stock_halt_snapshot.sql fa19099943dd885cfa3548cd45f25fb5d5150307524ea41d0cae0aa4b2c6e986
+backend/alembic/versions/0025_stock_catalog.py cd1890bfec3b1dc4b638fd3e86c9217d6eb331be3e895f2443b74fd88d078826
+backend/alembic/sql/0025_stock_catalog.sql 7665f5df6c828f681f6d7db7dda8b4cbf1a19d4f645fa4003fec94c1a5fa32fa
+backend/app/db/portfolio_bootstrap.py 01bec26cbefcf006f2ad3d5ded58a089d270f0afd984c5f1f4193f066d827c1b
+backend/app/db/portfolio_migrate.py cc180f5f87b14acc8cafc85a621f26254bed7ac11bf03cca7c0997714c6ad531
+backend/app/db/schema_contract.py 8d67928947550073688dbd2ea5713db66c00c1658d31206766588ccce9052b0a
+backend/app/db/dev_bootstrap.py df74dc8fe71f6b18f8ed0c5b435055172c2c4f9289eb503fb0bbe497cc6d47fd
+deploy/db/bootstrap-roles.sql 78e1c8d9e461b50900c70199ac6f5fc41d997c11c471eb93121e4689afad24ca
+CATALOG_PINS
+}
+
 admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0025_stock_catalog.py" 2>/dev/null; then
+    [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_source_supported "$1" || {
+      application_schema_incompatible; return 1;
+    }
+    if [ "${2:-runtime}" = portfolio-upgrade ]; then
+      case "${ADMITTED_REVISION:-}" in
+        0007|0008|0009|0010|0011|0012|0013|0014|0017|0020|0023|0024|0025) return 0 ;;
+        *) application_schema_incompatible; return 1 ;;
+      esac
+    fi
+    [ "${ADMITTED_REVISION:-}" = 0025 ] && return 0
+    application_schema_incompatible
+    return 1
+  fi
   if [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && reported_halt_source_supported "$1"; then
     if [ "${2:-runtime}" = portfolio-upgrade ]; then
       case "${ADMITTED_REVISION:-}" in

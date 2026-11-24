@@ -38,8 +38,8 @@ CREATE TABLE public.stock_catalog_securities (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT pk_stock_catalog_securities PRIMARY KEY (id),
     CONSTRAINT ck_stock_catalog_securities_identity_key CHECK (
-        length(identity_key) BETWEEN 1
-        AND 192
+        length(identity_key) >= 1
+        AND length(identity_key) <= 192
         AND identity_key = btrim(identity_key)
     ),
     CONSTRAINT ck_stock_catalog_securities_created_at_finite CHECK (isfinite(created_at)),
@@ -59,8 +59,8 @@ CREATE TABLE public.stock_catalog_admissions (
     CONSTRAINT pk_stock_catalog_admissions PRIMARY KEY (id),
     CONSTRAINT ck_stock_catalog_admissions_artifact_key CHECK (artifact ~ '^[a-zA-Z0-9_.:-]{1,96}$'),
     CONSTRAINT ck_stock_catalog_admissions_reference_length CHECK (
-        length(reference) BETWEEN 1
-        AND 2048
+        length(reference) >= 1
+        AND length(reference) <= 2048
         AND reference = btrim(reference)
     ),
     CONSTRAINT ck_stock_catalog_admissions_validity CHECK (
@@ -134,16 +134,16 @@ CREATE TABLE public.stock_catalog_listings (
         AND normalized_ticker = ticker
     ),
     CONSTRAINT ck_stock_catalog_listings_name_bounds CHECK (
-        length(company_name) BETWEEN 1
-        AND 256
+        length(company_name) >= 1
+        AND length(company_name) <= 256
         AND length(normalized_name) BETWEEN 1
         AND 512
         AND (share_class IS NULL OR length(share_class) BETWEEN 1
         AND 64)
     ),
     CONSTRAINT ck_stock_catalog_listings_source_shape CHECK (
-        length(reason) BETWEEN 1
-        AND 128
+        length(reason) >= 1
+        AND length(reason) <= 128
         AND length(row_key) BETWEEN 1
         AND 128
         AND row_digest ~ '^[0-9a-f]{64}$'

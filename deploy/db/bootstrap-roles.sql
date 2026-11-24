@@ -14,7 +14,7 @@ BEGIN
   IF (SELECT version_num FROM public.alembic_version) IN ('0015','0016','0018','0019','0021','0022') THEN
     RAISE EXCEPTION 'migration_only';
   END IF;
-  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023','0024') THEN
+  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023','0024','0025') THEN
     RAISE EXCEPTION 'unsupported populated revision';
   END IF;
   FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0013','0014','0017','0020') THEN ARRAY['stock_fill_facts','stock_status_evidence'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0014','0017','0020') THEN ARRAY['stock_dividend_payments','stock_dividend_decisions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)IN ('0017','0020') THEN ARRAY['portfolio_stock_closures'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)='0020' THEN ARRAY['portfolio_creations','portfolio_initializations'] ELSE ARRAY[]::text[] END LOOP
@@ -314,9 +314,13 @@ END $management_identity$;
 -- Exact closure and reported-halt catalogue identities share the same grants.
 
 DO $closure_identity$
+DECLARE final_acl text;
 BEGIN
- IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024') THEN RETURN; END IF;
- IF (SELECT count(*)<>1 OR NOT bool_and(version_num IN ('0023','0024')) FROM public.alembic_version)
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025') THEN RETURN; END IF;
+ final_acl := CASE WHEN (SELECT version_num FROM public.alembic_version)='0025'
+  THEN 'a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f'
+  ELSE '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' END;
+ IF (SELECT count(*)<>1 OR NOT bool_and(version_num IN ('0023','0024','0025')) FROM public.alembic_version)
  THEN RAISE EXCEPTION 'management final revision required'; END IF;
  IF EXISTS(SELECT FROM pg_roles WHERE rolname IN
   ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')
@@ -395,7 +399,8 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 ) catalogue
 ) IS DISTINCT FROM (CASE (SELECT version_num FROM public.alembic_version)
   WHEN '0023' THEN '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
-  WHEN '0024' THEN 'b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665' END)
+  WHEN '0024' THEN 'b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665'
+  WHEN '0025' THEN '64ae5dbb83bfa0fa764d667a91f09abcf023b39f3e3b032354ce1088c45135a3' END)
  THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
  IF EXISTS(SELECT FROM pg_proc p,
   LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
@@ -437,7 +442,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748','4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06','b4d138c09ace93ff69484b1b2932a667b17a19ce453a5623cae861e3e5a6ad62') THEN
+) NOT IN ('6dfc328bda8577360c8a2994cd5c1c00bd1cae1cbd542be6c1b3a0f3c4f71d76','71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748',final_acl,'4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945','f900b495d58d21eb1eaa04eac9445b1212810f751c254fb4c13e31b54c77f425','8f48c68571268efe53c84883faa9f3de4c676721acc2d003be10cae58df1dc06','b4d138c09ace93ff69484b1b2932a667b17a19ce453a5623cae861e3e5a6ad62') THEN
   RAISE EXCEPTION 'unexpected closure privileges'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
@@ -545,7 +550,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-)='71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' AND (
+) IN ('71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748',final_acl) AND (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
  'UTF8')),'hex') FROM (
  SELECT jsonb_build_array('default',CASE WHEN scope.namespace=0 THEN 'global'
@@ -978,8 +983,10 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
 ) privileges
 ) IS DISTINCT FROM '041a948470f9692628da43b35263a47bf58f4815310a0793d5eec099fa64c87e' THEN RAISE EXCEPTION 'management final ACL mismatch'; END IF;
 END $management_grants$;
-DO $closure_grants$ BEGIN
- IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024') THEN RETURN; END IF;
+DO $closure_grants$
+DECLARE final_acl text;
+BEGIN
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025') THEN RETURN; END IF;
 
 DO $management_reset$
 DECLARE obj record; col record;
@@ -1117,6 +1124,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator REVOKE ALL ON FUNCTIONS
 ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON FUNCTIONS
  FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 
+ final_acl := '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748';
+ IF (SELECT version_num FROM public.alembic_version)='0025' THEN
+  GRANT SELECT ON public.stock_catalog_generations,public.stock_catalog_securities,
+   public.stock_catalog_listings,public.stock_catalog_aliases TO birja_app,birja_scheduler;
+  GRANT SELECT (id,artifact,reviewed_at,valid_until,revoked_at,fields,scope,is_fixture)
+   ON public.stock_catalog_admissions TO birja_app,birja_scheduler;
+  final_acl := 'a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f';
+ END IF;
+
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
  'UTF8')),'hex') FROM (
@@ -1139,7 +1155,7 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
  LEFT JOIN pg_roles r ON r.oid=x.grantee
  WHERE p.pronamespace='public'::regnamespace AND x.grantee<>p.proowner
 ) privileges
-) IS DISTINCT FROM '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' THEN RAISE EXCEPTION 'closure final ACL mismatch'; END IF;
+) IS DISTINCT FROM final_acl THEN RAISE EXCEPTION 'closure final ACL mismatch'; END IF;
  IF (
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::text,
  'UTF8')),'hex') FROM (
