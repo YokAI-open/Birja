@@ -63,7 +63,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 - [x] 19-01 — Qualify catalog sources and reconcile common-stock coverage.
 
 **Wave 2** *(after Wave 1)*
-- [ ] 19-02 — Preserve catalog identities, aliases and verified provider mappings.
+- [x] 19-02 — Preserve catalog identities, aliases and verified provider mappings.
 
 **Wave 3** *(after Wave 2)*
 - [ ] 19-03 — Admit schema 0025 and verify encrypted catalog recovery.
@@ -112,7 +112,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
-| 19. Search the NYSE and Nasdaq catalog | 1/6 | In progress |
+| 19. Search the NYSE and Nasdaq catalog | 2/6 | In progress |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 
