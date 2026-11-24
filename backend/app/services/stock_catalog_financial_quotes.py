@@ -1,7 +1,7 @@
 """Reviewed financial quotes and held-stock demand for promoted catalog issues."""
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -187,25 +187,42 @@ async def _sessions(
         .one_or_none()
     )
     calendar = ProductAdmission(**row) if row else None
-    scope = {"account": binding.account, "server": binding.server}
+    return catalog_mark_sessions(
+        calendar,
+        await load_sessions(db, now),
+        binding.listing_exchange,
+        now,
+        account=binding.account,
+        server=binding.server,
+    )
+
+
+def catalog_mark_sessions(
+    calendar: ProductAdmission | None,
+    sessions: Sequence[RegularSession],
+    exchange: str,
+    now: datetime,
+    *,
+    account: str,
+    server: str,
+) -> tuple[SessionDecision, RegularSession | None]:
+    """Return current and exact latest closed bounds from one admitted snapshot."""
+    scope = {"account": account, "server": server}
     if not all(
         evaluate_admission(
-            calendar, "calendar", purpose, now, account=binding.account, server=binding.server
+            calendar, "calendar", purpose, now, account=account, server=server
         ).allowed
         for purpose in ("derived", "collection", "retention")
     ):
         return SessionDecision(), None
-    sessions = await load_sessions(db, now)
-    decision = session_at(binding.listing_exchange, now, sessions, calendar, **scope)
+    decision = session_at(exchange, now, sessions, calendar, **scope)
     if decision.state != "closed":
         return decision, None
     previous = max(
         (
             row
             for row in build_sessions(now, calendar, **scope)
-            if row.exchange == binding.listing_exchange
-            and row.closes_at is not None
-            and row.closes_at <= now
+            if row.exchange == exchange and row.closes_at is not None and row.closes_at <= now
         ),
         key=lambda row: row.session_date,
         default=None,
@@ -399,6 +416,17 @@ class CatalogFinancialMark:
     mode: Literal["fresh", "closed"]
 
 
+def catalog_mark_units_safe(action: StockActionState, now: datetime) -> bool:
+    return (
+        action.health == "current"
+        and action.checked_at is not None
+        and action.checked_at <= now
+        and action.valid_until is not None
+        and now < action.valid_until
+        and (action.next_blocking_at is None or now < action.next_blocking_at)
+    )
+
+
 async def read_catalog_financial_mark(
     db: AsyncSession,
     catalog_id: int,
@@ -429,17 +457,7 @@ async def read_catalog_financial_mark(
     if row is None:
         return None
     quote, action = row
-    if (
-        quote.mark_admission_id is None
-        or action.unit_epoch != quote.unit_epoch
-        or action.health != "current"
-        or action.checked_at is None
-        or action.checked_at > now
-        or action.valid_until is None
-        or now >= action.valid_until
-        or (action.quote_not_before is not None and quote.event_at < action.quote_not_before)
-        or (action.next_blocking_at is not None and now >= action.next_blocking_at)
-    ):
+    if quote.mark_admission_id is None or not catalog_mark_units_safe(action, now):
         return None
     binding = await load_catalog_mark_binding(
         db, catalog_id, listing_id, quote.mark_admission_id, now, allow_fixture=allow_fixture
@@ -459,12 +477,42 @@ async def read_catalog_financial_mark(
     if grant is None or not grant.reviewed_at <= quote.collected_at < grant.valid_until:
         return None
     decision, previous = await _sessions(db, binding, now)
+    return evaluate_catalog_financial_mark(
+        quote,
+        action,
+        binding.listing_exchange,
+        now,
+        permission_until=min(grant.valid_until, binding.valid_until),
+        decision=decision,
+        previous=previous,
+    )
+
+
+def evaluate_catalog_financial_mark(
+    quote: StockCatalogFinancialQuote,
+    action: StockActionState,
+    exchange: str,
+    now: datetime,
+    *,
+    permission_until: datetime,
+    decision: SessionDecision,
+    previous: RegularSession | None,
+) -> CatalogFinancialMark | None:
+    """Check the exact observed quote, unit and session without touching Redis."""
+    if (
+        quote.mark_admission_id is None
+        or not quote.observed_at <= now < quote.valid_until
+        or action.unit_epoch != quote.unit_epoch
+        or not catalog_mark_units_safe(action, now)
+        or action.valid_until is None
+        or (action.quote_not_before is not None and quote.event_at < action.quote_not_before)
+    ):
+        return None
     if decision.current is None or decision.valid_until is None or decision.state == "unknown":
         return None
     deadline = min(
         quote.valid_until,
-        grant.valid_until,
-        binding.valid_until,
+        permission_until,
         action.valid_until,
         decision.valid_until,
     )
@@ -504,9 +552,9 @@ async def read_catalog_financial_mark(
             quote.ask,
             quote.event_at,
             ["R"],
-            tape="C" if binding.listing_exchange == "NASDAQ" else "A",
+            tape="C" if exchange == "NASDAQ" else "A",
         ),
-        listing_exchange=binding.listing_exchange,
+        listing_exchange=exchange,
         collected_at=quote.collected_at,
     )
     return (

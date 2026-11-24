@@ -10,8 +10,10 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any, cast
 
-from sqlalchemy import literal, select, tuple_, union_all
+from sqlalchemy import Text, literal, select, tuple_, union_all
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.corporate_action import (
     StockActionRevision,
@@ -20,6 +22,8 @@ from app.models.corporate_action import (
 )
 from app.models.dividend import StockDividendDecision, StockDividendPayment
 from app.models.price import Coin
+from app.models.stock_catalog import StockCatalogListing
+from app.models.stock_catalog_finance import StockCatalogFillEvidence, StockCatalogInstrument
 from app.models.stock_execution import StockFillFacts
 from app.models.trade import Trade
 from app.schemas.event_history import EventDividend, EventHistoryPage
@@ -146,7 +150,17 @@ def _terms(row: StockDividendPayment | StockDividendDecision) -> dict[str, Any]:
     }
 
 
-def _dividend(row: StockDividendPayment) -> dict[str, Any]:
+def _action_identity(catalog_id: int | None, saved: object) -> dict[str, str]:
+    if catalog_id is None and saved is None:
+        return {}
+    if catalog_id is None or saved != str(catalog_id):
+        raise ValueError("Inconsistent retained catalog action identity")
+    return {"catalog_id": str(catalog_id)}
+
+
+def _dividend(
+    row: StockDividendPayment, *, catalog_id: int | None, saved_catalog_id: object
+) -> dict[str, Any]:
     return {
         "kind": "dividend",
         "id": f"dividend:{row.id}",
@@ -158,6 +172,7 @@ def _dividend(row: StockDividendPayment) -> dict[str, Any]:
         "payment_reference": f"dividend:{row.id}",
         "credited_amount": _number(row.original_amount),
         "credited_at": _stamp(row.recorded_at),
+        **_action_identity(catalog_id, saved_catalog_id),
         **_terms(row),
     }
 
@@ -216,13 +231,18 @@ async def list_event_history(
     if ids[4]:
         trades = (
             await db.execute(
-                select(Trade, Coin, StockFillFacts)
+                select(Trade, Coin, StockFillFacts, StockCatalogFillEvidence.catalog_id)
                 .join(Coin, Coin.id == Trade.coin_id)
                 .outerjoin(
                     StockFillFacts,
                     (StockFillFacts.trade_id == Trade.id)
                     & (StockFillFacts.user_id == user_id)
                     & (StockFillFacts.portfolio_id == portfolio_id),
+                )
+                .outerjoin(
+                    StockCatalogFillEvidence,
+                    (StockCatalogFillEvidence.trade_id == Trade.id)
+                    & (StockCatalogFillEvidence.coin_id == Trade.coin_id),
                 )
                 .where(
                     Trade.user_id == user_id,
@@ -231,11 +251,11 @@ async def list_event_history(
                 )
             )
         ).all()
-        for trade, coin, facts in trades:
+        for trade, coin, facts, catalog_id in trades:
             stock = coin.asset_class == "stock"
             if stock and facts is None:
                 raise ValueError("Missing immutable stock fill facts")
-            projected[(4, trade.id)] = {
+            event = {
                 "kind": "trade",
                 "id": f"trade:{trade.id}",
                 "recorded_at": _stamp(trade.created_at),
@@ -252,28 +272,71 @@ async def list_event_history(
                 "feed": facts.feed if stock else None,
                 "quote_at": _stamp(facts.event_at) if stock else None,
             }
+            if catalog_id is not None:
+                event["catalog_id"] = str(catalog_id)
+            projected[(4, trade.id)] = event
     if ids[3]:
         payments = (
-            await db.scalars(
-                select(StockDividendPayment).where(
+            await db.execute(
+                select(
+                    StockDividendPayment,
+                    StockCatalogInstrument.catalog_id,
+                    StockActionRevision.normalized_terms["catalog_id"],
+                )
+                .join(
+                    StockActionRevision, StockActionRevision.id == StockDividendPayment.revision_id
+                )
+                .outerjoin(
+                    StockCatalogInstrument,
+                    StockCatalogInstrument.coin_id == StockDividendPayment.coin_id,
+                )
+                .where(
                     StockDividendPayment.user_id == user_id,
                     StockDividendPayment.portfolio_id == portfolio_id,
                     StockDividendPayment.id.in_(ids[3]),
                 )
             )
         ).all()
-        for payment in payments:
-            projected[(3, payment.id)] = _dividend(payment)
+        for payment, catalog_id, saved in payments:
+            projected[(3, payment.id)] = _dividend(
+                payment, catalog_id=catalog_id, saved_catalog_id=saved
+            )
     if ids[2]:
+        first = aliased(StockActionRevision)
         splits = (
             await db.execute(
-                select(StockOwnershipMovement, StockSplitApplication, StockActionRevision)
+                select(
+                    StockOwnershipMovement,
+                    StockSplitApplication,
+                    StockActionRevision.normalized_terms,
+                    StockCatalogInstrument.catalog_id,
+                    first.normalized_terms,
+                    StockCatalogListing.company_name,
+                )
                 .join(
                     StockSplitApplication,
                     StockSplitApplication.id == StockOwnershipMovement.application_id,
                 )
                 .join(
                     StockActionRevision, StockActionRevision.id == StockSplitApplication.revision_id
+                )
+                .outerjoin(
+                    StockCatalogInstrument,
+                    StockCatalogInstrument.coin_id == StockOwnershipMovement.coin_id,
+                )
+                .outerjoin(
+                    first,
+                    (first.event_id == StockSplitApplication.economic_event_id)
+                    & (first.ordinal == 1)
+                    & StockCatalogInstrument.catalog_id.is_not(None),
+                )
+                .outerjoin(
+                    StockCatalogListing,
+                    (StockCatalogListing.security_id == StockCatalogInstrument.catalog_id)
+                    & (
+                        sql_cast(StockCatalogListing.id, Text)
+                        == first.normalized_terms["listing_id"].as_string()
+                    ),
                 )
                 .where(
                     StockOwnershipMovement.user_id == user_id,
@@ -283,20 +346,24 @@ async def list_event_history(
                 )
             )
         ).all()
-        for movement, application, revision in splits:
+        for movement, application, terms, catalog_id, original_terms, company_name in splits:
             ratio = Fraction(Decimal(application.new_rate)) / Fraction(
                 Decimal(application.old_rate)
             )
-            # Older split state has no saved company name. Its retained symbol is
-            # a truthful stable label; never recreate historical labels from catalog.
-            symbol = revision.normalized_terms["symbol"]
+            identity = _action_identity(catalog_id, terms.get("catalog_id"))
+            if catalog_id is not None:
+                if original_terms is None or original_terms.get("catalog_id") != str(catalog_id):
+                    raise ValueError("Missing original catalog split identity")
+                symbol = original_terms["symbol"]
+            else:
+                symbol = terms["symbol"]
             projected[(2, movement.id)] = {
                 "kind": "split",
                 "id": f"split:{movement.id}",
                 "recorded_at": _stamp(movement.recorded_at),
                 "asset_type": "stock",
                 "symbol": symbol,
-                "name": symbol,
+                "name": company_name or symbol,
                 "cash_delta": "0",
                 "ratio_new": str(ratio.numerator),
                 "ratio_old": str(ratio.denominator),
@@ -305,16 +372,32 @@ async def list_event_history(
                 "cost_basis_before": _number(movement.before_basis),
                 "cost_basis_after": _number(movement.after_basis),
                 "effective_at": _stamp(movement.economic_at),
+                **identity,
             }
     if ids[1]:
+        first = aliased(StockActionRevision)
         corrections = (
             await db.execute(
-                select(StockDividendDecision, StockDividendPayment)
+                select(
+                    StockDividendDecision,
+                    StockDividendPayment,
+                    StockCatalogInstrument.catalog_id,
+                    StockActionRevision.normalized_terms["catalog_id"],
+                    first.normalized_terms["catalog_id"],
+                )
                 .join(
                     StockDividendPayment,
                     (StockDividendPayment.id == StockDividendDecision.payment_id)
                     & (StockDividendPayment.user_id == user_id)
                     & (StockDividendPayment.portfolio_id == portfolio_id),
+                )
+                .join(
+                    StockActionRevision, StockActionRevision.id == StockDividendDecision.revision_id
+                )
+                .join(first, first.id == StockDividendPayment.revision_id)
+                .outerjoin(
+                    StockCatalogInstrument,
+                    StockCatalogInstrument.coin_id == StockDividendDecision.coin_id,
                 )
                 .where(
                     StockDividendDecision.user_id == user_id,
@@ -323,7 +406,7 @@ async def list_event_history(
                 )
             )
         ).all()
-        for decision, original in corrections:
+        for decision, original, catalog_id, saved, original_saved in corrections:
             projected[(1, decision.id)] = {
                 "kind": "dividend_correction",
                 "id": f"dividend_correction:{decision.id}",
@@ -345,7 +428,10 @@ async def list_event_history(
                 else None,
                 "applied_delta": _number(decision.applied_delta),
                 "terms": None if decision.outcome == "held_uncertain" else _terms(decision),
-                "original": EventDividend(**_dividend(original)),
+                "original": EventDividend(
+                    **_dividend(original, catalog_id=catalog_id, saved_catalog_id=original_saved)
+                ),
+                **_action_identity(catalog_id, saved),
             }
     if any((row.kind_rank, row.source_id) not in projected for row in selected):
         raise ValueError("Incomplete owned History projection")

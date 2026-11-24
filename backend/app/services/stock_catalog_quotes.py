@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter
 from redis.asyncio import Redis
@@ -189,17 +189,7 @@ async def load_catalog_asset_mapping(
     account: str,
     server: str,
 ) -> tuple[CatalogAssetMapping, datetime] | None:
-    if (
-        listing.provider_admission_id is None
-        or listing.provider_asset_id is None
-        or listing.provider_symbol is None
-        or listing.provider_evidence_digest is None
-        or listing.provider_verified_at is None
-        or listing.provider_valid_until is None
-        or not listing.provider_verified_at <= now < listing.provider_valid_until
-        or listing.currency != "USD"
-        or listing.units_per_share != 1
-    ):
+    if listing.provider_admission_id is None:
         return None
     grant = StockCatalogAdmission
     row = (
@@ -220,6 +210,59 @@ async def load_catalog_asset_mapping(
     if row is None:
         return None
     reviewed_at, valid_until, scope = row
+    alias_until = None
+    if listing.provider_symbol != listing.ticker:
+        alias = StockCatalogAlias
+        alias_until = await db.scalar(
+            select(alias.valid_until)
+            .where(
+                alias.listing_id == listing.id,
+                alias.security_id == listing.security_id,
+                alias.namespace != "former",
+                alias.symbol == listing.provider_symbol,
+                alias.verified_at <= now,
+                alias.valid_until > now,
+            )
+            .order_by(alias.valid_until.desc())
+            .limit(1)
+        )
+    return validate_catalog_asset_mapping(
+        listing,
+        now,
+        account=account,
+        server=server,
+        reviewed_at=reviewed_at,
+        valid_until=valid_until,
+        scope=scope,
+        alias_until=alias_until,
+    )
+
+
+def validate_catalog_asset_mapping(
+    listing: StockCatalogListing,
+    now: datetime,
+    *,
+    account: str,
+    server: str,
+    reviewed_at: datetime,
+    valid_until: datetime,
+    scope: dict[str, Any],
+    alias_until: datetime | None,
+) -> tuple[CatalogAssetMapping, datetime] | None:
+    """Evaluate an exact projected provider proof without another database read."""
+    if (
+        listing.provider_admission_id is None
+        or listing.provider_asset_id is None
+        or listing.provider_symbol is None
+        or listing.provider_evidence_digest is None
+        or listing.provider_verified_at is None
+        or listing.provider_valid_until is None
+        or not listing.provider_verified_at <= now < listing.provider_valid_until
+        or not reviewed_at <= now < valid_until
+        or listing.currency != "USD"
+        or listing.units_per_share != 1
+    ):
+        return None
     try:
         provider = CatalogAssetAdmission.model_validate_json(json.dumps(scope["provider"]))
         units = _UNIT_EVIDENCE.validate_json(json.dumps(scope["units"]))
@@ -269,21 +312,7 @@ async def load_catalog_asset_mapping(
         return None
     expires = min(mapping_valid_until, listing.provider_valid_until, listing.valid_until)
     if mapping.target.provider_symbol != listing.ticker:
-        alias = StockCatalogAlias
-        alias_until = await db.scalar(
-            select(alias.valid_until)
-            .where(
-                alias.listing_id == listing.id,
-                alias.security_id == listing.security_id,
-                alias.namespace != "former",
-                alias.symbol == listing.provider_symbol,
-                alias.verified_at <= now,
-                alias.valid_until > now,
-            )
-            .order_by(alias.valid_until.desc())
-            .limit(1)
-        )
-        if alias_until is None:
+        if alias_until is None or alias_until <= now:
             return None
         expires = min(expires, alias_until)
     return mapping, expires
