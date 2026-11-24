@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Link, useOutletContext, useParams } from "react-router";
-import { PortfolioContext } from "@/components/PortfolioContext";
+import { useOutletContext, useParams } from "react-router";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
+import { useNow } from "@/hooks/useNow";
+import { useStocks } from "@/hooks/useStocks";
 import { useStockTrade } from "@/hooks/useStockTrade";
 import { isStockOrder, type StockRefusal } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StockAttribution } from "@/components/StockAttribution";
+import { MarketOpening } from "@/components/MarketOpening";
 import {
   StockDate,
   StockDisclosure,
@@ -18,7 +20,7 @@ import {
 import { formatUnitPrice, formatUsd } from "@/lib/money";
 import { signedUsd } from "@/lib/financialDisplay";
 const reasons: Record<StockRefusal, string> = {
-  market_closed: "Market closed. You can edit a draft; no order is queued.",
+  market_closed: "Market closed.",
   halted: "Trading halted. New orders are unavailable.",
   frozen: "Trading frozen. New orders are unavailable.",
   status_unavailable: "Stock status is unverified. New orders are unavailable.",
@@ -41,8 +43,9 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
     c = t.context,
     id = useId(),
     input = useRef<HTMLInputElement>(null);
+  const { data: stocks } = useStocks();
+  const now = useNow(15_000);
   const [retrying, setRetrying] = useState(false);
-  const [previewName, setPreviewName] = useState(target.name);
   const oldPhase = useRef(t.phase);
   useEffect(() => {
     if (oldPhase.current === "filled" && t.phase === "draft") input.current?.focus();
@@ -56,7 +59,21 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       : /^[1-9]\d{12,}$/.test(t.quantity)
         ? reasons.numeric_range
         : reasons.invalid_quantity;
-  const refusal = c && c.execution_reason !== "available" ? reasons[c.execution_reason] : null;
+  // The catalogue has the verified next session even when the ticket cannot
+  // load trade context. These facts only affect the copy, never order admission.
+  const cataloguedStock = stocks?.items.find((item) => item.symbol === symbol);
+  const catalogueSession = cataloguedStock?.session;
+  const marketClosed =
+    (t.error === "market_closed" && c?.execution_enabled !== true) ||
+    c?.execution_reason === "market_closed" ||
+    c?.session.state === "closed" ||
+    (c?.session.state !== "open" && catalogueSession?.state === "closed");
+  const nextOpen = c?.session.next_open_at ?? catalogueSession?.next_open_at;
+  const refusal = marketClosed
+    ? reasons.market_closed
+    : c && c.execution_reason !== "available"
+      ? reasons[c.execution_reason]
+      : null;
   const message =
     t.phase === "filled"
       ? "Order filled."
@@ -66,13 +83,14 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
           ? "Checking order result…"
           : t.replacement
             ? "Price updated. Review the changes before confirming again."
-            : t.interrupted
+            : t.interrupted && !marketClosed
               ? "Trading became unavailable. Your quantity is saved here; get a fresh preview before confirming."
               : (refusal ??
                 (t.phase === "preview"
                   ? "Preview ready. Review before confirming."
                   : "Enter a quantity to preview this trade."));
   const quote = t.quote;
+  const lastQuote = marketClosed ? cataloguedStock?.quote : null;
   const visible = quote ?? c?.quote;
   const noShortcut =
     !c?.execution_enabled ||
@@ -82,14 +100,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   if (!target.isCurrent()) return null;
   return (
     <div className="app-page flex flex-col gap-7 text-base md:gap-9">
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0 space-y-2 wrap-anywhere">
-          <h1 className="app-heading">Trade {t.symbol}</h1>
-          <PortfolioContext name={target.name} />
-        </div>
-        <Button asChild variant="secondary">
-          <Link to="/">Back to Markets</Link>
-        </Button>
+      <header>
+        <h1 className="app-heading wrap-anywhere">Trade {t.symbol}</h1>
       </header>
       <p
         role="status"
@@ -102,6 +114,12 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         }
       >
         {message}
+        {message === reasons.market_closed && (
+          <>
+            {" "}
+            <MarketOpening nextOpen={nextOpen} now={now} />
+          </>
+        )}
       </p>
       <div className="grid min-w-0 gap-6 lg:grid-cols-12 lg:gap-8">
         <Card className="min-w-0 lg:col-span-7 lg:self-start">
@@ -116,11 +134,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 </p>
                 <Badge variant="neutral">Stock</Badge>
                 <div className="flex flex-wrap gap-3">
-                  <p>Session: {c.session.state}</p>
+                  {!marketClosed && <p>Session: {c.session.state}</p>}
                   <p>Status: {c.status.state}</p>
                   <p>Corporate actions: {c.action.state}</p>
                 </div>
-                {c.session.opens_at && c.session.closes_at && (
+                {!marketClosed && c.session.opens_at && c.session.closes_at && (
                   <p className="text-[13px] leading-[18px] wrap-anywhere">
                     Regular session (America/New_York):{" "}
                     <StockDate value={c.session.opens_at} exchange /> –{" "}
@@ -132,12 +150,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               <div aria-busy="true" aria-label="Loading stock">
                 <div className="h-7 rounded-control bg-muted" />
               </div>
-            ) : (
-              <p>Can&apos;t load this stock right now. Retry or return to Markets.</p>
-            )}
-            {t.contextError && (
-              <p role="alert">Can&apos;t load this stock right now. Retry or return to Markets.</p>
-            )}
+            ) : null}
+            {t.contextError && !marketClosed && <p role="alert">Couldn&apos;t load this stock.</p>}
             <Button
               variant="secondary"
               className="min-h-11 self-start"
@@ -151,24 +165,36 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
             >
               {retrying ? "Retrying stock…" : "Retry stock"}
             </Button>
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              {(["bid", "ask"] as const).map((side) => {
-                const selected = side === (t.side === "buy" ? "ask" : "bid");
-                return (
-                  <div
-                    key={side}
-                    className={`min-w-0 rounded-control border p-4 md:p-5 ${selected ? "border-ring bg-accent text-accent-foreground" : "border-border bg-card"}`}
-                  >
-                    <p className="font-medium">IEX {side}</p>
-                    <p className="text-[24px] leading-7 wrap-anywhere tabular-nums">
-                      {visible ? formatUnitPrice(visible[side]) : "Unavailable"}
-                    </p>
-                    {selected && <p>{t.side === "buy" ? "Buy price" : "Sell price"}</p>}
-                  </div>
-                );
-              })}
-            </div>
-            {visible && (
+            {lastQuote && (
+              <div>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatUnitPrice(lastQuote.mid)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Last verified IEX midpoint · <StockDate value={lastQuote.event_at} />
+                </p>
+              </div>
+            )}
+            {!marketClosed && (visible || c) && (
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                {(["bid", "ask"] as const).map((side) => {
+                  const selected = side === (t.side === "buy" ? "ask" : "bid");
+                  return (
+                    <div
+                      key={side}
+                      className={`min-w-0 rounded-control border p-4 md:p-5 ${selected ? "border-ring bg-accent text-accent-foreground" : "border-border bg-card"}`}
+                    >
+                      <p className="font-medium">IEX {side}</p>
+                      <p className="text-[24px] leading-7 wrap-anywhere tabular-nums">
+                        {visible ? formatUnitPrice(visible[side]) : "Unavailable"}
+                      </p>
+                      {selected && <p>{t.side === "buy" ? "Buy price" : "Sell price"}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {visible && !marketClosed && (
               <p className="text-[13px] leading-[18px]">
                 Source quote: <StockDate value={visible.event_at} />
               </p>
@@ -177,7 +203,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
               className="flex min-w-0 flex-col gap-5 border-t border-border pt-5"
               onSubmit={(e) => {
                 e.preventDefault();
-                setPreviewName(target.name);
                 void t.preview();
               }}
             >
@@ -247,9 +272,11 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 id={id + "restriction"}
                 className="text-[13px] leading-[18px] text-muted-foreground"
               >
-                {refusal
-                  ? "Preview unavailable while trading is paused. Your quantity is only a draft."
-                  : "A preview does not place an order. Confirm it separately."}
+                {marketClosed
+                  ? "Your quantity is a draft. No order will be queued."
+                  : refusal
+                    ? "Preview unavailable while trading is paused. Your quantity is only a draft."
+                    : "A preview does not place an order. Confirm it separately."}
               </p>
               {c && (
                 <dl className="flex flex-col gap-2">
@@ -261,31 +288,20 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 {t.phase === "loading_preview" ? "Loading preview" : "Preview trade"}
               </Button>
             </form>
-            <StockAttribution context="preview" />
+            <StockAttribution
+              context="preview"
+              required_text={lastQuote ? stocks?.attribution.required_text : undefined}
+            />
             <StockDisclosure />
           </CardContent>
         </Card>
         <Card className="min-w-0 bg-muted lg:col-span-5 lg:self-start">
           <CardContent>
             {t.fill ? (
-              <StockTradeReceipt
-                fill={t.fill}
-                target={target}
-                portfolioName={t.originalName ?? target.name}
-                onTradeAgain={t.tradeAgain}
-              />
+              <StockTradeReceipt fill={t.fill} target={target} onTradeAgain={t.tradeAgain} />
             ) : (
               <>
                 <h2 className="text-xl leading-7 font-semibold">Trade preview</h2>
-                <PortfolioContext
-                  name={
-                    t.attempt
-                      ? (t.originalName ?? target.name)
-                      : t.quote
-                        ? previewName
-                        : target.name
-                  }
-                />
                 {t.phase === "loading_preview" && (
                   <div
                     aria-busy="true"
@@ -297,7 +313,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     ))}
                   </div>
                 )}
-                {t.error && t.error !== "unknown" && (
+                {t.error && t.error !== "unknown" && t.error !== "market_closed" && (
                   <p role="alert" className="rounded-control bg-warn-soft p-4 text-warn-text">
                     {reasons[t.error]}
                   </p>
@@ -378,7 +394,6 @@ export default function StockTradePage() {
     return (
       <div className="app-page flex flex-col items-start gap-4">
         <h1 className="app-heading">Unknown stock</h1>
-        <Link to="/">Back to Markets</Link>
       </div>
     );
   return (

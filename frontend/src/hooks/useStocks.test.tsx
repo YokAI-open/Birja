@@ -156,6 +156,29 @@ it("retains admitted original quotes on background failure, then redacts at the 
   expect(result.current.data?.items[0].quote).toBeNull();
 });
 
+it("keeps a dated closed-session quote through the freshness boundary but purges it at the disclosure deadline", async () => {
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  const body = payload({ lifetime: 600 });
+  Object.assign(body.items[0].quote!, { event_at: stamp(-300), age_seconds: 300 });
+  Object.assign(body.items[0], { session_reason: "closed", quote_reason: "stale" });
+  Object.assign(body.items[0].session, { state: "closed", closes_at: stamp(-299) });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(body))),
+  );
+
+  const { result, client } = setup();
+  await waitFor(() => expect(result.current.data?.items[0].quote?.mid).toBe("101"));
+  expect(result.current.data?.items[0].execution_enabled).toBe(false);
+  now = 600_000;
+  act(() => window.dispatchEvent(new Event("focus")));
+  expect(result.current.data?.items[0].quote).toBeNull();
+  expect(
+    client.getQueryData<TimedStocks>(["stocks", "first@example.test"])?.items[0].quote,
+  ).toBeNull();
+});
+
 it("purges on revocation and cannot publish a late cancelled previous-session result", async () => {
   let release: (value: Response) => void = () => {};
   const fetch = vi
