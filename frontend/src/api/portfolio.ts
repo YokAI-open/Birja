@@ -113,7 +113,7 @@ function isMark(v: unknown, catalog: boolean): v is StockMark {
     v.valuation_reason !== "available" ||
     v.source !== "alpaca" ||
     v.feed !== "iex" ||
-    (catalog ? v.authority !== null || v.mark_mode === "halted" : authority === null) ||
+    (catalog ? v.authority !== null : authority === null) ||
     !fields.every((k) => stockTimestamp(v[k]))
   )
     return false;

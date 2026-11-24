@@ -31,6 +31,7 @@ from app.models.stock_catalog_finance import (
     StockCatalogActionCoverage,
     StockCatalogFinancialQuote,
     StockCatalogInstrument,
+    StockCatalogStatus,
 )
 from app.schemas.stock_trades import AuthorityIdentity
 from app.services.corporate_actions import action_hold_queries
@@ -81,12 +82,14 @@ def catalog_valuation_query(coin_ids: Any, settings: Settings, at: datetime) -> 
     listing: Table = StockCatalogListing.__table__  # type: ignore[assignment]
     quote: Table = StockCatalogFinancialQuote.__table__  # type: ignore[assignment]
     action: Table = StockActionState.__table__  # type: ignore[assignment]
+    status: Table = StockCatalogStatus.__table__  # type: ignore[assignment]
     coverage = StockCatalogActionCoverage
     generation, instrument = StockCatalogGeneration, StockInstrument
     grant = StockCatalogAdmission.__table__
     mark = grant.alias("mark_permission")
     mapping = grant.alias("provider_mapping")
     actions = grant.alias("action_permission")
+    halt = grant.alias("halt_permission")
     directory = grant.alias("directory_permission")
     name = grant.alias("name_permission")
     classification = grant.alias("classification_permission")
@@ -192,6 +195,29 @@ def catalog_valuation_query(coin_ids: Any, settings: Settings, at: datetime) -> 
             cast(_MARK_FIELDS, JSONB),
         ),
     )
+    halt_attested = and_(
+        status.c.catalog_id == binding.c.catalog_id,
+        status.c.listing_id == binding.c.listing_id,
+        status.c.state == "halted",
+        status.c.event_at <= at,
+        status.c.observed_at <= at,
+        status.c.valid_until > at,
+        halt.c.scope.contains(scopes),
+        func.public.stock_catalog_scope_current(
+            halt.c.id,
+            "catalog_halt",
+            binding.table_valued(),
+            listing.table_valued(),
+            at,
+            cast(
+                {
+                    key: ["collection", "execution", "storage", "backup"]
+                    for key in ("report_digest", "event_at", "valid_until", "state")
+                },
+                JSONB,
+            ),
+        ),
+    )
     rows = (
         select(
             binding.c.coin_id,
@@ -227,6 +253,17 @@ def catalog_valuation_query(coin_ids: Any, settings: Settings, at: datetime) -> 
             ).label("action"),
             units_attested.label("units_attested"),
             quote_attested.label("quote_attested"),
+            case(
+                (
+                    halt_attested,
+                    func.jsonb_build_object(
+                        "session_date",
+                        status.c.session_date,
+                        "valid_until",
+                        func.least(status.c.valid_until, halt.c.valid_until),
+                    ),
+                )
+            ).label("halt"),
             actions.c.valid_until.label("action_review_until"),
             mark.c.id.label("mark_id"),
             mark.c.reviewed_at.label("mark_reviewed"),
@@ -250,6 +287,8 @@ def catalog_valuation_query(coin_ids: Any, settings: Settings, at: datetime) -> 
         .outerjoin(quote, quote.c.coin_id == binding.c.coin_id)
         .outerjoin(action, action.c.coin_id == binding.c.coin_id)
         .outerjoin(coverage, coverage.coin_id == binding.c.coin_id)
+        .outerjoin(status, status.c.coin_id == binding.c.coin_id)
+        .outerjoin(halt, halt.c.id == status.c.admission_id)
         .outerjoin(mark, mark.c.id == quote.c.mark_admission_id)
         .outerjoin(mapping, mapping.c.id == listing.c.provider_admission_id)
         .outerjoin(actions, actions.c.id == coverage.admission_id)
@@ -306,6 +345,8 @@ def _catalog_mark_snapshot(
     sessions: CatalogSessions,
     settings: Settings,
     now: datetime,
+    *,
+    halt: dict[str, str] | None,
 ) -> StockValuation:
     def unavailable(reason: RefusalReason) -> StockValuation:
         return StockValuation(None, StockMark(valuation_reason=reason, units_safe=True))
@@ -372,6 +413,13 @@ def _catalog_mark_snapshot(
     decision, previous = sessions[listing.listing_exchange]
     if decision.state == "unknown":
         return unavailable("session_unavailable")
+    halted_until = (
+        _catalog_stamp(halt["valid_until"])
+        if halt is not None
+        and decision.current is not None
+        and decision.current.session_date.isoformat() == halt["session_date"]
+        else None
+    )
     mark = evaluate_catalog_financial_mark(
         quote,
         action,
@@ -380,6 +428,7 @@ def _catalog_mark_snapshot(
         permission_until=min(mapping[1], mark_until, display_until, action_until),
         decision=decision,
         previous=previous,
+        halted_until=halted_until,
     )
     if mark is None:
         return unavailable("quote_stale" if now >= quote.valid_until else "quote_unavailable")
@@ -481,10 +530,13 @@ def value_catalog_holding(
                 ),
             )
         )
-    value = _catalog_mark_snapshot(original, before, original_sessions, settings, now)
+    # The second snapshot can report a halt after the financial read. Keep
+    # the source price and recheck its deadline with the latest halt.
+    halt = current["halt"]
+    value = _catalog_mark_snapshot(original, before, original_sessions, settings, now, halt=halt)
     if value.mid is None:
         return holding(value)
-    latest = _catalog_mark_snapshot(current, after, current_sessions, settings, now)
+    latest = _catalog_mark_snapshot(current, after, current_sessions, settings, now, halt=halt)
     if latest.mid is None:
         return holding(latest)
     if value.mark.valid_until is None or latest.mark.valid_until is None:

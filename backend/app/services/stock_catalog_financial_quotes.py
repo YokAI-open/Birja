@@ -413,7 +413,7 @@ class CatalogFinancialMark:
     event_at: datetime
     collected_at: datetime
     valid_until: datetime
-    mode: Literal["fresh", "closed"]
+    mode: Literal["fresh", "closed", "halted"]
 
 
 def catalog_mark_units_safe(action: StockActionState, now: datetime) -> bool:
@@ -497,6 +497,7 @@ def evaluate_catalog_financial_mark(
     permission_until: datetime,
     decision: SessionDecision,
     previous: RegularSession | None,
+    halted_until: datetime | None = None,
 ) -> CatalogFinancialMark | None:
     """Check the exact observed quote, unit and session without touching Redis."""
     if (
@@ -520,10 +521,14 @@ def evaluate_catalog_financial_mark(
         deadline = min(deadline, action.next_blocking_at)
     if decision.state == "open":
         source = decision.current
-        mode: Literal["fresh", "closed"] = "fresh"
+        mode: Literal["fresh", "closed", "halted"] = "fresh"
         if source.closes_at is None:
             return None
-        deadline = min(deadline, source.closes_at, quote.event_at + _FRESH)
+        if halted_until is not None and now < halted_until:
+            mode = "halted"
+            deadline = min(deadline, source.closes_at, halted_until)
+        else:
+            deadline = min(deadline, source.closes_at, quote.event_at + _FRESH)
     else:
         mode = "closed"
         if (

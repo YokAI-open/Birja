@@ -14,7 +14,11 @@ from app.api.v2.portfolios import PortfolioOverview
 from app.models.corporate_action import StockActionState
 from app.models.stock import StockDataAdmission, StockSession
 from app.models.stock_catalog import StockCatalogAdmission
-from app.models.stock_catalog_finance import StockCatalogActionCoverage, StockCatalogFinancialQuote
+from app.models.stock_catalog_finance import (
+    StockCatalogActionCoverage,
+    StockCatalogFinancialQuote,
+    StockCatalogStatus,
+)
 from app.models.trade import Holding
 from app.schemas.portfolio import PortfolioOut
 from app.services.portfolio import get_portfolio, load_portfolio_snapshots
@@ -165,6 +169,70 @@ async def test_catalog_closed_mark_and_incomplete_scope_use_same_two_owned_reads
     assert holding.cost_basis == Decimal("198.50") and holding.quantity == Decimal(2)
     assert holding.stock_mark and holding.stock_mark.valuation_reason == "permission_unavailable"
     assert all(row.allocation_percent is None for row in incomplete.holdings)
+
+
+async def test_catalog_halt_keeps_authorized_dated_price_until_report_lease(engine, catalog_book):
+    market, settings = catalog_book
+    binding = market.instruments[0]
+    portfolio = OwnedActivePortfolio(market.world.first, market.world.owner)
+    now = market.now + timedelta(seconds=45)
+    event_at = market.now - timedelta(seconds=105)
+    report_until = now + timedelta(seconds=10)
+    permission_until = now + timedelta(seconds=5)
+    async with market.factory.begin() as db:
+        quote = await db.get(StockCatalogFinancialQuote, binding.coin_id)
+        assert quote is not None
+        quote.event_at = event_at
+        quote.execution_admission_id = None
+        grant = StockCatalogAdmission(
+            artifact="catalog_halt",
+            reference="Synthetic dated halt report",
+            is_fixture=True,
+            reviewed_at=market.now,
+            valid_until=permission_until,
+            fields={
+                key: ["collection", "execution", "storage", "backup"]
+                for key in ("report_digest", "event_at", "valid_until", "state")
+            },
+            scope={
+                "account": binding.account,
+                "server": binding.server,
+                "catalog_id": str(binding.catalog_id),
+                "listing_id": str(binding.listing_id),
+                "provider_asset_id": binding.provider_asset_id,
+                "feed": "nasdaq-rss",
+            },
+        )
+        db.add(grant)
+        await db.flush()
+        db.add(
+            StockCatalogStatus(
+                coin_id=binding.coin_id,
+                catalog_id=binding.catalog_id,
+                listing_id=binding.listing_id,
+                admission_id=grant.id,
+                state="halted",
+                report_digest="a" * 64,
+                event_at=now,
+                observed_at=now,
+                valid_until=report_until,
+                session_date=quote.session_date,
+            )
+        )
+
+    async with _app(engine) as db:
+        halted = await get_portfolio(db, portfolio=portfolio, settings=settings, now=now)
+        expired = await get_portfolio(
+            db, portfolio=portfolio, settings=settings, now=permission_until
+        )
+    priced = next(holding for holding in halted.holdings if holding.catalog_id)
+    assert priced.current_value == Decimal("204.00")
+    assert priced.stock_mark is not None
+    assert priced.stock_mark.mark_mode == "halted"
+    assert priced.stock_mark.event_at == priced.as_of == event_at
+    assert priced.stock_mark.valid_until == permission_until
+    unpriced = next(holding for holding in expired.holdings if holding.catalog_id)
+    assert unpriced.current_value is None and expired.unvalued_holding_count == 1
 
 
 async def test_catalog_mark_recheck_keeps_original_price_and_refuses_changed_units(
