@@ -44,34 +44,31 @@ def _admitted(
 def _permitted_listing(now: datetime, fixture: ColumnElement[bool]) -> ColumnElement[bool]:
     listing = StockCatalogListing
     admission = StockCatalogAdmission
-    return and_(
-        listing.valid_until > now,
-        or_(
-            fixture,
-            and_(
-                _admitted(
-                    listing.directory_admission_id.expression,
-                    admission.artifact == listing.source,
-                    {
-                        "ticker": ["display"],
-                        "listing_exchange": ["display"],
-                        "share_class": ["display"],
-                        "eligibility": ["derived_use"],
-                    },
-                    now,
-                ),
-                _admitted(
-                    listing.name_admission_id.expression,
-                    admission.artifact == listing.source,
-                    {"company_name": ["display"]},
-                    now,
-                ),
-                _admitted(
-                    listing.classification_admission_id.expression,
-                    admission.artifact.in_(("openfigi", "issuer_exception")),
-                    {"classification": ["derived_use"], "identity_key": ["derived_use"]},
-                    now,
-                ),
+    return or_(
+        fixture,
+        and_(
+            _admitted(
+                listing.directory_admission_id.expression,
+                admission.artifact == listing.source,
+                {
+                    "ticker": ["display"],
+                    "listing_exchange": ["display"],
+                    "share_class": ["display"],
+                    "eligibility": ["derived_use"],
+                },
+                now,
+            ),
+            _admitted(
+                listing.name_admission_id.expression,
+                admission.artifact == listing.source,
+                {"company_name": ["display"]},
+                now,
+            ),
+            _admitted(
+                listing.classification_admission_id.expression,
+                admission.artifact.in_(("openfigi", "issuer_exception")),
+                {"classification": ["derived_use"], "identity_key": ["derived_use"]},
+                now,
             ),
         ),
     )
@@ -144,6 +141,7 @@ async def search_catalog(
         .join(active, active.c.id == listing.generation_id)
         .where(
             listing.state == "active",
+            listing.valid_until > checked_at,
             listing.classification.in_(("common_stock", "ordinary_shares")),
             _permitted_listing(checked_at, active.c.mode == "fixture"),
         )
@@ -250,6 +248,7 @@ async def get_catalog_listing(
         .where(
             _active_generation(settings, checked_at),
             listing.security_id == catalog_id,
+            or_(listing.state != "active", listing.valid_until > checked_at),
             _permitted_listing(checked_at, generation.mode == "fixture"),
         )
         .execution_options(populate_existing=True)

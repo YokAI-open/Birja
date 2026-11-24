@@ -184,7 +184,8 @@ async def test_details_follow_identity_through_rename_failed_refresh_and_ticker_
         former = (await search_catalog(db, settings, "FQA", now=SECOND)).items[0]
         assert former.catalog_id == before.catalog_id
         assert former.ticker == "FQR" and former.listing_version != before.listing_version
-    third = SECOND + timedelta(hours=1)
+    # The old directory observation has expired while the new directory is current.
+    third = SECOND + timedelta(days=5)
     await _publish(
         catalog_factory,
         _manifest(third, nasdaq=(("FQR", "new-share-class"),)),
