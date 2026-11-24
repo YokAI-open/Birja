@@ -2,10 +2,14 @@
 // Never run it against a stack whose email backend is resend.
 import { expect, test } from "@playwright/test";
 import { portfolioId, signInNewUser } from "./helpers.js";
+import { stocks as stockCatalogue } from "./stock-fixtures.js";
 
 test("a signed-in user sees live prices for the curated coins", async ({ page, browser }) => {
   test.setTimeout(90_000);
 
+  await page.route("**/api/v1/stocks", (route) =>
+    route.fulfill({ json: stockCatalogue({ state: "unavailable" }) }),
+  );
   await signInNewUser(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/");
@@ -34,7 +38,10 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   const stocks = page.getByRole("list", { name: "US stocks", exact: true });
   await expect(stocks.getByRole("button")).toHaveCount(20);
   await stocks.getByRole("button", { name: /AAPL/ }).click();
-  await expect(page.getByRole("note", { name: "Stock price source" })).toContainText("IEX prices");
+  const apple = page.locator('section[aria-labelledby="market-asset"]');
+  await expect(apple.getByRole("link", { name: "View details AAPL" })).toBeVisible();
+  await expect(apple.getByText("Price unavailable")).toHaveCount(0);
+  await expect(apple.getByRole("note", { name: "Stock price source" })).toHaveCount(0);
 
   // Refetch without reload (PRICE-03).
   await page.waitForResponse((r) => r.url().endsWith("/api/v1/prices") && r.status() === 200, {

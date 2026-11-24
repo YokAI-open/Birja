@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Link, MemoryRouter, Route, Routes } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { contextFixture, fillFixture, quoteFixture } from "@/test/stockTradeFixtures";
+import { cashPortfolio } from "@/test/portfolioFixtures";
 import StockTradePage from "./StockTradePage";
 import App from "@/App";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
@@ -53,6 +54,18 @@ function setup(
             ],
           ),
         );
+      if (path === "/api/v2/portfolios/1") return Response.json(cashPortfolio());
+      if (path === "/api/v2/portfolios/2")
+        return Response.json({
+          ...cashPortfolio(),
+          portfolio_id: "2",
+          name: "Strategy two",
+          cash: "2500.00",
+          starting_cash: "2500.00",
+          total_value: "2500.00",
+          known_value: "2500.00",
+          class_values: { cash: "2500.00", stocks: "0.00", crypto: "0.00" },
+        });
       if (path.endsWith("/me"))
         return new Response(JSON.stringify({ email: "first@example.test" }));
       return new Response("{}", { status: 404 });
@@ -106,6 +119,10 @@ afterEach(() => {
 it("requires preview and explicit confirmation, then focuses the immutable historical receipt", async () => {
   const { user, calls } = setup();
   const input = await screen.findByLabelText("Whole-share quantity");
+  expect(await screen.findByText("IEX ask")).toBeVisible();
+  expect(screen.queryByText("Stock", { exact: true })).toBeNull();
+  expect(screen.queryByText(/^(Session:|Status:|Corporate actions:|Regular session)/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
   await user.type(input, "2");
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
@@ -113,6 +130,8 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   expect(calls.filter((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toHaveLength(0);
   expect(screen.getByText("Commission")).toBeVisible();
   expect(screen.getByText("Added spread")).toBeVisible();
+  expect(screen.queryByText(/Quotes come from IEX/)).toBeNull();
+  expect(screen.queryByText(/Stock commission and added spread/)).toBeNull();
   await user.click(confirm);
   const heading = await screen.findByRole("heading", { name: "Order filled" });
   expect(heading).toHaveFocus();
@@ -137,12 +156,15 @@ it("closed stocks allow only a draft, with no queue or unsafe executable prices"
   c.session.state = "closed";
   const { user, calls } = setup({ context: () => new Response(JSON.stringify(c)) });
   const input = await screen.findByLabelText("Whole-share quantity");
-  await user.type(input, "3");
+  await user.type(input, "3{Enter}");
   expect(input).toHaveValue("3");
-  expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
+  expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
+  expect(screen.queryByText("Enter a quantity to preview this trade.")).toBeNull();
   expect(screen.getByText("Market closed.")).toBeVisible();
   expect(screen.queryByText("Unavailable", { exact: true })).toBeNull();
   expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
+  expect(calls.some((x) => x.path.endsWith("/stock-trades/quote"))).toBe(false);
   expect(calls.some((x) => x.path === "/api/v2/portfolios/1/stock-trades")).toBe(false);
 });
 it.each([true, false])(
@@ -176,6 +198,10 @@ it.each([true, false])(
     expect(await screen.findByText("Market closed.")).toBeVisible();
     expect(screen.getByText("Opens in 2 hr")).toHaveAttribute("dateTime", nextOpen.toISOString());
     expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Preview trade" })).toBeNull();
+    expect(screen.queryByText("Your quantity is a draft. No order will be queued.")).toBeNull();
+    expect(await screen.findByText("Cash available $10,000.00")).toBeVisible();
     if (retainedQuote) {
       expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
       expect(screen.getByText(/Last verified IEX midpoint/)).toBeVisible();
@@ -187,11 +213,11 @@ it.each([true, false])(
     expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
   },
 );
-it("shows a single retry message when the stock and its schedule cannot load", async () => {
+it("shows a single message when the stock and its schedule cannot load", async () => {
   setup({ context: () => Response.json({}, { status: 503 }) });
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this stock.");
   expect(screen.getAllByText("Couldn't load this stock.")).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "Retry stock" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
 });
 it("keeps an unresolvable saved receipt as an uncertain attempt instead of allowing a new order", async () => {
   const { user, calls } = setup({
@@ -389,7 +415,7 @@ it("suppresses every financial field and receipt when the original portfolio is 
   await screen.findByRole("heading", { name: "Portfolio unavailable" });
   expect(await screen.findByText(/An earlier order's result is unconfirmed/)).toBeVisible();
   expect(screen.queryByLabelText("Whole-share quantity")).toBeNull();
-  expect(screen.queryByText("Cash available")).toBeNull();
+  expect(screen.queryByText(/^Cash available/)).toBeNull();
   expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Check order result" })).toBeNull();
   expect(calls.some((c) => c.path === "/api/v2/portfolios/2/stock-trades")).toBe(false);
@@ -409,6 +435,8 @@ it("does not display or relabel a late original stock receipt in a sibling ticke
   await user.click(confirm);
   await user.click(screen.getByRole("link", { name: "Other strategy" }));
   await waitFor(() => expect(screen.getByLabelText("Whole-share quantity")).toHaveValue(""));
+  expect(await screen.findByText("Cash available $2,500.00")).toBeVisible();
+  expect(screen.queryByText("Cash available $10,000.00")).toBeNull();
   expect(screen.queryByText("Strategy two")).toBeNull();
   await act(async () => {
     resolve(new Response(JSON.stringify(fillFixture())));

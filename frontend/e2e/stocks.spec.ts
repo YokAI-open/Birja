@@ -118,8 +118,12 @@ for (const width of [320, 375, 768, 1280])
     await expect(selected(page)).toContainText("NASDAQ");
     await expect(selected(page).getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(selected(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
-    await expect(selected(page).getByRole("note")).toContainText("IEX prices");
-    await expect(selected(page).getByRole("note")).toContainText("Fixture provider attribution");
+    await expect(selected(page).getByText(/IEX midpoint/)).toBeVisible();
+    await expect(selected(page).getByText(/Quotes come from IEX/)).toHaveCount(0);
+    const attribution = width < 768 ? selected(page) : section(page);
+    await expect(
+      attribution.getByText("Fixture provider attribution", { exact: true }),
+    ).toBeVisible();
     await expect(selected(page).locator("time")).toHaveAttribute(
       "datetime",
       "2026-11-10T14:59:50.000Z",
@@ -157,7 +161,7 @@ test("denied, admitted and revoked generations retain identities and purge provi
   await signInNewUser(page);
   await page.getByRole("button", { name: "US stocks", exact: true }).click();
   await expect(records(page)).toHaveCount(20);
-  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
+  await expect(section(page)).toContainText("Stock data is paused.");
   await expect(section(page).getByText(midpoint)).toHaveCount(0);
   body = stocks({ generation: 2, now: "2026-11-10T15:00:31Z" });
   await page.clock.fastForward(30_001);
@@ -166,7 +170,7 @@ test("denied, admitted and revoked generations retain identities and purge provi
   body = stocks({ state: "unavailable", generation: 3, now: "2026-11-10T15:01:02Z" });
   await page.clock.fastForward(30_001);
   await page.clock.runFor(100);
-  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
+  await expect(section(page)).toContainText("Stock data is paused.");
   await expect(section(page).getByText(midpoint)).toHaveCount(0);
   await expect(selected(page).locator("time")).toHaveCount(0);
   await expect(records(page)).toHaveCount(20);
@@ -190,7 +194,7 @@ test("local admission expiry and a late expired response cannot reintroduce quot
   expiredResponse = true;
   await page.clock.fastForward(6000);
   await page.clock.runFor(100);
-  await expect(section(page)).toContainText("Stock prices and trading are currently unavailable");
+  await expect(section(page)).toContainText("Stock data is paused.");
   await page.clock.fastForward(30_001);
   await refocus(page);
   await expect.poll(() => calls).toBeGreaterThan(initialCalls);
@@ -276,7 +280,9 @@ test("missing, previous-session, early-close, DST and unknown calendars remain s
   );
   await expect(records(page).nth(1)).not.toContainText(midpoint);
   await records(page).nth(2).getByRole("button").click();
-  await expect(selected(page).getByRole("status")).toContainText("Session unavailable");
+  await expect(selected(page).getByRole("status")).toContainText(
+    "Market hours haven’t been confirmed.",
+  );
   await records(page).nth(3).getByRole("button").click();
   await expect(selected(page).getByRole("status")).toContainText("Market closed");
   await records(page).nth(4).getByRole("button").click();

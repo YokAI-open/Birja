@@ -101,6 +101,24 @@ def _calendar_bounds(
     return tuple(result)
 
 
+def scheduled_reopening(exchange: str, now: datetime) -> datetime | None:
+    """Return a display-only reopening from the bundled regular-hours calendar."""
+    if exchange not in EXCHANGES or not utc(now):
+        return None
+    try:
+        bounds = _calendar_bounds(EXCHANGES[exchange], now.date(), now.date() + timedelta(days=7))
+    except ValueError, OverflowError:
+        return None
+    for _, opens, closes in bounds:
+        if opens is None or closes is None:
+            continue
+        if opens <= now < closes:
+            return None
+        if opens > now:
+            return opens
+    return None
+
+
 def session_at(
     exchange: str,
     now: datetime,

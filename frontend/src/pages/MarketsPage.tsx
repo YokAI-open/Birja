@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { StockAttribution } from "@/components/StockAttribution";
 import { MarketOpening } from "@/components/MarketOpening";
 import type { StockItem } from "@/api/stocks";
 import { stockActionSummary } from "@/lib/stockActionCopy";
@@ -16,13 +15,13 @@ type Market = "crypto" | "stock";
 const stockRestrictions: Record<StockItem["execution_reason"], string> = {
   available: "Market open",
   phase_disabled: "Stock trading is unavailable.",
-  permission_unavailable: "Stock data permissions are being verified.",
+  permission_unavailable: "Stock data is paused.",
   action_unavailable: "Corporate-action checks unavailable.",
   units_changed: "Stock units changed. Waiting for a new quote.",
   halted: "Trading halted.",
   frozen: "Trading frozen.",
   status_unavailable: "Stock status is unverified.",
-  session_unavailable: "Session unavailable.",
+  session_unavailable: "Market hours haven’t been confirmed.",
   market_closed: "Market closed.",
   quote_unavailable: "Waiting for a verified IEX quote.",
   quote_stale: "This quote is out of date.",
@@ -90,7 +89,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
       ? "Trade"
       : "Check price";
   const prefix = portfolioId ? `/portfolios/${encodeURIComponent(portfolioId)}` : "";
-  const price = asset?.price ? formatUnitPrice(asset.price) : "Price unavailable";
+  const price = asset?.price
+    ? formatUnitPrice(asset.price)
+    : stockMarket
+      ? null
+      : "Price unavailable";
 
   function selectMarket(next: Market) {
     if (next === market) return;
@@ -146,14 +149,14 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
           />
           {query.isPending ? (
             <p role="status">Loading {stockMarket ? "stocks" : "prices"}…</p>
-          ) : query.isError || (stockMarket && stocks.data && !permitted) ? (
+          ) : query.isError || (stockMarket && stocks.data && !permitted && !marketClosed) ? (
             <div role="status" className="mb-3 flex flex-wrap items-center gap-3 text-sm">
               <p>
                 {query.isError
                   ? query.data
                     ? "Couldn’t refresh. Showing the last available update."
                     : "Couldn’t load this market."
-                  : "Stock prices and trading are currently unavailable. You can still browse companies."}
+                  : stockRestrictions.permission_unavailable}
               </p>
               <button
                 type="button"
@@ -165,11 +168,6 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               </button>
             </div>
           ) : null}
-          {stockMarket && stocks.data && !permitted && query.isError && (
-            <p className="mb-3 text-sm text-[var(--market-muted)]">
-              Stock prices and trading are currently unavailable. You can still browse companies.
-            </p>
-          )}
           {stockMarket && permitted && stockItems.some((item) => item.quote) && (
             <p className="mb-2 text-xs text-[var(--market-muted)]">
               IEX prices · Midpoint
@@ -268,7 +266,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               {asset.symbol} · {stock?.listing_exchange ?? "USD"}
             </p>
             <div className="my-7 border-y border-[var(--market-line)] py-5 md:py-7">
-              {(!marketClosed || stockQuote) && (
+              {price && (
                 <p className="text-[clamp(2rem,4vw,3.25rem)] leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums">
                   {price}
                 </p>
@@ -301,13 +299,16 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
               )}
               {stock && !marketClosed && (
                 <div className="mt-2 space-y-2">
-                  <p role="status" className="text-[var(--market-muted)]">
+                  <p
+                    role="status"
+                    className={
+                      permitted
+                        ? "text-[var(--market-muted)]"
+                        : "text-[var(--market-muted)] md:hidden"
+                    }
+                  >
                     {stockRestriction}
                   </p>
-                  <StockAttribution
-                    context="listing"
-                    required_text={stocks.data?.attribution.required_text}
-                  />
                 </div>
               )}
             </div>
@@ -318,7 +319,7 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
             >
               {action}
             </Link>
-            {marketClosed && stockQuote && stocks.data?.attribution.required_text && (
+            {stockQuote && stocks.data?.attribution.required_text && (
               <p className="mt-3 text-xs text-[var(--market-muted)] md:hidden">
                 {stocks.data.attribution.required_text}
               </p>
