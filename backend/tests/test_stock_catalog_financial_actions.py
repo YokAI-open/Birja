@@ -27,6 +27,7 @@ from app.services.stock_catalog_provider import (
     CatalogUnitEvidence,
     _mapping_digest,
 )
+from app.services.stock_sessions import build_sessions
 from tests.portfolio_fixtures import portfolio_session
 from tests.test_stock_catalog_finance_migration import finance_0025 as finance_0025
 from tests.test_stock_catalog_promotion import finance_0026 as finance_0026
@@ -242,6 +243,56 @@ async def test_catalog_split_service_preserves_basis_and_holds_fractional_lots(
     assert result == (Decimal(quantity), Decimal("87.65"))
     assert await cash(conn, case.world.first) == Decimal("1234.56")
     assert await cash(conn, case.world.closed) == Decimal("55.55")
+
+
+@pytest.mark.parametrize("split", [False, True])
+async def test_verified_action_before_empty_catalog_journal_has_no_effect(scoped_actions, split):
+    conn, case = scoped_actions
+    async with _scheduler(conn) as db, db.begin():
+        authority = await _authority(db, case)
+        earlier = max(
+            (
+                row
+                for row in build_sessions(case.now, authority.calendar)
+                if row.exchange == case.binding.listing_exchange
+                and row.opens_at is not None
+                and row.opens_at < case.origin
+            ),
+            key=lambda row: row.session_date,
+        )
+        action = _dividend(case, ex_date=earlier.session_date, record_date=earlier.session_date)
+        if split:
+            action = replace(
+                action,
+                event_type="forward_split",
+                economic_at=earlier.opens_at,
+                units="pre_split",
+                rate=None,
+                new_rate=Decimal("2"),
+                old_rate=Decimal("1"),
+            )
+        assert action.process_date > earlier.session_date
+        assert (
+            await persist_action_batch(
+                db,
+                ActionBatch(
+                    records=(action,), observations=(ActionObservation(action),), complete=True
+                ),
+                None,
+                account=case.binding.account,
+                server=case.binding.server,
+                catalog=authority,
+            )
+            == ()
+        )
+        assert await db.scalar(text("SELECT count(*) FROM stock_action_events")) == 0
+        state = await db.get(StockActionState, case.binding.coin_id)
+        assert state is not None and state.health == "current" and state.unit_epoch == 0
+        _, uncertain = await _ingest(db, case, replace(action, dates_verified=False))
+        assert uncertain.classification == "uncertain"
+    assert await cash(conn, case.world.first) == Decimal("1234.56")
+    assert await conn.scalar(text("SELECT count(*) FROM stock_split_applications")) == 0
+    assert await conn.scalar(text("SELECT count(*) FROM stock_dividend_payments")) == 0
 
 
 async def test_catalog_operator_reconciles_verified_cancellation_after_rename(scoped_actions):

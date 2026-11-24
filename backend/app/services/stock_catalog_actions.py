@@ -233,9 +233,10 @@ async def catalog_action_candidates(
 ) -> tuple[CatalogActionAuthority, ...]:
     """Take one bounded cohort of promoted issues with explicit ingestion scope."""
     rows = (
-        await db.scalars(
+        await db.execute(
             text("""
-        SELECT b.coin_id
+        SELECT b.coin_id, CASE WHEN st.staged_continuation->>'target_until' IS NOT NULL
+          THEN st.staged_continuation->>'policy_key' END AS active_window
         FROM public.stock_catalog_instruments b
         JOIN public.stock_catalog_listings l ON (l.id,l.security_id)=(b.listing_id,b.catalog_id)
         JOIN public.stock_catalog_generations g ON g.id=l.generation_id
@@ -248,7 +249,7 @@ async def catalog_action_candidates(
               a.id,'catalog_actions',b,l,:at,CAST(:fields AS jsonb))
         )
         ORDER BY (st.staged_continuation->>'target_until' IS NOT NULL) DESC,
-                 c.observed_at NULLS FIRST,b.coin_id
+                 active_window, c.observed_at NULLS FIRST,b.coin_id
         LIMIT 8
     """),
             {
@@ -270,7 +271,10 @@ async def catalog_action_candidates(
     ready: list[CatalogActionAuthority] = []
     symbols: set[str] = set()
     cap = 8
-    for coin in rows:
+    active_window = rows[0].active_window if rows else None
+    for coin, previous_window in rows:
+        if previous_window != active_window:
+            break
         authority = await load_catalog_action_authority(
             db,
             coin,

@@ -44,7 +44,7 @@ from app.models.corporate_action import (
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.stock_catalog_finance import StockCatalogActionCoverage
-from app.models.trade import Holding
+from app.models.trade import Holding, Trade
 from app.models.user import Account
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
@@ -368,6 +368,15 @@ async def _hold(db: AsyncSession, state: StockActionState, at: datetime) -> None
     await db.flush()
 
 
+async def _no_history_before(db: AsyncSession, coin_id: int, origin: datetime) -> bool:
+    # Ingestion holds the instrument gate. The economic journal and fills
+    # must both prove that no Birja position existed before this origin.
+    movement = StockOwnershipMovement
+    prior = exists().where(movement.coin_id == coin_id, movement.economic_at < origin)
+    fill = exists().where(Trade.coin_id == coin_id, Trade.created_at < origin)
+    return not await db.scalar(select(prior | fill))
+
+
 async def persist_action_batch(
     db: AsyncSession,
     batch: ActionBatch,
@@ -514,6 +523,17 @@ async def persist_action_batch(
             ):
                 kind, reason = "uncertain", "conflicting"
                 terms["ingest_hold"] = "suspected_alias"
+            if (
+                catalog is not None
+                and kind in {"supported_dividend", "supported_forward_split"}
+                and verified_cutoff is not None
+                and state.journal_start_at == catalog.journal_origin
+                and verified_cutoff < catalog.journal_origin
+                and await _no_history_before(db, cid, catalog.journal_origin)
+            ):
+                # This action predates the proved empty book. A future
+                # delivery with a post-origin cutoff can still be ingested.
+                continue
             event = StockActionEvent(
                 coin_id=cid, economic_key=str(uuid4()), first_observed_at=action.observed_at
             )

@@ -474,10 +474,33 @@ class _CatalogCheckpoint:
     epoch: int
     stage: dict[str, Any]
     covered_until: datetime | None
+    snapshot_through: date | None
+    proof_key: str
+
+
+def _catalog_proof_key(authority: CatalogActionAuthority, settings: SchedulerSettings) -> str:
+    return sha256(
+        json.dumps(
+            [
+                authority.binding.listing_id,
+                authority.fingerprint,
+                authority.calendar.generation,
+                authority.ticker,
+                authority.journal_origin.isoformat(),
+                [
+                    (alias.symbol, alias.through.isoformat(), alias.valid_until.isoformat())
+                    for alias in authority.aliases
+                ],
+                sorted(authority.ambiguous_symbols),
+                settings.stock_actions_future_days,
+                settings.stock_actions_segment_days,
+            ],
+        ).encode()
+    ).hexdigest()
 
 
 async def _prepare_catalog_action(
-    db: AsyncSession, authority: CatalogActionAuthority, scope: _Scope
+    db: AsyncSession, authority: CatalogActionAuthority, scope: _Scope, proof_key: str
 ) -> _CatalogCheckpoint:
     binding = authority.binding
     await lock_catalog_action_scope(db)
@@ -518,12 +541,35 @@ async def _prepare_catalog_action(
     await assert_ownership_consistent(db, binding.coin_id)
     coverage = await db.get(StockCatalogActionCoverage, binding.coin_id, populate_existing=True)
     same_version = coverage is not None and (
+        coverage.catalog_id,
         coverage.admission_id,
         coverage.listing_id,
         coverage.journal_origin,
-    ) == (authority.admission_id, binding.listing_id, origin)
+    ) == (binding.catalog_id, authority.admission_id, binding.listing_id, origin)
     stage = dict(state.staged_continuation or {}) if same_version else {}
-    covered_until = state.covered_until if same_version else None
+    covered_until = None
+    snapshot_through = None
+    if (
+        stage.get("completed_policy") == proof_key
+        and coverage is not None
+        and coverage.coverage_start == state.coverage_start == origin
+        and coverage.covered_until == state.covered_until
+        and state.covered_until is not None
+        and origin <= state.covered_until <= checked
+    ):
+        covered_until = state.covered_until
+        snapshot_through = date.fromisoformat(stage["snapshot_through"])
+    keep_lease = (
+        covered_until is not None
+        and coverage is not None
+        and state.health == "current"
+        and state.admission_generation == authority.admission_id
+        and state.valid_until is not None
+        and checked < state.valid_until <= authority.valid_until
+        and (state.next_blocking_at is None or checked < state.next_blocking_at)
+        and (state.checked_at, state.valid_until, state.cursor)
+        == (coverage.observed_at, coverage.valid_until, coverage.cursor)
+    )
     if coverage is None:
         coverage = StockCatalogActionCoverage(
             coin_id=binding.coin_id,
@@ -540,22 +586,23 @@ async def _prepare_catalog_action(
         if not same_version:
             coverage.coverage_start = coverage.covered_until = None
             coverage.cursor = None
-    coverage.observed_at, coverage.valid_until = checked, None
-    state.epoch += 1
-    state.health, state.valid_until = "reconciling", None
+    if not keep_lease:
+        if state.health != "reconciling" or not same_version:
+            state.epoch += 1
+        coverage.observed_at, coverage.valid_until = checked, None
+        state.health, state.valid_until = "reconciling", None
     state.admission_generation = authority.admission_id
     state.staged_continuation = stage
     if not same_version:
         state.coverage_start = state.covered_until = None
         state.cursor = None
-    return _CatalogCheckpoint(state.epoch, stage, covered_until)
+    return _CatalogCheckpoint(state.epoch, stage, covered_until, snapshot_through, proof_key)
 
 
 @dataclass(frozen=True)
 class _CatalogWindow:
     target: datetime
     start: date
-    end: date
     horizon: date
     replay_at: datetime
     replay_end: datetime
@@ -570,7 +617,20 @@ def _catalog_window(
     settings: SchedulerSettings,
 ) -> _CatalogWindow:
     progress = stages[0].stage
-    same_stage = progress.get("policy_key") == key and all(p.stage == progress for p in stages)
+    same_stage = all(
+        stage.stage.get("policy_key") == key
+        and all(
+            stage.stage.get(field) == progress.get(field)
+            for field in (
+                "target_until",
+                "next_date",
+                "replay_at",
+                "replay_end",
+                "continuation",
+            )
+        )
+        for stage in stages
+    )
     if same_stage and progress.get("target_until"):
         target = datetime.fromisoformat(progress["target_until"])
         start = date.fromisoformat(progress["next_date"])
@@ -578,11 +638,14 @@ def _catalog_window(
         replay_end = datetime.fromisoformat(progress["replay_end"])
         token = progress.get("continuation")
     else:
-        baseline = min((p.covered_until or baseline) for p in stages) if same_stage else baseline
-        target, start, replay_at, replay_end, token = at, baseline.date(), baseline, at, None
+        replay_at = min(p.covered_until or baseline for p in stages)
+        start = min(
+            p.snapshot_through + timedelta(days=1) if p.snapshot_through else baseline.date()
+            for p in stages
+        )
+        target, replay_end, token = at, at, None
     horizon = target.date() + timedelta(days=settings.stock_actions_future_days)
-    end = min(horizon, start + timedelta(days=settings.stock_actions_segment_days - 1))
-    return _CatalogWindow(target, start, end, horizon, replay_at, replay_end, token)
+    return _CatalogWindow(target, start, horizon, replay_at, replay_end, token)
 
 
 async def _catalog_effects(
@@ -677,28 +740,53 @@ async def _publish_catalog_action_window(
         != authority
     ):
         raise ActionError("publication_changed")
-    cursor = next((b.continuation for b in reversed(batches) if b.continuation), state.cursor)
-    state.cursor = coverage.cursor = cursor
-    state.checked_at = coverage.observed_at = checked
     if coin_id in blocked:
         # Re-read the disputed interval rather than advancing beyond it.
+        if state.health == "current":
+            state.epoch += 1
+        state.health = "reconciling"
+        state.valid_until = coverage.valid_until = None
+        state.cursor = coverage.cursor = None
+        state.checked_at = coverage.observed_at = checked
         state.staged_continuation = {"reason": "identity_or_known_id_gap"}
         state.coverage_start = coverage.coverage_start = None
         state.covered_until = coverage.covered_until = None
     elif complete:
         origin = authority.journal_origin
+        state.cursor = coverage.cursor = None
+        state.checked_at = coverage.observed_at = checked
         state.coverage_start = coverage.coverage_start = origin
         state.covered_until = coverage.covered_until = window.target
-        state.valid_until = coverage.valid_until = min(
+        deadline = min(
             authority.valid_until,
-            checked + timedelta(seconds=settings.stock_actions_health_max_age_seconds),
+            window.target + timedelta(seconds=settings.stock_actions_health_max_age_seconds),
         )
-        state.health = "current"
-        state.staged_continuation = {"policy_key": progress["policy_key"], "target_until": None}
-        await db.flush()
-        await _catalog_effects(db, authority, scope)
+        state.staged_continuation = {
+            "completed_policy": stage.proof_key,
+            "snapshot_through": window.horizon.isoformat(),
+        }
+        state.health = "current" if checked < deadline else "reconciling"
+        state.valid_until = coverage.valid_until = deadline if checked < deadline else None
+        if state.valid_until is not None:
+            await db.flush()
+            await _catalog_effects(db, authority, scope)
     else:
-        state.staged_continuation = progress
+        state.staged_continuation = {
+            **progress,
+            **(
+                {
+                    "completed_policy": stage.proof_key,
+                    "snapshot_through": stage.snapshot_through.isoformat(),
+                }
+                if stage.snapshot_through is not None
+                else {}
+            ),
+        }
+        if state.health != "current" or state.valid_until is None or checked >= state.valid_until:
+            state.health = "reconciling"
+            state.valid_until = coverage.valid_until = None
+            state.cursor = coverage.cursor = progress["continuation"]
+            state.checked_at = coverage.observed_at = checked
 
 
 async def _refresh_catalog(
@@ -745,21 +833,15 @@ async def _refresh_catalog(
             raise ActionError("admission_changed")
 
     stages = []
-    for authority in authorities:
+    proof_keys = [_catalog_proof_key(authority, settings) for authority in authorities]
+    for authority, proof_key in zip(authorities, proof_keys, strict=True):
         await guard()
         async with sessionmaker.begin() as db:
-            stages.append(await _prepare_catalog_action(db, authority, scope))
+            stages.append(await _prepare_catalog_action(db, authority, scope, proof_key))
     baseline = min(a.journal_origin for a in authorities)
     policy_key = sha256(
         json.dumps(
-            [
-                sorted(
-                    (a.binding.coin_id, a.binding.listing_id, a.fingerprint, a.calendar.generation)
-                    for a in authorities
-                ),
-                settings.stock_actions_future_days,
-                settings.stock_actions_segment_days,
-            ]
+            sorted((a.binding.coin_id, key) for a, key in zip(authorities, proof_keys, strict=True))
         ).encode()
     ).hexdigest()
     async with sessionmaker() as db:
@@ -806,26 +888,32 @@ async def _refresh_catalog(
 
     batches: list[ActionBatch] = []
     snapshot = known = None
-    rest_complete = window.start > window.horizon
-    replay_complete = window.replay_at >= window.target
+    next_date, page_token = window.start, window.token
     http.event_hooks["request"].append(before_request)
     try:
-        if not rest_complete:
+        while next_date <= window.horizon and budget.attempts < budget.max_attempts:
+            end = min(
+                window.horizon, next_date + timedelta(days=settings.stock_actions_segment_days - 1)
+            )
             snapshot = await fetch_action_snapshot(
                 http,
                 mappings,
                 evidence,
                 now,
                 budget,
-                start=window.start,
-                end=window.end,
+                start=next_date,
+                end=end,
                 lease=lease,
-                page_token=window.token,
+                page_token=page_token,
                 catalog=authorities,
                 **scope,
             )
             batches.append(snapshot)
-            rest_complete = snapshot.complete and window.end == window.horizon
+            page_token = snapshot.continuation
+            if not snapshot.complete or snapshot.uncertain_coin_ids:
+                break
+            next_date = end + timedelta(days=1)
+        rest_complete = next_date > window.horizon
         if ids and rest_complete:
             known = await recheck_action_ids(
                 http,
@@ -840,7 +928,7 @@ async def _refresh_catalog(
             )
             batches.append(known)
         replay = None
-        if rest_complete and not replay_complete:
+        if rest_complete and window.replay_at < window.target:
             replay = await replay_action_mutations(
                 http,
                 mappings,
@@ -882,14 +970,23 @@ async def _refresh_catalog(
         )
     )
     blocked = missing | {coin for batch in batches for coin in batch.uncertain_coin_ids}
+    expected_partial = {
+        "attempt_budget",
+        "page_budget",
+        "response_limit",
+        "byte_budget",
+        "mutation_budget",
+        "cycle_budget",
+        "missing_or_uncertain",
+    }
+    if any(not batch.complete and batch.reason not in expected_partial for batch in batches):
+        blocked.update(names)
     complete = rest_complete and replay_complete and known_complete
     progress = {
         "policy_key": policy_key,
         "target_until": window.target.isoformat(),
-        "next_date": (
-            (window.end + timedelta(days=1)) if snapshot and snapshot.complete else window.start
-        ).isoformat(),
-        "continuation": snapshot.continuation if snapshot is not None else None,
+        "next_date": next_date.isoformat(),
+        "continuation": page_token,
         "replay_at": frontier.isoformat(),
         "replay_end": next_replay_end.isoformat(),
     }

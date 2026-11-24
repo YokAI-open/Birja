@@ -21,7 +21,7 @@ from app.models.corporate_action import (
     StockDividendEntitlement,
 )
 from app.models.stock import StockDataAdmission, StockInstrument
-from app.models.stock_catalog import StockCatalogAdmission
+from app.models.stock_catalog import StockCatalogAdmission, StockCatalogListing
 from app.models.stock_catalog_finance import StockCatalogActionCoverage
 from app.services.alpaca_actions import ActionBudget, fetch_action_snapshot
 from app.services.corporate_action_rules import classify_action
@@ -34,6 +34,7 @@ from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_catalog_promotion import (
     ACCOUNT,
     FIRST_ASSET,
+    OTHER_ASSET,
     SERVER,
     _listing,
     _promote,
@@ -221,6 +222,31 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
                     and state.valid_until is None
                 )
             assert rest.call_count == 1 and replay.call_count == 0
+            async with factory() as db:
+                previous_listing = await db.get(StockCatalogListing, binding.listing_id)
+                previous_grant = await db.get(StockCatalogAdmission, admission)
+            assert previous_listing is not None and previous_grant is not None
+            added_listing = await _listing(factory, previous_listing.generation_id, "FQN")
+            added_execution = await _reviewed_grant(factory, added_listing, OTHER_ASSET, origin)
+            added = await _promote(factory, added_listing, added_execution, origin)
+            async with factory.begin() as db:
+                db.add(
+                    StockCatalogAdmission(
+                        artifact=previous_grant.artifact,
+                        reference="Fixture newly selected issue",
+                        is_fixture=True,
+                        reviewed_at=previous_grant.reviewed_at,
+                        valid_until=previous_grant.valid_until,
+                        fields=previous_grant.fields,
+                        scope={
+                            **previous_grant.scope,
+                            "catalog_id": str(added.catalog_id),
+                            "listing_id": str(added.listing_id),
+                            "provider_asset_id": added.provider_asset_id,
+                            "rest_symbols": ["FQN"],
+                        },
+                    )
+                )
             settings.stock_actions_max_attempts = 4
             await redis_client.delete(stock_actions.WINDOW_KEY)
             assert (await cycle((factory, settings, origin), redis_client, http)).status == "ok"
@@ -234,6 +260,65 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
         assert coverage.admission_id == state.admission_generation == admission
         assert coverage.valid_until == state.valid_until and coverage.valid_until is not None
         assert coverage.covered_until == state.covered_until and coverage.covered_until > origin
+        assert await db.get(StockCatalogActionCoverage, added.coin_id) is None
+
+
+async def test_catalog_default_refresh_preserves_complete_lease_until_real_gap(
+    catalog_monitor, redis_client
+):
+    factory, settings, origin, binding, _ = catalog_monitor
+    settings.stock_actions_segment_days = 31
+    leases = []
+    gap = False
+
+    async def replay_reply(request):
+        if leases:
+            async with factory() as db:
+                state = await db.get(StockActionState, binding.coin_id)
+                coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+                assert state is not None and coverage is not None
+                assert state.health == "current"
+                assert (state.epoch, state.valid_until) == leases[-1]
+                assert state.valid_until == coverage.valid_until
+                assert state.covered_until == coverage.covered_until
+                assert request.url.params["since"] == coverage.covered_until.isoformat()
+        return httpx.Response(
+            200,
+            content=b"",
+            headers={"content-type": "application/json" if gap else "text/event-stream"},
+        )
+
+    with respx.mock(assert_all_called=False) as router:
+        rest = router.get("https://data.alpaca.markets/v1/corporate-actions").respond(
+            200, json={"corporate_actions": {}, "next_page_token": None}
+        )
+        replay = router.get(url__startswith="https://stream.data.alpaca.markets/").mock(
+            side_effect=replay_reply
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            for _ in range(2):
+                await redis_client.delete(stock_actions.WINDOW_KEY)
+                assert (await cycle((factory, settings, origin), redis_client, http)).status == "ok"
+                async with factory() as db:
+                    state = await db.get(StockActionState, binding.coin_id)
+                    assert state is not None and state.valid_until is not None
+                    assert state.health == "current"
+                    leases.append((state.epoch, state.valid_until))
+            assert leases[1][0] == leases[0][0]
+            assert leases[1][1] > leases[0][1]
+            assert rest.call_count == 3 and replay.call_count == 2
+            gap = True
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+    async with factory() as db:
+        state = await db.get(StockActionState, binding.coin_id)
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        assert state is not None and coverage is not None
+        assert state.health == "reconciling"
+        assert state.valid_until is None and coverage.valid_until is None
+        assert state.epoch > leases[-1][0]
 
 
 async def test_catalog_action_scope_without_replay_ingress_keeps_first_fill_held(
