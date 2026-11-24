@@ -11,7 +11,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from pydantic import TypeAdapter
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.models.stock_catalog import (
@@ -237,6 +237,37 @@ async def test_ticker_reuse_retires_old_issue_and_missing_corroboration_stays_re
         assert originals[before["FQB"].security_id].state == "review"
         assert originals[before["FQA"].security_id].valid_until == before["FQA"].valid_until
         assert (updated.active, updated.review, updated.retired) == (2, 1, 1)
+
+
+@pytest.mark.parametrize("figi_first", [True, False])
+async def test_evidence_source_change_cannot_retire_the_same_ticker(
+    catalog_factory: Factory, figi_first: bool
+) -> None:
+    def candidate(at: datetime, use_figi: bool) -> CatalogManifest:
+        manifest = _manifest(at)
+        if not use_figi:
+            return manifest
+        row = manifest.rows[0].model_copy(
+            update={
+                "identity_key": "figi:BBG001ABC234",
+                "reason": "corroborated_share_class",
+            }
+        )
+        return manifest.model_copy(update={"rows": (row, *manifest.rows[1:])})
+
+    original = await _publish(catalog_factory, candidate(NOW, figi_first), None)
+    with pytest.raises(CatalogPublishError, match="identity needs review"):
+        await _publish(
+            catalog_factory, candidate(SECOND, not figi_first), original.generation_id, now=SECOND
+        )
+    async with catalog_factory() as db:
+        active = await db.scalar(
+            select(StockCatalogGeneration).where(StockCatalogGeneration.is_active)
+        )
+        assert active is not None and active.id == original.generation_id
+        listings = await _listings(db, active.id)
+        assert len(listings) == 2 and {listing.state for listing in listings} == {"active"}
+        assert await db.scalar(select(func.count()).select_from(StockCatalogSecurity)) == 2
 
 
 async def test_bad_pair_incomplete_candidate_and_mass_removal_keep_active_version(

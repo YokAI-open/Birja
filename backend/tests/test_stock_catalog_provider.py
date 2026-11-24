@@ -119,6 +119,38 @@ async def test_mapping_stages_both_venues_without_retaining_provider_fields() ->
         )
 
 
+async def test_claim_change_between_assets_stops_the_second_request() -> None:
+    calls: list[str] = []
+    checks = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(200, json=_response(NYSE))
+
+    async def verify_claim() -> None:
+        nonlocal checks
+        checks += 1
+        if calls:
+            raise CatalogAssetError("asset_admission")
+
+    with pytest.raises(CatalogAssetError, match="asset_admission"):
+        await stage_reviewed_assets(
+            _admission(NYSE, NASDAQ),
+            (_unit(NYSE), _unit(NASDAQ)),
+            account="fixture-account",
+            server="fixture-server",
+            environment="paper",
+            expected_listings={1: NYSE, 2: NASDAQ},
+            key=SecretStr("synthetic-key"),
+            secret=SecretStr("synthetic-secret"),
+            clock=lambda: NOW,
+            transport=httpx.MockTransport(respond),
+            before_attempt=verify_claim,
+        )
+    assert checks == 2
+    assert calls == ["/v2/assets/BRK.B"]
+
+
 async def test_mapping_uses_only_matching_configured_environment_for_credentials() -> None:
     calls: list[str] = []
     key, secret = SecretStr("fixture-key"), SecretStr("fixture-secret")

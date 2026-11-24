@@ -461,6 +461,7 @@ describe("MarketsPage stock catalog", () => {
     await page.user.type(page.search, "Fixture");
     await page.user.click(await screen.findByRole("button", { name: /FQA/ }));
     await vi.waitFor(() => expect(firstSignal).toBeDefined());
+    expect(screen.queryByRole("link", { name: "View details FQA" })).toBeNull();
     await page.user.click(screen.getByRole("button", { name: /FQB/ }));
     expect(await screen.findByText("Couldn’t load this stock price.")).toBeVisible();
     expect(firstSignal?.aborted).toBe(true);

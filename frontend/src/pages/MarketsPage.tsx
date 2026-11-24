@@ -488,19 +488,21 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                 </div>
               )}
             </div>
-            {!listingChanged && !missingListing && (
-              <Link
-                className="market-action inline-flex min-h-13 w-full items-center justify-center rounded-sm px-8 py-3 font-semibold md:w-auto"
-                to={
-                  catalogListing
-                    ? `${prefix}/trade/catalog/${catalogListing.catalog_id}`
-                    : `${prefix}/trade/${stockMarket ? "stocks/" : ""}${encodeURIComponent(asset.symbol)}`
-                }
-                aria-label={`${action} ${asset.symbol}`}
-              >
-                {action}
-              </Link>
-            )}
+            {!listingChanged &&
+              !missingListing &&
+              (!catalogListing || !selectedQuote.isFetching) && (
+                <Link
+                  className="market-action inline-flex min-h-13 w-full items-center justify-center rounded-sm px-8 py-3 font-semibold md:w-auto"
+                  to={
+                    catalogListing
+                      ? `${prefix}/trade/catalog/${catalogListing.catalog_id}`
+                      : `${prefix}/trade/${stockMarket ? "stocks/" : ""}${encodeURIComponent(asset.symbol)}`
+                  }
+                  aria-label={`${action} ${asset.symbol}`}
+                >
+                  {action}
+                </Link>
+              )}
             {stockQuote && stocks.data?.attribution.required_text && (
               <p className="mt-3 text-xs text-[var(--market-muted)] md:hidden">
                 {stocks.data.attribution.required_text}

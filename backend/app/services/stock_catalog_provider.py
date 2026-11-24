@@ -3,7 +3,7 @@
 import asyncio
 import hashlib
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Literal
@@ -272,6 +272,7 @@ async def stage_catalog_assets(
     server: str,
     expected_listings: Mapping[int, CatalogAssetTarget],
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    before_attempt: Callable[[], Awaitable[None]] | None = None,
 ) -> tuple[CatalogAssetMapping, ...]:
     """Perform one approved batch, with one attempt per selected listing and no retries."""
     now = _now(clock)
@@ -289,6 +290,8 @@ async def stage_catalog_assets(
 
     mappings = []
     for unit in units:
+        if before_attempt is not None:
+            await before_attempt()
         now = _now(clock)
         if not _admitted(admission, now, account=account, server=server):
             raise CatalogAssetError("asset_admission")
@@ -318,6 +321,7 @@ async def stage_reviewed_assets(
     secret: SecretStr,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     transport: httpx.AsyncBaseTransport | None = None,
+    before_attempt: Callable[[], Awaitable[None]] | None = None,
 ) -> tuple[CatalogAssetMapping, ...]:
     """Use the independently configured account's credentials in a dedicated HTTP client."""
     if environment != admission.environment:
@@ -342,4 +346,5 @@ async def stage_reviewed_assets(
             server=server,
             expected_listings=expected_listings,
             clock=clock,
+            before_attempt=before_attempt,
         )

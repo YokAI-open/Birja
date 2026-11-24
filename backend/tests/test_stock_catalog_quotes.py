@@ -114,7 +114,7 @@ async def seed_catalog_quote_fixture(
         await db.execute(delete(StockSession))
         db.add_all(StockSession(**asdict(row)) for row in sessions)
     assert old.mode == "fixture"
-    issue = StockCatalogSecurity(identity_key="fixture-quote-" + str(uuid4()), created_at=now)
+    issue = StockCatalogSecurity(identity_key="review:" + _digest(str(uuid4())), created_at=now)
     db.add(issue)
     await db.flush()
     name = f"Synthetic {ticker} Holdings"

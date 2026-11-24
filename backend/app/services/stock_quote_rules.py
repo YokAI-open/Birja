@@ -132,11 +132,13 @@ def _side(value: object) -> Decimal | None:
     if not Decimal("0") < value < Decimal("1e12"):
         return None
     try:
-        if value.quantize(Decimal("1e-8")) != value:
+        normalized = value.quantize(Decimal("1e-8"))
+        if normalized != value:
             return None
     except InvalidOperation:
         return None
-    return value
+    exponent = value.as_tuple().exponent
+    return normalized if isinstance(exponent, int) and exponent < -8 else value
 
 
 def validate_iex_quote(

@@ -173,7 +173,22 @@ async def _stage_assets(engine: AsyncEngine, admission_id: int) -> dict[str, obj
             raise CatalogPublishError("This single-use provider admission was already attempted")
         # The claim survives request failure and process interruption, so a
         # restart cannot spend the same bounded reviewed provider allowance.
-        record.scope = {**record.scope, "attempted_at": now.isoformat()}
+        claimed_at = now.isoformat()
+        record.scope = {**record.scope, "attempted_at": claimed_at}
+
+    async def before_attempt() -> None:
+        async with AsyncSession(engine) as db, db.begin():
+            await _check_connection(await db.connection(), False)
+            checked_at = datetime.now(UTC)
+            current = await reviewed_mapping_scope(db, admission_id, checked_at)
+            claimed = await db.get(StockCatalogAdmission, admission_id)
+            if (
+                current != scope
+                or claimed is None
+                or claimed.scope.get("attempted_at") != claimed_at
+                or await current_mapping_targets(db, current, checked_at) != expected_targets
+            ):
+                raise CatalogPublishError("The provider claim or selected listing has changed")
 
     staged = await stage_reviewed_assets(
         scope.provider,
@@ -184,6 +199,7 @@ async def _stage_assets(engine: AsyncEngine, admission_id: int) -> dict[str, obj
         expected_listings=expected_targets,
         key=key,
         secret=secret,
+        before_attempt=before_attempt,
     )
     async with AsyncSession(engine) as db, db.begin():
         await _check_connection(await db.connection(), False)

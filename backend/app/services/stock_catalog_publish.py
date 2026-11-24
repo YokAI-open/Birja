@@ -194,6 +194,15 @@ def _retirements(
     return evidence_by_identity
 
 
+def _matches_retirement(retirement: _Retirement | None, prior: StockCatalogListing) -> bool:
+    return (
+        retirement is not None
+        and retirement.listing_version == prior.id
+        and retirement.listing_exchange == prior.listing_exchange
+        and retirement.ticker == prior.ticker
+    )
+
+
 def _inactive_listing(
     prior: StockCatalogListing,
     generation_id: int,
@@ -205,11 +214,7 @@ def _inactive_listing(
     retirement = retirements.get(identity)
     if prior.state == "retired":
         state, reason = prior.state, prior.reason
-    elif retirement is not None and (
-        retirement.listing_version == prior.id
-        and retirement.listing_exchange == prior.listing_exchange
-        and retirement.ticker == prior.ticker
-    ):
+    elif _matches_retirement(retirement, prior):
         state, reason = "retired", "confirmed_retirement"
     elif (prior.listing_exchange, prior.ticker) in occupancy:
         state, reason = "retired", "verified_ticker_reuse"
@@ -369,10 +374,23 @@ async def publish_catalog(
 
     retirements = _retirements(trusted, now)
     incoming = {row.identity_key: row for row in rows if row.identity_key is not None}
-    occupancy: set[tuple[str, str]] = {
-        (row.listing_exchange, row.ticker) for row in rows if row.listing_exchange
+    incoming_occupants: dict[tuple[str, str], str] = {
+        (row.listing_exchange, row.ticker): identity
+        for identity, row in incoming.items()
+        if row.listing_exchange
     }
+    occupancy = set(incoming_occupants)
     prior_listings = await _prior_listings(db, old)
+    for identity, prior in prior_listings.items():
+        replacement = incoming_occupants.get((prior.listing_exchange, prior.ticker))
+        if (
+            prior.state != "retired"
+            and identity not in incoming
+            and replacement is not None
+            and replacement.partition(":")[0] != identity.partition(":")[0]
+            and not _matches_retirement(retirements.get(identity), prior)
+        ):
+            raise CatalogPublishError("Ticker identity needs review across evidence sources")
     for venue in ("NASDAQ", "NYSE"):
         previous_active = [
             identity
