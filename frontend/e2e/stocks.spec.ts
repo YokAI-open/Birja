@@ -118,8 +118,12 @@ for (const width of [320, 375, 768, 1280])
     await expect(selected(page)).toContainText("NASDAQ");
     await expect(selected(page).getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(selected(page).getByRole("link", { name: /^Trade / })).toHaveCount(0);
-    await expect(selected(page).getByRole("note")).toContainText("IEX prices");
-    await expect(selected(page).getByRole("note")).toContainText("Fixture provider attribution");
+    await expect(selected(page).getByText(/IEX midpoint/)).toBeVisible();
+    await expect(selected(page).getByText(/Quotes come from IEX/)).toHaveCount(0);
+    const attribution = width < 768 ? selected(page) : section(page);
+    await expect(
+      attribution.getByText("Fixture provider attribution", { exact: true }),
+    ).toBeVisible();
     await expect(selected(page).locator("time")).toHaveAttribute(
       "datetime",
       "2026-11-10T14:59:50.000Z",

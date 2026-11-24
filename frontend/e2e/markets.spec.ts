@@ -2,10 +2,14 @@
 // Never run it against a stack whose email backend is resend.
 import { expect, test } from "@playwright/test";
 import { portfolioId, signInNewUser } from "./helpers.js";
+import { stocks as stockCatalogue } from "./stock-fixtures.js";
 
 test("a signed-in user sees live prices for the curated coins", async ({ page, browser }) => {
   test.setTimeout(90_000);
 
+  await page.route("**/api/v1/stocks", (route) =>
+    route.fulfill({ json: stockCatalogue({ state: "unavailable" }) }),
+  );
   await signInNewUser(page);
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/");
