@@ -69,7 +69,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 - [x] 19-03 — Admit schema 0025 and verify encrypted catalog recovery.
 
 **Wave 4** *(after Wave 3)*
-- [ ] 19-04 — Serve bounded local search and stable listing details.
+- [x] 19-04 — Serve bounded local search and stable listing details.
 
 **Wave 5** *(after Wave 4)*
 - [ ] 19-05 — Fetch selected display quotes and expose the owned trade context.
@@ -112,7 +112,7 @@ The simulator runs in a disposable stack for Phase 18 verification.
 | Phase | Plans complete | Status |
 |---|---|---|
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
-| 19. Search the NYSE and Nasdaq catalog | 3/6 | In progress |
+| 19. Search the NYSE and Nasdaq catalog | 4/6 | In progress |
 | 20. Trade and value stocks from search | 0/TBD | Not started |
 | 21. Verify, release and activate stock trading | 0/TBD | Not started |
 

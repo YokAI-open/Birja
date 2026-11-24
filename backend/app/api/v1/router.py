@@ -5,6 +5,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.legacy_finance import router as legacy_finance_router
 from app.api.v1.me import router as me_router
 from app.api.v1.prices import router as prices_router
+from app.api.v1.stock_catalog import router as stock_catalog_router
 from app.api.v1.stocks import router as stocks_router
 
 api_router = APIRouter()
@@ -13,4 +14,5 @@ api_router.include_router(auth_router)
 api_router.include_router(me_router)
 api_router.include_router(prices_router)
 api_router.include_router(stocks_router)
+api_router.include_router(stock_catalog_router)
 api_router.include_router(legacy_finance_router)
