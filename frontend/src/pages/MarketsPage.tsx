@@ -8,7 +8,6 @@ import { useNow } from "@/hooks/useNow";
 import { usePrices } from "@/hooks/usePrices";
 import { useStocks } from "@/hooks/useStocks";
 import { formatAge, freshnessStatus, statusLabel } from "@/lib/age";
-import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import { formatUnitPrice } from "@/lib/money";
 import "./markets.css";
 
@@ -282,13 +281,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                   {!fresh && " · Trading needs a fresh price"}
                 </p>
               )}
-              {stockQuote && (
+              {stockQuote && !marketClosed && (
                 <p className="mt-2 text-[var(--market-muted)]">
-                  {marketClosed ? "Last verified IEX midpoint" : "IEX midpoint"} ·{" "}
+                  IEX midpoint ·{" "}
                   <time dateTime={stockQuote.event_at} title={stockQuote.event_at}>
-                    {marketClosed
-                      ? fullLocalTimestamp(stockQuote.event_at)
-                      : `Updated ${formatAge(stockQuote.age_seconds)}`}
+                    Updated {formatAge(stockQuote.age_seconds)}
                   </time>
                 </p>
               )}
@@ -302,13 +299,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                   </p>
                 </div>
               )}
-              {stock && (!marketClosed || stockQuote) && (
+              {stock && !marketClosed && (
                 <div className="mt-2 space-y-2">
-                  {!marketClosed && (
-                    <p role="status" className="text-[var(--market-muted)]">
-                      {stockRestriction}
-                    </p>
-                  )}
+                  <p role="status" className="text-[var(--market-muted)]">
+                    {stockRestriction}
+                  </p>
                   <StockAttribution
                     context="listing"
                     required_text={stocks.data?.attribution.required_text}
@@ -323,6 +318,11 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
             >
               {action}
             </Link>
+            {marketClosed && stockQuote && stocks.data?.attribution.required_text && (
+              <p className="mt-3 text-xs text-[var(--market-muted)] md:hidden">
+                {stocks.data.attribution.required_text}
+              </p>
+            )}
           </section>
         )}
       </div>

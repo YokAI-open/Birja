@@ -16,7 +16,7 @@ test.describe("market reopening", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
 
   for (const retainedQuote of [true, false]) {
-    test(`verified closure shows a local countdown ${retainedQuote ? "with a dated price" : "when IEX prices are missing"}`, async ({
+    test(`verified closure shows a concise countdown ${retainedQuote ? "with the last price" : "when IEX prices are missing"}`, async ({
       page,
     }) => {
       await page.clock.install();
@@ -47,31 +47,20 @@ test.describe("market reopening", () => {
 
       const detail = selected(page);
       await expect(detail.getByRole("status")).toHaveText("Market closed");
-      await expect(detail.getByText(/Opens in 2 hr/)).toBeVisible();
       const opening = detail.locator(`time[datetime="${nextOpen}"]`);
-      const local = await page.evaluate((value) => {
-        return new Date(value).toLocaleString(undefined, {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          timeZoneName: "short",
-        });
-      }, nextOpen);
-      await expect(opening).toHaveAttribute("datetime", nextOpen);
-      await expect(opening).toHaveText(local);
+      await expect(opening).toHaveText("Opens in 2 hr");
       await expect(detail.getByText("Price unavailable")).toHaveCount(0);
+      await expect(detail.getByRole("note", { name: "Stock price source" })).toHaveCount(0);
+      await expect(detail.getByText(/Last verified IEX midpoint/)).toHaveCount(0);
       if (retainedQuote) {
         await expect(detail.getByText(midpoint, { exact: true })).toBeVisible();
-        await expect(detail.getByText(/Last verified IEX midpoint/)).toBeVisible();
-        await expect(detail.locator(`time[datetime="${first.quote!.event_at}"]`)).toBeVisible();
+        await expect(section(page).getByText(body.attribution.required_text)).toBeVisible();
       } else {
         await expect(detail.getByText(midpoint, { exact: true })).toHaveCount(0);
       }
       await expect(detail.getByRole("link", { name: "View details AAPL" })).toBeVisible();
       await page.clock.fastForward(60_000);
-      await expect(detail.getByText(/Opens in 1 hr 59 min/)).toBeVisible();
+      await expect(opening).toHaveText("Opens in 1 hr 59 min");
 
       await records(page).nth(1).getByRole("button").click();
       await expect(detail.getByText("Market closed")).toHaveCount(0);

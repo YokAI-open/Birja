@@ -173,19 +173,8 @@ it.each([true, false])(
       catalogue: () => Response.json(catalogue),
       context: () => Response.json({ detail: { code: "permission_unavailable" } }, { status: 409 }),
     });
-    expect(await screen.findByText(/Market closed\. Opens in 2 hr/)).toBeVisible();
-    expect(
-      screen.getByText(
-        nextOpen.toLocaleString(undefined, {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          timeZoneName: "short",
-        }),
-      ),
-    ).toHaveAttribute("dateTime", nextOpen.toISOString());
+    expect(await screen.findByText("Market closed.")).toBeVisible();
+    expect(screen.getByText("Opens in 2 hr")).toHaveAttribute("dateTime", nextOpen.toISOString());
     expect(screen.queryByText("Couldn't load this stock.")).toBeNull();
     if (retainedQuote) {
       expect(screen.getByText("$101.00", { exact: true })).toBeVisible();
