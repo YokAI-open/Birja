@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useOutletContext, useParams } from "react-router";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -9,7 +9,6 @@ import { isStockOrder, type StockRefusal } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MarketOpening } from "@/components/MarketOpening";
 import { StockDate, StockFigure, StockTradeReceipt } from "@/components/StockTradeReceipt";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
@@ -41,7 +40,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   const { data: stocks } = useStocks();
   const { data: portfolio } = usePortfolio(target);
   const now = useNow(15_000);
-  const [retrying, setRetrying] = useState(false);
   const oldPhase = useRef(t.phase);
   useEffect(() => {
     if (oldPhase.current === "filled" && t.phase === "draft") input.current?.focus();
@@ -129,19 +127,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                 <p>
                   {c.symbol} · {c.listing_exchange} · USD
                 </p>
-                <Badge variant="neutral">Stock</Badge>
-                <div className="flex flex-wrap gap-3">
-                  {!marketClosed && <p>Session: {c.session.state}</p>}
-                  <p>Status: {c.status.state}</p>
-                  <p>Corporate actions: {c.action.state}</p>
-                </div>
-                {!marketClosed && c.session.opens_at && c.session.closes_at && (
-                  <p className="text-[13px] leading-[18px] wrap-anywhere">
-                    Regular session (America/New_York):{" "}
-                    <StockDate value={c.session.opens_at} exchange /> –{" "}
-                    <StockDate value={c.session.closes_at} exchange />
-                  </p>
-                )}
               </>
             ) : t.contextLoading ? (
               <div aria-busy="true" aria-label="Loading stock">
@@ -154,21 +139,6 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   ? "Stock data is paused."
                   : "Couldn't load this stock."}
               </p>
-            )}
-            {!marketClosed && (
-              <Button
-                variant="secondary"
-                className="min-h-11 self-start"
-                aria-disabled={retrying}
-                onClick={() => {
-                  if (!retrying) {
-                    setRetrying(true);
-                    void t.refreshContext().finally(() => setRetrying(false));
-                  }
-                }}
-              >
-                {retrying ? "Retrying stock…" : "Retry stock"}
-              </Button>
             )}
             {lastQuote && (
               <div>

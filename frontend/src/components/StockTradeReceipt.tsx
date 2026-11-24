@@ -13,16 +13,10 @@ export function StockFigure({ label, children }: { label: string; children: Reac
     </div>
   );
 }
-export function StockDate({ value, exchange = false }: { value: string; exchange?: boolean }) {
+export function StockDate({ value }: { value: string }) {
   return (
     <time dateTime={value} title={value} className="wrap-anywhere">
-      {exchange
-        ? new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-            timeStyle: "long",
-            timeZone: "America/New_York",
-          }).format(new Date(value)) + " (America/New_York)"
-        : fullLocalTimestamp(value)}
+      {fullLocalTimestamp(value)}
     </time>
   );
 }

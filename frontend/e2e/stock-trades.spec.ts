@@ -84,6 +84,14 @@ async function ticket(page: Page) {
   await expect(page.getByLabel("Whole-share quantity")).toBeVisible();
   await expect(page.getByRole("button", { name: "Buy max" })).toBeEnabled();
 }
+async function pollStockContext(page: Page) {
+  const refresh = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith("/stock-trades/AAPL/context"),
+  );
+  await page.bringToFront();
+  await page.clock.runFor(15_100);
+  await refresh;
+}
 async function preview(page: Page, quantity = "2") {
   await page.getByLabel("Whole-share quantity").fill(quantity);
   const endpoint = await portfolioApi(page, "/stock-trades/quote");
@@ -204,6 +212,7 @@ test("actual changed ask requires renewed confirmation with the exact server del
 test("actual committed lost response resolves the original receipt with the same key after close", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   await preview(page);
   const bodies: unknown[] = [];
@@ -225,7 +234,7 @@ test("actual committed lost response resolves the original receipt with the same
   const check = page.getByRole("button", { name: "Check order result", exact: true });
   await expect(check).toBeEnabled();
   stockFixture("close");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByLabel("Whole-share quantity")).toBeDisabled();
   await check.click();
   await expect(page.getByRole("heading", { name: "Order filled" })).toBeFocused();
@@ -262,7 +271,7 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   await ticket(page);
   await preview(page);
   stockFixture("close");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByText("Market closed.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Retry stock", exact: true })).toHaveCount(0);
@@ -275,8 +284,7 @@ test("closed drafts retain quantity and require a fresh explicit preview after r
   await expect(page.getByText("Enter a quantity to preview this trade.")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("stock-closed-draft.png"), fullPage: true });
   stockFixture("open");
-  await page.bringToFront();
-  await page.clock.runFor(15_100);
+  await pollStockContext(page);
   await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toBeEnabled();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("3");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
@@ -355,6 +363,7 @@ for (const width of [320, 375, 768, 1024, 1440]) {
 test("keyboard-only ticket controls and stale deadlines never queue an order", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   const input = page.getByLabel("Whole-share quantity");
   await input.focus();
@@ -372,7 +381,7 @@ test("keyboard-only ticket controls and stale deadlines never queue an order", a
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeEnabled();
   stockFixture("stale");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(input).toHaveValue("2");
   expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");

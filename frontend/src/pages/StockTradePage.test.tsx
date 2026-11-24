@@ -119,6 +119,10 @@ afterEach(() => {
 it("requires preview and explicit confirmation, then focuses the immutable historical receipt", async () => {
   const { user, calls } = setup();
   const input = await screen.findByLabelText("Whole-share quantity");
+  expect(await screen.findByText("IEX ask")).toBeVisible();
+  expect(screen.queryByText("Stock", { exact: true })).toBeNull();
+  expect(screen.queryByText(/^(Session:|Status:|Corporate actions:|Regular session)/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
   await user.type(input, "2");
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   const confirm = await screen.findByRole("button", { name: "Confirm buy" });
@@ -209,11 +213,11 @@ it.each([true, false])(
     expect(screen.getByRole("button", { name: "Confirm buy" })).toBeDisabled();
   },
 );
-it("shows a single retry message when the stock and its schedule cannot load", async () => {
+it("shows a single message when the stock and its schedule cannot load", async () => {
   setup({ context: () => Response.json({}, { status: 503 }) });
   expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this stock.");
   expect(screen.getAllByText("Couldn't load this stock.")).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "Retry stock" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Retry stock" })).toBeNull();
 });
 it("keeps an unresolvable saved receipt as an uncertain attempt instead of allowing a new order", async () => {
   const { user, calls } = setup({

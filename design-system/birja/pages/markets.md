@@ -17,8 +17,7 @@ shared header. Store the originals and web-ready assets in
   available, **Check price** for older crypto quotes and **View details**
   for read-only stocks. Carry the symbol forward when choosing a portfolio.
 - Label IEX midpoint prices and show why trading is restricted in the
-  selected stock pane. Open the stock ticket for bid, ask and
-  regular-session details.
+  selected stock pane. Open the stock ticket for bid and ask prices.
 - While the market is closed, keep the last verified price while display
   permission is current. Keep the price panel to **Market closed** and a
   reopening countdown when the next session is verified.
