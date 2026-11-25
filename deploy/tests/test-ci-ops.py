@@ -75,9 +75,12 @@ def image_policy(image, aggregate):
 
 
 def recovery_policy(ops, runner_source=None):
-    command = "run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery"
+    runner = "python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor"
+    command = "run: sudo -- " + runner
     if sum(line.strip() == command for line in ops.splitlines()) != 1:
         raise ValueError("missing exact serial runner")
+    if sum(line.strip() == f"run: {runner} --preflight" for line in ops.splitlines()) != 1:
+        raise ValueError("missing exact successor preflight")
     source = runner_source if runner_source is not None else (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
     tree = ast.parse(source)
     constants = {node.targets[0].id: node.value for node in tree.body
@@ -86,15 +89,23 @@ def recovery_policy(ops, runner_source=None):
                 "tls-upgraded", "tls-fresh", "selected-rollback")
     if ast.literal_eval(constants["STAGES"]) != expected:
         raise ValueError("missing or reordered serial stage")
+    successor = expected[:2] + ("current0026-cold",) + expected[3:]
+    if ast.literal_eval(constants["SUCCESSOR_STAGES"]) != successor:
+        raise ValueError("missing or reordered successor stage")
     for required in (
-        "ops.package_current_archive(archive)", "ops.r.bundle_verify(archive, expected",
+        "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True)",
+        "ops.r.bundle_verify(archive, expected",
         "ops.bind_source_archive(archive, expected)", "ops.roundtrip(archive)",
         "cold=True", "ops.roles", "fresh_bootstrap=fresh", "--recovery-bundle",
         "authenticate(ops, archive, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "RETAINED_CLOSURE_SOURCE_PAYLOADS",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "PORTFOLIO_PAYLOAD_V6",
+        "RETAINED_CLOSURE_SOURCE_PAYLOADS", "successor_source_identity(sources)",
+        "current0026-image-binding.json", "successor_identity=identity",
+        "execute_stages(selected, guard, stages=stages)", "recovery-successor",
         "Path(\"/tmp/birja-phase14-proof/recovery.tar.gz\")",
+        "Path(\"/tmp/birja-backup-test-phase21-proof/recovery.tar.gz\")",
     ):
         if required not in source:
             raise ValueError("missing source-frozen graph: " + required)
@@ -102,6 +113,8 @@ def recovery_policy(ops, runner_source=None):
                     "python3 deploy/tests/test-selected-cutover-contracts.py"):
         if command not in ops:
             raise ValueError("missing selected compatibility contract")
+    if f'{runner} --verify-successor-receipt "$GITHUB_SHA"' not in ops:
+        raise ValueError("missing exact hosted receipt verification")
 
 
 def postgres_stack_policy(ops):
@@ -539,7 +552,8 @@ class CI(unittest.TestCase):
         recovery_policy(ops)
         source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
         for old in (
-            "ops.package_current_archive(archive)", "ops.roundtrip(archive)",
+            "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True)",
+            "ops.roundtrip(archive)", "execute_stages(selected, guard, stages=stages)",
             "cold=True", "fresh_bootstrap=fresh", "--recovery-bundle",
             "verify_archive_binding(archive, expected)", "verify_image(binding, inspect)",
             "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
@@ -548,11 +562,15 @@ class CI(unittest.TestCase):
             with self.assertRaises((ValueError, SyntaxError)):
                 recovery_policy(ops, source.replace(old, "omitted_stage"))
         with self.assertRaises(ValueError):
-            recovery_policy(ops.replace("--suite recovery", "--suite all-security"))
+            recovery_policy(ops.replace("--suite recovery-successor", "--suite all-security"))
         with self.assertRaises(ValueError):
-            recovery_policy(ops.replace("--suite recovery", "--suite recovery-current"))
+            recovery_policy(ops.replace("--suite recovery-successor", "--suite recovery-current"))
         with self.assertRaises(ValueError):
             recovery_policy(ops, source.replace("\"roles\", \"tls-upgraded\"", "\"tls-upgraded\", \"roles\"", 1))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops, source.replace('"current0026-cold"', '"current0023-cold"', 1))
+        with self.assertRaises(ValueError):
+            recovery_policy(ops.replace(' --verify-successor-receipt "$GITHUB_SHA"', ""))
         for old in ("bash deploy/tests/test-deploy-compatibility.sh", "python3 deploy/tests/test-selected-cutover-contracts.py"):
             with self.assertRaises(ValueError):
                 recovery_policy(ops.replace(old, "omitted_stage"))
@@ -793,13 +811,15 @@ class CI(unittest.TestCase):
             [
                 "${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz",
                 "${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz.sha256",
+                "${{ runner.temp }}/birja-verified-recovery/recovery-receipt.json",
             ],
         )
         script = textwrap.dedent(preparation.split("run: |\n", 1)[1])
-        canonical = "/tmp/birja-phase14-proof"
+        canonical = "/tmp/birja-backup-test-phase21-proof"
         self.assertIn(canonical + "/recovery.tar.gz", script)
         payload = b"public recovery tooling fixture\n"
-        for case in ("matching", "modified", "missing"):
+        receipt = b'{"synthetic":true}\n'
+        for case in ("matching", "modified", "missing", "modified-receipt", "unverified"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 source, runner, tools = root / "source", root / "runner", root / "bin"
@@ -809,16 +829,25 @@ class CI(unittest.TestCase):
                     (source / "recovery.tar.gz").write_bytes(
                         payload + (b"modified" if case == "modified" else b"")
                     )
-                (source / "recovery.tar.gz.sha256").write_text(
-                    hashlib.sha256(payload).hexdigest() + "\n"
-                )
+                (source / "status.json").write_bytes(receipt + (b"modified" if case == "modified-receipt" else b""))
                 # The real snippet operates only on owned test files here.
                 sudo = tools / "sudo"
-                sudo.write_text('#!/bin/sh\nexec "$@"\n')
+                sudo.write_text('#!/bin/sh\n[ "$1" != -- ] || shift\nexec "$@"\n')
                 sudo.chmod(0o700)
+                python = tools / "python3"
+                python.write_text(
+                    '#!/bin/sh\n'
+                    '[ "$*" = "deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor'
+                    ' --verify-successor-receipt $GITHUB_SHA" ] && [ "$VERIFIED" = 1 ] || exit 1\n'
+                    'printf "%s %s\\n" "$ARCHIVE_DIGEST" "$RECEIPT_DIGEST"\n'
+                )
+                python.chmod(0o700)
                 result = subprocess.run(
                     ["bash", "-c", script.replace(canonical, str(source))],
-                    env={"PATH": str(tools) + ":/usr/bin:/bin", "RUNNER_TEMP": str(runner)},
+                    env={"PATH": str(tools) + ":/usr/bin:/bin", "RUNNER_TEMP": str(runner),
+                         "GITHUB_SHA": "a" * 40, "VERIFIED": "0" if case == "unverified" else "1",
+                         "ARCHIVE_DIGEST": hashlib.sha256(payload).hexdigest(),
+                         "RECEIPT_DIGEST": hashlib.sha256(receipt).hexdigest()},
                     capture_output=True,
                     check=False,
                     timeout=10,
@@ -829,6 +858,7 @@ class CI(unittest.TestCase):
                         (runner / "birja-verified-recovery/recovery.tar.gz").read_bytes(),
                         payload,
                     )
+                    self.assertEqual((runner / "birja-verified-recovery/recovery-receipt.json").read_bytes(), receipt)
                 else:
                     self.assertNotEqual(result.returncode, 0)
 
@@ -842,7 +872,7 @@ class CI(unittest.TestCase):
         self.assertRegex(
             ops, r"(?m)^          sudo -- bash deploy/check-nginx-config\.sh$"
         )
-        self.assertIn("run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery", ops)
+        self.assertIn("run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor", ops)
         recovery_policy(ops)
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
@@ -873,7 +903,7 @@ class CI(unittest.TestCase):
             self.assertIn(producer, ops)
         self.assertLess(
             ops.index("- name: Ordinary dev financial authority"),
-            ops.index("--suite recovery"),
+            ops.index("--suite recovery-successor"),
         )
         cleanup = ops.split("- name: Clean fixed synthetic projects")[-1]
         self.assertIn("if: always()", cleanup)

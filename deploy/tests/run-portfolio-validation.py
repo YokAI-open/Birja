@@ -586,21 +586,54 @@ def execute_recovery(*, phase=14, suite="recovery"):
           + " sha256=" + expected, flush=True)
 
 
+def verify_successor_receipt(archive, tested_source):
+    """Return the two staging digests only after rechecking the completed proof."""
+    ops = load("ops-fixtures")
+    identity = successor_source_identity(ops.portfolio_sources())
+    if tested_source != identity["tested_source"]:
+        raise ValueError("hosted source does not match the tested checkout")
+    expected = ops.r.private(archive.with_suffix(archive.suffix + ".sha256")).read_text().strip()
+    receipt_data = ops.r.private(archive.parent / "status.json").read_bytes()
+    receipt = json.loads(receipt_data)
+    required = {
+        **identity, "archive": str(archive), "archive_sha256": expected,
+        "phase": 21, "suite": "recovery-successor", "recovery_profile": SUCCESSOR_PROFILE,
+        "payload_version": 6, "revision": "0026", "stage_order": list(SUCCESSOR_STAGES),
+        "stages": dict.fromkeys(SUCCESSOR_STAGES, "passed-authenticated"),
+        "current_stage": SUCCESSOR_STAGES[-1],
+    }
+    if (any(receipt.get(name) != value for name, value in required.items())
+            or any(receipt.get(name) is not True for name in
+                   ("ok", "whole7", "same_archive_final_ci"))):
+        raise ValueError("complete authenticated 0026 recovery receipt required")
+    image = json.loads(ops.r.private(archive.parent / "current0026-image-binding.json").read_text())
+    if receipt.get("current_image") != image:
+        raise ValueError("receipt does not match the authenticated current0026 image")
+    ops.r.bundle_verify(archive, expected, required_profile=SUCCESSOR_PROFILE)
+    authenticate(ops, archive, expected, campaign_sources(ops, successor=True),
+                 successor_identity=identity)
+    return expected, hashlib.sha256(receipt_data).hexdigest()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--phase", type=int, choices=[14, 15, 21], default=14)
     parser.add_argument("--suite", required=True,
                         choices=["all-security", "recovery", "recovery-current", "recovery-successor"])
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--preflight", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true")
+    mode.add_argument("--preflight", action="store_true")
+    mode.add_argument("--verify-successor-receipt", metavar="TESTED_SHA")
     args = parser.parse_args(argv)
-    if args.dry_run and args.preflight:
-        parser.error("preflight and dry-run are distinct commands")
     try:
         archive = validate_selection(args.suite, args.phase)
     except ValueError as exc:
         parser.error(str(exc))
-    if args.preflight:
+    if args.verify_successor_receipt is not None:
+        if args.suite != "recovery-successor":
+            parser.error("receipt verification requires recovery-successor")
+        print(*verify_successor_receipt(archive, args.verify_successor_receipt))
+    elif args.preflight:
         print(json.dumps(preflight(args.suite, phase=args.phase), sort_keys=True))
     elif args.dry_run:
         print(json.dumps(security_commands() if args.suite == "all-security" else
