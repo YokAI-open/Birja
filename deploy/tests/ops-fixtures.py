@@ -2197,8 +2197,15 @@ async def scenario(db):
  instrument.provider_asset_id='synthetic-'+str(instrument.coin_id);instrument.provider_verified_at=now-timedelta(days=10)
  sessions=build_sessions(now,calendar)
  opening=next(row for row in sessions if row.exchange==instrument.listing_exchange and row.opens_at and row.opens_at>now)
- if (await db.execute(select(StockSession.id).where(StockSession.exchange==opening.exchange,StockSession.session_date==opening.session_date))).scalar_one_or_none() is None:
-  db.add(StockSession(**asdict(opening)))
+ session=(await db.execute(select(StockSession).where(
+  StockSession.exchange==opening.exchange,StockSession.session_date==opening.session_date))).scalar_one_or_none()
+ session_fields=asdict(opening)
+ if session is None:
+  db.add(StockSession(**session_fields))
+ else:
+  # Earlier restore seeds can overlap the next opening, with an older calendar generation.
+  for field in ('opens_at','closes_at','coverage_start','coverage_end','calendar_admission_generation'):
+   setattr(session,field,session_fields[field])
  symbol=(await db.execute(select(Coin.symbol).where(Coin.id==instrument.coin_id))).scalar_one()
  action=NormalizedAction('synthetic-'+str(uuid.uuid4()),instrument.coin_id,symbol,'cash_dividend',now.date(),now,
   currency='USD',rate=Decimal('.25'),ex_date=opening.session_date,record_date=opening.session_date,
