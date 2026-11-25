@@ -50,8 +50,8 @@ def test_exact_reference_targets_preserve_exchange_and_distinct_share_classes() 
     assert capture_plan.digest == plan().digest
     assert [(job.venue, job.symbol, job.exchange) for job in capture_plan.targets] == [
         ("NASDAQ", "FXCO", "UW"),
-        ("NYSE", "FXCA.A", "UN"),
-        ("NYSE", "FXCA.B", "UN"),
+        ("NYSE", "FXCA/A", "UN"),
+        ("NYSE", "FXCA/B", "UN"),
     ]
 
 
@@ -97,11 +97,12 @@ async def test_capture_persists_before_sending_and_exports_compatible_reusable_f
     runner._write_lines(output, (item.model_dump_json() for item in completed.observations))
     assert output.stat().st_mode & 0o077 == 0
     readback = _read_mappings(output)
-    assert set(readback["NYSE"]) == {"FXCA.A", "FXCA.B"}
+    assert set(readback["NYSE"]) == {"FXCA/A", "FXCA/B"}
     assert set(readback["NASDAQ"]) == {"FXCO"}
     assert "securityDescription" not in output.read_text()
     assert "Fixture issuer" in output.read_text()
     assert "Unused provider text" not in output.read_text()
+    assert not completed.alternates
 
 
 async def test_provider_failure_does_not_retry_and_resumed_cursor_respects_cooldown() -> None:
@@ -115,7 +116,16 @@ async def test_provider_failure_does_not_retry_and_resumed_cursor_respects_coold
         calls += 1
         if calls == 1:
             return httpx.Response(429, headers={"Retry-After": "75"})
-        return httpx.Response(200, json=[{"warning": "Unused warning text"}] * 3)
+        jobs = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json=[
+                {"warning": "Unused warning text"}
+                if job["exchCode"] == "UN"
+                else {"data": [mapping(job["idValue"], job["exchCode"])]}
+                for job in jobs
+            ],
+        )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(read)) as client:
         cursor = runner.CaptureCursor(plan_digest=capture_plan.digest)
@@ -143,7 +153,78 @@ async def test_provider_failure_does_not_retry_and_resumed_cursor_respects_coold
         )
     assert calls == 2 and len(recovered.observations) == 3
     assert recovered.retry_after is None
-    assert recovered.observations[0].observation.result == {"warning": "No current mapping"}
+    assert recovered.observations[-1].observation.result == {"warning": "No current mapping"}
+
+
+async def test_alternate_tiers_and_us_composite_resume_without_dropping_conflicts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(runner, "MAX_MAPPING_ATTEMPTS", 1)
+    capture_plan = plan()
+    clock = Clock()
+    requests: list[list[tuple[str, str]]] = []
+    checkpoints: list[runner.CaptureCursor] = []
+
+    def read(request: httpx.Request) -> httpx.Response:
+        jobs = [(job["idValue"], job["exchCode"]) for job in json.loads(request.content)]
+        requests.append(jobs)
+        return httpx.Response(
+            200,
+            json=[
+                {"warning": "Unused provider warning"}
+                if code in {"UW", "UR", "UN"}
+                else {
+                    "data": [
+                        mapping(symbol, code, "BBG000000037" if code == "UQ" else "BBG000000039")
+                    ]
+                }
+                for symbol, code in jobs
+            ],
+        )
+
+    cursor = runner.CaptureCursor(plan_digest=capture_plan.digest)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(read)) as client:
+        for round_number in range(3):
+            if round_number == 1:
+                monkeypatch.setattr(runner, "MAX_MAPPING_JOBS", 2)
+            cursor = await runner.capture(
+                capture_plan,
+                runner.CaptureCursor.model_validate_json(cursor.model_dump_json()),
+                client,
+                checkpoints.append,
+                clock=clock.read,
+                sleeper=clock.sleep,
+                check_scope=check_scope,
+            )
+            if round_number < 2:
+                first = next(iter(runner.capture_output(cursor)))
+                assert first.observation.result == {"warning": "No current mapping"}
+            await clock.sleep(3)
+
+    assert requests == [
+        [("FXCO", "UW"), ("FXCA/A", "UN"), ("FXCA/B", "UN")],
+        [("FXCO", "UQ"), ("FXCO", "UR")],
+        [("FXCO", "US")],
+    ]
+    assert cursor.recent_attempts == (
+        CAT_TIME,
+        CAT_TIME + timedelta(seconds=3),
+        CAT_TIME + timedelta(seconds=6),
+    )
+    assert checkpoints[-2].alternates == cursor.alternates[:2]
+    assert cursor.observations[0].observation.result == {"warning": "No current mapping"}
+    output = tmp_path / "mapping.jsonl"
+    runner._write_lines(output, (item.model_dump_json() for item in runner.capture_output(cursor)))
+    consumer = _read_mappings(output)["NASDAQ"]["FXCO"]
+    assert consumer.observed_at == CAT_TIME
+    fallback = consumer.result["fallback"]
+    assert isinstance(fallback, dict)
+    assert fallback["primary"] == {"warning": "No current mapping"}
+    alternatives = fallback["alternates"]
+    assert [result["exchange"] for result in alternatives] == ["UQ", "UR", "US"]
+    assert alternatives[0]["result"]["data"][0]["shareClassFIGI"] == "BBG000000037"
+    assert alternatives[1]["result"] == {"warning": "No current mapping"}
+    assert alternatives[2]["result"]["data"][0]["shareClassFIGI"] == "BBG000000039"
 
 
 @pytest.mark.parametrize(

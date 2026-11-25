@@ -31,9 +31,12 @@ _FIGI = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 _COMMON_ISSUER_WRAPPERS = {"REIT", "Foreign Sh."}
 _NONCOMMON_TYPES = {
     ("Closed-End Fund", "Mutual Fund"),
+    ("Ltd Part", "Partnership Shares"),
     ("MLP", "Partnership Shares"),
     ("Royalty Trst", "Common Stock"),
+    ("Unit", "Unit"),
 }
+_NASDAQ_TIERS = {"UQ", "UR", "UW"}
 
 
 class ReferenceMapping(CatalogModel):
@@ -49,17 +52,30 @@ def _digest(value: object) -> str:
 def _primary_aliases(issue: PillarIssue) -> tuple[str, ...]:
     return tuple(
         symbol
-        for symbol in dict.fromkeys((issue.cqs_symbol, issue.venue_symbol))
+        for symbol in dict.fromkeys(
+            (issue.cqs_symbol, issue.venue_symbol, preferred_openfigi_symbol(issue))
+        )
         if re.fullmatch(SYMBOL_PATTERN, symbol) is not None
     )
 
 
-def _matching_mapping(
-    mapping: ReferenceMapping, aliases: tuple[str, ...], exchange: str, now: datetime
+def preferred_openfigi_symbol(issue: PillarIssue) -> str:
+    """Translate only a verified primary NYSE share-class suffix to OpenFIGI."""
+    share_class = re.fullmatch(r"([A-Z0-9]+)\.([A-Z])", issue.cqs_symbol)
+    if (
+        issue.listing_exchange == "NYSE"
+        and issue.common_class is not None
+        and share_class is not None
+        and issue.venue_symbol == f"{share_class[1]} {share_class[2]}"
+    ):
+        return f"{share_class[1]}/{share_class[2]}"
+    return issue.cqs_symbol
+
+
+def _matching_result(
+    result: dict[str, object], aliases: tuple[str, ...], exchange: str
 ) -> tuple[str, str, str, str] | None:
-    if not timedelta(0) <= now - mapping.observed_at <= CORROBORATION_AGE:
-        return None
-    rows = mapping.result.get("data")
+    rows = result.get("data")
     if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
         return None
 
@@ -70,8 +86,9 @@ def _matching_mapping(
         ticker, name = item.get("ticker"), item.get("name")
         share_class, composite = item.get("shareClassFIGI"), item.get("compositeFIGI")
         kind, broad_type = item.get("securityType"), item.get("securityType2")
+        venue_code = item.get("exchCode")
         if (
-            item.get("exchCode") != exchange
+            venue_code != exchange
             or item.get("marketSector") != "Equity"
             or ticker not in aliases
             or not isinstance(ticker, str)
@@ -98,6 +115,56 @@ def _matching_mapping(
         else:
             return None
     return matches.pop() if len(matches) == 1 else None
+
+
+def _matching_fallback(
+    fallback: object, aliases: tuple[str, ...], primary_exchange: str
+) -> tuple[str, str, str, str] | None:
+    if (
+        primary_exchange not in _NASDAQ_TIERS
+        or not isinstance(fallback, dict)
+        or set(fallback) != {"primary", "alternates"}
+        or fallback["primary"] != {"warning": "No current mapping"}
+    ):
+        return None
+    alternates = fallback["alternates"]
+    expected = sorted(_NASDAQ_TIERS - {primary_exchange}) + ["US"]
+    if not isinstance(alternates, list) or len(alternates) != len(expected):
+        return None
+    matches = {}
+    for code, alternate in zip(expected, alternates, strict=True):
+        if (
+            not isinstance(alternate, dict)
+            or set(alternate) != {"exchange", "result"}
+            or alternate["exchange"] != code
+            or not isinstance(alternate["result"], dict)
+        ):
+            return None
+        if alternate["result"] == {"warning": "No current mapping"}:
+            continue
+        entry = _matching_result(alternate["result"], aliases, code)
+        if entry is None:
+            return None
+        matches[code] = entry
+    composite = matches.pop("US", None)
+    if composite is None or not matches:
+        return None
+    # Alternate tier and composite records must refer to the same share class.
+    selected = next(iter(matches.values()))
+    identity = (selected[0], selected[2], selected[3])
+    if any((entry[0], entry[2], entry[3]) != identity for entry in (*matches.values(), composite)):
+        return None
+    return selected
+
+
+def _matching_mapping(
+    mapping: ReferenceMapping, aliases: tuple[str, ...], exchange: str, now: datetime
+) -> tuple[str, str, str, str] | None:
+    if not timedelta(0) <= now - mapping.observed_at <= CORROBORATION_AGE:
+        return None
+    if "fallback" in mapping.result:
+        return _matching_fallback(mapping.result["fallback"], aliases, exchange)
+    return _matching_result(mapping.result, aliases, exchange)
 
 
 def _classify(
@@ -143,7 +210,7 @@ def _classify(
             source=row.source,
             row_key=row.row_key,
             row_digest=row.row_digest,
-            ticker=ticker,
+            ticker=issue.cqs_symbol,
             listing_exchange=row.listing_exchange,
             company_name=name,
             aliases=(CatalogAlias(namespace="openfigi", symbol=ticker),),
