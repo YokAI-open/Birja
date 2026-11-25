@@ -67,6 +67,7 @@ export default function PortfoliosPage() {
   }, [open]);
   const navigate = useNavigate();
   const location = useLocation();
+  const overviewPath = useRef(window.location.pathname);
   const [acknowledgement] = useState(() => location.state?.deletionConfirmed === true);
   useLayoutEffect(() => {
     if (location.state?.deletionConfirmed === true) {
@@ -77,12 +78,12 @@ export default function PortfoliosPage() {
     (metadata: { id: string }, replay: boolean) => {
       // BrowserRouter updates the URL before React commits the next route.
       // A creation receipt can arrive while this overview is still mounted.
-      if (window.location.pathname !== location.pathname) return;
+      if (window.location.pathname !== overviewPath.current) return;
       void navigate(`/portfolios/${metadata.id}`, {
         state: { creationResult: { id: metadata.id, replay } },
       });
     },
-    [location.pathname, navigate],
+    [navigate],
   );
   const rows = query.data;
   const capKnown = rows !== undefined && !query.membershipUncertain;
