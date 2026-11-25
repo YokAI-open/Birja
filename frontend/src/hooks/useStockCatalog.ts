@@ -188,9 +188,13 @@ export function useCatalogOrderQuoteDemand(
       view.session.closes_at !== null &&
       Date.parse(view.session.opens_at) <= now &&
       now < Date.parse(view.session.closes_at) &&
-      ["status_unavailable", "quote_unavailable", "quote_stale", "units_changed"].includes(
-        view.execution_reason,
-      ),
+      [
+        "status_unavailable",
+        "action_unavailable",
+        "quote_unavailable",
+        "quote_stale",
+        "units_changed",
+      ].includes(view.execution_reason),
     queryFn: ({ signal }) => {
       if (!listing) throw new Error("No selected stock listing");
       return requestCatalogPrice(listing, signal, scope.current);

@@ -15,11 +15,16 @@ from sqlalchemy import delete, func, select, update
 
 from app.api.v2 import stock_catalog as routes
 from app.models.corporate_action import StockActionState
-from app.models.stock_catalog_finance import StockCatalogFinancialQuote, StockCatalogStatus
+from app.models.stock_catalog_finance import (
+    StockCatalogActionCoverage,
+    StockCatalogFinancialQuote,
+    StockCatalogStatus,
+)
 from app.models.trade import Trade
 from app.models.user import Account, User
 from app.schemas.stock_catalog_quotes import CatalogOrderIn
 from app.services.portfolios import OwnedActivePortfolio
+from app.services.stock_catalog_action_demand import _key, selected_catalog_actions
 from app.services.stock_catalog_trading import PreviewLease
 from tests.helpers import OutboxSender, csrf_headers, sign_in, unique_email
 from tests.test_portfolio_stock_api import headers, private
@@ -377,15 +382,24 @@ async def test_open_selection_requests_status_coverage_without_admitting_orders(
         return "quote_unavailable"
 
     monkeypatch.setattr(routes, "request_catalog_quote", wait)
-    selected = await ticket.client.post(
-        f"/api/v2/stock-catalog/{ticket.market['catalog']}/quote",
-        headers=headers(ticket.client),
-        json={"listing_version": str(ticket.market["listing"])},
-    )
+    settings = ticket.market["settings"]
+    redis = ticket.app.state.catalog_quote_redis
+    scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
+    await redis.delete(_key(**scope))
+    try:
+        selected = await ticket.client.post(
+            f"/api/v2/stock-catalog/{ticket.market['catalog']}/quote",
+            headers=headers(ticket.client),
+            json={"listing_version": str(ticket.market["listing"])},
+        )
+        interests = await selected_catalog_actions(redis, **scope)
+    finally:
+        await redis.delete(_key(**scope))
     assert selected.status_code == 200, selected.text
     private(selected)
     assert selected.json()["read_only"] is True
     assert selected.json()["execution_reason"] == "status_unavailable"
+    assert interests == ((ticket.market["catalog"], ticket.market["listing"]),)
     [request] = calls
     assert request["purpose"] == "financial"
     assert (request["catalog_id"], request["listing_version"]) == (
@@ -398,6 +412,35 @@ async def test_open_selection_requests_status_coverage_without_admitting_orders(
     assert refused.status_code == 409
     assert refused.json() == {"detail": {"code": "status_unavailable"}}
     assert len(calls) == 1
+
+
+async def test_open_selection_requests_missing_actions_without_admitting_orders(
+    ticket: Ticket, finance_0026
+):
+    async with finance_0026.begin() as db:
+        await db.execute(
+            delete(StockCatalogActionCoverage).where(
+                StockCatalogActionCoverage.coin_id == ticket.market["c"]
+            )
+        )
+    settings = ticket.market["settings"]
+    redis = ticket.app.state.catalog_quote_redis
+    scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
+    await redis.delete(_key(**scope))
+    try:
+        selected = await ticket.client.post(
+            f"/api/v2/stock-catalog/{ticket.market['catalog']}/quote",
+            headers=headers(ticket.client),
+            json={"listing_version": str(ticket.market["listing"])},
+        )
+        assert selected.status_code == 200, selected.text
+        assert selected.json()["execution_reason"] == "action_unavailable"
+        assert selected.json()["read_only"] is True
+        assert await selected_catalog_actions(redis, **scope) == (
+            (ticket.market["catalog"], ticket.market["listing"]),
+        )
+    finally:
+        await redis.delete(_key(**scope))
 
 
 async def test_catalog_selection_refreshes_post_split_units_before_order(
