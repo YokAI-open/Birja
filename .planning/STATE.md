@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
-status: ready_to_execute
-last_updated: "2026-11-25T07:20:25.677Z"
-last_activity: 2026-11-25 -- Phase 21 planning complete
+status: executing
+last_updated: "2026-11-25T08:05:45Z"
+last_activity: 2026-11-25 -- Phase 21 recovery bundle and catalog operator work verified
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
-  completed_plans: 20
+  completed_plans: 22
   percent: 50
-stopped_at: Phase 21 planned and checked (9 plans across 7 waves)
+stopped_at: Phase 21 Wave 1 complete (2 of 9 plans)
 ---
 
 # Project State
@@ -29,9 +29,9 @@ acceptance of searchable stock trading.
 ## Current Position
 
 Phase: 21
-Plan: 0 of 9 executed
-Status: Ready to execute
-Last activity: 2026-11-25 -- Phase 21 planning complete
+Plan: 2 of 9 executed
+Status: Executing Wave 2
+Last activity: 2026-11-25 -- Phase 21 recovery bundle and catalog operator work verified
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence

@@ -139,8 +139,8 @@ acceptance. [Phase 20 verification](phases/20-trade-and-value-stocks-from-search
 **Plans:** 9 plans across 7 waves
 
 **Wave 1**
-- [ ] 21-01 — Build the exact 0026 recovery artifact in CI.
-- [ ] 21-02 — Prepare catalog admission, refresh and cache retention.
+- [x] 21-01 — Build the exact 0026 recovery artifact in CI.
+- [x] 21-02 — Prepare catalog admission, refresh and cache retention.
 
 **Wave 2** *(after Wave 1)*
 - [ ] 21-03 — Rehearse populated cutover and compatible recovery.
@@ -178,7 +178,7 @@ requires both outcomes. SC-01 and SC-03 keep their Phase 19 assignment.
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
 | 20. Trade and value stocks from search | 9/9 | Complete on local fixtures 2026-11-24 |
-| 21. Verify, release and activate stock trading | 0/9 | Planned |
+| 21. Verify, release and activate stock trading | 2/9 | In progress |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.4/SUMMARY.md) · [Deferred work](DEFERRED.md)
