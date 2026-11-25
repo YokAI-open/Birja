@@ -62,7 +62,7 @@ async def stock_authority_case(strategy_books, engine):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0023"
+        ).scalar_one() == "0026"
         await conn.execute(
             text(
                 "SELECT pg_advisory_xact_lock(hashtextextended("

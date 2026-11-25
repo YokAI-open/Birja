@@ -127,6 +127,10 @@ export async function guardedJsonRequest(
   path: string,
   init: RequestInit,
   isCurrent: () => boolean,
+  options?: {
+    successStatuses?: readonly number[];
+    validateErrorDetail?: (status: number, detail: Record<string, unknown>) => boolean;
+  },
 ): Promise<unknown> {
   const check = () => {
     init.signal?.throwIfAborted();
@@ -164,26 +168,33 @@ export async function guardedJsonRequest(
   }
   const value = await json(response);
   check();
-  if (!response.ok) throw strictError(response, value);
-  if (response.status !== 200) throw new Error("Unexpected response");
+  if (!response.ok) throw strictError(response, value, options?.validateErrorDetail);
+  if (!(options?.successStatuses ?? [200]).includes(response.status))
+    throw new Error("Unexpected response");
   return value;
 }
 
-function strictError(response: Response, value: unknown): ApiError {
+function strictError(
+  response: Response,
+  value: unknown,
+  validateDetail?: (status: number, detail: Record<string, unknown>) => boolean,
+): ApiError {
   const record = (v: unknown): v is Record<string, unknown> =>
     typeof v === "object" && v !== null && !Array.isArray(v);
   if (!record(value) || Object.keys(value).join() !== "detail" || !record(value.detail))
     throw new Error("Unexpected response");
   const detail = value.detail;
+  const acceptedDetail = validateDetail?.(response.status, detail) === true;
   if (
     typeof detail.code !== "string" ||
-    !Object.keys(detail).every(
-      (key) =>
-        key === "code" ||
-        ((response.status === 401 || response.status === 403 || response.status >= 500) &&
-          key === "message" &&
-          typeof detail.message === "string"),
-    )
+    (!acceptedDetail &&
+      !Object.keys(detail).every(
+        (key) =>
+          key === "code" ||
+          ((response.status === 401 || response.status === 403 || response.status >= 500) &&
+            key === "message" &&
+            typeof detail.message === "string"),
+      ))
   )
     throw new Error("Unexpected response");
   const header = response.headers.get("Retry-After");
@@ -193,6 +204,7 @@ function strictError(response: Response, value: unknown): ApiError {
     detail.code,
     "Request refused",
     wait !== null && Number.isSafeInteger(wait) ? wait : null,
+    acceptedDetail ? detail : null,
   );
 }
 

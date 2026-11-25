@@ -7,10 +7,42 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from app.core.config import SchedulerSettings, Settings
-from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_admission import ProductAdmission, catalog_action_policy, evaluate_admission
 from app.services.stock_quote_rules import CURATED_SYMBOLS
 
 NOW = datetime(2026, 11, 10, 15, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"all_us_replay_ingress": False},
+        {"replay_region": "eu"},
+        {"known_id_recheck": False},
+        {"rest_symbols": ["FQA", "FQA"]},
+        {"requests_per_minute": 201},
+        {"symbols_per_request": True},
+        {"max_response_bytes": 0},
+        {"history_start": "invalid-date"},
+        {"history_start": "2026-12-01"},
+        {"mutation_start": "2026-11-10T15:00:00"},
+    ],
+)
+def test_catalog_actions_refuse_unreviewed_capabilities_limits_and_dates(changes):
+    scope = {
+        "all_us_replay_ingress": True,
+        "replay_region": "us",
+        "known_id_recheck": True,
+        "rest_symbols": ["FQA", "FORMER"],
+        "requests_per_minute": 12,
+        "symbols_per_request": 2,
+        "max_response_bytes": 65536,
+        "history_start": "2026-10-01",
+        "future_through": "2026-11-30",
+        "mutation_start": NOW.isoformat(),
+    }
+    assert catalog_action_policy(scope) is not None
+    assert catalog_action_policy(scope | changes) is None
 
 
 def admitted(product: str = "quotes") -> ProductAdmission:

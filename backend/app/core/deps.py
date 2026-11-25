@@ -37,6 +37,11 @@ def get_redis(request: Request) -> Redis:
     return redis
 
 
+def get_catalog_quote_redis(request: Request) -> Redis | None:
+    redis: Redis | None = request.app.state.catalog_quote_redis
+    return redis
+
+
 def get_client_ip(request: Request) -> str:
     # Only the socket peer. uvicorn's --proxy-headers (trusting --forwarded-allow-ips
     # only) rewrites it for trusted proxies; never parse the forwarding header here.
@@ -111,6 +116,7 @@ async def get_current_user(
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 DbDep = Annotated[AsyncSession, Depends(get_db)]
 RedisDep = Annotated[Redis, Depends(get_redis)]
+CatalogQuoteRedisDep = Annotated[Redis | None, Depends(get_catalog_quote_redis)]
 ClientIpDep = Annotated[str, Depends(get_client_ip)]
 CsrfDep = Annotated[None, Depends(verify_csrf)]
 OtpStoreDep = Annotated[OtpStore, Depends(get_otp_store)]

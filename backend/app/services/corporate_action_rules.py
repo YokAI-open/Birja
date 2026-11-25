@@ -96,7 +96,9 @@ class SplitPlan:
     owners: tuple[SplitOwner, ...] = ()
 
 
-def classify_action(action: NormalizedAction) -> ActionClassification:
+def classify_action(
+    action: NormalizedAction, *, catalog_symbol: str | None = None
+) -> ActionClassification:
     """Only explicit verified terms support automatic effects; no invented dates."""
     uncertain = ActionClassification()
     if (
@@ -106,7 +108,11 @@ def classify_action(action: NormalizedAction) -> ActionClassification:
         or type(action.coin_id) is not int
         or not 0 < action.coin_id <= 9007199254740991
         or not isinstance(action.symbol, str)
-        or action.symbol not in CURATED_SYMBOLS
+        or (
+            action.symbol not in CURATED_SYMBOLS
+            if catalog_symbol is None
+            else action.symbol != catalog_symbol
+        )
         or type(action.process_date) is not date
         or not utc(action.observed_at)
         or (action.source_event_at is not None and not utc(action.source_event_at))
@@ -200,8 +206,11 @@ def dividend_cutoff(
     *,
     account: str = "birja",
     server: str = "birja",
+    catalog_symbol: str | None = None,
 ) -> CutoffEvidence | None:
-    if classify_action(action).kind != "supported_dividend" or not utc(now):
+    if classify_action(
+        action, catalog_symbol=catalog_symbol
+    ).kind != "supported_dividend" or not utc(now):
         return None
     sessions = build_sessions(now, authority, account=account, server=server)
     selected = [
@@ -218,8 +227,10 @@ def dividend_cutoff(
     )
 
 
-def plan_forward_split(action: NormalizedAction, owners: Sequence[SplitOwner]) -> SplitPlan:
-    classification = classify_action(action)
+def plan_forward_split(
+    action: NormalizedAction, owners: Sequence[SplitOwner], *, catalog_symbol: str | None = None
+) -> SplitPlan:
+    classification = classify_action(action, catalog_symbol=catalog_symbol)
     if classification.kind != "supported_forward_split" or classification.ratio is None:
         return SplitPlan(reason=classification.reason)
     result = []

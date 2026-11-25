@@ -46,7 +46,8 @@ def options(argv):
         inventory = r.bundle_verify(archive, sha)
         family = inventory.get('portfolio_payload', {})
         assert (inventory.get('recovery_profile'),family.get('version'),family.get('revision')) in {
-            ('deploy-recovery-v3',2,'0020'), ('deploy-recovery-v4',3,'0023')}
+            ('deploy-recovery-v3',2,'0020'), ('deploy-recovery-v4',3,'0023'),
+            ('deploy-recovery-v5',4,'0024'), ('deploy-recovery-v7',6,'0026')}
     return a
 
 

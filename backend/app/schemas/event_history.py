@@ -70,9 +70,10 @@ class EventBase(WireModel):
     kind: str
     id: str
     recorded_at: Instant
-    symbol: str = Field(pattern=r"^[A-Z][A-Z0-9.-]{0,19}$")
+    symbol: str = Field(max_length=20)
     name: Annotated[str, Field(max_length=256), AfterValidator(_name)]
     cash_delta: Cash
+    catalog_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def identity(self) -> Self:
@@ -80,6 +81,20 @@ class EventBase(WireModel):
             raise ValueError("Invalid event identity")
         if int(self.id.split(":")[1]) > 9223372036854775807:
             raise ValueError("Identity overflow")
+        if self.catalog_id is None:
+            if "catalog_id" in self.model_fields_set:
+                raise ValueError("Missing catalog identity")
+            pattern = r"[A-Z][A-Z0-9.-]{0,19}"
+        else:
+            if (
+                getattr(self, "asset_type", None) != "stock"
+                or re.fullmatch(r"[1-9][0-9]{0,18}", self.catalog_id) is None
+                or int(self.catalog_id) > 9223372036854775807
+            ):
+                raise ValueError("Invalid catalog identity")
+            pattern = r"[A-Z0-9][A-Z0-9.$^+/=-]{0,13}"
+        if re.fullmatch(pattern, self.symbol) is None:
+            raise ValueError("Invalid event symbol")
         return self
 
 
@@ -199,6 +214,8 @@ class EventDividendCorrection(EventBase):
         }
         if self.payment_reference != self.original.id or self.decision_reference != self.id:
             raise ValueError("Invalid lineage")
+        if self.catalog_id != self.original.catalog_id:
+            raise ValueError("Invalid catalog lineage")
         if self.original.recorded_at > self.recorded_at or reasons[self.outcome] != self.reason:
             raise ValueError("Invalid correction chronology or reason")
         applied = Decimal(self.applied_delta)

@@ -19,6 +19,7 @@ import { useMe } from "@/hooks/useMe";
 import { useLogout } from "@/hooks/useAuthMutations";
 import HealthPage from "@/pages/HealthPage";
 import SignInPage from "@/pages/SignInPage";
+import StockCatalogTradePage from "@/pages/StockCatalogTradePage";
 import StockTradePage from "@/pages/StockTradePage";
 import TradePage from "@/pages/TradePage";
 import PortfolioPage from "@/pages/PortfolioPage";
@@ -28,6 +29,7 @@ import HistoryPage from "@/pages/HistoryPage";
 import { PortfolioTargetBoundary } from "@/components/PortfolioTargetBoundary";
 import { usePortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { isPortfolioId } from "@/api/portfolios";
+import { isCatalogId } from "@/api/stockCatalog";
 import { usePortfolioManagement } from "@/hooks/usePortfolioManagement";
 import { PortfolioMetadataForm } from "@/components/PortfolioMetadataForm";
 import PortfolioDeletionPage from "@/pages/PortfolioDeletionPage";
@@ -205,6 +207,21 @@ function LegacyTrade({ stock = false }: { stock?: boolean }) {
   );
 }
 
+function catalogTradePath(portfolioId: string, catalogId: string) {
+  return `/portfolios/${portfolioId}/trade/catalog/${catalogId}`;
+}
+
+function CatalogTradeEntry() {
+  const { catalogId } = useParams();
+  if (!isCatalogId(catalogId)) return <StockCatalogTradePage />;
+  return (
+    <PortfolioTargetBoundary
+      tradeSymbol="this stock"
+      legacyDestination={(portfolioId) => catalogTradePath(portfolioId, catalogId)}
+    />
+  );
+}
+
 function SignedIn() {
   const { pathname } = useLocation();
   const logout = useLogout();
@@ -215,6 +232,7 @@ function SignedIn() {
   const explicitId = isPortfolioId(matchedId) ? matchedId : undefined;
   const portfolioDetail = useMatch({ path: "/portfolios/:portfolioId", end: true });
   const portfolioHistory = useMatch({ path: "/portfolios/:portfolioId/history", end: true });
+  const catalogId = useMatch("/portfolios/:portfolioId/trade/catalog/:catalogId")?.params.catalogId;
   const portfolioNavigation = useMatch("/portfolios/*");
   const portfoliosActive = Boolean(portfolioNavigation && !portfolioHistory);
   const navigation = usePortfolioTarget(explicitId ?? openedId);
@@ -288,7 +306,13 @@ function SignedIn() {
             <PortfolioSwitcher
               portfolioId={explicitId}
               label={portfolioHistory ? "History portfolio" : undefined}
-              destination={portfolioHistory ? (id) => `/portfolios/${id}/history` : undefined}
+              destination={
+                portfolioHistory
+                  ? (id) => `/portfolios/${id}/history`
+                  : isCatalogId(catalogId)
+                    ? (id) => catalogTradePath(id, catalogId)
+                    : undefined
+              }
             />
           </div>
         )}
@@ -298,6 +322,7 @@ function SignedIn() {
           <Route path="portfolios/:portfolioId" element={<PortfolioRoute />}>
             <Route index element={<PortfolioPage />} />
             <Route path="history" element={<HistoryPage />} />
+            <Route path="trade/catalog/:catalogId" element={<StockCatalogTradePage />} />
             <Route path="trade/stocks/:symbol" element={<StockTradePage />} />
             <Route path="trade/:symbol" element={<TradePage />} />
           </Route>
@@ -321,6 +346,7 @@ function SignedIn() {
             }
           />
           <Route path="trade/stocks/:symbol" element={<LegacyTrade stock />} />
+          <Route path="trade/catalog/:catalogId" element={<CatalogTradeEntry />} />
           <Route path="trade/:symbol" element={<LegacyTrade />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

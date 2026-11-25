@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 from typing import cast as typecast
 
-from sqlalchemy import Table, Text, case, cast, exists, func, select
+from sqlalchemy import Table, Text, case, cast, exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -14,13 +14,19 @@ from app.models.corporate_action import (
     StockActionEvent,
     StockActionRevision,
     StockActionState,
+    StockDividendEntitlement,
+    StockOwnershipMovement,
     StockSplitApplication,
 )
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument, StockQuote, StockSession
+from app.models.stock_catalog_finance import StockCatalogStatus
 from app.models.stock_execution import StockStatusEvidence
+from app.models.trade import Trade
 from app.services.corporate_actions import action_hold_queries
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_catalog_promotion import CatalogFinancialBinding
+from app.services.stock_halts import SOURCE as REPORTED_HALT_SOURCE
 from app.services.stock_quote_rules import CURATED_SYMBOLS
 from app.services.stock_sessions import RegularSession, session_at
 from app.services.stock_trading_rules import (
@@ -31,6 +37,114 @@ from app.services.stock_trading_rules import (
     StatusEvidence,
     evaluate_execution,
 )
+
+
+async def load_catalog_status(
+    db: AsyncSession, binding: CatalogFinancialBinding, now: datetime
+) -> tuple[StockCatalogStatus, datetime] | None:
+    """Check the retained report's exact listing, account and posting rights."""
+    statement = select(StockCatalogStatus, text("permission.valid_until")).from_statement(
+        text("""
+        SELECT status.*,permission.valid_until AS permission_until
+        FROM public.stock_catalog_status status
+        JOIN public.stock_catalog_instruments binding ON binding.coin_id=status.coin_id
+        JOIN public.stock_catalog_listings listing ON listing.id=binding.listing_id
+        JOIN public.stock_catalog_admissions permission ON permission.id=status.admission_id
+        WHERE status.coin_id=:coin AND status.catalog_id=binding.catalog_id
+          AND status.listing_id=:listing AND status.listing_id=binding.listing_id
+          AND status.event_at<=:at AND status.observed_at<=:at AND status.valid_until>:at
+          AND permission.scope @> jsonb_build_object(
+              'account',CAST(:account AS text),'server',CAST(:server AS text))
+          AND public.stock_catalog_scope_current(
+              permission.id,'catalog_halt',binding,listing,:at,
+              (SELECT jsonb_object_agg(field,'["collection","execution","storage","backup"]'::jsonb)
+               FROM unnest(ARRAY['report_digest','event_at','valid_until','state']) field))
+    """)
+    )
+    row = (
+        await db.execute(
+            statement.execution_options(populate_existing=True),
+            {
+                "coin": binding.coin_id,
+                "listing": binding.listing_id,
+                "at": now,
+                "account": binding.account,
+                "server": binding.server,
+            },
+        )
+    ).one_or_none()
+    return (row[0], row[1]) if row is not None else None
+
+
+async def has_unprocessed_catalog_action(
+    db: AsyncSession,
+    *,
+    coin_id: int,
+    at: datetime,
+    portfolio_id: int | None,
+    complete_from: datetime,
+    covered_until: datetime,
+) -> bool:
+    """A pending split affects the issue, while dividend entitlement is per root."""
+    event, revision = StockActionEvent, StockActionRevision
+    due = exists(
+        select(event.id)
+        .join(revision, revision.id == event.current_revision_id)
+        .where(
+            event.coin_id == coin_id,
+            revision.classification == "supported_forward_split",
+            revision.verified_cutoff <= at,
+            ~exists(
+                select(StockSplitApplication.id).where(
+                    StockSplitApplication.economic_event_id == event.id,
+                )
+            ),
+        )
+    )
+    changed = exists(
+        select(StockSplitApplication.id)
+        .join(event, event.id == StockSplitApplication.economic_event_id)
+        .where(
+            StockSplitApplication.coin_id == coin_id,
+            StockSplitApplication.revision_id != event.current_revision_id,
+        )
+    )
+    if portfolio_id is None:
+        return bool(await db.scalar(select(due | changed)))
+    applicable_dividend = exists(
+        select(event.id)
+        .join(revision, revision.id == event.current_revision_id)
+        .where(
+            event.coin_id == coin_id,
+            revision.classification == "supported_dividend",
+            revision.verified_cutoff <= at,
+            ~exists(
+                select(StockDividendEntitlement.id).where(
+                    StockDividendEntitlement.event_id == event.id,
+                    StockDividendEntitlement.portfolio_id == portfolio_id,
+                )
+            ),
+            (
+                (revision.verified_cutoff < complete_from)
+                | (revision.verified_cutoff > covered_until)
+                | exists(
+                    select(StockOwnershipMovement.id).where(
+                        StockOwnershipMovement.coin_id == coin_id,
+                        StockOwnershipMovement.portfolio_id == portfolio_id,
+                        StockOwnershipMovement.economic_at < revision.verified_cutoff,
+                    )
+                )
+                | exists(
+                    select(Trade.id).where(
+                        Trade.coin_id == coin_id,
+                        Trade.portfolio_id == portfolio_id,
+                        Trade.created_at < revision.verified_cutoff,
+                    )
+                )
+            ),
+        )
+    )
+    return bool(await db.scalar(select(due | changed | applicable_dividend)))
 
 
 def session_json_rows(anchor: datetime) -> Any:
@@ -266,6 +380,10 @@ def executions_from_snapshot(
         "server": settings.stock_data_server,
     }
     hashes = {row["product"]: row["row_hash"] for row in raw.admissions or []}
+    status_admission = admissions.get("status")
+    reported_mode = bool(
+        status_admission and status_admission.scope.get("feed") == REPORTED_HALT_SOURCE
+    )
     evidence = tuple(
         AdmissionEvidence(
             product,
@@ -282,7 +400,13 @@ def executions_from_snapshot(
                     product,
                     purpose,
                     checked,
-                    feed="alpaca-corporate-actions" if product == "actions" else "iex",
+                    feed=(
+                        "alpaca-corporate-actions"
+                        if product == "actions"
+                        else REPORTED_HALT_SOURCE
+                        if product == "status" and reported_mode
+                        else "iex"
+                    ),
                     **scope,
                 ).allowed
                 for purpose in ("collection", "display", "derived", "retention")
@@ -311,7 +435,11 @@ def executions_from_snapshot(
                 row["quote_source"],
                 row["quote_feed"],
             )
-        status = StatusEvidence(coin_id=cid, provider_asset_id=asset)
+        status = StatusEvidence(
+            coin_id=cid,
+            provider_asset_id=asset,
+            source=REPORTED_HALT_SOURCE if reported_mode else "alpaca",
+        )
         if row["status_coin_id"] is not None:
             fields = {
                 key.removeprefix("status_"): value
@@ -322,13 +450,28 @@ def executions_from_snapshot(
                 fields[key] = _stamp(fields[key])
             if fields["session_date"] is not None:
                 fields["session_date"] = date.fromisoformat(fields["session_date"])
-            status = StatusEvidence(**fields)
+            candidate = StatusEvidence(**fields)
+            if (candidate.source == REPORTED_HALT_SOURCE) == reported_mode:
+                status = candidate
         data_deadlines: dict[str, datetime] = {}
         for product, observed in (("quotes", quote.collected_at), ("status", status.observed_at)):
             permission = admissions.get(product)
             seconds = permission.quota.get("retention_seconds") if permission is not None else None
             if observed is not None and type(seconds) is int and 0 < seconds <= 86400:
                 data_deadlines[product] = observed + timedelta(seconds=seconds)
+        if reported_mode:
+            # Expired observations become absent evidence. Product permissions
+            # still govern a refresh, and neither expired row can authorize a fill.
+            quote_deadline = data_deadlines.get("quotes")
+            if quote_deadline is not None and checked >= quote_deadline:
+                quote = QuoteEvidence()
+                del data_deadlines["quotes"]
+            status_deadline = data_deadlines.get("status")
+            if status_deadline is not None and checked >= status_deadline:
+                status = StatusEvidence(
+                    coin_id=cid, provider_asset_id=asset, source=REPORTED_HALT_SOURCE
+                )
+                del data_deadlines["status"]
         item_admissions = tuple(
             replace(a, approved=False)
             if a.product in data_deadlines and checked >= data_deadlines[a.product]

@@ -11,10 +11,12 @@ conditions; see[owner closure](phases/07-permitted-stock-discovery/07-OWNER-CLOS
 Saved November16measurement and existing local/hosted proofs remain the technical
 evidence; no provider terms audit or new measurement is inferred.
 
-**Remaining engineering follow-up:** the stock-status scheduler has no live
-transport (`backend/app/tasks/stock_status.py`). Implement and qualify a supported
-transport before claiming real stock execution enabled. This is separate from
-the now-closed human acceptance. Do not bypass runtime status/admission checks.
+**Remaining engineering follow-up:** the deployed stock-status scheduler has
+no live transport. The [November 24 activation check](quick/20261124-stock-activation/SUMMARY.md)
+verified Alpaca quote and corporate-action access. v1.4 will implement and
+verify the owner-approved simulator rule using current REST quotes and
+exchange-reported halt checks. Phase 7 owner acceptance remains closed. Stock
+activation stays pending until v1.4 is verified and rolled out.
 
 ## Historical v1.1 Phase7 deferral record
 

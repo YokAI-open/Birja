@@ -43,7 +43,7 @@ class InstalledVerifierContracts(unittest.TestCase):
 
                 def install(path, expected, synthetic_root, required_profile=None):
                     self.assertEqual((path, expected, required_profile),
-                                     (archive, sha, "deploy-recovery-v4"))
+                                     (archive, sha, "deploy-recovery-v5"))
                     host = Path(synthetic_root)
                     self.assertEqual(host.name, "host")
                     self.assertEqual(host.stat().st_mode & 0o777, 0o700)
@@ -59,7 +59,7 @@ class InstalledVerifierContracts(unittest.TestCase):
                 original_loader = smoke.load_recovery
                 with mock.patch.object(smoke, "load_recovery", side_effect=lambda path=None: trusted if path is None else original_loader(path)):
                     with smoke.installed_recovery_verifier(archive, sha) as actual:
-                        trusted.bundle_verify.assert_called_once_with(archive, sha, required_profile="deploy-recovery-v4")
+                        trusted.bundle_verify.assert_called_once_with(archive, sha, required_profile="deploy-recovery-v5")
                         self.assertEqual(actual.HERE, selected_paths[0].parent)
                         self.assertEqual((actual.HERE.parent / "sources" / ("portfolio" + revision + ".tar")).read_bytes(), b"adjacent selected source")
                         self.assertTrue(selected_paths[0].is_file())

@@ -1,57 +1,64 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Birja Interface Redesign
-current_phase: 17
-current_plan: 2
-status: ready_for_release
-last_updated: "2026-11-23T13:29:25+00:00"
-last_activity: 2026-11-23
+milestone: v1.4
+milestone_name: Searchable Stock Trading
+current_phase: 21
+status: executing
+last_updated: "2026-11-25T13:17:52Z"
+last_activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
 progress:
-  total_phases: 2
+  total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 29
+  completed_plans: 24
+  percent: 50
+stopped_at: Phase 21 feature PR #46 merged into develop and release 0.8.0 prepared locally
 ---
 
 # Project State
 
 ## Project Reference
 
-See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and the
-[candidate audit](v1.3-MILESTONE-AUDIT.md).
+See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
+[REQUIREMENTS.md](REQUIREMENTS.md) and [v1.4 research](research/v1.4/SUMMARY.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: prepare the integrated redesign for its separate release workflow.
+Current focus: Phase 21 release verification, rollout preparation and live
+acceptance of searchable stock trading.
 
 ## Current Position
 
-Phase: 17 — Verify Full-Stack Behavior and Prepare Release
-Plan: 17-02 complete
-Status: All six required checks passed at 8ce10f2cc1d43f60189dcb12cc4489c93d1cfb93. The owner approved merging PR #41 into develop. Merge commit 1902eab33b7db4dfa3b74af30bb7230447f994b7 has the same tree as the checked PR.
-Last activity: 2026-11-23 — Verified the [PR #41 merge](https://github.com/YokAI-open/Birja/pull/41) and closed all ten milestone requirements.
+Phase: 21
+Plan: 4 of 9 executed
+Status: Awaiting release PR publication approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
 
-## Evidence
+Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
+awaits complete admitted live exchange coverage. SC-03 has fixture evidence
+and awaits expanded live quote proof. Phase 20 completed all nine plans and
+verified SL-01 through SL-04 on synthetic fixtures. Phase 21 owns the overall
+and critical coverage gates, release CI, and the first out-of-list production
+buy and sell using live IEX data.
+[Phase 19 verification](phases/19-search-the-nyse-and-nasdaq-catalog/19-VERIFICATION.md) ·
+[Phase 20 verification](phases/20-trade-and-value-stocks-from-search/20-VERIFICATION.md)
 
-- The reviewed app and dependency inputs match ef60a64. The final PR run
-  passed image scans and the same-archive PostgreSQL recovery, TLS and
-  rollback suite.
-- Frontend lint, format, typecheck, build and 1,332 tests passed locally.
-  Final hosted backend verification passed 3,703 tests with 100% critical-path
-  coverage.
-- The final full local browser run passed all 93 runnable tests with one
-  expected deployed-only CSP skip. The hosted browser job passed.
-- Owner integrated UI and native 200% passed. See [UAT](phases/16-adopt-the-approved-interface/16-HUMAN-UAT.md).
-- v1.2 is archived and production is v0.6.2. Phase 7 owner acceptance is
-  closed. Live stock activation and other follow-ups stay in [DEFERRED.md](DEFERRED.md).
+Phase 21 local recovery and catalog checks passed. The exact feature CI
+run passed 3,941 backend tests, 94.41% overall coverage, 100% critical
+coverage, the full browser run and verified recovery tooling. PR #46
+merged into develop as `e1b7956` with the checked feature tree. Release
+0.8.0 is prepared locally. Live acquisition and activation need
+evidence for the expanded scope. These checks can progress independently.
+[Feature CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
+[Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 
-Hosted CI: [run 45160029262](https://github.com/YokAI-open/Birja/actions/runs/45160029262).
+## Carried context
 
-See [CI diagnosis and local proof](debug/pr41-hosted-qualification.md).
+- v1.3 Phases 16 and 17 are verified. The [v1.3 audit](v1.3-MILESTONE-AUDIT.md)
+  and original phase records preserve approval and verification evidence.
 
-Recovery setup and History Back correction: [run 45169702553](https://github.com/YokAI-open/Birja/actions/runs/45169702553).
+- Production baseline `07d3aa5` has the redesigned UI and 20-stock catalog.
+  Alpaca quotes and corporate actions were verified in isolation. Production
+  stock execution is disabled and tracked in the [November 24 verification](quick/20261124-stock-activation/SUMMARY.md).
 
-Final PR checks: [run 45176790570](https://github.com/YokAI-open/Birja/actions/runs/45176790570).
-
-Develop merge CI: [run 45184429735](https://github.com/YokAI-open/Birja/actions/runs/45184429735), started after merge.
+- Phase 7 owner acceptance is closed. The actual stock activation outcome is
+  now owned by v1.4. [Deferred work](DEFERRED.md)

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def stage_program(revision):
-    assert revision in ("0015", "0016")
+    assert revision in ("0015", "0016", "0024", "0025")
     return r'''
 import asyncio,os,sys
 import asyncpg
@@ -51,24 +51,57 @@ asyncio.run(main())
 '''.replace('TARGET', repr(revision))
 
 
+def retained_catalog_program():
+    return r'''
+import asyncio
+import os
+
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from app.db.schema_contract import SchemaAdmissionError, require_schema
+
+async def main():
+    engine = create_async_engine(os.environ['DATABASE_URL'])
+    try:
+        async with engine.connect() as conn:
+            assert await require_schema(conn, consumer='retained0025') == '0025'
+            try:
+                await require_schema(conn)
+            except SchemaAdmissionError as exc:
+                assert exc.reason == 'incompatible_schema'
+            else:
+                raise AssertionError('current consumer admitted retained 0025')
+        print('actual_retained0025_admitted=true current_refused=true', flush=True)
+    finally:
+        await engine.dispose()
+
+asyncio.run(main())
+'''
+
+
 def financial_program():
     return r'''
 import asyncio,os
 from decimal import Decimal as D
 import asyncpg
-from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL
+from app.db.portfolio_bootstrap import PREFLIGHT_0026_SQL
 async def main():
  c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
  try:
   assert await c.fetchval("SELECT current_database()='birja' AND session_user='birja'")
-  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0023'
-  await c.execute(PREFLIGHT_0023_SQL)
+  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0026'
+  await c.execute(PREFLIGHT_0026_SQL)
+  from app.db.schema_contract import require_schema, SchemaAdmissionError
   # Disposable administrative fixture only: retain the original custom-baseline
   # economic oracle without granting ordinary account INSERT or rewriting a baseline.
   uid=await c.fetchval("INSERT INTO users(email) VALUES ('bootstrap@example.test') RETURNING id")
   root=await c.fetchval("INSERT INTO accounts(user_id,name,name_key,cash,starting_cash) VALUES ($1,'Custom baseline',portfolio_name_key('Custom baseline'),123.45,7777) RETURNING id",uid)
   await c.execute("INSERT INTO portfolio_initializations(user_id,origin) VALUES ($1,'legacy')",uid)
   await c.execute("SET ROLE birja_app")
+  await c.fetch("SELECT id,ticker FROM public.stock_catalog_listings")
+  assert await c.fetchval("SELECT has_column_privilege(current_user,'stock_catalog_admissions','fields','SELECT')")
+  assert not await c.fetchval("SELECT has_column_privilege(current_user,'stock_catalog_admissions','reference','SELECT')")
+  assert not await c.fetchval("SELECT has_table_privilege(current_user,'stock_catalog_listings','INSERT,UPDATE,DELETE')")
   try:await c.execute("INSERT INTO accounts(user_id,cash,starting_cash) VALUES ($1,123.45,7777)",uid)
   except asyncpg.InsufficientPrivilegeError:pass
   else:raise AssertionError('ordinary account INSERT admitted')
@@ -91,7 +124,6 @@ async def main():
   from sqlalchemy.engine import make_url
   from sqlalchemy.ext.asyncio import create_async_engine
   from app.db.portfolio_migrate import require_migrator
-  from app.db.schema_contract import require_schema, SchemaAdmissionError
   password=secrets.token_hex(32)
   await c.execute(await c.fetchval("SELECT format('ALTER ROLE birja_migrator LOGIN PASSWORD %L',$1::text)",password))
   e=create_async_engine(make_url(os.environ['DATABASE_URL']).set(username='birja_migrator',password=password))
@@ -99,7 +131,7 @@ async def main():
    for change,undo,reason in [
     ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC','Unsafe migration schema'),
     ('ALTER ROLE birja_app CREATEROLE','ALTER ROLE birja_app NOCREATEROLE','Unsafe migration schema'),
-    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0023'",'migration_only')]:
+    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0026'",'migration_only')]:
     await c.execute(change)
     try:
      async with e.connect() as x:
@@ -188,6 +220,20 @@ def main():
                     command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m", "app.db.dev_bootstrap"])
                     command(dc + ["run", "--rm", "--no-deps", "backend", "alembic", "upgrade", "0014"])
                     sql("INSERT INTO users(email) VALUES ('retained@example.test'); INSERT INTO accounts(user_id,cash,starting_cash) SELECT id,321.12,8765 FROM users")
+                if lane == "upgrade":
+                    command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
+                            input=stage_program("0024"))
+                    command(dc + ["run", "--rm", "--no-deps", "backend", "python", "-m",
+                                  "app.db.dev_bootstrap", "--after-migrations"])
+                    assert sql("SELECT version_num FROM alembic_version") == "0024"
+                    assert sql("SELECT to_regclass('public.stock_catalog_generations') IS NULL") == "t"
+                    command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
+                            input=stage_program("0025"))
+                    command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m",
+                                  "app.db.dev_bootstrap", "--after-migrations"])
+                    assert sql("SELECT to_regclass('public.stock_catalog_instruments') IS NULL") == "t"
+                    command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
+                            input=retained_catalog_program())
                 if lane in ("0015", "0016"):
                     command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"],
                             input=stage_program(lane))
@@ -208,6 +254,7 @@ def main():
                         input=prefix + (ROOT / "deploy/db/bootstrap-roles.sql").read_text())
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"], input=financial_program())
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"])
+                assert sql("SELECT version_num FROM alembic_version") == "0026"
                 assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='bootstrap@example.test')") == "124.45000000:7777.00000000"
                 if lane != "fresh":
                     assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='retained@example.test')") == "321.12000000:8765.00000000"

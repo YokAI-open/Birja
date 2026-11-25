@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { StockFill } from "@/api/stockTrades";
+import type { StockFillValues } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { fullLocalTimestamp, signedUsd } from "@/lib/financialDisplay";
@@ -24,10 +24,12 @@ export function StockTradeReceipt({
   fill: f,
   onTradeAgain,
   target,
+  unitPrice = formatUnitPrice,
 }: {
-  fill: StockFill;
+  fill: StockFillValues;
   target: PortfolioTarget;
   onTradeAgain: () => void;
+  unitPrice?: (value: string) => string;
 }) {
   const id = useId(),
     heading = useRef<HTMLHeadingElement>(null),
@@ -60,9 +62,9 @@ export function StockTradeReceipt({
         {f.side === "buy" ? "Bought" : "Sold"} {f.quantity.split(".")[0]} shares
       </p>
       <dl className="flex min-w-0 flex-col gap-3">
-        <StockFigure label="Execution price">{formatUnitPrice(f.exec_price)}</StockFigure>
-        <StockFigure label="IEX bid">{formatUnitPrice(f.bid)}</StockFigure>
-        <StockFigure label="IEX ask">{formatUnitPrice(f.ask)}</StockFigure>
+        <StockFigure label="Execution price">{unitPrice(f.exec_price)}</StockFigure>
+        <StockFigure label="IEX bid">{unitPrice(f.bid)}</StockFigure>
+        <StockFigure label="IEX ask">{unitPrice(f.ask)}</StockFigure>
         <StockFigure label="Commission">{formatUsd(f.fee)}</StockFigure>
         <StockFigure label="Added spread">0%</StockFigure>
         <StockFigure label="Total cash change">{signedUsd(f.cash_delta)}</StockFigure>

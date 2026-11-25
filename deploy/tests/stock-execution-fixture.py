@@ -1,7 +1,6 @@
-"""Independent synthetic execution consumer, embedded in isolated clients only.
+"""Synthetic execution and receipt consumers for disposable PostgreSQL fixtures.
 
-No application test fixtures or private provider inputs are used. The parent
-operations driver owns all containers, databases and fixture credentials.
+The operations driver owns every container, database, and fixture credential.
 """
 
 PROGRAM = r'''
@@ -171,3 +170,232 @@ def program(*, seed: bool, database: str | None = None) -> str:
     if database not in (None, "birja_restore_test"):
         raise ValueError("Unexpected synthetic database")
     return f"FIXTURE_SEED={seed!r}\nFIXTURE_DATABASE={database!r}\n" + PROGRAM
+
+
+async def reported_receipt_fixture(mode, before=None):
+    """Exercise exact receipt replay through restricted TLS on a disposable PG18 clone."""
+    import hashlib
+    import inspect
+    import json
+    from dataclasses import asdict, replace
+    from datetime import UTC, datetime, time, timedelta
+    from decimal import Decimal
+    from urllib.parse import urlsplit, urlunsplit
+    from uuid import UUID
+
+    from sqlalchemy import insert, text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import Settings
+    from app.db.connection import database_connect_args
+    from app.db.schema_contract import require_schema
+    from app.models.stock import StockDataAdmission, StockSession
+    from app.schemas.stock_trades import TradeIn
+    from app.services import stock_sessions, stock_trading
+    from app.services.accounts import get_or_create_user
+    from app.services.portfolios import OwnedActivePortfolio
+    from tests.test_stock_admission import action_admitted, admitted
+    from tests.test_stock_sessions import evidence
+
+    if mode not in {"alpaca", "nasdaq-rss", "replay", "replay-legacy"}:
+        raise ValueError("Unknown synthetic receipt fixture mode")
+    replaying = mode in {"replay", "replay-legacy"}
+    revision = "0023" if mode in {"alpaca", "replay-legacy"} else "0024"
+    consumer = "retained0023" if revision == "0023" else "retained0024"
+    settings = Settings(stock_data_enabled=True)
+    url = urlsplit(settings.database_url)
+    database = "/birja_restore_test" if replaying else "/birja_test"
+    if (
+        settings.env != "test"
+        or url.hostname != "127.0.0.1"
+        or url.port != 55434
+        or url.username != "birja_test"
+        or url.path != database
+        or url.query
+        or not settings.database_ssl_ca_file
+    ):
+        raise ValueError("Owned disposable TLS database required")
+    args = database_connect_args(settings)
+    admin = create_async_engine(settings.database_url, connect_args=args)
+    restricted = url._replace(netloc="birja_app:test-app@127.0.0.1:55434")
+    app = create_async_engine(urlunsplit(restricted), connect_args=args)
+    scheduler_url = url._replace(
+        netloc="birja_scheduler:test-scheduler@127.0.0.1:55434"
+    )
+    scheduler = create_async_engine(urlunsplit(scheduler_url), connect_args=args)
+    client = async_sessionmaker(app, expire_on_commit=False)
+    sides = ("buy",) if mode == "alpaca" else ("buy", "sell")
+    prefix = 18 if mode == "alpaca" else 24
+    try:
+        for role in (app, scheduler):
+            async with role.connect() as conn:
+                assert await conn.scalar(
+                    text("SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()")
+                )
+                assert await require_schema(conn, consumer=consumer) == revision
+        if not replaying:
+            async with client.begin() as db:
+                uid, created = await get_or_create_user(
+                    db, f"disposable-{prefix}@execution.invalid"
+                )
+                assert created
+                pid = await db.scalar(
+                    text("SELECT id FROM accounts WHERE user_id=:uid"), {"uid": uid}
+                )
+            now = datetime.now(UTC)
+            calendar = evidence(now)
+
+            def synthetic_bounds(alias, start, end):
+                today = now.date()
+                tomorrow = today + timedelta(days=1)
+                midnight = datetime.combine(today, time.min, UTC)
+                start_at = datetime.combine(tomorrow, time(14), UTC)
+                return (
+                    (
+                        today,
+                        max(midnight, now - timedelta(hours=1)),
+                        now + timedelta(hours=1),
+                    ),
+                    (tomorrow, start_at, start_at + timedelta(hours=6)),
+                )
+
+            stock_sessions._calendar_bounds = synthetic_bounds
+            async with async_sessionmaker(admin).begin() as db:
+                for item in (
+                    admitted("reference"),
+                    admitted("quotes"),
+                    action_admitted(),
+                    admitted("status"),
+                    calendar,
+                ):
+                    scope = {
+                        **item.scope,
+                        "durable_accounting": True,
+                        "backup_restore": True,
+                        "retention_mode": "durable-accounting",
+                    }
+                    if item.product == "status" and mode == "nasdaq-rss":
+                        scope["feed"] = mode
+                    row = replace(
+                        item,
+                        reviewed_at=now - timedelta(hours=1),
+                        valid_from=now - timedelta(hours=1),
+                        valid_until=now + timedelta(hours=1),
+                        scope=scope,
+                    )
+                    await db.execute(
+                        text(
+                            "DELETE FROM stock_data_admissions WHERE product=:product"
+                        ),
+                        {"product": item.product},
+                    )
+                    await db.execute(insert(StockDataAdmission).values(**asdict(row)))
+                cid = await db.scalar(text("SELECT id FROM coins WHERE symbol='AAPL'"))
+                values = {
+                    "cid": cid,
+                    "at": now,
+                    "day": now.date(),
+                    "source": mode,
+                    "legacy": mode == "alpaca",
+                    "sequence": int(mode == "alpaca"),
+                    "digest": "previous-report" if mode == "alpaca" else "b" * 64,
+                }
+                await db.execute(
+                    text(
+                        "UPDATE stock_instruments SET provider_asset_id='synthetic-AAPL', provider_verified_at=:at WHERE coin_id=:cid"
+                    ),
+                    values,
+                )
+                await db.execute(text("DELETE FROM stock_sessions"))
+                await db.execute(
+                    insert(StockSession),
+                    [
+                        asdict(row)
+                        for row in stock_sessions.build_sessions(now, calendar)
+                    ],
+                )
+                await db.execute(
+                    text("DELETE FROM stock_quotes WHERE coin_id=:cid"), values
+                )
+                await db.execute(
+                    text("""INSERT INTO stock_quotes (coin_id,bid,ask,mid,source,feed,event_at,collected_at,session_date,admission_generation,unit_epoch)
+                    VALUES (:cid,100,102,101,'alpaca','iex',:at,:at,:day,4,0)"""),
+                    values,
+                )
+                await db.execute(
+                    text("""INSERT INTO stock_action_state (coin_id,health,admission_generation,checked_at,valid_until,coverage_start,covered_until,journal_start_at,complete_from)
+                    VALUES (:cid,'current',4,:at,CAST(:at AS timestamptz)+interval '1 hour',CAST(:at AS timestamptz)-interval '1 day',:at,CAST(:at AS timestamptz)-interval '1 day',CAST(:at AS timestamptz)-interval '1 day')
+                    ON CONFLICT (coin_id) DO UPDATE SET checked_at=excluded.checked_at,valid_until=excluded.valid_until,covered_until=excluded.covered_until"""),
+                    values,
+                )
+                await db.execute(
+                    text("DELETE FROM stock_status_evidence WHERE coin_id=:cid"), values
+                )
+                await db.execute(
+                    text("""INSERT INTO stock_status_evidence (coin_id,provider_asset_id,source,state,event_at,observed_at,valid_until,session_date,admission_generation,continuity_generation,sequence,bootstrap_verified,continuity_current,source_ref)
+                    VALUES (:cid,'synthetic-AAPL',:source,'normal',:at,:at,CAST(:at AS timestamptz)+interval '60 seconds',:day,4,1,:sequence,:legacy,:legacy,:digest)"""),
+                    values,
+                )
+            receipts = []
+            for index, side in enumerate(sides):
+                order = TradeIn(
+                    symbol="AAPL",
+                    side=side,
+                    quantity="1",
+                    expected_exec_price="102" if side == "buy" else "100",
+                    idempotency_key=UUID(int=prefix + index),
+                )
+                async with client() as db:
+                    fill, created = await stock_trading.execute(
+                        db,
+                        portfolio=OwnedActivePortfolio(pid, uid),
+                        order=order,
+                        settings=settings,
+                    )
+                    assert created and fill.fee == 0
+                    assert fill.cash_after == Decimal(9898 if side == "buy" else 9998)
+                    receipts.append(
+                        {
+                            "uid": uid,
+                            "order": order.model_dump(mode="json"),
+                            "fill": fill.model_dump(mode="json"),
+                        }
+                    )
+            print("stock_receipts=" + json.dumps(receipts, sort_keys=True))
+            return receipts
+
+        assert len(before) == (1 if mode == "replay-legacy" else 3)
+        # The exact released _receipt reader from v0.7.0 has this source hash.
+        reader = inspect.getsource(stock_trading._receipt).strip().encode()
+        assert (
+            hashlib.sha256(reader).hexdigest()
+            == "5eeb442388041b4534949d27bccbb70d81c07218e65dd984c9d989b4d4879e4d"
+        )
+        async with admin.connect() as conn:
+            assert await conn.scalar(
+                text(
+                    "SELECT count(*) FROM stock_status_evidence WHERE source='nasdaq-rss' AND valid_until <= clock_timestamp()"
+                )
+            ) == int(mode == "replay")
+            assert await conn.scalar(
+                text("SELECT count(*) FROM stock_fill_facts")
+            ) == len(before)
+        for original in before:
+            uid = original["uid"]
+            order = TradeIn.model_validate(original["order"])
+            portfolio = OwnedActivePortfolio(int(original["fill"]["portfolio_id"]), uid)
+            async with client() as db:
+                replay, created = await stock_trading.execute(
+                    db, portfolio=portfolio, order=order, settings=settings
+                )
+            assert not created and replay.model_dump(mode="json") == original["fill"]
+        if mode == "replay-legacy":
+            print("legacy_stock_receipt_replay=true verified_tls=true")
+        else:
+            print(
+                "stock_receipt_replay=true retained_reader_exact=true expired_report_retained=true verified_tls=true"
+            )
+    finally:
+        await scheduler.dispose()
+        await app.dispose()
+        await admin.dispose()

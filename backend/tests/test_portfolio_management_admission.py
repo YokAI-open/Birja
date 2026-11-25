@@ -38,15 +38,15 @@ async def test_current_refuses_every_retained_or_partial_before_writes(staged, r
 
 
 async def test_complete_current_and_actual_retained_source_refusal(staged):
-    await asyncio.to_thread(run_test_migration, "0023")
-    from app.db.portfolio_bootstrap import GRANTS_0023_SQL as GRANTS_SQL
+    from app.db.portfolio_bootstrap import CURRENT_PORTFOLIO_REVISION
+    from tests.test_migrations import install_runtime_grants_for_revision
 
+    await asyncio.to_thread(run_test_migration, CURRENT_PORTFOLIO_REVISION)
     async with staged.begin() as conn:
-        raw = await conn.get_raw_connection()
-        await raw.driver_connection.execute(GRANTS_SQL)
         await conn.execute(
             text("REVOKE CREATE ON SCHEMA public FROM PUBLIC,birja_app,birja_scheduler")
         )
+        await install_runtime_grants_for_revision(conn, CURRENT_PORTFOLIO_REVISION)
     old_source = (
         await asyncio.to_thread(
             subprocess.run,
@@ -59,7 +59,7 @@ async def test_complete_current_and_actual_retained_source_refusal(staged):
     namespace = {}
     exec(compile(old_source, "retained0017/schema_contract.py", "exec"), namespace)  # noqa: S102 - pinned trusted git source
     async with staged.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn) == CURRENT_PORTFOLIO_REVISION
         with pytest.raises(namespace["SchemaAdmissionError"], match="incompatible_schema"):
             await namespace["require_schema"](conn)
 

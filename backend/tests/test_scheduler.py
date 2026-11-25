@@ -57,7 +57,11 @@ async def test_independent_stock_loops(monkeypatch, quotes, actions_enabled, rai
     seen = []
     stop = asyncio.Event()
 
-    async def run_loop(*, cycle, interval, stop):
+    async def run_loop(*, cycle, interval, stop, heartbeat=scheduler.HEARTBEAT_PATH):
+        # This case counts the scheduled health-bearing loops. Independent
+        # demand and halt checks have their own scheduler wiring tests.
+        if heartbeat is None:
+            return
         result = await cycle()
         seen.append(result.accepted)
         if len(seen) == 1 + int(quotes) + 2 * int(actions_enabled):

@@ -94,6 +94,19 @@ function Return({ holding }: { holding: PortfolioHolding }) {
 }
 
 function Trade({ holding, target }: { holding: PortfolioHolding; target: PortfolioTarget }) {
+  if (holding.catalog_id !== undefined) {
+    if (!holding.listing_exchange) return <span>Trading unavailable</span>;
+    return (
+      <Button asChild variant="secondary" className="min-h-11 min-w-11 px-4">
+        <Link
+          aria-label={`View details ${holding.symbol} stock`}
+          to={`/portfolios/${target.portfolioId}/trade/catalog/${holding.catalog_id}`}
+        >
+          View details
+        </Link>
+      </Button>
+    );
+  }
   return holding.is_active ? (
     <Button asChild variant="secondary" className="min-h-11 min-w-11 px-4">
       <Link

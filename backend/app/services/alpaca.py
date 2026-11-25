@@ -4,7 +4,7 @@ import asyncio
 import json
 import random
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -14,10 +14,14 @@ from typing import Any
 import httpx
 
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_catalog_sources import SYMBOL_PATTERN
 from app.services.stock_quote_rules import (
+    RawIexQuote,
     RawStockQuote,
     StockMapping,
     ValidatedStockQuote,
+    ValidIexQuote,
+    validate_iex_quote,
     validate_quote,
     verified_mapping,
 )
@@ -28,9 +32,10 @@ _STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?(?:Z|\
 
 
 class AlpacaError(Exception):
-    def __init__(self, reason: str, *, retryable: bool = False) -> None:
+    def __init__(self, reason: str, *, retryable: bool = False, status: int | None = None) -> None:
         super().__init__(reason)
         self.retryable = retryable
+        self.status = status
 
 
 @dataclass(frozen=True)
@@ -127,44 +132,60 @@ def _event(value: object, now: datetime) -> datetime | None:
     return event
 
 
+def _parse_entry(entry: object, symbol: str, collected_at: datetime) -> RawIexQuote | None:
+    if not isinstance(entry, dict) or entry.get("S", symbol) != symbol:
+        return None
+    return RawIexQuote(
+        entry.get("bp"),
+        entry.get("ap"),
+        _event(entry.get("t"), collected_at),
+        entry.get("c"),
+        entry.get("bx"),
+        entry.get("ax"),
+        entry.get("z"),
+        entry.get("bs"),
+        entry.get("as"),
+        entry.get("source", "alpaca"),
+        entry.get("feed", "iex"),
+    )
+
+
 def _batch(
     entries: dict[str, Any],
     symbols: Sequence[StockMapping],
     admission: ProductAdmission,
     collected_at: datetime,
 ) -> QuoteBatch:
-    mappings = {mapping.symbol: mapping for mapping in symbols}
-    if entries.keys() - mappings.keys():
-        raise AlpacaError("unexpected_symbol")
     accepted: list[ValidatedStockQuote] = []
     rejected: dict[str, str] = {}
-    for symbol, mapping in mappings.items():
+    for mapping in symbols:
+        symbol = mapping.symbol
         entry = entries.get(symbol)
-        if entry is None:
-            rejected[symbol] = "missing"
-            continue
-        quote = None
-        if isinstance(entry, dict) and entry.get("S", symbol) == symbol:
-            quote = validate_quote(
+        raw = _parse_entry(entry, symbol, collected_at)
+        quote = (
+            None
+            if raw is None
+            else validate_quote(
                 RawStockQuote(
                     mapping,
-                    entry.get("bp"),
-                    entry.get("ap"),
-                    _event(entry.get("t"), collected_at),
-                    entry.get("c"),
-                    entry.get("bx"),
-                    entry.get("ax"),
-                    entry.get("z"),
-                    entry.get("bs"),
-                    entry.get("as"),
-                    entry.get("source", "alpaca"),
-                    entry.get("feed", "iex"),
+                    raw.bid,
+                    raw.ask,
+                    raw.event_at,
+                    raw.conditions,
+                    raw.bid_exchange,
+                    raw.ask_exchange,
+                    raw.tape,
+                    raw.bid_size,
+                    raw.ask_size,
+                    raw.source,
+                    raw.feed,
                 ),
                 collected_at,
                 admission.generation,
             )
+        )
         if quote is None:
-            rejected[symbol] = "invalid"
+            rejected[symbol] = "missing" if entry is None else "invalid"
         else:
             accepted.append(quote)
     return QuoteBatch(tuple(accepted), rejected)
@@ -199,6 +220,7 @@ async def fetch_iex_quotes(
     budget_seconds: float = 10,
     account: str = "birja",
     server: str = "birja",
+    before_attempt: Callable[[], Awaitable[None]] | None = None,
 ) -> QuoteBatch:
     """Use only a verified curated mapping; injected client owns private headers.
 
@@ -223,25 +245,105 @@ async def fetch_iex_quotes(
         or not 0 < budget_seconds <= 10
     ):
         raise AlpacaError("invalid_request")
-    max_bytes = min(max_bytes, admission.quota["max_response_bytes"])
-    attempts = min(attempts, admission.quota["requests_per_minute"])
+
+    def check_admission(at: datetime) -> None:
+        _admitted(admission, at, account=account, server=server)
+
+    entries, collected_at = await _latest_entries(
+        http,
+        [mapping.symbol for mapping in symbols],
+        now,
+        attempts=min(attempts, admission.quota["requests_per_minute"]),
+        max_bytes=min(max_bytes, admission.quota["max_response_bytes"]),
+        budget_seconds=budget_seconds,
+        check_admission=check_admission,
+        before_attempt=before_attempt,
+        sleep=sleep,
+        jitter=jitter,
+    )
+    return _batch(entries, symbols, admission, collected_at)
+
+
+async def fetch_catalog_iex_quotes(
+    http: httpx.AsyncClient,
+    venues: Mapping[str, str],
+    now: Callable[[], datetime],
+    *,
+    before_attempt: Callable[[], Awaitable[None]],
+    attempts: int,
+    max_bytes: int,
+    budget_seconds: float,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+    jitter: Callable[[], float] | None = None,
+) -> dict[str, ValidIexQuote]:
+    """Parse only the operator-mapped symbols authorized by the attempt guard."""
+    if (
+        not 1 <= len(venues) <= 8
+        or any(
+            re.fullmatch(SYMBOL_PATTERN, symbol) is None or venue not in ("NASDAQ", "NYSE")
+            for symbol, venue in venues.items()
+        )
+        or type(attempts) is not int
+        or not 1 <= attempts <= 3
+        or type(max_bytes) is not int
+        or not 1 <= max_bytes <= 1048576
+        or not 0 < budget_seconds <= 10
+    ):
+        raise AlpacaError("invalid_request")
+    entries, collected_at = await _latest_entries(
+        http,
+        tuple(venues),
+        now,
+        attempts=attempts,
+        max_bytes=max_bytes,
+        budget_seconds=budget_seconds,
+        before_attempt=before_attempt,
+        sleep=sleep,
+        jitter=jitter,
+    )
+    accepted: dict[str, ValidIexQuote] = {}
+    for symbol, venue in venues.items():
+        raw = _parse_entry(entries.get(symbol), symbol, collected_at)
+        if (
+            raw is not None
+            and (
+                quote := validate_iex_quote(raw, listing_exchange=venue, collected_at=collected_at)
+            )
+            is not None
+        ):
+            accepted[symbol] = quote
+    return accepted
+
+
+async def _latest_entries(
+    http: httpx.AsyncClient,
+    symbols: Sequence[str],
+    now: Callable[[], datetime],
+    *,
+    attempts: int,
+    max_bytes: int,
+    budget_seconds: float,
+    check_admission: Callable[[datetime], None] | None = None,
+    before_attempt: Callable[[], Awaitable[None]] | None,
+    sleep: Callable[[float], Awaitable[None]] | None,
+    jitter: Callable[[], float] | None,
+) -> tuple[dict[str, Any], datetime]:
     sleep = sleep or asyncio.sleep
     jitter = jitter or _JITTER
     remaining = budget_seconds
     try:
         async with asyncio.timeout(budget_seconds):
             for attempt in range(attempts):
-                _admitted(admission, now(), account=account, server=server)
+                if check_admission is not None:
+                    check_admission(now())
+                if before_attempt is not None:
+                    await before_attempt()
                 retry_after = 0.0
                 try:
                     async with http.stream(
                         "GET",
                         LATEST_QUOTES_URL,
-                        params={
-                            "symbols": ",".join(m.symbol for m in symbols),
-                            "feed": "iex",
-                            "currency": "USD",
-                        },
+                        params={"symbols": ",".join(symbols), "feed": "iex", "currency": "USD"},
                         timeout=min(remaining, 5),
                         follow_redirects=False,
                     ) as response:
@@ -251,7 +353,7 @@ async def fetch_iex_quotes(
                                 retry_after = _retry_after(
                                     response.headers.get("Retry-After"), now()
                                 )
-                                raise AlpacaError(f"http_{status}", retryable=True)
+                                raise AlpacaError(f"http_{status}", retryable=True, status=status)
                             raise AlpacaError(f"http_{status}")
                         content = bytearray()
                         async for chunk in response.aiter_bytes(chunk_size=max_bytes + 1):
@@ -259,8 +361,12 @@ async def fetch_iex_quotes(
                             if len(content) > max_bytes:
                                 raise AlpacaError("response_limit")
                     collected_at = now()
-                    _admitted(admission, collected_at, account=account, server=server)
-                    return _batch(_decode(bytes(content)), symbols, admission, collected_at)
+                    if check_admission is not None:
+                        check_admission(collected_at)
+                    entries = _decode(bytes(content))
+                    if entries.keys() - set(symbols):
+                        raise AlpacaError("unexpected_symbol")
+                    return entries, collected_at
                 except httpx.TransportError as exc:
                     last = AlpacaError(type(exc).__name__, retryable=True)
                 except AlpacaError as exc:
@@ -271,7 +377,7 @@ async def fetch_iex_quotes(
                     raise last
                 delay = max(retry_after, 2**attempt + min(1, max(0, jitter())))
                 if delay >= remaining:
-                    raise AlpacaError("retry_budget", retryable=True)
+                    raise AlpacaError("retry_budget", retryable=True, status=last.status)
                 remaining -= delay
                 await sleep(delay)
     except TimeoutError:

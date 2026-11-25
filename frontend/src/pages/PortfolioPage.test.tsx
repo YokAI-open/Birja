@@ -548,6 +548,70 @@ it("shows exact server incomplete subtotal with no allocation fills or overall r
   expect(document.querySelector("[data-allocation-fill]")).toBeNull();
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
+
+const catalogId = "9007199254740993";
+
+it.each(["closed", "halted"] as const)(
+  "keeps a dated %s catalog mark and stable ticket distinct from same-ticker crypto",
+  async (mode) => {
+    const p = mixedPortfolio();
+    const stock = {
+      ...stockHolding(),
+      symbol: "BTC",
+      name: "BTC Fixture Stock",
+      catalog_id: catalogId,
+      listing_exchange: "NYSE" as const,
+      provider_asset_id: null,
+      stock_mark: { ...p.holdings[0].stock_mark!, mark_mode: mode, authority: null },
+    };
+    p.holdings = [
+      stock,
+      {
+        ...stock,
+        name: "Bitcoin",
+        catalog_id: undefined,
+        listing_exchange: undefined,
+        coin_id: "1",
+        asset_class: "crypto",
+        stock_mark: null,
+        quantity: "0.12345678",
+        current_value: "300.00",
+      },
+    ];
+    const { client } = show(p);
+    client.setQueryData(["stocks", "first@example.test"], { admission: { state: "unavailable" } });
+    const cards = await screen.findByRole("list", { name: "Holdings" });
+    const stockCard = within(cards).getByText("BTC Fixture Stock").closest("li")!;
+    expect(stockCard).toHaveTextContent("$202.00");
+    expect(stockCard).toHaveTextContent(mode === "halted" ? "Halted" : "Market closed");
+    expect(stockCard.querySelector("time")).toHaveAttribute("datetime", "2026-11-10T15:00:00Z");
+    expect(within(stockCard).getByRole("link", { name: "View details BTC stock" })).toHaveAttribute(
+      "href",
+      `/portfolios/1/trade/catalog/${catalogId}`,
+    );
+    expect(within(cards).getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    );
+  },
+);
+
+it("keeps a restricted catalog holding in an incomplete portfolio without a private link", async () => {
+  const p = incomplete();
+  Object.assign(p.holdings[0], {
+    catalog_id: catalogId,
+    is_active: false,
+    provider_asset_id: null,
+    symbol: "STOCK",
+    name: "Restricted stock",
+  });
+  show(p);
+  expect(await screen.findByText("Known value: $9,796.00 — incomplete")).toBeVisible();
+  const cards = screen.getByRole("list", { name: "Holdings" });
+  expect(cards).toHaveTextContent("Restricted stock");
+  expect(cards).not.toHaveTextContent("Apple Inc.");
+  expect(within(cards).queryByRole("link")).toBeNull();
+});
 it.each(["closed", "halted"] as const)(
   "shows dated %s marks without calling them live",
   async (mode) => {

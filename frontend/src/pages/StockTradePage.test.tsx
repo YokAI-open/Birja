@@ -14,6 +14,7 @@ function setup(
   options: {
     context?: () => Response;
     catalogue?: () => Response;
+    quote?: () => Response;
     trade?: (body: Record<string, unknown>) => Response | Promise<Response>;
     route?: string;
     app?: boolean;
@@ -40,7 +41,8 @@ function setup(
         return options.catalogue?.() ?? new Response("{}", { status: 404 });
       if (path.endsWith("/context"))
         return scoped(options.context?.() ?? new Response(JSON.stringify(contextFixture())));
-      if (path.endsWith("/quote")) return scoped(new Response(JSON.stringify(quoteFixture())));
+      if (path.endsWith("/quote"))
+        return scoped(options.quote?.() ?? Response.json(quoteFixture()));
       if (path === "/api/v2/portfolios/1/stock-trades")
         return scoped(
           await (options.trade?.(body!) ?? new Response(JSON.stringify(fillFixture()))),
@@ -144,6 +146,20 @@ it("requires preview and explicit confirmation, then focuses the immutable histo
   );
   await user.click(screen.getByRole("button", { name: "Trade again" }));
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("");
+});
+it("discloses the coverage of a current exchange halt report", async () => {
+  const c = contextFixture();
+  c.status = {
+    ...c.status,
+    source: "nasdaq-rss",
+    event_at: "2026-11-10T14:59:55Z",
+    valid_until: "2026-11-10T15:01:50Z",
+    bootstrap_verified: false,
+    continuity_current: false,
+  };
+  setup({ context: () => Response.json(c) });
+  expect(await screen.findByText("Halt reports can be delayed or incomplete.")).toBeVisible();
+  expect(screen.getByText("IEX ask")).toBeVisible();
 });
 it("closed stocks allow only a draft, with no queue or unsafe executable prices", async () => {
   const c = contextFixture();
@@ -265,61 +281,81 @@ it("Buy max edits the draft only and side selection highlights ask/bid with keyb
   expect(screen.getByText("Sell price")).toBeVisible();
   expect(screen.getByRole("button", { name: "Sell all" })).toBeDisabled();
 });
-it("price changes show old/new values and require a second explicit confirmation", async () => {
-  const q = quoteFixture();
-  Object.assign(q, {
-    ask: "103",
-    exact_mid: "101.5",
-    exec_price: "103",
-    notional: "206",
-    cash_delta: "-206",
-    cash_after: "9794",
-  });
-  const changed = {
-    code: "price_changed",
-    previous_exec_price: "102",
-    previous_cash_delta: "-204",
-    exec_price_change: "1",
-    cash_delta_change: "-2",
-    quote: q,
-  };
-  let count = 0;
-  const { user, calls } = setup({
-    trade: () => {
-      count++;
-      if (count === 1) return new Response(JSON.stringify({ detail: changed }), { status: 409 });
-      const f = fillFixture();
-      Object.assign(f, {
-        ask: "103",
-        exact_mid: "101.5",
-        exec_price: "103",
-        notional: "206",
-        cash_delta: "-206",
-        cash_after: "9794",
-      });
-      return new Response(JSON.stringify(f));
-    },
-  });
-  await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
-  await user.click(screen.getByRole("button", { name: "Preview trade" }));
-  const confirm = screen.getByRole("button", { name: "Confirm buy" });
-  await waitFor(() => expect(confirm).toBeEnabled());
-  await user.click(confirm);
-  const changes = await screen.findByRole("region", { name: "Price changes" });
-  expect(changes).toHaveTextContent("Previous execution price$102.00");
-  expect(changes).toHaveTextContent("New execution price$103.00");
-  expect(changes).toHaveTextContent("Difference−$2.00");
-  expect(count).toBe(1);
-  expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
-  await user.click(confirm);
-  await screen.findByRole("heading", { name: "Order filled" });
-  expect(count).toBe(2);
-  const bodies = calls
-    .filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")
-    .map((c) => c.body!);
-  expect(bodies[0].idempotency_key).not.toBe(bodies[1].idempotency_key);
-  expect(bodies[1].expected_exec_price).toBe("103");
-});
+it.each(["legacy status", "renewed halt report"])(
+  "price changes with %s show old/new values and require reconfirmation",
+  async (statusMode) => {
+    const q = quoteFixture();
+    Object.assign(q, {
+      ask: "103",
+      exact_mid: "101.5",
+      exec_price: "103",
+      notional: "206",
+      cash_delta: "-206",
+      cash_after: "9794",
+    });
+    const changed = {
+      code: "price_changed",
+      previous_exec_price: "102",
+      previous_cash_delta: "-204",
+      exec_price_change: "1",
+      cash_delta_change: "-2",
+      quote: q,
+    };
+    const displayedContext = contextFixture();
+    const initialQuote = quoteFixture();
+    if (statusMode === "renewed halt report") {
+      displayedContext.status = {
+        ...displayedContext.status,
+        source: "nasdaq-rss",
+        event_at: "2026-11-10T14:59:55Z",
+        bootstrap_verified: false,
+        continuity_current: false,
+      };
+      displayedContext.authority!.status_sequence = 0;
+      initialQuote.authority.status_sequence = 0;
+      q.authority.status_sequence = 0;
+      q.authority.continuity_generation++;
+    }
+    let count = 0;
+    const { user, calls } = setup({
+      context: () => Response.json(displayedContext),
+      quote: () => Response.json(initialQuote),
+      trade: () => {
+        count++;
+        if (count === 1) return new Response(JSON.stringify({ detail: changed }), { status: 409 });
+        const f = fillFixture();
+        Object.assign(f, {
+          ask: "103",
+          exact_mid: "101.5",
+          exec_price: "103",
+          notional: "206",
+          cash_delta: "-206",
+          cash_after: "9794",
+        });
+        return new Response(JSON.stringify(f));
+      },
+    });
+    await user.type(await screen.findByLabelText("Whole-share quantity"), "2");
+    await user.click(screen.getByRole("button", { name: "Preview trade" }));
+    const confirm = screen.getByRole("button", { name: "Confirm buy" });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
+    const changes = await screen.findByRole("region", { name: "Price changes" });
+    expect(changes).toHaveTextContent("Previous execution price$102.00");
+    expect(changes).toHaveTextContent("New execution price$103.00");
+    expect(changes).toHaveTextContent("Difference−$2.00");
+    expect(count).toBe(1);
+    expect(screen.queryByRole("heading", { name: "Order filled" })).toBeNull();
+    await user.click(confirm);
+    await screen.findByRole("heading", { name: "Order filled" });
+    expect(count).toBe(2);
+    const bodies = calls
+      .filter((c) => c.path === "/api/v2/portfolios/1/stock-trades")
+      .map((c) => c.body!);
+    expect(bodies[0].idempotency_key).not.toBe(bodies[1].idempotency_key);
+    expect(bodies[1].expected_exec_price).toBe("103");
+  },
+);
 it("unknown response keeps fields frozen and checks the same original body after closure", async () => {
   let count = 0;
   const { user, calls, client } = setup({

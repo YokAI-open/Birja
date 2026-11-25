@@ -56,6 +56,24 @@ afterEach(() => {
 });
 
 describe("strict stock boundary", () => {
+  it("accepts an active exchange report beyond the legacy 60-second observation limit", () => {
+    const active = {
+      ...valid.items[0],
+      execution_enabled: true,
+      execution_reason: "available",
+      status_reason: "normal",
+      status: {
+        state: "normal",
+        reported_at: "2026-11-10T14:59:59Z",
+        observed_at: "2026-11-10T15:00:00Z",
+        valid_until: "2026-11-10T15:01:40Z",
+      },
+    };
+    expect(isStocks({ ...valid, items: [active, ...valid.items.slice(1)] })).toBe(true);
+    active.status.valid_until = "2026-11-10T15:02:00Z";
+    expect(isStocks({ ...valid, items: [active, ...valid.items.slice(1)] })).toBe(false);
+  });
+
   it("accepts the complete exact string-money contract and permission-denied catalogue", () => {
     expect(isStocks(valid)).toBe(true);
     expect(

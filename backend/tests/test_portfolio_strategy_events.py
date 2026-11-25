@@ -36,7 +36,7 @@ BACKUP_PATH = Path(__file__).resolve().parents[2] / "deploy/backup-snapshot.py"
 
 @pytest_asyncio.fixture
 async def management_api(closure_api):
-    """Current0023 API; retained0020 creation fixtures remain separate."""
+    """Current portfolio API used for lifecycle and event checks."""
     return closure_api
 
 

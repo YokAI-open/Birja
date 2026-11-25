@@ -12,20 +12,19 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from tests.portfolio_fixtures import migrate_to, portfolio_migration_db
 from tests.test_dividend_rules import TARGET_VECTORS
 from tests.test_dividend_schema import dividend_case
+from tests.test_migrations import install_current_test_grants
 from tests.test_stock_action_migrations import ledger
 from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_sessions import evidence
 
-__all__ = ["ledger", "dividend_case"]
+__all__ = ["ledger", "dividend_case", "portfolio_migration_db"]
 
 
 def migration():
-    """Current behavioral proofs authenticate the exact final source asset.
-
-    The retained0014 migration has its own explicit old-schema lane.
-    """
+    """Exact function bodies for explicit retained 0025 proofs."""
     import re
 
     source = (Path(__file__).parents[1] / "alembic/sql/0017_dividend_portfolio.sql").read_text()
@@ -655,6 +654,13 @@ async def test_acl_direct_write_and_private_helper_denials(authority_case, role)
         await conn.execute(text("RESET ROLE"))
 
 
+@pytest_asyncio.fixture
+async def retained_dividend_authority(portfolio_migration_db):
+    await migrate_to("0025")
+    await install_current_test_grants()
+
+
+@pytest.mark.usefixtures("retained_dividend_authority")
 async def test_acl_function_identity_exact_and_public_cannot_execute(authority_case):
     import hashlib
     import re
@@ -698,9 +704,10 @@ async def test_acl_function_identity_exact_and_public_cannot_execute(authority_c
         await conn.execute(text("RESET ROLE"))
 
 
+@pytest.mark.usefixtures("retained_dividend_authority")
 async def test_identity_bootstrap_refuses_tampered_body_and_public_acl(authority_case):
     conn, _ = authority_case
-    from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0025_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     await conn.execute(text(guard))
@@ -839,6 +846,7 @@ async def test_current_admitted_calendar_semantics_refuse_stale_eligibility(auth
     ).scalar_one() == 0
 
 
+@pytest.mark.usefixtures("retained_dividend_authority")
 @pytest.mark.parametrize("declaration", ["type", "name", "mode"])
 async def test_identity_preflight_refuses_altered_out_declaration(authority_case, declaration):
     conn, _ = authority_case
@@ -882,7 +890,7 @@ async def test_identity_preflight_refuses_altered_out_declaration(authority_case
             "TO birja_scheduler"
         )
     )
-    from app.db.portfolio_bootstrap import PREFLIGHT_0023_SQL as PREFLIGHT_SQL
+    from app.db.portfolio_bootstrap import PREFLIGHT_0025_SQL as PREFLIGHT_SQL
 
     guard = PREFLIGHT_SQL
     with pytest.raises(DBAPIError, match="management catalogue mismatch"):

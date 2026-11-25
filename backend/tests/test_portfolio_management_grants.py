@@ -85,7 +85,7 @@ async def current(engine, request):
 async def test_bootstrap_preserves_money_and_exact_roles(current):
     engine, roles = current
     async with roles["birja_app"].begin() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert (await conn.execute(text("SELECT session_user,current_user"))).one() == (
             "birja_app",
             "birja_app",
@@ -154,7 +154,7 @@ async def test_bootstrap_preserves_money_and_exact_roles(current):
                 )
             )
         ).one() == (False, False)
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
 
 
 @pytest.mark.parametrize(
@@ -238,7 +238,7 @@ async def test_missing_or_excess_grants_refuse_current_writes(current, drift):
         await conn.execute(text(drift))
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
             async with conn.begin_nested():
-                await require_schema(conn)
+                await require_schema(conn, consumer="retained0023")
 
 
 async def test_all_private_helpers_have_no_nonowner_execute(current):
@@ -338,7 +338,7 @@ async def test_production_admin_bootstrap_agrees_with_current_grants(current):
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with engine.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
 
 
 @pytest.mark.parametrize("disabled", [False, True])
@@ -357,7 +357,7 @@ async def test_unexpected_grant_rewrite_refuses_runtime_and_bootstrap(current, d
         before = (await conn.execute(text("SELECT count(*),sum(cash) FROM accounts"))).one()
     async with roles["birja_app"].connect() as conn:
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-            await require_schema(conn)
+            await require_schema(conn, consumer="retained0023")
     async with engine.connect() as conn:
         with pytest.raises(DBAPIError, match="rewrite"):
             async with conn.begin_nested():
@@ -387,7 +387,7 @@ async def test_implicit_database_owner_create_refuses_admission_and_bootstrap(cu
                 )
             ).scalar_one() is True
             with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-                await require_schema(conn)
+                await require_schema(conn, consumer="retained0023")
         async with engine.connect() as conn:
             with pytest.raises(DBAPIError, match="ownership|schema"):
                 async with conn.begin_nested():
@@ -406,4 +406,4 @@ async def test_valid_administrative_schema_ownership_is_admitted(current, schema
     async with engine.begin() as conn:
         await conn.execute(text(f"ALTER SCHEMA public OWNER TO {schema_owner}"))  # noqa: S608 - fixed owner matrix
     async with roles["birja_app"].connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"

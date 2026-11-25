@@ -409,3 +409,23 @@ async def test_dividend_loop_is_independent_and_awaits_cancellation(
     async with asyncio.timeout(2):
         await scheduler.amain(stop)
     assert started.is_set() and cleaned.is_set() and len(calls) == 3
+
+
+async def test_due_check_does_not_touch_main_heartbeat(monkeypatch):
+    from unittest.mock import Mock
+
+    stop = asyncio.Event()
+    heartbeat = Mock()
+    monkeypatch.setattr(scheduler, "touch_heartbeat", heartbeat)
+    ran = False
+
+    async def due_check() -> CycleResult:
+        nonlocal ran
+        ran = True
+        asyncio.get_running_loop().call_later(0.01, stop.set)
+        return CycleResult("locked")
+
+    async with asyncio.timeout(1):
+        await run(cycle=due_check, interval=60, stop=stop, heartbeat=None)
+    assert ran
+    heartbeat.assert_not_called()

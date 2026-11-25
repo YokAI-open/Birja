@@ -30,6 +30,8 @@ export type PortfolioHolding = {
   is_active: boolean;
   asset_class: "crypto" | "stock";
   coin_id: string;
+  catalog_id?: string;
+  listing_exchange?: "NYSE" | "NASDAQ";
   provider_asset_id: string | null;
   stock_mark: StockMark | null;
   quantity: string;
@@ -75,7 +77,7 @@ const allocation = (v: unknown) => {
 };
 const id = (v: unknown): v is string =>
   typeof v === "string" && /^[1-9]\d{0,18}$/.test(v) && BigInt(v) <= 9223372036854775807n;
-function isMark(v: unknown): v is StockMark {
+function isMark(v: unknown, catalog: boolean): v is StockMark {
   if (
     !stockRecord(v) ||
     !stockExact(
@@ -105,12 +107,13 @@ function isMark(v: unknown): v is StockMark {
       v.authority === null &&
       fields.every((k) => v[k] === null)
     );
+  const authority = isStockAuthority(v.authority) ? v.authority : null;
   if (
     !v.units_safe ||
     v.valuation_reason !== "available" ||
     v.source !== "alpaca" ||
     v.feed !== "iex" ||
-    !isStockAuthority(v.authority) ||
+    (catalog ? v.authority !== null : authority === null) ||
     !fields.every((k) => stockTimestamp(v[k]))
   )
     return false;
@@ -122,16 +125,22 @@ function isMark(v: unknown): v is StockMark {
     collected < until &&
     until <= stockInstant(v.historical_admission_until as string) &&
     until <= stockInstant(v.retained_until as string) &&
-    v.authority.admissions.every((a) => until <= stockInstant(a.valid_until))
+    (authority === null || authority.admissions.every((a) => until <= stockInstant(a.valid_until)))
   );
 }
+
+const HOLDING_KEYS =
+  "symbol name is_active asset_class coin_id provider_asset_id stock_mark quantity cost_basis average_cost mid current_value unrealized_pl unrealized_pl_percent allocation_percent as_of age_seconds status";
+
 function isHolding(v: unknown): v is PortfolioHolding {
+  if (!stockRecord(v)) return false;
+  const catalog = Object.hasOwn(v, "catalog_id");
+  const exchange = Object.hasOwn(v, "listing_exchange");
+  const keys = catalog
+    ? HOLDING_KEYS + " catalog_id" + (exchange ? " listing_exchange" : "")
+    : HOLDING_KEYS;
   if (
-    !stockRecord(v) ||
-    !stockExact(
-      v,
-      "symbol name is_active asset_class coin_id provider_asset_id stock_mark quantity cost_basis average_cost mid current_value unrealized_pl unrealized_pl_percent allocation_percent as_of age_seconds status",
-    ) ||
+    !stockExact(v, keys) ||
     !text(v.symbol) ||
     !text(v.name) ||
     typeof v.is_active !== "boolean" ||
@@ -164,13 +173,23 @@ function isHolding(v: unknown): v is PortfolioHolding {
   )
     return false;
   if (v.asset_class === "crypto")
-    return v.provider_asset_id === null && v.stock_mark === null && v.average_cost !== null;
-  if (
-    !text(v.provider_asset_id) ||
-    !/^\d{1,12}(?:\.0{1,9})?$/.test(v.quantity) ||
-    !isMark(v.stock_mark)
-  )
+    return (
+      !catalog && v.provider_asset_id === null && v.stock_mark === null && v.average_cost !== null
+    );
+  if (catalog) {
+    if (
+      !id(v.catalog_id) ||
+      v.provider_asset_id !== null ||
+      !/^[A-Z0-9][A-Z0-9.$^+/=-]{0,13}$/.test(v.symbol) ||
+      (exchange
+        ? v.listing_exchange !== "NYSE" && v.listing_exchange !== "NASDAQ"
+        : v.is_active || v.symbol !== "STOCK" || v.name !== "Restricted stock" || !unpriced)
+    )
+      return false;
+  } else if (!text(v.provider_asset_id)) {
     return false;
+  }
+  if (!/^\d{1,12}(?:\.0{1,9})?$/.test(v.quantity) || !isMark(v.stock_mark, catalog)) return false;
   const mark = v.stock_mark;
   if (
     unpriced !== (mark.mark_mode === "unavailable") ||

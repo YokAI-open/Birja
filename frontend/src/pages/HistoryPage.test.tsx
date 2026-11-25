@@ -83,6 +83,32 @@ it("keeps the History page heading for navigation", async () => {
   renderWithClient(<HistoryPage />);
   expect(await screen.findByRole("heading", { name: "History" })).toBeVisible();
 });
+it("opens the original catalog issue in the owned portfolio from expanded History", async () => {
+  const stock: EventTrade = {
+    ...item,
+    id: "trade:2",
+    asset_type: "stock",
+    catalog_id: "9007199254740993",
+    symbol: "4Q.A+/=C",
+    name: "Original shares",
+    quantity: "1",
+    exec_price: "100.00",
+    fee: "0",
+    source: "alpaca",
+    feed: "iex",
+    quote_at: item.recorded_at,
+  };
+  historyFetch(() => ok([item, stock]));
+  const { user } = renderWithClient(<HistoryPage />);
+  const label = await screen.findByText(stock.symbol);
+  await user.click(label);
+  expect(screen.getByText(stock.name, { exact: false })).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: `View stock ticket for ${stock.symbol}` }),
+  ).toHaveAttribute("href", "/portfolios/1/trade/catalog/9007199254740993");
+  await user.click(screen.getByText(item.symbol));
+  expect(screen.getAllByRole("link", { name: /^View stock ticket/ })).toHaveLength(1);
+});
 afterEach(() => vi.unstubAllGlobals());
 it("reserves the initial loading region", async () => {
   historyFetch(() => new Promise(() => {}));

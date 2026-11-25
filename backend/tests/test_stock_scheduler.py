@@ -689,3 +689,103 @@ async def test_hanging_stock_http_keeps_real_crypto_ticks_and_both_leases_releas
     assert crypto_ticks[-1] - crypto_ticks[1] < 1
     assert await redis_client.exists(scheduler.LOCK_KEY) == 0
     assert await redis_client.exists(stock_scheduler.LOCK_KEY) == 0
+
+
+async def test_spot_quote_honors_shared_quota_but_runs_inside_periodic_window(state, redis_client):
+    from app.services.stock_quote_demand import pending_stock_quotes, request_stock_quote
+
+    scope = {"account": "birja", "server": "birja"}
+    state["settings"] = state["settings"].model_copy(
+        update={"stock_account_requests_per_minute": 1}
+    )
+    await redis_client.set(stock_scheduler.WINDOW_KEY, "periodic", ex=60)
+
+    async def spot(symbol, http):
+        async with asyncio.TaskGroup() as group:
+            waiting = group.create_task(request_stock_quote(redis_client, symbol, **scope))
+            async with asyncio.timeout(2):
+                while symbol not in await pending_stock_quotes(redis_client, **scope):  # noqa: ASYNC110
+                    await asyncio.sleep(0.01)
+            result = await stock_scheduler.run_stock_cycle(
+                sessionmaker=state["factory"],
+                redis=redis_client,
+                http=http,
+                settings=state["settings"],
+                now=lambda: state["now"],
+                on_demand=True,
+            )
+        assert waiting.result()
+        return result
+
+    with respx.mock as router:
+
+        def respond(request):
+            symbol = request.url.params["symbols"]
+            prices = body(state)["quotes"]
+            return httpx.Response(200, json={"quotes": {symbol: prices[symbol]}})
+
+        route = router.get(LATEST_QUOTES_URL).mock(side_effect=respond)
+        async with httpx.AsyncClient() as http:
+            assert (await spot("AAPL", http)).accepted == 1
+            assert (await spot("MSFT", http)).status == "source_error"
+        assert route.call_count == 1
+        assert route.calls[0].request.url.params["symbols"] == "AAPL"
+    assert len(await rows(state)) == 1
+    assert await redis_client.get(stock_scheduler.WINDOW_KEY) == "periodic"
+
+
+@pytest.mark.parametrize("pending_before_lock", [False, True])
+async def test_empty_spot_lane_does_not_fetch_or_consume_periodic_budget(
+    state, redis_client, monkeypatch, pending_before_lock
+):
+    from unittest.mock import AsyncMock
+
+    pending = AsyncMock(
+        side_effect=[{"AAPL": "expired-ticket"}, {}] if pending_before_lock else [{}]
+    )
+    refresh = AsyncMock()
+    monkeypatch.setattr(stock_scheduler, "pending_stock_quotes", pending)
+    monkeypatch.setattr(stock_scheduler, "_refresh", refresh)
+    async with httpx.AsyncClient() as http:
+        result = await stock_scheduler.run_stock_cycle(
+            sessionmaker=state["factory"],
+            redis=redis_client,
+            http=http,
+            settings=state["settings"],
+            on_demand=True,
+        )
+    assert result.status == "ok" and result.accepted == 0
+    assert pending.await_count == (2 if pending_before_lock else 1)
+    refresh.assert_not_awaited()
+    assert await redis_client.exists(stock_scheduler.LOCK_KEY, stock_scheduler.WINDOW_KEY) == 0
+
+
+async def test_spot_completion_outage_does_not_leave_stock_lock(
+    state, redis_client, monkeypatch, caplog
+):
+    from unittest.mock import AsyncMock
+
+    from redis.exceptions import RedisError
+
+    from app.tasks.scheduler import CycleResult
+
+    monkeypatch.setattr(
+        stock_scheduler, "pending_stock_quotes", AsyncMock(return_value={"AAPL": "owned"})
+    )
+    monkeypatch.setattr(
+        stock_scheduler, "_refresh", AsyncMock(return_value=CycleResult("ok", accepted=1))
+    )
+    monkeypatch.setattr(
+        stock_scheduler, "complete_stock_quotes", AsyncMock(side_effect=RedisError("test outage"))
+    )
+    async with httpx.AsyncClient() as http:
+        result = await stock_scheduler.run_stock_cycle(
+            sessionmaker=state["factory"],
+            redis=redis_client,
+            http=http,
+            settings=state["settings"],
+            on_demand=True,
+        )
+    assert result.accepted == 1
+    assert await redis_client.exists(stock_scheduler.LOCK_KEY) == 0
+    assert "stock request completion unavailable" in caplog.text

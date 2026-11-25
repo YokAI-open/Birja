@@ -345,15 +345,16 @@ async def test_disappearing_projection_refuses_partial_history(authority_case, m
     conn, ids = authority_case
     paid = await process(conn, ids)
     async with AsyncSession(bind=conn) as db:
-        real = db.scalars
+        real = db.execute
 
         async def missing_projection(statement, *args, **kwargs):
-            if statement.column_descriptions[0].get("entity") is StockDividendPayment:
-                assert (await real(statement, *args, **kwargs)).one().id == paid.payment_id
+            if statement.column_descriptions[0].get("expr") is StockDividendPayment:
+                payment = (await real(statement, *args, **kwargs)).one()[0]
+                assert payment.id == paid.payment_id
                 return await real(statement.where(False), *args, **kwargs)
             return await real(statement, *args, **kwargs)
 
-        monkeypatch.setattr(db, "scalars", missing_projection)
+        monkeypatch.setattr(db, "execute", missing_projection)
         with pytest.raises(ValueError, match="Incomplete owned History projection"):
             await list_event_history(
                 db, portfolio=OwnedActivePortfolio(ids["portfolio_id"], ids["user_id"])

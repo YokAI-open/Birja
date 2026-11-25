@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from tests.portfolio_fixtures import close_empty_test_root, portfolio_world
+from tests.test_migrations import EXPECTED_HEAD
 
 __all__ = ["portfolio_world"]
 
@@ -40,7 +41,7 @@ async def stock_authority_case(engine, migrated):
         tx = await conn.begin()
         assert (
             await conn.execute(text("SELECT version_num FROM alembic_version"))
-        ).scalar_one() == "0023"
+        ).scalar_one() == EXPECTED_HEAD
         owners = []
         for label in ("owned", "foreign"):
             owners.append(
@@ -89,10 +90,11 @@ async def stock_authority_case(engine, migrated):
             await conn.execute(
                 text("""INSERT INTO stock_data_admissions
               (product,state,generation,reviewed_at,valid_from,valid_until,evidence_ref,terms_version,
-              collection_allowed,display_allowed,derived_allowed,retention_allowed,calendar)
+              collection_allowed,display_allowed,derived_allowed,retention_allowed,scope,calendar)
               VALUES (:p,'approved',1,:n,CAST(:n AS timestamptz)-interval '1 hour',
               CAST(:n AS timestamptz)+interval '1 hour','synthetic-only','fixture',
               true,true,true,true,
+              jsonb_build_object('feed','iex'),
               CASE WHEN :p='calendar' THEN jsonb_build_object('review_valid_until',
               CAST(:n AS timestamptz)+interval '1 hour') ELSE '{}'::jsonb END)"""),
                 {"p": product, "n": now},
@@ -397,7 +399,8 @@ async def test_final_sql_stock_function_inventory_owners_paths_and_grants(portfo
     )
     assert len(rows) == 3
     for row in rows:
-        assert row["owner"] == "birja_migrator" and not row["prosecdef"] and not row["public"]
+        assert row["owner"] == "birja_migrator" and not row["public"]
+        assert row["prosecdef"] == (row["proname"] == "check_stock_split_digest_version")
         assert row["proconfig"] == ["search_path=pg_catalog, public, pg_temp"]
         assert row["app"] == (row["proname"] == "assert_stock_execution_current")
         assert not row["scheduler"]

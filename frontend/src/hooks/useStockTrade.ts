@@ -55,10 +55,10 @@ const who = (c: QueryClient) => c.getQueryData<{ email: string } | null>(["me"])
 const floor = (v: string) => Date.parse(v);
 const ceil = (v: string) => floor(v) + (/\.\d{3}\d*[1-9]\d*(?:Z|\+00:00)$/.test(v) ? 1 : 0);
 export function stockUpper(
-  data: TimedStockContext | TimedStockQuote,
+  data: Pick<TimedStockQuote, "observed_at" | "transport"> & { authority_offset_ms?: number },
   now = performance.now(),
 ): number {
-  const offset = "authority_offset_ms" in data ? (data.authority_offset_ms ?? 0) : 0;
+  const offset = data.authority_offset_ms ?? 0;
   return (
     ceil(data.observed_at) +
     Math.ceil(data.transport.round_trip_ms + offset + Math.max(0, now - data.transport.received_at))
@@ -93,6 +93,7 @@ export function projectStockContext(
     result = {
       ...result,
       status: {
+        ...data.status,
         state: "unknown",
         event_at: null,
         observed_at: null,
@@ -129,8 +130,8 @@ export function projectStockContext(
     reason = "action_unavailable";
   else if (
     result.status.state !== "normal" ||
-    !result.status.bootstrap_verified ||
-    !result.status.continuity_current
+    (result.status.source !== "nasdaq-rss" &&
+      (!result.status.bootstrap_verified || !result.status.continuity_current))
   )
     reason =
       result.status.state === "halted"
@@ -174,7 +175,7 @@ type ContextGuard = {
 };
 type AuthGuard = { email: string | null; version: number; contexts: Map<string, ContextGuard> };
 const guards = new WeakMap<QueryClient, AuthGuard>();
-function authGuard(client: QueryClient): AuthGuard {
+export function stockTradeAuth(client: QueryClient): AuthGuard {
   const existing = guards.get(client);
   if (existing) return existing;
   const g: AuthGuard = { email: who(client), version: 0, contexts: new Map() };
@@ -290,7 +291,12 @@ function compatible(q: TimedStockQuote, c: TimedStockContext): boolean {
     q.provider_asset_id === c.provider_asset_id &&
     q.authority.safety_epoch === c.authority.safety_epoch &&
     q.authority.unit_epoch === c.authority.unit_epoch &&
-    q.authority.continuity_generation === c.authority.continuity_generation &&
+    (q.authority.continuity_generation === c.authority.continuity_generation ||
+      (c.status.source === "nasdaq-rss" &&
+        q.authority.status_sequence === 0 &&
+        q.authority.status_admission_generation === c.authority.status_admission_generation &&
+        q.authority.continuity_generation > c.authority.continuity_generation &&
+        stockInstant(q.observed_at) >= stockInstant(c.observed_at))) &&
     q.authority.admissions.every((a) =>
       c.authority!.admissions.some(
         (b) =>
@@ -313,7 +319,7 @@ function quoteCurrent(q: TimedStockQuote, c: TimedStockContext | undefined): boo
 export function useStockTrade(target: PortfolioTarget | null, routeSymbol: string) {
   const client = useQueryClient();
   const scope = useMemo(() => financialScope(client, target), [client, target]);
-  const auth = authGuard(client),
+  const auth = stockTradeAuth(client),
     email = scope.owner,
     portfolioId = scope.portfolioId;
   const stateKey = useMemo(

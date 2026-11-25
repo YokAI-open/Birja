@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,9 @@ from app.db.connection import database_ssl_context, validate_database_url
 class _StockSettings(BaseSettings):
     """Shared nonsecret stock bounds; these settings confer no product rights."""
 
+    env: Literal["dev", "test", "prod"]
+    redis_url: str = Field(repr=False)
+    catalog_quote_redis_url: str | None = Field(default=None, repr=False)
     stock_data_enabled: bool = False
     stock_feed: Literal["iex"] = "iex"
     stock_poll_interval_seconds: int = Field(default=60, ge=60, le=120)
@@ -23,6 +27,28 @@ class _StockSettings(BaseSettings):
     stock_max_response_bytes: int = Field(default=262144, ge=4096, le=1048576)
     stock_data_account: str = Field(default="birja", min_length=1, max_length=128)
     stock_data_server: str = Field(default="birja", min_length=1, max_length=128)
+
+    @property
+    def catalog_cache_url(self) -> str | None:
+        # The deployment supplies a separate memory-only Redis endpoint. An
+        # absent production setting leaves catalog demand and display disabled.
+        return self.catalog_quote_redis_url or (None if self.env == "prod" else self.redis_url)
+
+    @model_validator(mode="after")
+    def _check_catalog_cache(self) -> _StockSettings:
+        if self.catalog_quote_redis_url is not None:
+            catalog = urlsplit(self.catalog_quote_redis_url)
+            state = urlsplit(self.redis_url)
+            if (
+                catalog.scheme not in {"redis", "rediss"}
+                or catalog.hostname is None
+                or catalog.query
+                or catalog.fragment
+                or catalog.path not in {"", "/0"}
+                or (catalog.hostname, catalog.port or 6379) == (state.hostname, state.port or 6379)
+            ):
+                raise ValueError("Catalog quotes require a separate Redis instance")
+        return self
 
     @model_validator(mode="after")
     def _check_stock_budget(self) -> _StockSettings:
@@ -40,10 +66,8 @@ class Settings(_StockSettings):
     # hide_input_in_errors keeps credentials in the URLs out of ValidationError text
     model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
-    env: Literal["dev", "test", "prod"]
     database_url: str = Field(repr=False)
     database_ssl_ca_file: str | None = Field(default=None, repr=False)
-    redis_url: str = Field(repr=False)
     otp_hmac_secret: SecretStr = Field(repr=False)
     jwt_secret: SecretStr = Field(repr=False)
 
@@ -240,10 +264,8 @@ class SchedulerSettings(_StockSettings):
 
     model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
 
-    env: Literal["dev", "test", "prod"]
     database_url: str = Field(repr=False)
     database_ssl_ca_file: str | None = Field(default=None, repr=False)
-    redis_url: str = Field(repr=False)
 
     price_source: Literal["kraken", "fake"] = "kraken"
     price_poll_interval_seconds: int = 60
