@@ -3,6 +3,7 @@
 import json
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
@@ -25,7 +26,13 @@ from app.models.corporate_action import (
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.stock_catalog import StockCatalogAdmission, StockCatalogListing
 from app.models.stock_catalog_finance import StockCatalogActionCoverage
-from app.services.alpaca_actions import ActionBudget, fetch_action_snapshot
+from app.models.trade import Holding
+from app.services.alpaca_actions import (
+    ActionBudget,
+    fetch_action_snapshot,
+    recheck_action_ids,
+    replay_action_mutations,
+)
 from app.services.corporate_action_rules import classify_action
 from app.services.stock_catalog_actions import load_catalog_action_authority
 from app.services.stock_catalog_promotion import CATALOG_ACTION_FIELDS
@@ -383,6 +390,7 @@ async def test_catalog_default_refresh_preserves_complete_lease_until_real_gap(
     settings.stock_actions_segment_days = 31
     leases = []
     gap = False
+    capped = False
 
     async def replay_reply(request):
         if leases:
@@ -395,6 +403,12 @@ async def test_catalog_default_refresh_preserves_complete_lease_until_real_gap(
                 assert state.valid_until == coverage.valid_until
                 assert state.covered_until == coverage.covered_until
                 assert request.url.params["since"] == coverage.covered_until.isoformat()
+        if capped:
+            return httpx.Response(
+                200,
+                content=b" " * (settings.stock_actions_max_response_bytes + 1),
+                headers={"content-type": "text/event-stream"},
+            )
         return httpx.Response(
             200,
             content=b"",
@@ -420,6 +434,22 @@ async def test_catalog_default_refresh_preserves_complete_lease_until_real_gap(
             assert leases[1][0] == leases[0][0]
             assert leases[1][1] > leases[0][1]
             assert rest.call_count == 3 and replay.call_count == 2
+            capped = True
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+            async with factory() as db:
+                partial = await db.get(StockActionState, binding.coin_id)
+                assert partial is not None and partial.staged_continuation is not None
+                assert (partial.epoch, partial.valid_until) == leases[-1]
+                staged = partial.staged_continuation
+                assert (
+                    datetime.fromisoformat(staged["replay_at"])
+                    < datetime.fromisoformat(staged["replay_end"])
+                    < datetime.fromisoformat(staged["target_until"])
+                )
+            capped = False
             gap = True
             await redis_client.delete(stock_actions.WINDOW_KEY)
             assert (
@@ -452,6 +482,338 @@ async def test_catalog_action_scope_without_replay_ingress_keeps_first_fill_held
         state = await db.get(StockActionState, binding.coin_id)
         assert state is not None and state.health == "unknown" and state.valid_until is None
         assert await db.get(StockCatalogActionCoverage, binding.coin_id) is None
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "missing_state",
+        "incomplete_journal",
+        "unproved_owned_book",
+        "lost_lease",
+        "admission_before_preparing",
+        "admission_at_preparation",
+        "date_scope",
+        "account_quota",
+        "publication_epoch",
+    ],
+)
+async def test_catalog_cycle_holds_incomplete_state_or_lost_authority(
+    catalog_monitor, redis_client, monkeypatch, problem
+):
+    factory, settings, origin, binding, admission_id = catalog_monitor
+    async with factory.begin() as db:
+        state = await db.get(StockActionState, binding.coin_id)
+        assert state is not None
+        if problem == "incomplete_journal":
+            state.journal_start_at = origin
+            state.complete_from = None
+        elif problem == "unproved_owned_book":
+            owner = await db.scalar(
+                text("INSERT INTO users(email) VALUES (:email) RETURNING id"),
+                {"email": f"monitor-{uuid4()}@example.test"},
+            )
+            root = await db.scalar(text("SELECT initialize_portfolio(:owner)"), {"owner": owner})
+            db.add(
+                Holding(
+                    user_id=owner,
+                    portfolio_id=root,
+                    coin_id=binding.coin_id,
+                    quantity=1,
+                    cost_basis=25,
+                )
+            )
+        elif problem == "date_scope":
+            grant = await db.get(StockCatalogAdmission, admission_id)
+            assert grant is not None
+            grant.scope = grant.scope | {"future_through": origin.date().isoformat()}
+
+    if problem == "missing_state":
+        real_get = AsyncSession.get
+
+        async def missing_state(db, model, identity, *args, **kwargs):
+            value = await real_get(db, model, identity, *args, **kwargs)
+            if model is StockActionState and identity == binding.coin_id:
+                assert value is not None
+                return None
+            return value
+
+        monkeypatch.setattr(AsyncSession, "get", missing_state)
+    elif problem == "lost_lease":
+        real_get = redis_client.get
+
+        async def no_owned_lock(key):
+            return None if key == stock_actions.LOCK_KEY else await real_get(key)
+
+        monkeypatch.setattr(redis_client, "get", no_owned_lock)
+    elif problem in ("admission_before_preparing", "admission_at_preparation"):
+        calls = 0
+
+        async def reload_authority(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == (1 if problem == "admission_before_preparing" else 2):
+                return None
+            return await load_catalog_action_authority(*args, **kwargs)
+
+        monkeypatch.setattr(stock_actions, "load_catalog_action_authority", reload_authority)
+    elif problem == "account_quota":
+
+        async def exhausted(*_args, **_kwargs):
+            return False
+
+        monkeypatch.setattr(stock_actions, "reserve_account_attempt", exhausted)
+
+    async def provider_page(_request):
+        assert problem == "publication_epoch"
+        async with factory.begin() as db:
+            state = await db.get(StockActionState, binding.coin_id)
+            assert state is not None
+            state.epoch += 1
+        return httpx.Response(200, json={"corporate_actions": {}, "next_page_token": None})
+
+    with respx.mock(assert_all_called=False) as router:
+        rest = router.get("https://data.alpaca.markets/v1/corporate-actions").mock(
+            side_effect=provider_page
+        )
+        router.get(url__startswith="https://stream.data.alpaca.markets/").respond(
+            200, content=b"", headers={"content-type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await cycle((factory, settings, origin), redis_client, http)
+    assert result.status == "source_error"
+    assert rest.call_count == (1 if problem == "publication_epoch" else 0)
+    async with factory() as db:
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        assert coverage is None or (coverage.valid_until is None and coverage.covered_until is None)
+
+
+async def test_catalog_action_quota_is_bounded_without_starving_legacy_scope(
+    catalog_monitor, redis_client, monkeypatch
+):
+    factory, settings, origin, binding, _ = catalog_monitor
+    async with factory.begin() as db:
+        for grant in (action_admitted(), admitted("reference")):
+            db.add(
+                StockDataAdmission(
+                    **asdict(
+                        replace(
+                            grant,
+                            reviewed_at=origin,
+                            valid_from=origin,
+                            valid_until=origin + timedelta(hours=1),
+                        )
+                    )
+                )
+            )
+    settings.stock_actions_max_attempts = 8
+    statuses = iter(("ok", "locked"))
+    quotas = []
+
+    async def catalog(_factory, _redis, _http, _settings, _token, _now, budget, authorities):
+        assert [a.binding.coin_id for a in authorities] == [binding.coin_id]
+        quotas.append(budget.max_attempts)
+        budget.attempts = 1
+        raise stock_actions.ActionError("source_gap")
+
+    async def legacy(_factory, _redis, _http, _settings, _token, _now, budget):
+        quotas.append(budget.max_attempts)
+        assert budget.attempts == 1
+        return stock_actions.CycleResult(next(statuses))
+
+    monkeypatch.setattr(stock_actions, "_refresh_catalog", catalog)
+    monkeypatch.setattr(stock_actions, "_refresh", legacy)
+    with respx.mock() as router:
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (await cycle((factory, settings, origin), redis_client, http)).status == "locked"
+    assert quotas == [4, 8, 4, 8] and not router.calls
+
+
+async def test_catalog_renewed_review_rechecks_retained_event_id(catalog_monitor, redis_client):
+    factory, settings, origin, binding, admission_id = catalog_monitor
+    now = datetime.now(UTC)
+    async with factory() as db:
+        authority = await load_catalog_action_authority(
+            db, binding.coin_id, now, account=ACCOUNT, server=SERVER, allow_fixture=True
+        )
+    assert authority is not None
+    day = next(
+        session.session_date.isoformat()
+        for session in build_sessions(now, authority.calendar)
+        if session.session_date >= origin.date() and session.exchange == binding.listing_exchange
+    )
+    identity = str(uuid4())
+    terms = {
+        "id": identity,
+        "symbol": authority.ticker,
+        "process_date": day,
+        "ex_date": day,
+        "record_date": day,
+        "payable_date": day,
+        "currency": "USD",
+        "rate": 0.25,
+        "sub_type": "ordinary",
+        "foreign": False,
+        "special": False,
+        "due_bills": False,
+    }
+    requested_ids = []
+
+    def source(request):
+        ids = request.url.params.get("ids")
+        if ids is not None:
+            requested_ids.append(ids)
+        return httpx.Response(
+            200,
+            json={
+                "corporate_actions": {"cash_dividends": [terms]} if ids is None else {},
+                "next_page_token": None,
+            },
+        )
+
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://data.alpaca.markets/v1/corporate-actions").mock(side_effect=source)
+        router.get(url__startswith="https://stream.data.alpaca.markets/").respond(
+            200, content=b"", headers={"content-type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            assert (await cycle((factory, settings, origin), redis_client, http)).status == "ok"
+            async with factory.begin() as db:
+                old = await db.get(StockCatalogAdmission, admission_id)
+                assert old is not None
+                old.revoked_at = datetime.now(UTC)
+                replacement = StockCatalogAdmission(
+                    artifact=old.artifact,
+                    reference="Synthetic renewed exact action scope",
+                    is_fixture=True,
+                    reviewed_at=old.revoked_at,
+                    valid_until=old.valid_until,
+                    fields=old.fields,
+                    scope=old.scope,
+                )
+                db.add(replacement)
+                await db.flush()
+                renewed_id = replacement.id
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            assert (
+                await cycle((factory, settings, origin), redis_client, http)
+            ).status == "source_error"
+    assert requested_ids == [identity]
+    async with factory() as db:
+        source_count = await db.scalar(text("SELECT count(*) FROM stock_action_sources"))
+        state = await db.get(StockActionState, binding.coin_id)
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        assert source_count == 1 and state is not None and coverage is not None
+        assert state.admission_generation == coverage.admission_id == renewed_id
+        assert state.health == "reconciling" and state.valid_until is coverage.valid_until is None
+
+
+@pytest.mark.parametrize("limit", ["known_ids", "entitlements"])
+async def test_catalog_monitor_refuses_truncated_work_sets(
+    catalog_monitor, redis_client, monkeypatch, limit
+):
+    factory, settings, origin, binding, _ = catalog_monitor
+    real_execute, real_scalars = AsyncSession.execute, AsyncSession.scalars
+
+    async def known_or_actual(db, stmt, *args, **kwargs):
+        if "SELECT stock_action_sources.provider_event_id, stock_action_events.coin_id" in str(
+            stmt
+        ):
+            return SimpleNamespace(all=lambda: [(str(i), binding.coin_id) for i in range(1001)])
+        return await real_execute(db, stmt, *args, **kwargs)
+
+    async def events_or_actual(db, stmt, *args, **kwargs):
+        if "SELECT stock_action_events.id" in str(stmt):
+            return SimpleNamespace(all=lambda: list(range(1001)))
+        return await real_scalars(db, stmt, *args, **kwargs)
+
+    if limit == "known_ids":
+        monkeypatch.setattr(AsyncSession, "execute", known_or_actual)
+    else:
+        monkeypatch.setattr(AsyncSession, "scalars", events_or_actual)
+    with respx.mock(assert_all_called=False) as router:
+        rest = router.get("https://data.alpaca.markets/v1/corporate-actions").respond(
+            200, json={"corporate_actions": {}, "next_page_token": None}
+        )
+        router.get(url__startswith="https://stream.data.alpaca.markets/").respond(
+            200, content=b"", headers={"content-type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await cycle((factory, settings, origin), redis_client, http)
+    assert result.status == "source_error"
+    assert rest.call_count == (0 if limit == "known_ids" else 1)
+    async with factory() as db:
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        assert coverage is not None and coverage.valid_until is coverage.covered_until is None
+
+
+@pytest.mark.parametrize("deadline", ["review", "freshness"])
+async def test_catalog_monitor_keeps_expired_publication_held(
+    catalog_monitor, redis_client, monkeypatch, deadline
+):
+    factory, settings, origin, binding, _ = catalog_monitor
+    real_clock, real_persist = stock_actions._clock, stock_actions.persist_action_batch
+    completion_time = None
+
+    async def after_persist(db, batch, authority, *, catalog, **scope):
+        nonlocal completion_time
+        result = await real_persist(db, batch, authority, catalog=catalog, **scope)
+        completion_time = (
+            catalog.valid_until
+            if deadline == "review"
+            else await real_clock(db)
+            + timedelta(seconds=settings.stock_actions_health_max_age_seconds + 1)
+        )
+        return result
+
+    async def publication_clock(db):
+        return completion_time or await real_clock(db)
+
+    monkeypatch.setattr(stock_actions, "_clock", publication_clock)
+    monkeypatch.setattr(stock_actions, "persist_action_batch", after_persist)
+    with respx.mock(assert_all_called=False) as router:
+        router.get("https://data.alpaca.markets/v1/corporate-actions").respond(
+            200, json={"corporate_actions": {}, "next_page_token": None}
+        )
+        router.get(url__startswith="https://stream.data.alpaca.markets/").respond(
+            200, content=b"", headers={"content-type": "text/event-stream"}
+        )
+        async with httpx.AsyncClient(trust_env=False) as http:
+            result = await cycle((factory, settings, origin), redis_client, http)
+    assert result.status == ("source_error" if deadline == "review" else "ok")
+    async with factory() as db:
+        state = await db.get(StockActionState, binding.coin_id)
+        coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
+        assert state is not None and coverage is not None
+        assert state.health == "reconciling" and state.valid_until is coverage.valid_until is None
+
+
+async def test_catalog_monitor_requires_current_collection_policy(catalog_monitor, redis_client):
+    factory, settings, _, binding, _ = catalog_monitor
+    now = datetime.now(UTC)
+    async with factory() as db:
+        reviewed = await load_catalog_action_authority(
+            db, binding.coin_id, now, account=ACCOUNT, server=SERVER, allow_fixture=True
+        )
+    assert reviewed is not None and reviewed.policy is not None
+    with respx.mock() as router:
+        async with httpx.AsyncClient(trust_env=False) as http:
+            with pytest.raises(stock_actions.ActionError, match="admission"):
+                await stock_actions._refresh_catalog(
+                    factory,
+                    redis_client,
+                    http,
+                    settings,
+                    "synthetic-lock",
+                    lambda: now,
+                    ActionBudget(),
+                    (replace(reviewed, policy=None),),
+                )
+    assert not router.calls
 
 
 async def test_catalog_action_parser_verifies_explicit_dates_and_keeps_missing_terms_held(
@@ -518,6 +880,125 @@ async def test_catalog_action_parser_verifies_explicit_dates_and_keeps_missing_t
         "supported_dividend",
         "uncertain",
     ]
+
+
+async def test_catalog_action_reader_holds_unreviewed_requests_and_ambiguous_records(
+    catalog_monitor,
+):
+    factory, _, origin, binding, _ = catalog_monitor
+    now = datetime.now(UTC)
+    async with factory() as db:
+        authority = await load_catalog_action_authority(
+            db, binding.coin_id, now, account=ACCOUNT, server=SERVER, allow_fixture=True
+        )
+    assert authority is not None and authority.policy is not None
+    mapping = StockMapping(
+        binding.coin_id, authority.ticker, binding.provider_asset_id, origin, "NASDAQ"
+    )
+    identity = str(uuid4())
+    day = origin.date()
+
+    with respx.mock(assert_all_called=False) as router:
+        rest = router.get("https://data.alpaca.markets/v1/corporate-actions")
+        async with httpx.AsyncClient(trust_env=False) as http:
+
+            async def snapshot(scopes, mappings, *, observed=None, start=day):
+                return await fetch_action_snapshot(
+                    http,
+                    mappings,
+                    lambda: observed if observed is not None else scopes,
+                    lambda: now,
+                    ActionBudget(),
+                    start=start,
+                    end=day,
+                    catalog=scopes,
+                )
+
+            unreviewed = await snapshot((authority,), (mapping,), start=day - timedelta(days=1))
+            assert unreviewed.reason == "unreviewed_window"
+            wrong_mapping = await snapshot((authority,), (replace(mapping, symbol="FQN"),))
+            assert wrong_mapping.reason == "invalid_request"
+            assert (
+                await snapshot((authority,), (mapping,), observed=())
+            ).reason == "admission_changed"
+            expired = await snapshot((replace(authority, valid_until=now),), (mapping,))
+            assert expired.reason == "admission"
+            replay = await replay_action_mutations(
+                http,
+                (mapping,),
+                lambda: (authority,),
+                lambda: now,
+                ActionBudget(),
+                since=origin - timedelta(seconds=1),
+                until=now,
+                catalog=(authority,),
+            )
+            assert replay.reason == "unreviewed_window" and not router.calls
+
+            entry = {"id": identity, "symbol": authority.ticker, "rate": 0.25, "currency": "USD"}
+            rest.respond(
+                200,
+                json={"corporate_actions": {"cash_dividends": [entry]}, "next_page_token": None},
+            )
+            missing_date = await snapshot((authority,), (mapping,))
+            assert missing_date.uncertain_coin_ids == {binding.coin_id} and not missing_date.records
+
+            ambiguous = replace(authority, ambiguous_symbols=frozenset({authority.ticker}))
+            held = await snapshot((ambiguous,), (mapping,))
+            assert held.uncertain_coin_ids == {binding.coin_id} and not held.records
+            known = await recheck_action_ids(
+                http,
+                (mapping,),
+                lambda: (ambiguous,),
+                lambda: now,
+                ActionBudget(),
+                ids={identity: authority.ticker},
+                catalog=(ambiguous,),
+            )
+            assert known.uncertain_coin_ids == {binding.coin_id} and not known.records
+
+            second = replace(
+                authority,
+                ticker="FQN",
+                binding=replace(
+                    binding,
+                    coin_id=binding.coin_id + 1,
+                    provider_symbol="FQN",
+                    provider_asset_id="other-fixture-asset",
+                ),
+                policy=replace(authority.policy, rest_symbols=("FQN",)),
+            )
+            second_mapping = replace(
+                mapping,
+                coin_id=second.binding.coin_id,
+                symbol=second.ticker,
+                provider_asset_id=second.binding.provider_asset_id,
+            )
+            rest.respond(
+                200,
+                json={
+                    "corporate_actions": {
+                        "cash_dividends": [entry | {"process_date": day.isoformat()}]
+                    },
+                    "next_page_token": None,
+                },
+            )
+            scoped = await snapshot((authority, second), (mapping, second_mapping))
+            assert [record.coin_id for record in scoped.records] == [binding.coin_id]
+            rest.respond(
+                200,
+                json={
+                    "corporate_actions": {
+                        "cash_dividends": [entry | {"old_symbol": second.ticker}]
+                    },
+                    "next_page_token": None,
+                },
+            )
+            disputed = await snapshot((authority, second), (mapping, second_mapping))
+            assert (
+                disputed.uncertain_coin_ids == {binding.coin_id, second.binding.coin_id}
+                and not disputed.records
+            )
 
 
 async def cycle(monitor, redis, http):
