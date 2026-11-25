@@ -106,8 +106,10 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
             raise ValueError("private campaign image record required")
         binding = json.loads(record.read_text())
         lane = record.name.removesuffix("-image-binding.json")
-        if lane in {"current0023", "current0020", "current0017", "retained0020-refusal", "retained0017-refusal"}:
-            prefix = "birja-portfolio-current:" if lane == "current0023" else "birja-portfolio-retained:"
+        if lane in {"current0023", "current0026", "current0020", "current0017",
+                    "retained0020-refusal", "retained0017-refusal"}:
+            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026"}
+                      else "birja-portfolio-retained:")
             alias = campaign_image_tag(prefix + binding["source_commit"][:12] + "-" + binding["context_sha256"][:20], archive)
         elif lane in sources.FIXED_RELEASES:
             alias = "birja-retained-portfolio:" + binding["source_commit"][:12] + "-" + archive_sha[:16] + namespace
@@ -118,13 +120,21 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
     sources.verify_archive_binding(archive, archive_sha)
 
 
-def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=subprocess.run):
+def build_current_runtime(
+    sources, env, *, archive=None, archive_sha=None, revision="0023", run=subprocess.run
+):
     """Build the actual declared runtime from one authenticated Git context.
 
     A fresh CI runner must be able to create this image without any previous
     workstation image. Only the committed backend tree is sent to Docker;
     neither host source overlays nor an alternate dependency base are used.
     """
+    if revision not in {"0023", "0026"}:
+        raise ValueError("unsupported current runtime schema")
+    if revision == "0026":
+        if archive is None:
+            raise ValueError("0026 runtime requires a selected v7 campaign")
+        load_recovery().bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v7")
     commit = sources.git("rev-parse", "HEAD").decode().strip()
     if sources.git("diff", "--name-only", "HEAD", "--", "backend").strip():
         raise ValueError("current source must be frozen before image build")
@@ -132,7 +142,7 @@ def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=s
     payload = sources.git("archive", commit, "backend")
     context = hashlib.sha256(payload).hexdigest()
     binding = campaign_image_binding(
-        sources, env, archive=archive, archive_sha=archive_sha, revision="0023",
+        sources, env, archive=archive, archive_sha=archive_sha, revision=revision,
         source_commit=commit, app_tree=app_tree, context_sha256=context, run=run,
     )
     if binding is not None:
@@ -196,7 +206,7 @@ def build_current_runtime(sources, env, *, archive=None, archive_sha=None, run=s
     sources.verify_image(binding, json.loads(result.stdout))
     if archive is not None:
         sources.verify_archive_binding(archive, archive_sha)
-        sources.record_image_binding(archive, "current0023", binding)
+        sources.record_image_binding(archive, "current" + revision, binding)
     return binding
 
 
@@ -204,8 +214,9 @@ def build_selected_runtime(
     sources, env, *, revision, archive=None, archive_sha=None, run=subprocess.run
 ):
     profile = sources.profile_for(revision)
-    if revision == "0023":
-        return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha, run=run)
+    if revision in {"0023", "0026"}:
+        return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha,
+                                     revision=revision, run=run)
     if revision not in {"0017", "0020"}:
         raise ValueError("unsupported portfolio smoke schema")
     payload = sources.source_archive(
