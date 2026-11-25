@@ -380,6 +380,15 @@ async def test_operator_admission_requires_exact_apply_and_current_generation(
     digest = _sha(raw)
     migrator = create_async_engine(migration_url())
     command = ["admit", str(packet), "--expect-generation", "empty"]
+    async with catalog_factory.begin() as admin:
+        owner = await admin.scalar(
+            text("SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname='public'")
+        )
+        assert owner in {"pg_database_owner", "birja_test"}
+        # The migration suite's disposable reset uses birja_test as schema
+        # owner. The operator rehearsal uses the production ownership shape.
+        if owner == "birja_test":
+            await admin.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
     try:
         review = await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
         assert review == {"disposition": "reviewed", "packet_sha256": digest, "count": 4}
@@ -398,6 +407,8 @@ async def test_operator_admission_requires_exact_apply_and_current_generation(
             stock_catalog_import._args([*command, "--apply", "--expected-packet-sha", digest]),
         )
         assert applied["disposition"] == "applied"
+        with pytest.raises(CatalogPublishError, match="overlaps"):
+            await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
         async with catalog_factory() as reader:
             assert await reader.scalar(select(func.count()).select_from(StockCatalogAdmission)) == 4
 
@@ -411,7 +422,39 @@ async def test_operator_admission_requires_exact_apply_and_current_generation(
         with pytest.raises(CatalogPublishError, match="generation"):
             await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
         assert published.generation_id > 0
+        current_command = [
+            "admit",
+            str(packet),
+            "--expect-generation",
+            str(published.generation_id),
+        ]
+        expired = {**rows[0], "valid_until": (now - timedelta(seconds=1)).isoformat()}
+        packet.write_text(json.dumps({"version": 1, "admissions": [expired]}))
+        with pytest.raises(CatalogPublishError, match="UTC validity"):
+            await stock_catalog_import._admit(migrator, stock_catalog_import._args(current_command))
+        replacement = {**rows[0], "reference": "Reviewed synthetic replacement"}
+        admission_ids = applied["admission_ids"]
+        assert isinstance(admission_ids, list)
+        prior_id = int(admission_ids[0])
+        raw = json.dumps({"version": 1, "admissions": [replacement], "revoke_ids": [prior_id]})
+        packet.write_text(raw)
+        reviewed = await stock_catalog_import._admit(
+            migrator, stock_catalog_import._args(current_command)
+        )
+        assert reviewed["revoked_count"] == 1
         async with catalog_factory() as reader:
+            prior = await reader.get(StockCatalogAdmission, prior_id)
+            assert prior is not None and prior.revoked_at is None
+        await stock_catalog_import._admit(
+            migrator,
+            stock_catalog_import._args(
+                [*current_command, "--apply", "--expected-packet-sha", _sha(raw)]
+            ),
+        )
+        async with catalog_factory() as reader:
+            prior = await reader.get(StockCatalogAdmission, prior_id)
+            assert prior is not None and prior.revoked_at is not None
+            assert prior.reference == rows[0]["reference"]
             conn = await reader.connection()
             for role in ("birja_app", "birja_scheduler"):
                 assert (
@@ -427,6 +470,9 @@ async def test_operator_admission_requires_exact_apply_and_current_generation(
                 await stock_catalog_import._check_connection(conn, False, for_finance=True)
     finally:
         await migrator.dispose()
+        if owner == "birja_test":
+            async with catalog_factory.begin() as admin:
+                await admin.execute(text("ALTER SCHEMA public OWNER TO birja_test"))
 
 
 async def test_fixture_manifest_requires_explicit_disposable_mode(

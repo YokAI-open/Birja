@@ -216,6 +216,56 @@ storage deadline. Stopped/failed collectors do not suspend those obligations.
 Until that prerequisite is met, keep activation disabled. No app/scheduler DELETE
 grant or new deletion job is added here; no financial evidence may be erased.
 
+## Expanded catalog admission on revision 0026
+
+Use the restricted migrator and verified database TLS settings for the exact
+release. Set `BIRJA_CATALOG_DATABASE_URL` and `DATABASE_SSL_CA_FILE` in a private
+operator environment. Set the reviewed `STOCK_DATA_ACCOUNT`,
+`STOCK_DATA_SERVER` and, for asset lookup, `ALPACA_ASSET_ENVIRONMENT`.
+Keep these values and all evidence under the existing private custody policy.
+
+Prepare a mode-0600 JSON file with `version: 1` and `admissions` containing
+1–32 reviewed records. Each record contains `artifact`, a private evidence
+`reference`, aware UTC `reviewed_at` and `valid_until`, field-to-purpose
+`fields` and artifact-specific `scope`. The importer refuses expired windows,
+missing purposes, fixture inputs and overlapping current quote or financial
+scope. An optional `revoke_ids` array names up to 32 current live admission
+IDs for an explicitly approved replacement. Old records keep their original
+evidence and receive a revocation timestamp.
+
+| Artifact | Scope and reviewed purpose |
+| --- | --- |
+| `nasdaqlisted`, `otherlisted`, `openfigi`, `issuer_exception` | Use a dated scope for each artifact. Retain the exact normalized directory or classification fields and collection, internal use, derived use, storage and backup purposes. Include display for ticker, exchange, name and class fields. Directory scope is empty, except for explicitly reviewed issuer retirements. |
+| `alpaca_assets` | Supply `provider` and `units` matching exact active listing targets, account, server, environment and window. A grant covers at most two distinct-exchange targets and the existing command consumes the grant on its first attempt, including failed attempts. |
+| `alpaca_iex_quotes` | Supply reviewed account/server, `iex`, USD, approved exchanges and request bounds for transient display and cache of symbol, bid, ask and source time. |
+| `catalog_execution`, `catalog_mark`, `catalog_halt`, `catalog_actions` | Set the exact current `catalog_id` and `listing_id` as canonical strings, mapped `provider_asset_id`, account/server and feed. Scope execution and marks to `iex`, halts to `nasdaq-rss`, and actions to `alpaca-corporate-actions`. Retain the separate reviewed collection/use, storage and backup for each artifact. |
+
+Run review before asking for application approval. Use `empty` for the first
+catalog and the current generation ID thereafter. These commands run from
+the backend directory with the release's Python environment.
+
+```sh
+python -m app.tasks.stock_catalog_import admit "$packet" --expect-generation "$generation"
+python -m app.tasks.stock_catalog_import admit "$packet" --expect-generation "$generation" \
+  --apply --expected-packet-sha "$approved_sha256"
+```
+
+The default review rolls back. It reports only the packet SHA-256 and counts.
+Apply requires approval of those exact bytes and revalidates the generation
+and scopes under the catalog lock. The apply receipt lists admission IDs in
+packet order. Reconcile those IDs privately to the approved products. Keep
+calendar prerequisites in the separate `stock_data_admissions.calendar`
+procedure above.
+
+Apply reviewed directory and classification rights before publishing an
+admitted manifest. Stage the approved exact asset targets for the new
+generation, then admit the mapped listing scopes and promote the exact
+current listing for execution. The eligibility checks reject the earlier
+listing version. A verified rename or refresh can update the same issue and
+financial binding, keeping existing holdings and original History links.
+Keep catalog discovery available within its separate rights while a listing
+waits for renewed quote, mark, status, execution or action scope.
+
 ## Positive/negative rehearsal and later activation
 
 Run `cd backend && uv run pytest tests/test_stock_admission.py
