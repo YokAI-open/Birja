@@ -115,16 +115,16 @@ def test_closed_end_fund_does_not_become_an_eligible_share(inputs) -> None:
     assert any(row.reason == "corroborated_noncommon_class" for row in manifest.rows)
 
 
-@pytest.mark.parametrize("composite_conflicts", [False, True])
-def test_vendor_class_alias_and_nasdaq_fallback(inputs, composite_conflicts: bool) -> None:
+@pytest.mark.parametrize("conflicting_field", [None, "shareClassFIGI", "compositeFIGI"])
+def test_vendor_class_alias_and_nasdaq_fallback(inputs, conflicting_field: str | None) -> None:
     paths, observations = inputs
     observations[0]["symbol"] = "FXCA/A"
     observations[0]["observation"]["result"]["data"][0]["ticker"] = "FXCA/A"
     record = observations[2]["observation"]
     primary = record["result"]["data"][0]
     composite = {**primary, "exchCode": "US"}
-    if composite_conflicts:
-        composite["shareClassFIGI"] = "BBG000000119"
+    if conflicting_field is not None:
+        composite[conflicting_field] = "BBG000000119"
     warning = {"warning": "No current mapping"}
     record["result"] = {
         "fallback": {
@@ -138,11 +138,11 @@ def test_vendor_class_alias_and_nasdaq_fallback(inputs, composite_conflicts: boo
     }
     paths.mapping.write_text("\n".join(json.dumps(row) for row in observations) + "\n")
     manifest = _inventory(paths, CAT_TIME)
-    assert manifest.complete is not composite_conflicts
+    assert manifest.complete is (conflicting_field is None)
     included = {row.ticker: row for row in manifest.rows if row.disposition == "included"}
     assert {alias.symbol for alias in included["FXCA.A"].aliases} == {"FXCA/A"}
     assert included["FXCA.A"].identity_key != included["FXCA.B"].identity_key
-    assert ("FXCO" in included) is not composite_conflicts
+    assert ("FXCO" in included) is (conflicting_field is None)
 
 
 def _exception(row, *, ticker=None, classification=None, **overrides):
@@ -202,7 +202,7 @@ def test_reviewed_nasdaq_keeps_matching_mapping_identity_and_aliases(inputs) -> 
     _exceptions(paths, [_exception(candidate)])
     manifest = _inventory(paths, CAT_TIME)
     included = next(row for row in manifest.rows if row.ticker == "FXCO")
-    assert included.reason == "reviewed_issue_evidence"
+    assert included.reason == "corroborated_share_class"
     assert included.identity_key == candidate.identity_key
     assert included.aliases == candidate.aliases
     assert included.evidence_at == candidate.evidence_at

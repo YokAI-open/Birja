@@ -37,6 +37,7 @@ _NONCOMMON_TYPES = {
     ("Unit", "Unit"),
 }
 _NASDAQ_TIERS = {"UQ", "UR", "UW"}
+_MappingIdentity = tuple[str, str, str, str, str]
 
 
 class ReferenceMapping(CatalogModel):
@@ -74,12 +75,12 @@ def preferred_openfigi_symbol(issue: PillarIssue) -> str:
 
 def _matching_result(
     result: dict[str, object], aliases: tuple[str, ...], exchange: str
-) -> tuple[str, str, str, str] | None:
+) -> _MappingIdentity | None:
     rows = result.get("data")
     if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
         return None
 
-    matches: set[tuple[str, str, str, str]] = set()
+    matches: set[_MappingIdentity] = set()
     for item in rows:
         if not isinstance(item, dict):
             return None
@@ -107,11 +108,11 @@ def _matching_result(
         if not name or len(name) > 255 or not name.isprintable():
             return None
         if (kind, broad_type) in _NONCOMMON_TYPES:
-            matches.add((ticker, name, share_class, "out_of_scope"))
+            matches.add((ticker, name, share_class, composite, "out_of_scope"))
         elif kind in (
             {"Common Stock", "Ordinary Shares"} | _COMMON_ISSUER_WRAPPERS
         ) and broad_type in {"Common Stock", "Ordinary Shares", "REIT"}:
-            matches.add((ticker, name, share_class, "common"))
+            matches.add((ticker, name, share_class, composite, "common"))
         else:
             return None
     return matches.pop() if len(matches) == 1 else None
@@ -119,7 +120,7 @@ def _matching_result(
 
 def _matching_fallback(
     fallback: object, aliases: tuple[str, ...], primary_exchange: str
-) -> tuple[str, str, str, str] | None:
+) -> _MappingIdentity | None:
     if (
         primary_exchange not in _NASDAQ_TIERS
         or not isinstance(fallback, dict)
@@ -151,15 +152,15 @@ def _matching_fallback(
         return None
     # Alternate tier and composite records must refer to the same share class.
     selected = next(iter(matches.values()))
-    identity = (selected[0], selected[2], selected[3])
-    if any((entry[0], entry[2], entry[3]) != identity for entry in (*matches.values(), composite)):
+    identity = (selected[0], *selected[2:])
+    if any((entry[0], *entry[2:]) != identity for entry in (*matches.values(), composite)):
         return None
     return selected
 
 
 def _matching_mapping(
     mapping: ReferenceMapping, aliases: tuple[str, ...], exchange: str, now: datetime
-) -> tuple[str, str, str, str] | None:
+) -> _MappingIdentity | None:
     if not timedelta(0) <= now - mapping.observed_at <= CORROBORATION_AGE:
         return None
     if "fallback" in mapping.result:
@@ -194,7 +195,7 @@ def _classify(
     identified = {value for value, _ in matched}
     if len(identified) != 1 or (resolved := identified.pop()) is None:
         return row, outcome(row, "unresolved", "mapping_conflict_or_unknown")
-    ticker, name, identity, asset_type = resolved
+    ticker, name, identity, composite, asset_type = resolved
     observed_at = min(at for _, at in matched)
     if asset_type == "out_of_scope":
         return row, outcome(
@@ -227,7 +228,9 @@ def _classify(
         classification=classification,
         identity=f"figi:{identity}",
         provider_ticker=ticker if licensed is row else None,
-        evidence_digest=_digest([row.row_digest, classification, ticker, name, identity]),
+        evidence_digest=_digest(
+            [row.row_digest, classification, ticker, name, identity, composite]
+        ),
         evidence_at=observed_at,
     )
 

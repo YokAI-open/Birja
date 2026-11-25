@@ -145,10 +145,8 @@ def _reviewed_outcome(
     proof: dict[str, object] = {"issuer_review": review.model_dump(mode="json")}
     if prior.disposition == "included" and prior.evidence_at is not None:
         proof["retained_mapping_digest"] = prior.evidence_digest
-        return checked.model_copy(
+        return prior.model_copy(
             update={
-                "identity_key": prior.identity_key,
-                "aliases": prior.aliases,
                 "evidence_at": min(prior.evidence_at, review.reviewed_at),
                 "evidence_digest": _digest(proof),
             }

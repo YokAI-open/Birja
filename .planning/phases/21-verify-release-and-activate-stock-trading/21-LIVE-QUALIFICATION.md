@@ -147,6 +147,15 @@ application role, ten queries each for `ORCL` and `Oracle` returned the
 same listing. `BRK/B` returned `BRK.B` on NYSE. Median times for the
 three queries were 62–66 milliseconds.
 
+The matching Alpaca inventories also passed full-size enrollment on a
+disposable `0027` database. All 49 reviewed batches visited 4,898 rows
+and created 4,853 expanded financial bindings in 339 seconds. The other
+45 were the original 20 handled by the curated path and 25 marked
+nontradable by Alpaca. Every promoted listing had one current grant for
+each of provider identity, execution, mark, reported halts and actions.
+The ORCL binding retained the actual inventory capture timestamp. No
+production records were changed by these tests.
+
 The catalog financial quote scheduler accepted two real IEX quotes for
 NYSE ORCL. With an explicit selection at 20:28 UTC, the restricted
 scheduler persisted a source observation aged 0.082 seconds and returned
