@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T13:11:41Z"
-last_activity: 2026-11-25 -- Phase 21 feature PR passed all six hosted checks
+last_updated: "2026-11-25T13:17:52Z"
+last_activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: Phase 21 feature PR #46 at f306934 is green and awaits develop merge approval
+stopped_at: Phase 21 feature PR #46 merged into develop and release 0.8.0 prepared locally
 ---
 
 # Project State
@@ -30,8 +30,8 @@ acceptance of searchable stock trading.
 
 Phase: 21
 Plan: 4 of 9 executed
-Status: Awaiting develop merge approval and expanded live-source evidence
-Last activity: 2026-11-25 -- Phase 21 feature PR passed all six hosted checks
+Status: Awaiting release PR publication approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence
@@ -44,8 +44,9 @@ buy and sell using live IEX data.
 
 Phase 21 local recovery and catalog checks passed. The exact feature CI
 run passed 3,941 backend tests, 94.41% overall coverage, 100% critical
-coverage, the full browser run and verified recovery tooling. The release
-and main artifact remain pending. Live acquisition and activation need
+coverage, the full browser run and verified recovery tooling. PR #46
+merged into develop as `e1b7956` with the checked feature tree. Release
+0.8.0 is prepared locally. Live acquisition and activation need
 evidence for the expanded scope. These checks can progress independently.
 [Feature CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)

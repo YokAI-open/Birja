@@ -178,7 +178,7 @@ requires both outcomes. SC-01 and SC-03 keep their Phase 19 assignment.
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
 | 20. Trade and value stocks from search | 9/9 | Complete on local fixtures 2026-11-24 |
-| 21. Verify, release and activate stock trading | 4/9 | Feature PR #46 green. Merge approval and live-source checks pending. |
+| 21. Verify, release and activate stock trading | 4/9 | Feature PR #46 merged. Local 0.8.0 release prepared. |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.4/SUMMARY.md) · [Deferred work](DEFERRED.md)

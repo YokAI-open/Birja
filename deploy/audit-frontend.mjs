@@ -12,9 +12,9 @@ export const POLICY = Object.freeze({
   advisory: "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
   expires: "2026-12-17T00:00:00.000Z",
   manifestSha256:
-    "c374ffc85980c39fdb3ba0f732648c612a9f4155433d0f40afd3d18b6f356c92",
+    "e6718b7177b9fe352381030887cb399dca62c615317242c4b1b8fea38d553497",
   lockSha256:
-    "e93da90cd5f93730ddd436e84d3bb1b9e25336b82b33f04161b8a2b792d9f497",
+    "b3d4faa5c73ef0ff1fe04cc56b4f0326893ca0b5955938550fbf0d9da6d0ec37",
 });
 const LEVELS = ["info", "low", "moderate", "high", "critical"];
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");

@@ -42,5 +42,23 @@ GitHub finalized PR artifact `15023005738` with transport SHA-256
 The protected rollout requires the artifact from the eventual successful
 `main` run. Backend passed all 3,941 tests in 54:06 with 94.41% overall
 and 100% critical coverage. Its audit passed and `ci-pass` succeeded.
-GitHub reports PR #46 clean and mergeable at that exact head into the
-unchanged `develop` base. The owner merge decision is pending.
+GitHub reported PR #46 clean and mergeable at that exact head into the
+unchanged `develop` base.
+
+## Develop merge and release preparation
+
+The owner approved merging the green feature head and preparing the
+release locally. PR #46 merged at 13:16:48 UTC on 2026-11-25 as
+`e1b79566c38f75254827961216c67c390ce94d68`. Both the feature head and the
+merge have tree `1df6b476c62eab9b7f9ed1f768ab558a8b314167`. The merge has
+the checked base and approved feature as its two parents. The verified
+`main` head `07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9` is an ancestor.
+
+The local `release-0.8.0` branch starts at that merge and carries forward
+the saved CI evidence. Version 0.8.0 is the next minor version after
+`v0.7.1` for the catalog and trading feature. The backend and frontend
+manifests and locks differ only in their root application version. The
+frontend audit fingerprints match those new files and the existing issue
+35 advisory, scope and expiry are preserved. The offline uv lock check,
+frontend audit tests, lint, typecheck, build and diff checks passed.
+Release publication and successful exact-main CI remain pending.
