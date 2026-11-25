@@ -101,10 +101,13 @@ class Selected:
             fingerprint=self.binding.fingerprint,
         )
 
-    async def run(self, http: httpx.AsyncClient) -> scheduler.CycleResult:
+    async def run(
+        self, http: httpx.AsyncClient, *, quota_redis: Redis | None = None
+    ) -> scheduler.CycleResult:
         return await stock_catalog_quotes.run_catalog_quote_cycle(
             sessionmaker=self.sessions,
             redis=self.redis,
+            quota_redis=self.redis if quota_redis is None else quota_redis,
             http=http,
             settings=self.settings,
             now=lambda: self.now,
@@ -176,6 +179,8 @@ async def selected(
 async def one_request(
     state: Selected,
     responder: Callable[[httpx.Request], httpx.Response | Awaitable[httpx.Response]],
+    *,
+    quota_redis: Redis | None = None,
 ) -> tuple[scheduler.CycleResult, CatalogQuoteOutcome, int]:
     with respx.mock as mock:
         route = mock.get(LATEST_QUOTES_URL).mock(side_effect=responder)
@@ -184,7 +189,7 @@ async def one_request(
             async with asyncio.timeout(2):
                 while not await pending_catalog_quotes(state.redis, **state.scope):  # noqa: ASYNC110
                     await asyncio.sleep(0.01)
-            result = await state.run(http)
+            result = await state.run(http, quota_redis=quota_redis)
     return result, waiting.result(), route.call_count
 
 
@@ -249,6 +254,71 @@ async def test_retry_after_exceeding_cycle_preserves_throttle_reason(selected: S
     )
     assert (result.rejected, outcome, calls) == (1, "throttled", 1)
     assert await selected.redis.get(selected.cache_key) is None
+
+
+async def test_split_catalog_cache_keeps_one_quota_and_atomic_result(selected: Selected):
+    state_redis = selected.redis
+    selected.settings.stock_account_requests_per_minute = 1
+    # Separate logical databases suffice here to detect incorrect client use.
+    # The release Compose check separately verifies distinct Redis instances.
+    cache_url = selected.settings.redis_url.rsplit("/", 1)[0] + "/1"
+    async with Redis.from_url(cache_url, decode_responses=True) as cache:
+        split = replace(selected, redis=cache)
+        try:
+            assert await stock_scheduler.reserve_account_attempt(
+                state_redis, selected.settings, {}, at=selected.now
+            )
+            result, outcome, calls = await one_request(
+                split, selected.quote_reply, quota_redis=state_redis
+            )
+            assert (result.accepted, outcome, calls) == (0, "throttled", 0)
+            assert not await pending_catalog_quotes(cache, **selected.scope)
+            assert await cache.get(selected.cache_key) is None
+
+            await state_redis.delete(selected.account_window)
+            async with asyncio.TaskGroup() as group:
+                demand = group.create_task(
+                    request_catalog_quote(
+                        cache,
+                        **selected.scope,
+                        catalog_id=selected.binding.catalog_id,
+                        listing_version=selected.binding.listing_version,
+                        fingerprint=selected.binding.fingerprint,
+                        purpose="financial",
+                    )
+                )
+                async with asyncio.timeout(2):
+                    while not await pending_catalog_quotes(cache, **selected.scope):  # noqa: ASYNC110
+                        await asyncio.sleep(0.01)
+                target = (selected.binding.catalog_id, selected.binding.listing_version)
+                async with selected.sessions() as db:
+                    assert target in await stock_halts._catalog_targets(
+                        db, cache, stock_halts.CatalogHaltWindow(), selected.now, **selected.scope
+                    )
+                    assert target not in await stock_halts._catalog_targets(
+                        db,
+                        state_redis,
+                        stock_halts.CatalogHaltWindow(),
+                        selected.now,
+                        **selected.scope,
+                    )
+                demand.cancel()
+            async for key in cache.scan_iter(match=f"{selected.queue}*"):
+                await cache.delete(key)
+
+            result, outcome, calls = await one_request(
+                split, selected.quote_reply, quota_redis=state_redis
+            )
+            assert (result.accepted, outcome, calls) == (1, "ready", 1)
+            assert not await pending_catalog_quotes(cache, **selected.scope)
+            assert await cache.get(selected.cache_key) is not None
+            assert await cache.zcard(selected.account_window) == 0
+            assert await state_redis.zcard(selected.account_window) == 1
+            assert await state_redis.get(selected.cache_key) is None
+            assert not await pending_catalog_quotes(state_redis, **selected.scope)
+        finally:
+            async for key in cache.scan_iter(match=f"{selected.queue}*"):
+                await cache.delete(key)
 
 
 @pytest.mark.parametrize("upstream_status", [200, 503])
@@ -378,12 +448,17 @@ async def test_catalog_backpressure_keeps_curated_and_crypto_ticks(
     stopped, started, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
     crypto_ticks, curated_ticks = [], []
     real_run = scheduler.run
+    settings = selected.settings.model_copy(
+        update={"catalog_quote_redis_url": "redis://127.0.0.1:56380/0"}
+    )
 
     async def crypto(**kwargs):
+        assert kwargs["redis"].connection_pool.connection_kwargs["port"] == 56379
         crypto_ticks.append(True)
         return scheduler.CycleResult("ok")
 
     async def curated(**kwargs):
+        assert kwargs["redis"].connection_pool.connection_kwargs["port"] == 56379
         if not kwargs["on_demand"]:
             curated_ticks.append(True)
             if len(curated_ticks) == 3:
@@ -391,6 +466,8 @@ async def test_catalog_backpressure_keeps_curated_and_crypto_ticks(
         return scheduler.CycleResult("ok")
 
     async def slow_catalog(**kwargs):
+        assert kwargs["redis"].connection_pool.connection_kwargs["port"] == 56380
+        assert kwargs["quota_redis"].connection_pool.connection_kwargs["port"] == 56379
         started.set()
         try:
             await asyncio.Event().wait()
@@ -398,12 +475,14 @@ async def test_catalog_backpressure_keeps_curated_and_crypto_ticks(
             closed.set()
 
     async def no_halts(**kwargs):
+        assert kwargs["redis"].connection_pool.connection_kwargs["port"] == 56379
+        assert kwargs["catalog_redis"].connection_pool.connection_kwargs["port"] == 56380
         return scheduler.CycleResult("ok")
 
     async def accelerated(**kwargs):
         await real_run(**{**kwargs, "interval": 0.04, "heartbeat": tmp_path / "hb"})
 
-    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: selected.settings)
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: settings)
     monkeypatch.setattr(scheduler, "run", accelerated)
     monkeypatch.setattr(scheduler, "run_cycle", crypto)
     monkeypatch.setattr(stock_scheduler, "run_stock_cycle", curated)
@@ -446,6 +525,7 @@ class FinancialMarket:
         return await stock_catalog_quotes.run_catalog_quote_cycle(
             sessionmaker=self.factory,
             redis=self.redis,
+            quota_redis=self.redis,
             http=http,
             settings=self.settings,
             now=lambda: self.now,

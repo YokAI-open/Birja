@@ -217,6 +217,7 @@ async def _work_deadline(
 async def _refresh(
     sessionmaker: async_sessionmaker[AsyncSession],
     redis: Redis,
+    quota_redis: Redis,
     http: httpx.AsyncClient,
     settings: SchedulerSettings,
     selected: list[list[_QuoteWork]],
@@ -246,7 +247,9 @@ async def _refresh(
                 redis, request, account=account, server=server
             ):
                 raise AlpacaError("failed_check")
-        if not await reserve_account_attempt(redis, settings, evidence, at=checked_at, cap=quota):
+        if not await reserve_account_attempt(
+            quota_redis, settings, evidence, at=checked_at, cap=quota
+        ):
             raise AlpacaError("account_budget")
         if now() >= min(deadlines):
             raise AlpacaError("failed_check")
@@ -331,13 +334,14 @@ async def _refresh(
 async def run_catalog_quote_cycle(
     *,
     sessionmaker: async_sessionmaker[AsyncSession],
-    redis: Redis,
+    redis: Redis | None,
+    quota_redis: Redis,
     http: httpx.AsyncClient,
     settings: SchedulerSettings,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     cursor: CatalogQuoteCursor | None = None,
 ) -> CycleResult:
-    if not settings.stock_data_enabled:
+    if not settings.stock_data_enabled or redis is None:
         return CycleResult("ok")
     account, server = settings.stock_data_account, settings.stock_data_server
     token = secrets.token_hex(16)
@@ -395,7 +399,9 @@ async def run_catalog_quote_cycle(
                 )
             accepted = 0
             if selected:
-                accepted = await _refresh(sessionmaker, redis, http, settings, selected, now, token)
+                accepted = await _refresh(
+                    sessionmaker, redis, quota_redis, http, settings, selected, now, token
+                )
             return CycleResult(
                 "ok", accepted=accepted, rejected=len(requests) + len(considered) - accepted
             )

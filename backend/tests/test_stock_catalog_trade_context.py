@@ -11,6 +11,8 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from pydantic import ValidationError
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,11 @@ from app.models.corporate_action import StockActionState
 from app.models.stock_catalog import StockCatalogAdmission, StockCatalogGeneration
 from app.models.stock_catalog_finance import StockCatalogFinancialQuote
 from app.services.stock_catalog_quote_demand import catalog_quote_key, pending_catalog_quotes
-from app.services.stock_catalog_quotes import load_catalog_quote_context, publish_catalog_quote
+from app.services.stock_catalog_quotes import (
+    CatalogDisplayQuote,
+    load_catalog_quote_context,
+    publish_catalog_quote,
+)
 from app.services.stock_quote_rules import ValidIexQuote
 from tests.helpers import OutboxSender, csrf_headers, sign_in, unique_email
 from tests.test_migrations import install_current_test_grants
@@ -131,6 +137,69 @@ async def test_authentication_csrf_and_canonical_listing_selection(
     private(stale)
 
 
+@pytest.mark.parametrize("outage", [True, False])
+async def test_catalog_does_not_fall_back_to_state_redis(
+    target: Target,
+    catalog_factory: Factory,
+    running_app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    outage: bool,
+) -> None:
+    class UnavailableCache:
+        async def get(self, key: str) -> None:
+            raise RedisConnectionError("Synthetic volatile cache unavailable")
+
+        async def eval(self, *args: object) -> None:
+            raise RedisConnectionError("Synthetic volatile cache unavailable")
+
+    settings = running_app.state.settings
+    async with catalog_factory() as db:
+        context = await load_catalog_quote_context(
+            db, settings, target.catalog_id, now=target.clock
+        )
+    assert context.binding is not None
+    scope = {"account": settings.stock_data_account, "server": settings.stock_data_server}
+    key = catalog_quote_key(
+        **scope,
+        catalog_id=target.catalog_id,
+        listing_version=target.listing_version,
+        fingerprint=context.binding.fingerprint,
+    )
+    state = running_app.state.redis
+    await state.set(
+        key,
+        CatalogDisplayQuote(
+            bid=Decimal("17.24"),
+            ask=Decimal("17.26"),
+            mid=Decimal("17.25"),
+            event_at=target.clock - timedelta(seconds=4),
+            collected_at=target.clock,
+        ).model_dump_json(),
+        ex=10,
+    )
+    try:
+        monkeypatch.setattr(
+            running_app.state, "catalog_quote_redis", UnavailableCache() if outage else None
+        )
+        price = await target.quote()
+        assert price.status_code == 200
+        assert price.json()["quote"] is None
+        assert price.json()["reason"] == "quote_unavailable"
+        assert not await pending_catalog_quotes(state, **scope)
+        existing = await target.client.get(PORTFOLIOS)
+        assert existing.status_code == 200 and existing.json()[0]["id"] == target.portfolio_id
+    finally:
+        await state.delete(key)
+
+
+def test_production_catalog_cache_requires_a_separate_instance(settings) -> None:
+    assert settings.catalog_cache_url == settings.redis_url
+    assert settings.model_copy(update={"env": "prod"}).catalog_cache_url is None
+    endpoint = settings.redis_url.rsplit("/", 1)[0] + "/1"
+    with pytest.raises(ValidationError, match="separate Redis instance"):
+        type(settings)(catalog_quote_redis_url=endpoint)
+
+
 async def test_read_only_target_and_financial_authority_remain_portfolio_specific(
     target: Target,
     catalog_factory: Factory,
@@ -204,10 +273,18 @@ async def test_read_only_target_and_financial_authority_remain_portfolio_specifi
         }
         private(refused)
     order = {"listing_version": str(target.listing_version), "side": "buy", "quantity": "1"}
+    # The confirm endpoint validates the request shape before it can refuse
+    # financial execution on an unpromoted catalog issue.
+    confirmation = {
+        **order,
+        "expected_exec_price": "17.26",
+        "idempotency_key": str(uuid4()),
+        "preview_token": f"1.0.{'0' * 64}",
+    }
     base = target.context_url().removesuffix("trade-context")
     for action, payload in (
         ("preview", order),
-        ("confirm", {**order, "expected_exec_price": "17.26", "idempotency_key": str(uuid4())}),
+        ("confirm", confirmation),
     ):
         denied = await target.client.post(
             base + action, json=payload, headers=headers(target.client)

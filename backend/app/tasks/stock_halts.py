@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal
 
 import httpx
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -105,7 +106,11 @@ async def _catalog_targets(
 ) -> tuple[tuple[int, int], ...]:
     from app.services.stock_catalog_financial_quotes import held_catalog_quote_page
 
-    pending = await pending_catalog_quotes(redis, account=account, server=server)
+    try:
+        pending = await pending_catalog_quotes(redis, account=account, server=server)
+    except RedisError:
+        # Curated reports and durable catalog targets have their own authority.
+        pending = ()
     held = await held_catalog_quote_page(
         db, now=checked, after=window.held_after, limit=_CATALOG_PAGE
     )
@@ -472,6 +477,7 @@ async def run_stock_halt_cycle(
     settings: SchedulerSettings,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     catalog_window: CatalogHaltWindow | None = None,
+    catalog_redis: Redis | None = None,
 ) -> CycleResult:
     if not settings.stock_data_enabled:
         return CycleResult("ok")
@@ -498,9 +504,9 @@ async def run_stock_halt_cycle(
                 if not opened:
                     return CycleResult("ok")
                 targets = (
-                    ()
-                    if catalog_window is None
-                    else await _catalog_targets(db, redis, catalog_window, checked, **scope)
+                    await _catalog_targets(db, catalog_redis, catalog_window, checked, **scope)
+                    if catalog_window is not None and catalog_redis is not None
+                    else ()
                 )
                 curated = _admitted(evidence, checked, **scope)
                 if (

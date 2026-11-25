@@ -179,6 +179,7 @@ async def test_catalog_report_loop_reuses_one_report_and_refuses_ambiguous_notic
                 http=http,
                 settings=settings,
                 catalog_window=window,
+                catalog_redis=redis_client,
             )
             assert (await stock_halts.run_stock_halt_cycle(**args)).accepted == 1
             assert (await stock_halts.run_stock_halt_cycle(**args)).accepted == 0

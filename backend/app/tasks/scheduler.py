@@ -284,6 +284,12 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         socket_connect_timeout=2,
         socket_timeout=2,
     )
+    cache_url = settings.catalog_cache_url
+    catalog_redis = redis if cache_url == settings.redis_url else None
+    if cache_url is not None and catalog_redis is None:
+        catalog_redis = Redis.from_url(
+            cache_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=2
+        )
     http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
     stock_http: httpx.AsyncClient | None = None
     action_http: httpx.AsyncClient | None = None
@@ -352,7 +358,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                 assert stock_http is not None  # noqa: S101 - created before loop
                 return await run_catalog_quote_cycle(
                     sessionmaker=sessionmaker,
-                    redis=redis,
+                    redis=catalog_redis,
+                    quota_redis=redis,
                     http=stock_http,
                     settings=settings,
                     cursor=catalog_cursor,
@@ -368,7 +375,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
             )
 
             halt_http = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(5.0))
-            catalog_halt_window = CatalogHaltWindow()
+            catalog_halt_window = CatalogHaltWindow() if catalog_redis is not None else None
 
             async def halt_cycle() -> CycleResult:
                 assert halt_http is not None  # noqa: S101 - created before loop
@@ -378,6 +385,7 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                     http=halt_http,
                     settings=settings,
                     catalog_window=catalog_halt_window,
+                    catalog_redis=catalog_redis,
                 )
 
             background_checks.append((halt_cycle, DUE_CHECK_SECONDS))
@@ -432,6 +440,8 @@ async def amain(stop: asyncio.Event | None = None) -> None:
         if stock_http is not None:
             await stock_http.aclose()
         await http.aclose()
+        if catalog_redis is not None and catalog_redis is not redis:
+            await catalog_redis.aclose()
         await redis.aclose()
         await engine.dispose()
 
