@@ -4,7 +4,7 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T19:37:18Z"
+last_updated: "2026-11-25T19:42:52Z"
 last_activity: 2026-11-25 -- Verified live IEX quote access for out-of-list Oracle in a bounded probe
 progress:
   total_phases: 4
@@ -12,7 +12,7 @@ progress:
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: One-stock Alpaca probe passed; expanded catalog and live activation still pending
+stopped_at: Full searchable trading confirmed; catalog coverage and listing enrollment pending
 ---
 
 # Project State
@@ -56,7 +56,9 @@ GitHub published v0.8.0 on that commit. The back-merge and expanded
 live-source evidence are pending. The owner confirmed expanded Alpaca
 scope and the approved ORCL probe returned advancing sub-second IEX
 quotes. Complete directory and live trading qualification remain open.
-A paused-stock rollout is proposed for owner review. [Production proposal](phases/21-verify-release-and-activate-stock-trading/21-PRODUCTION-PREFLIGHT.md)
+The owner confirmed the full searchable-trading scope. The production
+proposal records the remaining catalog coverage and listing enrollment
+work. [Production proposal](phases/21-verify-release-and-activate-stock-trading/21-PRODUCTION-PREFLIGHT.md)
 [Release CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 

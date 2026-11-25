@@ -1,13 +1,11 @@
 # Phase 21 production preflight proposal
 
-The owner requested publication and deployment. GitHub published v0.8.0.
-The approved Phase 21 rollout combines the 0026 upgrade with live stock
-admission. Expanded exchange coverage, account scope for IEX data and
-durable use, and out-of-list quote and corporate-action proof remain open.
-This proposal requests a separate decision to prepare a deployment with
-stock trading and live stock collection paused. Preparation and a paused
-deployment leave the live requirements and Phase 21 acceptance open.
-[Live-source qualification](21-LIVE-QUALIFICATION.md)
+The owner requested working stock trading across the searchable NYSE and
+Nasdaq common-share catalog. A deployment with stocks paused and an
+original-20 rollout would fall short of that outcome. GitHub published
+v0.8.0. Production rollout and expanded live qualification remain open.
+[Milestone requirements](../../REQUIREMENTS.md)
+· [Live-source qualification](21-LIVE-QUALIFICATION.md)
 
 ## Selected release
 
@@ -38,17 +36,35 @@ measurements reserved for the approved backup and recovery scope.
 App, Git and system configuration writes, writer stops, volume operations,
 provider access, backup and restore require later authorization.
 
-## Proposed paused-stock cutover
+## Work remaining for searchable trading
 
-Use the existing protected tooling and fresh exact encrypted restore
-gates with the actual predecessor. Keep `STOCK_DATA_ENABLED=false` and
-`STOCK_ACTIONS_ENABLED=false`. Proceed only after verifying the mounted
-source and available distinct candidate. Under the shared operation lock,
-fence the writers, verify the final predecessor snapshot and restore,
-and copy and migrate the approved candidate to `0026`. Preserve the
-predecessor data and tooling. Run origin and public smoke, confirm crypto
-and stock refusal, then take and verify a fresh encrypted 0026 backup in
-the approved isolated clone. Confirm off-server custody with the owner.
+- Publish a current, reconciled NYSE and Nasdaq common-share catalog using
+  sources with documented field and use scope. Alpaca's asset master can
+  verify active listings and provider identities. Alpaca states that its
+  asset API does not classify stocks and ETFs separately. Full coverage
+  therefore needs a checked classification source and coverage comparison.
+  [Alpaca asset FAQ](https://docs.alpaca.markets/us/v1.4.2/docs/broker-api-faq)
+- Make listing verification and trading enrollment practical for the
+  full catalog. The released importer stages up to two individually
+  approved asset lookups per grant. Financial promotion takes an exact
+  catalog ID, listing ID and admission ID. The trade endpoint is read-only
+  for a listing without a financial binding, even when a display quote
+  exists. Closing this gap requires an operator workflow that can enroll
+  verified listings in batches or when selected, within the existing
+  allowed scope, quota and identity checks. Retain fresh quotes, reported
+  halts and action coverage for the issue before permitting an order.
+- Use the exact authorized release, measured candidate volumes and
+  verified prechange encrypted restore for the cutover. After protected
+  activation, verify the browser can search for an out-of-list name and
+  ticker, buy and sell a virtual share, and reconcile cash, holdings and
+  History.
+
+The 0026 recovery proof and the bounded live ORCL read remain applicable to
+their measured inputs. Two targeted released tests also passed in a
+disposable PostgreSQL/Redis stack for the existing AAPL route and reported
+halt/expired-evidence rules. Those results do not establish expanded
+production readiness. The exact approved cutover must use verified
+rollout evidence for whichever release delivers the full outcome.
 
 Before the first candidate writer, the measured original 0023 release and
 volumes can be reopened after the rollback checks. After the first writer,
@@ -57,6 +73,5 @@ maintenance window, volume selection, capacity, live recovery evidence and
 rollback route must be bound to the actual host before asking for cutover
 approval. [Production runbook](../../../deploy/RUNBOOK.md)
 
-Phase 21 Plans 06, 08 and 09 retain the live catalog and trading
-requirements. Their proofs stay pending until live qualification and
-activation are complete.
+Phase 21 retains full catalog coverage and the production out-of-list
+acceptance requirement.
