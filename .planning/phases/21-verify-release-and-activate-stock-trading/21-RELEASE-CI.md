@@ -61,4 +61,85 @@ manifests and locks differ only in their root application version. The
 frontend audit fingerprints match those new files and the existing issue
 35 advisory, scope and expiry are preserved. The offline uv lock check,
 frontend audit tests, lint, typecheck, build and diff checks passed.
-Release publication and successful exact-main CI remain pending.
+Successful exact-main CI and release publication remain pending.
+
+## Release PR
+
+The owner approved pushing the local release head and opening its PR into
+`main`, with reviewed CI, fixture and planning fixes on the release branch
+through the check run. [PR #47](https://github.com/YokAI-open/Birja/pull/47)
+tests release head `84511f0864799d5a058129644a89a7ce37f88bdc` against
+`main` base `07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9`.
+[Run 45623598560](https://github.com/YokAI-open/Birja/actions/runs/45623598560)
+The frontend, image, full browser and ops jobs passed. The recovery
+campaign restored the exact retained `0025` and cold encrypted `0026` on a
+fresh server. It preserved the original volume and ledger before writes
+and recovered exact `0026` candidate data and receipts after writes. The
+predecessor refused `0026`. PR artifact `15029749173` has transport SHA-256
+`efb0dfd5ad9abdedf78abdadd0bdc6aaf1cd5d3dbb406fdc7d2a85c52d85a2c6`.
+The artifact must be replaced by the verified artifact from the eventual
+successful `main` run for protected rollout.
+
+Backend passed 3,941 tests with 94.41% overall coverage and 100% critical
+coverage. Its dependency audit passed. All six jobs, including `ci-pass`,
+completed successfully on the exact release head. GitHub reports PR #47
+open, clean and mergeable into the verified `main` base. The next
+checkpoint is explicit owner approval for the main merge commit.
+
+## Main merge
+
+The owner approved the merge of the checked release head. PR #47 merged
+at 14:23:00 UTC on 2026-11-25 as
+`4c839f5642f60771a5a376f2956bd7c8ab28aca9`, with parents
+`07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9` and
+`84511f0864799d5a058129644a89a7ce37f88bdc`. The merge tree
+`ede70d1f0320f6efd7907a7ec35463453dca3a7b` matches the reviewed release.
+[Main run 45633446612](https://github.com/YokAI-open/Birja/actions/runs/45633446612)
+tests the actual main merge commit on the push event.
+
+The [main recovery job](https://github.com/YokAI-open/Birja/actions/runs/45633446612/job/139272499837)
+failed in the retained `0012` corporate-action scenario. After the November
+25 session opened, the next opening was November 27. The older fixture
+already held a session row for that date under calendar generation 3. Its
+scenario expected generation 8 and kept the existing row untouched.
+PostgreSQL correctly rejected the mismatched calendar in the resolution
+function. No release artifact was staged by this run.
+
+The fixture refreshes the selected session under the scenario's active
+calendar while retaining its primary key. There are no runtime or
+migration changes. The isolated retained-source PostgreSQL replay
+reproduced the same rejection on the prior fixture, then passed resolution
+and split application with the patched fixture. It confirmed November 27
+at 14:30 UTC, a stable row ID and new generation 8. All 44 recovery-runner
+contracts and 113 ops CI contracts passed. Independent focused review
+found no blockers. The full campaign remains required on the corrective PR
+and its resulting main commit.
+
+## Corrective release PR
+
+The owner approved publishing fixture correction `58a90b3fe44b46e360b3c36a4098af9774ad6882`,
+opening its [PR #48](https://github.com/YokAI-open/Birja/pull/48), merging
+that exact head into main only after all six checks pass, and monitoring
+the resulting main run. The PR has the checked main base `4c839f5`.
+[Run 45636439110](https://github.com/YokAI-open/Birja/actions/runs/45636439110)
+tests the approved corrective head.
+
+The corrective PR's frontend, image, browser and seven-stage recovery
+jobs passed. The hosted recovery log confirms exact retained `0012` rows,
+schema and sequences through the repaired scenario. The same archive also
+passed retained `0025`, cold encrypted `0026` on a fresh server, and exact
+data before and after the first write boundary. GitHub uploaded that
+PR archive. Its SHA-256 is
+`a32f8c92f66eff8b081538fc4989e282c5da2e2c5320cf9008b315bb34efde5d`.
+
+Both the original main run and corrective PR backend jobs failed
+`test_catalog_renewed_review_rechecks_retained_event_id`. Each stopped
+after one test failure and 2,526 passes. The local PostgreSQL reproduction
+showed the mocked dividend opening fell before the catalog journal origin,
+so the app correctly omitted the event from the new empty book. Renewal had
+no retained ID to recheck. The corrective test records today's process date
+with ex, record and payable dates at the next verified session opening.
+It retains the exact known-ID recheck and reconciliation assertions.
+All 60 tests in the monitoring module passed on disposable PostgreSQL and
+Redis, Ruff lint and formatting passed, and independent review found
+no blockers. The full PR suite and resulting main CI remain required.
