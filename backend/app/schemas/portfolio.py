@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from typing import Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.schemas.trades import Money
 from app.services.portfolio import PortfolioPriceStatus, PortfolioSnapshot
@@ -28,6 +28,24 @@ class HoldingOut(BaseModel):
     as_of: AwareDatetime | None
     age_seconds: int | None = Field(ge=0)
     status: PortfolioPriceStatus
+    catalog_id: str | None = Field(
+        default=None,
+        pattern=r"^[1-9][0-9]{0,18}$",
+        exclude_if=lambda value: value is None,
+    )
+    listing_exchange: Literal["NYSE", "NASDAQ"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def catalog_identity(self) -> Self:
+        if self.catalog_id is None:
+            if self.listing_exchange is not None:
+                raise ValueError("Listing exchange requires a catalog identity")
+        elif self.asset_class != "stock" or int(self.catalog_id) > 9223372036854775807:
+            raise ValueError("Invalid catalog holding identity")
+        return self
 
 
 class PortfolioOut(BaseModel):

@@ -61,6 +61,15 @@ function EventCard({
             </p>
           )}
           <HistoryEventDetails item={item} target={target} anchorPrefix={prefix} />
+          {item.catalog_id && (
+            <Link
+              to={`/portfolios/${target.portfolioId}/trade/catalog/${item.catalog_id}`}
+              aria-label={`View stock ticket for ${item.symbol}`}
+              className="mt-2 inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              View stock
+            </Link>
+          )}
         </div>
       </details>
     </li>

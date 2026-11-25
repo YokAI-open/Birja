@@ -13,20 +13,21 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.security import create_access_token
-from app.db.portfolio_bootstrap import GRANTS_0023_SQL as GRANTS_SQL
 from app.main import create_app
 from tests import test_portfolio_closure_authority as authority_harness
+from tests.portfolio_fixtures import migrate_to
+from tests.test_migrations import EXPECTED_HEAD, install_runtime_grants_for_revision
 from tests.test_portfolio_management_authority import create, owner
 
 authority = authority_harness.authority
 
 
 @pytest_asyncio.fixture
-async def management_api(authority, engine, settings):
-    restricted, migrator, _ = authority
-    async with engine.begin() as conn:
-        raw = await conn.get_raw_connection()
-        await raw.driver_connection.execute(GRANTS_SQL)
+async def management_api(authority, settings):
+    restricted, migrator, admin = authority
+    await migrate_to("head")
+    async with admin.begin() as conn:
+        await install_runtime_grants_for_revision(conn, EXPECTED_HEAD)
     config = settings.model_copy(
         update={
             "database_url": restricted.url.render_as_string(hide_password=False),

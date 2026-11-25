@@ -41,11 +41,12 @@ async def guard_case(engine, migrated, new_user, request):
             await conn.execute(
                 text("""INSERT INTO stock_data_admissions
             (product,state,generation,reviewed_at,valid_from,valid_until,evidence_ref,terms_version,
-             collection_allowed,display_allowed,derived_allowed,retention_allowed,calendar)
+             collection_allowed,display_allowed,derived_allowed,retention_allowed,scope,calendar)
             VALUES (:p,'approved',1,CAST(:n AS timestamptz),
             CAST(:n AS timestamptz)-interval '1 hour',CAST(:n AS timestamptz)+interval '1 hour',
             'synthetic-only','fixture',true,true,true,true,
-            CASE WHEN :p='calendar' THEN jsonb_build_object(
+            jsonb_build_object('feed','iex'),
+              CASE WHEN :p='calendar' THEN jsonb_build_object(
             'review_valid_until',CAST(:n AS timestamptz)+interval '1 hour')
             ELSE '{}'::jsonb END)"""),
                 {"p": product, "n": now},

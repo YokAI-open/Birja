@@ -51,6 +51,8 @@ class CurrentCampaign(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.validate_selection("recovery-current")
         for argv, stages in ((["--suite", "recovery", "--dry-run"], runner.STAGES),
+                             (["--phase", "21", "--suite", "recovery-successor", "--dry-run"],
+                              runner.SUCCESSOR_STAGES),
                              (["--phase", "15", "--suite", "recovery-current", "--dry-run"], ("current0023-cold",))):
             output = io.StringIO()
             with redirect_stdout(output):
@@ -61,6 +63,10 @@ class CurrentCampaign(unittest.TestCase):
         with redirect_stdout(io.StringIO()), patch.object(runner, "execute_recovery", side_effect=AssertionError("execution")):
             with self.assertRaises(SystemExit):
                 runner.main(["--suite", "recovery-current", "--dry-run"])
+        for suite, phase in (("recovery-successor", 14), ("recovery-successor", 15),
+                             ("recovery", 21), ("recovery-current", 21), ("all-security", 21)):
+            with self.subTest(phase=phase, suite=suite), self.assertRaises(ValueError):
+                runner.validate_selection(suite, phase)
 
     def test_current_stage_authenticates_failure_and_validates_real_result_shape(self):
         for outcome in (["a" * 64, "b" * 64, "c" * 64], None, RuntimeError("failed current")):
@@ -240,6 +246,68 @@ class CurrentCampaign(unittest.TestCase):
         self.assertEqual(str(runner.ARCHIVE), "/tmp/birja-phase14-proof/recovery.tar.gz")
         self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0023-cold",
                                        "roles", "tls-upgraded", "tls-fresh", "selected-rollback"))
+        self.assertEqual(str(runner.archive_for_phase(21)), "/tmp/birja-backup-test-phase21-proof/recovery.tar.gz")
+        self.assertEqual(runner.SUCCESSOR_STAGES, ("image-transition", "retained-roundtrip", "current0026-cold",
+                                                 "roles", "tls-upgraded", "tls-fresh", "selected-rollback"))
+        auth = ["a" * 64, "b" * 64, "c" * 64]
+        actions = dict.fromkeys(runner.SUCCESSOR_STAGES, lambda: auth)
+        runner.execute_stages(actions, lambda: None, stages=runner.SUCCESSOR_STAGES)
+        with self.assertRaisesRegex(ValueError, "unrecognized recovery stage"):
+            runner.execute_stages({**actions, "other-stage": lambda: None}, lambda: None,
+                                  stages=runner.SUCCESSOR_STAGES)
+        with self.assertRaisesRegex(ValueError, "unrecognized recovery stage"):
+            runner.execute_stages(dict.fromkeys(runner.STAGES, lambda: auth), lambda: None,
+                                  stages=runner.SUCCESSOR_STAGES)
+
+    def test_successor_receipt_requires_completed_graph_and_exact_source_and_image(self):
+        from types import SimpleNamespace
+
+        identity = {"tested_source": "a" * 40, "tested_tree": "b" * 40,
+                    "app_tree": "c" * 40, "context_sha256": "d" * 64}
+        binding = {"id": "sha256:" + "e" * 64, "source_commit": identity["tested_source"],
+                   "app_tree": identity["app_tree"], "context_sha256": identity["context_sha256"],
+                   "config_sha256": "f" * 64, "rootfs_sha256": "0" * 64}
+        runner.require_successor_image(binding, identity)
+        for field, value in (("id", "mutable-tag"), ("source_commit", "f" * 40),
+                             ("app_tree", "f" * 40), ("context_sha256", "f" * 64),
+                             ("config_sha256", ""), ("rootfs_sha256", "")):
+            with self.subTest(image_field=field), self.assertRaisesRegex(ValueError, "tested source"):
+                runner.require_successor_image({**binding, field: value}, identity)
+        with tempfile.TemporaryDirectory(prefix="birja-backup-test-receipt-unit-") as tmp:
+            root = Path(tmp)
+            archive = root / "recovery.tar.gz"
+            expected = "1" * 64
+            (root / "recovery.tar.gz.sha256").write_text(expected + "\n")
+            (root / "current0026-image-binding.json").write_text(json.dumps(binding))
+            complete = {**identity, "archive": str(archive), "archive_sha256": expected,
+                        "phase": 21, "suite": "recovery-successor",
+                        "recovery_profile": "deploy-recovery-v7", "payload_version": 6, "revision": "0026",
+                        "stage_order": list(runner.SUCCESSOR_STAGES), "current_stage": "selected-rollback",
+                        "stages": dict.fromkeys(runner.SUCCESSOR_STAGES, "passed-authenticated"),
+                        "current_image": binding, "ok": True, "whole7": True, "same_archive_final_ci": True}
+            fake = SimpleNamespace(r=SimpleNamespace(private=Path, bundle_verify=lambda *a, **k: None),
+                                   portfolio_sources=lambda: None)
+            with patch.object(runner, "load", return_value=fake), \
+                 patch.object(runner, "successor_source_identity", return_value=identity), \
+                 patch.object(runner, "campaign_sources", return_value={}), \
+                 patch.object(runner, "authenticate") as authenticate:
+                for mutation in ({"ok": False}, {"whole7": 1}, {"same_archive_final_ci": False},
+                                 {"stages": {}}, {"current_stage": "tls-fresh"},
+                                 {"tested_tree": "f" * 40}, {"tested_source": "f" * 40},
+                                 {"recovery_profile": "deploy-recovery-v5"}, {"revision": "0024"},
+                                 {"current_image": {**binding, "id": "sha256:" + "9" * 64}}):
+                    with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                        (root / "status.json").write_text(json.dumps({**complete, **mutation}))
+                        runner.verify_successor_receipt(archive, identity["tested_source"])
+                receipt = root / "status.json"
+                receipt.write_text(json.dumps(complete))
+                with self.assertRaisesRegex(ValueError, "hosted source"):
+                    runner.verify_successor_receipt(archive, "f" * 40)
+                authenticate.assert_not_called()
+                self.assertEqual(runner.verify_successor_receipt(archive, identity["tested_source"]),
+                                 (expected, hashlib.sha256(receipt.read_bytes()).hexdigest()))
+                authenticate.assert_called_once_with(fake, archive, expected, {},
+                                                     successor_identity=identity)
 
     def test_every_stage_including_failed_stage_authenticates_afterward(self):
         for failed in (None, *runner.STAGES):
@@ -409,15 +477,24 @@ class CurrentCampaign(unittest.TestCase):
     def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
         module = runner.load('test-dev-bootstrap')
         code = module.financial_program()
-        compile(code, '<dev0023>', 'exec')
-        self.assertIn("version_num FROM alembic_version\")=='0023'", code)
+        compile(code, '<dev0026>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0026'", code)
+        self.assertIn("PREFLIGHT_0026_SQL", code)
         self.assertIn("version_num='0018'", code)
-        self.assertIn("version_num='0023'", code)
+        self.assertIn("version_num='0026'", code)
         self.assertIn("D('124.45')", code)
         self.assertIn('7777', code)
         self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))
         source = (ROOT / 'deploy/tests/test-dev-bootstrap.py').read_text()
         self.assertIn('services[name]["volumes"] = "RESET"', source)
+        self.assertLess(source.index('input=stage_program("0024")'),
+                        source.index('input=stage_program("0025")'))
+        self.assertLess(source.index('input=stage_program("0025")'),
+                        source.index('input=retained_catalog_program()'))
+        retained = module.retained_catalog_program()
+        compile(retained, '<retained0025>', 'exec')
+        self.assertIn("require_schema(conn, consumer='retained0025') == '0025'", retained)
+        self.assertIn("exc.reason == 'incompatible_schema'", retained)
 
     def test_preflight_uses_stripped_tools_and_exact_owned_fixture_tail(self):
         from types import SimpleNamespace

@@ -84,6 +84,14 @@ async function ticket(page: Page) {
   await expect(page.getByLabel("Whole-share quantity")).toBeVisible();
   await expect(page.getByRole("button", { name: "Buy max" })).toBeEnabled();
 }
+async function pollStockContext(page: Page) {
+  const refresh = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith("/stock-trades/AAPL/context"),
+  );
+  await page.bringToFront();
+  await page.clock.runFor(15_100);
+  await refresh;
+}
 async function preview(page: Page, quantity = "2") {
   await page.getByLabel("Whole-share quantity").fill(quantity);
   const endpoint = await portfolioApi(page, "/stock-trades/quote");
@@ -120,6 +128,8 @@ async function noOverflow(page: Page) {
 test("actual ask buy and bid sale preserve immutable receipt, shared cash and combined allocation", async ({
   page,
 }, info) => {
+  // This cold-browser flow signs in, places three stock orders and trades BTC.
+  test.setTimeout(60_000);
   await ticket(page);
   await page.getByRole("button", { name: "Buy max", exact: true }).click();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("98");
@@ -149,7 +159,8 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
   expect(sell.exec_price).toBe("100.00000000");
   expect(sell.cash_after).toBe("9996.00000000");
   expect(sell.held_after).toBe("0.00000000");
-  await page.goto("/trade/BTC");
+  const selected = await portfolioId(page);
+  await page.goto(`/portfolios/${selected}/trade/BTC`);
   await expect(page.getByRole("heading", { name: /Trade BTC/ })).toBeVisible();
   await page.getByLabel("Amount", { exact: true }).fill("100");
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -161,7 +172,7 @@ test("actual ask buy and bid sale preserve immutable receipt, shared cash and co
     if (await receipt.isVisible()) break;
   }
   await expect(page.getByRole("heading", { name: "Order filled", exact: true })).toBeVisible();
-  await page.goto("/trade/stocks/AAPL");
+  await page.goto(`/portfolios/${selected}/trade/stocks/AAPL`);
   await preview(page, "1");
   const next = await fill(page);
   expect(next.cash_after).toBe("9794.00000000");
@@ -204,6 +215,7 @@ test("actual changed ask requires renewed confirmation with the exact server del
 test("actual committed lost response resolves the original receipt with the same key after close", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   await preview(page);
   const bodies: unknown[] = [];
@@ -225,7 +237,7 @@ test("actual committed lost response resolves the original receipt with the same
   const check = page.getByRole("button", { name: "Check order result", exact: true });
   await expect(check).toBeEnabled();
   stockFixture("close");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByLabel("Whole-share quantity")).toBeDisabled();
   await check.click();
   await expect(page.getByRole("heading", { name: "Order filled" })).toBeFocused();
@@ -258,18 +270,26 @@ test("actual malformed success preserves the original attempt for safe result re
 test("closed drafts retain quantity and require a fresh explicit preview after reopening", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   await preview(page);
   stockFixture("close");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
+  await expect(page.getByText("Market closed.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Retry stock", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Cash available $10,000.00", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Whole-share quantity")).toHaveValue("2");
   await page.getByLabel("Whole-share quantity").fill("3");
-  await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toBeDisabled();
+  await page.getByLabel("Whole-share quantity").press("Enter");
+  await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Your quantity is a draft. No order will be queued.")).toHaveCount(0);
+  await expect(page.getByText("Enter a quantity to preview this trade.")).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("stock-closed-draft.png"), fullPage: true });
   stockFixture("open");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByRole("button", { name: "Preview trade", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Whole-share quantity")).toHaveValue("3");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");
 });
@@ -346,6 +366,7 @@ for (const width of [320, 375, 768, 1024, 1440]) {
 test("keyboard-only ticket controls and stale deadlines never queue an order", async ({
   page,
 }, info) => {
+  await page.clock.install();
   await ticket(page);
   const input = page.getByLabel("Whole-share quantity");
   await input.focus();
@@ -363,7 +384,7 @@ test("keyboard-only ticket controls and stale deadlines never queue an order", a
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeEnabled();
   stockFixture("stale");
-  await page.getByRole("button", { name: "Retry stock", exact: true }).click();
+  await pollStockContext(page);
   await expect(page.getByRole("button", { name: "Confirm buy", exact: true })).toBeDisabled();
   await expect(input).toHaveValue("2");
   expect((await (await page.request.get(await portfolioApi(page))).json()).cash).toBe("10000.00");

@@ -334,9 +334,9 @@ jobs:
         with:
           node-version-file: frontend/.nvmrc
       - name: Bounded current-source recovery preflight
-        run: python3 deploy/tests/run-portfolio-validation.py --suite recovery --preflight
+        run: python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor --preflight
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
-        run: sudo -- python3 deploy/tests/run-portfolio-validation.py --suite recovery
+        run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor
       - name: Stage verified recovery tooling
         if: success()
         run: |
@@ -344,12 +344,16 @@ jobs:
           umask 077
           recovery_stage="$RUNNER_TEMP/birja-verified-recovery"
           mkdir "$recovery_stage"
-          recovery_archive=/tmp/birja-phase14-proof/recovery.tar.gz
-          recovery_sha=$(sudo cat "$recovery_archive.sha256")
+          recovery_archive=/tmp/birja-backup-test-phase21-proof/recovery.tar.gz
+          verification=$(sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor --verify-successor-receipt "$GITHUB_SHA")
+          read -r recovery_sha receipt_sha <<< "$verification"
           [[ "$recovery_sha" =~ ^[0-9a-f]{64}$ ]]
-          sudo install -m 600 -o "$(id -u)" -g "$(id -g)" "$recovery_archive" "$recovery_stage/recovery.tar.gz"
+          [[ "$receipt_sha" =~ ^[0-9a-f]{64}$ ]]
+          sudo -- install -m 600 -o "$(id -u)" -g "$(id -g)" "$recovery_archive" "$recovery_stage/recovery.tar.gz"
+          sudo -- install -m 600 -o "$(id -u)" -g "$(id -g)" "${recovery_archive%/*}/status.json" "$recovery_stage/recovery-receipt.json"
           printf '%s  recovery.tar.gz\n' "$recovery_sha" > "$recovery_stage/recovery.tar.gz.sha256"
           (cd "$recovery_stage" && sha256sum --check --strict recovery.tar.gz.sha256)
+          printf '%s  %s\n' "$receipt_sha" "$recovery_stage/recovery-receipt.json" | sha256sum --check --strict
       - name: Upload verified recovery tooling
         if: success()
         uses: actions/upload-artifact@v7
@@ -358,6 +362,7 @@ jobs:
           path: |
             ${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz
             ${{ runner.temp }}/birja-verified-recovery/recovery.tar.gz.sha256
+            ${{ runner.temp }}/birja-verified-recovery/recovery-receipt.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

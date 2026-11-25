@@ -92,6 +92,13 @@ def test_regular_condition_can_apply_to_both_sides() -> None:
     assert validate_quote(raw(conditions=["R", "R"]), NOW, 4) is not None
 
 
+def test_trailing_zero_scale_matches_the_wire_price_precision() -> None:
+    quote = validate_quote(raw(bid=Decimal("100.000000010"), ask=Decimal("100.0000000200")), NOW, 4)
+    assert quote is not None
+    assert str(quote.bid) == "100.00000001"
+    assert str(quote.ask) == "100.00000002"
+
+
 def test_unrepresentable_decimal_context_is_refused_instead_of_raising() -> None:
     with localcontext() as context:
         context.prec = 1

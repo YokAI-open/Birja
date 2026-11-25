@@ -10,7 +10,7 @@ import json
 from dataclasses import asdict, dataclass, fields
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -43,7 +43,8 @@ from app.models.corporate_action import (
 )
 from app.models.price import Coin
 from app.models.stock import StockDataAdmission, StockInstrument
-from app.models.trade import Holding
+from app.models.stock_catalog_finance import StockCatalogActionCoverage
+from app.models.trade import Holding, Trade
 from app.models.user import Account
 from app.services.alpaca_actions import ActionBatch
 from app.services.corporate_action_rules import (
@@ -68,6 +69,10 @@ from app.services.stock_ownership import (
 )
 from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
 from app.services.stock_quotes import load_stock_catalog
+from app.services.stock_sessions import build_sessions
+
+if TYPE_CHECKING:
+    from app.services.stock_catalog_actions import CatalogActionAuthority
 
 
 class ActionHeld(ValueError):
@@ -84,6 +89,93 @@ class PersistedAction:
 
 async def _clock(db: AsyncSession) -> datetime:
     return cast(datetime, (await db.execute(select(func.clock_timestamp()))).scalar_one())
+
+
+async def _action_gate(
+    db: AsyncSession, coin_id: int, catalog: CatalogActionAuthority | None
+) -> None:
+    if catalog is not None:
+        from app.services.stock_catalog_actions import lock_catalog_action_scope
+
+        if catalog.binding.coin_id != coin_id:
+            raise ActionHeld("identity_conflict")
+        await lock_catalog_action_scope(db)
+    await acquire_stock_gate(db, coin_id)
+
+
+async def _check_catalog_action(
+    db: AsyncSession,
+    catalog: CatalogActionAuthority,
+    *,
+    state: StockActionState | None = None,
+) -> bool:
+    from app.services.stock_catalog_actions import load_catalog_action_authority
+
+    binding = catalog.binding
+    now = await _clock(db)
+    current = await load_catalog_action_authority(
+        db,
+        binding.coin_id,
+        now,
+        account=binding.account,
+        server=binding.server,
+        allow_fixture=catalog.is_fixture,
+    )
+    if current != catalog:
+        raise ActionHeld("admission_changed")
+    if state is None:
+        return True
+    coverage = await db.get(StockCatalogActionCoverage, binding.coin_id, populate_existing=True)
+    return (
+        coverage is not None
+        and (coverage.catalog_id, coverage.listing_id, coverage.admission_id)
+        == (binding.catalog_id, binding.listing_id, catalog.admission_id)
+        and state.admission_generation == catalog.admission_id
+        and state.health == "current"
+        and state.valid_until is not None
+        and now < state.valid_until <= catalog.valid_until
+        and coverage.coverage_start is not None
+        and coverage.covered_until is not None
+        and coverage.coverage_start <= coverage.journal_origin <= coverage.covered_until <= now
+        and coverage.journal_origin == state.journal_start_at
+        and (
+            coverage.coverage_start,
+            coverage.covered_until,
+            coverage.cursor,
+            coverage.observed_at,
+            coverage.valid_until,
+        )
+        == (
+            state.coverage_start,
+            state.covered_until,
+            state.cursor,
+            state.checked_at,
+            state.valid_until,
+        )
+    )
+
+
+def _same_catalog_terms(before: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Re-observation after rename compares economics under the same issue."""
+    incidental = {"symbol", "listing_id", "catalog_admission_id", "ingest_hold"}
+    return {k: v for k, v in before.items() if k not in incidental} == {
+        k: v for k, v in after.items() if k not in incidental
+    }
+
+
+def _current_catalog_revision(
+    revision: StockActionRevision, catalog: CatalogActionAuthority
+) -> bool:
+    terms = revision.normalized_terms
+    binding = catalog.binding
+    return (
+        revision.admission_generation == catalog.admission_id
+        and terms.get("catalog_id") == str(binding.catalog_id)
+        and str(terms.get("coin_id")) == str(binding.coin_id)
+        and terms.get("listing_id") == str(binding.listing_id)
+        and terms.get("provider_asset_id") == binding.provider_asset_id
+        and terms.get("symbol") == catalog.ticker
+    )
 
 
 async def _load_admission(db: AsyncSession, product: str) -> ProductAdmission | None:
@@ -276,13 +368,23 @@ async def _hold(db: AsyncSession, state: StockActionState, at: datetime) -> None
     await db.flush()
 
 
+async def _no_history_before(db: AsyncSession, coin_id: int, origin: datetime) -> bool:
+    # Ingestion holds the instrument gate. The economic journal and fills
+    # must both prove that no Birja position existed before this origin.
+    movement = StockOwnershipMovement
+    prior = exists().where(movement.coin_id == coin_id, movement.economic_at < origin)
+    fill = exists().where(Trade.coin_id == coin_id, Trade.created_at < origin)
+    return not await db.scalar(select(prior | fill))
+
+
 async def persist_action_batch(
     db: AsyncSession,
     batch: ActionBatch,
-    authority: ProductAdmission,
+    authority: ProductAdmission | None,
     *,
     account: str = "birja",
     server: str = "birja",
+    catalog: CatalogActionAuthority | None = None,
 ) -> tuple[PersistedAction, ...]:
     if (
         not isinstance(batch, ActionBatch)
@@ -317,25 +419,40 @@ async def persist_action_batch(
     if len(cids) != 1:
         raise ActionHeld("one_instrument_per_transaction")
     cid = next(iter(cids))
-    await acquire_stock_gate(db, cid)
-    capability = (
-        "replay" if any(row.mutation != "snapshot" for row in batch.observations) else "rest"
-    )
-    evidence = await _authority(
-        db, authority, capability=capability, account=account, server=server
-    )
-    mapping = next((row for row in await load_stock_catalog(db) if row.coin_id == cid), None)
+    await _action_gate(db, cid, catalog)
     now = await _clock(db)
-    if mapping is None or not verified_mapping(mapping, now):
-        raise ActionHeld("mapping")
-    state = await _state(db, cid, evidence.generation)
+    mapping: StockMapping | None = None
+    evidence: ProductAdmission | None = None
+    if catalog is None:
+        if authority is None:
+            raise ActionHeld("admission")
+        capability = (
+            "replay" if any(row.mutation != "snapshot" for row in batch.observations) else "rest"
+        )
+        evidence = await _authority(
+            db, authority, capability=capability, account=account, server=server
+        )
+        mapping = await _mapping(db, cid)
+        symbol = mapping.symbol
+        generation = evidence.generation
+    else:
+        if (account, server) != (catalog.binding.account, catalog.binding.server):
+            raise ActionHeld("admission")
+        await _check_catalog_action(db, catalog)
+        symbol = catalog.ticker
+        generation = catalog.admission_id
+    state = await _state(db, cid, generation)
+    if catalog is not None and state.admission_generation != generation:
+        state.admission_generation = generation
+        state.valid_until = None
+        await _hold(db, state, now)
     results = []
     for observation in batch.observations:
         action = observation.action
         if (
             not utc(action.observed_at)
             or action.observed_at > await _clock(db)
-            or action.symbol != mapping.symbol
+            or action.symbol != symbol
         ):
             raise ActionHeld("invalid_observation")
         source = (
@@ -348,8 +465,40 @@ async def persist_action_batch(
             )
         ).scalar_one_or_none()
         terms = _terms(action)
-        classification = classify_action(action)
+        if catalog is not None:
+            terms.update(
+                {
+                    "catalog_id": str(catalog.binding.catalog_id),
+                    "listing_id": str(catalog.binding.listing_id),
+                    "provider_asset_id": catalog.binding.provider_asset_id,
+                    "catalog_admission_id": str(generation),
+                }
+            )
+        catalog_symbol = symbol if catalog is not None else None
+        classification = classify_action(action, catalog_symbol=catalog_symbol)
         kind, reason = classification.kind, classification.reason
+        verified_cutoff = action.economic_at if kind == "supported_forward_split" else None
+        if catalog is not None and kind in ("supported_dividend", "supported_forward_split"):
+            if kind == "supported_dividend":
+                cutoff = dividend_cutoff(
+                    action,
+                    catalog.binding.listing_exchange,
+                    now,
+                    catalog.calendar,
+                    account=account,
+                    server=server,
+                    catalog_symbol=catalog_symbol,
+                )
+                verified_cutoff = cutoff.cutoff if cutoff is not None else None
+            elif not any(
+                session.exchange == catalog.binding.listing_exchange
+                and session.session_date == action.ex_date
+                and session.opens_at == verified_cutoff
+                for session in build_sessions(now, catalog.calendar, account=account, server=server)
+            ):
+                verified_cutoff = None
+            if verified_cutoff is None:
+                kind, reason = "uncertain", "conflicting"
         if source is None:
             candidates = (
                 (
@@ -374,6 +523,17 @@ async def persist_action_batch(
             ):
                 kind, reason = "uncertain", "conflicting"
                 terms["ingest_hold"] = "suspected_alias"
+            if (
+                catalog is not None
+                and kind in {"supported_dividend", "supported_forward_split"}
+                and verified_cutoff is not None
+                and state.journal_start_at == catalog.journal_origin
+                and verified_cutoff < catalog.journal_origin
+                and await _no_history_before(db, cid, catalog.journal_origin)
+            ):
+                # This action predates the proved empty book. A future
+                # delivery with a post-origin cutoff can still be ingested.
+                continue
             event = StockActionEvent(
                 coin_id=cid, economic_key=str(uuid4()), first_observed_at=action.observed_at
             )
@@ -412,9 +572,12 @@ async def persist_action_batch(
                     # Inclusive replay can redeliver A after B became current.
                     # Compare A with its own immutable observation, never B;
                     # do not manufacture a historical revision or rewind state.
-                    if {
+                    recorded_terms = {
                         k: v for k, v in recorded.normalized_terms.items() if k != "ingest_hold"
-                    } != terms:
+                    }
+                    if recorded_terms != terms and not (
+                        catalog is not None and _same_catalog_terms(recorded_terms, terms)
+                    ):
                         raise ActionHeld("mutation_conflict")
                     results.append(
                         PersistedAction(
@@ -432,6 +595,7 @@ async def persist_action_batch(
             previous is not None
             and {k: v for k, v in previous.normalized_terms.items() if k != "ingest_hold"} == terms
         )
+        applied = None
         if not identical:
             applied = (
                 await db.execute(
@@ -440,6 +604,16 @@ async def persist_action_batch(
                     )
                 )
             ).scalar_one_or_none()
+            if (
+                catalog is not None
+                and applied is not None
+                and previous is not None
+                and _same_catalog_terms(previous.normalized_terms, terms)
+            ):
+                # Renewing authority for the same terms preserves the split's
+                # applied revision, including across a verified ticker change.
+                identical = True
+        if not identical:
             latest = (
                 await db.execute(
                     select(func.max(StockOwnershipMovement.economic_at)).where(
@@ -449,6 +623,7 @@ async def persist_action_batch(
             ).scalar_one()
             if applied is not None or (
                 action.economic_at is not None
+                and (catalog is None or action.event_type == "forward_split")
                 and latest is not None
                 and action.economic_at <= latest
             ):
@@ -494,12 +669,12 @@ async def persist_action_batch(
                     source_mutation_id=observation.cursor,
                     source_event_at=observation.source_at or action.source_event_at,
                     observed_at=action.observed_at,
-                    admission_generation=evidence.generation,
+                    admission_generation=generation,
                     normalized_terms=terms,
                     classification=kind,
                     reason=reason,
-                    verified_cutoff=action.economic_at
-                    if kind == "supported_forward_split"
+                    verified_cutoff=verified_cutoff
+                    if kind in ("supported_dividend", "supported_forward_split")
                     else None,
                     units=action.units,
                 )
@@ -509,7 +684,9 @@ async def persist_action_batch(
             state.epoch += 1
             if kind not in ("supported_dividend", "supported_forward_split"):
                 await _hold(db, state, now)
-            elif action.economic_at is not None:
+            elif action.economic_at is not None and (
+                catalog is None or kind == "supported_forward_split"
+            ):
                 state.next_blocking_at = (
                     min(state.next_blocking_at, action.economic_at)
                     if state.next_blocking_at
@@ -524,7 +701,7 @@ async def persist_action_batch(
                 revision_id=revision.id,
                 mutation_id=observation.cursor,
                 observed_at=action.observed_at,
-                admission_generation=evidence.generation,
+                admission_generation=generation,
                 source_kind="replay" if observation.mutation != "snapshot" else "rest",
                 cycle_id=str(uuid4()),
             )
@@ -544,14 +721,17 @@ async def persist_action_batch(
                 revision_id=missing_event.current_revision_id,
                 mutation_id=None,
                 observed_at=await _clock(db),
-                admission_generation=evidence.generation,
+                admission_generation=generation,
                 source_kind="missing_or_uncertain",
                 cycle_id=str(uuid4()),
             )
         )
         await _hold(db, state, await _clock(db))
     await db.flush()
-    await _guard(db, cid, evidence, mapping)
+    if catalog is not None:
+        await _check_catalog_action(db, catalog)
+    else:
+        await _guard(db, cid, cast(ProductAdmission, evidence), cast(StockMapping, mapping))
     return tuple(results)
 
 
@@ -562,11 +742,21 @@ async def apply_due_actions(
     *,
     account: str = "birja",
     server: str = "birja",
+    catalog: CatalogActionAuthority | None = None,
 ) -> tuple[int, ...]:
     """Apply due splits once. Only post-lock database time is authoritative."""
-    await acquire_stock_gate(db, coin_id)
-    evidence = await _authority(db, account=account, server=server)
-    mapping = await _mapping(db, coin_id)
+    await _action_gate(db, coin_id, catalog)
+    evidence: ProductAdmission | None = None
+    mapping: StockMapping | None = None
+    if catalog is None:
+        evidence = await _authority(db, account=account, server=server)
+        mapping = await _mapping(db, coin_id)
+        generation = evidence.generation
+    else:
+        if (account, server) != (catalog.binding.account, catalog.binding.server):
+            raise ActionHeld("admission")
+        await _check_catalog_action(db, catalog)
+        generation = catalog.admission_id
     state, rows = await assert_ownership_consistent(db, coin_id)
     # Instrument gate precedes deterministic root locks and then holding locks.
     # Re-read active state after waits; a frozen sibling remains in complete
@@ -590,7 +780,8 @@ async def apply_due_actions(
         state.health != "current"
         or state.valid_until is None
         or checked >= state.valid_until
-        or state.admission_generation != evidence.generation
+        or state.admission_generation != generation
+        or (catalog is not None and not await _check_catalog_action(db, catalog, state=state))
     ):
         await _hold(db, state, checked)
         return ()
@@ -634,16 +825,29 @@ async def apply_due_actions(
             state.complete_from is None
             or cutoff < state.complete_from
             or (rows and rows[-1].economic_at >= cutoff)
+            or (
+                catalog is not None
+                and (
+                    state.covered_until is None
+                    or cutoff > state.covered_until
+                    or not _current_catalog_revision(revision, catalog)
+                )
+            )
         ):
             await _hold(db, state, checked)
             break
         # Split arithmetic's identifier is opaque; pass roots, not repeated users.
         owners = [SplitOwner(h.portfolio_id, h.quantity, h.cost_basis) for h in holders]
-        plan = plan_forward_split(action, owners)
+        plan = plan_forward_split(
+            action, owners, catalog_symbol=catalog.ticker if catalog is not None else None
+        )
         if not plan.allowed:
             await _hold(db, state, checked)
             break
-        await _authority(db, evidence, account=account, server=server)
+        if catalog is None:
+            await _authority(db, evidence, account=account, server=server)
+        elif not await _check_catalog_action(db, catalog, state=state):
+            raise ActionHeld("monitor_unavailable")
         active_roots = {h.portfolio_id for h in holders}
         before = portfolio_digest_rows(
             rows,
@@ -711,16 +915,34 @@ async def apply_due_actions(
         state.sequence = rows[-1].sequence if rows else 0
         result.append(application.id)
         changed_effects = True
+    if catalog is not None and state.health == "current":
+        state.next_blocking_at = await db.scalar(
+            select(func.min(StockActionRevision.verified_cutoff))
+            .join(StockActionEvent, StockActionEvent.current_revision_id == StockActionRevision.id)
+            .where(
+                StockActionEvent.coin_id == coin_id,
+                StockActionRevision.classification == "supported_forward_split",
+                ~exists(
+                    select(StockSplitApplication.id).where(
+                        StockSplitApplication.economic_event_id == StockActionEvent.id
+                    )
+                ),
+            )
+        )
     await db.flush()
-    await _guard(
-        db,
-        coin_id,
-        evidence,
-        mapping,
-        require_monitor=changed_effects,
-        expected_units=state.unit_epoch,
-        expected_epoch=state.epoch,
-    )
+    if catalog is not None:
+        if not await _check_catalog_action(db, catalog, state=state if changed_effects else None):
+            raise ActionHeld("monitor_unavailable")
+    else:
+        await _guard(
+            db,
+            coin_id,
+            cast(ProductAdmission, evidence),
+            cast(StockMapping, mapping),
+            require_monitor=changed_effects,
+            expected_units=state.unit_epoch,
+            expected_epoch=state.epoch,
+        )
     return tuple(result)
 
 
@@ -880,6 +1102,7 @@ async def derive_dividend_entitlements(
     *,
     account: str = "birja",
     server: str = "birja",
+    catalog: CatalogActionAuthority | None = None,
 ) -> tuple[EntitlementSnapshot, ...]:
     """Retain historical eligibility, never cash/payment/History publication.
 
@@ -889,10 +1112,23 @@ async def derive_dividend_entitlements(
     event = await db.get(StockActionEvent, event_id)
     if event is None:
         raise ActionHeld("unknown_event")
-    await acquire_stock_gate(db, event.coin_id)
+    await _action_gate(db, event.coin_id, catalog)
     event = cast(StockActionEvent, await db.get(StockActionEvent, event_id, populate_existing=True))
-    evidence = await _authority(db, account=account, server=server)
-    mapping = await _mapping(db, event.coin_id)
+    evidence: ProductAdmission | None = None
+    mapping: StockMapping | None = None
+    if catalog is None:
+        evidence = await _authority(db, account=account, server=server)
+        mapping = await _mapping(db, event.coin_id)
+        generation = evidence.generation
+        exchange = mapping.listing_exchange
+        calendar = await _load_admission(db, "calendar")
+    else:
+        if (account, server) != (catalog.binding.account, catalog.binding.server):
+            raise ActionHeld("admission")
+        await _check_catalog_action(db, catalog)
+        generation = catalog.admission_id
+        exchange = catalog.binding.listing_exchange
+        calendar = catalog.calendar
     revision = (
         await db.get(StockActionRevision, event.current_revision_id)
         if event.current_revision_id
@@ -903,12 +1139,16 @@ async def derive_dividend_entitlements(
     action = _action(revision)
     if action.event_type != "cash_dividend":
         raise ActionHeld("not_dividend")
-    state = await _state(db, event.coin_id, evidence.generation)
-    calendar = await _load_admission(db, "calendar")
-    instrument = cast(StockInstrument, await db.get(StockInstrument, event.coin_id))
+    state = await _state(db, event.coin_id, generation)
     now = await _clock(db)
     cutoff = dividend_cutoff(
-        action, instrument.listing_exchange, now, calendar, account=account, server=server
+        action,
+        exchange,
+        now,
+        calendar,
+        account=account,
+        server=server,
+        catalog_symbol=catalog.ticker if catalog is not None else None,
     )
     classification = "cancelled" if action.cancelled else "eligible"
     rows = list(
@@ -969,11 +1209,19 @@ async def derive_dividend_entitlements(
         and state.health == "current"
         and state.valid_until is not None
         and now < state.valid_until
-        and state.admission_generation == evidence.generation
+        and state.admission_generation == generation
         and state.covered_until is not None
         and cutoff.cutoff <= state.covered_until
         and not await persistent_action_holds(db, event.coin_id)
     )
+    if catalog is not None:
+        verified = (
+            verified
+            and _current_catalog_revision(revision, catalog)
+            and cutoff is not None
+            and cutoff.cutoff == revision.verified_cutoff
+            and await _check_catalog_action(db, catalog, state=state)
+        )
     units = 0
     if cutoff is not None:
         units = sum(a.cutoff < cutoff.cutoff for a in applications)
@@ -1073,15 +1321,19 @@ async def derive_dividend_entitlements(
         db.add(existing)
         await db.flush()
         result.append(_snapshot(existing))
-    await _authority(db, evidence, account=account, server=server)
-    await _guard(
-        db,
-        event.coin_id,
-        evidence,
-        mapping,
-        calendar if verified else None,
-        require_monitor=verified,
-        expected_units=state.unit_epoch,
-        expected_epoch=state.epoch,
-    )
+    if catalog is not None:
+        if not await _check_catalog_action(db, catalog, state=state if verified else None):
+            raise ActionHeld("monitor_unavailable")
+    else:
+        await _authority(db, evidence, account=account, server=server)
+        await _guard(
+            db,
+            event.coin_id,
+            cast(ProductAdmission, evidence),
+            cast(StockMapping, mapping),
+            calendar if verified else None,
+            require_monitor=verified,
+            expected_units=state.unit_epoch,
+            expected_epoch=state.epoch,
+        )
     return tuple(result)

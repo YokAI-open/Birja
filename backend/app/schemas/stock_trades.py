@@ -94,6 +94,7 @@ class SessionFacts(Contract):
 
 
 class StatusFacts(Contract):
+    source: Literal["alpaca", "nasdaq-rss"] = "alpaca"
     state: Literal["normal", "halted", "frozen", "unknown"] = "unknown"
     event_at: AwareDatetime | None = None
     observed_at: AwareDatetime | None = None

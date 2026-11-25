@@ -50,6 +50,9 @@ PORTFOLIO0020 = {
     "app_tree": "98b64d2ade4519aa566f4ad1832aac9b33485691",
     "alembic_tree": "eb240860976eb6f3f04ad69cf9d169089c595e02",
 }
+CATALOG_FINANCE = {
+    "revision": "0026", "payload_version": 6, "profile": "deploy-recovery-v7",
+}
 
 
 def profile_for(revision):
@@ -60,6 +63,8 @@ def profile_for(revision):
         return dict(PORTFOLIO0020)
     if revision == "0023":
         return dict(MATRIX["current"])
+    if revision == "0026":
+        return dict(CATALOG_FINANCE)
     if revision in {f"{n:04}" for n in range(7, 15)}:
         return {"revision": revision, "lane": "legacy0007" if revision == "0007" else
                 "legacy0008" if revision == "0008" else "retained"}

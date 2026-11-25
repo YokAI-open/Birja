@@ -1,55 +1,63 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Birja Interface Redesign
-current_phase: 17
-current_plan: 2
-status: awaiting_ci_fix_publication
-last_updated: "2026-11-23T12:37:00+00:00"
-last_activity: 2026-11-23
+milestone: v1.4
+milestone_name: Searchable Stock Trading
+current_phase: 21
+status: executing
+last_updated: "2026-11-25T11:01:49Z"
+last_activity: 2026-11-25 -- Phase 21 local candidate verified and independently reviewed
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 4
-  completed_plans: 3
-  percent: 75
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 29
+  completed_plans: 24
+  percent: 50
+stopped_at: Phase 21 Wave 4 publication checkpoint and live-source evidence review
 ---
 
 # Project State
 
 ## Project Reference
 
-See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md) and the
-[candidate audit](v1.3-MILESTONE-AUDIT.md).
+See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
+[REQUIREMENTS.md](REQUIREMENTS.md) and [v1.4 research](research/v1.4/SUMMARY.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: publish the verified Markets browser correction for redesign PR #41 after approval.
+Current focus: Phase 21 release verification, rollout preparation and live
+acceptance of searchable stock trading.
 
 ## Current Position
 
-Phase: 17 — Verify Full-Stack Behavior and Prepare Release
-Plan: 17-02 required CI
-Status: PR #41 is open into develop at 5be70d58e5134cb921299bba14e33f9bdc790dc5. The hosted History Back and complete ops checks passed. Four narrow-viewport Markets keyboard cases failed. The local test correction passes all 93 runnable cases. Required CI needs to run again after publication approval.
-Last activity: 2026-11-23 — Reproduced and corrected Markets test focus timing for [PR #41](https://github.com/YokAI-open/Birja/pull/41).
+Phase: 21
+Plan: 4 of 9 executed
+Status: Awaiting publication approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Phase 21 local candidate verified and independently reviewed
 
-## Evidence
+Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
+awaits complete admitted live exchange coverage. SC-03 has fixture evidence
+and awaits expanded live quote proof. Phase 20 completed all nine plans and
+verified SL-01 through SL-04 on synthetic fixtures. Phase 21 owns the overall
+and critical coverage gates, release CI, and the first out-of-list production
+buy and sell using live IEX data.
+[Phase 19 verification](phases/19-search-the-nyse-and-nasdaq-catalog/19-VERIFICATION.md) ·
+[Phase 20 verification](phases/20-trade-and-value-stocks-from-search/20-VERIFICATION.md)
 
-- Same application tree at ef60a64 and abe4976. Follow-up changes affect
-  browser test locators and navigation in three specs.
-- Frontend lint, format, typecheck, build and 1,332 tests pass with 97.56%
-  line coverage. Backend lint, format and mypy pass. Use the complete
-  3,703-test/100%-critical release receipt for checked identical backend
-  inputs. A separate fresh run passed 1,374 before intentional interruption
-  and owned cleanup.
-- The complete browser run returned 85 passes, eight test failures and one
-  expected deployed-only skip. The targeted rerun passed 16 including all
-  eight failed cases. The evidence covers 93 distinct runnable scenarios.
-- Owner integrated UI and native 200% passed. See [UAT](phases/16-adopt-the-approved-interface/16-HUMAN-UAT.md).
-- v1.2 is archived and production is v0.6.2. Phase 7 owner acceptance is
-  closed. Live stock activation and other follow-ups stay in [DEFERRED.md](DEFERRED.md).
+Phase 21 local recovery and catalog checks passed. All 99 baseline test
+failures or setup errors passed targeted reruns. Source-matched backend
+coverage is 94.41% overall and 100% critical. The exact hosted whole-suite
+result and release artifact remain pending. Live acquisition and activation
+need evidence for the expanded scope. Those checks can progress independently.
+[Local candidate](phases/21-verify-release-and-activate-stock-trading/21-CANDIDATE.md) ·
+[Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 
-Hosted CI: [run 45160029262](https://github.com/YokAI-open/Birja/actions/runs/45160029262).
+## Carried context
 
-See [CI diagnosis and local proof](debug/pr41-hosted-qualification.md).
+- v1.3 Phases 16 and 17 are verified. The [v1.3 audit](v1.3-MILESTONE-AUDIT.md)
+  and original phase records preserve approval and verification evidence.
 
-Replacement hosted CI: [run 45169702553](https://github.com/YokAI-open/Birja/actions/runs/45169702553).
+- Production baseline `07d3aa5` has the redesigned UI and 20-stock catalog.
+  Alpaca quotes and corporate actions were verified in isolation. Production
+  stock execution is disabled and tracked in the [November 24 verification](quick/20261124-stock-activation/SUMMARY.md).
+
+- Phase 7 owner acceptance is closed. The actual stock activation outcome is
+  now owned by v1.4. [Deferred work](DEFERRED.md)

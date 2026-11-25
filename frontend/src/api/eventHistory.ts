@@ -11,6 +11,7 @@ type EventBase<K extends string, A extends "crypto" | "stock"> = {
   symbol: string;
   name: string;
   cash_delta: string;
+  catalog_id?: string;
 };
 export type EventTrade = EventBase<"trade", "crypto" | "stock"> & {
   side: "buy" | "sell";
@@ -118,6 +119,8 @@ function shares(v: unknown): bigint | null {
 }
 const baseKeys = "kind id recorded_at asset_type symbol name cash_delta";
 const termKeys = "eligible_quantity rate cutoff ex_date record_date payable_date";
+const eventKeys = (v: Record<string, unknown>, fields: string) =>
+  exact(v, baseKeys + (Object.hasOwn(v, "catalog_id") ? " catalog_id " : " ") + fields);
 function terms(v: Record<string, unknown>): boolean {
   return (
     shares(v.eligible_quantity) !== null &&
@@ -135,13 +138,18 @@ function roundedTarget(v: Record<string, unknown>): bigint {
   return (q + (r > CENT / 2n || (r === CENT / 2n && q % 2n !== 0n) ? 1n : 0n)) * CENT;
 }
 function base(v: Record<string, unknown>): boolean {
+  const catalog = Object.hasOwn(v, "catalog_id");
   return (
     typeof v.kind === "string" &&
     publicId(v.id, v.kind) &&
     timestamp(v.recorded_at) &&
     (v.asset_type === "crypto" || v.asset_type === "stock") &&
     typeof v.symbol === "string" &&
-    /^[A-Z][A-Z0-9.-]{0,19}$/.test(v.symbol) &&
+    (catalog
+      ? v.asset_type === "stock" &&
+        id(v.catalog_id) &&
+        /^[A-Z0-9][A-Z0-9.$^+/=-]{0,13}$/.test(v.symbol)
+      : /^[A-Z][A-Z0-9.-]{0,19}$/.test(v.symbol)) &&
     text(v.name, 256) &&
     cents(v.cash_delta, true) !== null
   );
@@ -150,7 +158,7 @@ function dividend(v: unknown): v is EventDividend {
   if (
     !record(v) ||
     !base(v) ||
-    !exact(v, baseKeys + " " + termKeys + " payment_reference credited_amount credited_at") ||
+    !eventKeys(v, termKeys + " payment_reference credited_amount credited_at") ||
     v.kind !== "dividend" ||
     v.asset_type !== "stock" ||
     !terms(v) ||
@@ -171,7 +179,7 @@ function item(v: unknown): v is EventHistoryItem {
   if (v.kind === "dividend") return dividend(v);
   if (v.kind === "trade") {
     if (
-      !exact(v, baseKeys + " side quantity exec_price fee filled_at source feed quote_at") ||
+      !eventKeys(v, "side quantity exec_price fee filled_at source feed quote_at") ||
       (v.side !== "buy" && v.side !== "sell") ||
       fixed(v.quantity) === null ||
       fixed(v.quantity)! <= 0n ||
@@ -196,10 +204,9 @@ function item(v: unknown): v is EventHistoryItem {
   }
   if (v.kind === "split") {
     if (
-      !exact(
+      !eventKeys(
         v,
-        baseKeys +
-          " ratio_new ratio_old quantity_before quantity_after cost_basis_before cost_basis_after effective_at",
+        "ratio_new ratio_old quantity_before quantity_after cost_basis_before cost_basis_after effective_at",
       ) ||
       v.asset_type !== "stock" ||
       cents(v.cash_delta, true) !== 0n ||
@@ -224,12 +231,12 @@ function item(v: unknown): v is EventHistoryItem {
   if (
     v.kind !== "dividend_correction" ||
     v.asset_type !== "stock" ||
-    !exact(
+    !eventKeys(
       v,
-      baseKeys +
-        " payment_reference decision_reference outcome reason desired_total cumulative_applied_before proposed_delta applied_delta terms original",
+      "payment_reference decision_reference outcome reason desired_total cumulative_applied_before proposed_delta applied_delta terms original",
     ) ||
     !dividend(v.original) ||
+    v.catalog_id !== v.original.catalog_id ||
     v.payment_reference !== v.original.id ||
     v.decision_reference !== v.id ||
     instant(v.original.recorded_at) > instant(v.recorded_at as string) ||

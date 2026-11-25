@@ -137,7 +137,7 @@ for name in backend/alembic/versions/0023_portfolio_closure_authority.py \
   backend/alembic/sql/0023_portfolio_closure.sql backend/app/db/portfolio_bootstrap.py \
   backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
   mkdir -p "$APP_DIR/$(dirname "$name")"
-  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$HERE/../.." show "v0.7.0:$name" > "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
 done
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m closure-tested
@@ -178,3 +178,92 @@ run_case deploy 0023 "$CLOSURE_MIGRATOR_CORRUPT" no refuse
 if admit_application_source "$CLOSURE_MIGRATOR_CORRUPT"; then
   echo 'FAIL corrupted migration authentication admitted'; exit 1
 fi
+
+git -C "$APP_DIR" checkout -q --detach "$CLOSURE_TESTED"
+for name in backend/alembic/versions/0024_stock_halt_snapshot.py \
+  backend/alembic/sql/0024_stock_halt_snapshot.sql backend/app/db/portfolio_bootstrap.py \
+  backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py; do
+  git -C "$HERE/../.." show "33b9b5fdc6f89ef810d588bd7c7b2962b2c80352:$name" > "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m reported-halt-tested
+HALT_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$HALT_TESTED
+for revision in 0023 0024; do
+  run_case deploy "$revision" "$HALT_TESTED" no pass
+  ADMITTED_REVISION=$revision admit_application_source "$HALT_TESTED"
+done
+run_case rollback 0024 main yes pass
+run_case rollback 0024 main no refuse
+BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
+if ADMITTED_REVISION=0024 admit_application_source "$CLOSURE_TESTED"; then
+  echo 'FAIL predecessor runtime admitted on 0024'; exit 1
+fi
+
+# Exercise the new exact source across the forward and pending-rollback paths.
+git -C "$APP_DIR" checkout -q --detach "$HALT_TESTED"
+RETAINED_0025=31cba00ca3f0c9d4214b6bb0b66892a4c81779fb
+for name in backend/alembic/versions/0025_stock_catalog.py \
+  backend/alembic/sql/0025_stock_catalog.sql backend/app/db/portfolio_bootstrap.py \
+  backend/app/db/schema_contract.py backend/app/db/portfolio_migrate.py \
+  backend/app/db/dev_bootstrap.py deploy/db/bootstrap-roles.sql; do
+  mkdir -p "$APP_DIR/$(dirname "$name")"
+  git -C "$HERE/../.." show "$RETAINED_0025:$name" > "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-tested
+CATALOG_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$CATALOG_TESTED
+run_case deploy 0024 "$CATALOG_TESTED" no pass
+run_case deploy 0025 "$CATALOG_TESTED" no pass
+run_case rollback 0025 main yes pass
+run_case rollback 0025 main no refuse
+if ADMITTED_REVISION=0024 admit_application_source "$CATALOG_TESTED"; then
+  echo 'FAIL catalog runtime admitted before upgrade'; exit 1
+fi
+BIRJA_TESTED_SOURCE=$HALT_TESTED
+run_case deploy 0025 "$HALT_TESTED" no refuse
+run_case rollback 0025 main yes refuse
+printf '\n-- corrupted catalog contract\n' >> "$APP_DIR/backend/alembic/sql/0025_stock_catalog.sql"
+git -C "$APP_DIR" add backend/alembic/sql/0025_stock_catalog.sql
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-corrupt
+BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
+run_case deploy 0024 "$BIRJA_TESTED_SOURCE" no refuse
+run_case deploy 0025 "$BIRJA_TESTED_SOURCE" no refuse
+
+# Revision 0026 requires every current migration companion and a matching
+# runtime. The 0025 fixture above continues to exercise its retained lane.
+git -C "$APP_DIR" checkout -q --detach "$CATALOG_TESTED"
+for name in backend/alembic/versions/0026_stock_catalog_finance.py \
+  backend/alembic/sql/0026_stock_catalog_{finance,execution,actions}.sql \
+  backend/app/db/{portfolio_bootstrap,portfolio_migrate,schema_contract,dev_bootstrap}.py \
+  backend/app/models/{__init__,stock_catalog_finance,price}.py \
+  backend/app/services/corporate_actions.py deploy/db/bootstrap-roles.sql; do
+  mkdir -p "$APP_DIR/$(dirname "$name")"
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-finance-tested
+FINANCE_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$FINANCE_TESTED
+run_case deploy 0025 "$FINANCE_TESTED" no pass
+run_case deploy 0026 "$FINANCE_TESTED" no pass
+run_case rollback 0026 main yes pass
+run_case rollback 0026 main no refuse
+if ADMITTED_REVISION=0025 admit_application_source "$FINANCE_TESTED"; then
+  echo 'FAIL catalog financial runtime admitted before upgrade'; exit 1
+fi
+BIRJA_TESTED_SOURCE=$CATALOG_TESTED
+run_case deploy 0026 "$CATALOG_TESTED" no refuse
+run_case rollback 0026 main yes refuse
+BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
+run_case deploy 0026 "$CLOSURE_TESTED" no refuse
+run_case rollback 0026 main yes refuse
+run_case rollback 0023 main yes pass
+printf '\n-- corrupted catalog execution contract\n' >> "$APP_DIR/backend/alembic/sql/0026_stock_catalog_execution.sql"
+git -C "$APP_DIR" add backend/alembic/sql/0026_stock_catalog_execution.sql
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-finance-corrupt
+BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
+run_case deploy 0025 "$BIRJA_TESTED_SOURCE" no refuse
+run_case deploy 0026 "$BIRJA_TESTED_SOURCE" no refuse
+run_case rollback 0026 main yes refuse

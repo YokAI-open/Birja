@@ -25,7 +25,9 @@ import httpx
 
 from app.services.corporate_action_rules import NormalizedAction
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_catalog_actions import CatalogActionAuthority, matches_catalog_action_symbol
 from app.services.stock_quote_rules import StockMapping, utc, verified_mapping
+from app.services.stock_sessions import build_sessions
 
 REST_URL = "https://data.alpaca.markets/v1/corporate-actions"
 REPLAY_URL = "https://stream.data.alpaca.markets/v1beta1/events/corporate-actions"
@@ -60,7 +62,8 @@ _SYMBOL_FIELDS = (
 _ULID = re.compile(r"[0-7][0-9A-HJKMNP-TV-Z]{25}\Z")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 _STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)\Z")
-EvidenceLoader = Callable[[], ProductAdmission | None | Awaitable[ProductAdmission | None]]
+ActionEvidence = ProductAdmission | tuple[CatalogActionAuthority, ...] | None
+EvidenceLoader = Callable[[], ActionEvidence | Awaitable[ActionEvidence]]
 LeaseCheck = Callable[[], bool | Awaitable[bool]]
 Capability = Literal["rest", "replay"]
 
@@ -95,6 +98,7 @@ class ActionBatch:
     complete: bool = False
     attempt_count: int = 0
     reason: str = "source_gap"
+    uncertain_coin_ids: frozenset[int] = frozenset()
 
 
 @dataclass
@@ -160,9 +164,11 @@ class _Context:
     account: str
     server: str
     capability: Capability
+    catalog: tuple[CatalogActionAuthority, ...] = ()
     initial: ProductAdmission | None = None
+    uncertain_coin_ids: set[int] = field(default_factory=set)
 
-    async def guard(self) -> ProductAdmission:
+    async def guard(self) -> tuple[int, int]:
         self.budget.remaining()
         if await _resolve(self.lease()) is not True:
             raise ActionError("lease")
@@ -170,7 +176,21 @@ class _Context:
         self.budget.remaining()
         if await _resolve(self.lease()) is not True:
             raise ActionError("lease")
-        if value is None or any(
+        if self.catalog:
+            if value != self.catalog:
+                raise ActionError("admission_changed")
+            at = self.now()
+            policies = [
+                authority.policy
+                for authority in self.catalog
+                if at < authority.valid_until and authority.policy is not None
+            ]
+            if len(policies) != len(self.catalog):
+                raise ActionError("admission")
+            return min(p.requests_per_minute for p in policies), min(
+                p.max_response_bytes for p in policies
+            )
+        if not isinstance(value, ProductAdmission) or any(
             not evaluate_admission(
                 value,
                 "actions",
@@ -189,7 +209,9 @@ class _Context:
             self.initial = copy.deepcopy(value)
         elif value != self.initial:
             raise ActionError("admission_changed")
-        return value
+        return cast(int, value.quota["requests_per_minute"]), cast(
+            int, value.quota["max_response_bytes"]
+        )
 
 
 def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -335,15 +357,63 @@ def _normalize(
         if flag in entry and type(entry[flag]) is not bool:
             raise ActionError("invalid_record")
     subtype = entry.get("sub_type")
-    if subtype is not None and subtype not in ("interest", "return_of_capital"):
+    if (
+        subtype is not None
+        and subtype not in ("interest", "return_of_capital")
+        and not (ctx.catalog and subtype == "ordinary")
+    ):
         raise ActionError("invalid_subtype")
     rate = _rate(entry.get("rate"), replay=replay)
     new_rate = _rate(entry.get("new_rate"), replay=replay)
     old_rate = _rate(entry.get("old_rate"), replay=replay)
     result = []
     changed = event_type not in ("cash_dividend", "forward_split")
+    catalog = {target.binding.coin_id: target for target in ctx.catalog}
+    involved = [target for target in ctx.catalog if target.known_symbols & symbols]
+    if len(involved) > 1 and not changed:
+        ctx.uncertain_coin_ids.update(target.binding.coin_id for target in involved)
+        return ()
     for mapping in ctx.mappings:
-        if mapping.symbol not in symbols:
+        target = catalog.get(mapping.coin_id)
+        cutoff = None
+        due_bills = (
+            True
+            if any(
+                dates[key] is not None
+                for key in ("due_bill_on_date", "due_bill_off_date", "due_bill_redemption_date")
+            )
+            else None
+        )
+        units = None
+        if target is not None:
+            matched = target.known_symbols & symbols
+            if not matched:
+                continue
+            if any(
+                not matches_catalog_action_symbol(target, symbol, dates["process_date"], ctx.now())
+                for symbol in matched
+            ):
+                ctx.uncertain_coin_ids.add(mapping.coin_id)
+                continue
+            if due_bills is None and type(entry.get("due_bills")) is bool:
+                due_bills = entry["due_bills"]
+            units = "pre_split" if entry.get("units") == "pre_split" else None
+            if all(dates[name] is not None for name in ("ex_date", "record_date", "payable_date")):
+                cutoff = next(
+                    (
+                        row.opens_at
+                        for row in build_sessions(
+                            ctx.now(),
+                            target.calendar,
+                            account=ctx.account,
+                            server=ctx.server,
+                        )
+                        if row.exchange == target.binding.listing_exchange
+                        and row.session_date == dates["ex_date"]
+                    ),
+                    None,
+                )
+        elif mapping.symbol not in symbols:
             continue
         result.append(
             NormalizedAction(
@@ -354,6 +424,7 @@ def _normalize(
                 dates["process_date"],
                 ctx.now(),
                 source_event_at=source_at,
+                economic_at=cutoff if event_type == "forward_split" else None,
                 currency=currency or None,
                 rate=rate,
                 new_rate=new_rate,
@@ -364,15 +435,12 @@ def _normalize(
                 subtype=subtype,
                 foreign=entry.get("foreign"),
                 special=entry.get("special"),
-                due_bills=True
-                if any(
-                    dates[key] is not None
-                    for key in ("due_bill_on_date", "due_bill_off_date", "due_bill_redemption_date")
-                )
-                else None,
+                due_bills=due_bills,
                 identity_verified=not changed,
+                dates_verified=cutoff is not None,
                 identity_changed=changed,
                 cancelled=cancelled,
+                units=units,
             )
         )
     return tuple(result)
@@ -395,17 +463,17 @@ async def _pause(ctx: _Context, seconds: float) -> None:
 
 
 async def _attempt(ctx: _Context) -> int:
-    evidence = await ctx.guard()
+    requests, _ = await ctx.guard()
     budget = ctx.budget
-    if budget.attempts >= min(budget.max_attempts, evidence.quota["requests_per_minute"]):
+    if budget.attempts >= min(budget.max_attempts, requests):
         raise ActionError("attempt_budget")
-    cadence = 60 / evidence.quota["requests_per_minute"]
+    cadence = 60 / requests
     if budget._last_attempt is not None:
         await _pause(ctx, max(0, cadence - (budget.monotonic() - budget._last_attempt)))
-    evidence = await ctx.guard()
+    _, max_bytes = await ctx.guard()
     budget.attempts += 1
     budget._last_attempt = budget.monotonic()
-    return min(budget.max_response_bytes, cast(int, evidence.quota["max_response_bytes"]))
+    return min(budget.max_response_bytes, max_bytes)
 
 
 async def _request(ctx: _Context, params: dict[str, str]) -> bytes:
@@ -470,6 +538,7 @@ def _context(
     account: str,
     server: str,
     capability: Capability,
+    catalog: tuple[CatalogActionAuthority, ...] = (),
 ) -> _Context:
     budget.validate()
     if budget._busy:
@@ -479,15 +548,38 @@ def _context(
         or "last-event-id" in http.headers
         or not utc(now())
         or not 1 <= len(mappings) <= 20
-        or not all(verified_mapping(mapping, now()) for mapping in mappings)
+        or (not catalog and not all(verified_mapping(mapping, now()) for mapping in mappings))
         or len({mapping.symbol for mapping in mappings}) != len(mappings)
         or len({mapping.coin_id for mapping in mappings}) != len(mappings)
         or len({mapping.provider_asset_id for mapping in mappings}) != len(mappings)
     ):
         raise ActionError("invalid_request")
+    if catalog and (
+        len(catalog) > 8
+        or {(m.coin_id, m.symbol, m.provider_asset_id, m.listing_exchange) for m in mappings}
+        != {
+            (a.binding.coin_id, a.ticker, a.binding.provider_asset_id, a.binding.listing_exchange)
+            for a in catalog
+        }
+        or any(
+            (a.binding.account, a.binding.server) != (account, server) or a.policy is None
+            for a in catalog
+        )
+    ):
+        raise ActionError("invalid_request")
     budget._busy = True
     return _Context(
-        http, tuple(mappings), evidence, now, budget, lease, sleep, account, server, capability
+        http,
+        tuple(mappings),
+        evidence,
+        now,
+        budget,
+        lease,
+        sleep,
+        account,
+        server,
+        capability,
+        catalog,
     )
 
 
@@ -498,6 +590,7 @@ def _batch(
     complete: bool,
     budget: ActionBudget,
     reason: str,
+    uncertain_coin_ids: set[int] | None = None,
 ) -> ActionBatch:
     return ActionBatch(
         tuple(row.action for row in rows),
@@ -507,6 +600,7 @@ def _batch(
         complete,
         budget.attempts,
         reason,
+        frozenset(uncertain_coin_ids or ()),
     )
 
 
@@ -551,6 +645,41 @@ async def _rest(
                         if event_id in seen_ids:
                             raise ActionError("duplicate_identity")
                         seen_ids.add(event_id)
+                        if (
+                            ctx.catalog
+                            and ids is not None
+                            and event_id in ids
+                            and (
+                                not normalized
+                                or {row.symbol for row in normalized} != {ids[event_id]}
+                            )
+                        ):
+                            ctx.uncertain_coin_ids.update(
+                                mapping.coin_id
+                                for mapping in ctx.mappings
+                                if mapping.symbol == ids[event_id]
+                            )
+                            continue
+                        if (
+                            ctx.catalog
+                            and ids is None
+                            and not normalized
+                            and any(
+                                target.binding.coin_id in ctx.uncertain_coin_ids
+                                and any(
+                                    entry.get(key) in target.known_symbols for key in _SYMBOL_FIELDS
+                                )
+                                for target in ctx.catalog
+                            )
+                        ):
+                            continue
+                        if (
+                            ctx.catalog
+                            and ids is None
+                            and any(row.process_date is None for row in normalized)
+                        ):
+                            ctx.uncertain_coin_ids.update(row.coin_id for row in normalized)
+                            continue
                         if not normalized or (
                             ids is not None
                             and (
@@ -590,6 +719,7 @@ async def _rest(
                         not missing,
                         ctx.budget,
                         "missing_or_uncertain" if missing else "pages_exhausted",
+                        ctx.uncertain_coin_ids,
                     )
                 seen_tokens.add(token)
     except ActionError as exc:
@@ -598,7 +728,7 @@ async def _rest(
         reason = "cycle_budget"
     if reason in ("admission", "admission_changed", "lease"):
         rows.clear()
-    return _batch(rows, (coverage,), token, False, ctx.budget, reason)
+    return _batch(rows, (coverage,), token, False, ctx.budget, reason, ctx.uncertain_coin_ids)
 
 
 async def fetch_action_snapshot(
@@ -615,20 +745,35 @@ async def fetch_action_snapshot(
     account: str = "birja",
     server: str = "birja",
     page_token: str | None = None,
+    catalog: tuple[CatalogActionAuthority, ...] = (),
 ) -> ActionBatch:
     """Exhaust inclusive process-date pages; this does not prove financial health."""
     try:
         if type(start) is not date or type(end) is not date or not start <= end:
             raise ActionError("invalid_window")
         page_token = _token(page_token)
-        ctx = _context(http, mappings, evidence, now, budget, lease, sleep, account, server, "rest")
+        if any(
+            a.policy is None
+            or not a.policy.history_start <= start <= end <= a.policy.future_through
+            for a in catalog
+        ):
+            raise ActionError("unreviewed_window")
+        ctx = _context(
+            http, mappings, evidence, now, budget, lease, sleep, account, server, "rest", catalog
+        )
     except ActionError as exc:
         return ActionBatch(attempt_count=budget.attempts, reason=str(exc))
     try:
         return await _rest(
             ctx,
             {
-                "symbols": ",".join(sorted(mapping.symbol for mapping in mappings)),
+                "symbols": ",".join(
+                    sorted(
+                        {symbol for a in catalog if a.policy for symbol in a.policy.rest_symbols}
+                        if catalog
+                        else {mapping.symbol for mapping in mappings}
+                    )
+                ),
                 "start": start.isoformat(),
                 "end": end.isoformat(),
                 "region": "us",
@@ -655,6 +800,7 @@ async def recheck_action_ids(
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     account: str = "birja",
     server: str = "birja",
+    catalog: tuple[CatalogActionAuthority, ...] = (),
 ) -> ActionBatch:
     """Known-ID absence is uncertain; never fabricate deletion/cancellation."""
     try:
@@ -665,7 +811,9 @@ async def recheck_action_ids(
             _uuid(identity)
             if symbol not in symbols:
                 raise ActionError("invalid_ids")
-        ctx = _context(http, mappings, evidence, now, budget, lease, sleep, account, server, "rest")
+        ctx = _context(
+            http, mappings, evidence, now, budget, lease, sleep, account, server, "rest", catalog
+        )
     except ActionError as exc:
         return ActionBatch(attempt_count=budget.attempts, reason=str(exc))
     try:
@@ -862,7 +1010,15 @@ async def _replay(
                         True,
                         "terminal_id" if until_id else "historical_until_close",
                     )
-                    return _batch(rows, (completed,), last, True, ctx.budget, completed.reason)
+                    return _batch(
+                        rows,
+                        (completed,),
+                        last,
+                        True,
+                        ctx.budget,
+                        completed.reason,
+                        ctx.uncertain_coin_ids,
+                    )
     except ActionError as exc:
         reason = str(exc)
     except httpx.TransportError:
@@ -872,7 +1028,7 @@ async def _replay(
     if reason in ("admission", "admission_changed", "lease"):
         rows.clear()
         last = None
-    return _batch(rows, (coverage,), last, False, ctx.budget, reason)
+    return _batch(rows, (coverage,), last, False, ctx.budget, reason, ctx.uncertain_coin_ids)
 
 
 async def replay_action_mutations(
@@ -890,6 +1046,7 @@ async def replay_action_mutations(
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     account: str = "birja",
     server: str = "birja",
+    catalog: tuple[CatalogActionAuthority, ...] = (),
 ) -> ActionBatch:
     """One finite, separately admitted all-US historical replay; no live worker.
 
@@ -899,6 +1056,12 @@ async def replay_action_mutations(
     terminal ID never prove coverage. Local retained observations are curated.
     """
     try:
+        if catalog and (
+            since is None
+            or until is None
+            or any(a.policy is None or since < a.policy.mutation_start for a in catalog)
+        ):
+            raise ActionError("unreviewed_window")
         if since_id is not None or until_id is not None:
             if since is not None or until is not None:
                 raise ActionError("invalid_window")
@@ -924,7 +1087,7 @@ async def replay_action_mutations(
             first, final = cast(datetime, since).isoformat(), cast(datetime, until).isoformat()
             params = {"since": first, "until": final, "region": "us"}
         ctx = _context(
-            http, mappings, evidence, now, budget, lease, sleep, account, server, "replay"
+            http, mappings, evidence, now, budget, lease, sleep, account, server, "replay", catalog
         )
     except ActionError as exc:
         return ActionBatch(attempt_count=budget.attempts, reason=str(exc))

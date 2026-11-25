@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: resolved
 updated: 2026-11-23
 ---
 
@@ -49,3 +49,6 @@ The complete isolated Chromium suite then passed all 93 runnable scenarios
 in 18.2 minutes, with one expected deployed-only CSP skip and clean teardown.
 The local suite log is at
 `/tmp/birja-phase09-browser-ba0j1zsi/browser-all.log`.
+
+The [replacement hosted run](https://github.com/YokAI-open/Birja/actions/runs/45176790570)
+passed all six jobs, including the complete browser suite and recovery.

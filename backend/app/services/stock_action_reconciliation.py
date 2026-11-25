@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.stock import StockInstrument
 from app.services.corporate_action_rules import classify_action, dividend_cutoff
 from app.services.corporate_actions import _action, _mapping
 from app.services.stock_admission import ProductAdmission, evaluate_admission
@@ -198,27 +199,55 @@ async def reconcile(
         )
     ).scalar_one_or_none()
     if stored is None:
-        auth, admission_digest = await _admission_snapshot(db, "actions")
+        revision = await db.get(StockActionRevision, request.expected_revision)
+        if revision is None or revision.event_id != request.event_id:
+            raise ValueError("revision unavailable")
+        terms = revision.normalized_terms
+        is_catalog = "catalog_id" in terms
         calendar, calendar_digest = await _admission_snapshot(db, "calendar")
         now = (await db.execute(text("SELECT clock_timestamp()"))).scalar_one()
-        if (
-            auth is None
-            or admission_digest != evidence.admission_digest
-            or not all(
-                evaluate_admission(
-                    auth,
-                    "actions",
-                    purpose,
-                    now,
-                    feed="alpaca-corporate-actions",
-                    capability="rest",
-                    account=account,
-                    server=server,
-                ).allowed
-                for purpose in ("collection", "derived", "retention")
+        catalog_symbol = None
+        if is_catalog:
+            catalog_symbol = terms.get("symbol")
+            if (
+                not isinstance(catalog_symbol, str)
+                or str(terms.get("coin_id")) != str(request.coin_id)
+                or terms.get("provider_asset_id") != evidence.security_id
+                or revision.admission_generation != request.admission_generation
+            ):
+                raise ValueError("actions authority unavailable")
+            # Only the definer reads the scoped catalog proof and verifies
+            # the exact admission digest, current listing and original alias.
+            catalog_exchange = await db.scalar(
+                select(StockInstrument.listing_exchange).where(
+                    StockInstrument.coin_id == request.coin_id
+                )
             )
-        ):
-            raise ValueError("actions authority unavailable")
+            if catalog_exchange is None:
+                raise ValueError("revision unavailable")
+            exchange = catalog_exchange
+        else:
+            auth, admission_digest = await _admission_snapshot(db, "actions")
+            if (
+                auth is None
+                or admission_digest != evidence.admission_digest
+                or not all(
+                    evaluate_admission(
+                        auth,
+                        "actions",
+                        purpose,
+                        now,
+                        feed="alpaca-corporate-actions",
+                        capability="rest",
+                        account=account,
+                        server=server,
+                    ).allowed
+                    for purpose in ("collection", "derived", "retention")
+                )
+            ):
+                raise ValueError("actions authority unavailable")
+            if auth.generation != request.admission_generation:
+                raise ValueError("admission changed")
         if (
             calendar is None
             or calendar_digest != evidence.calendar_digest
@@ -230,23 +259,25 @@ async def reconcile(
             )
         ):
             raise ValueError("calendar authority unavailable")
-        if auth.generation != request.admission_generation:
-            raise ValueError("admission changed")
-        revision = await db.get(StockActionRevision, request.expected_revision)
-        if revision is None or revision.event_id != request.event_id:
-            raise ValueError("revision unavailable")
-        mapping = await _mapping(db, request.coin_id)
+        if not is_catalog:
+            exchange = (await _mapping(db, request.coin_id)).listing_exchange
         action = _action(revision)
         if request.decision != "confirm_no_effect":
-            classified = classify_action(action)
+            classified = classify_action(action, catalog_symbol=catalog_symbol)
             cutoff = dividend_cutoff(
-                action, mapping.listing_exchange, now, calendar, account=account, server=server
+                action,
+                exchange,
+                now,
+                calendar,
+                account=account,
+                server=server,
+                catalog_symbol=catalog_symbol,
             )
             effective_cutoff = (
                 action.economic_at
                 if classified.kind == "supported_forward_split"
                 and any(
-                    row.exchange == mapping.listing_exchange
+                    row.exchange == exchange
                     and row.session_date == action.ex_date
                     and row.opens_at == action.economic_at
                     for row in build_sessions(now, calendar, account=account, server=server)

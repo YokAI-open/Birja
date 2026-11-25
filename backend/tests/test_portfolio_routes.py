@@ -297,6 +297,11 @@ def test_production_route_inventory_has_no_implicit_financial_consumer(app):
         ("POST", base + "/stock-trades/quote"),
         ("POST", base + "/stock-trades"),
         ("GET", base + "/stock-trades/{symbol}/context"),
+        ("POST", "/api/v2/stock-catalog/{catalog_id}/quote"),
+        ("GET", base + "/stock-catalog/{catalog_id}/trade-context"),
+        ("POST", base + "/stock-catalog/{catalog_id}/preview"),
+        ("POST", base + "/stock-catalog/{catalog_id}/confirm"),
+        ("POST", base + "/stock-catalog/{catalog_id}/receipt"),
     }
     # These actual registered callables can only refuse. None imports a
     # financial user_id service or can be masked by a test-only registration.

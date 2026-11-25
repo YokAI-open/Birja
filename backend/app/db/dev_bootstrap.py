@@ -12,11 +12,20 @@ from sqlalchemy.engine import make_url
 
 from app.db.portfolio_bootstrap import (
     ACL_0023_SHA256,
+    ACL_0025_SHA256,
+    ACL_0025_SQL,
+    ACL_0026_SHA256,
+    ACL_0026_SQL,
     ACL_SQL,
+    CATALOGUE_FINANCE_TABLES,
+    CATALOGUE_TABLES,
+    CURRENT_PORTFOLIO_REVISION,
     DEFAULT_ACL_0023_SHA256,
     DEFAULT_ACL_0023_SQL,
     GRANTS_0023_SQL,
-    PREFLIGHT_0023_SQL,
+    GRANTS_0025_SQL,
+    GRANTS_0026_SQL,
+    PORTFOLIO_PREFLIGHT_SQL,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -110,9 +119,9 @@ FUNCTION_SIGNATURES = frozenset(
 
 def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
     """Finite migration-only inventories, distinct from runtime admission."""
-    if revision is not None and revision not in {f"{n:04}" for n in range(7, 24)}:
+    if revision is not None and revision not in {f"{n:04}" for n in range(7, 27)}:
         raise ValueError("Unsupported migration revision inventory")
-    if revision not in {"0021", "0022", "0023"}:
+    if revision not in {"0021", "0022", "0023", "0024", "0025", "0026"}:
         return TABLES, FUNCTION_SIGNATURES
     tables = TABLES | {"portfolio_lifecycle_closures", "portfolio_closure_intents"}
     signatures = FUNCTION_SIGNATURES - {
@@ -122,12 +131,25 @@ def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[s
         "associate_portfolio_metadata_only()",
     }
     signatures |= {"check_portfolio_lifecycle_integrity()"}
-    if revision in {"0022", "0023"}:
+    if revision != "0021":
         signatures |= {"check_portfolio_terminal_root()"}
-    if revision == "0023":
+    if revision in PORTFOLIO_PREFLIGHT_SQL:
         signatures |= {
             "close_portfolio(bigint,bigint,uuid,text,text)",
             "check_stock_terminal_clock()",
+        }
+    if revision in {"0025", "0026"}:
+        tables |= CATALOGUE_TABLES
+    if revision == "0026":
+        tables |= CATALOGUE_FINANCE_TABLES
+        signatures |= {
+            "stock_catalog_scope_current(bigint,text,stock_catalog_instruments,"
+            "stock_catalog_listings,timestampwithtimezone,jsonb)",
+            "check_catalog_stock_fill()",
+            "assert_catalog_stock_execution_current(bigint,bigint,jsonb)",
+            "stock_catalog_action_context(bigint,bigint,bigint,"
+            "timestampwithtimezone,timestampwithtimezone,boolean)",
+            "check_stock_catalog_split_movements()",
         }
     return frozenset(tables), frozenset(signatures)
 
@@ -137,7 +159,7 @@ def require_complete_migration_inventory(
     relations: list[tuple[str, str, str]],
     signatures: set[str],
 ) -> None:
-    if revision not in {"0021", "0022", "0023"}:
+    if revision not in {"0021", "0022", "0023", "0024", "0025", "0026"}:
         return
     tables, functions = migration_objects(revision)
     nonidentity = {
@@ -148,7 +170,7 @@ def require_complete_migration_inventory(
         "stock_action_state",
         "stock_fill_facts",
         "stock_status_evidence",
-    }
+    } | CATALOGUE_FINANCE_TABLES
     if (
         {name for name, kind, _ in relations if kind == "r"} != tables
         or {name for name, kind, _ in relations if kind == "S"}
@@ -158,10 +180,14 @@ def require_complete_migration_inventory(
         raise ValueError("Incomplete successor migration inventory")
 
 
-async def _authorize_portfolios(conn: asyncpg.Connection) -> None:
-    await conn.execute(PREFLIGHT_0023_SQL)
-    await conn.execute(GRANTS_0023_SQL)
-    if await conn.fetchval(ACL_SQL) != ACL_0023_SHA256:
+async def _authorize_portfolios(conn: asyncpg.Connection, revision: str) -> None:
+    grants_sql, acl_sql, acl_sha256 = {
+        "0025": (GRANTS_0025_SQL, ACL_0025_SQL, ACL_0025_SHA256),
+        "0026": (GRANTS_0026_SQL, ACL_0026_SQL, ACL_0026_SHA256),
+    }.get(revision, (GRANTS_0023_SQL, ACL_SQL, ACL_0023_SHA256))
+    await conn.execute(PORTFOLIO_PREFLIGHT_SQL[revision])
+    await conn.execute(grants_sql)
+    if await conn.fetchval(acl_sql) != acl_sha256:
         raise ValueError("Unexpected final management grants")
     if await conn.fetchval(DEFAULT_ACL_0023_SQL) != DEFAULT_ACL_0023_SHA256:
         raise ValueError("Unexpected final closure default privileges")
@@ -172,7 +198,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 24)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 27)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")
@@ -261,8 +287,11 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
         finally:
             await conn.execute("ALTER ROLE birja_migrator NOLOGIN PASSWORD NULL")
         async with conn.transaction():
-            await _authorize_portfolios(conn)
-        print("dev_final_migration=true source_revision=" + str(revision) + " final=0023")
+            await _authorize_portfolios(conn, CURRENT_PORTFOLIO_REVISION)
+        print(
+            f"dev_final_migration=true source_revision={revision} "
+            f"final={CURRENT_PORTFOLIO_REVISION}"
+        )
     finally:
         await conn.execute("SELECT pg_advisory_unlock(1026016001)")
 
@@ -384,8 +413,8 @@ async def bootstrap(
                 revision = await conn.fetchval("SELECT version_num FROM public.alembic_version")
                 if revision in {"0015", "0016", "0018", "0019", "0021", "0022"}:
                     raise ValueError("migration_only; refusing normal dev bootstrap")
-                if revision == "0023":
-                    await _authorize_portfolios(conn)
+                if revision in PORTFOLIO_PREFLIGHT_SQL:
+                    await _authorize_portfolios(conn, revision)
                 elif revision in {"0017", "0020"}:
                     raise ValueError("Retained schema requires explicit forward migration")
                 else:

@@ -25,7 +25,13 @@ class Coin(Base):
     __tablename__ = "coins"
     __table_args__ = (
         CheckConstraint("symbol = upper(symbol)", name="symbol_upper"),
-        CheckConstraint("length(symbol) BETWEEN 1 AND 10", name="symbol_length"),
+        CheckConstraint(
+            "CASE WHEN asset_class = 'stock' AND left(symbol, 1) = '@' THEN "
+            "CASE WHEN symbol ~ '^@[1-9][0-9]{0,18}$' THEN "
+            "substring(symbol FROM 2)::numeric <= 9223372036854775807 ELSE false END "
+            "ELSE length(symbol) >= 1 AND length(symbol) <= 10 END",
+            name="symbol_length",
+        ),
         CheckConstraint("length(name) BETWEEN 1 AND 64", name="name_length"),
         CheckConstraint("length(kraken_pair) BETWEEN 1 AND 32", name="kraken_pair_length"),
         CheckConstraint("asset_class IN ('crypto', 'stock')", name="asset_class_known"),

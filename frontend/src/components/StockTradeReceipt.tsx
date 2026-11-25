@@ -1,19 +1,10 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { StockFill } from "@/api/stockTrades";
+import type { StockFillValues } from "@/api/stockTrades";
 import { Button } from "@/components/ui/button";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
-import { StockAttribution } from "./StockAttribution";
 import { fullLocalTimestamp, signedUsd } from "@/lib/financialDisplay";
 import { formatUnitPrice, formatUsd } from "@/lib/money";
-export function StockDisclosure() {
-  return (
-    <p className="text-[13px] leading-[18px] text-muted-foreground">
-      Stock commission and added spread are zero. Regulatory fees are omitted. Virtual sale proceeds
-      are available immediately; real settlement restrictions are not simulated.
-    </p>
-  );
-}
 export function StockFigure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -22,16 +13,10 @@ export function StockFigure({ label, children }: { label: string; children: Reac
     </div>
   );
 }
-export function StockDate({ value, exchange = false }: { value: string; exchange?: boolean }) {
+export function StockDate({ value }: { value: string }) {
   return (
     <time dateTime={value} title={value} className="wrap-anywhere">
-      {exchange
-        ? new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-            timeStyle: "long",
-            timeZone: "America/New_York",
-          }).format(new Date(value)) + " (America/New_York)"
-        : fullLocalTimestamp(value)}
+      {fullLocalTimestamp(value)}
     </time>
   );
 }
@@ -39,10 +24,12 @@ export function StockTradeReceipt({
   fill: f,
   onTradeAgain,
   target,
+  unitPrice = formatUnitPrice,
 }: {
-  fill: StockFill;
+  fill: StockFillValues;
   target: PortfolioTarget;
   onTradeAgain: () => void;
+  unitPrice?: (value: string) => string;
 }) {
   const id = useId(),
     heading = useRef<HTMLHeadingElement>(null),
@@ -75,9 +62,9 @@ export function StockTradeReceipt({
         {f.side === "buy" ? "Bought" : "Sold"} {f.quantity.split(".")[0]} shares
       </p>
       <dl className="flex min-w-0 flex-col gap-3">
-        <StockFigure label="Execution price">{formatUnitPrice(f.exec_price)}</StockFigure>
-        <StockFigure label="IEX bid">{formatUnitPrice(f.bid)}</StockFigure>
-        <StockFigure label="IEX ask">{formatUnitPrice(f.ask)}</StockFigure>
+        <StockFigure label="Execution price">{unitPrice(f.exec_price)}</StockFigure>
+        <StockFigure label="IEX bid">{unitPrice(f.bid)}</StockFigure>
+        <StockFigure label="IEX ask">{unitPrice(f.ask)}</StockFigure>
         <StockFigure label="Commission">{formatUsd(f.fee)}</StockFigure>
         <StockFigure label="Added spread">0%</StockFigure>
         <StockFigure label="Total cash change">{signedUsd(f.cash_delta)}</StockFigure>
@@ -94,8 +81,6 @@ export function StockTradeReceipt({
       <p className="text-[13px] leading-[18px] text-muted-foreground">
         Balances shown are the recorded balances immediately after this trade.
       </p>
-      <StockAttribution context="preview" />
-      <StockDisclosure />
       <div className="flex flex-wrap gap-3">
         <Button asChild className="min-h-11">
           <Link to={`/portfolios/${f.portfolio_id}`}>Portfolio</Link>

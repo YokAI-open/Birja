@@ -1,42 +1,60 @@
-# Requirements: Birja v1.3 — Interface Redesign
+# Requirements — Birja v1.4 Searchable Stock Trading
 
-## v1.3 Requirements
+Defined and approved by the owner on 2026-11-24.
 
-### Approved interface
+## Working simulated stock trading
 
-- [x] **UI-01** — The Birja logo, wordmark, Markets, Portfolios, History and door control fit one header row on supported phones and desktops. The current destination is identifiable.
-- [x] **UI-02** — The door focuses the current sign-in field or signs out directly. OTP, session refresh, failed logout recovery and private-data clearing work with the backend. Old Account URLs return to Markets, and signed-in system status remains at `/health`.
-- [x] **UI-03** — Users can browse and search crypto and stocks, see the selected asset and start a trade. IEX attribution, stock eligibility and market-hours restrictions remain visible where needed.
-- [x] **UI-04** — Users open strategies through whole-card links and create them through the final New portfolio card. Cards show cash, value and return. Users can set a name and optionally add or clear a description.
-- [x] **UI-05** — A selected portfolio has one switcher, Edit, Remove and Update toolbar. Its overview shows profit or loss and cash, stock and crypto allocation. Holding cards offer filtering, sorting and trade actions. Unavailable valuations remain explicit.
-- [x] **UI-06** — Both order tickets preserve correct portfolio context, preview, confirmation, receipt, rejection and recovery from an uncertain order result. Orders affect only the selected portfolio.
-- [x] **UI-07** — History has one switcher and Update control. Expandable cards retain the exact recorded values, order, pagination, and original references for trades, dividends, corrections and splits.
+- [x] **SX-01** — A user can preview a whole-share stock order during the regular US session using an on-demand eligible IEX ask for buys or bid for sells. Execution requires a current-session quote whose source timestamp is less than 120 seconds old.
+- [x] **SX-02** — A user sees a specific refusal for closed sessions, exchange-reported halts, or stale or failed market checks. Birja uses a recent official report to block reported stock and market-wide halts. Explain that reporting can lag or omit a halt. The simulator uses fresh regular-session quotes and does not require continuous venue-status verification.
+- [x] **SX-03** — A confirmed fill updates only the selected portfolio. Repricing requires reconfirmation. A retry recovers the original receipt without a duplicate fill. Shares, cash and History match the receipt and stock commission remains zero.
+- [x] **SX-04** — The pricing and halt-data combination is qualified with representative live symbols, observed freshness, quotas and applicable use for Birja. Demonstrate a real app buy and sell using live prices in a disposable portfolio while preserving the existing crypto flow.
 
-### Verification and delivery
+## Search and new stock onboarding
 
-- [x] **QA-01** — Keyboard, phone and desktop workflows, and enlarged-text layouts pass verification. Owner-accepted design decisions and representative release-candidate evidence are recorded.
-- [x] **QA-02** — Changed code passes review and the existing frontend, backend and isolated browser checks. Tests cover session, portfolio ownership and deletion, trade economics and History across the redesigned flows.
-- [ ] **QA-03** — A milestone audit links requirements to actual verification. The reviewed release candidate has the required PR and CI evidence before merge. Release and production actions follow the established approval workflow.
+- [ ] **SC-01** — Users can search all active NYSE and Nasdaq common stocks by ticker or company name, with exact ticker matches first and a clear empty state. Coverage and exclusions can be checked against the refreshed exchange directory.
+- [x] **SC-02** — The catalog handles verified ticker aliases and distinct share classes. A listing change or delisting preserves its historical identity and blocks an ambiguous or inactive instrument from new orders.
+- [ ] **SC-03** — A user can select a result beyond the original 20, see its company and exchange, request a price and open a trade in the chosen portfolio. If the price is missing or the instrument requires review, the reason is visible.
+- [x] **SC-04** — Search uses local catalog data and bounded results. Selecting a result fetches only the needed price. A failing or rate-limited price source still allows search and keeps the last verified catalog available.
 
-## Future requirements
+## Held stocks and corporate actions
 
-See [DEFERRED.md](DEFERRED.md) for live stock status transport and other separately tracked work. Phase 7 owner acceptance is closed.
+- [x] **SL-01** — An eligible stock found through search can be bought and sold. Quote refresh is shared and bounded for actively selected and held stocks, and scales without polling every listed stock.
+- [x] **SL-02** — Markets and the stock ticket show the latest permitted timestamped price when the market is closed, if a mark exists. Show the local-time opening countdown and disable execution until a fresh in-session quote is available.
+- [x] **SL-03** — The expanded eligible universe retains exactly-once ordinary USD dividends and supported forward splits. Unresolved or unsupported events pause affected symbols without disturbing other holdings and portfolios.
+- [x] **SL-04** — Mixed stock and crypto holdings retain the correct cash, basis, quantities and valuations after new-symbol fills, action processing, ticker changes and restarts. An unpriced holding keeps the portfolio aggregate visibly incomplete.
 
-## Out of scope
+## Release acceptance
 
-New trading behavior, provider activation, speculative API or schema changes, production data in local tests, and unrelated repository tooling. Backend changes address demonstrated problems in the approved flows.
+- [ ] **SV-01** — Real-browser acceptance covers accessible search, a ticker beyond the original 20, a simulated buy and sell, and matching cash, holdings and History. It also covers market closed, a reported halt, stale data and crypto availability.
+- [ ] **SV-02** — Existing portfolios, ledgers and historical identifiers survive the upgrade. The changed paths pass code review, relevant automated tests and applicable restore and rollback verification.
+- [ ] **SV-03** — Required CI passes on the release candidate. After the approved rollout, a designated synthetic production portfolio can find a stock beyond the original 20 and complete a buy and sell with live IEX data during a regular session. The rollout receipt records outcomes and enables rollback using the existing runbook.
+
+## Scope boundaries
+
+Active NYSE and Nasdaq common shares are included, including distinct share
+classes. ETFs, ADRs, preferred stock, warrants, OTC instruments, international
+exchanges, premarket and after-hours trading, and brokerage orders are outside
+the approved scope. The plan targets existing free data access and documented
+public sources. Paid feeds and provider outreach remain separate decisions.
 
 ## Traceability
 
 | Requirement | Phase | Status |
-|---|---|---|
-| UI-01 | Phase 16 | Complete |
-| UI-02 | Phase 16 | Complete |
-| UI-03 | Phase 16 | Complete |
-| UI-04 | Phase 16 | Complete |
-| UI-05 | Phase 16 | Complete |
-| UI-06 | Phase 16 | Complete |
-| UI-07 | Phase 16 | Complete |
-| QA-01 | Phase 16 | Complete |
-| QA-02 | Phase 17 | Complete |
-| QA-03 | Phase 17 | Pending |
+|---|---:|---|
+| SX-01 | 18 | Complete |
+| SX-02 | 18 | Complete |
+| SX-03 | 18 | Complete |
+| SX-04 | 18 | Complete |
+| SC-01 | 19 | Live directory coverage pending |
+| SC-02 | 19 | Complete |
+| SC-03 | 19 | Verified on fixtures. Live quote proof pending. |
+| SC-04 | 19 | Complete |
+| SL-01 | 20 | Complete on local fixtures |
+| SL-02 | 20 | Complete on local fixtures |
+| SL-03 | 20 | Complete on local fixtures |
+| SL-04 | 20 | Complete on local fixtures |
+| SV-01 | 21 | Pending |
+| SV-02 | 21 | Pending |
+| SV-03 | 21 | Pending |
+
+Coverage is 15 requirements assigned exactly once.

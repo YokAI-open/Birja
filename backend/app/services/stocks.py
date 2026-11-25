@@ -32,7 +32,12 @@ from app.services.stock_eligibility import (
     session_rows as _sessions,
 )
 from app.services.stock_quote_rules import CURATED_SYMBOLS, ValidatedStockQuote, quote_eligibility
-from app.services.stock_sessions import RegularSession, load_sessions, session_at
+from app.services.stock_sessions import (
+    RegularSession,
+    load_sessions,
+    scheduled_reopening,
+    session_at,
+)
 from app.services.stock_trading_rules import status_current
 
 
@@ -221,6 +226,13 @@ async def list_stocks(
         exchange: session_at(exchange, checked_at, sessions, calendar, **scope)
         for exchange in ("NYSE", "NASDAQ")
     }
+    # The public schedule is display-only while the feed is off. Keep it out
+    # of quote, corporate-action and execution authority calculations.
+    scheduled_openings = {
+        exchange: scheduled_reopening(exchange, checked_at)
+        for exchange, decision in decisions.items()
+        if not settings.stock_data_enabled and not permitted and decision.state == "unknown"
+    }
     items = []
     disclosure_deadline = permission.valid_until
     for original in catalogue:
@@ -254,6 +266,9 @@ async def list_stocks(
                         product,
                         purpose,
                         checked_at,
+                        feed="nasdaq-rss"
+                        if product == "status" and facts.source == "nasdaq-rss"
+                        else "iex",
                         **scope,
                     ).allowed
                     for purpose in ("collection", "display", "derived", "retention")
@@ -276,7 +291,10 @@ async def list_stocks(
                 )
                 if checked_at < min(deadlines):
                     status = StockStatus(
-                        state=facts.state, observed_at=facts.observed_at, valid_until=min(deadlines)
+                        state=facts.state,
+                        observed_at=facts.observed_at,
+                        valid_until=min(deadlines),
+                        reported_at=facts.event_at if facts.source == "nasdaq-rss" else None,
                     )
         session = decisions[row["listing_exchange"]]
         current = session.current
@@ -366,6 +384,15 @@ async def list_stocks(
                         collected_at=candidate.collected_at,
                         age_seconds=int((checked_at - candidate.event_at).total_seconds()),
                     )
+        reopening = scheduled_openings.get(row["listing_exchange"])
+        display_session = StockSessionOut(
+            state="closed" if reopening else cast(Any, session.state),
+            opens_at=current.opens_at if current else None,
+            closes_at=current.closes_at if current else None,
+            next_open_at=reopening
+            or (session.next_session.opens_at if session.next_session else None),
+            valid_until=reopening or session.valid_until,
+        )
         items.append(
             StockItem(
                 id=row["id"],
@@ -389,15 +416,9 @@ async def list_stocks(
                     if not action_safe
                     else "quote_unavailable"
                 ),
-                session=StockSessionOut(
-                    state=cast(Any, session.state),
-                    opens_at=current.opens_at if current else None,
-                    closes_at=current.closes_at if current else None,
-                    next_open_at=session.next_session.opens_at if session.next_session else None,
-                    valid_until=session.valid_until,
-                ),
+                session=display_session,
                 quote_reason=cast(Any, reason),
-                session_reason=cast(Any, session.state),
+                session_reason=display_session.state,
             )
         )
     return StocksResponse(

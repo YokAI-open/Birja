@@ -45,6 +45,7 @@ export type StockItem = {
     state: "normal" | "halted" | "frozen" | "unknown";
     observed_at: string | null;
     valid_until: string | null;
+    reported_at?: string;
   };
   action: StockAction;
   valuation_reason:
@@ -219,7 +220,9 @@ function item(value: unknown, now: string): value is StockItem {
       value,
       "id symbol company_name listing_exchange currency quote session status action valuation_reason execution_enabled execution_reason quote_reason session_reason status_reason",
     ) &&
-    exact(value.status, "state observed_at valid_until") &&
+    (exact(value.status, "state observed_at valid_until") ||
+      (exact(value.status, "state observed_at valid_until reported_at") &&
+        timestamp(value.status.reported_at))) &&
     action(value.action, now) &&
     enumValue(value.valuation_reason, [
       "available",
@@ -278,15 +281,25 @@ function coherent(item: StockItem, now: string): boolean {
   if (item.execution_enabled !== (item.execution_reason === "available")) return false;
   const status = item.status;
   if (status.state === "unknown") {
-    if (status.observed_at !== null || status.valid_until !== null) return false;
-  } else if (
-    status.observed_at === null ||
-    status.valid_until === null ||
-    stockInstant(status.observed_at) > stockInstant(now) ||
-    stockInstant(status.valid_until) <= stockInstant(now) ||
-    stockInstant(status.valid_until) > stockInstant(status.observed_at) + 60_000_000_000n
-  )
-    return false;
+    if (
+      status.observed_at !== null ||
+      status.valid_until !== null ||
+      status.reported_at !== undefined
+    )
+      return false;
+  } else {
+    if (status.observed_at === null || status.valid_until === null) return false;
+    const observed = stockInstant(status.observed_at),
+      until = stockInstant(status.valid_until);
+    const reported = status.reported_at === undefined ? null : stockInstant(status.reported_at);
+    if (observed > stockInstant(now) || until <= stockInstant(now)) return false;
+    if (
+      reported === null
+        ? until > observed + 60_000_000_000n
+        : reported > observed || until > reported + 120_000_000_000n
+    )
+      return false;
+  }
   if (
     item.execution_enabled &&
     (status.state !== "normal" ||

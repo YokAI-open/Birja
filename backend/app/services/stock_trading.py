@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import Any, cast
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import bindparam, select, text
@@ -39,6 +40,8 @@ from app.schemas.stock_trades import (
 )
 from app.services.portfolios import OwnedActivePortfolio
 from app.services.stock_eligibility import LoadedExecution, load_execution_evidence
+from app.services.stock_halts import REPORT_LOCK_KEYS
+from app.services.stock_halts import SOURCE as REPORTED_HALT_SOURCE
 from app.services.stock_ownership import (
     OwnershipHeld,
     StockMovementInput,
@@ -220,6 +223,47 @@ def _preview(
     )
 
 
+async def _book_stock_trade(
+    db: AsyncSession,
+    portfolio: OwnedActivePortfolio,
+    coin_id: int,
+    plan: StockTradePlan,
+    event_at: datetime,
+    idempotency_key: UUID,
+) -> tuple[Trade, StockOwnershipMovement]:
+    trade = Trade(
+        user_id=portfolio.user_id,
+        portfolio_id=portfolio.portfolio_id,
+        coin_id=coin_id,
+        side=plan.side,
+        input_kind="quantity",
+        input_value=plan.quantity,
+        quantity=plan.quantity,
+        mid_price=plan.mid,
+        price_as_of=event_at,
+        exec_price=plan.exec_price,
+        fee=ZERO,
+        cash_delta=plan.cash_delta,
+        cash_after=plan.cash_after,
+        idempotency_key=idempotency_key,
+    )
+    db.add(trade)
+    await db.flush()
+    movement = await append_stock_movement(
+        db,
+        StockMovementInput(
+            user_id=portfolio.user_id,
+            portfolio_id=portfolio.portfolio_id,
+            coin_id=coin_id,
+            quantity=plan.quantity if plan.side == "buy" else -plan.quantity,
+            after_basis=plan.cost_basis_after,
+            causal_key=f"trade:{trade.id}",
+            trade_id=trade.id,
+        ),
+    )
+    return trade, movement
+
+
 async def quote(
     db: AsyncSession, *, portfolio: OwnedActivePortfolio, order: QuoteIn, settings: Settings
 ) -> QuoteOut:
@@ -327,7 +371,7 @@ async def _replay(
     facts, executed = row
     require_same_order(
         trade,
-        same_instrument=facts.symbol == order.symbol,
+        same_instrument=facts.symbol == order.symbol and "catalog_id" not in facts.authority,
         portfolio_id=portfolio.portfolio_id,
         side=order.side,
         kind="quantity",
@@ -339,7 +383,7 @@ async def _replay(
         raise _refuse("receipt_unavailable") from None
 
 
-class _QuoteRefreshed(Exception):
+class _ExecutionRefreshed(Exception):
     """Tentative immutable metadata must be rebuilt after a full rollback."""
 
 
@@ -351,10 +395,10 @@ async def execute(
     # cash locks are reacquired. A changed selected price still needs confirmation.
     try:
         return await _execute_once(db, portfolio=portfolio, order=order, settings=settings)
-    except _QuoteRefreshed:
+    except _ExecutionRefreshed:
         try:
             return await _execute_once(db, portfolio=portfolio, order=order, settings=settings)
-        except _QuoteRefreshed:
+        except _ExecutionRefreshed:
             raise _refuse("quote_unavailable") from None
 
 
@@ -366,7 +410,10 @@ async def _execute_once(
         historical = await find_user_trade(db, portfolio.user_id, order.idempotency_key)
         if historical is not None:
             stock_cause = await db.scalar(
-                select(StockFillFacts.trade_id).where(StockFillFacts.trade_id == historical.id)
+                select(StockFillFacts.trade_id).where(
+                    StockFillFacts.trade_id == historical.id,
+                    ~StockFillFacts.authority.has_key("catalog_id"),  # noqa: W601
+                )
             )
             if stock_cause is None:
                 require_same_order(
@@ -395,35 +442,13 @@ async def _execute_once(
         plan = _plan(loaded, order, cash, held, basis)
         if plan.exec_price != order.expected_exec_price:
             raise PriceChanged(_preview(loaded, plan, portfolio), order.expected_exec_price)
-        trade = Trade(
-            user_id=portfolio.user_id,
-            portfolio_id=portfolio.portfolio_id,
-            coin_id=cid,
-            side=order.side,
-            input_kind="quantity",
-            input_value=plan.quantity,
-            quantity=plan.quantity,
-            mid_price=plan.mid,
-            price_as_of=loaded.evidence.quote.event_at,
-            exec_price=plan.exec_price,
-            fee=ZERO,
-            cash_delta=plan.cash_delta,
-            cash_after=plan.cash_after,
-            idempotency_key=order.idempotency_key,
-        )
-        db.add(trade)
-        await db.flush()
-        movement = await append_stock_movement(
+        trade, movement = await _book_stock_trade(
             db,
-            StockMovementInput(
-                user_id=portfolio.user_id,
-                portfolio_id=portfolio.portfolio_id,
-                coin_id=cid,
-                quantity=plan.quantity if order.side == "buy" else -plan.quantity,
-                after_basis=plan.cost_basis_after,
-                causal_key=f"trade:{trade.id}",
-                trade_id=trade.id,
-            ),
+            portfolio,
+            cid,
+            plan,
+            cast(datetime, loaded.evidence.quote.event_at),
+            order.idempotency_key,
         )
         current = await load_execution_evidence(db, cid, settings)
         _require(current)
@@ -434,7 +459,7 @@ async def _execute_once(
                     _preview(current, replacement, portfolio), order.expected_exec_price
                 )
             # Already inserted immutable Trade metadata must not be rewritten.
-            raise _QuoteRefreshed
+            raise _ExecutionRefreshed
         authority = json.loads(json.dumps(asdict(current.evidence), default=_encoded))
         authority["portfolio_id"] = portfolio.portfolio_id
         e, q = current.evidence, current.evidence.quote
@@ -470,6 +495,8 @@ async def _execute_once(
         await db.refresh(facts)
         fill = _receipt(trade, facts, movement.economic_at)
         await db.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+        if e.status.source == REPORTED_HALT_SOURCE:
+            await db.execute(text(f"SELECT pg_advisory_xact_lock_shared({REPORT_LOCK_KEYS})"))
         # LAST business SQL: no refresh, read, helper or provider await follows.
         await db.execute(
             text(
@@ -496,8 +523,11 @@ async def _execute_once(
     except DBAPIError as exc:
         await db.rollback()
         if getattr(exc.orig, "sqlstate", None) == "22023":
-            if "stock quote unavailable" in str(exc.orig):
-                raise _QuoteRefreshed from None
+            message = str(exc.orig)
+            if "stock quote unavailable" in message or "stock status unavailable" in message:
+                raise _ExecutionRefreshed from None
+            if "stock market closed" in message:
+                raise _refuse("market_closed") from None
             raise _refuse("quote_unavailable") from None
         raise
     except BaseException:

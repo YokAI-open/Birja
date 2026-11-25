@@ -152,6 +152,39 @@ it("projects an existing immutable stock receipt without recalculating its fill"
     ),
   ).toBe(true);
 });
+it("retains stable catalog identity across every event and its original dividend", () => {
+  const issue = { catalog_id: "9007199254740993", symbol: "4Q.A+/=C" };
+  const paid = { ...dividend, ...issue };
+  const corrected = { ...correction, ...issue, original: paid };
+  const catalogTrade = {
+    ...trade,
+    ...issue,
+    id: "trade:2",
+    asset_type: "stock",
+    quantity: "1",
+    exec_price: "1.00",
+    fee: "0",
+    feed: "iex",
+    source: "alpaca",
+    quote_at: trade.recorded_at,
+  };
+  expect(
+    isEventHistoryPage(page([catalogTrade, trade, corrected, paid, { ...split, ...issue }])),
+  ).toBe(true);
+  for (const changes of [
+    { catalog_id: null },
+    { catalog_id: "01" },
+    { catalog_id: "9223372036854775808" },
+    { symbol: "@123" },
+    { asset_type: "crypto" },
+    { provider_asset_id: "fixture-extra-field" },
+  ]) {
+    expect(isEventHistoryPage(page([{ ...catalogTrade, ...changes }]))).toBe(false);
+  }
+  expect(
+    isEventHistoryPage(page([{ ...corrected, original: { ...paid, catalog_id: "31" } }])),
+  ).toBe(false);
+});
 it("distinguishes verified zero and exact half-even ties from unknown terms", () => {
   for (const [rate, amount] of [
     ["0.005", "0.00"],

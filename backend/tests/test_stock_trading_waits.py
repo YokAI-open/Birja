@@ -120,7 +120,10 @@ MUTATIONS.update(
             "UPDATE stock_data_admissions SET attribution='changed' WHERE product='quotes'"
         ),
         "safety_epoch": "UPDATE stock_action_state SET epoch=epoch+1",
-        "status_sequence": "UPDATE stock_status_evidence SET sequence=sequence+1",
+        "status_sequence": (
+            "UPDATE stock_status_evidence SET sequence=sequence+1 WHERE coin_id=:coin_id "
+            "RETURNING sequence"
+        ),
     }
 )
 
@@ -169,6 +172,7 @@ async def test_adversarial_change_at_actual_wait_boundary(
         pid = await writer.scalar(select(func.pg_backend_pid()))
         real_execute, real_flush = writer.execute, writer.flush
         blocked, flushes = False, 0
+        guarded_sequences = []
         if boundary == "instrument":
             await acquire_stock_gate(blocker, cid)
         elif boundary == "account":
@@ -200,6 +204,19 @@ async def test_adversarial_change_at_actual_wait_boundary(
             ):
                 blocked = True
                 await real_execute(text("SELECT pg_advisory_xact_lock(:gate)"), {"gate": gate})
+            if (
+                mutation == "status_sequence"
+                and "SELECT public.assert_stock_execution_current" in str(statement)
+            ):
+                assert blocked
+                expected_sequence = args[0]["authority"]["status"]["sequence"]
+                actual_sequence = (
+                    await real_execute(
+                        text("SELECT sequence FROM stock_status_evidence WHERE coin_id=:coin_id"),
+                        {"coin_id": cid},
+                    )
+                ).scalar_one()
+                guarded_sequences.append((expected_sequence, actual_sequence))
             return await real_execute(statement, *args, **kwargs)
 
         async def flush(*args, **kwargs):
@@ -225,12 +242,38 @@ async def test_adversarial_change_at_actual_wait_boundary(
             # The instrument/cash/holding writer locks remain held. These are
             # independently committed authority changes, not mocked evidence.
             async with factory.begin() as editor:
-                await editor.execute(text(MUTATIONS[mutation]))
+                if mutation == "status_sequence":
+                    params = {"coin_id": cid}
+                    sequence = await editor.scalar(
+                        text("SELECT sequence FROM stock_status_evidence WHERE coin_id=:coin_id"),
+                        params,
+                    )
+                    changed = await editor.scalar(text(MUTATIONS[mutation]), params)
+                    assert isinstance(sequence, int) and changed == sequence + 1
+                else:
+                    await editor.execute(text(MUTATIONS[mutation]))
             await blocker.commit()
             if mutation == "opposite":
                 fill, created = await asyncio.wait_for(task, 10)
                 assert created and fill.bid == 101 and fill.ask == 102
                 assert fill.cash_after == 9694 and fill.held_after == 3
+            elif mutation == "status_sequence":
+                # The final SQL guard rejects the old evidence. A normal status
+                # refresh can rebuild once at the same confirmed price.
+                fill, created = await asyncio.wait_for(task, 10)
+                assert guarded_sequences == [(sequence, changed), (changed, changed)]
+                assert created and fill.exec_price == 102
+                assert fill.authority.status_sequence == changed
+                assert fill.cash_after == 9694 and fill.held_after == 3
+                after = await financial_snapshot(factory)
+                assert after == (
+                    before[0],
+                    before[1] + fill.cash_delta,
+                    before[2] + 1,
+                    before[3] + fill.quantity,
+                    before[4] - fill.cash_delta,
+                    before[5] + 1,
+                )
             else:
                 with pytest.raises(TradeRefused) as exc:
                     await asyncio.wait_for(task, 10)

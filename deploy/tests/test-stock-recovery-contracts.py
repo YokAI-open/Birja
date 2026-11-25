@@ -44,6 +44,103 @@ def load(name):
 
 
 class RevisionContracts(unittest.TestCase):
+    def test_catalog_manifest_adds_only_the_five_durable_tables(self):
+        producer = load('backup-snapshot')
+        previous = producer.contract_columns('0024')
+        current = producer.contract_columns('0025')
+        catalog_tables = {
+            'stock_catalog_admissions', 'stock_catalog_aliases', 'stock_catalog_generations',
+            'stock_catalog_listings', 'stock_catalog_securities',
+        }
+        self.assertEqual(set(current) - set(previous), catalog_tables)
+        self.assertEqual({table: current[table] for table in previous}, previous)
+        self.assertEqual(set(producer.identity_tables('0025')) - set(producer.identity_tables('0024')),
+                         catalog_tables)
+        self.assertEqual(
+            hashlib.sha256(producer.manifest_sql('0024').encode()).hexdigest(),
+            '3e0e88940881e7a554c36263e919a0b0822ec7bacc61cf929fe73ffd3b3e49af',
+        )
+        query = producer.manifest_sql('0025')
+        for field in ('catalog_active_generation', 'provider_admission_id', 'normalized_symbol',
+                      'valid_until', 'revoked_at', 'coverage', 'identity_key'):
+            self.assertIn(field, query)
+        for table in catalog_tables:
+            self.assertIn(f"SELECT '{table}',id,json_build_array(", query)
+
+    def test_catalog_finance_uses_typed_identity_without_new_sequences(self):
+        producer = load('backup-snapshot')
+        prior = producer.contract_columns('0025')
+        current = producer.contract_columns('0026')
+        keys = {
+            'stock_catalog_instruments': 'catalog_id',
+            'stock_catalog_financial_quotes': 'coin_id',
+            'stock_catalog_status': 'coin_id',
+            'stock_catalog_action_coverage': 'coin_id',
+            'stock_catalog_fill_evidence': 'trade_id',
+        }
+        self.assertEqual(set(current) - set(prior), set(keys))
+        self.assertEqual({table: current[table] for table in prior}, prior)
+        self.assertEqual(producer.identity_tables('0026'), producer.identity_tables('0025'))
+        query = producer.manifest_sql('0026')
+        for table, key in keys.items():
+            self.assertIn(f"SELECT '{table}',{key},json_build_array(", query)
+            self.assertNotIn(table + '_id_seq', query)
+        for field in ('catalog_finance_invalid', 'catalog_active_generation', 'report_valid_until',
+                      'provider_admission_id', 'quote_valid_until', 'journal_origin'):
+            self.assertIn(field, query)
+        self.assertEqual(
+            hashlib.sha256(producer.manifest_sql('0025').encode()).hexdigest(),
+            '36cdd7e9756936b3e0a79e6b249e833a0b5d11d4fad2d4181ab96ab485e0fb08',
+        )
+
+    def test_catalog_archive_profiles_are_exact(self):
+        producer = load('backup-snapshot')
+        restore = load('verify-restore')
+        for version, revision, pins in (
+            (4, '0024', producer.REPORTED_HALT_SOURCE_SHA256),
+            (5, '0025', producer.CATALOG_SOURCE_SHA256),
+            (6, '0026', producer.CATALOG_FINANCE_SOURCE_SHA256),
+        ):
+            with self.subTest(revision=revision):
+                profile = 'deploy-recovery-v' + str(version + 1)
+                payload = {'version': version, 'revision': revision}
+                expected = {name: '0' * 64 for name in restore.portfolio_payload_files(
+                    {'portfolio_payload': payload})}
+                expected.update(pins)
+                payload['sha256'] = expected.copy()
+                expected.update({name: '1' * 64 for name in restore.CONTRACT_PAYLOAD})
+                revisions = list(producer.SUPPORTED_REVISIONS[:producer.SUPPORTED_REVISIONS.index(revision) + 1])
+                inventory = {
+                    'recovery_profile': profile,
+                    'portfolio_payload': payload,
+                    'schema_contract': {
+                        'revisions': revisions,
+                        'payload_sha256': {name: expected[name] for name in restore.CONTRACT_PAYLOAD},
+                    },
+                }
+                self.assertIn(profile, restore.RECOVERY_PROFILES)
+                restore.verify_portfolio_inventory(inventory, expected)
+                restore.verify_contract_inventory(inventory, expected)
+                forged = copy.deepcopy(inventory)
+                forged['schema_contract']['revisions'] = revisions[:-1]
+                with self.assertRaises(ValueError):
+                    restore.verify_contract_inventory(forged, expected)
+                migration = next(name for name in pins if name.startswith('backend/alembic/versions/' + revision))
+                forged['portfolio_payload']['sha256'][migration] = '2' * 64
+                with self.assertRaises(ValueError):
+                    restore.verify_portfolio_inventory(forged, expected | {migration: '2' * 64})
+
+    def test_catalog_finance_payload_carries_every_pinned_source(self):
+        producer = load('backup-snapshot')
+        restore = load('verify-restore')
+        payload = producer.catalog_finance_payload_inventory(ROOT)
+        self.assertEqual(payload['revision'], '0026')
+        self.assertEqual(payload['version'], 6)
+        self.assertEqual(set(payload['sha256']), set(restore.portfolio_payload_files({'portfolio_payload': payload})))
+        self.assertEqual({name: payload['sha256'][name] for name in producer.CATALOG_FINANCE_SOURCE_SHA256},
+                         producer.CATALOG_FINANCE_SOURCE_SHA256)
+        restore.verify_portfolio_inventory({'portfolio_payload': payload}, payload['sha256'])
+
     def test_dividend_pregrant_structure_refuses_ambiguous_query(self):
         restore=load('verify-restore')
         producer=load('backup-snapshot')
@@ -936,6 +1033,31 @@ INSERT INTO stock_dividend_decisions(payment_id,user_id,event_id,coin_id,revisio
             live([],'ROLLBACK;')
             proc.stdin.close()
             self.assertEqual(proc.wait(timeout=5),0)
+
+
+@unittest.skipUnless("--postgres" in sys.argv, "isolated PostgreSQL and TLS required")
+class ReportedHaltRecoveryContracts(unittest.TestCase):
+    def test_replay_legacy_and_reported_fills_after_verified_restore(self):
+        proof = subprocess.run(
+            ["bash", str(ROOT / "deploy/tests/test-stock-halt-recovery.sh")],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        self.assertEqual(proof.returncode, 0, proof.stderr)
+        self.assertIn("equality=true invariants=true identities=true", proof.stdout)
+        self.assertIn("paired_encrypted_snapshot_integrity=true", proof.stdout)
+        self.assertIn("legacy_stock_receipt_replay=true verified_tls=true", proof.stdout)
+        self.assertIn(
+            "stock_receipt_replay=true retained_reader_exact=true "
+            "expired_report_retained=true verified_tls=true",
+            proof.stdout,
+        )
+        self.assertIn(
+            "evidence_bearing_downgrade_refused=true retained_candidate_revision=0024",
+            proof.stdout,
+        )
 
 
 if __name__ == "__main__":

@@ -868,9 +868,15 @@ def program(*, mode, database=None, expected=None, before=None):
             raise ValueError('before-backup snapshot hash required')
     contract = producer()
     _, common = historical_helpers(load_backend=False)
+    # The explicit 0023 database lane also runs in the 0024 campaign. Bind
+    # its executable to the source profile that was authenticated above.
+    source_pins = contract.CLOSURE_SOURCE_SHA256
+    if (ROOT / "backend/alembic/versions/0024_stock_halt_snapshot.py").is_file():
+        contract.require_closure_source(ROOT, revision="0024")
+        source_pins = contract.REPORTED_HALT_SOURCE_SHA256
     pins = {
         name.removeprefix("backend/"): sha
-        for name, sha in contract.CLOSURE_SOURCE_SHA256.items()
+        for name, sha in source_pins.items()
         if name.startswith("backend/")
     }
     code = (

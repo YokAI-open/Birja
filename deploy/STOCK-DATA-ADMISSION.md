@@ -18,7 +18,7 @@ For EACH product (`reference`, `quotes`, `actions`, `status`, `calendar`) record
 | --- | --- |
 | Access | Account/subscription and exact endpoint/feed coverage |
 | Purposes | Separately verified collection, display, derived and retention rights |
-| Scope | application=birja, audience=authenticated-users, exact account/server IDs, feed=iex |
+| Scope | application=birja, audience=authenticated-users, exact account/server IDs, feed=iex or the status scope below |
 | Terms | Secure evidence reference, reviewed version, reviewer/time and validity interval |
 | Fields | Only reviewed fields; quotes require bid/ask/event_at/symbol |
 | Attribution | Exact permitted public text, including the visible IEX prices label |
@@ -31,6 +31,16 @@ symbol/status/event_at; `calendar` requires exchange/session_date/opens_at/close
 Reference metadata independently reviewed from SEC/public sources does not grant
 quote/action/status rights. Additional fields need explicit review, not guessing.
 Evidence fixtures and domain validation cannot determine legal permission.
+
+For the Phase 18 simulator, prepare a new `status` generation with
+`scope.feed=nasdaq-rss` for Nasdaq Trader’s public reported-halt feed. The same
+admission purposes, expiry, scope and quota review apply. Keep the `symbol`,
+`status` and `event_at` fields. In the reported mode, `event_at` is the HTTP
+publication timestamp. Advancing the admission generation prevents old
+observations from carrying over. Reported halts block trading, and the ticket
+explains that reports can be delayed or incomplete. An absent, invalid or stale
+report cannot admit a new fill. Existing Alpaca `status` rows retain their IEX
+stream semantics. Changing this product does not activate stock trading by itself.
 
 Keep original contracts/reviewer records outside source control. DB evidence_ref
 points to the private review record; store no keys or raw contract text in JSON.
@@ -117,9 +127,12 @@ async def import_packet(session, now, *, apply=False, account, server):
         if packet['generation'] != row.generation + 1:
             raise ValueError('stale administrative generation')
         candidate = ProductAdmission(**packet)
+        if not isinstance(candidate.scope, dict):
+            raise ValueError('invalid evidence scope')
+        feed = candidate.scope.get('feed', 'iex')
         for purpose in ('collection', 'display', 'derived', 'retention'):
             decision = evaluate_admission(candidate, candidate.product, purpose,
-                now, account=account, server=server)
+                now, account=account, server=server, feed=feed)
             if getattr(candidate, purpose + '_allowed') and not decision.allowed:
                 raise ValueError('evidence dry-run denied')
         for key, value in packet.items():
@@ -202,6 +215,73 @@ explicitly approved and verified privileged cleanup process must satisfy every
 storage deadline. Stopped/failed collectors do not suspend those obligations.
 Until that prerequisite is met, keep activation disabled. No app/scheduler DELETE
 grant or new deletion job is added here; no financial evidence may be erased.
+
+## Expanded catalog admission on revision 0026
+
+Use the restricted migrator and verified database TLS settings for the exact
+release. Set `BIRJA_CATALOG_DATABASE_URL` and `DATABASE_SSL_CA_FILE` in a private
+operator environment. Set the reviewed `STOCK_DATA_ACCOUNT`,
+`STOCK_DATA_SERVER` and, for asset lookup, `ALPACA_ASSET_ENVIRONMENT`.
+Keep these values and all evidence under the existing private custody policy.
+
+Prepare a mode-0600 JSON file with `version: 1` and `admissions` containing
+1–32 reviewed records. Each record contains `artifact`, a private evidence
+`reference`, aware UTC `reviewed_at` and `valid_until`, field-to-purpose
+`fields` and artifact-specific `scope`. The importer refuses expired windows,
+missing purposes, fixture inputs and overlapping current quote or financial
+scope. An optional `revoke_ids` array names up to 32 current live admission
+IDs for an explicitly approved replacement. Old records keep their original
+evidence and receive a revocation timestamp.
+
+| Artifact | Scope and reviewed purpose |
+| --- | --- |
+| `nasdaqlisted`, `otherlisted`, `openfigi`, `issuer_exception` | Use a dated scope for each artifact. Retain the exact normalized directory or classification fields and collection, internal use, derived use, storage and backup purposes. Include display for ticker, exchange, name and class fields. Directory scope is empty, except for explicitly reviewed issuer retirements. |
+| `alpaca_assets` | Supply `provider` and `units` matching exact active listing targets, account, server, environment and window. A grant covers at most two distinct-exchange targets and the existing command consumes the grant on its first attempt, including failed attempts. |
+| `alpaca_iex_quotes` | Supply reviewed account/server, `iex`, USD, approved exchanges and request bounds for transient display and cache of symbol, bid, ask and source time. |
+| `catalog_execution`, `catalog_mark`, `catalog_halt`, `catalog_actions` | Set the exact current `catalog_id` and `listing_id` as canonical strings, mapped `provider_asset_id`, account/server and feed. Scope execution and marks to `iex`, halts to `nasdaq-rss`, and actions to `alpaca-corporate-actions`. Retain the separate reviewed collection/use, storage and backup for each artifact. |
+
+`catalog_actions` also requires `all_us_replay_ingress: true`,
+`replay_region: "us"`, and `known_id_recheck: true`. Supply `rest_symbols`
+with the mapped provider symbol and any reviewed same-issue former aliases.
+Use dates for `history_start` and `future_through`, and a UTC timestamp for
+`mutation_start`. The reviewed window must cover the financial journal start.
+Set explicit positive `requests_per_minute` (up to 200),
+`symbols_per_request` (up to 8 and at least the reviewed symbol count),
+and `max_response_bytes` (up to 262144).
+
+Run review before asking for application approval. Use `empty` for the first
+catalog and the current generation ID thereafter. These commands run from
+the backend directory with the release's Python environment.
+
+```sh
+python -m app.tasks.stock_catalog_import admit "$packet" --expect-generation "$generation"
+python -m app.tasks.stock_catalog_import admit "$packet" --expect-generation "$generation" \
+  --apply --expected-packet-sha "$approved_sha256"
+```
+
+The default review rolls back. It reports only the packet SHA-256 and counts.
+Apply requires approval of those exact bytes and revalidates the generation
+and scopes under the catalog lock. The apply receipt lists admission IDs in
+packet order. Reconcile those IDs privately to the approved products. Keep
+calendar prerequisites in the separate `stock_data_admissions.calendar`
+procedure above.
+
+Apply reviewed directory and classification rights before publishing an
+admitted manifest. Stage the approved exact asset targets for the new
+generation, then admit the mapped listing scopes and promote the exact
+current listing for execution. The eligibility checks reject the earlier
+listing version. A verified rename or refresh can update the same issue and
+financial binding, keeping existing holdings and original History links.
+Keep catalog discovery available within its separate rights while a listing
+waits for renewed quote, mark, status, execution or action scope.
+
+The production candidate routes catalog quote demand, outcomes and display
+values through the private `catalog-quote-redis` service. It disables AOF
+and periodic snapshots and keeps its data directory on tmpfs. Account quota,
+authentication and curated stock state keep using the existing Redis
+service. An unavailable catalog cache stops its refresh work and there is
+no production fallback to the persistent instance. Previously admitted
+durable facts retain their independent database and backup scope.
 
 ## Positive/negative rehearsal and later activation
 
