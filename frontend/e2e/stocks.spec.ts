@@ -52,11 +52,16 @@ test.describe("market reopening", () => {
       await expect(detail.getByText("Price unavailable")).toHaveCount(0);
       await expect(detail.getByRole("note", { name: "Stock price source" })).toHaveCount(0);
       await expect(detail.getByText(/Last verified IEX midpoint/)).toHaveCount(0);
+      const closingPrice = detail.getByText(midpoint);
       if (retainedQuote) {
-        await expect(detail.getByText(midpoint, { exact: true })).toBeVisible();
+        await expect(closingPrice).toBeVisible();
+        await expect(closingPrice.locator("time")).toHaveAttribute(
+          "datetime",
+          first.quote!.event_at,
+        );
         await expect(section(page).getByText(body.attribution.required_text)).toBeVisible();
       } else {
-        await expect(detail.getByText(midpoint, { exact: true })).toHaveCount(0);
+        await expect(closingPrice).toHaveCount(0);
       }
       await expect(detail.getByRole("link", { name: "View details AAPL" })).toBeVisible();
       await page.clock.fastForward(60_000);

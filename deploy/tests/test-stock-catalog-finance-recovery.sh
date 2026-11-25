@@ -239,7 +239,7 @@ downgrade_refuses() {
     "$PYTHON" -m alembic downgrade 0025) >"$stage/downgrade.log" 2>&1; then
     return 1
   fi
-  rg -q 'Catalog finance downgrade refused' "$stage/downgrade.log"
+  grep -q 'Catalog finance downgrade refused' "$stage/downgrade.log"
   test "$(sql -d "$database" -c 'SELECT version_num FROM alembic_version')" = 0026
 }
 
@@ -262,7 +262,7 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
   # The independently pinned predecessor opens the existing restricted roles.
   use_primary_name birja_test birja_source_test
   old_runtime predecessor-seed > "$stage/predecessor-before.log"
-  rg -q '^portfolio_verified_tls=true$' "$stage/predecessor-before.log"
+  grep -q '^portfolio_verified_tls=true$' "$stage/predecessor-before.log"
   use_primary_name birja_source_test birja_test
   observe "$predecessor" birja_test predecessor
   docker volume inspect "$original_volume" > "$stage/original-fingerprint"
@@ -299,8 +299,8 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     cmp "$stage/predecessor.json" "$stage/predecessor-reopened.json"
     use_primary_name birja_test birja_source_test
     old_runtime predecessor-read > "$stage/predecessor-replay.log"
-    diff <(rg '^portfolio_projection=' "$stage/predecessor-before.log") \
-      <(rg '^portfolio_projection=' "$stage/predecessor-replay.log")
+    diff <(grep '^portfolio_projection=' "$stage/predecessor-before.log") \
+      <(grep '^portfolio_projection=' "$stage/predecessor-replay.log")
     use_primary_name birja_source_test birja_test
     docker stop "$original" >/dev/null
     docker start "$candidate" >/dev/null
@@ -349,7 +349,7 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     if old_runtime predecessor-read > "$stage/incompatible.log" 2>&1; then
       exit 1
     fi
-    rg -q '0023 only before import' "$stage/incompatible.log"
+    grep -q '0023 only before import' "$stage/incompatible.log"
     use_primary_name birja_source_test birja_test
     printf '%s\n' 'postwrite_0026_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0026_refused=true'
   else
