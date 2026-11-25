@@ -17,10 +17,12 @@ from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm import aliased
 
 from app.db.connection import database_connect_args
 from app.db.portfolio_migrate import require_migrator, require_source
-from app.models.stock_catalog import StockCatalogAdmission, StockCatalogListing
+from app.models.stock_catalog import StockCatalogAdmission, StockCatalogAlias, StockCatalogListing
+from app.services.stock_admission import catalog_action_policy
 from app.services.stock_catalog_classification import CatalogModel
 from app.services.stock_catalog_promotion import _REQUIRED_FIELDS, promote_catalog_instrument
 from app.services.stock_catalog_provider import (
@@ -109,6 +111,19 @@ class _ExactListingScope(CatalogModel):
     requests_per_minute: int = Field(default=200, ge=1, le=200)
     max_response_bytes: int = Field(default=1048576, ge=4096, le=1048576)
     symbols_per_request: int = Field(default=1, ge=1, le=8)
+
+
+class _CatalogActionsScope(_ExactListingScope):
+    all_us_replay_ingress: Literal[True]
+    replay_region: Literal["us"]
+    known_id_recheck: Literal[True]
+    rest_symbols: list[str]
+    history_start: str
+    future_through: str
+    mutation_start: str
+    requests_per_minute: int = Field(ge=1, le=200)
+    symbols_per_request: int = Field(ge=1, le=8)
+    max_response_bytes: int = Field(ge=1, le=262144)
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -341,7 +356,8 @@ async def _check_asset_scope(db: AsyncSession, row: _Admission, now: datetime) -
 async def _check_listing_scope(
     db: AsyncSession, row: _Admission, generation: int, now: datetime
 ) -> None:
-    scope = _ExactListingScope.model_validate(row.scope)
+    scope_type = _CatalogActionsScope if row.artifact == "catalog_actions" else _ExactListingScope
+    scope = scope_type.model_validate(row.scope)
     _check_account(scope.account, scope.server)
     catalog_id, listing_id = int(scope.catalog_id), int(scope.listing_id)
     if scope.feed != _FINANCIAL_FEEDS[row.artifact] or max(catalog_id, listing_id) >= 2**63:
@@ -363,8 +379,44 @@ async def _check_listing_scope(
         if listing is not None
         else None
     )
-    if mapping is None:
+    if listing is None or mapping is None:
         raise CatalogPublishError("Admission listing or provider mapping is no longer current")
+    if row.artifact == "catalog_actions":
+        provider_symbol = mapping[0].target.provider_symbol
+        policy = catalog_action_policy(row.scope)
+        if (
+            policy is None
+            or provider_symbol not in policy.rest_symbols
+            or len(policy.rest_symbols) > policy.symbols_per_request
+            or policy.history_start > now.date()
+            or policy.mutation_start > now
+        ):
+            raise CatalogPublishError("Admission action policy differs from the reviewed listing")
+        former_symbols = set(policy.rest_symbols) - {provider_symbol, listing.ticker}
+        if former_symbols:
+            alias, prior = StockCatalogAlias, aliased(StockCatalogListing)
+            verified = set(
+                await db.scalars(
+                    select(alias.symbol).where(
+                        alias.security_id == catalog_id,
+                        alias.listing_id == listing_id,
+                        alias.namespace == "former",
+                        alias.symbol.in_(former_symbols),
+                        alias.verified_at <= now,
+                        alias.valid_until > now,
+                        select(prior.id)
+                        .where(
+                            prior.security_id == catalog_id,
+                            prior.id != listing_id,
+                            prior.ticker == alias.symbol,
+                            prior.provider_asset_id == scope.provider_asset_id,
+                        )
+                        .exists(),
+                    )
+                )
+            )
+            if verified != former_symbols:
+                raise CatalogPublishError("Admission action symbols lack verified listing aliases")
 
 
 def _overlap(a: StockCatalogAdmission, b: StockCatalogAdmission) -> bool:

@@ -240,6 +240,15 @@ evidence and receive a revocation timestamp.
 | `alpaca_iex_quotes` | Supply reviewed account/server, `iex`, USD, approved exchanges and request bounds for transient display and cache of symbol, bid, ask and source time. |
 | `catalog_execution`, `catalog_mark`, `catalog_halt`, `catalog_actions` | Set the exact current `catalog_id` and `listing_id` as canonical strings, mapped `provider_asset_id`, account/server and feed. Scope execution and marks to `iex`, halts to `nasdaq-rss`, and actions to `alpaca-corporate-actions`. Retain the separate reviewed collection/use, storage and backup for each artifact. |
 
+`catalog_actions` also requires `all_us_replay_ingress: true`,
+`replay_region: "us"`, and `known_id_recheck: true`. Supply `rest_symbols`
+with the mapped provider symbol and any reviewed same-issue former aliases.
+Use dates for `history_start` and `future_through`, and a UTC timestamp for
+`mutation_start`. The reviewed window must cover the financial journal start.
+Set explicit positive `requests_per_minute` (up to 200),
+`symbols_per_request` (up to 8 and at least the reviewed symbol count),
+and `max_response_bytes` (up to 262144).
+
 Run review before asking for application approval. Use `empty` for the first
 catalog and the current generation ID thereafter. These commands run from
 the backend directory with the release's Python environment.

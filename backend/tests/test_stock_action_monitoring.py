@@ -1,5 +1,6 @@
 """Real PostgreSQL continuity; private provider traffic is always mocked."""
 
+import json
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -8,10 +9,11 @@ import httpx
 import pytest
 import pytest_asyncio
 import respx
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import SchedulerSettings
+from app.db.portfolio_bootstrap import GRANTS_0026_SQL
 from app.models.corporate_action import (
     StockActionEvent,
     StockActionObservation,
@@ -29,7 +31,7 @@ from app.services.stock_catalog_actions import load_catalog_action_authority
 from app.services.stock_catalog_promotion import CATALOG_ACTION_FIELDS
 from app.services.stock_quote_rules import StockMapping
 from app.services.stock_sessions import build_sessions
-from app.tasks import stock_actions, stock_scheduler
+from app.tasks import stock_actions, stock_catalog_import, stock_scheduler
 from tests.test_stock_admission import action_admitted, admitted
 from tests.test_stock_catalog_promotion import (
     ACCOUNT,
@@ -42,7 +44,7 @@ from tests.test_stock_catalog_promotion import (
 )
 from tests.test_stock_catalog_promotion import finance_0025 as finance_0025
 from tests.test_stock_catalog_promotion import finance_0026 as finance_0026
-from tests.test_stock_catalog_publish import _manifest, _publish
+from tests.test_stock_catalog_publish import _manifest, _publish, _rights, _sha
 from tests.test_stock_sessions import evidence
 
 
@@ -122,6 +124,117 @@ async def states(factory):
             .scalars()
             .all()
         )
+
+
+async def test_reviewed_operator_action_scope_is_usable_by_scheduler(
+    engine, finance_0026, tmp_path, monkeypatch
+):
+    now = datetime.now(UTC)
+    origin = now - timedelta(minutes=4)
+    rights = tuple(
+        right.model_copy(update={"reviewed_at": origin, "valid_until": now + timedelta(hours=2)})
+        for right in _rights()
+    )
+    async with engine.begin() as admin:
+        await admin.execute(text("ALTER SCHEMA public OWNER TO pg_database_owner"))
+        raw = await admin.get_raw_connection()
+        await raw.driver_connection.execute(GRANTS_0026_SQL)
+    async with finance_0026.begin() as db:
+        for right in rights:
+            db.add(
+                StockCatalogAdmission(
+                    **right.model_dump(mode="json", exclude={"reviewed_at", "valid_until"}),
+                    reviewed_at=right.reviewed_at,
+                    valid_until=right.valid_until,
+                    scope={},
+                )
+            )
+        db.add(StockDataAdmission(**asdict(evidence(now))))
+    generation = await _publish(finance_0026, _manifest(origin, rights=rights), None, now=origin)
+    listing = await _listing(finance_0026, generation.generation_id, "FQA")
+    execution = await _reviewed_grant(finance_0026, listing, FIRST_ASSET, origin)
+    async with finance_0026.begin() as db:
+        grant = await db.get(StockCatalogAdmission, execution)
+        assert grant is not None
+        grant.is_fixture = False
+    binding = await _promote(finance_0026, listing, execution, origin, allow_fixture=False)
+    monkeypatch.setenv("STOCK_DATA_ACCOUNT", ACCOUNT)
+    monkeypatch.setenv("STOCK_DATA_SERVER", SERVER)
+    packet = tmp_path / "synthetic-approval.json"
+    command = ["admit", str(packet), "--expect-generation", str(generation.generation_id)]
+    base_scope = {
+        "account": ACCOUNT,
+        "server": SERVER,
+        "feed": "alpaca-corporate-actions",
+        "catalog_id": str(binding.catalog_id),
+        "listing_id": str(binding.listing_id),
+        "provider_asset_id": binding.provider_asset_id,
+    }
+    scope = {
+        **base_scope,
+        "all_us_replay_ingress": True,
+        "known_id_recheck": True,
+        "replay_region": "us",
+        "rest_symbols": [binding.provider_symbol],
+        "history_start": origin.date().isoformat(),
+        "future_through": (now.date() + timedelta(days=90)).isoformat(),
+        "mutation_start": origin.isoformat(),
+        "requests_per_minute": 12,
+        "symbols_per_request": 1,
+        "max_response_bytes": 65536,
+    }
+
+    def packet_with(scope):
+        raw = json.dumps(
+            {
+                "version": 1,
+                "admissions": [
+                    {
+                        "artifact": "catalog_actions",
+                        "reference": "Synthetic reviewed exact action authority",
+                        "reviewed_at": origin.isoformat(),
+                        "valid_until": (now + timedelta(hours=1)).isoformat(),
+                        "fields": CATALOG_ACTION_FIELDS,
+                        "scope": scope,
+                    }
+                ],
+            }
+        )
+        packet.write_text(raw)
+        return _sha(raw)
+
+    async with finance_0026() as db:
+        migrator = db.bind
+    for bad_scope in (base_scope, {**scope, "rest_symbols": ["OTHER"]}):
+        packet_with(bad_scope)
+        with pytest.raises(ValueError):
+            await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
+    digest = packet_with(scope)
+    review = await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
+    assert review == {"disposition": "reviewed", "packet_sha256": digest, "count": 1}
+    async with finance_0026() as db:
+        assert (
+            await db.scalar(
+                select(StockCatalogAdmission.id).where(
+                    StockCatalogAdmission.artifact == "catalog_actions"
+                )
+            )
+            is None
+        )
+    applied = await stock_catalog_import._admit(
+        migrator,
+        stock_catalog_import._args([*command, "--apply", "--expected-packet-sha", digest]),
+    )
+    async with engine.connect() as connection, AsyncSession(connection) as scheduler:
+        await scheduler.execute(text("SET LOCAL ROLE birja_scheduler"))
+        authority = await load_catalog_action_authority(
+            scheduler, binding.coin_id, now, account=ACCOUNT, server=SERVER
+        )
+    assert authority is not None and authority.policy is not None
+    assert applied["admission_ids"] == [str(authority.admission_id)]
+    assert authority.policy.rest_symbols == (binding.provider_symbol,)
+    assert authority.policy.requests_per_minute == 12
+    assert authority.policy.mutation_start == origin
 
 
 @pytest_asyncio.fixture
