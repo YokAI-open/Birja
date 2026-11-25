@@ -266,6 +266,14 @@ financial binding, keeping existing holdings and original History links.
 Keep catalog discovery available within its separate rights while a listing
 waits for renewed quote, mark, status, execution or action scope.
 
+The production candidate routes catalog quote demand, outcomes and display
+values through the private `catalog-quote-redis` service. It disables AOF
+and periodic snapshots and keeps its data directory on tmpfs. Account quota,
+authentication and curated stock state keep using the existing Redis
+service. An unavailable catalog cache stops its refresh work and there is
+no production fallback to the persistent instance. Previously admitted
+durable facts retain their independent database and backup scope.
+
 ## Positive/negative rehearsal and later activation
 
 Run `cd backend && uv run pytest tests/test_stock_admission.py

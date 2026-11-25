@@ -33,9 +33,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         socket_connect_timeout=2,
         socket_timeout=2,
     )
+    cache_url = settings.catalog_cache_url
+    catalog_redis = redis if cache_url == settings.redis_url else None
+    if cache_url is not None and catalog_redis is None:
+        catalog_redis = Redis.from_url(
+            cache_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=2
+        )
     app.state.engine = engine
     app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     app.state.redis = redis
+    app.state.catalog_quote_redis = catalog_redis
     app.state.otp_store = OtpStore(redis, settings.otp_hmac_secret)
     http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
     app.state.http = http
@@ -46,6 +53,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await http.aclose()
+        if catalog_redis is not None and catalog_redis is not redis:
+            await catalog_redis.aclose()
         await redis.aclose()
         await engine.dispose()
 

@@ -11,11 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.stock_trades import PrivateRoute, _refusal
 from app.core.config import Settings
 from app.core.deps import (
+    CatalogQuoteRedisDep,
     CsrfDep,
     CurrentUserDep,
     DbDep,
     OwnedActivePortfolioDep,
-    RedisDep,
     SettingsDep,
 )
 from app.models.corporate_action import StockActionState
@@ -116,7 +116,7 @@ async def _cache_action_deadline(
 
 async def _present(
     db: AsyncSession,
-    redis: Redis,
+    redis: Redis | None,
     settings: Settings,
     context: CatalogQuoteContext,
     listing: StockCatalogItem,
@@ -126,7 +126,7 @@ async def _present(
 ) -> tuple[CatalogQuoteContext, stock_catalog_trading.CatalogExecution, CatalogQuoteOut]:
     binding = context.binding
     quote = None
-    if binding is not None:
+    if binding is not None and redis is not None:
         await db.rollback()
         quote = await read_catalog_quote(
             redis,
@@ -243,11 +243,13 @@ async def post_catalog_quote(
     user: CurrentUserDep,
     csrf: CsrfDep,
     db: DbDep,
-    redis: RedisDep,
+    redis: CatalogQuoteRedisDep,
     settings: SettingsDep,
 ) -> CatalogQuoteOut:
     context, listing = await _read_context(db, settings, catalog_id, body.listing_version)
     context, execution, view = await _present(db, redis, settings, context, listing)
+    if redis is None:
+        return view
     financial = execution.financial
     purpose: CatalogQuotePurpose
     if (
@@ -301,7 +303,7 @@ async def get_catalog_trade_context(
     catalog_id: CatalogPath,
     portfolio: OwnedActivePortfolioDep,
     db: DbDep,
-    redis: RedisDep,
+    redis: CatalogQuoteRedisDep,
     settings: SettingsDep,
 ) -> CatalogTradeContextOut:
     context, listing = await _read_context(db, settings, catalog_id)
@@ -318,7 +320,7 @@ async def get_catalog_trade_context(
 
 async def _refresh_execution(
     db: AsyncSession,
-    redis: Redis,
+    redis: Redis | None,
     settings: Settings,
     portfolio: OwnedActivePortfolio,
     catalog_id: int,
@@ -326,7 +328,7 @@ async def _refresh_execution(
     reason: str,
 ) -> bool:
     refreshable = {"quote_unavailable", "quote_stale", "units_changed"}
-    if reason not in refreshable:
+    if redis is None or reason not in refreshable:
         return False
     execution = await stock_catalog_trading.load_catalog_execution(
         db, settings, catalog_id, listing_version, datetime.now(UTC), portfolio=portfolio
@@ -371,7 +373,7 @@ async def post_catalog_preview(
     portfolio: OwnedActivePortfolioDep,
     csrf: CsrfDep,
     db: DbDep,
-    redis: RedisDep,
+    redis: CatalogQuoteRedisDep,
     settings: SettingsDep,
 ) -> CatalogPreviewOut:
     try:
@@ -405,7 +407,7 @@ async def post_catalog_confirm(
     portfolio: OwnedActivePortfolioDep,
     csrf: CsrfDep,
     db: DbDep,
-    redis: RedisDep,
+    redis: CatalogQuoteRedisDep,
     settings: SettingsDep,
     response: Response,
 ) -> CatalogFillOut:

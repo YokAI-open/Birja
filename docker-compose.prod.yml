@@ -79,6 +79,25 @@ services:
       timeout: 3s
       retries: 20
 
+  catalog-quote-redis:
+    image: cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set in /etc/birja/prod.env}
+    command: >
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 64mb --maxmemory-policy noeviction --appendonly no --save ""
+    tmpfs:
+      - /data:uid=65532,gid=65532,mode=0750
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build:
       context: ./backend
@@ -94,6 +113,7 @@ services:
       DATABASE_URL: ${APP_DATABASE_URL:?configure app role after verified recovery}
       DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CATALOG_QUOTE_REDIS_URL: redis://:${REDIS_PASSWORD}@catalog-quote-redis:6379/0
       OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?set in /etc/birja/prod.env}
       JWT_SECRET: ${JWT_SECRET:?set in /etc/birja/prod.env}
       RESEND_API_KEY: ${RESEND_API_KEY:?set in /etc/birja/prod.env}
@@ -109,6 +129,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      catalog-quote-redis:
+        condition: service_started
+        required: false
     command:
       - uvicorn
       - app.main:create_app
@@ -152,6 +175,7 @@ services:
       DATABASE_URL: ${SCHEDULER_DATABASE_URL:?configure scheduler role after verified recovery}
       DATABASE_SSL_CA_FILE: /run/birja/db-ca.crt
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CATALOG_QUOTE_REDIS_URL: redis://:${REDIS_PASSWORD}@catalog-quote-redis:6379/0
       PRICE_SOURCE: "kraken"
       STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}
       STOCK_FEED: ${STOCK_FEED:-iex}
@@ -181,6 +205,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      catalog-quote-redis:
+        condition: service_started
+        required: false
       backend:
         condition: service_healthy
     command: ["python", "-m", "app.tasks.scheduler"]
