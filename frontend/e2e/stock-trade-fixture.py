@@ -1063,6 +1063,7 @@ def catalog_app():
                         await run_catalog_quote_cycle(
                             sessionmaker=application.state.sessionmaker,
                             redis=application.state.redis,
+                            quota_redis=application.state.redis,
                             http=client,
                             settings=worker,
                         )
