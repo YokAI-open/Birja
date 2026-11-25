@@ -641,19 +641,22 @@ async def test_catalog_renewed_review_rechecks_retained_event_id(catalog_monitor
             db, binding.coin_id, now, account=ACCOUNT, server=SERVER, allow_fixture=True
         )
     assert authority is not None
-    day = next(
+    # An action before the journal origin is intentionally excluded from an empty book.
+    ex_date = next(
         session.session_date.isoformat()
         for session in build_sessions(now, authority.calendar)
-        if session.session_date >= origin.date() and session.exchange == binding.listing_exchange
+        if session.exchange == binding.listing_exchange
+        and session.opens_at is not None
+        and session.opens_at > now
     )
     identity = str(uuid4())
     terms = {
         "id": identity,
         "symbol": authority.ticker,
-        "process_date": day,
-        "ex_date": day,
-        "record_date": day,
-        "payable_date": day,
+        "process_date": now.date().isoformat(),
+        "ex_date": ex_date,
+        "record_date": ex_date,
+        "payable_date": ex_date,
         "currency": "USD",
         "rate": 0.25,
         "sub_type": "ordinary",

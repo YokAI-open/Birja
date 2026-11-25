@@ -114,3 +114,32 @@ at 14:30 UTC, a stable row ID and new generation 8. All 44 recovery-runner
 contracts and 113 ops CI contracts passed. Independent focused review
 found no blockers. The full campaign remains required on the corrective PR
 and its resulting main commit.
+
+## Corrective release PR
+
+The owner approved publishing fixture correction `58a90b3fe44b46e360b3c36a4098af9774ad6882`,
+opening its [PR #48](https://github.com/YokAI-open/Birja/pull/48), merging
+that exact head into main only after all six checks pass, and monitoring
+the resulting main run. The PR has the checked main base `4c839f5`.
+[Run 45636439110](https://github.com/YokAI-open/Birja/actions/runs/45636439110)
+tests the approved corrective head.
+
+The corrective PR's frontend, image, browser and seven-stage recovery
+jobs passed. The hosted recovery log confirms exact retained `0012` rows,
+schema and sequences through the repaired scenario. The same archive also
+passed retained `0025`, cold encrypted `0026` on a fresh server, and exact
+data before and after the first write boundary. GitHub uploaded that
+PR archive. Its SHA-256 is
+`a32f8c92f66eff8b081538fc4989e282c5da2e2c5320cf9008b315bb34efde5d`.
+
+Both the original main run and corrective PR backend jobs failed
+`test_catalog_renewed_review_rechecks_retained_event_id`. Each stopped
+after one test failure and 2,526 passes. The local PostgreSQL reproduction
+showed the mocked dividend opening fell before the catalog journal origin,
+so the app correctly omitted the event from the new empty book. Renewal had
+no retained ID to recheck. The corrective test records today's process date
+with ex, record and payable dates at the next verified session opening.
+It retains the exact known-ID recheck and reconciliation assertions.
+All 60 tests in the monitoring module passed on disposable PostgreSQL and
+Redis, Ruff lint and formatting passed, and independent review found
+no blockers. The full PR suite and resulting main CI remain required.
