@@ -61,4 +61,27 @@ manifests and locks differ only in their root application version. The
 frontend audit fingerprints match those new files and the existing issue
 35 advisory, scope and expiry are preserved. The offline uv lock check,
 frontend audit tests, lint, typecheck, build and diff checks passed.
-Release publication and successful exact-main CI remain pending.
+Successful exact-main CI and release publication remain pending.
+
+## Release PR
+
+The owner approved pushing the local release head and opening its PR into
+`main`, with reviewed CI, fixture and planning fixes on the release branch
+through the check run. [PR #47](https://github.com/YokAI-open/Birja/pull/47)
+tests release head `84511f0864799d5a058129644a89a7ce37f88bdc` against
+`main` base `07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9`.
+[Run 45623598560](https://github.com/YokAI-open/Birja/actions/runs/45623598560)
+The frontend, image, full browser and ops jobs passed. The recovery
+campaign restored the exact retained `0025` and cold encrypted `0026` on a
+fresh server. It preserved the original volume and ledger before writes
+and recovered exact `0026` candidate data and receipts after writes. The
+predecessor refused `0026`. PR artifact `15029749173` has transport SHA-256
+`efb0dfd5ad9abdedf78abdadd0bdc6aaf1cd5d3dbb406fdc7d2a85c52d85a2c6`.
+The artifact must be replaced by the verified artifact from the eventual
+successful `main` run for protected rollout.
+
+Backend passed 3,941 tests with 94.41% overall coverage and 100% critical
+coverage. Its dependency audit passed. All six jobs, including `ci-pass`,
+completed successfully on the exact release head. GitHub reports PR #47
+open, clean and mergeable into the verified `main` base. The next
+checkpoint is explicit owner approval for the main merge commit.

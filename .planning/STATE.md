@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T13:17:52Z"
-last_activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
+last_updated: "2026-11-25T14:21:21Z"
+last_activity: 2026-11-25 -- Release PR #47 passed all six required checks
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: Phase 21 feature PR #46 merged into develop and release 0.8.0 prepared locally
+stopped_at: Release PR #47 passed CI and awaits main merge approval
 ---
 
 # Project State
@@ -30,8 +30,8 @@ acceptance of searchable stock trading.
 
 Phase: 21
 Plan: 4 of 9 executed
-Status: Awaiting release PR publication approval and expanded live-source evidence
-Last activity: 2026-11-25 -- Phase 21 feature merged and release 0.8.0 prepared locally
+Status: Awaiting main merge approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Release PR #47 passed all six required checks
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence
@@ -46,9 +46,10 @@ Phase 21 local recovery and catalog checks passed. The exact feature CI
 run passed 3,941 backend tests, 94.41% overall coverage, 100% critical
 coverage, the full browser run and verified recovery tooling. PR #46
 merged into develop as `e1b7956` with the checked feature tree. Release
-0.8.0 is prepared locally. Live acquisition and activation need
-evidence for the expanded scope. These checks can progress independently.
-[Feature CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
+PR #47 passed all six jobs at `84511f0`, including the seven-stage recovery
+rehearsal. The main merge requires owner approval. Live acquisition and
+activation need evidence for the expanded scope.
+[Release CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 
 ## Carried context
