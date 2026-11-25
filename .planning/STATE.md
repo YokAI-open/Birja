@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T14:21:21Z"
-last_activity: 2026-11-25 -- Release PR #47 passed all six required checks
+last_updated: "2026-11-25T14:38:15Z"
+last_activity: 2026-11-25 -- Main CI exposed a retained recovery fixture calendar mismatch
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: Release PR #47 passed CI and awaits main merge approval
+stopped_at: Isolated fixture repair passed and awaits corrective PR approval
 ---
 
 # Project State
@@ -30,8 +30,8 @@ acceptance of searchable stock trading.
 
 Phase: 21
 Plan: 4 of 9 executed
-Status: Awaiting main merge approval and expanded live-source evidence
-Last activity: 2026-11-25 -- Release PR #47 passed all six required checks
+Status: Awaiting corrective CI PR approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Main CI exposed a retained recovery fixture calendar mismatch
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence
@@ -47,8 +47,10 @@ run passed 3,941 backend tests, 94.41% overall coverage, 100% critical
 coverage, the full browser run and verified recovery tooling. PR #46
 merged into develop as `e1b7956` with the checked feature tree. Release
 PR #47 passed all six jobs at `84511f0`, including the seven-stage recovery
-rehearsal. The main merge requires owner approval. Live acquisition and
-activation need evidence for the expanded scope.
+rehearsal. It merged into main as `4c839f5` with the checked release tree.
+Main CI failed the retained recovery fixture. The targeted PostgreSQL
+replay passes with the reviewed fix and full CI will verify the repair.
+Live acquisition and activation need evidence for the expanded scope.
 [Release CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 

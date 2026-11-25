@@ -85,3 +85,32 @@ coverage. Its dependency audit passed. All six jobs, including `ci-pass`,
 completed successfully on the exact release head. GitHub reports PR #47
 open, clean and mergeable into the verified `main` base. The next
 checkpoint is explicit owner approval for the main merge commit.
+
+## Main merge
+
+The owner approved the merge of the checked release head. PR #47 merged
+at 14:23:00 UTC on 2026-11-25 as
+`4c839f5642f60771a5a376f2956bd7c8ab28aca9`, with parents
+`07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9` and
+`84511f0864799d5a058129644a89a7ce37f88bdc`. The merge tree
+`ede70d1f0320f6efd7907a7ec35463453dca3a7b` matches the reviewed release.
+[Main run 45633446612](https://github.com/YokAI-open/Birja/actions/runs/45633446612)
+tests the actual main merge commit on the push event.
+
+The [main recovery job](https://github.com/YokAI-open/Birja/actions/runs/45633446612/job/139272499837)
+failed in the retained `0012` corporate-action scenario. After the November
+25 session opened, the next opening was November 27. The older fixture
+already held a session row for that date under calendar generation 3. Its
+scenario expected generation 8 and kept the existing row untouched.
+PostgreSQL correctly rejected the mismatched calendar in the resolution
+function. No release artifact was staged by this run.
+
+The fixture refreshes the selected session under the scenario's active
+calendar while retaining its primary key. There are no runtime or
+migration changes. The isolated retained-source PostgreSQL replay
+reproduced the same rejection on the prior fixture, then passed resolution
+and split application with the patched fixture. It confirmed November 27
+at 14:30 UTC, a stable row ID and new generation 8. All 44 recovery-runner
+contracts and 113 ops CI contracts passed. Independent focused review
+found no blockers. The full campaign remains required on the corrective PR
+and its resulting main commit.
