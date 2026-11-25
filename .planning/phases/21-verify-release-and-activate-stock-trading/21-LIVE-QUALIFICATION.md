@@ -140,6 +140,13 @@ Alpaca's exact current primary symbol and venue. Alpaca returned
 and preserve their execution-state distinction. Provider availability,
 market hours and the latest stock-specific evidence still control orders.
 
+The restricted test migrator published all 4,898 listings in an
+isolated PostgreSQL database in 2.301 seconds. Replaying the exact
+manifest preserved the generation and digest. Under the restricted
+application role, ten queries each for `ORCL` and `Oracle` returned the
+same listing. `BRK/B` returned `BRK.B` on NYSE. Median times for the
+three queries were 62–66 milliseconds.
+
 The catalog financial quote scheduler accepted two real IEX quotes for
 NYSE ORCL. With an explicit selection at 20:28 UTC, the restricted
 scheduler persisted a source observation aged 0.082 seconds and returned
