@@ -94,14 +94,14 @@ async def test_genuine_granted20_transition_requires_explicit_runtime_bootstrap(
     async with child.connect() as conn:
         await conn.execute(text(PREFLIGHT_0023_SQL))
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-            await require_schema(conn)
+            await require_schema(conn, consumer="retained0023")
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with child.begin() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert await complete_snapshot(conn) == before[0]
         await sql(conn, GRANTS_0023_SQL)
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert await complete_snapshot(conn) == before[0]
 
 
@@ -119,14 +119,14 @@ async def test_genuine_legacy14_transition_requires_explicit_runtime_bootstrap(l
     async with child.connect() as conn:
         await conn.execute(text(PREFLIGHT_0023_SQL))
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-            await require_schema(conn)
+            await require_schema(conn, consumer="retained0023")
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with child.begin() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert await complete_snapshot(conn) == before[0]
         await sql(conn, GRANTS_0023_SQL)
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert await complete_snapshot(conn) == before[0]
 
 
@@ -247,7 +247,7 @@ async def test_closed_evidence_bootstrap_admits_valid_and_refuses_corrupt_names(
     await authorize(successor)
     portfolio = await closed_evidence_fixture(successor)
     async with successor.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         before = await complete_snapshot(conn)
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
@@ -462,7 +462,7 @@ async def test_fresh_upgraded_exact_successor_admission_and_sql_parity(successor
         before = (await conn.execute(text("SELECT id,cash,starting_cash FROM accounts"))).all()
         await conn.execute(text(PREFLIGHT_0023_SQL))
         await sql(conn, GRANTS_0023_SQL)
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert (await conn.execute(text(CATALOGUE_0023_SQL))).scalar_one() == CATALOGUE_0023_SHA256
         assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0023_SHA256
         assert (
@@ -471,7 +471,7 @@ async def test_fresh_upgraded_exact_successor_admission_and_sql_parity(successor
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with successor.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         assert (
             await conn.execute(text(DEFAULT_ACL_0023_SQL))
         ).scalar_one() == DEFAULT_ACL_0023_SHA256
@@ -499,11 +499,11 @@ async def test_fresh_quarantine_entry_requires_exact_regrant_before_runtime(succ
         assert (await conn.execute(text(ACL_SQL))).scalar_one() == ACL_0023_QUARANTINE_SHA256
         await conn.execute(text(PREFLIGHT_0023_SQL))
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
-            await require_schema(conn)
+            await require_schema(conn, consumer="retained0023")
     code, diagnostic = await production_bootstrap()
     assert code == 0, diagnostic
     async with successor.connect() as conn:
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
 
 
 async def test_fresh_implicit_public_function_defaults_refuse_runtime_and_bootstrap(successor):
@@ -533,7 +533,7 @@ async def test_fresh_implicit_public_function_defaults_refuse_runtime_and_bootst
             ).scalar_one()
             with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
                 async with conn.begin_nested():
-                    await require_schema(conn)
+                    await require_schema(conn, consumer="retained0023")
             with pytest.raises(DBAPIError, match="effective closure default"):
                 async with conn.begin_nested():
                     await conn.execute(text(PREFLIGHT_0023_SQL))
@@ -584,7 +584,7 @@ async def test_fresh_developer_bootstrap_authorizes_only_exact_current(successor
     async with successor.begin() as conn:
         raw = await conn.get_raw_connection()
         await _authorize_portfolios(raw.driver_connection, "0023")
-        assert await require_schema(conn) == "0023"
+        assert await require_schema(conn, consumer="retained0023") == "0023"
         counts = (
             await conn.execute(
                 text(
@@ -598,16 +598,17 @@ async def test_fresh_developer_bootstrap_authorizes_only_exact_current(successor
 
 
 async def test_repeated_bootstrap_leaves_current_for_next_pytest_process(engine):
+    from app.db.portfolio_bootstrap import CURRENT_PORTFOLIO_REVISION
     from app.db.schema_contract import require_schema
     from tests.test_migrations import ensure_dividend_test_owner, install_current_test_grants
 
     await reset_disposable_schema(engine)
-    await asyncio.to_thread(run_test_migration, "0023")
+    await asyncio.to_thread(run_test_migration, CURRENT_PORTFOLIO_REVISION)
     await install_current_test_grants()
     for _ in range(2):
         await ensure_dividend_test_owner()
         await install_current_test_grants()
         async with engine.connect() as conn:
-            assert await require_schema(conn) == "0023"
+            assert await require_schema(conn) == CURRENT_PORTFOLIO_REVISION
     # Deliberately leave the supported current schema. The next independent
-    # pytest process must pass its finite session-autouse prerequisite on0023.
+    # pytest process must pass its finite session-autouse prerequisite on this revision.

@@ -274,7 +274,7 @@ async def test_configured0008_to0023_preserves_books_and_accepts_final_bootstrap
                     "acl": bootstrap.ACL_0023_SHA256,
                     "defaults": bootstrap.DEFAULT_ACL_0023_SHA256,
                 }
-                assert await require_schema(conn) == "0023"
+                assert await require_schema(conn, consumer="retained0023") == "0023"
                 assert await require_migrator(conn) == "0023"
                 await assert_preserved(conn, before, tails)
     finally:

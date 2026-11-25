@@ -399,7 +399,8 @@ async def test_final_sql_stock_function_inventory_owners_paths_and_grants(portfo
     )
     assert len(rows) == 3
     for row in rows:
-        assert row["owner"] == "birja_migrator" and not row["prosecdef"] and not row["public"]
+        assert row["owner"] == "birja_migrator" and not row["public"]
+        assert row["prosecdef"] == (row["proname"] == "check_stock_split_digest_version")
         assert row["proconfig"] == ["search_path=pg_catalog, public, pg_temp"]
         assert row["app"] == (row["proname"] == "assert_stock_execution_current")
         assert not row["scheduler"]

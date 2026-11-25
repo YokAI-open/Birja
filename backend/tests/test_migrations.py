@@ -535,6 +535,8 @@ async def test_populated_history_index_roundtrip(retained_migration_db) -> None:
     await asyncio.to_thread(run_test_migration, "0007")
 
     async def snapshot():
+        # Migrations run in another process and change retained row shapes.
+        await engine.dispose()
         async with engine.connect() as conn:
             rows = []
             for query in (
