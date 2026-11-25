@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import AwareDatetime, Field, TypeAdapter
@@ -42,7 +43,7 @@ from app.services.stock_catalog_sources import (
 
 Mode = Literal["fixture", "live"]
 Venue = Literal["NASDAQ", "NYSE", "out_of_scope"]
-Artifact = Literal["nasdaqlisted", "otherlisted", "openfigi", "issuer_exception"]
+Artifact = Literal["nasdaqlisted", "otherlisted", "openfigi_nyse", "openfigi", "issuer_exception"]
 Purpose = Literal["collection", "internal_use", "derived_use", "display", "storage", "backup"]
 Digest = Annotated[str, Field(pattern=SHA256)]
 
@@ -52,6 +53,7 @@ MAX_MAPPING_JOBS = 10
 MAX_MAPPING_BYTES = 512 * 1024
 MAX_STAGE_BYTES = 32 * 1024 * 1024
 OPENFIGI_URL = "https://api.openfigi.com/v3/mapping"
+_EASTERN = ZoneInfo("America/New_York")
 _DEADLINE = 15
 _MAX_RETRY_WAIT = 60
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
@@ -117,10 +119,15 @@ class Cursor(CatalogModel):
     outcomes: tuple[InventoryRow, ...] = ()
 
 
-def _rights_required(now: datetime, rights: tuple[ArtifactRights, ...], exceptions: bool) -> None:
+def _rights_required(
+    now: datetime,
+    rights: tuple[ArtifactRights, ...],
+    exceptions: bool,
+    nyse_source: Literal["otherlisted", "openfigi_nyse"] = "otherlisted",
+) -> None:
     required = {
         "nasdaqlisted": _DIRECTORY_FIELDS,
-        "otherlisted": _DIRECTORY_FIELDS,
+        nyse_source: _DIRECTORY_FIELDS,
         "openfigi": _CLASSIFICATION_FIELDS | {"aliases"},
     }
     if exceptions:
@@ -170,10 +177,17 @@ def _complete(coverage: dict[Venue, Coverage]) -> bool:
 def validate_manifest(manifest: CatalogManifest, now: datetime) -> None:
     """Verify the manifest's compact evidence and completeness claims on read."""
     first, second = manifest.sources
+    aligned = (
+        first.published_at.astimezone(_EASTERN).date()
+        == second.published_at.astimezone(_EASTERN).date()
+        if second.artifact == "openfigi_nyse"
+        else abs(first.published_at - second.published_at) <= timedelta(hours=1)
+    )
     if (
-        (first.artifact, second.artifact) != ("nasdaqlisted", "otherlisted")
+        first.artifact != "nasdaqlisted"
+        or second.artifact not in ("otherlisted", "openfigi_nyse")
         or first.sha256 == second.sha256
-        or abs(first.published_at - second.published_at) > timedelta(hours=1)
+        or not aligned
         or any(
             not timedelta(0) <= now - src.published_at <= timedelta(days=4)
             for src in manifest.sources
@@ -188,6 +202,7 @@ def validate_manifest(manifest: CatalogManifest, now: datetime) -> None:
             now,
             manifest.rights,
             any(row.reason == "reviewed_issue_evidence" for row in manifest.rows),
+            second.artifact,
         )
     counts = Counter(row.source for row in manifest.rows)
     if any(counts[src.artifact] != src.row_count for src in manifest.sources):
@@ -203,6 +218,8 @@ def validate_manifest(manifest: CatalogManifest, now: datetime) -> None:
             row.identity_key is None
             or row.classification not in {"common_stock", "ordinary_shares"}
             or row.listing_exchange is None
+            or (row.source == "nasdaqlisted" and row.listing_exchange != "NASDAQ")
+            or (row.source == "openfigi_nyse" and row.listing_exchange != "NYSE")
             or row.evidence_at is None
             or not timedelta(0) <= now - row.evidence_at <= CORROBORATION_AGE
             for row in admitted
