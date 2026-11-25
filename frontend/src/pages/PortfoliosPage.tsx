@@ -74,11 +74,15 @@ export default function PortfoliosPage() {
     }
   }, [location, navigate]);
   const created = useCallback(
-    (metadata: { id: string }, replay: boolean) =>
-      navigate(`/portfolios/${metadata.id}`, {
+    (metadata: { id: string }, replay: boolean) => {
+      // BrowserRouter updates the URL before React commits the next route.
+      // A creation receipt can arrive while this overview is still mounted.
+      if (window.location.pathname !== location.pathname) return;
+      void navigate(`/portfolios/${metadata.id}`, {
         state: { creationResult: { id: metadata.id, replay } },
-      }),
-    [navigate],
+      });
+    },
+    [location.pathname, navigate],
   );
   const rows = query.data;
   const capKnown = rows !== undefined && !query.membershipUncertain;
