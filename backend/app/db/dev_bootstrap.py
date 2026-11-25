@@ -119,9 +119,9 @@ FUNCTION_SIGNATURES = frozenset(
 
 def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
     """Finite migration-only inventories, distinct from runtime admission."""
-    if revision is not None and revision not in {f"{n:04}" for n in range(7, 27)}:
+    if revision is not None and revision not in {f"{n:04}" for n in range(7, 28)}:
         raise ValueError("Unsupported migration revision inventory")
-    if revision not in {"0021", "0022", "0023", "0024", "0025", "0026"}:
+    if revision not in {"0021", "0022", *PORTFOLIO_PREFLIGHT_SQL}:
         return TABLES, FUNCTION_SIGNATURES
     tables = TABLES | {"portfolio_lifecycle_closures", "portfolio_closure_intents"}
     signatures = FUNCTION_SIGNATURES - {
@@ -138,9 +138,9 @@ def migration_objects(revision: str | None) -> tuple[frozenset[str], frozenset[s
             "close_portfolio(bigint,bigint,uuid,text,text)",
             "check_stock_terminal_clock()",
         }
-    if revision in {"0025", "0026"}:
+    if revision in {"0025", "0026", "0027"}:
         tables |= CATALOGUE_TABLES
-    if revision == "0026":
+    if revision in {"0026", "0027"}:
         tables |= CATALOGUE_FINANCE_TABLES
         signatures |= {
             "stock_catalog_scope_current(bigint,text,stock_catalog_instruments,"
@@ -159,7 +159,7 @@ def require_complete_migration_inventory(
     relations: list[tuple[str, str, str]],
     signatures: set[str],
 ) -> None:
-    if revision not in {"0021", "0022", "0023", "0024", "0025", "0026"}:
+    if revision not in {"0021", "0022", *PORTFOLIO_PREFLIGHT_SQL}:
         return
     tables, functions = migration_objects(revision)
     nonidentity = {
@@ -184,6 +184,7 @@ async def _authorize_portfolios(conn: asyncpg.Connection, revision: str) -> None
     grants_sql, acl_sql, acl_sha256 = {
         "0025": (GRANTS_0025_SQL, ACL_0025_SQL, ACL_0025_SHA256),
         "0026": (GRANTS_0026_SQL, ACL_0026_SQL, ACL_0026_SHA256),
+        "0027": (GRANTS_0026_SQL, ACL_0026_SQL, ACL_0026_SHA256),
     }.get(revision, (GRANTS_0023_SQL, ACL_SQL, ACL_0023_SHA256))
     await conn.execute(PORTFOLIO_PREFLIGHT_SQL[revision])
     await conn.execute(grants_sql)
@@ -198,7 +199,7 @@ async def _migrate_dev(conn: asyncpg.Connection, database_url: str) -> None:
     revision = None
     if await conn.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL"):
         rows = await conn.fetch("SELECT version_num FROM public.alembic_version")
-        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 27)}:
+        if len(rows) != 1 or rows[0][0] not in {f"{n:04}" for n in range(7, 28)}:
             raise ValueError("Unsupported dev migration revision; refusing")
         revision = rows[0][0]
     await conn.execute("SELECT pg_advisory_lock(1026016001)")

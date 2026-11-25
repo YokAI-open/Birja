@@ -89,7 +89,7 @@ def recovery_policy(ops, runner_source=None):
                 "tls-upgraded", "tls-fresh", "selected-rollback")
     if ast.literal_eval(constants["STAGES"]) != expected:
         raise ValueError("missing or reordered serial stage")
-    successor = expected[:2] + ("current0026-cold",) + expected[3:]
+    successor = expected[:2] + ("current0027-cold",) + expected[3:]
     if ast.literal_eval(constants["SUCCESSOR_STAGES"]) != successor:
         raise ValueError("missing or reordered successor stage")
     for required in (
@@ -100,9 +100,9 @@ def recovery_policy(ops, runner_source=None):
         "authenticate(ops, archive, expected, source, image_records)", "verify_archive_binding(archive, expected)",
         "retained.extractfile(name).read() != (ROOT / name).read_bytes()",
         "source != {name: ops.r.digest(ROOT / name) for name in source}",
-        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "PORTFOLIO_PAYLOAD_V6",
+        "verify_image(binding, inspect)", "PORTFOLIO_PAYLOAD_V4", "PORTFOLIO_PAYLOAD_V7",
         "RETAINED_CLOSURE_SOURCE_PAYLOADS", "successor_source_identity(sources)",
-        "current0026-image-binding.json", "successor_identity=identity",
+        "current0027-image-binding.json", "successor_identity=identity",
         "execute_stages(selected, guard, stages=stages)", "recovery-successor",
         "Path(\"/tmp/birja-phase14-proof/recovery.tar.gz\")",
         "Path(\"/tmp/birja-backup-test-phase21-proof/recovery.tar.gz\")",
@@ -568,7 +568,7 @@ class CI(unittest.TestCase):
         with self.assertRaises(ValueError):
             recovery_policy(ops, source.replace("\"roles\", \"tls-upgraded\"", "\"tls-upgraded\", \"roles\"", 1))
         with self.assertRaises(ValueError):
-            recovery_policy(ops, source.replace('"current0026-cold"', '"current0023-cold"', 1))
+            recovery_policy(ops, source.replace('"current0027-cold"', '"current0023-cold"', 1))
         with self.assertRaises(ValueError):
             recovery_policy(ops.replace(' --verify-successor-receipt "$GITHUB_SHA"', ""))
         for old in ("bash deploy/tests/test-deploy-compatibility.sh", "python3 deploy/tests/test-selected-cutover-contracts.py"):

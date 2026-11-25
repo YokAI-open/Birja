@@ -143,7 +143,26 @@ CATALOG_PINS
 
 stock_catalog_finance_source_supported() {
   local name expected actual
+  if [ "${2:-0026}" = 0027 ]; then
+    while read -r name expected; do
+      actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
+      [ "$actual" = "$expected" ] || return 1
+    done <<'CATALOG_NYSE_PINS'
+backend/alembic/versions/0027_stock_catalog_nyse_source.py 9ebf379351b670ac376100bb6922d5fda8a27bcecb44d031cf9db080c105c427
+backend/app/db/dev_bootstrap.py 142a83e62460fc747e994d0bea5de492860eaadf27f136e08b6b1748fc232a70
+backend/app/db/portfolio_bootstrap.py a038e69cd351c4f7a51883ac1af1bffb28c9dd59bdccb5445d9f87d450324eac
+backend/app/db/portfolio_migrate.py 52d270a4f91f3f6015fe8b07b57430450337d98822edf37e5ec56ac704fe471e
+backend/app/db/schema_contract.py e9d0783c2a87f888b0ccc79cec350ca0ae2403a69d4629a5ee6b50213d7763ed
+backend/app/models/stock_catalog.py 343adeb595efc1c4cfba39b7a10d6c7d5dc446adaf70615cc103f8a3b093613f
+deploy/db/bootstrap-roles.sql 229a9c1dafcaeaf76b99c5f9db05574c88a08d7a1baff65a2fcde26d659c0a88
+CATALOG_NYSE_PINS
+  fi
   while read -r name expected; do
+    if [ "${2:-0026}" = 0027 ]; then
+      case "$name" in
+        backend/app/db/dev_bootstrap.py|backend/app/db/portfolio_bootstrap.py|backend/app/db/portfolio_migrate.py|backend/app/db/schema_contract.py|deploy/db/bootstrap-roles.sql) continue ;;
+      esac
+    fi
     actual=$(git -C "$APP_DIR" show "$1:$name" 2>/dev/null | sha256sum | awk '{print $1}') || return 1
     [ "$actual" = "$expected" ] || return 1
   done <<'CATALOG_FINANCE_PINS'
@@ -173,6 +192,20 @@ admit_application_source() {
   # ADMITTED_REVISION is authenticated by recovery_gate; tested_source is
   # pinned by the retained manifest. A mutable ref name proves neither.
   [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]] || { application_schema_incompatible; return 1; }
+  if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0027_stock_catalog_nyse_source.py" 2>/dev/null; then
+    [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_finance_source_supported "$1" 0027 || {
+      application_schema_incompatible; return 1;
+    }
+    if [ "${2:-runtime}" = portfolio-upgrade ]; then
+      case "${ADMITTED_REVISION:-}" in
+        0007|0008|0009|0010|0011|0012|0013|0014|0017|0020|0023|0024|0025|0026|0027) return 0 ;;
+        *) application_schema_incompatible; return 1 ;;
+      esac
+    fi
+    [ "${ADMITTED_REVISION:-}" = 0027 ] && return 0
+    application_schema_incompatible
+    return 1
+  fi
   if git -C "$APP_DIR" cat-file -e "$1:backend/alembic/versions/0026_stock_catalog_finance.py" 2>/dev/null; then
     [ "$1" = "${BIRJA_TESTED_SOURCE:-}" ] && stock_catalog_finance_source_supported "$1" || {
       application_schema_incompatible; return 1;

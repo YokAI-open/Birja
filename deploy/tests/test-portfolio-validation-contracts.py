@@ -247,7 +247,7 @@ class CurrentCampaign(unittest.TestCase):
         self.assertEqual(runner.STAGES, ("image-transition", "retained-roundtrip", "current0023-cold",
                                        "roles", "tls-upgraded", "tls-fresh", "selected-rollback"))
         self.assertEqual(str(runner.archive_for_phase(21)), "/tmp/birja-backup-test-phase21-proof/recovery.tar.gz")
-        self.assertEqual(runner.SUCCESSOR_STAGES, ("image-transition", "retained-roundtrip", "current0026-cold",
+        self.assertEqual(runner.SUCCESSOR_STAGES, ("image-transition", "retained-roundtrip", "current0027-cold",
                                                  "roles", "tls-upgraded", "tls-fresh", "selected-rollback"))
         auth = ["a" * 64, "b" * 64, "c" * 64]
         actions = dict.fromkeys(runner.SUCCESSOR_STAGES, lambda: auth)
@@ -278,10 +278,10 @@ class CurrentCampaign(unittest.TestCase):
             archive = root / "recovery.tar.gz"
             expected = "1" * 64
             (root / "recovery.tar.gz.sha256").write_text(expected + "\n")
-            (root / "current0026-image-binding.json").write_text(json.dumps(binding))
+            (root / "current0027-image-binding.json").write_text(json.dumps(binding))
             complete = {**identity, "archive": str(archive), "archive_sha256": expected,
                         "phase": 21, "suite": "recovery-successor",
-                        "recovery_profile": "deploy-recovery-v7", "payload_version": 6, "revision": "0026",
+                        "recovery_profile": "deploy-recovery-v8", "payload_version": 7, "revision": "0027",
                         "stage_order": list(runner.SUCCESSOR_STAGES), "current_stage": "selected-rollback",
                         "stages": dict.fromkeys(runner.SUCCESSOR_STAGES, "passed-authenticated"),
                         "current_image": binding, "ok": True, "whole7": True, "same_archive_final_ci": True}
@@ -477,11 +477,11 @@ class CurrentCampaign(unittest.TestCase):
     def test_dev_diagnostic_uses_current_schema_without_app_account_insert(self):
         module = runner.load('test-dev-bootstrap')
         code = module.financial_program()
-        compile(code, '<dev0026>', 'exec')
-        self.assertIn("version_num FROM alembic_version\")=='0026'", code)
-        self.assertIn("PREFLIGHT_0026_SQL", code)
+        compile(code, '<dev0027>', 'exec')
+        self.assertIn("version_num FROM alembic_version\")=='0027'", code)
+        self.assertIn("PREFLIGHT_0027_SQL", code)
         self.assertIn("version_num='0018'", code)
-        self.assertIn("version_num='0026'", code)
+        self.assertIn("version_num='0027'", code)
         self.assertIn("D('124.45')", code)
         self.assertIn('7777', code)
         self.assertLess(code.index('INSERT INTO accounts'), code.index('SET ROLE birja_app'))

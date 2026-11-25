@@ -628,7 +628,7 @@ async def enrolled_catalog_migrator(admin):
             text("""
             SELECT current_database()='birja' AND session_user='birja'
                 AND NOT role.rolcanlogin AND NOT role.rolsuper
-                AND (SELECT version_num FROM alembic_version)='0026'
+                AND (SELECT version_num FROM alembic_version)='0027'
             FROM pg_roles role WHERE role.rolname='birja_migrator'
             """)
         )

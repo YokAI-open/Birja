@@ -107,11 +107,11 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
             raise ValueError("private campaign image record required")
         binding = json.loads(record.read_text())
         lane = record.name.removesuffix("-image-binding.json")
-        if lane in {"current0023", "current0026", "predecessor0023", "current0020", "current0017",
+        if lane in {"current0023", "current0026", "current0027", "predecessor0023", "current0020", "current0017",
                     "retained0020-refusal", "retained0017-refusal"}:
             if lane == "predecessor0023" and binding["source_commit"] != PREDECESSOR_0023:
                 raise ValueError("predecessor image source changed")
-            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026", "predecessor0023"}
+            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026", "current0027", "predecessor0023"}
                       else "birja-portfolio-retained:")
             alias = campaign_image_tag(prefix + binding["source_commit"][:12] + "-" + binding["context_sha256"][:20], archive)
         elif lane in sources.FIXED_RELEASES:
@@ -133,14 +133,15 @@ def build_current_runtime(
     workstation image. Only the committed backend tree is sent to Docker;
     neither host source overlays nor an alternate dependency base are used.
     """
-    if revision not in {"0023", "0026"}:
+    if revision not in {"0023", "0026", "0027"}:
         raise ValueError("unsupported current runtime schema")
     if predecessor and revision != "0023":
         raise ValueError("exact 0023 predecessor required")
-    if revision == "0026" or predecessor:
+    if revision in {"0026", "0027"} or predecessor:
         if archive is None:
-            raise ValueError("0026 runtime requires a selected v7 campaign")
-        load_recovery().bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v7")
+            raise ValueError("Current catalog runtime requires an exact recovery campaign")
+        profile = "deploy-recovery-v7" if revision == "0026" else "deploy-recovery-v8"
+        load_recovery().bundle_verify(archive, archive_sha, required_profile=profile)
     head = sources.git("rev-parse", "HEAD").decode().strip()
     commit = PREDECESSOR_0023 if predecessor else head
     lane = "predecessor0023" if predecessor else "current" + revision
@@ -222,7 +223,7 @@ def build_selected_runtime(
     sources, env, *, revision, archive=None, archive_sha=None, run=subprocess.run
 ):
     profile = sources.profile_for(revision)
-    if revision in {"0023", "0026"}:
+    if revision in {"0023", "0026", "0027"}:
         return build_current_runtime(sources, env, archive=archive, archive_sha=archive_sha,
                                      revision=revision, run=run)
     if revision not in {"0017", "0020"}:
@@ -1126,7 +1127,7 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
 def installed_recovery_verifier(archive, archive_sha, *, profile="deploy-recovery-v5"):
     """Keep the authenticated consumer and adjacent retained sources alive."""
     trusted = load_recovery()
-    if profile not in {"deploy-recovery-v5", "deploy-recovery-v7"}:
+    if profile not in {"deploy-recovery-v5", "deploy-recovery-v7", "deploy-recovery-v8"}:
         raise ValueError("unsupported installed campaign profile")
     trusted.bundle_verify(archive, archive_sha, required_profile=profile)
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-verifier-context-") as temporary:
