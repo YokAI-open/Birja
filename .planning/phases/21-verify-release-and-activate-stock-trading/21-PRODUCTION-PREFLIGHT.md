@@ -26,15 +26,29 @@ deployment launcher and smoke script.
 
 ## Read-only host scope
 
-Once approved, verify the host and deployment log before reading fixed
-container image, mount and health metadata. Check PostgreSQL schema,
-restricted role and TLS metadata, stock flag states, current retained
-tool and binding identities, local disk headroom, and local backup and
-restore receipts and inventory count. Record sanitized results. Use
-local protected metadata for this step, with live backup-service
-measurements reserved for the approved backup and recovery scope.
-App, Git and system configuration writes, writer stops, volume operations,
-provider access, backup and restore require later authorization.
+The owner authorized completing the full rollout and agent-run production
+acceptance on November 25, 2026. Use the exact reviewed release, measured
+cutover inputs and applicable source evidence for the rollout.
+
+Inspection that day at 19:50 UTC confirmed `07d3aa5` and revision `0023`.
+The app, scheduler, PostgreSQL and Redis were healthy. Both runtime
+database roles connected with verified TLS 1.3. PostgreSQL reported no
+invalid public indexes and a database size of about 11.7 MB.
+
+- The original 20 stocks exist and there are zero stock data admissions.
+  Live quotes and actions are disabled. The production scheduler lacks
+  the protected Alpaca credential configuration.
+- The current database and Redis mounts are the Phase 6 candidates.
+  The unmounted predecessors also contain data. Use distinct empty
+  candidates and remeasure space after building. About 13.17 GB was free.
+- The installed deployment manifest and recovery-v4 files matched their
+  recorded hashes. The 03:10 UTC nightly backup succeeded. The guarded
+  B2 restore verified that exact `0023` predecessor snapshot in the
+  isolated clone at 20:24:56 UTC. All 20 recovery inventory entries are
+  in use. Repeat the protected backup and matching restore with the
+  final cutover configuration and fenced writers.
+
+The inspection used local metadata and read-only transactions.
 
 ## Work remaining for searchable trading
 

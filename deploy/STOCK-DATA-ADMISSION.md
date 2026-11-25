@@ -68,8 +68,20 @@ shortened (aware UTC bounds on that date, New York09:30 opening and earlier than
 exchange/date entries, unsupported/conflicting overrides or malformed/expired
 review evidence deny admission. Review the actual referenced official content;
 host validation alone does not prove that a closure announcement is authentic.
-Every review renewal or override update increments generation; existing derived
-rows cannot inherit authority merely by being fresh.
+Every review renewal or override update increments generation. The operator
+command `python -m app.tasks.stock_calendar_renew inspect` reports the
+current generation and predecessor digest. Run this from the full tested
+application checkout with the private `BIRJA_CATALOG_DATABASE_URL`,
+`DATABASE_SSL_CA_FILE`, `STOCK_DATA_ACCOUNT` and `STOCK_DATA_SERVER`.
+These are the same verified migrator settings as the catalog imports.
+Prepare the packet with two
+fresh official calendar checks and matching private evidence files. Use
+`review --packet <file> --nyse-evidence <file> --nasdaq-evidence <file>`
+to validate them. Then use `apply` with the same inputs and
+`--expected-packet-sha <digest>`. It publishes the reviewed authority and
+its matching derived sessions in one database transaction. Run a renewal
+before expiry, including on weekends. Take a second official look when
+either venue changes its advertised sessions.
 
 ## Operator inspection and prepared import
 
@@ -216,7 +228,7 @@ storage deadline. Stopped/failed collectors do not suspend those obligations.
 Until that prerequisite is met, keep activation disabled. No app/scheduler DELETE
 grant or new deletion job is added here; no financial evidence may be erased.
 
-## Expanded catalog admission on revision 0026
+## Expanded catalog admission on revisions 0026 and 0027
 
 Use the restricted migrator and verified database TLS settings for the exact
 release. Set `BIRJA_CATALOG_DATABASE_URL` and `DATABASE_SSL_CA_FILE` in a private
@@ -235,7 +247,7 @@ evidence and receive a revocation timestamp.
 
 | Artifact | Scope and reviewed purpose |
 | --- | --- |
-| `nasdaqlisted`, `otherlisted`, `openfigi`, `issuer_exception` | Use a dated scope for each artifact. Retain the exact normalized directory or classification fields and collection, internal use, derived use, storage and backup purposes. Include display for ticker, exchange, name and class fields. Directory scope is empty, except for explicitly reviewed issuer retirements. |
+| `nasdaqlisted`, `otherlisted`, `openfigi_nyse`, `openfigi`, `issuer_exception` | Use a dated scope for each artifact. Retain the exact normalized directory or classification fields and collection, internal use, derived use, storage and backup purposes. Include display for ticker, exchange, name and class fields. Directory scope is empty, except for explicitly reviewed issuer retirements. `openfigi_nyse` requires revision 0027 and is used with the Nasdaq Listed roster and official comparison evidence. |
 | `alpaca_assets` | Supply `provider` and `units` matching exact active listing targets, account, server, environment and window. A grant covers at most two distinct-exchange targets and the existing command consumes the grant on its first attempt, including failed attempts. |
 | `alpaca_iex_quotes` | Supply reviewed account/server, `iex`, USD, approved exchanges and request bounds for transient display and cache of symbol, bid, ask and source time. |
 | `catalog_execution`, `catalog_mark`, `catalog_halt`, `catalog_actions` | Set the exact current `catalog_id` and `listing_id` as canonical strings, mapped `provider_asset_id`, account/server and feed. Scope execution and marks to `iex`, halts to `nasdaq-rss`, and actions to `alpaca-corporate-actions`. Retain the separate reviewed collection/use, storage and backup for each artifact. |
@@ -272,6 +284,26 @@ generation, then admit the mapped listing scopes and promote the exact
 current listing for execution. The eligibility checks reject the earlier
 listing version. A verified rename or refresh can update the same issue and
 financial binding, keeping existing holdings and original History links.
+
+For the 0027 OpenFIGI NYSE source, use the same-date Nasdaq Listed,
+NYSE Pillar and CAT inputs. CAT supplies the NYSE primary comparison.
+Nasdaq Listed supplies the Nasdaq primary roster, with Pillar as the
+class comparison and CAT test flags used for additional test keys.
+Capture reusable mapping fields with
+`app.tasks.stock_catalog_reference_capture` and its private restart cursor.
+Pass the captured mappings to `app.tasks.stock_catalog_reference_inventory`.
+Keep incomplete reconciliation private and record unresolved issues.
+The live publisher requires a complete manifest.
+
+Capture the two account-scoped Alpaca asset inventories with
+`app.services.stock_catalog_asset_inventory --output <new-private-directory>`.
+Supply their original bytes and captured timestamps to
+`app.tasks.stock_catalog_enroll`. Read the review digest and ordered
+continuation, then apply that exact bounded batch. Repeat under the validated
+catalog generation until the continuation is empty. A new generation changes
+listing versions. Publish and enroll before the regular session so a refresh
+does not interrupt trading. Confirm the resulting selected and held cycles
+under the account's available quota.
 Keep catalog discovery available within its separate rights while a listing
 waits for renewed quote, mark, status, execution or action scope.
 
