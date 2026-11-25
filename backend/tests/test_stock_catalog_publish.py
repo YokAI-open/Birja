@@ -5,14 +5,20 @@ import hashlib
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import get_args
 
 import httpx
 import pytest
 import pytest_asyncio
 from pydantic import TypeAdapter
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy import delete, func, select, text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.models.stock_catalog import (
     StockCatalogAdmission,
@@ -35,6 +41,7 @@ from app.services.stock_catalog_publish import (
     publish_catalog,
 )
 from app.services.stock_catalog_sources import CatalogAlias, DirectorySource, ListingExchange
+from app.tasks import stock_catalog_import
 from app.tasks.stock_catalog_import import _database_settings
 from app.tasks.stock_catalog_inventory import (
     ArtifactRights,
@@ -43,6 +50,7 @@ from app.tasks.stock_catalog_inventory import (
     SourceEvidence,
     _coverage,
 )
+from tests.test_migrations import test_migration_url as migration_url
 
 NOW = datetime(2026, 11, 24, 15, tzinfo=UTC)
 SECOND = NOW + timedelta(hours=1)
@@ -351,6 +359,74 @@ async def test_manifest_rights_require_a_current_independent_durable_decision(
         decision.revoked_at = NOW + timedelta(minutes=1)
     with pytest.raises(CatalogPublishError, match="trusted operator admission"):
         await _publish(catalog_factory, candidate, receipt.generation_id, now=SECOND)
+
+
+async def test_operator_admission_requires_exact_apply_and_current_generation(
+    catalog_factory: Factory, tmp_path: Path
+) -> None:
+    now = datetime.now(UTC)
+    rows = [
+        {
+            **right.model_dump(mode="json"),
+            "reviewed_at": (now - timedelta(minutes=5)).isoformat(),
+            "valid_until": (now + timedelta(hours=1)).isoformat(),
+            "scope": {},
+        }
+        for right in _rights()
+    ]
+    packet = tmp_path / "review.json"
+    raw = json.dumps({"version": 1, "admissions": rows})
+    packet.write_text(raw)
+    digest = _sha(raw)
+    migrator = create_async_engine(migration_url())
+    command = ["admit", str(packet), "--expect-generation", "empty"]
+    try:
+        review = await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
+        assert review == {"disposition": "reviewed", "packet_sha256": digest, "count": 4}
+        async with catalog_factory() as reader:
+            assert await reader.scalar(select(func.count()).select_from(StockCatalogAdmission)) == 0
+
+        with pytest.raises(CatalogPublishError):
+            await stock_catalog_import._admit(
+                migrator,
+                stock_catalog_import._args(
+                    [*command, "--apply", "--expected-packet-sha", "0" * 64]
+                ),
+            )
+        applied = await stock_catalog_import._admit(
+            migrator,
+            stock_catalog_import._args([*command, "--apply", "--expected-packet-sha", digest]),
+        )
+        assert applied["disposition"] == "applied"
+        async with catalog_factory() as reader:
+            assert await reader.scalar(select(func.count()).select_from(StockCatalogAdmission)) == 4
+
+        rights = tuple(
+            ArtifactRights.model_validate_json(
+                json.dumps({k: v for k, v in row.items() if k != "scope"})
+            )
+            for row in rows
+        )
+        published = await _publish(catalog_factory, _manifest(now, rights=rights), None, now=now)
+        with pytest.raises(CatalogPublishError, match="generation"):
+            await stock_catalog_import._admit(migrator, stock_catalog_import._args(command))
+        assert published.generation_id > 0
+        async with catalog_factory() as reader:
+            conn = await reader.connection()
+            for role in ("birja_app", "birja_scheduler"):
+                assert (
+                    await conn.scalar(
+                        text(
+                            "SELECT has_table_privilege(:role,'stock_catalog_admissions','INSERT')"
+                        ),
+                        {"role": role},
+                    )
+                    is False
+                )
+            with pytest.raises(ValueError, match="restricted migrator"):
+                await stock_catalog_import._check_connection(conn, False, for_finance=True)
+    finally:
+        await migrator.dispose()
 
 
 async def test_fixture_manifest_requires_explicit_disposable_mode(
