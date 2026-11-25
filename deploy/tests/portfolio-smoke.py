@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = "birja-portfolio-fixture-test"
 PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
+PREDECESSOR_0023 = "07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9"
 
 
 def load(name):
@@ -29,7 +30,7 @@ def load(name):
 
 
 def campaign_image_binding(sources, env, *, archive, archive_sha, revision,
-                           source_commit, app_tree, context_sha256, run):
+                           source_commit, app_tree, context_sha256, run, lane=None):
     """Reuse only this archive's first-use immutable image, never a mutable tag.
 
     Missing or altered recorded images are an integrity failure. Rebuilding an
@@ -46,7 +47,7 @@ def campaign_image_binding(sources, env, *, archive, archive_sha, revision,
     sources.verify_archive_binding(archive, archive_sha)
     if archive.stat().st_uid != os.getuid() or archive.stat().st_mode & 0o077:
         raise ValueError("private campaign archive required")
-    record = parent / ("current" + revision + "-image-binding.json")
+    record = parent / ((lane or "current" + revision) + "-image-binding.json")
     if record.is_symlink():
         raise ValueError("private campaign image record required")
     if not record.exists():
@@ -106,9 +107,11 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
             raise ValueError("private campaign image record required")
         binding = json.loads(record.read_text())
         lane = record.name.removesuffix("-image-binding.json")
-        if lane in {"current0023", "current0026", "current0020", "current0017",
+        if lane in {"current0023", "current0026", "predecessor0023", "current0020", "current0017",
                     "retained0020-refusal", "retained0017-refusal"}:
-            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026"}
+            if lane == "predecessor0023" and binding["source_commit"] != PREDECESSOR_0023:
+                raise ValueError("predecessor image source changed")
+            prefix = ("birja-portfolio-current:" if lane in {"current0023", "current0026", "predecessor0023"}
                       else "birja-portfolio-retained:")
             alias = campaign_image_tag(prefix + binding["source_commit"][:12] + "-" + binding["context_sha256"][:20], archive)
         elif lane in sources.FIXED_RELEASES:
@@ -121,7 +124,8 @@ def authenticate_campaign_images(archive, archive_sha, *, inspect_image=None):
 
 
 def build_current_runtime(
-    sources, env, *, archive=None, archive_sha=None, revision="0023", run=subprocess.run
+    sources, env, *, archive=None, archive_sha=None, revision="0023", predecessor=False,
+    run=subprocess.run
 ):
     """Build the actual declared runtime from one authenticated Git context.
 
@@ -131,11 +135,15 @@ def build_current_runtime(
     """
     if revision not in {"0023", "0026"}:
         raise ValueError("unsupported current runtime schema")
-    if revision == "0026":
+    if predecessor and revision != "0023":
+        raise ValueError("exact 0023 predecessor required")
+    if revision == "0026" or predecessor:
         if archive is None:
             raise ValueError("0026 runtime requires a selected v7 campaign")
         load_recovery().bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v7")
-    commit = sources.git("rev-parse", "HEAD").decode().strip()
+    head = sources.git("rev-parse", "HEAD").decode().strip()
+    commit = PREDECESSOR_0023 if predecessor else head
+    lane = "predecessor0023" if predecessor else "current" + revision
     if sources.git("diff", "--name-only", "HEAD", "--", "backend").strip():
         raise ValueError("current source must be frozen before image build")
     app_tree = sources.git("rev-parse", commit + ":backend/app").decode().strip()
@@ -143,10 +151,10 @@ def build_current_runtime(
     context = hashlib.sha256(payload).hexdigest()
     binding = campaign_image_binding(
         sources, env, archive=archive, archive_sha=archive_sha, revision=revision,
-        source_commit=commit, app_tree=app_tree, context_sha256=context, run=run,
+        source_commit=commit, app_tree=app_tree, context_sha256=context, lane=lane, run=run,
     )
     if binding is not None:
-        if (sources.git("rev-parse", "HEAD").decode().strip() != commit
+        if (sources.git("rev-parse", "HEAD").decode().strip() != head
                 or sources.git("diff", "--name-only", "HEAD", "--", "backend").strip()):
             raise ValueError("current source changed during image reuse")
         return binding
@@ -180,7 +188,7 @@ def build_current_runtime(
             )
         sources.verify_source_tree(image_root, payload)
     if (
-        sources.git("rev-parse", "HEAD").decode().strip() != commit
+        sources.git("rev-parse", "HEAD").decode().strip() != head
         or sources.git("diff", "--name-only", "HEAD", "--", "backend").strip()
     ):
         raise ValueError("current source changed during image build")
@@ -206,7 +214,7 @@ def build_current_runtime(
     sources.verify_image(binding, json.loads(result.stdout))
     if archive is not None:
         sources.verify_archive_binding(archive, archive_sha)
-        sources.record_image_binding(archive, "current" + revision, binding)
+        sources.record_image_binding(archive, lane, binding)
     return binding
 
 
@@ -626,7 +634,7 @@ asyncio.run(run())
 
 
 def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bootstrap=False,
-        upgraded_bootstrap=False, upgraded_from="0020"):
+        upgraded_bootstrap=False, upgraded_from="0020", recovery_profile="deploy-recovery-v5"):
     if fresh_bootstrap and (revision not in {"0020", "0023"} or cold or upgraded_bootstrap):
         raise ValueError("fresh authority requires an explicit supported non-cold lane")
     if upgraded_bootstrap and (revision != "0023" or cold):
@@ -971,7 +979,7 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
                 # and a genuinely new server after the source is destroyed.
                 import shutil
 
-                with installed_recovery_verifier(archive, archive_sha) as r:
+                with installed_recovery_verifier(archive, archive_sha, profile=recovery_profile) as r:
                     manifest = r.canonical(dc, "birja_source_test")
                     r.recovery_contract().validate_manifest(manifest)
                     stage = root / "backup-input"
@@ -1115,15 +1123,17 @@ def run(*, archive=None, archive_sha=None, cold=False, revision="0023", fresh_bo
 
 
 @contextmanager
-def installed_recovery_verifier(archive, archive_sha):
+def installed_recovery_verifier(archive, archive_sha, *, profile="deploy-recovery-v5"):
     """Keep the authenticated consumer and adjacent retained sources alive."""
     trusted = load_recovery()
-    trusted.bundle_verify(archive, archive_sha, required_profile="deploy-recovery-v5")
+    if profile not in {"deploy-recovery-v5", "deploy-recovery-v7"}:
+        raise ValueError("unsupported installed campaign profile")
+    trusted.bundle_verify(archive, archive_sha, required_profile=profile)
     with tempfile.TemporaryDirectory(prefix="birja-backup-test-verifier-context-") as temporary:
         host = Path(temporary) / "host"
         host.mkdir(mode=0o700)
         trusted.bundle_install(
-            archive, archive_sha, str(host), required_profile="deploy-recovery-v5"
+            archive, archive_sha, str(host), required_profile=profile
         )
         selected = host / "var/lib/birja/recovery/releases" / archive_sha / "deploy/verify-restore.py"
         yield load_recovery(selected)

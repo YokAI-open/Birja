@@ -491,9 +491,69 @@ def recovery_operations(ops, archive, expected):
 
 
 def successor_recovery_operations(ops, archive, expected):
-    # Plan 21-03 supplies the 0026 and predecessor operations. The legacy
-    # 0023 stage graph cannot count toward a passing successor receipt.
-    raise ValueError("0026 recovery stage operations are not wired")
+    smoke = load("portfolio-smoke")
+
+    def catalog(lane, *, requires=(), authority=False):
+        if lane in {"cold", "upgraded", "rollback"}:
+            smoke.build_current_runtime(
+                ops.portfolio_sources(), environment(), archive=archive, archive_sha=expected,
+                revision="0023", predecessor=True,
+            )
+        result = subprocess.run(
+            ["bash", str(ROOT / "deploy/tests/test-stock-catalog-finance-recovery.sh"),
+             "--lane", lane, "--archive", str(archive), "--sha256", expected],
+            cwd=ROOT, env=environment(), capture_output=True, timeout=900,
+        )
+        if result.returncode:
+            raise ValueError("owned catalog recovery failed: " + lane + "\n"
+                             + result.stderr.decode()[-2000:])
+        output = result.stdout.decode().splitlines()
+        if any(line not in output for line in requires):
+            raise ValueError("missing measured catalog result: " + lane)
+        print("\n".join(output), flush=True)
+        if authority:
+            reports = [line.removeprefix("catalog_authority=") for line in output
+                       if line.startswith("catalog_authority=")]
+            if len(reports) != 1 or "catalog_runtime_verified_tls=true" not in output:
+                raise ValueError("missing measured restricted TLS authority: " + lane)
+            return json.loads(reports[0])
+
+    def retained():
+        ops.roundtrip(archive)
+        for revision in ("0017", "0020"):
+            smoke.run(archive=archive, archive_sha=expected, revision=revision, cold=True,
+                      recovery_profile=SUCCESSOR_PROFILE)
+        catalog("retained0025", requires=("retained_0025_exact=true",))
+
+    def roles():
+        ops.roles()
+        catalog("roles", requires=("catalog_runtime_verified_tls=true",))
+
+    def tls(fresh):
+        ops.tls(fresh_bootstrap=fresh)
+        return catalog("fresh" if fresh else "upgraded", authority=True)
+
+    def rollback():
+        subprocess.run(["bash", str(ROOT / "deploy/tests/test-rollback-db-security.sh"),
+                        "--recovery-bundle", str(archive)], cwd=ROOT,
+                       env=environment(), check=True)
+        catalog("rollback", requires=(
+            "prewrite_predecessor_restarted=true original_volume_and_ledger_exact=true",
+            "postwrite_0026_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0026_refused=true",
+        ))
+
+    return {
+        "image-transition": ops.image_transition,
+        "retained-roundtrip": retained,
+        "current0026-cold": lambda: catalog(
+            "cold", requires=("cold_encrypted_0026_exact=true fresh_restore_server=true",),
+            authority=True,
+        ),
+        "roles": roles,
+        "tls-upgraded": lambda: tls(False),
+        "tls-fresh": lambda: tls(True),
+        "selected-rollback": rollback,
+    }
 
 
 def execute_current_stage(operations, guard):

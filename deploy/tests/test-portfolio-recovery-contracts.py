@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -19,6 +20,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
+RETAINED_0023 = "07d3aa5c627b5ba550aa2d11baa13e2becaf3aa9"
 RETAINED_0024 = "33b9b5fdc6f89ef810d588bd7c7b2962b2c80352"
 RETAINED_0025 = "31cba00ca3f0c9d4214b6bb0b66892a4c81779fb"
 
@@ -30,11 +32,15 @@ def load(name, root=ROOT):
     return module
 
 
+def source_git(*arguments):
+    return subprocess.check_output(
+        ['git', '-c', 'safe.directory=' + str(ROOT), *arguments], cwd=ROOT,
+    )
+
+
 def retained_catalog(root, *, runtime=False):
     if runtime:
-        source = subprocess.check_output(
-            ['git', 'archive', '--format=tar', RETAINED_0025, 'backend'], cwd=ROOT,
-        )
+        source = source_git('archive', '--format=tar', RETAINED_0025, 'backend')
         with tarfile.open(fileobj=io.BytesIO(source), mode='r:') as archive:
             archive.extractall(root, filter='data')
     current = load('backup-snapshot')
@@ -45,20 +51,29 @@ def retained_catalog(root, *, runtime=False):
         'deploy/verify-restore.py',
         'deploy/tests/stock-execution-fixture.py',
     }:
-        contents = subprocess.check_output(
-            ['git', 'show', RETAINED_0025 + ':' + name], cwd=ROOT,
-        )
+        contents = source_git('show', RETAINED_0025 + ':' + name)
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
     current.require_closure_source(root, revision='0025', allow_successor=False)
 
 
+def predecessor_catalog(root):
+    """Use the immutable production predecessor tree for the synthetic book."""
+    source = source_git('archive', '--format=tar', RETAINED_0023)
+    with tarfile.open(fileobj=io.BytesIO(source), mode='r:') as archive:
+        archive.extractall(root, filter='data')
+    load('backup-snapshot', root).require_closure_source(root)
+
+
 def catalog_snapshot(root, revision, stage, restic_path):
     import shutil
 
     producer = load('backup-snapshot', root)
-    producer.require_closure_source(root, revision=revision, allow_successor=False)
+    if revision == '0023':
+        producer.require_closure_source(root)
+    else:
+        producer.require_closure_source(root, revision=revision, allow_successor=False)
     docker = shutil.which('docker')
     assert docker
     job = producer.Job({
@@ -68,34 +83,150 @@ def catalog_snapshot(root, revision, stage, restic_path):
         'restic_binary': restic_path, 'db_user': 'birja_test', 'db_name': 'birja_test',
         'release': 'fixture-phase20', 'timeout_seconds': 60, 'max_stage_bytes': 32 * 1024 * 1024,
     })
-    job.dc = [docker, 'exec', '-i', os.environ['BIRJA_CATALOG_TEST_CONTAINER']]
+    job.dc = [docker, 'exec', '-i', catalog_container()]
     job.bundle = stage / revision
     job.start_utc = producer.utc()
     job.data_epoch = int(time.time())
     job.snapshot()
     source = json.loads((job.bundle / 'manifest.json').read_text())
     assert source['revision'] == revision
-    assert source['tables']['stock_fill_facts']['count'] == (3 if revision == '0025' else 5)
+    if not (stage / 'host').exists():
+        assert source['tables']['stock_fill_facts']['count'] == (3 if revision == '0025' else 5)
     if revision == '0026':
         assert source['catalog_finance_invalid'] == 0
         assert source['tables']['stock_catalog_fill_evidence']['count'] == 2
 
 
-def catalog_restore(root, manifest):
-    restore = load('verify-restore', root)
+def catalog_container():
     container = os.environ['BIRJA_CATALOG_TEST_CONTAINER']
+    if not re.fullmatch(r'[a-f0-9]{64}', container):
+        raise ValueError('Owned catalog fixture container required')
+    label = subprocess.check_output(
+        ['docker', 'inspect', '--type', 'container', '--format',
+         '{{index .Config.Labels "org.birja.fixture"}}', container],
+    )
+    if label.strip() != b'catalog-finance':
+        raise ValueError('Owned catalog fixture container required')
+    return container
+
+
+def catalog_sql(container, query, db):
+    return subprocess.run(
+        ['docker', 'exec', '-i', container, 'psql', '-XqAt', '-v', 'ON_ERROR_STOP=1',
+         '-U', 'birja_test', '-d', db], input=query.encode(), capture_output=True, check=True,
+    ).stdout
+
+
+def catalog_restore(root, manifest, database='birja_restore_test'):
+    restore = load('verify-restore', root)
+    container = catalog_container()
+    if database not in {'birja_test', restore.CLONE}:
+        raise ValueError('Unexpected disposable database')
 
     def isolated_sql(dc, query, db=restore.CLONE):
         assert db == restore.CLONE
-        return subprocess.run(
-            ['docker', 'exec', '-i', container, 'psql', '-XqAt', '-v', 'ON_ERROR_STOP=1',
-             '-U', 'birja_test', '-d', db], input=query.encode(), capture_output=True, check=True,
-        ).stdout
+        return catalog_sql(container, query, database)
 
     with mock.patch.object(restore, 'sql', isolated_sql):
         source = json.loads(manifest.read_text())
         restore.restore_closure_authority([], source)
         restore.verify([], source, quarantined=False)
+
+
+def catalog_observe(root, database, output):
+    if database not in {'birja_test', 'birja_restore_test'}:
+        raise ValueError('Unexpected disposable database')
+    restore = load('verify-restore', root)
+    container = catalog_container()
+    with mock.patch.object(
+        restore, 'sql', lambda _, query, db=restore.CLONE: catalog_sql(container, query, db),
+    ):
+        manifest = restore.canonical([], database)
+    restore.recovery_contract().validate_manifest(manifest)
+    with output.open('x') as stream:
+        json.dump(manifest, stream, sort_keys=True)
+
+
+def compare_predecessor(before, after):
+    """The 0026 migration adds catalog tables and leaves the prior book intact."""
+    prior = json.loads(before.read_text())
+    successor = json.loads(after.read_text())
+    assert prior['revision'] == '0023' and successor['revision'] == '0026'
+    for key in ('financial', 'portfolio_state', 'management_state', 'closure_state'):
+        assert prior[key] == successor[key], key
+    for table, entry in prior['tables'].items():
+        if table != 'alembic_version':
+            assert successor['tables'][table] == entry, table
+    assert all(row in successor['identity_state'] for row in prior['identity_state'])
+
+
+def catalog_authority(path):
+    contract = json.loads(path.read_text())['closure_contract']
+    print('catalog_authority=' + json.dumps([contract[key] for key in ('catalogue', 'acl', 'defaults')]))
+
+
+def catalog_runtime_program(kind, path):
+    import inspect
+
+    if kind in {'predecessor-seed', 'predecessor-read'}:
+        load('backup-snapshot', path).require_closure_source(path)
+        spec = importlib.util.spec_from_file_location(
+            'predecessor_fixture', path / 'deploy/tests/portfolio-closure-recovery-fixture.py',
+        )
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        print(fixture.program(mode='create' if kind == 'predecessor-seed' else 'projection'))
+        return
+    if kind == 'roles' and path == Path('/run/birja/catalog-receipts.json'):
+        print(CATALOG_ROLE_PROBE)
+        return
+    if kind != 'replay' or path != Path('/run/birja/catalog-receipts.json'):
+        raise ValueError('Unexpected disposable runtime program')
+    print('import asyncio, json\nfrom pathlib import Path')
+    print(inspect.getsource(catalog_economics))
+    print(f'asyncio.run(catalog_economics("replay", Path({str(path)!r})))')
+
+
+CATALOG_ROLE_PROBE = """
+import asyncio
+from urllib.parse import urlsplit
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from app.core.config import Settings
+from app.db.connection import database_connect_args
+from app.db.schema_contract import require_schema
+
+async def main():
+    settings = Settings()
+    assert settings.env == 'test'
+    target = urlsplit(settings.database_url)
+    assert (target.hostname, target.port, target.username) == ('postgres', 5432, 'birja_test')
+    assert target.path in {'/birja_test', '/birja_restore_test'} and not target.query
+    assert settings.database_ssl_ca_file
+    for role, password in (('birja_app', 'test-app'), ('birja_scheduler', 'test-scheduler')):
+        url = settings.database_url.replace('birja_test:test@', f'{role}:{password}@')
+        assert url != settings.database_url
+        engine = create_async_engine(url, connect_args=database_connect_args(settings))
+        try:
+            async with engine.connect() as conn:
+                assert await require_schema(conn) == '0026'
+                assert await conn.scalar(text(
+                    'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
+                ))
+                assert await conn.scalar(text('SELECT current_user')) == role
+                assert not await conn.scalar(text(
+                    'SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls '
+                    'FROM pg_roles WHERE rolname=current_user'
+                ))
+                assert not await conn.scalar(text(
+                    "SELECT has_table_privilege(current_user,'stock_catalog_admissions','INSERT')"
+                ))
+        finally:
+            await engine.dispose()
+    print('catalog_runtime_verified_tls=true')
+
+asyncio.run(main())
+"""
 
 
 def catalog_cache_absent(stage, revision, canary):
@@ -124,28 +255,35 @@ async def catalog_economics(mode, receipt_path):
     from app.services.corporate_actions import apply_due_actions
     from app.services.dividends import process_dividend
     from app.services.event_history import list_event_history
+    from app.services.portfolio import get_portfolio
     from app.services.portfolios import OwnedActivePortfolio
     from app.services.stock_catalog_actions import load_catalog_action_authority, lock_catalog_action_scope
     from app.services.stock_ownership import acquire_stock_gate
-    from tests.test_stock_catalog_financial_actions import _derive, _dividend, _ingest
-    from tests.test_stock_catalog_promotion import OTHER_ASSET, _listing, _promote, _reviewed_grant
-    from tests.test_stock_catalog_sql_actions import ACTION_FIELDS
-    from tests.test_stock_catalog_sql_authority import execution_market
-    from tests.test_stock_catalog_trading import _confirmation
-    from tests.test_stock_sessions import evidence
+    if mode == 'seed':
+        from tests.test_stock_catalog_financial_actions import _derive, _dividend, _ingest
+        from tests.test_stock_catalog_promotion import OTHER_ASSET, _listing, _promote, _reviewed_grant
+        from tests.test_stock_catalog_sql_actions import ACTION_FIELDS
+        from tests.test_stock_catalog_sql_authority import execution_market
+        from tests.test_stock_catalog_trading import _confirmation
+        from tests.test_stock_sessions import evidence
 
     if mode not in {'seed', 'replay'}:
         raise ValueError('Unknown synthetic economics mode')
-    settings = Settings(stock_data_enabled=True, stock_data_account='birja', stock_data_server='birja')
+    settings = Settings(stock_data_enabled=mode == 'seed', stock_data_account='birja',
+                        stock_data_server='birja')
     url = urlsplit(settings.database_url)
-    database = '/birja_test' if mode == 'seed' else '/birja_restore_test'
-    if (settings.env != 'test' or url.hostname != '127.0.0.1' or url.port != 55434
-        or url.username != 'birja_test' or url.path != database or url.query
+    databases = {'/birja_test'} if mode == 'seed' else {'/birja_restore_test'}
+    fixture_hosts = {('127.0.0.1', 55434)}
+    if mode == 'replay' and receipt_path == Path('/run/birja/catalog-receipts.json'):
+        fixture_hosts.add(('postgres', 5432))
+        databases.add('/birja_test')
+    if (settings.env != 'test' or (url.hostname, url.port) not in fixture_hosts
+        or url.username != 'birja_test' or url.path not in databases or url.query
         or not settings.database_ssl_ca_file):
         raise ValueError('Owned disposable TLS database required')
 
     def engine(user, password):
-        target = url._replace(netloc=f'{user}:{password}@127.0.0.1:55434')
+        target = url._replace(netloc=f'{user}:{password}@{url.hostname}:{url.port}')
         return create_async_engine(urlunsplit(target), connect_args=database_connect_args(settings))
 
     app = engine('birja_app', 'test-app')
@@ -215,6 +353,20 @@ async def catalog_economics(mode, receipt_path):
                 assert await pay(work) == expected
             assert await split_again(saved['action_coin']) == saved['splits']
             assert await observe(market, saved['action_coin']) == saved['economics']
+            if url.hostname == 'postgres':
+                async with app_sessions() as db:
+                    active = (await db.execute(text("""
+                        SELECT a.id, a.user_id FROM accounts a
+                        JOIN holdings h ON h.portfolio_id = a.id
+                        JOIN coins c ON c.id = h.coin_id
+                        WHERE a.closed_at IS NULL AND c.symbol = 'BTC' AND h.quantity > 0
+                        ORDER BY a.id LIMIT 1
+                    """))).one()
+                    portfolio = await get_portfolio(
+                        db, portfolio=OwnedActivePortfolio(*active), settings=settings,
+                    )
+                    assert any(row.symbol == 'BTC' and row.quantity > 0 for row in portfolio.holdings)
+                print('stock_switches_disabled=true original_crypto_holding_available=true')
             print('restricted_tls_replay=true buy_sell_dividend_correction_split_exact=true')
             return
 
@@ -875,17 +1027,50 @@ asyncio.run(main())
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == '--materialize-catalog':
+    if len(sys.argv) == 3 and sys.argv[1] in {'--materialize-catalog', '--materialize-predecessor'}:
         destination = Path(sys.argv[2]).resolve()
         if not destination.is_dir() or any(destination.iterdir()):
             raise ValueError('Expected an empty disposable source directory')
-        retained_catalog(destination, runtime=True)
+        if sys.argv[1] == '--materialize-predecessor':
+            predecessor_catalog(destination)
+        else:
+            retained_catalog(destination, runtime=True)
+        sys.exit(0)
+    if len(sys.argv) == 6 and sys.argv[1] == '--install-catalog-archive':
+        host = Path(sys.argv[2])
+        consumer = load('verify-restore')
+        consumer.bundle_install(
+            Path(sys.argv[3]), sys.argv[4], str(host), required_profile='deploy-recovery-v7',
+        )
+        release = host / 'var/lib/birja/recovery/releases' / sys.argv[4]
+        consumer.private(release / 'deploy' / 'verify-restore.py')
+        if consumer.digest(release / 'tools/restic') != consumer.RESTIC_SHA:
+            raise ValueError('Archived restic checksum mismatch')
+        if sys.argv[5] != '0026':
+            raise ValueError('Only the exact successor release is supported')
+        sys.exit(0)
+    if len(sys.argv) == 5 and sys.argv[1] == '--catalog-observe':
+        catalog_observe(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
+        sys.exit(0)
+    if len(sys.argv) == 4 and sys.argv[1] == '--compare-predecessor':
+        compare_predecessor(Path(sys.argv[2]), Path(sys.argv[3]))
+        sys.exit(0)
+    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-exact':
+        source, observed = (json.loads(Path(name).read_text()) for name in sys.argv[2:])
+        load('verify-restore').closure_evidence_matches(observed, source)
+        assert observed['closure_contract'] == source['closure_contract']
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[1] == '--catalog-authority':
+        catalog_authority(Path(sys.argv[2]))
+        sys.exit(0)
+    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-runtime-program':
+        catalog_runtime_program(sys.argv[2], Path(sys.argv[3]))
         sys.exit(0)
     if len(sys.argv) == 6 and sys.argv[1] == '--catalog-snapshot':
         catalog_snapshot(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]), sys.argv[5])
         sys.exit(0)
-    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-restore':
-        catalog_restore(Path(sys.argv[2]), Path(sys.argv[3]))
+    if len(sys.argv) in {4, 5} and sys.argv[1] == '--catalog-restore':
+        catalog_restore(Path(sys.argv[2]), Path(sys.argv[3]), *sys.argv[4:])
         sys.exit(0)
     if len(sys.argv) == 5 and sys.argv[1] == '--catalog-cache-absent':
         catalog_cache_absent(Path(sys.argv[2]), sys.argv[3], sys.argv[4])
