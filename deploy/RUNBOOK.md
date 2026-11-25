@@ -1,5 +1,39 @@
 # Birja production runbook
 
+## Catalog finance schema 0026 recovery
+
+Use the `deploy-recovery-v7` bundle with payload 6 from the successful CI run
+for the exact released commit. The verification receipt binds the commit,
+tree, backend image and seven completed stages to the same archive SHA-256.
+Keep the production predecessor receipt and its exact retained tooling
+available. Phase 21 starts its isolated rehearsal at `07d3aa5` on 0023.
+Verify the actual running revision and bindings in the approved preflight.
+
+Before the approved cutover holds any writers, identify the original and
+candidate volumes and verify independent recovery capacity. While holding the
+operation lock, fence writers and verify the final original fingerprints and
+restored backup before copying or routing. Migrate only the selected candidate
+to 0026. The pre-write recovery path selects the verified original 0023
+volumes, retained release and its matching tooling. Confirm that the original
+data and bindings are the ones measured before restarting predecessor writers.
+
+Treat the first candidate writer startup as the write boundary. After it,
+keep the 0026 candidate volumes. For a stock-only incident, the compatible
+route uses the tested 0026 source with stocks disabled and verifies crypto,
+historical receipts and exact current recovery. Recovery from a broader
+failure requires a separately tested 0026-compatible release and an approved
+current recovery point. The compatibility guard refuses 0023 on 0026 and
+populated downgrade refuses. A pre-change restore would discard later fills
+and is outside the after-write recovery path.
+
+The same-bundle qualification runs via
+`python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor`.
+The isolated tests compare the frozen original book with the migrated copy,
+recover 0026 through the installed consumer on fresh PostgreSQL, and replay
+receipts as restricted verified-TLS users. Production still requires the
+recorded identity, the approved maintained recovery tools and the exact
+release-specific operational decision.
+
 ## Stock execution schema 0024 recovery contract
 
 Phase 18 adds payload version 4, schema 0024 and recovery profile

@@ -256,6 +256,10 @@ fi
 BIRJA_TESTED_SOURCE=$CATALOG_TESTED
 run_case deploy 0026 "$CATALOG_TESTED" no refuse
 run_case rollback 0026 main yes refuse
+BIRJA_TESTED_SOURCE=$CLOSURE_TESTED
+run_case deploy 0026 "$CLOSURE_TESTED" no refuse
+run_case rollback 0026 main yes refuse
+run_case rollback 0023 main yes pass
 printf '\n-- corrupted catalog execution contract\n' >> "$APP_DIR/backend/alembic/sql/0026_stock_catalog_execution.sql"
 git -C "$APP_DIR" add backend/alembic/sql/0026_stock_catalog_execution.sql
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-finance-corrupt
