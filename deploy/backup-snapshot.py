@@ -80,8 +80,10 @@ def require(value):
         raise ValueError("guard")
 
 
-SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024", "0025", "0026")
-CLOSURE_REVISIONS = ('0023', '0024', '0025', '0026')
+SUPPORTED_REVISIONS = ("0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0017", "0020", "0023", "0024", "0025", "0026", "0027")
+CLOSURE_REVISIONS = ('0023', '0024', '0025', '0026', '0027')
+CATALOG_REVISIONS = ('0025', '0026', '0027')
+CATALOG_FINANCE_REVISIONS = ('0026', '0027')
 CATALOG_COLUMNS = {
     'stock_catalog_admissions': 'id artifact reference reviewed_at valid_until revoked_at fields scope is_fixture',
     'stock_catalog_aliases': 'id listing_id security_id namespace symbol normalized_symbol verified_at valid_until',
@@ -180,6 +182,9 @@ PORTFOLIO_PAYLOAD_V6 = PORTFOLIO_PAYLOAD_V5 + [
     'backend/app/models/stock_catalog_finance.py',
     'backend/app/models/price.py',
 ]
+PORTFOLIO_PAYLOAD_V7 = PORTFOLIO_PAYLOAD_V6 + [
+    'backend/alembic/versions/0027_stock_catalog_nyse_source.py',
+]
 
 
 def portfolio_payload_inventory(root):
@@ -234,6 +239,17 @@ def catalog_finance_payload_inventory(root):
         require(path.is_file() and not path.is_symlink() and path.resolve() == path)
         hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     return {'version': 6, 'revision': '0026', 'sha256': hashes}
+
+
+def catalog_nyse_payload_inventory(root):
+    root = Path(root).resolve(strict=True)
+    require_closure_source(root, revision='0027', allow_successor=False)
+    hashes = {}
+    for name in PORTFOLIO_PAYLOAD_V7:
+        path = root / name
+        require(path.is_file() and not path.is_symlink() and path.resolve() == path)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {'version': 7, 'revision': '0027', 'sha256': hashes}
 
 
 def verify_halt_inventory(root, inventory):
@@ -547,7 +563,7 @@ def validate_resolution_authority(authority, revision='0012'):
 def identity_tables(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision == '0026':
+    if revision in CATALOG_FINANCE_REVISIONS:
         return identity_tables('0025')
     if revision == '0025':
         return sorted([*identity_tables('0024'), *CATALOG_COLUMNS])
@@ -591,7 +607,7 @@ def dump_identity_state(raw, revision="0011"):
 def contract_columns(revision):
     if revision in ('0015', '0016', '0018', '0019', '0021', '0022'):
         raise ValueError('migration_only')
-    if revision == '0026':
+    if revision in CATALOG_FINANCE_REVISIONS:
         columns = contract_columns('0025')
         columns.update({table: set(value.split()) for table, value in CATALOG_FINANCE_COLUMNS.items()})
         return columns
@@ -1207,6 +1223,17 @@ CATALOG_FINANCE_SOURCE_SHA256 = {
 CATALOG_FINANCE_SCHEMA_SHA256 = 'd663c6cf07de20685b83d5f58a8a3381157d0b0afb087aa64dc6c34dd40c0626'
 CATALOG_FINANCE_AUTHORITY_SHA256 = '754ee589ad16d56a959a73bc61bdce9f66393a1145838da0826589f11509ab8b'
 CATALOG_FINANCE_QUARANTINE_AUTHORITY_SHA256 = 'f75e5fca14d23799b7492eff89936cd3b6108c81ec8d0d2a6633c97423da7e49'
+CATALOG_NYSE_SOURCE_SHA256 = {
+    **CATALOG_FINANCE_SOURCE_SHA256,
+    'backend/alembic/versions/0027_stock_catalog_nyse_source.py': '9ebf379351b670ac376100bb6922d5fda8a27bcecb44d031cf9db080c105c427',
+    'backend/app/db/dev_bootstrap.py': '142a83e62460fc747e994d0bea5de492860eaadf27f136e08b6b1748fc232a70',
+    'backend/app/db/portfolio_bootstrap.py': 'a038e69cd351c4f7a51883ac1af1bffb28c9dd59bdccb5445d9f87d450324eac',
+    'backend/app/db/portfolio_migrate.py': '52d270a4f91f3f6015fe8b07b57430450337d98822edf37e5ec56ac704fe471e',
+    'backend/app/db/schema_contract.py': 'e9d0783c2a87f888b0ccc79cec350ca0ae2403a69d4629a5ee6b50213d7763ed',
+    'backend/app/models/stock_catalog.py': '343adeb595efc1c4cfba39b7a10d6c7d5dc446adaf70615cc103f8a3b093613f',
+    'deploy/db/bootstrap-roles.sql': '229a9c1dafcaeaf76b99c5f9db05574c88a08d7a1baff65a2fcde26d659c0a88',
+}
+CATALOG_NYSE_SCHEMA_SHA256 = '93302ae024b7731cbb1724f8c9cc5cc4c97e01b67f4ebc5b126303269feb0d59'
 
 CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
@@ -1220,7 +1247,7 @@ def require_closure_source(root=None, *, revision='0023', allow_successor=True):
     root = HERE.parent if root is None else Path(root)
     require(revision in CLOSURE_REVISIONS)
     profiles = (CLOSURE_SOURCE_SHA256, REPORTED_HALT_SOURCE_SHA256, CATALOG_SOURCE_SHA256,
-                CATALOG_FINANCE_SOURCE_SHA256)
+                CATALOG_FINANCE_SOURCE_SHA256, CATALOG_NYSE_SOURCE_SHA256)
     index = CLOSURE_REVISIONS.index(revision)
     profiles = profiles[index:] if allow_successor else profiles[index:index + 1]
 
@@ -1248,15 +1275,15 @@ def closure_bootstrap(revision='0023'):
 def closure_manifest_sql(revision='0023'):
     bootstrap = closure_bootstrap(revision)
     query = management_manifest_sql(bootstrap=bootstrap)
-    is_catalog = revision in ('0025', '0026')
+    is_catalog = revision in CATALOG_REVISIONS
     identities = {**CLOSURE_COLUMNS, **CATALOG_COLUMNS} if is_catalog else CLOSURE_COLUMNS
-    tables = {**identities, **CATALOG_FINANCE_COLUMNS} if revision == '0026' else identities
+    tables = {**identities, **CATALOG_FINANCE_COLUMNS} if revision in CATALOG_FINANCE_REVISIONS else identities
     timestamp_columns = {
         'closed_at', 'recorded_at', 'reviewed_at', 'valid_until', 'revoked_at',
         'verified_at', 'published_at', 'evidence_at', 'provider_verified_at',
         'provider_valid_until', 'unit_evidence_at', 'created_at',
     }
-    if revision == '0026':
+    if revision in CATALOG_FINANCE_REVISIONS:
         timestamp_columns.update({
             'promoted_at', 'event_at', 'collected_at', 'observed_at', 'opens_at', 'closes_at',
             'journal_origin', 'coverage_start', 'covered_until', 'report_event_at',
@@ -1287,7 +1314,7 @@ def closure_manifest_sql(revision='0023'):
               "'invalid',CASE WHEN "+lifecycle+" THEN 1 ELSE 0 END),\n"
     if is_catalog:
         fields += " 'catalog_active_generation',(SELECT id FROM stock_catalog_generations WHERE is_active),\n"
-    if revision == '0026':
+    if revision in CATALOG_FINANCE_REVISIONS:
         old_source = "source NOT IN ('sec','alpaca')"
         require(query.count(old_source) == 1)
         query = query.replace(
@@ -1326,9 +1353,12 @@ def validate_closure_manifest(manifest, *, quarantined=False):
     revision = manifest['revision']
     require(revision in CLOSURE_REVISIONS)
     acl = CLOSURE_ACL_SHA256
-    if revision == '0026':
+    if revision in CATALOG_FINANCE_REVISIONS:
         bootstrap = closure_bootstrap(revision)
-        schema, catalogue = CATALOG_FINANCE_SCHEMA_SHA256, bootstrap.CATALOGUE_0026_SHA256
+        if revision == '0027':
+            schema, catalogue = CATALOG_NYSE_SCHEMA_SHA256, bootstrap.CATALOGUE_0027_SHA256
+        else:
+            schema, catalogue = CATALOG_FINANCE_SCHEMA_SHA256, bootstrap.CATALOGUE_0026_SHA256
         authority = CATALOG_FINANCE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CATALOG_FINANCE_AUTHORITY_SHA256
         acl = bootstrap.ACL_0026_SHA256
         require(type(manifest['catalog_finance_invalid']) is int and manifest['catalog_finance_invalid'] == 0)
@@ -1343,7 +1373,7 @@ def validate_closure_manifest(manifest, *, quarantined=False):
     else:
         schema, catalogue = CLOSURE_SCHEMA_SHA256, CLOSURE_CATALOGUE_SHA256
         authority = CLOSURE_QUARANTINE_AUTHORITY_SHA256 if quarantined else CLOSURE_AUTHORITY_SHA256
-    if revision in ('0025', '0026'):
+    if revision in CATALOG_REVISIONS:
         active = manifest['catalog_active_generation']
         require(active is None or (type(active) is int and active > 0
                                    and manifest['tables']['stock_catalog_generations']['count'] > 0))
@@ -2289,7 +2319,7 @@ class Job:
 
 def _bundle_package(output, *, recovery=None, payload_version):
     """Stage a finite reviewed family; transport mocks never prove recovery."""
-    require(type(payload_version) is int and payload_version in (2, 3, 4, 5, 6))
+    require(type(payload_version) is int and payload_version in (2, 3, 4, 5, 6, 7))
     if payload_version >= 3:
         require_closure_source(revision=CLOSURE_REVISIONS[payload_version - 3], allow_successor=False)
     else:
@@ -2332,7 +2362,7 @@ def _bundle_package(output, *, recovery=None, payload_version):
         stage = Path(tmp)
         payload_files = {2: PORTFOLIO_PAYLOAD_V2, 3: PORTFOLIO_PAYLOAD_V3,
                          4: PORTFOLIO_PAYLOAD_V4, 5: PORTFOLIO_PAYLOAD_V5,
-                         6: PORTFOLIO_PAYLOAD_V6}[payload_version]
+                         6: PORTFOLIO_PAYLOAD_V6, 7: PORTFOLIO_PAYLOAD_V7}[payload_version]
         files = CORE + UNITS + payload_files
         for name in files:
             src = HERE.parent / name
@@ -2393,7 +2423,8 @@ def _bundle_package(output, *, recovery=None, payload_version):
             "format": 1,
             "portfolio_payload": {2: portfolio_payload_inventory, 3: closure_payload_inventory,
                                   4: halt_payload_inventory, 5: catalog_payload_inventory,
-                                  6: catalog_finance_payload_inventory}[payload_version](stage),
+                                  6: catalog_finance_payload_inventory,
+                                  7: catalog_nyse_payload_inventory}[payload_version](stage),
             "recovery_profile": "deploy-recovery-v" + str(payload_version + 1),
             "files": files,
             "units": UNITS,
@@ -2463,11 +2494,16 @@ def bundle_package_v6(output, *, recovery=None):
     return _bundle_package(output, recovery=recovery, payload_version=6)
 
 
+def bundle_package_v7(output, *, recovery=None):
+    """Package the exact 0027 NYSE source and retained financial contracts."""
+    return _bundle_package(output, recovery=recovery, payload_version=7)
+
+
 def main(argv, *, config=None):
     os.umask(0o077)
     bundles = {'bundle-v2': bundle_package_v2, 'bundle-v3': bundle_package_v3,
                'bundle-v4': bundle_package_v4, 'bundle-v5': bundle_package_v5,
-               'bundle-v6': bundle_package_v6}
+               'bundle-v6': bundle_package_v6, 'bundle-v7': bundle_package_v7}
     if argv and argv[0] in bundles:
         parser = argparse.ArgumentParser(allow_abbrev=False)
         parser.add_argument('--output', required=True)

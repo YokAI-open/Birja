@@ -120,7 +120,11 @@ class StockCatalogListing(Base):
         UniqueConstraint("generation_id", "security_id"),
         UniqueConstraint("id", "security_id"),
         CheckConstraint("listing_exchange IN ('NYSE', 'NASDAQ')", name="venue_known"),
-        CheckConstraint("source IN ('nasdaqlisted', 'otherlisted')", name="source_known"),
+        CheckConstraint(
+            "source IN ('nasdaqlisted', 'otherlisted')"
+            " OR (source = 'openfigi_nyse' AND listing_exchange = 'NYSE')",
+            name="source_known",
+        ),
         CheckConstraint("state IN ('active', 'review', 'retired')", name="state_known"),
         CheckConstraint(
             "classification IN ('common_stock', 'ordinary_shares', 'out_of_scope') "

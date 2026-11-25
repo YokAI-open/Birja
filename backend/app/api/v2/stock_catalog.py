@@ -35,6 +35,7 @@ from app.schemas.stock_catalog_quotes import (
 )
 from app.services import stock_catalog_trading
 from app.services.portfolios import OwnedActivePortfolio, fence_owned_active_portfolios
+from app.services.stock_catalog_action_demand import record_catalog_action_interest
 from app.services.stock_catalog_financial_quotes import read_catalog_financial_mark
 from app.services.stock_catalog_quote_demand import CatalogQuotePurpose, request_catalog_quote
 from app.services.stock_catalog_quotes import (
@@ -251,6 +252,19 @@ async def post_catalog_quote(
     if redis is None:
         return view
     financial = execution.financial
+    if (
+        view.session.state == "open"
+        and execution.reason in {"status_unavailable", "action_unavailable"}
+        and financial is not None
+    ):
+        await db.rollback()
+        await record_catalog_action_interest(
+            redis,
+            account=settings.stock_data_account,
+            server=settings.stock_data_server,
+            catalog_id=catalog_id,
+            listing_id=body.listing_version,
+        )
     purpose: CatalogQuotePurpose
     if (
         view.session.state == "open"

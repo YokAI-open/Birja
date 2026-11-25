@@ -65,6 +65,8 @@ def profile_for(revision):
         return dict(MATRIX["current"])
     if revision == "0026":
         return dict(CATALOG_FINANCE)
+    if revision == "0027":
+        return {"revision": "0027", "payload_version": 7, "profile": "deploy-recovery-v8"}
     if revision in {f"{n:04}" for n in range(7, 15)}:
         return {"revision": revision, "lane": "legacy0007" if revision == "0007" else
                 "legacy0008" if revision == "0008" else "retained"}

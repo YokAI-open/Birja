@@ -90,6 +90,11 @@ async def load_catalog_action_authority(
           LEFT JOIN public.stock_catalog_action_coverage c ON c.coin_id=b.coin_id
           LEFT JOIN public.stock_action_state st ON st.coin_id=b.coin_id
          WHERE b.coin_id=:coin AND (g.mode='live' OR :allow_fixture)
+           AND a.scope->>'catalog_id'=b.catalog_id::text
+           AND a.scope->>'listing_id'=b.listing_id::text
+           AND a.scope->>'provider_asset_id'=l.provider_asset_id
+           AND a.is_fixture=(g.mode='fixture') AND a.revoked_at IS NULL
+           AND a.reviewed_at<=:at AND :at<a.valid_until
            AND a.scope @> CAST(:scope AS jsonb)
            AND public.stock_catalog_scope_current(
              a.id,'catalog_actions',b,l,:at,CAST(:fields AS jsonb))
@@ -230,31 +235,96 @@ async def catalog_action_candidates(
     account: str,
     server: str,
     allow_fixture: bool,
+    selected: tuple[tuple[int, int], ...] | None = None,
+    max_age_seconds: int = 120,
 ) -> tuple[CatalogActionAuthority, ...]:
-    """Take one bounded cohort of promoted issues with explicit ingestion scope."""
+    """Take one cohort, sharing provider capacity between open exposure and selection."""
     rows = (
         await db.execute(
             text("""
-        SELECT b.coin_id, CASE WHEN st.staged_continuation->>'target_until' IS NOT NULL
-          THEN st.staged_continuation->>'policy_key' END AS active_window
-        FROM public.stock_catalog_instruments b
-        JOIN public.stock_catalog_listings l ON (l.id,l.security_id)=(b.listing_id,b.catalog_id)
-        JOIN public.stock_catalog_generations g ON g.id=l.generation_id
-        JOIN public.stock_action_state st ON st.coin_id=b.coin_id
-        LEFT JOIN public.stock_catalog_action_coverage c ON c.coin_id=b.coin_id
-        WHERE (g.mode='live' OR :allow_fixture) AND EXISTS (
-            SELECT 1 FROM public.stock_catalog_admissions a
-            WHERE a.artifact='catalog_actions' AND a.scope @> CAST(:scope AS jsonb)
-            AND public.stock_catalog_scope_current(
-              a.id,'catalog_actions',b,l,:at,CAST(:fields AS jsonb))
+        WITH selected_listings AS (
+            SELECT DISTINCT catalog_id, listing_id
+            FROM jsonb_to_recordset(CAST(:selected AS jsonb))
+            AS item(catalog_id bigint, listing_id bigint)
+        ), open_exposures AS (
+            SELECT h.coin_id
+            FROM public.holdings h JOIN public.accounts p ON p.id=h.portfolio_id
+            WHERE NOT :scan_all AND h.quantity>0 AND p.closed_at IS NULL
+            UNION
+            -- A sold position may still have a later dividend or correction.
+            SELECT m.coin_id
+            FROM public.stock_ownership_movements m
+            JOIN public.accounts p ON (p.id,p.user_id)=(m.portfolio_id,m.user_id)
+            WHERE NOT :scan_all AND p.closed_at IS NULL
+        ), candidates AS MATERIALIZED (
+            SELECT b.coin_id, b AS binding, l AS listing, g.mode, c.observed_at,
+                   st.staged_continuation->>'target_until' IS NOT NULL AS in_progress,
+                   CASE WHEN st.staged_continuation->>'target_until' IS NOT NULL
+                     THEN st.staged_continuation->>'policy_key' END AS active_window,
+                   CASE WHEN pg_input_is_valid(
+                       st.staged_continuation->>'target_until','timestamp with time zone')
+                     THEN (st.staged_continuation->>'target_until')::timestamptz END AS target_at,
+                   requested.catalog_id IS NOT NULL AS is_selected
+            FROM public.stock_catalog_instruments b
+            JOIN public.stock_catalog_listings l ON (l.id,l.security_id)=(b.listing_id,b.catalog_id)
+            JOIN public.stock_catalog_generations g ON g.id=l.generation_id
+            JOIN public.stock_action_state st ON st.coin_id=b.coin_id
+            LEFT JOIN public.stock_catalog_action_coverage c ON c.coin_id=b.coin_id
+            LEFT JOIN open_exposures exposure ON exposure.coin_id=b.coin_id
+            LEFT JOIN selected_listings requested
+              ON (requested.catalog_id,requested.listing_id)=(b.catalog_id,b.listing_id)
+            WHERE (g.mode='live' OR :allow_fixture) AND g.is_active
+              AND g.published_at<=:at AND :at<g.valid_until
+              AND (
+                :scan_all OR st.staged_continuation->>'target_until' IS NOT NULL
+                OR exposure.coin_id IS NOT NULL OR requested.catalog_id IS NOT NULL
+            )
+        ), admitted AS (
+            SELECT coin_id, active_window, in_progress, target_at, is_selected, observed_at,
+                   row_number() OVER (PARTITION BY in_progress, is_selected
+                                      ORDER BY observed_at NULLS FIRST, coin_id) AS lane_rank
+            FROM candidates
+            WHERE EXISTS (
+                SELECT 1 FROM public.stock_catalog_admissions a
+                WHERE a.artifact='catalog_actions' AND a.scope @> CAST(:scope AS jsonb)
+                  AND a.is_fixture=(candidates.mode='fixture') AND a.revoked_at IS NULL
+                  AND a.reviewed_at<=:at AND :at<a.valid_until
+                  AND a.scope->>'catalog_id'=(candidates.binding).catalog_id::text
+                  AND a.scope->>'listing_id'=(candidates.binding).listing_id::text
+                  AND a.scope->>'provider_asset_id'=(candidates.listing).provider_asset_id
+                  AND public.stock_catalog_scope_current(
+                    a.id,'catalog_actions',candidates.binding,candidates.listing,
+                    :at,CAST(:fields AS jsonb))
+            )
         )
-        ORDER BY (st.staged_continuation->>'target_until' IS NOT NULL) DESC,
-                 active_window, c.observed_at NULLS FIRST,b.coin_id
+        SELECT coin_id, active_window
+        FROM admitted
+        ORDER BY CASE
+                   WHEN NOT in_progress THEN 1
+                   WHEN :scan_all OR (
+                     target_at<=:at
+                     AND target_at>:at-CAST(:max_age_seconds AS integer)*interval '1 second'
+                   ) THEN 0
+                   ELSE 2
+                 END, active_window,
+                 -- At most three obligation slots for each waiting selection slot.
+                 CASE WHEN NOT :scan_all AND NOT in_progress
+                   THEN (lane_rank-1)*CASE WHEN is_selected THEN 3 ELSE 1 END ELSE 0 END,
+                 (NOT :scan_all AND NOT in_progress AND NOT is_selected),
+                 observed_at NULLS FIRST, coin_id
         LIMIT 8
     """),
             {
                 "at": at,
                 "allow_fixture": allow_fixture,
+                "scan_all": selected is None,
+                "max_age_seconds": max_age_seconds,
+                "selected": json.dumps(
+                    [
+                        {"catalog_id": catalog_id, "listing_id": listing_id}
+                        for catalog_id, listing_id in selected or ()
+                    ]
+                ),
                 "fields": json.dumps(CATALOG_ACTION_FIELDS),
                 "scope": json.dumps(
                     {

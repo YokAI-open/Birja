@@ -410,9 +410,9 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
 
 it("keeps quantity across a hold and closure, without offering an expired confirmation", async () => {
   let active = openTicket();
-  const { user, client } = setup({
+  const { user, client, fetch } = setup({
     context: () => Response.json(active),
-    order: () => Response.json(preview()),
+    order: (path) => (path.endsWith("/quote") ? Response.json(active) : Response.json(preview())),
   });
   const quantity = await screen.findByLabelText("Whole-share quantity");
   await user.type(quantity, "2");
@@ -430,6 +430,9 @@ it("keeps quantity across a hold and closure, without offering an expired confir
     await client.invalidateQueries({ queryKey: ["stockCatalogTradeContext"] });
   });
   expect(await screen.findByText("Trading paused for corporate-action review.")).toBeVisible();
+  await waitFor(() => {
+    expect(fetch.mock.calls.filter(([path]) => String(path).endsWith("/quote"))).toHaveLength(1);
+  });
   expect(screen.getByLabelText("Whole-share quantity")).toHaveValue("2");
   expect(screen.queryByRole("button", { name: "Confirm buy" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Preview trade" })).toBeDisabled();

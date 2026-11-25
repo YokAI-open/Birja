@@ -67,6 +67,7 @@ _JSON_BYTES = 16384
 _DIRECTORY_RIGHTS = {
     "nasdaqlisted": _DIRECTORY_FIELDS,
     "otherlisted": _DIRECTORY_FIELDS,
+    "openfigi_nyse": _DIRECTORY_FIELDS,
     "openfigi": _CLASSIFICATION_FIELDS | {"aliases"},
     "issuer_exception": _CLASSIFICATION_FIELDS,
 }
@@ -167,7 +168,7 @@ async def _check_connection(
         ).scalar_one()
     else:
         revision = await require_migrator(conn)
-    allowed = ("0026",) if for_finance else ("0025", "0026")
+    allowed = ("0026", "0027") if for_finance else ("0025", "0026", "0027")
     if revision not in allowed:
         raise CatalogPublishError("Catalog import requires the admitted catalog migration")
 

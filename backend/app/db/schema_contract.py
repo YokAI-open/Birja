@@ -28,7 +28,9 @@ Consumer = Literal[
     "retained0008",
 ]
 SUPPORTED = {
-    "portfolio": frozenset({CURRENT_PORTFOLIO_REVISION}),
+    # The additive provenance constraint does not change financial runtime
+    # permissions or behavior on the qualified 0026 predecessor.
+    "portfolio": frozenset({"0026", CURRENT_PORTFOLIO_REVISION}),
     "retained0025": frozenset({"0025"}),
     "retained0024": frozenset({"0024"}),
     "retained0023": frozenset({"0023"}),
@@ -66,9 +68,11 @@ async def require_schema(conn: AsyncConnection, *, consumer: Consumer = "portfol
     if consumer not in SUPPORTED or revision not in SUPPORTED[consumer]:
         raise SchemaAdmissionError("incompatible_schema")
     if revision in PORTFOLIO_PREFLIGHT_SQL:
-        acl_sha256 = {"0025": ACL_0025_SHA256, "0026": ACL_0026_SHA256}.get(
-            revision, ACL_0023_SHA256
-        )
+        acl_sha256 = {
+            "0025": ACL_0025_SHA256,
+            "0026": ACL_0026_SHA256,
+            "0027": ACL_0026_SHA256,
+        }.get(revision, ACL_0023_SHA256)
         try:
             await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
             if (await conn.execute(text(ACL_SQL))).scalar_one() != acl_sha256:

@@ -14,7 +14,7 @@ BEGIN
   IF (SELECT version_num FROM public.alembic_version) IN ('0015','0016','0018','0019','0021','0022') THEN
     RAISE EXCEPTION 'migration_only';
   END IF;
-  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023','0024','0025','0026') THEN
+  IF (SELECT version_num FROM public.alembic_version) NOT IN ('0007','0008','0009','0010','0011','0012','0013','0014','0017','0020','0023','0024','0025','0026','0027') THEN
     RAISE EXCEPTION 'unsupported populated revision';
   END IF;
   FOREACH t IN ARRAY ARRAY['users','accounts','auth_sessions','refresh_tokens','coins','prices','holdings','trades','alembic_version'] || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0009','0010','0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_instruments','stock_quotes','stock_sessions','stock_data_admissions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0011','0012','0013','0014','0017','0020') THEN ARRAY['stock_action_events','stock_action_sources','stock_action_revisions','stock_action_observations','stock_action_state','stock_ownership_movements','stock_split_applications','stock_dividend_entitlements','stock_action_resolutions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0013','0014','0017','0020') THEN ARRAY['stock_fill_facts','stock_status_evidence'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0014','0017','0020') THEN ARRAY['stock_dividend_payments','stock_dividend_decisions'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)IN ('0017','0020') THEN ARRAY['portfolio_stock_closures'] ELSE ARRAY[]::text[] END || CASE WHEN (SELECT version_num FROM public.alembic_version)='0020' THEN ARRAY['portfolio_creations','portfolio_initializations'] ELSE ARRAY[]::text[] END LOOP
@@ -316,14 +316,15 @@ END $management_identity$;
 DO $closure_identity$
 DECLARE final_acl text; prior_acl text;
 BEGIN
- IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025','0026') THEN RETURN; END IF;
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025','0026','0027') THEN RETURN; END IF;
  final_acl := CASE (SELECT version_num FROM public.alembic_version)
   WHEN '0026' THEN '6995ecd9a65d5bf659480b524e37e236c31a293cb2ab9f1648ea657c15842994'
+  WHEN '0027' THEN '6995ecd9a65d5bf659480b524e37e236c31a293cb2ab9f1648ea657c15842994'
   WHEN '0025' THEN 'a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f'
   ELSE '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748' END;
- prior_acl := CASE WHEN (SELECT version_num FROM public.alembic_version)='0026'
+ prior_acl := CASE WHEN (SELECT version_num FROM public.alembic_version) IN ('0026','0027')
   THEN 'a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f' ELSE final_acl END;
- IF (SELECT count(*)<>1 OR NOT bool_and(version_num IN ('0023','0024','0025','0026')) FROM public.alembic_version)
+ IF (SELECT count(*)<>1 OR NOT bool_and(version_num IN ('0023','0024','0025','0026','0027')) FROM public.alembic_version)
  THEN RAISE EXCEPTION 'management final revision required'; END IF;
  IF EXISTS(SELECT FROM pg_roles WHERE rolname IN
   ('birja_app','birja_scheduler','birja_migrator','birja_action_operator')
@@ -404,7 +405,8 @@ SELECT encode(sha256(convert_to(coalesce(jsonb_agg(v ORDER BY v::text),'[]')::te
   WHEN '0023' THEN '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
   WHEN '0024' THEN 'b32bc2c2f40039500c2f992af87bc6c1ce74962a691a5613555c6f5ad1a1a665'
   WHEN '0025' THEN '64ae5dbb83bfa0fa764d667a91f09abcf023b39f3e3b032354ce1088c45135a3'
-  WHEN '0026' THEN '0c855fb80619ed1cd46183b87c3357a9183b3592d4504ebce8c722fb61085cc6' END)
+  WHEN '0026' THEN '0c855fb80619ed1cd46183b87c3357a9183b3592d4504ebce8c722fb61085cc6'
+  WHEN '0027' THEN '93cff92c149e5d9bbbcce68e141a4e4cd496a05c586ee7310f57afc291d9fe71' END)
  THEN RAISE EXCEPTION 'management catalogue mismatch'; END IF;
  IF EXISTS(SELECT FROM pg_proc p,
   LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
@@ -994,7 +996,7 @@ END $management_grants$;
 DO $closure_grants$
 DECLARE final_acl text;
 BEGIN
- IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025','0026') THEN RETURN; END IF;
+ IF (SELECT version_num FROM public.alembic_version) NOT IN ('0023','0024','0025','0026','0027') THEN RETURN; END IF;
 
 DO $management_reset$
 DECLARE obj record; col record;
@@ -1133,14 +1135,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE birja_migrator IN SCHEMA public REVOKE ALL ON 
  FROM PUBLIC,birja_app,birja_scheduler,birja_action_operator;
 
  final_acl := '71896f41a9310ada0af0961b78e78f5364654f1513c11bf9310c250ad545f748';
- IF (SELECT version_num FROM public.alembic_version) IN ('0025','0026') THEN
+ IF (SELECT version_num FROM public.alembic_version) IN ('0025','0026','0027') THEN
   GRANT SELECT ON public.stock_catalog_generations,public.stock_catalog_securities,
    public.stock_catalog_listings,public.stock_catalog_aliases TO birja_app,birja_scheduler;
   GRANT SELECT (id,artifact,reviewed_at,valid_until,revoked_at,fields,scope,is_fixture)
    ON public.stock_catalog_admissions TO birja_app,birja_scheduler;
   final_acl := 'a055778473726ac8321879c4c3a93d2810217a388bf70794b7ca773ada1aaf8f';
  END IF;
- IF (SELECT version_num FROM public.alembic_version)='0026' THEN
+ IF (SELECT version_num FROM public.alembic_version) IN ('0026','0027') THEN
   GRANT SELECT ON public.stock_catalog_instruments,public.stock_catalog_financial_quotes,
    public.stock_catalog_status,public.stock_catalog_action_coverage TO birja_app,birja_scheduler;
   GRANT INSERT,UPDATE ON public.stock_catalog_financial_quotes,public.stock_catalog_status,

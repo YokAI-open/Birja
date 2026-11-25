@@ -4,16 +4,21 @@
 https://www.nasdaq.com/market-activity/stock-market-holiday-schedule.
 """
 
+import hashlib
+import json
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.models.stock import StockDataAdmission
 from app.services import stock_sessions
+from app.services.stock_admission import ProductAdmission
+from app.services.stock_catalog_publish import CatalogPublishError
 from app.services.stock_quote_rules import ValidatedStockQuote
 from app.services.stock_sessions import (
     build_sessions,
@@ -23,6 +28,8 @@ from app.services.stock_sessions import (
     scheduled_reopening,
     session_at,
 )
+from app.tasks import stock_calendar_renew
+from tests.test_migrations import test_migration_url as migration_url
 from tests.test_stock_admission import admitted
 
 
@@ -309,3 +316,182 @@ async def test_persist_rejects_forged_rows_and_expired_database_review(
         )
         assert await load_sessions(db, now) == []
         assert await load_sessions(db, now.replace(tzinfo=None)) == []
+
+
+def _calendar_files(
+    path: Path,
+    now: datetime,
+    prior: ProductAdmission | None = None,
+) -> tuple[dict, tuple[Path, Path, Path]]:
+    candidate = replace(
+        evidence(now),
+        generation=prior.generation + 1 if prior else 1,
+        reviewed_at=now,
+        calendar={
+            **evidence(now).calendar,
+            "coverage_start": (now.date() - timedelta(days=45)).isoformat(),
+            "coverage_end": (now.date() + timedelta(days=90)).isoformat(),
+        },
+    )
+    packet_path, nyse, nasdaq = [
+        path / name for name in ("packet.json", "nyse.html", "nasdaq.html")
+    ]
+    source_records = []
+    for exchange, file in (("XNYS", nyse), ("XNAS", nasdaq)):
+        raw = f"synthetic reviewed exchange schedule {exchange}".encode()
+        file.write_bytes(raw)
+        file.chmod(0o600)
+        source_records.append(
+            {
+                "exchange": exchange,
+                "url": stock_calendar_renew._OFFICIAL_URLS[exchange],
+                "checked_at": (now - timedelta(minutes=1)).isoformat(),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "reference": f"synthetic retained review {exchange}",
+            }
+        )
+    packet = {
+        "version": 1,
+        "expected_generation": prior.generation if prior else 0,
+        "expected_previous_sha256": stock_calendar_renew._previous_digest(prior),
+        "review_kind": "unchanged_schedule" if prior else "updated_schedule",
+        "official_checks": source_records,
+        "admission": asdict(candidate),
+    }
+    _write_calendar_packet(packet_path, packet)
+    return packet, (packet_path, nyse, nasdaq)
+
+
+def _write_calendar_packet(path: Path, packet: dict) -> None:
+    path.write_text(json.dumps(packet, default=datetime.isoformat), encoding="utf-8")
+    path.chmod(0o600)
+
+
+@pytest.fixture
+def calendar_operator(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STOCK_DATA_ACCOUNT", "birja")
+    monkeypatch.setenv("STOCK_DATA_SERVER", "birja")
+
+
+def test_operator_calendar_requires_exact_private_official_records(tmp_path: Path) -> None:
+    packet, paths = _calendar_files(tmp_path, NOW)
+    first = stock_calendar_renew._read_review(*paths)
+    assert first.digest == hashlib.sha256(paths[0].read_bytes()).hexdigest()
+    paths[1].chmod(0o644)
+    with pytest.raises(CatalogPublishError, match="mode-0600"):
+        stock_calendar_renew._read_review(*paths)
+    paths[1].chmod(0o600)
+    packet["official_checks"][0]["url"] = "https://www.nyse.com/"
+    _write_calendar_packet(paths[0], packet)
+    with pytest.raises(CatalogPublishError, match="reviewed source evidence"):
+        stock_calendar_renew._read_review(*paths)
+    packet["official_checks"][0]["url"] = stock_calendar_renew._OFFICIAL_URLS["XNYS"]
+    _write_calendar_packet(paths[0], packet)
+    paths[1].write_bytes(paths[1].read_bytes() + b"\n")
+    with pytest.raises(CatalogPublishError, match="reviewed source evidence"):
+        stock_calendar_renew._read_review(*paths)
+
+
+def test_operator_calendar_unchanged_schedule_still_requires_new_checks(
+    tmp_path: Path, calendar_operator: None
+) -> None:
+    prior = evidence(NOW - timedelta(days=1))
+    packet, paths = _calendar_files(tmp_path, NOW, prior)
+    checked = stock_calendar_renew._read_review(*paths)
+    candidate, account, server = stock_calendar_renew._prepare(checked, prior, NOW)
+
+    assert (account, server) == ("birja", "birja")
+    assert candidate.generation == prior.generation + 1
+    assert candidate.calendar["operator_packet_sha256"] == checked.digest
+    assert candidate.calendar["official_checks"] == [
+        check.model_dump(mode="json") for check in checked.packet.official_checks
+    ]
+
+    packet["official_checks"][0]["checked_at"] = prior.reviewed_at.isoformat()
+    _write_calendar_packet(paths[0], packet)
+    with pytest.raises(CatalogPublishError, match="fresh official checks"):
+        stock_calendar_renew._prepare(stock_calendar_renew._read_review(*paths), prior, NOW)
+
+    packet["official_checks"][0]["checked_at"] = (NOW - timedelta(hours=20)).isoformat()
+    _write_calendar_packet(paths[0], packet)
+    with pytest.raises(CatalogPublishError, match="fresh and match both"):
+        stock_calendar_renew._prepare(stock_calendar_renew._read_review(*paths), prior, NOW)
+
+    packet["official_checks"][0]["checked_at"] = (NOW - timedelta(minutes=1)).isoformat()
+    packet["admission"]["calendar"]["version"] += "/changed"
+    _write_calendar_packet(paths[0], packet)
+    with pytest.raises(CatalogPublishError, match="updated-schedule review"):
+        stock_calendar_renew._prepare(stock_calendar_renew._read_review(*paths), prior, NOW)
+
+
+async def test_operator_calendar_commits_exact_authority_and_sessions_together(
+    engine: AsyncEngine,
+    clean_stock_discovery: None,
+    tmp_path: Path,
+    calendar_operator: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime.now(UTC)
+    _, paths = _calendar_files(tmp_path, now)
+    reviewed = stock_calendar_renew._read_review(*paths)
+    migrator = create_async_engine(migration_url(), hide_parameters=True)
+    try:
+        operator = async_sessionmaker(migrator)
+        observed = async_sessionmaker(engine)
+        async with operator.begin() as db:
+            report = await stock_calendar_renew._renew(db, reviewed, now)
+            assert report["disposition"] == "reviewed"
+        async with observed() as db:
+            assert await load_sessions(db, now) == []
+            assert await db.scalar(select(StockDataAdmission.id)) is None
+        async with operator.begin() as db:
+            with pytest.raises(CatalogPublishError, match="exact reviewed calendar packet"):
+                await stock_calendar_renew._renew(db, reviewed, now, expected_sha="incorrect")
+
+        async def failed_persist(*args, **kwargs) -> int:
+            return 0
+
+        with (
+            monkeypatch.context() as patch,
+            pytest.raises(CatalogPublishError, match="could not be persisted"),
+        ):
+            patch.setattr(stock_calendar_renew, "persist_sessions", failed_persist)
+            async with operator.begin() as db:
+                await stock_calendar_renew._renew(db, reviewed, now, expected_sha=reviewed.digest)
+        async with observed() as db:
+            assert await db.scalar(select(StockDataAdmission.id)) is None
+            assert await load_sessions(db, now) == []
+
+        async with operator.begin() as db:
+            applied = await stock_calendar_renew._renew(
+                db, reviewed, now, expected_sha=reviewed.digest
+            )
+            assert applied["sessions"] == 272
+            async with observed() as reader:
+                assert await load_sessions(reader, now) == []
+        async with observed() as db:
+            _, authority = await stock_calendar_renew._load(db)
+            assert authority is not None
+            rows = await load_sessions(db, now)
+            assert {row.calendar_admission_generation for row in rows} == {authority.generation}
+            assert session_at("NASDAQ", now, rows, authority).state != "unknown"
+        async with operator.begin() as db:
+            with pytest.raises(CatalogPublishError, match="prior calendar authority changed"):
+                await stock_calendar_renew._renew(db, reviewed, now, expected_sha=reviewed.digest)
+
+        later = now + timedelta(minutes=2)
+        _, renewal_paths = _calendar_files(tmp_path, later, authority)
+        renewed = stock_calendar_renew._read_review(*renewal_paths)
+        async with operator.begin() as db:
+            applied = await stock_calendar_renew._renew(
+                db, renewed, later, expected_sha=renewed.digest
+            )
+            assert applied["generation"] == authority.generation + 1
+        async with observed() as db:
+            _, refreshed = await stock_calendar_renew._load(db)
+            assert refreshed is not None
+            assert session_at("NYSE", later, rows, refreshed).state == "unknown"
+            current = await load_sessions(db, later)
+            assert session_at("NYSE", later, current, refreshed).state != "unknown"
+    finally:
+        await migrator.dispose()

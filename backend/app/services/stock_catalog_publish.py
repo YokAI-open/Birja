@@ -149,18 +149,24 @@ async def _reviewed_rights(
 def _check_directory_refresh(
     old: StockCatalogGeneration, sources: tuple[SourceEvidence, SourceEvidence]
 ) -> None:
+    source_keys = [source.artifact for source in sources]
+    source_transition = set(old.sources) == {"nasdaqlisted", "otherlisted"} and source_keys == [
+        "nasdaqlisted",
+        "openfigi_nyse",
+    ]
+    if source_transition:
+        source_keys[1] = "otherlisted"
     try:
         previous = [
-            SourceEvidence.model_validate_json(json.dumps(old.sources[src.artifact]))
-            for src in sources
+            SourceEvidence.model_validate_json(json.dumps(old.sources[key])) for key in source_keys
         ]
     except KeyError, TypeError, ValueError:
         raise CatalogPublishError("Stored directory evidence has an invalid shape") from None
     if any(
-        new.artifact != prior.artifact
+        prior.artifact != key
         or new.published_at <= prior.published_at
         or new.sha256 == prior.sha256
-        for prior, new in zip(previous, sources, strict=True)
+        for key, prior, new in zip(source_keys, previous, sources, strict=True)
     ):
         raise CatalogPublishError("Publication requires a newer pair of directory artifacts")
 

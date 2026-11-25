@@ -38,7 +38,7 @@ def package_current_archive(archive, *, successor=False):
     producer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(producer)
     if successor:
-        producer.bundle_package_v6(archive, recovery=r)
+        producer.bundle_package_v7(archive, recovery=r)
     else:
         producer.bundle_package_v4(archive, recovery=r)
 
@@ -51,7 +51,8 @@ def archive_profile(archive, sha):
     if family not in {('deploy-recovery-v3', 2, '0020'),
                       ('deploy-recovery-v4', 3, '0023'),
                       ('deploy-recovery-v5', 4, '0024'),
-                      ('deploy-recovery-v7', 6, '0026')}:
+                      ('deploy-recovery-v7', 6, '0026'),
+                      ('deploy-recovery-v8', 7, '0027')}:
         raise ValueError('unsupported authenticated campaign family')
     return family[0]
 

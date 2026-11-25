@@ -25,7 +25,7 @@ from app.db.base import Base
 from tests.helpers import unique_email
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-EXPECTED_HEAD = "0026"
+EXPECTED_HEAD = "0027"
 
 # Fixed application inventory: never REASSIGN OWNED or transfer arbitrary objects.
 MIGRATION_TABLES = frozenset(
@@ -121,7 +121,7 @@ _CATALOG_FINANCE_FUNCTIONS = frozenset(
         "check_stock_catalog_split_movements()",
     }
 )
-_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025", "0026"}
+_SUCCESSOR_REVISIONS = {"0021", "0022", "0023", "0024", "0025", "0026", "0027"}
 
 
 def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset[str]]:
@@ -134,17 +134,17 @@ def migration_inventory(revision: str | None) -> tuple[frozenset[str], frozenset
             "reject_stock_record_mutation()",
         }
         functions = (MIGRATION_FUNCTIONS - retired) | _CLOSURE_FUNCTIONS
-        if revision in {"0022", "0023", "0024", "0025", "0026"}:
+        if revision != "0021":
             functions |= {"check_portfolio_terminal_root()"}
-        if revision in {"0023", "0024", "0025", "0026"}:
+        if revision not in {"0021", "0022"}:
             functions |= {
                 "close_portfolio(bigint,bigint,uuid,text,text)",
                 "check_stock_terminal_clock()",
             }
         tables = MIGRATION_TABLES | _CLOSURE_TABLES
-        if revision in {"0025", "0026"}:
+        if revision in {"0025", "0026", "0027"}:
             tables |= STOCK_CATALOG_TABLES
-        if revision == "0026":
+        if revision in {"0026", "0027"}:
             tables |= _CATALOG_FINANCE_TABLES
             functions |= _CATALOG_FINANCE_FUNCTIONS
         return tables, frozenset(functions)
@@ -392,6 +392,7 @@ async def install_runtime_grants_for_revision(conn, revision: str) -> None:
         "0024": GRANTS_0023_SQL,
         "0025": GRANTS_0025_SQL,
         "0026": GRANTS_0026_SQL,
+        "0027": GRANTS_0026_SQL,
     }[revision]
     await conn.execute(text(PORTFOLIO_PREFLIGHT_SQL[revision]))
     # The grant contract includes a dollar-quoted block.

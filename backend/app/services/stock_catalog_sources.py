@@ -1,4 +1,4 @@
-"""Read and validate the two Nasdaq Trader listing directories."""
+"""Read listing directories and define the normalized catalog evidence shape."""
 
 import hashlib
 import re
@@ -9,11 +9,12 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
-DirectorySource = Literal["nasdaqlisted", "otherlisted"]
+DirectorySource = Literal["nasdaqlisted", "otherlisted", "openfigi_nyse"]
+NasdaqTraderSource = Literal["nasdaqlisted", "otherlisted"]
 ListingExchange = Literal["NYSE", "NASDAQ"]
 AliasNamespace = Literal["act", "cqs", "nasdaq", "openfigi"]
 
-DIRECTORY_URLS: dict[DirectorySource, str] = {
+DIRECTORY_URLS: dict[NasdaqTraderSource, str] = {
     "nasdaqlisted": "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
     "otherlisted": "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
 }
@@ -26,15 +27,17 @@ HEADERS = {
         "ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol"
     ),
 }
+_FOOTER_WIDTHS = {"nasdaqlisted": (8,), "otherlisted": (7, 8)}
 MAX_DIRECTORY_BYTES = 4 * 1024 * 1024
 MAX_DIRECTORY_ROWS = 20_000
 _MAX_AGE = timedelta(days=4)
 _MAX_PAIR_SKEW = timedelta(hours=1)
 _EASTERN = ZoneInfo("America/New_York")
 SYMBOL_PATTERN = r"[A-Z0-9][A-Z0-9.$^+/=\-]{0,13}"
+_CQS_SYMBOL_PATTERN = r"(?=.{1,14}\Z)[A-Z0-9][A-Z0-9.$^+/=\-]*(?:p[A-Z0-9./]*w?|rw?|w)?"
 _TIMESTAMP = re.compile(r"File Creation Time: ?([0-9]{10}):?([0-9]{2})")
 _NASDAQ_FIGI_VENUES = {"Q": "UW", "G": "UQ", "S": "UR"}
-_OTHER_VENUES = {"A", "N", "P", "V", "Z"}
+_OTHER_VENUES = {"A", "F", "M", "N", "P", "V", "Z"}
 
 
 class CatalogSourceError(ValueError):
@@ -84,8 +87,8 @@ def _source_timestamp(value: str) -> datetime:
     return early.astimezone(UTC)
 
 
-def _symbol(value: str) -> str:
-    if re.fullmatch(SYMBOL_PATTERN, value) is None:
+def _symbol(value: str, pattern: str = SYMBOL_PATTERN) -> str:
+    if re.fullmatch(pattern, value) is None:
         raise CatalogSourceError("Invalid directory ticker")
     return value
 
@@ -99,6 +102,7 @@ def _parse_row(source: DirectorySource, line: str, ordinal: int) -> DirectoryRow
     listing_exchange: ListingExchange | None
     figi_exchange: str | None
     aliases: tuple[CatalogAlias, ...]
+    qualified_cqs = False
     if source == "nasdaqlisted":
         listing_exchange = "NASDAQ"
         figi_exchange = _NASDAQ_FIGI_VENUES.get(category)
@@ -130,9 +134,10 @@ def _parse_row(source: DirectorySource, line: str, ordinal: int) -> DirectoryRow
         figi_exchange = "UN" if listing_exchange else None
         cqs, etf, round_lot, test_issue, nasdaq = first, second, third, fourth, fifth
         next_shares = "N"
+        qualified_cqs = _symbol(cqs, _CQS_SYMBOL_PATTERN) != cqs.upper()
         aliases = (
             CatalogAlias(namespace="act", symbol=ticker),
-            CatalogAlias(namespace="cqs", symbol=_symbol(cqs)),
+            CatalogAlias(namespace="cqs", symbol=cqs),
             CatalogAlias(namespace="nasdaq", symbol=_symbol(nasdaq)),
         )
     if etf not in {"Y", "N"} or test_issue not in {"Y", "N"}:
@@ -150,6 +155,9 @@ def _parse_row(source: DirectorySource, line: str, ordinal: int) -> DirectoryRow
         exclusion = "exchange_traded_fund"
     elif next_shares == "Y":
         exclusion = "nextshares"
+    elif qualified_cqs:
+        # CQS lowercase suffixes denote preferred, rights, or when-issued securities.
+        exclusion = "qualified_cqs_issue"
     return DirectoryRow(
         source=source,
         row_key=f"{source}:{ordinal}",
@@ -163,7 +171,7 @@ def _parse_row(source: DirectorySource, line: str, ordinal: int) -> DirectoryRow
     )
 
 
-def parse_directory(source: DirectorySource, payload: bytes) -> DirectorySnapshot:
+def parse_directory(source: NasdaqTraderSource, payload: bytes) -> DirectorySnapshot:
     if not payload or len(payload) > MAX_DIRECTORY_BYTES or not payload.endswith(b"\n"):
         raise CatalogSourceError("Directory is empty, oversized or truncated")
     try:
@@ -174,7 +182,7 @@ def parse_directory(source: DirectorySource, payload: bytes) -> DirectorySnapsho
     if not 3 <= len(lines) <= MAX_DIRECTORY_ROWS + 2 or lines[0] != HEADERS[source]:
         raise CatalogSourceError("Directory has an unexpected header or row count")
     footer = lines[-1].split("|")
-    if len(footer) != 8 or any(footer[1:]):
+    if len(footer) not in _FOOTER_WIDTHS[source] or any(footer[1:]):
         raise CatalogSourceError("Directory is missing a complete terminal timestamp row")
     return DirectorySnapshot(
         artifact=source,

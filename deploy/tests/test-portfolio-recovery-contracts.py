@@ -92,7 +92,7 @@ def catalog_snapshot(root, revision, stage, restic_path):
     assert source['revision'] == revision
     if not (stage / 'host').exists():
         assert source['tables']['stock_fill_facts']['count'] == (3 if revision == '0025' else 5)
-    if revision == '0026':
+    if revision in ('0026', '0027'):
         assert source['catalog_finance_invalid'] == 0
         assert source['tables']['stock_catalog_fill_evidence']['count'] == 2
 
@@ -148,10 +148,10 @@ def catalog_observe(root, database, output):
 
 
 def compare_predecessor(before, after):
-    """The 0026 migration adds catalog tables and leaves the prior book intact."""
+    """Migrations through 0027 add catalog tables and leaves the prior book intact."""
     prior = json.loads(before.read_text())
     successor = json.loads(after.read_text())
-    assert prior['revision'] == '0023' and successor['revision'] == '0026'
+    assert prior['revision'] == '0023' and successor['revision'] == '0027'
     for key in ('financial', 'portfolio_state', 'management_state', 'closure_state'):
         assert prior[key] == successor[key], key
     for table, entry in prior['tables'].items():
@@ -209,7 +209,7 @@ async def main():
         engine = create_async_engine(url, connect_args=database_connect_args(settings))
         try:
             async with engine.connect() as conn:
-                assert await require_schema(conn) == '0026'
+                assert await require_schema(conn) == '0027'
                 assert await conn.scalar(text(
                     'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
                 ))
@@ -342,7 +342,7 @@ async def catalog_economics(mode, receipt_path):
         for role in (app, scheduler):
             async with role.connect() as conn:
                 assert await conn.scalar(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))
-                assert await require_schema(conn) == '0026'
+                assert await require_schema(conn) == '0027'
         if mode == 'replay':
             saved = json.loads(receipt_path.read_text())
             market = saved['market']
@@ -663,7 +663,7 @@ class PortfolioRecoveryContracts(unittest.TestCase):
         historical = load('backup-snapshot', self.retained_0025)
         profiles = (
             ('0025', self.retained_0025, historical, current.CATALOG_SOURCE_SHA256),
-            ('0026', ROOT, current, current.CATALOG_FINANCE_SOURCE_SHA256),
+            ('0027', ROOT, current, current.CATALOG_NYSE_SOURCE_SHA256),
         )
         for revision, source, producer, pins in profiles:
             with tempfile.TemporaryDirectory(prefix='birja-closure-source-') as tmp:
@@ -1040,13 +1040,13 @@ if __name__ == "__main__":
         host = Path(sys.argv[2])
         consumer = load('verify-restore')
         consumer.bundle_install(
-            Path(sys.argv[3]), sys.argv[4], str(host), required_profile='deploy-recovery-v7',
+            Path(sys.argv[3]), sys.argv[4], str(host), required_profile='deploy-recovery-v8',
         )
         release = host / 'var/lib/birja/recovery/releases' / sys.argv[4]
         consumer.private(release / 'deploy' / 'verify-restore.py')
         if consumer.digest(release / 'tools/restic') != consumer.RESTIC_SHA:
             raise ValueError('Archived restic checksum mismatch')
-        if sys.argv[5] != '0026':
+        if sys.argv[5] != '0027':
             raise ValueError('Only the exact successor release is supported')
         sys.exit(0)
     if len(sys.argv) == 5 and sys.argv[1] == '--catalog-observe':
