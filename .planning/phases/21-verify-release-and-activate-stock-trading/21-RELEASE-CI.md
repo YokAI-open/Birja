@@ -220,3 +220,17 @@ and root filesystem SHA-256
 The checked main commit is ready for the `v0.8.0` tag and GitHub release
 once the owner approves publication. Plan 21-05 also requires the release
 back-merge.
+
+## Published release
+
+The owner requested publication and deployment. GitHub published
+`v0.8.0` at 19:28:33 UTC on 2026-11-25. The peeled remote tag is the
+verified main commit `0f4a42f4dfec657314d2feaab1c5a539c69518b8`.
+The release uses the reviewed notes from that commit.
+[GitHub release](https://github.com/YokAI-open/Birja/releases/tag/v0.8.0)
+
+The exact release commit is the proposed `release-0.8.0-backmerge`
+head into checked `develop` base
+`e1b79566c38f75254827961216c67c390ce94d68`. The back-merge awaits
+approval and the six hosted checks. Production rollout has its own
+scope and prerequisites.

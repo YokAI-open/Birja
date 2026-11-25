@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T18:18:23Z"
-last_activity: 2026-11-25 -- Main at 0f4a42f passed all six checks and recovery artifact verification
+last_updated: "2026-11-25T19:30:27Z"
+last_activity: 2026-11-25 -- Published v0.8.0 from verified main commit 0f4a42f
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: Main CI passed and recovery artifact verified; awaiting v0.8.0 publication approval
+stopped_at: v0.8.0 published; awaiting back-merge and production scope decisions
 ---
 
 # Project State
@@ -30,8 +30,8 @@ acceptance of searchable stock trading.
 
 Phase: 21
 Plan: 4 of 9 executed
-Status: Awaiting v0.8.0 publication approval and expanded live-source evidence
-Last activity: 2026-11-25 -- Main at 0f4a42f passed all six checks and recovery artifact verification
+Status: v0.8.0 published; expanded live-source and production checks pending
+Last activity: 2026-11-25 -- Published v0.8.0 from verified main commit 0f4a42f
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence
@@ -52,7 +52,9 @@ Corrective PR #48 fixed two calendar-dependent test fixtures and passed all
 six hosted checks at `1024e95`. It merged into main as `0f4a42f` with the
 checked tree. All six main checks passed after a same-commit recovery
 retry, and the exact `0026` bundle and seven-stage receipt verified.
-Publication, back-merge and expanded live-source evidence are pending.
+GitHub published v0.8.0 on that commit. The back-merge and expanded
+live-source evidence are pending. A paused-stock rollout is proposed
+for owner review. [Production proposal](phases/21-verify-release-and-activate-stock-trading/21-PRODUCTION-PREFLIGHT.md)
 [Release CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 
