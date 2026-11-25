@@ -136,6 +136,37 @@ acceptance. [Phase 20 verification](phases/20-trade-and-value-stocks-from-search
 
 **Requirements:** SV-01, SV-02, SV-03
 
+**Plans:** 9 plans across 7 waves
+
+**Wave 1**
+- [ ] 21-01 — Build the exact 0026 recovery artifact in CI.
+- [ ] 21-02 — Prepare catalog admission, refresh and cache retention.
+
+**Wave 2** *(after Wave 1)*
+- [ ] 21-03 — Rehearse populated cutover and compatible recovery.
+
+**Wave 3** *(after Wave 2)*
+- [ ] 21-04 — Qualify the integrated release candidate.
+
+**Wave 4** *(after Wave 3)*
+- [ ] 21-05 — Qualify and publish the exact release candidate.
+- [ ] 21-06 — Qualify the expanded live sources and catalog.
+
+**Wave 5** *(after both Wave 4 plans)*
+- [ ] 21-07 — Bind the protected maintenance packet to the actual host.
+
+**Wave 6** *(after Wave 5)*
+- [ ] 21-08 — Roll out 0026 under protected recovery and live admissions.
+
+**Wave 7** *(after Wave 6)*
+- [ ] 21-09 — Complete live out-of-list trading and verification.
+
+Plans 21-05 and 21-06 can advance independently. Production preflight
+requires both outcomes. SC-01 and SC-03 keep their Phase 19 assignment.
+[Phase 21 validation](phases/21-verify-release-and-activate-stock-trading/21-VALIDATION.md)
+
+**Success Criteria**:
+
 1. Browser acceptance covers an out-of-list stock search, simulated round trip, cash, holdings and History, along with market closure, known halts and stale data.
 2. Review, required CI and applicable migration, recovery and rollback checks pass for the release candidate.
 3. After the approved rollout, the designated production test portfolio buys and sells an out-of-list stock against real IEX prices. Record safe totals and exact release identity.
@@ -147,7 +178,7 @@ acceptance. [Phase 20 verification](phases/20-trade-and-value-stocks-from-search
 | 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
 | 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
 | 20. Trade and value stocks from search | 9/9 | Complete on local fixtures 2026-11-24 |
-| 21. Verify, release and activate stock trading | 0/TBD | Not started |
+| 21. Verify, release and activate stock trading | 0/9 | Planned |
 
 All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
 [Research](research/v1.4/SUMMARY.md) · [Deferred work](DEFERRED.md)
