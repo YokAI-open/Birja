@@ -3,12 +3,14 @@
 from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import text
 
+from app.models.corporate_action import StockOwnershipMovement
 from app.schemas.event_history import EventDividendCorrection, EventTrade
 from app.services.corporate_actions import apply_due_actions
 from app.services.event_history import list_event_history
@@ -109,7 +111,7 @@ async def test_catalog_dividend_correction_keeps_original_owned_lineage(scoped_a
         EventDividendCorrection.model_validate(serialized)
 
 
-async def test_catalog_split_history_holds_original_units_and_basis(scoped_actions):
+async def test_catalog_split_history_holds_original_units_and_basis(scoped_actions, monkeypatch):
     conn, case = scoped_actions
     split = _dividend(
         case,
@@ -140,6 +142,32 @@ async def test_catalog_split_history_holds_original_units_and_basis(scoped_actio
         == Decimal(event["cost_basis_after"])
         == Decimal("87.65")
     )
+    async with portfolio_session(conn) as db:
+        real = db.execute
+        remove_original = True
+
+        async def with_partial_identity(statement, *args, **kwargs):
+            result = await real(statement, *args, **kwargs)
+            if statement.column_descriptions[0].get("expr") is StockOwnershipMovement:
+                movement, application, terms, catalog_id, original, name = result.one()
+                assert original["catalog_id"] == str(catalog_id) == event["catalog_id"]
+                if remove_original:
+                    original = None
+                else:
+                    terms = terms | {"catalog_id": str(catalog_id + 1)}
+                return SimpleNamespace(
+                    all=lambda: [(movement, application, terms, catalog_id, original, name)]
+                )
+            return result
+
+        monkeypatch.setattr(db, "execute", with_partial_identity)
+        for remove_original_identity, reason in (
+            (True, "Missing original catalog split identity"),
+            (False, "Inconsistent retained catalog action identity"),
+        ):
+            remove_original = remove_original_identity
+            with pytest.raises(ValueError, match=reason):
+                await list_event_history(db, portfolio=root)
 
 
 def test_catalog_history_wire_uses_strict_issue_id_and_symbol_without_legacy_key():

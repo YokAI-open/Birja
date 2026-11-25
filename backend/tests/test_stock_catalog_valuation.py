@@ -1,13 +1,13 @@
 """Owned catalog valuation against real schema and restricted test roles."""
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import event, text, update
+from sqlalchemy import event, null, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v2.portfolios import PortfolioOverview
@@ -21,9 +21,13 @@ from app.models.stock_catalog_finance import (
 )
 from app.models.trade import Holding
 from app.schemas.portfolio import PortfolioOut
+from app.services import portfolio as portfolio_service
+from app.services import stock_valuation
 from app.services.portfolio import get_portfolio, load_portfolio_snapshots
 from app.services.portfolios import OwnedActivePortfolio
 from app.services.stock_catalog_promotion import CATALOG_ACTION_FIELDS
+from app.services.stock_eligibility import execution_snapshot_query
+from app.services.stock_sessions import SessionDecision
 from tests.test_migrations import install_current_test_grants
 from tests.test_stock_catalog_promotion import FIRST_ASSET, _listing, _promote, _reviewed_grant
 from tests.test_stock_catalog_publish import _manifest, _publish
@@ -302,6 +306,86 @@ async def test_catalog_mark_recheck_keeps_original_price_and_refuses_changed_uni
     position = next(row for row in third.holdings if row.catalog_id)
     assert reads == 2 and third.total_value is None
     assert position.stock_mark and position.stock_mark.valuation_reason == "session_unavailable"
+
+
+async def test_catalog_valuation_refuses_incomplete_or_changed_read_evidence(
+    engine, catalog_book, monkeypatch
+):
+    market, settings = catalog_book
+    now = market.now + timedelta(minutes=4)
+    coin_id = market.instruments[0].coin_id
+    async with _app(engine) as db:
+        query = execution_snapshot_query(now).add_columns(
+            stock_valuation.catalog_valuation_query((coin_id,), settings, now).label("catalog")
+        )
+        source = (await db.execute(query)).one()
+    (row,) = source.catalog
+    sessions = stock_valuation.catalog_valuation_sessions(source, settings, now)
+
+    def value(original, current, schedule=sessions):
+        return stock_valuation.value_catalog_holding(
+            original,
+            current,
+            original_sessions=schedule,
+            current_sessions=sessions,
+            settings=settings,
+            now=now,
+        ).value
+
+    assert value(row, row).mid == Decimal("102")
+    quote = row["quote"]
+    for changed, expected in (
+        ({"quote": quote | {"unit_epoch": quote["unit_epoch"] + 1}}, "units_changed"),
+        ({"mapping_until": now.isoformat()}, "permission_unavailable"),
+        ({"mapping_reviewed": None}, "permission_unavailable"),
+        (
+            {
+                "mapping_scope": row["mapping_scope"]
+                | {"provider": row["mapping_scope"]["provider"] | {"account": "other-fixture"}}
+            },
+            "permission_unavailable",
+        ),
+        ({"quote": quote | {"valid_until": now.isoformat()}}, "quote_stale"),
+    ):
+        snapshot = row | changed
+        result = value(snapshot, snapshot)
+        assert result.mid is None and result.mark.valuation_reason == expected, expected
+
+    unknown = value(row, row, sessions | {"NASDAQ": (SessionDecision(), None)})
+    assert unknown.mid is None and unknown.mark.valuation_reason == "session_unavailable"
+    assert value(row, row | {"listing_id": row["listing_id"] + 1}).mid is None
+    changed_review = value(row, row | {"mark_id": row["mark_id"] + 1})
+    assert changed_review.mid is None and changed_review.mark.units_safe
+    changed_attestation = value(row, row | {"quote_attested": False})
+    assert changed_attestation.mid is None
+    assert changed_attestation.mark.valuation_reason == "permission_unavailable"
+
+    verified_mark = stock_valuation.evaluate_catalog_financial_mark
+
+    def incomplete_mark(*args, **kwargs):
+        verified = verified_mark(*args, **kwargs)
+        assert verified is not None
+        return replace(verified, valid_until=None)
+
+    monkeypatch.setattr(stock_valuation, "evaluate_catalog_financial_mark", incomplete_mark)
+    without_deadline = value(row, row)
+    assert without_deadline.mid is None and without_deadline.mark.units_safe
+
+    monkeypatch.setattr(portfolio_service, "catalog_valuation_query", lambda *_: null())
+    async with _app(engine) as db:
+        portfolio = await get_portfolio(
+            db,
+            portfolio=OwnedActivePortfolio(market.world.first, market.world.owner),
+            settings=settings,
+            now=now,
+        )
+    protected = next(holding for holding in portfolio.holdings if holding.coin_id == str(coin_id))
+    assert (protected.symbol, protected.name, protected.current_value) == (
+        "STOCK",
+        "Restricted stock",
+        None,
+    )
+    assert portfolio.total_value is None and portfolio.known_value == Decimal("1244.56")
 
 
 async def test_catalog_rename_and_reused_ticker_keep_original_owned_issue(engine, catalog_book):

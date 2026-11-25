@@ -3,6 +3,7 @@
 import json
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -12,9 +13,12 @@ from sqlalchemy import text
 
 from app.db.portfolio_bootstrap import GRANTS_0026_SQL
 from app.models.corporate_action import StockActionRevision, StockActionState
+from app.models.stock import StockInstrument
+from app.services import corporate_actions
 from app.services.alpaca_actions import ActionBatch, ActionObservation
 from app.services.corporate_action_rules import NormalizedAction
 from app.services.corporate_actions import (
+    ActionHeld,
     apply_due_actions,
     derive_dividend_entitlements,
     persist_action_batch,
@@ -243,6 +247,101 @@ async def test_catalog_split_service_preserves_basis_and_holds_fractional_lots(
     assert result == (Decimal(quantity), Decimal("87.65"))
     assert await cash(conn, case.world.first) == Decimal("1234.56")
     assert await cash(conn, case.world.closed) == Decimal("55.55")
+    if quantity == 4:
+        renamed = await _rename_with_current_mapping(conn, case)
+        async with _scheduler(conn) as db, db.begin():
+            new_authority, repeated = await _ingest(db, case, replace(split, symbol=renamed.ticker))
+            assert repeated.revision_id == revision.revision_id
+            assert (
+                await apply_due_actions(db, case.binding.coin_id, catalog=new_authority) == applied
+            )
+
+
+async def test_action_services_refuse_unbound_scope_and_unverified_split_time(scoped_actions):
+    conn, case = scoped_actions
+    split = _dividend(
+        case,
+        event_type="forward_split",
+        rate=None,
+        units="pre_split",
+        economic_at=case.cutoff + timedelta(minutes=1),
+        new_rate=Decimal("2"),
+        old_rate=Decimal("1"),
+    )
+    batch = ActionBatch(records=(split,), observations=(ActionObservation(split),), complete=True)
+    async with _scheduler(conn) as db, db.begin():
+        authority = await _authority(db, case)
+        with pytest.raises(ActionHeld, match="identity_conflict"):
+            await apply_due_actions(db, case.binding.coin_id + 1, catalog=authority)
+        with pytest.raises(ActionHeld, match="admission_changed"):
+            await apply_due_actions(
+                db, case.binding.coin_id, catalog=replace(authority, fingerprint="review-changed")
+            )
+        with pytest.raises(ActionHeld, match="admission"):
+            await apply_due_actions(db, case.binding.coin_id, catalog=authority, account="other")
+        with pytest.raises(ActionHeld, match="admission"):
+            await persist_action_batch(db, batch, None)
+        with pytest.raises(ActionHeld, match="admission"):
+            await persist_action_batch(db, batch, None, catalog=authority, account="other")
+        state = await db.get(StockActionState, case.binding.coin_id)
+        assert state is not None
+        state.admission_generation = authority.admission_id + 1
+        _, result = await _ingest(db, case, split)
+        assert (result.classification, result.reason) == ("uncertain", "conflicting")
+        assert state.admission_generation == authority.admission_id
+        assert state.valid_until is None and state.health == "reconciling"
+        with pytest.raises(ActionHeld, match="admission"):
+            await derive_dividend_entitlements(
+                db, result.event_id, catalog=authority, account="other"
+            )
+        assert await apply_due_actions(db, case.binding.coin_id, catalog=authority) == ()
+    assert await cash(conn, case.world.first) == Decimal("1234.56")
+    assert await conn.scalar(text("SELECT count(*) FROM stock_split_applications")) == 0
+
+
+@pytest.mark.parametrize("effect,check", [("split", 2), ("split", 3), ("dividend", 2)])
+async def test_catalog_effect_rolls_back_when_required_monitor_proof_disappears(
+    scoped_actions, monkeypatch, effect, check
+):
+    conn, case = scoped_actions
+    action = _dividend(case)
+    if effect == "split":
+        action = replace(
+            action,
+            event_type="forward_split",
+            rate=None,
+            units="pre_split",
+            economic_at=case.cutoff,
+            new_rate=Decimal("2"),
+            old_rate=Decimal("1"),
+        )
+    async with _scheduler(conn) as db, db.begin():
+        authority, revision = await _ingest(db, case, action)
+
+    observed = 0
+    genuine = corporate_actions._check_catalog_action
+
+    async def unavailable(db, catalog, *, state=None):
+        nonlocal observed
+        current = await genuine(db, catalog, state=state)
+        if state is not None:
+            observed += 1
+            if observed == check:
+                assert current
+                return False
+        return current
+
+    monkeypatch.setattr(corporate_actions, "_check_catalog_action", unavailable)
+    with pytest.raises(ActionHeld, match="monitor_unavailable"):
+        async with _scheduler(conn) as db, db.begin():
+            if effect == "split":
+                await apply_due_actions(db, case.binding.coin_id, catalog=authority)
+            else:
+                await derive_dividend_entitlements(db, revision.event_id, catalog=authority)
+    assert observed == check
+    assert await conn.scalar(text("SELECT count(*) FROM stock_split_applications")) == 0
+    assert await conn.scalar(text("SELECT count(*) FROM stock_dividend_entitlements")) == 0
+    assert await cash(conn, case.world.first) == Decimal("1234.56")
 
 
 @pytest.mark.parametrize("split", [False, True])
@@ -295,7 +394,9 @@ async def test_verified_action_before_empty_catalog_journal_has_no_effect(scoped
     assert await conn.scalar(text("SELECT count(*) FROM stock_dividend_payments")) == 0
 
 
-async def test_catalog_operator_reconciles_verified_cancellation_after_rename(scoped_actions):
+async def test_catalog_operator_reconciles_verified_cancellation_after_rename(
+    scoped_actions, monkeypatch
+):
     conn, case = scoped_actions
     action = _dividend(case, dates_verified=False)
     async with _scheduler(conn) as db, db.begin():
@@ -364,6 +465,29 @@ async def test_catalog_operator_reconciles_verified_cancellation_after_rename(sc
     async with conn.begin_nested():
         await conn.execute(text("SET LOCAL ROLE birja_action_operator"))
         async with portfolio_session(conn) as db, db.begin():
+            scope = {"account": authority.binding.account, "server": authority.binding.server}
+            wrong_issue = request.model_copy(
+                update={
+                    "evidence": request.evidence.model_copy(update={"security_id": "other-fixture"})
+                }
+            )
+            with pytest.raises(ValueError, match="actions authority unavailable"):
+                await reconcile(db, wrong_issue, **scope)
+
+            real_scalar = db.scalar
+
+            async def missing_exchange(statement, *args, **kwargs):
+                observed = await real_scalar(statement, *args, **kwargs)
+                if statement.column_descriptions[0].get("entity") is StockInstrument:
+                    assert observed == case.listing.listing_exchange
+                    return None
+                return observed
+
+            with monkeypatch.context() as context:
+                context.setattr(db, "scalar", missing_exchange)
+                with pytest.raises(ValueError, match="revision unavailable"):
+                    await reconcile(db, request, **scope)
+
             first = await reconcile(
                 db, request, account=authority.binding.account, server=authority.binding.server
             )
