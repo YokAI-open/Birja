@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Searchable Stock Trading
 current_phase: 21
 status: executing
-last_updated: "2026-11-25T11:01:49Z"
-last_activity: 2026-11-25 -- Phase 21 local candidate verified and independently reviewed
+last_updated: "2026-11-25T13:11:41Z"
+last_activity: 2026-11-25 -- Phase 21 feature PR passed all six hosted checks
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 29
   completed_plans: 24
   percent: 50
-stopped_at: Phase 21 Wave 4 publication checkpoint and live-source evidence review
+stopped_at: Phase 21 feature PR #46 at f306934 is green and awaits develop merge approval
 ---
 
 # Project State
@@ -30,8 +30,8 @@ acceptance of searchable stock trading.
 
 Phase: 21
 Plan: 4 of 9 executed
-Status: Awaiting publication approval and expanded live-source evidence
-Last activity: 2026-11-25 -- Phase 21 local candidate verified and independently reviewed
+Status: Awaiting develop merge approval and expanded live-source evidence
+Last activity: 2026-11-25 -- Phase 21 feature PR passed all six hosted checks
 
 Phase 19 completed all six local plans. SC-02 and SC-04 are verified. SC-01
 awaits complete admitted live exchange coverage. SC-03 has fixture evidence
@@ -42,12 +42,12 @@ buy and sell using live IEX data.
 [Phase 19 verification](phases/19-search-the-nyse-and-nasdaq-catalog/19-VERIFICATION.md) ·
 [Phase 20 verification](phases/20-trade-and-value-stocks-from-search/20-VERIFICATION.md)
 
-Phase 21 local recovery and catalog checks passed. All 99 baseline test
-failures or setup errors passed targeted reruns. Source-matched backend
-coverage is 94.41% overall and 100% critical. The exact hosted whole-suite
-result and release artifact remain pending. Live acquisition and activation
-need evidence for the expanded scope. Those checks can progress independently.
-[Local candidate](phases/21-verify-release-and-activate-stock-trading/21-CANDIDATE.md) ·
+Phase 21 local recovery and catalog checks passed. The exact feature CI
+run passed 3,941 backend tests, 94.41% overall coverage, 100% critical
+coverage, the full browser run and verified recovery tooling. The release
+and main artifact remain pending. Live acquisition and activation need
+evidence for the expanded scope. These checks can progress independently.
+[Feature CI receipt](phases/21-verify-release-and-activate-stock-trading/21-RELEASE-CI.md) ·
 [Live-source qualification](phases/21-verify-release-and-activate-stock-trading/21-LIVE-QUALIFICATION.md)
 
 ## Carried context

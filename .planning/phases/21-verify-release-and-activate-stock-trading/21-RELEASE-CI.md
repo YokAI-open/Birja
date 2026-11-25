@@ -28,3 +28,19 @@ found no blocker for the two changes.
 The first run completed before publishing the consolidated fixes. Merge
 into `develop` requires green checks on the actual feature head and
 explicit approval. Release and main artifact identity are pending.
+
+## Follow-up run
+
+[Run 45611951920](https://github.com/YokAI-open/Birja/actions/runs/45611951920)
+tests feature head `f3069343bd5d158c43f0653acc3df9fcc0e3bb5d`. Frontend,
+image, the full browser suite and ops passed. Hosted recovery logs confirm
+the exact retained `0025` restore, encrypted current `0026` on the fresh
+restore server, the unchanged original before writes, and exact `0026`
+volume/receipt recovery after writes. The old image refused `0026`.
+GitHub finalized PR artifact `15023005738` with transport SHA-256
+`8eb74557fd40e7a90fb6b172d7338ef7446a09ea1a7fe0550b46a8c17cf23f9b`.
+The protected rollout requires the artifact from the eventual successful
+`main` run. Backend passed all 3,941 tests in 54:06 with 94.41% overall
+and 100% critical coverage. Its audit passed and `ci-pass` succeeded.
+GitHub reports PR #46 clean and mergeable at that exact head into the
+unchanged `develop` base. The owner merge decision is pending.
