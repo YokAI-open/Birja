@@ -10,7 +10,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any, cast
 
-from sqlalchemy import Text, literal, select, tuple_, union_all
+from sqlalchemy import Text, false, literal, select, true, tuple_, union_all
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -195,7 +195,12 @@ def _dividend(
 
 
 async def list_event_history(
-    db: AsyncSession, *, portfolio: OwnedActivePortfolio, limit: int = 25, cursor: str | None = None
+    db: AsyncSession,
+    *,
+    portfolio: OwnedActivePortfolio,
+    limit: int = 25,
+    cursor: str | None = None,
+    filters: EventHistoryFilters = DEFAULT_FILTERS,
 ) -> EventHistoryPage:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("History limit must be between 1 and 100")
@@ -204,28 +209,50 @@ async def list_event_history(
     if type(user_id) is not int or not 1 <= user_id <= MAX_ID:
         raise ValueError("Invalid History owner")
     boundary = (
-        decode_cursor(cursor, expected_portfolio_id=portfolio_id) if cursor is not None else None
+        decode_cursor(cursor, expected_portfolio_id=portfolio_id, expected_filters=filters)
+        if cursor is not None
+        else None
     )
     await validate_portfolio_read(db, portfolio)
-    # Every source is owner-filtered before the seek and the bounded lookahead.
+    # Owner, asset and activity predicates run before the seek and lookahead.
+    trade_events = select(
+        Trade.created_at.label("recorded_at"),
+        literal(4).label("kind_rank"),
+        Trade.id.label("source_id"),
+    ).where(
+        Trade.user_id == user_id,
+        Trade.portfolio_id == portfolio_id,
+        true() if filters.activity in ("all", "buy", "sell") else false(),
+    )
+    if filters.activity in ("buy", "sell"):
+        trade_events = trade_events.where(Trade.side == filters.activity)
+    if filters.asset != "all":
+        trade_events = trade_events.join(Coin, Coin.id == Trade.coin_id).where(
+            Coin.asset_class == filters.asset
+        )
+    include_dividends = (
+        true() if filters.asset != "crypto" and filters.activity in ("all", "dividend") else false()
+    )
+    include_splits = (
+        true() if filters.asset != "crypto" and filters.activity in ("all", "split") else false()
+    )
     sources = union_all(
-        select(
-            Trade.created_at.label("recorded_at"),
-            literal(4).label("kind_rank"),
-            Trade.id.label("source_id"),
-        ).where(Trade.user_id == user_id, Trade.portfolio_id == portfolio_id),
+        trade_events,
         select(StockDividendPayment.recorded_at, literal(3), StockDividendPayment.id).where(
             StockDividendPayment.user_id == user_id,
             StockDividendPayment.portfolio_id == portfolio_id,
+            include_dividends,
         ),
         select(StockOwnershipMovement.recorded_at, literal(2), StockOwnershipMovement.id).where(
             StockOwnershipMovement.user_id == user_id,
             StockOwnershipMovement.portfolio_id == portfolio_id,
             StockOwnershipMovement.cause_kind == "split",
+            include_splits,
         ),
         select(StockDividendDecision.recorded_at, literal(1), StockDividendDecision.id).where(
             StockDividendDecision.user_id == user_id,
             StockDividendDecision.portfolio_id == portfolio_id,
+            include_dividends,
         ),
     ).subquery("owned_events")
     stmt = select(sources)
@@ -457,7 +484,9 @@ async def list_event_history(
     if len(rows) > limit:
         last = selected[-1]
         next_cursor = encode_cursor(
-            EventHistoryCursor(last.recorded_at, last.kind_rank, last.source_id, portfolio_id)
+            EventHistoryCursor(
+                last.recorded_at, last.kind_rank, last.source_id, portfolio_id, filters
+            )
         )
     await validate_portfolio_read(db, portfolio, final=True)
     return EventHistoryPage(items=items, next_cursor=next_cursor)

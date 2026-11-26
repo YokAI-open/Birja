@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.models.user import User
 from app.services.event_history import EventHistoryCursor, encode_cursor
@@ -21,6 +22,7 @@ from tests.dividend_fixtures import (
     stock_trade_case,
 )
 from tests.helpers import selected_portfolio_path, sign_in, unique_email
+from tests.portfolio_fixtures import delete_owned_test_root
 from tests.test_history_service import STAMP, put_fill
 
 __all__ = ["dividend_case", "ownership", "status_case", "stock_trade_case"]
@@ -38,6 +40,19 @@ async def test_mixed_history_authenticated_empty_read(auth_client, outbox):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == {"items": [], "next_cursor": None}
+
+
+@pytest.mark.parametrize("params", [{"activity": "Buy"}, {"asset": "stock "}, {"activity": ""}])
+async def test_mixed_history_invalid_filters_have_fixed_private_error(auth_client, outbox, params):
+    await sign_in(auth_client, outbox, unique_email())
+    response = await auth_client.get(
+        await selected_portfolio_path(auth_client, "/event-history"), params=params
+    )
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "detail": {"code": "invalid_filter", "message": "Invalid history filter."}
+    }
 
 
 async def test_mixed_history_requires_real_session(auth_client):
@@ -151,6 +166,39 @@ async def test_mixed_history_default_page_size_exact_crypto_and_read_only(
     ).json()
     assert len(last["items"]) == 1 and last["next_cursor"] is None
     assert len({row["id"] for row in body["items"] + last["items"]}) == 26
+    path = await selected_portfolio_path(auth_client, "/event-history")
+    default = await auth_client.get(path, params={"activity": "all", "asset": "all"})
+    assert default.json() == body
+    filters = {"activity": "buy", "asset": "crypto"}
+    filtered = (await auth_client.get(path, params=filters)).json()
+    assert filtered["items"] == body["items"]
+    assert filtered["next_cursor"] != body["next_cursor"]
+    assert (
+        await auth_client.get(path, params={**filters, "cursor": filtered["next_cursor"]})
+    ).json() == last
+    for params in (
+        {**filters, "activity": "sell", "cursor": filtered["next_cursor"]},
+        {"asset": "crypto", "cursor": filtered["next_cursor"]},
+        {**filters, "cursor": body["next_cursor"]},
+    ):
+        refused = await auth_client.get(path, params=params)
+        assert refused.status_code == 422 and refused.headers["cache-control"] == "no-store"
+        assert refused.json()["detail"]["code"] == "invalid_cursor"
+
+
+async def test_filtered_mixed_history_rejects_closed_and_foreign_roots(auth_client, outbox, engine):
+    await sign_in(auth_client, outbox, unique_email())
+    original = await selected_portfolio_path(auth_client, "/event-history")
+    filters = {"activity": "dividend", "asset": "stock"}
+    await sign_in(auth_client, outbox, unique_email())
+    own = await selected_portfolio_path(auth_client, "/event-history")
+    assert own != original
+    await delete_owned_test_root(auth_client, async_sessionmaker(engine), int(own.split("/")[4]))
+    for path in (own, original):
+        response = await auth_client.get(path, params=filters)
+        assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == {"detail": {"code": "portfolio_unavailable"}}
 
 
 @pytest.mark.parametrize("classification", ["uncertain", "cancelled"])
@@ -223,7 +271,13 @@ async def test_mixed_history_openapi_has_no_owner_parameter(running_app):
     operation = running_app.openapi()["paths"]["/api/v2/portfolios/{portfolio_id}/event-history"][
         "get"
     ]
-    assert {row["name"] for row in operation["parameters"]} == {"portfolio_id", "limit", "cursor"}
+    assert {row["name"] for row in operation["parameters"]} == {
+        "portfolio_id",
+        "limit",
+        "cursor",
+        "activity",
+        "asset",
+    }
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/EventHistoryPage"
     }
