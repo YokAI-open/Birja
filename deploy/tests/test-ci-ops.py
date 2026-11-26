@@ -78,10 +78,15 @@ def image_policy(image, aggregate):
 def recovery_policy(ops, runner_source=None):
     runner = "python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor"
     command = "run: sudo -- " + runner
-    if sum(line.strip() == command for line in ops.splitlines()) != 1:
+    preflight = f"run: {runner} --preflight"
+    clock = "- name: Wait for the archived recovery fixture clock window"
+    steps = [line.strip() for line in ops.splitlines()]
+    if steps.count(command) != 1:
         raise ValueError("missing exact serial runner")
-    if sum(line.strip() == f"run: {runner} --preflight" for line in ops.splitlines()) != 1:
+    if steps.count(preflight) != 1:
         raise ValueError("missing exact successor preflight")
+    if steps.count(clock) != 1 or not steps.index(preflight) < steps.index(clock) < steps.index(command):
+        raise ValueError("archived fixture wait must follow preflight and precede serial recovery")
     source = runner_source if runner_source is not None else (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
     tree = ast.parse(source)
     constants = {node.targets[0].id: node.value for node in tree.body
@@ -565,6 +570,18 @@ class CI(unittest.TestCase):
     def test_same_archive_recovery_rejects_missing_or_reordered_stages(self):
         ops = jobs()["ops"]
         recovery_policy(ops)
+        clock = "      - name: Wait for the archived recovery fixture clock window\n"
+        serial = "      - name: Serial real PostgreSQL recovery roles TLS and old-image rollback\n"
+        upload = "      - name: Upload verified recovery tooling\n"
+        before, wait = ops.split(clock, 1)
+        wait, after = wait.split(serial, 1)
+        after, upload_steps = after.split(upload, 1)
+        for mutation in (
+            before + serial + after + upload + upload_steps,
+            before + serial + after + clock + wait + upload + upload_steps,
+        ):
+            with self.assertRaisesRegex(ValueError, "archived fixture wait"):
+                recovery_policy(mutation)
         source = (ROOT / "deploy/tests/run-portfolio-validation.py").read_text()
         for old in (
             "ops.package_current_archive(archive)", "ops.package_current_archive(archive, successor=True, phase=phase)",
