@@ -19,6 +19,7 @@ import { useTrade } from "@/hooks/useTrade";
 import { freshnessStatus } from "@/lib/age";
 import { formatQuantity, formatUnitPrice, formatUsd } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import "./tradeWorkspace.css";
 
 type Kind = "usd" | "quantity";
 
@@ -85,7 +86,7 @@ function SkeletonRows() {
 
 function segment(selected: boolean) {
   return cn(
-    "inline-flex h-10 flex-1 items-center justify-center rounded-pill px-4 text-[15px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
+    "inline-flex min-h-11 flex-1 items-center justify-center rounded-pill px-4 text-[15px] font-medium disabled:cursor-not-allowed disabled:opacity-40",
     selected ? "bg-card text-foreground shadow-pop" : "text-muted-foreground hover:bg-accent",
   );
 }
@@ -324,26 +325,20 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
   }
 
   return (
-    <div className="app-page flex flex-col gap-7 text-base md:gap-9">
-      <header>
-        <h1 className="app-heading wrap-anywhere">Trade {symbol}</h1>
+    <div className="trade-workspace">
+      <header className="trade-workspace-heading">
+        <h1>Trade {symbol}</h1>
+        {coin && <p>{coin.name}</p>}
       </header>
-      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
-        <Card className="min-w-0 lg:col-span-7 lg:self-start">
-          <CardContent className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2 border-b border-border pb-5">
+      <div className="trade-workspace-grid">
+        <Card role="region" aria-label="Trade ticket" className="trade-workspace-ticket">
+          <CardContent className="trade-workspace-content">
+            <div className="trade-workspace-market">
               {coin ? (
-                <>
-                  <p className="text-muted-foreground">{coin.name}</p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-4xl leading-tight font-semibold tracking-tight tabular-nums md:text-5xl">
-                      {formatUnitPrice(coin.price)}
-                    </span>
-                    {status && (
-                      <FreshnessBadge status={status} ageSeconds={age} asOf={coin.as_of} />
-                    )}
-                  </div>
-                </>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="trade-workspace-price">{formatUnitPrice(coin.price)}</span>
+                  {status && <FreshnessBadge status={status} ageSeconds={age} asOf={coin.as_of} />}
+                </div>
               ) : (
                 <span className="h-9 w-1/2 rounded-control bg-muted" />
               )}
@@ -377,6 +372,15 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     {value === "buy" ? "Buy" : "Sell"}
                   </button>
                 ))}
+              </div>
+
+              <div className="trade-workspace-balances">
+                {portfolio.data && <p>Cash available {formatUsd(portfolio.data.cash)}</p>}
+                {held !== undefined && (
+                  <p>
+                    You hold {formatQuantity(held)} {symbol}
+                  </p>
+                )}
               </div>
 
               {side === "buy" && (
@@ -414,7 +418,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     id="trade-input"
                     inputMode="decimal"
                     autoComplete="off"
-                    className="pr-16 text-right tabular-nums"
+                    className="min-h-13 pr-16 text-right tabular-nums"
                     value={input}
                     disabled={locked}
                     aria-invalid={fieldError !== null}
@@ -440,27 +444,13 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     {fieldError}
                   </p>
                 )}
-                {side === "sell" && held !== undefined && (
-                  <p className="text-[13px] leading-[18px] text-muted-foreground">
-                    You hold {formatQuantity(held)} {symbol}
-                  </p>
-                )}
-                {side === "buy" && portfolio.data && (
-                  <p className="text-[13px] leading-[18px] text-muted-foreground">
-                    Cash available {formatUsd(portfolio.data.cash)}
-                  </p>
-                )}
               </div>
             </form>
           </CardContent>
         </Card>
 
-        <Card
-          role="region"
-          aria-labelledby={summaryHeadingId}
-          className="min-w-0 bg-muted lg:col-span-5 lg:self-start"
-        >
-          <CardContent className="flex flex-col gap-4">{preview}</CardContent>
+        <Card role="region" aria-labelledby={summaryHeadingId} className="trade-workspace-preview">
+          <CardContent className="trade-workspace-content">{preview}</CardContent>
         </Card>
       </div>
     </div>

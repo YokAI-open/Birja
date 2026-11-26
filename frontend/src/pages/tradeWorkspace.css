@@ -1,0 +1,99 @@
+.trade-chooser-shell,
+.trade-workspace {
+  width: 100%;
+  max-width: 1360px;
+  margin: 24px auto 0;
+}
+
+.trade-chooser-shell section {
+  max-width: 220px;
+}
+
+.trade-chooser-shell select {
+  height: 44px;
+}
+
+.trade-workspace-heading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.trade-workspace-heading h1 {
+  overflow-wrap: anywhere;
+  font-size: clamp(1.875rem, 3.25vw, 2.875rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+.trade-workspace-heading p {
+  color: var(--muted-foreground);
+  line-height: 1.25;
+}
+
+.trade-workspace-grid {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.trade-workspace-ticket,
+.trade-workspace-preview {
+  min-width: 0;
+  padding: 16px;
+}
+
+.trade-workspace-preview {
+  background: var(--muted);
+}
+
+.trade-workspace-content {
+  gap: 16px;
+}
+
+.trade-workspace-market {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+
+.trade-workspace-price {
+  overflow-wrap: anywhere;
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.trade-workspace-balances {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.trade-workspace-balances:empty {
+  display: none;
+}
+
+@media (min-width: 741px) {
+  .trade-chooser-shell {
+    margin-top: 46px;
+  }
+
+  .trade-workspace-grid {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  }
+
+  .trade-workspace-ticket,
+  .trade-workspace-preview {
+    padding: 24px;
+  }
+}

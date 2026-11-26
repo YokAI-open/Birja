@@ -1070,6 +1070,8 @@ it("opens the chosen portfolio, preserving the original trade route for Back", a
   const { user } = setup("/portfolios/1/trade/BTC");
   await screen.findByRole("heading", { name: "Crypto BTC" });
   const select = screen.getByRole("combobox", { name: "Open portfolio" });
+  expect(screen.getAllByRole("combobox")).toEqual([select]);
+  expect(select.closest(".trade-chooser-shell")).toBeInTheDocument();
   expect(screen.getByText("Private alice@example.test root 1")).toBeVisible();
   expect(probes.mounted.mock.calls.every(([, target]) => target.portfolioId === "1")).toBe(true);
   await user.selectOptions(select, "2");

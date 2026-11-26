@@ -266,6 +266,9 @@ function SignedIn({ onSignedOut }: { onSignedOut: () => void }) {
   const portfolioDetail = useMatch({ path: "/portfolios/:portfolioId", end: true });
   const portfolioHistory = useMatch({ path: "/portfolios/:portfolioId/history", end: true });
   const catalogId = useMatch("/portfolios/:portfolioId/trade/catalog/:catalogId")?.params.catalogId;
+  const curatedTrade = useMatch("/portfolios/:portfolioId/trade/stocks/:symbol");
+  const cryptoTrade = useMatch("/portfolios/:portfolioId/trade/:symbol");
+  const tradeRoute = Boolean(catalogId || curatedTrade || cryptoTrade);
   const portfolioNavigation = useMatch("/portfolios/*");
   const portfoliosActive = Boolean(portfolioNavigation && !portfolioHistory);
   const navigation = usePortfolioTarget(explicitId ?? openedId);
@@ -331,9 +334,10 @@ function SignedIn({ onSignedOut }: { onSignedOut: () => void }) {
       )}
       <div ref={content}>
         {explicitId && !portfolioDetail && (!portfolioHistory || !target) && (
-          <div className="mx-auto mt-6 max-w-[1280px]">
+          <div className={tradeRoute ? "trade-chooser-shell" : "mx-auto mt-6 max-w-[1280px]"}>
             <PortfolioSwitcher
               portfolioId={explicitId}
+              inline={tradeRoute}
               label={portfolioHistory ? "History portfolio" : undefined}
               destination={
                 portfolioHistory
