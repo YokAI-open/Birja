@@ -73,13 +73,18 @@ describe("SignInPage email step", () => {
     const { user } = renderWithClient(<SignInPage />);
     const email = screen.getByLabelText("Email");
     await user.type(email, "a@example.com");
+    await user.tab();
+    const submit = screen.getByRole("button", { name: "Send code" });
+    expect(submit).toHaveFocus();
     const form = email.closest("form")!;
     act(() => {
       fireEvent.submit(form);
       fireEvent.submit(form);
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Sending…" })).toBe(submit);
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    expect(submit).toHaveFocus();
     await act(async () => release(ok({ status: "code_sent" }, 202)));
     expect(await screen.findByLabelText("6-digit code")).toHaveFocus();
   });
@@ -138,31 +143,50 @@ describe("SignInPage code step", () => {
     expect(input).toHaveAttribute("aria-describedby", alert.id);
   });
 
-  it("accepts a pasted code and keeps one verification pending", async () => {
-    let release!: (response: Response) => void;
-    const { user } = await toCodeStep({
-      verify: () => new Promise((resolve) => (release = resolve)),
-    });
-    const input = screen.getByLabelText("6-digit code");
-    await user.paste("123456");
-    expect(input).toHaveValue("123456");
-    const form = input.closest("form")!;
-    act(() => {
-      fireEvent.submit(form);
-      fireEvent.submit(form);
-    });
-    const verificationCalls = () =>
-      vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/v2/auth/verify-code");
-    await waitFor(() => expect(verificationCalls()).toHaveLength(1));
-    expect(screen.getByRole("button", { name: "Signing in…" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Send a new code" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Use a different email" })).toBeDisabled();
-    await act(async () => release(errorResponse(503, "service_unavailable")));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Sign-in is temporarily unavailable.",
-    );
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
-  });
+  it.each([false, true])(
+    "retains focus after a failed verification when focus moves: %s",
+    async (moveFocus) => {
+      let release!: (response: Response) => void;
+      const { user } = await toCodeStep({
+        verify: () => new Promise((resolve) => (release = resolve)),
+      });
+      const input = screen.getByLabelText("6-digit code");
+      await user.paste("123456");
+      expect(input).toHaveValue("123456");
+      await user.tab();
+      const submit = screen.getByRole("button", { name: "Sign in" });
+      expect(submit).toHaveFocus();
+      const form = input.closest("form")!;
+      act(() => {
+        fireEvent.submit(form);
+        fireEvent.submit(form);
+      });
+      const verificationCalls = () =>
+        vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/v2/auth/verify-code");
+      await waitFor(() => expect(verificationCalls()).toHaveLength(1));
+      expect(await screen.findByRole("button", { name: "Signing in…" })).toBe(submit);
+      expect(submit).toHaveAttribute("aria-disabled", "true");
+      expect(submit).toHaveFocus();
+      const resend = screen.getByRole("button", { name: "Send a new code" });
+      expect(resend).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("button", { name: "Use a different email" })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      if (moveFocus) await user.tab();
+      await user.keyboard("{Enter}");
+      expect(verificationCalls()).toHaveLength(1);
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/v1/auth/request-code"),
+      ).toHaveLength(1);
+      await act(async () => release(errorResponse(503, "service_unavailable")));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Sign-in is temporarily unavailable.",
+      );
+      expect(submit).not.toHaveAttribute("aria-disabled");
+      expect(moveFocus ? resend : submit).toHaveFocus();
+    },
+  );
 
   it("does not treat a 422 on the code as an email error", async () => {
     const { user } = await toCodeStep({ verify: () => errorResponse(422, "validation_error") });
@@ -171,17 +195,36 @@ describe("SignInPage code step", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong. Try again.");
   });
 
-  it("re-requests a code for the same email", async () => {
-    const { user } = await toCodeStep();
-    const input = screen.getByLabelText("6-digit code");
-    await user.type(input, "123456");
-    await user.click(screen.getByRole("button", { name: "Send a new code" }));
-    const fetchMock = vi.mocked(fetch);
-    const calls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/auth/request-code");
-    expect(calls).toHaveLength(2);
-    expect(calls[1]?.[1]?.body).toBe(JSON.stringify({ email: "a@example.com" }));
-    await waitFor(() => expect(input).toHaveValue(""));
-  });
+  it.each([false, true])(
+    "clears the code after keyboard resend when focus moves: %s",
+    async (moveFocus) => {
+      let release!: (response: Response) => void;
+      const request = vi.fn<Handler>().mockReturnValueOnce(ok({ status: "code_sent" }, 202));
+      request.mockImplementation(() => new Promise((resolve) => (release = resolve)));
+      const { user } = await toCodeStep({ request });
+      const input = screen.getByLabelText("6-digit code");
+      await user.type(input, "123456");
+      await user.tab();
+      await user.tab();
+      const resend = screen.getByRole("button", { name: "Send a new code" });
+      expect(resend).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(await screen.findByRole("button", { name: "Sending…" })).toBe(resend);
+      expect(resend).toHaveAttribute("aria-disabled", "true");
+      expect(resend).toHaveFocus();
+      await user.keyboard("{Enter}");
+      if (moveFocus) await user.tab();
+      const fetchMock = vi.mocked(fetch);
+      const calls = fetchMock.mock.calls.filter((c) => c[0] === "/api/v1/auth/request-code");
+      expect(calls).toHaveLength(2);
+      expect(calls[1]?.[1]?.body).toBe(JSON.stringify({ email: "a@example.com" }));
+      await act(async () => release(ok({ status: "code_sent" }, 202)));
+      await waitFor(() => expect(input).toHaveValue(""));
+      expect(
+        moveFocus ? screen.getByRole("button", { name: "Use a different email" }) : input,
+      ).toHaveFocus();
+    },
+  );
 
   it("shows a resend error under the code field", async () => {
     let n = 0;
@@ -189,10 +232,15 @@ describe("SignInPage code step", () => {
       request: () =>
         ++n === 1 ? ok({ status: "code_sent" }, 202) : errorResponse(503, "service_unavailable"),
     });
-    await user.click(screen.getByRole("button", { name: "Send a new code" }));
+    const resend = screen.getByRole("button", { name: "Send a new code" });
+    await user.tab();
+    expect(resend).toHaveFocus();
+    await user.keyboard("{Enter}");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Sign-in is temporarily unavailable.",
     );
+    expect(resend).toHaveFocus();
+    expect(resend).not.toHaveAttribute("aria-disabled");
   });
 
   it("returns to the email step with a different email", async () => {

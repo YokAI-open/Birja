@@ -1,10 +1,12 @@
-import { useRef, useState, type FormEvent, type Ref } from "react";
+import { useRef, useState, type FormEvent, type MouseEvent, type Ref } from "react";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useRequestCode, useVerifyCode } from "@/hooks/useAuthMutations";
 import "./signInWorkspace.css";
+
+const pendingButtonClass = "aria-disabled:cursor-not-allowed aria-disabled:opacity-40";
 
 function waitText(seconds: number): string {
   if (seconds < 60) {
@@ -47,6 +49,7 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
   const requestCode = useRequestCode();
   const verifyCode = useVerifyCode();
   const actionInFlight = useRef(false);
+  const codeForm = useRef<HTMLFormElement>(null);
   const pending = requestCode.isPending || verifyCode.isPending;
 
   function startAction() {
@@ -73,11 +76,17 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
     });
   };
 
-  const onResend = () => {
+  const onResend = (event: MouseEvent<HTMLButtonElement>) => {
     if (sentTo === null || !startAction()) return;
+    const button = event.currentTarget;
     verifyCode.reset();
     requestCode.mutate(sentTo, {
-      onSuccess: () => setCode(""),
+      onSuccess: () => {
+        setCode("");
+        if (document.activeElement === button) {
+          codeForm.current?.querySelector<HTMLInputElement>("input[name='code']")?.focus();
+        }
+      },
       onSettled: finishAction,
     });
   };
@@ -127,7 +136,13 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
                 {error}
               </p>
             )}
-            <Button size="lg" type="submit" disabled={empty || pending}>
+            <Button
+              size="lg"
+              type="submit"
+              disabled={empty}
+              aria-disabled={pending || undefined}
+              className={pendingButtonClass}
+            >
               {requestCode.isPending ? "Sending…" : "Send code"}
             </Button>
           </form>
@@ -148,7 +163,7 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
         <p id="code-delivery" className="wrap-anywhere text-muted-foreground">
           We sent a code to {sentTo}. It expires in 10 minutes.
         </p>
-        <form key="code" onSubmit={onVerify} className="sign-in-form" noValidate>
+        <form ref={codeForm} key="code" onSubmit={onVerify} className="sign-in-form" noValidate>
           <div className="sign-in-field">
             <label htmlFor="code">6-digit code</label>
             <Input
@@ -172,12 +187,25 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
               {error}
             </p>
           )}
-          <Button size="lg" type="submit" disabled={code.length !== 6 || pending}>
+          <Button
+            size="lg"
+            type="submit"
+            disabled={code.length !== 6}
+            aria-disabled={pending || undefined}
+            className={pendingButtonClass}
+          >
             {verifyCode.isPending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onResend} disabled={pending}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onResend}
+            aria-disabled={pending || undefined}
+            className={pendingButtonClass}
+          >
             {requestCode.isPending ? "Sending…" : "Send a new code"}
           </Button>
           <Button
@@ -185,7 +213,8 @@ function SignInPage({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) {
             variant="ghost"
             size="sm"
             onClick={onChangeEmail}
-            disabled={pending}
+            aria-disabled={pending || undefined}
+            className={pendingButtonClass}
           >
             Use a different email
           </Button>
