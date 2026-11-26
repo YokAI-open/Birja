@@ -18,6 +18,10 @@ const priceAxis = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumSignificantDigits: 5,
 });
+const precisePriceAxis = new Intl.NumberFormat("en-US", {
+  ...priceAxis.resolvedOptions(),
+  maximumSignificantDigits: 7,
+});
 const exactPrice = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -26,6 +30,10 @@ const exactPrice = new Intl.NumberFormat("en-US", {
 });
 const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const dateLabel = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const historyAsOf = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 function drawChart(canvas: HTMLCanvasElement, series: HistorySeries, range: HistoryRange) {
   const { width, height } = canvas.getBoundingClientRect();
@@ -46,9 +54,12 @@ function drawChart(canvas: HTMLCanvasElement, series: HistorySeries, range: Hist
   const high = max + padding;
   const styles = getComputedStyle(canvas);
   ctx.font = `11px ${styles.fontFamily}`;
-  const ticks = Array.from({ length: 5 }, (_, index) =>
-    priceAxis.format(high - ((high - low) * index) / 4),
-  );
+  const tickValues = Array.from({ length: 5 }, (_, index) => high - ((high - low) * index) / 4);
+  const roundedTicks = tickValues.map((value) => priceAxis.format(value));
+  const ticks =
+    new Set(roundedTicks).size === roundedTicks.length
+      ? roundedTicks
+      : tickValues.map((value) => precisePriceAxis.format(value));
   const axisWidth = Math.max(56, ...ticks.map((label) => ctx.measureText(label).width + 12));
   const right = width - axisWidth;
   const top = 10;
@@ -168,8 +179,11 @@ export function MarketHistoryChart({
   loading: boolean;
   retry?: () => void;
 }) {
+  const selectedRange = useRef<HTMLButtonElement>(null);
   const series = response?.series;
   const usable = series && series.points.length > 0;
+  const singleSession = range === "1D" && series?.time_basis === "regular_session";
+  const period = singleSession ? "Regular session" : periods[range];
   const stateMessage = loading
     ? "Loading price history…"
     : response?.state === "empty"
@@ -186,7 +200,7 @@ export function MarketHistoryChart({
     <section className="market-history" aria-label="Price history">
       <div className="market-history-toolbar">
         <p className="text-sm text-muted-foreground">
-          {periods[range]}{" "}
+          {period}{" "}
           {series?.period_change_pct != null && (
             <strong>
               <MarketHistoryChange value={series.period_change_pct} />
@@ -198,6 +212,7 @@ export function MarketHistoryChart({
             <button
               key={option}
               type="button"
+              ref={option === range ? selectedRange : undefined}
               aria-pressed={option === range}
               onClick={() => onRange(option)}
             >
@@ -210,12 +225,22 @@ export function MarketHistoryChart({
         <figure className="market-history-figure">
           <HistoryPlot series={series} range={range} />
           <figcaption className="market-history-caption">
-            <span>{source}</span>
+            <span>
+              {source}
+              {series.timeliness === "on_time" && series.as_of && (
+                <>
+                  {" · As of "}
+                  <time dateTime={series.as_of}>
+                    {historyAsOf.format(Date.parse(series.as_of))}
+                  </time>
+                </>
+              )}
+            </span>
             <details key={range}>
               <summary>Price data</summary>
               <table>
                 <caption className="sr-only">
-                  {symbol} closing prices · {periods[range]}
+                  {symbol} closing prices · {period}
                 </caption>
                 <thead>
                   <tr>
@@ -260,7 +285,13 @@ export function MarketHistoryChart({
           <p role="status">{stateMessage}</p>
           {series && <p className="text-xs">{source}</p>}
           {!loading && retry && (
-            <button type="button" onClick={retry}>
+            <button
+              type="button"
+              onClick={() => {
+                selectedRange.current?.focus();
+                retry();
+              }}
+            >
               Try history again
             </button>
           )}

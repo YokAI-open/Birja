@@ -1,5 +1,5 @@
 import { guardedJsonRequest } from "./client";
-import { isCatalogId } from "./stockCatalog";
+import { isCanonicalUtcTimestamp as stamp, isCatalogId } from "./stockCatalog";
 
 export const historyRanges = ["1D", "1W", "1M"] as const;
 export type HistoryRange = (typeof historyRanges)[number];
@@ -44,10 +44,6 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, ...fields: string[]) =>
   Object.keys(value).length === fields.length && fields.every((key) => Object.hasOwn(value, key));
-const stamp = (value: unknown): value is string =>
-  typeof value === "string" &&
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
-  Number.isFinite(Date.parse(value));
 const close = (value: unknown): value is string =>
   typeof value === "string" &&
   /^(?:0|[1-9]\d{0,17})(?:\.\d{1,12})?$/.test(value) &&
@@ -200,10 +196,18 @@ export async function requestMarketHistory(
   current: () => boolean,
 ) {
   if (!isInstrument(instrument)) throw new Error("Invalid market history instrument");
-  const value = await guardedJsonRequest(
-    "/api/v2/market-history/query",
-    { method: "POST", body: JSON.stringify({ instrument, range }), signal },
-    current,
-  );
+  const value = await new Promise<unknown>((resolve, reject) => {
+    signal.throwIfAborted();
+    // A chart can stop waiting while the shared session refresh finishes for other requests.
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    void guardedJsonRequest(
+      "/api/v2/market-history/query",
+      { method: "POST", body: JSON.stringify({ instrument, range }), signal },
+      current,
+    )
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+  });
   return decodeMarketHistory(value, instrument, range);
 }

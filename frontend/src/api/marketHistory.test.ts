@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { decodeMarketHistory, type HistoryInstrument, type HistoryResponse } from "./marketHistory";
+import { describe, expect, it, vi } from "vitest";
+import {
+  decodeMarketHistory,
+  requestMarketHistory,
+  type HistoryInstrument,
+  type HistoryResponse,
+} from "./marketHistory";
 
 const instrument = {
   kind: "catalog",
@@ -87,6 +92,8 @@ describe("market history response", () => {
     { currency: "EUR" },
     { adjustment: "raw" },
     { interval_minutes: 60 },
+    { start_at: "2026-11-10T14:30:00-05:00" },
+    { start_at: "2026-09-31T14:30:00Z" },
     { as_of: "2026-12-24T15:00:00Z" },
     { timeliness: "delayed" },
     { points: [...response.series.points].reverse() },
@@ -101,4 +108,30 @@ describe("market history response", () => {
       ),
     ).toThrow();
   });
+});
+
+it("stops waiting for a shared refresh when the chart request expires", async () => {
+  const controller = new AbortController();
+  let finishRefresh!: (response: Response) => void;
+  const refreshing = new Promise<Response>((resolve) => {
+    finishRefresh = resolve;
+  });
+  const fetch = vi.fn((path: string) =>
+    path.endsWith("/refresh")
+      ? refreshing
+      : Promise.resolve(Response.json({ detail: { code: "not_authenticated" } }, { status: 401 })),
+  );
+  document.cookie = "bj_csrf=test";
+  vi.stubGlobal("fetch", fetch);
+  try {
+    const pending = requestMarketHistory(instrument, "1W", controller.signal, () => true);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const rejected = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+    controller.abort(new DOMException("Chart deadline elapsed", "TimeoutError"));
+    await rejected;
+  } finally {
+    finishRefresh(new Response(null, { status: 204 }));
+    document.cookie = "bj_csrf=; Max-Age=0";
+    vi.unstubAllGlobals();
+  }
 });

@@ -172,6 +172,41 @@ describe("market history chart", () => {
     expect(screen.queryByText("Price data")).not.toBeInTheDocument();
   });
 
+  it("dates a one-day equity chart by its actual regular session", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const response: HistoryResponse = {
+      instrument: apple,
+      range: "1D",
+      state: "partial",
+      series: {
+        ...series,
+        timeliness: "on_time",
+        end_at: series.as_of!,
+        expected_through_at: series.as_of,
+      },
+    };
+    render(
+      <MarketHistoryChart
+        symbol="AAPL"
+        range="1D"
+        onRange={vi.fn()}
+        response={response}
+        loading={false}
+      />,
+    );
+    expect(screen.getByText("Regular session", { exact: true })).toBeVisible();
+    expect(screen.getByText(/IEX · Regular sessions/).querySelector("time")).toHaveAttribute(
+      "datetime",
+      series.as_of,
+    );
+  });
+
   it("polls a pending response at most three times and offers a new user retry", async () => {
     vi.useFakeTimers();
     const fetch = vi.fn(() =>
@@ -184,6 +219,7 @@ describe("market history chart", () => {
     expect(screen.getByText("History is still loading")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Try history again" }));
     await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(screen.getByRole("button", { name: "1W" })).toHaveFocus();
     expect(fetch).toHaveBeenCalledTimes(5);
   });
 });
