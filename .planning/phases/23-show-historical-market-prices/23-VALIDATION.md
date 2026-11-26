@@ -1,7 +1,7 @@
 ---
 phase: 23
 slug: show-historical-market-prices
-status: planned
+status: executed
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-11-26
@@ -10,20 +10,20 @@ created: 2026-11-26
 # Phase 23 — Validation strategy
 
 Use the locked Python and Node environments, isolated Postgres and Redis,
-Vitest, and the existing disposable Playwright stack. All rows below are
-planned. New provider tests use HTTP boundary fixtures. No separate Wave 0
-setup is needed.
+Vitest, and the existing disposable Playwright stack. Provider tests use
+HTTP boundary fixtures. `nyquist_compliant` records the planned verification
+coverage. Live provider qualification remains open.
 
-| Task | Requirements | Evidence |
+| Task | Requirements | Execution evidence |
 |---|---|---|
-| 23-01-01 | CHART-04 | Dated source qualification with published scope and bounded observed attempts, or precise unresolved evidence |
-| 23-01-02 | CHART-01, CHART-02, CHART-04 | `test_market_history.py` and `test_market_history_providers.py` for explicit mapping, completeness, Decimal prices and limits |
-| 23-02-01 | CHART-01, CHART-03, CHART-04 | `test_market_history_api.py` for authority, identity, deduplication, disabled and cache-failure states |
-| 23-02-02 | CHART-03, CHART-04 | `test_market_history_scheduler.py` and API tests for actual shared budgets, memory-only cache and safe publication |
-| 23-03-01 | CHART-01, CHART-02, CHART-03 | Chart and API decoder Vitest for confirmed dates/prices, range changes, error, late symbols and auth departure |
-| 23-03-02 | CHART-01, CHART-02, CHART-03 | Markets Vitest and chart tests, lint and type checking for the ready, closed, partial and unavailable paths |
-| 23-04-01 | CHART-01–04 | Focused isolated Playwright selection with named chart tests, Phase 22 Markets and catalog cases, and actual crypto and stock fills |
-| 23-04-02 | CHART-01–04 | Full frontend checks, relevant backend replay, scope-relevant review, screenshots and evidence receipt |
+| 23-01-01 | CHART-04 | Published candidate scope documented. Representative live coverage, rights and measured limits remain open. [Source qualification](23-SOURCE-QUALIFICATION.md) |
+| 23-01-02 | CHART-01, CHART-02, CHART-04 | 36 provider and normalization tests passed for exact mapping, bounded reads, completion, Decimal changes and gaps. [Plan 01 summary](23-01-SUMMARY.md) |
+| 23-02-01 | CHART-01, CHART-03, CHART-04 | API fixtures passed for authentication, active identity, coalescing, disabled scope and cache failure. [Plan 02 summary](23-02-SUMMARY.md) |
+| 23-02-02 | CHART-03, CHART-04 | 335 scoped backend regression tests passed, with 130 focused cases reaching 100% on both critical scheduler modules. The review fixes passed 85 replay checks and 100% stock route coverage. [Code review](23-REVIEW.md) |
+| 23-03-01 | CHART-01, CHART-02, CHART-03 | Chart and API decoder tests passed for matching windows, dates and prices, gaps, errors and session boundaries. [Plan 03 summary](23-03-SUMMARY.md) |
+| 23-03-02 | CHART-01, CHART-02, CHART-03 | 57 focused post-review tests passed for late replies, aborts, retries, status and current-quote independence. [Code review](23-REVIEW.md) |
+| 23-04-01 | CHART-01–04 | All 11 isolated Chromium cases passed for chart ranges, exact identity, preview ask, retained stock and crypto fills, market closure, narrow layout and enlarged-text reflow. [Browser receipt](23-BROWSER-RECEIPT.md) |
+| 23-04-02 | CHART-01–04 | Four running-app and ZIP pairs compared. Frontend lint, typecheck, 1,409 Vitest tests and the build passed. [Browser receipt](23-BROWSER-RECEIPT.md) |
 
 After each task run its automated check. At backend integration run the
 new provider, history API and scheduler tests together, plus affected
