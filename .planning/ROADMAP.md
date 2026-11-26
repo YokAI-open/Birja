@@ -49,6 +49,16 @@
 1. A user can switch among `1D`, `1W` and `1M` price series for a coin, a featured stock and an out-of-list stock. The chart and text alternative report the same points, period and source.
 2. Closed sessions and missing points stay distinguishable from observed prices. Partial history or provider failure leaves current prices, search and eligible order entry usable.
 3. Historical requests use qualified coverage and a measured, bounded free-tier fetch/cache policy. Market orders still use the existing current-quote path.
+4. The running app matches the approved Markets reference on ticker tiles, spacing, chart controls and action placement across four matched desktop and mobile captures. Real-data and attribution differences are recorded.
+
+**Plans:** 4 plans across 4 waves
+
+- [ ] 23-01 — Qualify source candidates and define actual time-series data contracts.
+- [ ] 23-02 — Serve selected histories through bounded API and scheduler work.
+- [ ] 23-03 — Render charts and match the approved Markets layout.
+- [ ] 23-04 — Verify independent trading behavior and compare actual-app and ZIP captures.
+
+[Research](phases/23-show-historical-market-prices/23-RESEARCH.md) · [UI contract](phases/23-show-historical-market-prices/23-UI-SPEC.md) · [Validation strategy](phases/23-show-historical-market-prices/23-VALIDATION.md)
 
 ### Phase 24: Compare portfolio performance
 
@@ -83,7 +93,7 @@
 | Phase | Plans complete | Status |
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
-| 23. Show historical market prices | 0/TBD | Unplanned |
+| 23. Show historical market prices | 0/4 | Planned |
 | 24. Compare portfolio performance | 0/TBD | Unplanned |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
