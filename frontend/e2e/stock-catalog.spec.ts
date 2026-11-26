@@ -29,11 +29,21 @@ function catalogFixture(
     | "catalog-hold"
     | "catalog-dividend"
     | "catalog-split",
+  openingOwner?: string,
 ) {
   expect(process.env.COMPOSE_PROJECT_NAME).toBe("birja-phase09-e2e-test");
   return execFileSync(
     "docker",
-    ["compose", "exec", "-T", "backend", "python", "/e2e/stock-trade-fixture.py", operation],
+    [
+      "compose",
+      "exec",
+      "-T",
+      "backend",
+      "python",
+      "/e2e/stock-trade-fixture.py",
+      operation,
+      ...(openingOwner === undefined ? [] : [openingOwner]),
+    ],
     { cwd: root, encoding: "utf8", timeout: 20000 },
   );
 }
@@ -446,8 +456,8 @@ test("catalog posts an ordinary dividend and split into the owned mixed portfoli
   page,
 }) => {
   test.setTimeout(120000);
-  catalogFixture("catalog-finance-mixed");
-  await signInNewUser(page);
+  const email = await signInNewUser(page);
+  catalogFixture("catalog-finance-mixed", email);
   const owned = await portfolioId(page);
   const prefix = "/portfolios/" + owned;
   const scope = "/api/v2" + prefix;
@@ -479,7 +489,7 @@ test("catalog posts an ordinary dividend and split into the owned mixed portfoli
     (row: { catalog_id?: string }) => row.catalog_id === item.catalog_id,
   );
   expect(holding).toMatchObject({ symbol: "FQZM", asset_class: "stock", current_value: null });
-  expect(Number(holding.quantity)).toBe(4);
+  expect(Number(holding.quantity)).toBe(8);
   expect(Number(holding.cost_basis)).toBe(206);
   expect(Number(split.cash)).toBe(9695);
   expect(split.holdings).toContainEqual(
@@ -529,7 +539,7 @@ test("catalog posts an ordinary dividend and split into the owned mixed portfoli
     1,
   );
   const splitEvent = recorded.find((row: { kind: string }) => row.kind === "split");
-  expect(Number(splitEvent.quantity_before)).toBe(2);
-  expect(Number(splitEvent.quantity_after)).toBe(4);
+  expect(Number(splitEvent.quantity_before)).toBe(4);
+  expect(Number(splitEvent.quantity_after)).toBe(8);
   expect(observedQuotes()).toEqual([["FQZM"]]);
 });

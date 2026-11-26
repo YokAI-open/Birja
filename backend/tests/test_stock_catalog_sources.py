@@ -22,9 +22,9 @@ NYSE_COMMON = "FST.B|Fixture Alpha - Class B Common Stock|N|FST.B|N|100|N|FST/B"
 
 
 def directory(source: DirectorySource, *rows: str, time: str = CAPTURE) -> bytes:
-    return (
-        "\n".join([HEADERS[source], *rows, f"File Creation Time: {time}|||||||"]) + "\n"
-    ).encode()
+    suffix = "|||||||" if source == "nasdaqlisted" else "||||||"
+    lines = [HEADERS[source], *rows, f"File Creation Time: {time}{suffix}"]
+    return ("\n".join(lines) + "\n").encode()
 
 
 def mapping(
@@ -65,6 +65,68 @@ def test_directory_pair_preserves_venue_provenance_and_symbol_spelling() -> None
         ("cqs", "FST.B"),
         ("nasdaq", "FST/B"),
     ]
+
+
+@pytest.mark.parametrize("cqs", ["FLpB", "FLr", "FL.Bw"])
+def test_cqs_qualified_issue_keeps_exact_case_and_is_excluded(cqs: str) -> None:
+    snapshot = parse_directory(
+        "otherlisted",
+        directory(
+            "otherlisted",
+            f"FL$B|Fixture qualified issue|N|{cqs}|N|100|N|FL-B",
+            f"{cqs.upper()}|Fixture common stock|N|{cqs.upper()}|N|100|N|{cqs.upper()}",
+        ),
+    )
+    qualified, common = snapshot.rows
+    assert qualified.aliases[1].symbol == cqs
+    assert qualified.exclusion == "qualified_cqs_issue"
+    assert common.aliases[1].symbol == cqs.upper()
+    assert common.exclusion is None
+
+
+def test_other_directory_excludes_out_of_scope_texas_venues() -> None:
+    snapshot = parse_directory(
+        "otherlisted",
+        directory(
+            "otherlisted",
+            "FTA|Fixture active NYSE Texas stock|M|FTA|N|100|N|FTA",
+            "FTB|Fixture Texas Stock Exchange test issue|F|FTB|N|10|Y|FTB",
+            NYSE_COMMON,
+        ),
+    )
+    assert [(row.listing_exchange, row.exclusion) for row in snapshot.rows] == [
+        (None, "other_primary_exchange"),
+        (None, "other_primary_exchange"),
+        ("NYSE", None),
+    ]
+
+
+def test_other_directory_still_accepts_padded_terminal_timestamp() -> None:
+    payload = directory("otherlisted", NYSE_COMMON)
+    padded = payload.replace(b"||||||\n", b"|||||||\n")
+    assert (
+        parse_directory("otherlisted", padded).published_at
+        == parse_directory("otherlisted", payload).published_at
+    )
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        (b"||||||\n", b"|||||\n"),
+        (b"||||||\n", b"||||||extra\n"),
+        (b"|N|FST.B|", b"|X|FST.B|"),
+        (b"|N|FST.B|", b"|N|FSTxB|"),
+        (b"|N|FST.B|", b"|N|FSTppB|"),
+        (b"|N|FST.B|", b"|N|FSTp BROKEN|"),
+        (b"|N|FST/B\n", b"|N|FSTpB\n"),
+    ],
+)
+def test_other_directory_refuses_invalid_venue_aliases_or_footer(old: bytes, new: bytes) -> None:
+    payload = directory("otherlisted", NYSE_COMMON)
+    assert old in payload
+    with pytest.raises(CatalogSourceError):
+        parse_directory("otherlisted", payload.replace(old, new))
 
 
 @pytest.mark.parametrize(

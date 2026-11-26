@@ -174,7 +174,7 @@ async def test_catalog_current_upgrade_preserves_retained_0025_ledger(portfolio_
     await migrate_to("head")
     await install_current_test_grants()
     async with engine.connect() as conn:
-        assert await require_schema(conn) == "0026"
+        assert await require_schema(conn) == "0027"
         with pytest.raises(SchemaAdmissionError, match="incompatible_schema"):
             await require_schema(conn, consumer="retained0025")
         assert await economic_snapshot(conn) == before
@@ -191,12 +191,12 @@ async def test_catalog_current_upgrade_preserves_retained_0025_ledger(portfolio_
 )
 async def test_catalog_runtime_refuses_schema_or_authority_drift(engine, migrated, drift):
     async with engine.connect() as conn, conn.begin():
-        assert await require_schema(conn) == "0026"
+        assert await require_schema(conn) == "0027"
         with pytest.raises(SchemaAdmissionError, match="incompatible_authority"):
             async with conn.begin_nested():
                 await conn.execute(text(drift))
                 await require_schema(conn)
-        assert await require_schema(conn) == "0026"
+        assert await require_schema(conn) == "0027"
 
 
 async def test_uninitialized_schema_refuses_instead_of_auto_migrating(portfolio_migration_db):
@@ -246,7 +246,7 @@ async def test_actual_malformed_revision_metadata_refuses(portfolio_migration_db
 async def test_restricted_runtime_role_can_read_schema_admission(engine, migrated, role):
     async with engine.connect() as conn, conn.begin():
         await conn.execute(text(f"SET LOCAL ROLE {role}"))  # noqa: S608 - fixed role matrix
-        assert await require_schema(conn) == "0026"
+        assert await require_schema(conn) == "0027"
         assert not (
             await conn.execute(
                 text("SELECT has_table_privilege(current_user,'alembic_version','UPDATE')")

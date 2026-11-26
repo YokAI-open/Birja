@@ -67,7 +67,12 @@ async def _listing(factory: Factory, generation_id: int, ticker: str) -> StockCa
 
 
 async def _reviewed_grant(
-    factory: Factory, listing: StockCatalogListing, asset_id: str, now: datetime
+    factory: Factory,
+    listing: StockCatalogListing,
+    asset_id: str,
+    now: datetime,
+    *,
+    asset_valid_until: datetime | None = None,
 ) -> int:
     exchange: ListingExchange = "NASDAQ" if listing.listing_exchange == "NASDAQ" else "NYSE"
     target = CatalogAssetTarget(
@@ -82,7 +87,7 @@ async def _reviewed_grant(
         units_per_share=1,
         classification="common_stock",
         reviewed_at=now - timedelta(hours=2),
-        valid_until=now + timedelta(hours=4),
+        valid_until=asset_valid_until or now + timedelta(hours=4),
         evidence_digest=_sha(f"synthetic units {listing.id}"),
     )
     provider = CatalogAssetAdmission(

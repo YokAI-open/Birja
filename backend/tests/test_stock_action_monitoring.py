@@ -22,10 +22,11 @@ from app.models.corporate_action import (
     StockActionSource,
     StockActionState,
     StockDividendEntitlement,
+    StockOwnershipMovement,
 )
 from app.models.stock import StockDataAdmission, StockInstrument
 from app.models.stock_catalog import StockCatalogAdmission, StockCatalogListing
-from app.models.stock_catalog_finance import StockCatalogActionCoverage
+from app.models.stock_catalog_finance import StockCatalogActionCoverage, StockCatalogInstrument
 from app.models.trade import Holding
 from app.services.alpaca_actions import (
     ActionBudget,
@@ -34,8 +35,13 @@ from app.services.alpaca_actions import (
     replay_action_mutations,
 )
 from app.services.corporate_action_rules import classify_action
-from app.services.stock_catalog_actions import load_catalog_action_authority
+from app.services.stock_catalog_action_demand import _key, record_catalog_action_interest
+from app.services.stock_catalog_actions import (
+    catalog_action_candidates,
+    load_catalog_action_authority,
+)
 from app.services.stock_catalog_promotion import CATALOG_ACTION_FIELDS
+from app.services.stock_ownership import acquire_stock_gate
 from app.services.stock_quote_rules import StockMapping
 from app.services.stock_sessions import build_sessions
 from app.tasks import stock_actions, stock_catalog_import, stock_scheduler
@@ -245,10 +251,19 @@ async def test_reviewed_operator_action_scope_is_usable_by_scheduler(
 
 
 @pytest_asyncio.fixture
-async def catalog_monitor(engine, finance_0026, redis_client):
+async def catalog_monitor(engine, finance_0026, redis_client, request):
     now = datetime.now(UTC)
     origin = now - timedelta(minutes=4)
-    generation = await _publish(finance_0026, _manifest(origin), None, now=origin)
+    additional = tuple(
+        (f"FDA{offset}", f"fixture-demand-{offset}")
+        for offset in range(getattr(request, "param", 0))
+    )
+    generation = await _publish(
+        finance_0026,
+        _manifest(origin, nasdaq=(("FQA", "fixture-nasdaq"), *additional)),
+        None,
+        now=origin,
+    )
     listing = await _listing(finance_0026, generation.generation_id, "FQA")
     execution = await _reviewed_grant(finance_0026, listing, FIRST_ASSET, origin)
     binding = await _promote(finance_0026, listing, execution, origin)
@@ -286,6 +301,30 @@ async def catalog_monitor(engine, finance_0026, redis_client):
         grant = await db.get(StockCatalogAdmission, execution)
         assert grant is not None
         grant.revoked_at = now
+    if additional:
+        for offset, ticker in enumerate([*(ticker for ticker, _ in additional), "FQN"], start=3):
+            extra_listing = await _listing(finance_0026, generation.generation_id, ticker)
+            extra_asset = f"31000000-1234-4567-b89a-{offset:012}"
+            extra_grant = await _reviewed_grant(finance_0026, extra_listing, extra_asset, origin)
+            extra = await _promote(finance_0026, extra_listing, extra_grant, origin)
+            async with finance_0026.begin() as db:
+                db.add(
+                    StockCatalogAdmission(
+                        artifact=admission.artifact,
+                        reference=f"Fixture actions for {ticker}",
+                        is_fixture=True,
+                        reviewed_at=admission.reviewed_at,
+                        valid_until=admission.valid_until,
+                        fields=admission.fields,
+                        scope={
+                            **admission.scope,
+                            "catalog_id": str(extra.catalog_id),
+                            "listing_id": str(extra.listing_id),
+                            "provider_asset_id": extra.provider_asset_id,
+                            "rest_symbols": [ticker],
+                        },
+                    )
+                )
     settings = SchedulerSettings(
         env="test",
         database_url=str(engine.url),
@@ -298,7 +337,7 @@ async def catalog_monitor(engine, finance_0026, redis_client):
     try:
         yield finance_0026, settings, origin, binding, admission_id
     finally:
-        for key in (stock_actions.LOCK_KEY, stock_actions.WINDOW_KEY):
+        for key in (stock_actions.LOCK_KEY, stock_actions.WINDOW_KEY, _key(ACCOUNT, SERVER)):
             await redis_client.delete(key)
 
 
@@ -308,6 +347,20 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
     factory, settings, origin, binding, admission = catalog_monitor
     settings.stock_actions_max_attempts = 1
     page = "resume-catalog-page"
+
+    async def monitor_selected(http):
+        return await cycle(
+            (factory, settings, origin), redis_client, http, catalog_redis=redis_client
+        )
+
+    async def select_listing(listing_id):
+        await record_catalog_action_interest(
+            redis_client,
+            account=ACCOUNT,
+            server=SERVER,
+            catalog_id=binding.catalog_id,
+            listing_id=listing_id,
+        )
 
     def rest_reply(request):
         assert request.url.params["symbols"] == "FQA"
@@ -325,9 +378,12 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
             headers={"content-type": "text/event-stream"},
         )
         async with httpx.AsyncClient(trust_env=False) as http:
-            assert (
-                await cycle((factory, settings, origin), redis_client, http)
-            ).status == "source_error"
+            await select_listing(binding.listing_id + 1)
+            await monitor_selected(http)
+            assert rest.call_count == 0 and replay.call_count == 0
+            await redis_client.delete(stock_actions.WINDOW_KEY)
+            await select_listing(binding.listing_id)
+            assert (await monitor_selected(http)).status == "source_error"
             async with factory() as db:
                 coverage = await db.get(StockCatalogActionCoverage, binding.coin_id)
                 state = await db.get(StockActionState, binding.coin_id)
@@ -368,8 +424,8 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
                     )
                 )
             settings.stock_actions_max_attempts = 4
-            await redis_client.delete(stock_actions.WINDOW_KEY)
-            assert (await cycle((factory, settings, origin), redis_client, http)).status == "ok"
+            await redis_client.delete(stock_actions.WINDOW_KEY, _key(ACCOUNT, SERVER))
+            assert (await monitor_selected(http)).status == "ok"
     assert rest.call_count == 2 and rest.calls.last.request.url.params["page_token"] == page
     assert replay.call_count == 1
     async with factory() as db:
@@ -381,6 +437,110 @@ async def test_catalog_action_window_resumes_exact_page_and_proves_coverage(
         assert coverage.valid_until == state.valid_until and coverage.valid_until is not None
         assert coverage.covered_until == state.covered_until and coverage.covered_until > origin
         assert await db.get(StockCatalogActionCoverage, added.coin_id) is None
+
+
+async def test_catalog_action_candidates_keep_only_active_positive_holdings_when_unselected(
+    catalog_monitor,
+):
+    factory, _, _, binding, _ = catalog_monitor
+    async with factory() as db:
+        now = datetime.now(UTC)
+
+        async def candidates():
+            return await catalog_action_candidates(
+                db, now, account=ACCOUNT, server=SERVER, allow_fixture=True, selected=()
+            )
+
+        owner = await db.scalar(
+            text("INSERT INTO users(email) VALUES (:email) RETURNING id"),
+            {"email": f"monitor-{uuid4()}@example.test"},
+        )
+        root = await db.scalar(text("SELECT initialize_portfolio(:owner)"), {"owner": owner})
+        holding = Holding(user_id=owner, portfolio_id=root, coin_id=binding.coin_id, quantity=0)
+        db.add(holding)
+        await db.flush()
+        assert await candidates() == ()
+        holding.quantity = 1
+        await db.flush()
+        assert [item.binding.coin_id for item in await candidates()] == [binding.coin_id]
+        holding.quantity = 0
+        await acquire_stock_gate(db, binding.coin_id)
+        db.add(
+            StockOwnershipMovement(
+                coin_id=binding.coin_id,
+                user_id=owner,
+                portfolio_id=root,
+                sequence=1,
+                economic_at=now - timedelta(days=1),
+                recorded_at=now - timedelta(days=1),
+                quantity=1,
+                before_quantity=0,
+                after_quantity=1,
+                before_basis=0,
+                after_basis=25,
+                unit_epoch=0,
+                cause_kind="opening",
+                causal_key="fixture-past-exposure",
+            )
+        )
+        await db.flush()
+        assert [item.binding.coin_id for item in await candidates()] == [binding.coin_id]
+        await db.execute(
+            text("UPDATE accounts SET closed_at=:now WHERE id=:root"), {"now": now, "root": root}
+        )
+        assert await candidates() == ()
+
+
+@pytest.mark.parametrize("catalog_monitor", [7], indirect=True)
+async def test_catalog_action_candidates_reserve_space_for_current_selection(catalog_monitor):
+    factory, _, _, original, _ = catalog_monitor
+    now = datetime.now(UTC)
+    async with factory() as db:
+        instruments = (
+            await db.scalars(
+                select(StockCatalogInstrument).order_by(StockCatalogInstrument.coin_id)
+            )
+        ).all()
+        assert len(instruments) == 9
+        *held, selected = instruments
+        owner = await db.scalar(
+            text("INSERT INTO users(email) VALUES (:email) RETURNING id"),
+            {"email": f"monitor-{uuid4()}@example.test"},
+        )
+        root = await db.scalar(text("SELECT initialize_portfolio(:owner)"), {"owner": owner})
+        db.add_all(
+            Holding(user_id=owner, portfolio_id=root, coin_id=item.coin_id, quantity=1)
+            for item in held
+        )
+        state = await db.get(StockActionState, original.coin_id)
+        assert state is not None
+        scope = {"account": ACCOUNT, "server": SERVER, "allow_fixture": True}
+        selection = ((selected.catalog_id, selected.listing_id),)
+
+        async def candidates():
+            await db.flush()
+            return [
+                row.binding.coin_id
+                for row in await catalog_action_candidates(db, now, selected=selection, **scope)
+            ]
+
+        current = await candidates()
+        assert len(current) == 8 and current[0] == selected.coin_id
+        assert sum(item.coin_id in current for item in held) == 7
+        db.add(Holding(user_id=owner, portfolio_id=root, coin_id=selected.coin_id, quantity=1))
+        current = await candidates()
+        assert len(current) == 8 and current[0] == selected.coin_id
+        assert sum(item.coin_id in current for item in held) == 7
+        state.staged_continuation = {
+            "target_until": (now - timedelta(seconds=5)).isoformat(),
+            "policy_key": "fixture-active-window",
+        }
+        assert await candidates() == [original.coin_id]
+        state.staged_continuation = {
+            **state.staged_continuation,
+            "target_until": (now - timedelta(minutes=5)).isoformat(),
+        }
+        assert (await candidates())[0] == selected.coin_id
 
 
 async def test_catalog_default_refresh_preserves_complete_lease_until_real_gap(
@@ -1004,10 +1164,10 @@ async def test_catalog_action_reader_holds_unreviewed_requests_and_ambiguous_rec
             )
 
 
-async def cycle(monitor, redis, http):
+async def cycle(monitor, redis, http, *, catalog_redis=None):
     factory, settings, _ = monitor
     return await stock_actions.run_stock_action_cycle(
-        sessionmaker=factory, redis=redis, http=http, settings=settings
+        sessionmaker=factory, redis=redis, http=http, settings=settings, catalog_redis=catalog_redis
     )
 
 

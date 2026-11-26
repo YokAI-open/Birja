@@ -16,7 +16,7 @@ if (( $# )); then
   [[ $archive_sha =~ ^[a-f0-9]{64}$ ]]
   archive_dir=${archive%/*}
   current_image=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
-    "$archive_dir/current0026-image-binding.json")
+    "$archive_dir/current0027-image-binding.json")
   [[ $current_image =~ ^sha256:[a-f0-9]{64}$ ]]
   if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     predecessor_image=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
@@ -58,7 +58,7 @@ if [[ $lane == paired || $lane == retained0025 ]]; then
 fi
 if [[ $lane != paired ]]; then
   chmod 700 "$stage"
-  "$PYTHON" "$contracts" --install-catalog-archive "$stage/host" "$archive" "$archive_sha" 0026
+  "$PYTHON" "$contracts" --install-catalog-archive "$stage/host" "$archive" "$archive_sha" 0027
   installed="$stage/host/var/lib/birja/recovery/releases/$archive_sha"
   restic_path="$installed/tools/restic"
   network=$(docker network create --internal "${stage##*/}")
@@ -158,6 +158,29 @@ openssl rand -hex 32 > "$stage/restic-password"
 restic=("$restic_path" --repo "$stage/repository" --password-file "$stage/restic-password" --no-cache)
 "${restic[@]}" init >/dev/null
 canary=fixture_catalog_finance_ephemeral_quote_bbb5b660b739
+
+seed_nyse_provenance() {
+  sql -d birja_test <<'SQL'
+SET ROLE birja_migrator;
+WITH generation AS (
+  INSERT INTO stock_catalog_generations
+    (manifest_sha256,mode,published_at,valid_until,is_active,sources,coverage)
+  VALUES(repeat('b',64),'fixture','2000-01-01Z','2000-01-02Z',false,'{}','{}')
+  RETURNING id
+), security AS (
+  INSERT INTO stock_catalog_securities(identity_key,created_at)
+  VALUES('fixture-openfigi-nyse','2000-01-01Z') RETURNING id
+)
+INSERT INTO stock_catalog_listings
+  (generation_id,security_id,ticker,normalized_ticker,company_name,normalized_name,
+   listing_exchange,state,reason,source,row_key,row_digest,valid_until)
+SELECT generation.id,security.id,'FNYS','FNYS','Fixture NYSE','fixture nyse',
+       'NYSE','review','fixture','openfigi_nyse','fixture-openfigi-nyse',
+       repeat('c',64),'2000-01-02Z'
+FROM generation,security;
+SQL
+}
+
 encrypted_round_trip() {
   local root="$1" revision="$2" snapshot
   local -a payload=(database.dump manifest.json)
@@ -239,8 +262,10 @@ downgrade_refuses() {
     "$PYTHON" -m alembic downgrade 0025) >"$stage/downgrade.log" 2>&1; then
     return 1
   fi
-  grep -q 'Catalog finance downgrade refused' "$stage/downgrade.log"
-  test "$(sql -d "$database" -c 'SELECT version_num FROM alembic_version')" = 0026
+  grep -q 'ck_stock_catalog_listings_source_known.*is violated' "$stage/downgrade.log"
+  test "$(sql -d "$database" -c 'SELECT version_num FROM alembic_version')" = 0027
+  test "$(sql -d "$database" -c "SELECT count(*) FROM stock_catalog_listings
+        WHERE source='openfigi_nyse' AND listing_exchange='NYSE'")" = 1
 }
 
 current_authority() {
@@ -276,11 +301,11 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
   start_postgres "${stage##*/}-candidate" "$candidate_volume"
   roles
   restore_database "$installed" 0023 birja_test
-  migrate "$ROOT" 0026
+  migrate "$ROOT" 0027
   bootstrap "$ROOT"
   observe "$installed" birja_test successor
   "$PYTHON" "$contracts" --compare-predecessor "$stage/predecessor.json" "$stage/successor.json"
-  printf '%s\n' 'populated_0023_to_0026=true predecessor_books_and_sequences_exact=true'
+  printf '%s\n' 'populated_0023_to_0027=true predecessor_books_and_sequences_exact=true'
   if [[ $lane == upgraded ]]; then
     current_authority birja_test
     exit
@@ -312,33 +337,34 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
   fi
 
   PYTHONPATH="$ROOT/backend" "$PYTHON" "$contracts" --catalog-economics seed "$stage/current-receipts.json"
+  seed_nyse_provenance
   chmod 444 "$stage/current-receipts.json"
   start_cache
   test "$(docker exec "$redis" redis-cli SET fixture:stock:quote:FQA "$canary" EX 600)" = OK
   # Move to a fresh PostgreSQL server for cold replay, or restart this exact
   # candidate volume after application writes to prove the containment path.
-  encrypted_round_trip "$installed" 0026
+  encrypted_round_trip "$installed" 0027
   if [[ $lane == cold ]]; then
     docker rm -f "$postgres" >/dev/null
     postgres=''
     start_postgres "${stage##*/}-restored"
     roles
-    restore_database "$installed" 0026
+    restore_database "$installed" 0027
     replay_db=birja_restore_test
   else
     docker restart "$postgres" >/dev/null
     wait_postgres
     docker volume inspect "$candidate_volume" | cmp "$stage/candidate-fingerprint"
     observe "$installed" birja_test candidate-restarted
-    "$PYTHON" "$contracts" --catalog-exact "$stage/restored-0026/manifest.json" "$stage/candidate-restarted.json"
+    "$PYTHON" "$contracts" --catalog-exact "$stage/restored-0027/manifest.json" "$stage/candidate-restarted.json"
     replay_db=birja_test
   fi
   docker rm -f "$redis" >/dev/null
   redis=''
   start_cache
   test "$(docker exec "$redis" redis-cli DBSIZE)" = 0
-  docker exec "$postgres" pg_dump -U birja_test -d "$replay_db" --data-only > "$stage/0026.sql"
-  "$PYTHON" "$contracts" --catalog-cache-absent "$stage" 0026 "$canary"
+  docker exec "$postgres" pg_dump -U birja_test -d "$replay_db" --data-only > "$stage/0027.sql"
+  "$PYTHON" "$contracts" --catalog-cache-absent "$stage" 0027 "$canary"
   "$PYTHON" "$contracts" --catalog-runtime-program replay /run/birja/catalog-receipts.json |
     runtime "$current_image" "$replay_db" \
       -v "$stage/current-receipts.json:/run/birja/catalog-receipts.json:ro"
@@ -351,10 +377,10 @@ if [[ $lane =~ ^(cold|upgraded|rollback)$ ]]; then
     fi
     grep -q '0023 only before import' "$stage/incompatible.log"
     use_primary_name birja_source_test birja_test
-    printf '%s\n' 'postwrite_0026_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0026_refused=true'
+    printf '%s\n' 'postwrite_0027_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0027_refused=true'
   else
     current_authority "$replay_db"
-    printf '%s\n' 'cold_encrypted_0026_exact=true fresh_restore_server=true'
+    printf '%s\n' 'cold_encrypted_0027_exact=true fresh_restore_server=true'
   fi
   exit
 fi
@@ -365,7 +391,7 @@ start_cache
 test "$(docker exec "$redis" redis-cli SET fixture:stock:quote:FQA "$canary" EX 600)" = OK
 
 if [[ $lane == fresh || $lane == roles ]]; then
-  migrate "$ROOT" 0026
+  migrate "$ROOT" 0027
   bootstrap "$ROOT"
   current_authority birja_test
   exit
@@ -395,11 +421,12 @@ docker exec "$postgres" dropdb -U birja_test birja_restore_test
   fi
 fi
 
-migrate "$ROOT" 0026
+migrate "$ROOT" 0027
 bootstrap "$ROOT"
 PYTHONPATH="$ROOT/backend" "$PYTHON" "$contracts" --catalog-economics seed "$stage/current-receipts.json"
+seed_nyse_provenance
 test "$(docker exec "$redis" redis-cli GET fixture:stock:quote:FQA)" = "$canary"
-round_trip "$ROOT" 0026
+round_trip "$ROOT" 0027
 docker rm -f "$redis" >/dev/null
 redis=''
 start_cache
@@ -408,5 +435,5 @@ PYTHONPATH="$ROOT/backend" DATABASE_URL="${DATABASE_URL%birja_test}birja_restore
   "$PYTHON" "$contracts" --catalog-economics replay "$stage/current-receipts.json"
 downgrade_refuses birja_restore_test
 "${restic[@]}" check --read-data >/dev/null
-printf '%s\n' 'retained_0025_exact=true successor_0026_exact=true redis_display_cache_excluded=true'
+printf '%s\n' 'retained_0025_exact=true successor_0027_exact=true redis_display_cache_excluded=true'
 printf '%s\n' 'cold_fill_and_actions_replay_exact=true populated_downgrade_refused=true encrypted_integrity=true'

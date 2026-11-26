@@ -593,23 +593,43 @@ test("Phase13 real incomplete strategy and failed refresh preserve sibling and s
   stockFixture("hold");
   const first = await statement(page, a.id),
     second = await statement(page, b.id);
-  expect(first.valuation_complete).toBe(false);
-  expect(first.total_value).toBeNull();
-  expect(first.total_pl).toBeNull();
-  expect(first.unvalued_holding_count).toBe(1);
-  expect(second.valuation_complete).toBe(true);
-  const rows = await (await page.request.get(`${api}/overview`)).json();
+  const response = await page.request.get(`${api}/overview`);
+  expect(response.status()).toBe(200);
+  const rows = await response.json();
   const row = rows.find((r: { id: string }) => r.id === a.id);
-  for (const key of [
-    "cash",
-    "known_value",
-    "total_value",
-    "total_pl",
-    "valuation_complete",
-    "unvalued_holding_count",
-    "prices_as_of",
-  ])
-    expect(row[key]).toEqual(first[key]);
+  const sibling = rows.find((r: { id: string }) => r.id === b.id);
+  // The crypto scheduler can publish a new mark between the two requests.
+  for (const snapshot of [first, row]) {
+    expect(snapshot).toMatchObject({
+      cash: "9798.00",
+      valuation_complete: false,
+      total_value: null,
+      total_pl: null,
+      unvalued_holding_count: 1,
+    });
+    expect(snapshot.holdings).toHaveLength(2);
+    expect(snapshot.holdings).toContainEqual(
+      expect.objectContaining({ symbol: "AAPL", asset_class: "stock", current_value: null }),
+    );
+    const btc = snapshot.holdings.find((holding: { symbol: string }) => holding.symbol === "BTC");
+    expect(btc).toMatchObject({
+      asset_class: "crypto",
+      current_value: expect.any(String),
+      as_of: expect.any(String),
+    });
+    expect(Number(snapshot.known_value)).toBeCloseTo(9798 + Number(btc.current_value), 8);
+    expect(snapshot.prices_as_of).toBe(btc.as_of);
+    expect(Date.parse(snapshot.prices_as_of)).toBeLessThanOrEqual(Date.parse(snapshot.valued_at));
+  }
+  for (const snapshot of [second, sibling]) {
+    expect(snapshot).toMatchObject({
+      cash: "10000.00",
+      total_value: "10000.00",
+      valuation_complete: true,
+      prices_as_of: null,
+      holdings: [],
+    });
+  }
   await page.clock.install();
   await overview(page);
   await expect(page.getByText(/Known value: .* incomplete/)).toBeVisible();

@@ -1,35 +1,38 @@
 # Birja production runbook
 
-## Catalog finance schema 0026 recovery
+## Catalog finance and NYSE source schema 0027 recovery
 
-Use the `deploy-recovery-v7` bundle with payload 6 from the successful CI run
+Use the `deploy-recovery-v8` bundle with payload 7 from the successful CI run
 for the exact released commit. The verification receipt binds the commit,
 tree, backend image and seven completed stages to the same archive SHA-256.
 Keep the production predecessor receipt and its exact retained tooling
-available. Phase 21 starts its isolated rehearsal at `07d3aa5` on 0023.
-Verify the actual running revision and bindings in the approved preflight.
+available. Keep the released `deploy-recovery-v7` bundle with payload 6 for
+0026 snapshots. Phase 21 starts its isolated rehearsal at `07d3aa5` on 0023
+to exercise the full financial migration. Verify the actual running revision
+and bindings before selecting the predecessor for a live rollout.
 
 Before the approved cutover holds any writers, identify the original and
 candidate volumes and verify independent recovery capacity. While holding the
 operation lock, fence writers and verify the final original fingerprints and
 restored backup before copying or routing. Migrate only the selected candidate
-to 0026. The pre-write recovery path selects the verified original 0023
+to 0027. The pre-write recovery path selects the verified original
 volumes, retained release and its matching tooling. Confirm that the original
 data and bindings are the ones measured before restarting predecessor writers.
 
 Treat the first candidate writer startup as the write boundary. After it,
-keep the 0026 candidate volumes. For a stock-only incident, the compatible
-route uses the tested 0026 source with stocks disabled and verifies crypto,
+keep the 0027 candidate volumes. For a stock-only incident, the compatible
+route uses the tested 0027 source with stocks disabled and verifies crypto,
 historical receipts and exact current recovery. Recovery from a broader
-failure requires a separately tested 0026-compatible release and an approved
-current recovery point. The compatibility guard refuses 0023 on 0026 and
-populated downgrade refuses. A pre-change restore would discard later fills
+failure requires a separately tested 0027-compatible release and a verified
+current recovery point. The deployment guard requires 0027-compatible code
+on the candidate volumes. PostgreSQL refuses a downgrade to 0026 once an
+OpenFIGI NYSE listing is present. A pre-change restore would discard later fills
 and is outside the after-write recovery path.
 
 The same-bundle qualification runs via
 `python3 deploy/tests/run-portfolio-validation.py --phase 21 --suite recovery-successor`.
 The isolated tests compare the frozen original book with the migrated copy,
-recover 0026 through the installed consumer on fresh PostgreSQL, and replay
+recover 0027 through the installed consumer on fresh PostgreSQL, and replay
 receipts as restricted verified-TLS users. Production still requires the
 recorded identity, the approved maintained recovery tools and the exact
 release-specific operational decision.

@@ -368,7 +368,12 @@ async def test_dated_stock_marks_keep_source_time_and_exact_owned_value(
     async with factory.begin() as db:
         if mode == "halted":
             await db.execute(text("UPDATE stock_status_evidence SET state='halted'"))
-        await db.execute(text("UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes'"))
+        await db.execute(
+            text(
+                "UPDATE stock_quotes SET event_at=collected_at-interval '5 minutes', "
+                "session_date=((collected_at-interval '5 minutes') AT TIME ZONE 'UTC')::date"
+            )
+        )
     try:
         p = await statement(factory, root, settings)
         assert p.total_value == 998 and p.holdings[0].stock_mark.mark_mode == mode

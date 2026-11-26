@@ -100,6 +100,7 @@ class RevisionContracts(unittest.TestCase):
             (4, '0024', producer.REPORTED_HALT_SOURCE_SHA256),
             (5, '0025', producer.CATALOG_SOURCE_SHA256),
             (6, '0026', producer.CATALOG_FINANCE_SOURCE_SHA256),
+            (7, '0027', producer.CATALOG_NYSE_SOURCE_SHA256),
         ):
             with self.subTest(revision=revision):
                 profile = 'deploy-recovery-v' + str(version + 1)
@@ -130,15 +131,15 @@ class RevisionContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     restore.verify_portfolio_inventory(forged, expected | {migration: '2' * 64})
 
-    def test_catalog_finance_payload_carries_every_pinned_source(self):
+    def test_catalog_nyse_payload_carries_every_pinned_source(self):
         producer = load('backup-snapshot')
         restore = load('verify-restore')
-        payload = producer.catalog_finance_payload_inventory(ROOT)
-        self.assertEqual(payload['revision'], '0026')
-        self.assertEqual(payload['version'], 6)
+        payload = producer.catalog_nyse_payload_inventory(ROOT)
+        self.assertEqual(payload['revision'], '0027')
+        self.assertEqual(payload['version'], 7)
         self.assertEqual(set(payload['sha256']), set(restore.portfolio_payload_files({'portfolio_payload': payload})))
-        self.assertEqual({name: payload['sha256'][name] for name in producer.CATALOG_FINANCE_SOURCE_SHA256},
-                         producer.CATALOG_FINANCE_SOURCE_SHA256)
+        self.assertEqual({name: payload['sha256'][name] for name in producer.CATALOG_NYSE_SOURCE_SHA256},
+                         producer.CATALOG_NYSE_SOURCE_SHA256)
         restore.verify_portfolio_inventory({'portfolio_payload': payload}, payload['sha256'])
 
     def test_dividend_pregrant_structure_refuses_ambiguous_query(self):

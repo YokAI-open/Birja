@@ -234,13 +234,14 @@ run_case deploy 0025 "$BIRJA_TESTED_SOURCE" no refuse
 # Revision 0026 requires every current migration companion and a matching
 # runtime. The 0025 fixture above continues to exercise its retained lane.
 git -C "$APP_DIR" checkout -q --detach "$CATALOG_TESTED"
+FINANCE_SOURCE=0f4a42f4dfec657314d2feaab1c5a539c69518b8
 for name in backend/alembic/versions/0026_stock_catalog_finance.py \
   backend/alembic/sql/0026_stock_catalog_{finance,execution,actions}.sql \
   backend/app/db/{portfolio_bootstrap,portfolio_migrate,schema_contract,dev_bootstrap}.py \
   backend/app/models/{__init__,stock_catalog_finance,price}.py \
   backend/app/services/corporate_actions.py deploy/db/bootstrap-roles.sql; do
   mkdir -p "$APP_DIR/$(dirname "$name")"
-  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$HERE/../.." show "$FINANCE_SOURCE:$name" > "$APP_DIR/$name"
   git -C "$APP_DIR" add "$name"
 done
 git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-finance-tested
@@ -267,3 +268,32 @@ BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
 run_case deploy 0025 "$BIRJA_TESTED_SOURCE" no refuse
 run_case deploy 0026 "$BIRJA_TESTED_SOURCE" no refuse
 run_case rollback 0026 main yes refuse
+
+# The successor recognizes the original 0026 datastore for migration, then
+# binds runtime and rollback to the new exact provenance constraint contract.
+git -C "$APP_DIR" checkout -q --detach "$FINANCE_TESTED"
+for name in backend/alembic/versions/0027_stock_catalog_nyse_source.py \
+  backend/app/db/{portfolio_bootstrap,portfolio_migrate,schema_contract,dev_bootstrap}.py \
+  backend/app/models/stock_catalog.py deploy/db/bootstrap-roles.sql; do
+  cp "$HERE/../../$name" "$APP_DIR/$name"
+  git -C "$APP_DIR" add "$name"
+done
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-nyse-tested
+NYSE_TESTED=$(git -C "$APP_DIR" rev-parse HEAD)
+BIRJA_TESTED_SOURCE=$NYSE_TESTED
+run_case deploy 0026 "$NYSE_TESTED" no pass
+run_case deploy 0027 "$NYSE_TESTED" no pass
+run_case rollback 0027 main yes pass
+run_case rollback 0027 main no refuse
+if ADMITTED_REVISION=0026 admit_application_source "$NYSE_TESTED"; then
+  echo 'FAIL NYSE catalog runtime admitted before upgrade'; exit 1
+fi
+BIRJA_TESTED_SOURCE=$FINANCE_TESTED
+run_case deploy 0027 "$FINANCE_TESTED" no refuse
+run_case rollback 0027 main yes refuse
+printf '\n# corrupted provenance migration\n' >> "$APP_DIR/backend/alembic/versions/0027_stock_catalog_nyse_source.py"
+git -C "$APP_DIR" add backend/alembic/versions/0027_stock_catalog_nyse_source.py
+git -C "$APP_DIR" -c user.name=Test -c user.email=test@example.invalid commit -q -m catalog-nyse-corrupt
+BIRJA_TESTED_SOURCE=$(git -C "$APP_DIR" rev-parse HEAD)
+run_case deploy 0026 "$BIRJA_TESTED_SOURCE" no refuse
+run_case rollback 0027 main yes refuse

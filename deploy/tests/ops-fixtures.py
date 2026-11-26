@@ -38,7 +38,7 @@ def package_current_archive(archive, *, successor=False):
     producer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(producer)
     if successor:
-        producer.bundle_package_v6(archive, recovery=r)
+        producer.bundle_package_v7(archive, recovery=r)
     else:
         producer.bundle_package_v4(archive, recovery=r)
 
@@ -51,7 +51,8 @@ def archive_profile(archive, sha):
     if family not in {('deploy-recovery-v3', 2, '0020'),
                       ('deploy-recovery-v4', 3, '0023'),
                       ('deploy-recovery-v5', 4, '0024'),
-                      ('deploy-recovery-v7', 6, '0026')}:
+                      ('deploy-recovery-v7', 6, '0026'),
+                      ('deploy-recovery-v8', 7, '0027')}:
         raise ValueError('unsupported authenticated campaign family')
     return family[0]
 
@@ -2179,7 +2180,7 @@ async def scenario_authority(db):
   'rest_symbols':sorted(CURATED_SYMBOLS),'all_us_replay_ingress':True,'replay_region':'us',
   'durable_accounting':True,'backup_restore':True,'retention_mode':'durable-accounting'}},
   allowed_fields=['provider_event_id','symbol','event_type','process_date'])
- calendar=ProductAdmission(product='calendar',**common,
+ calendar=ProductAdmission(product='calendar',**{**common,'reviewed_at':now},
   allowed_fields=['exchange','session_date','opens_at','closes_at'],
   calendar={'exchanges':['XNYS','XNAS'],'version':'exchange-calendars-4.13.2/official-2026',
    'sources':['https://www.nyse.com/trade/hours-calendars','https://www.nasdaq.com/market-activity/stock-market-holiday-schedule'],

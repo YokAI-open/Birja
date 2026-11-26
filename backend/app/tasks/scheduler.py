@@ -408,7 +408,11 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                 assert action_http is not None  # noqa: S101 - created before loop
                 try:
                     return await run_stock_action_cycle(
-                        sessionmaker=sessionmaker, redis=redis, http=action_http, settings=settings
+                        sessionmaker=sessionmaker,
+                        redis=redis,
+                        http=action_http,
+                        settings=settings,
+                        catalog_redis=catalog_redis,
                     )
                 except Exception as exc:
                     logger.warning("action loop failed: %s", type(exc).__name__)

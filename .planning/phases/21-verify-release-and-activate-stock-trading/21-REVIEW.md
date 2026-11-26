@@ -107,3 +107,30 @@ receipt hashes matched the candidate record. The evidence consists of a red
 baseline run and passing focused receipts. The exact integrated test tree
 requires a fresh hosted full-suite run, along with the browser, audit, image
 scan and seven-stage recovery gates. Live stock acceptance remains pending.
+
+## Activation follow-up
+
+The follow-up review found three issues with the expanded rollout. The
+action scheduler could starve a selected stock behind existing holdings,
+and it could drop a sold-out position that still had a dividend or
+correction obligation. The reference builder could also omit a common
+issue present in an official comparator. The amended scheduler serves
+selected issues alongside economic obligations and keeps sold-out issues
+with durable ownership in active portfolios. The reference builder
+detects omitted issues in the NYSE CAT/Pillar and Nasdaq Listed/Pillar
+comparisons and keeps unmatched classifications unresolved.
+
+The catalog enrollment review also checked that provider verification
+uses the original capture timestamp, that renewal is bound to the
+exact provider/account/server/environment, and that action scope covers
+the scheduler's lookahead through the final active UTC date. The
+matching calendar authority and sessions commit together. The separate
+paired encrypted replay verified retained `0025` and successor `0027`
+and exact buy, sell, dividend, correction and split replay. The new
+provenance survives restore, and a populated downgrade refuses.
+
+Follow-up review confirmed these fixes and the production recovery
+boundaries. The live selected and held ORCL quote results are in the
+[source qualification](21-LIVE-QUALIFICATION.md). Publication of a complete
+current generation, the exact hosted CI artifact and the production
+buy/sell remain required.

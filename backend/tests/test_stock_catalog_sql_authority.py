@@ -34,13 +34,16 @@ from tests.test_stock_catalog_publish import Factory, _manifest, _publish
 
 
 @pytest_asyncio.fixture
-async def execution_market(finance_0026: Factory):
+async def execution_market(finance_0026: Factory, *, catalog_age: timedelta = timedelta(0)):
     now = datetime.now(UTC)
     origin = now - timedelta(minutes=15)
     opens = now - timedelta(minutes=10)
     end = now + timedelta(minutes=10)
     session_date = now.date()
-    generation = await _publish(finance_0026, _manifest(origin), None, now=origin)
+    catalog_published_at = origin - catalog_age
+    generation = await _publish(
+        finance_0026, _manifest(catalog_published_at), None, now=catalog_published_at
+    )
     listing = await _listing(finance_0026, generation.generation_id, "FQA")
     grant = await _reviewed_grant(finance_0026, listing, FIRST_ASSET, origin)
     instrument = await _promote(finance_0026, listing, grant, origin)

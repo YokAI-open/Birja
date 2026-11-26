@@ -143,3 +143,94 @@ It retains the exact known-ID recheck and reconciliation assertions.
 All 60 tests in the monitoring module passed on disposable PostgreSQL and
 Redis, Ruff lint and formatting passed, and independent review found
 no blockers. The full PR suite and resulting main CI remain required.
+
+The owner approved pushing `1024e95261f5e2c9608a60f820e4c73a869fce99`
+to PR #48, merging that exact commit after all six required checks pass,
+and monitoring the resulting main run. The branch was updated at that
+commit with [run 45647160066](https://github.com/YokAI-open/Birja/actions/runs/45647160066)
+on the new head.
+
+All six jobs passed, including the full browser and recovery campaigns.
+The backend passed 3,941 tests, 94.41% overall coverage, 100% critical
+coverage and the dependency audit. GitHub reported PR #48 clean and
+mergeable against the checked main base.
+
+## Corrective main merge
+
+PR #48 merged under the owner's exact-head approval at 16:38:42 UTC on
+2026-11-25 as `0f4a42f4dfec657314d2feaab1c5a539c69518b8`. Its parents
+are `4c839f5642f60771a5a376f2956bd7c8ab28aca9` and
+`1024e95261f5e2c9608a60f820e4c73a869fce99`. The merge tree
+`0eb379b4240d0a28918dffcab0825f12c2c555e7` equals the tested PR tree.
+[Main run 45656126522](https://github.com/YokAI-open/Birja/actions/runs/45656126522)
+tests the actual corrective main commit on the push event.
+
+Attempt 1 passed frontend, image and browser. Its recovery job passed the
+retained restores, cold encrypted `0026`, role and TLS stages, then
+exceeded the 180-second launcher timeout during the selected cutover.
+That command completed in about 71 seconds in the successful exact-tree
+PR run. The failed main attempt staged no tooling artifact. The existing
+timeout and all recovery assertions remain in force for the same-commit
+failed-job retry.
+[Attempt 1 recovery job](https://github.com/YokAI-open/Birja/actions/runs/45656126522/job/139353159962)
+
+Attempt 1 backend passed 3,941 tests with 94.41% overall and 100% critical
+coverage. The Python dependency audit passed. Its aggregate failed
+because of the cutover timeout. GitHub started
+[attempt 2](https://github.com/YokAI-open/Birja/actions/runs/45656126522/attempts/2)
+with failed jobs only on the unchanged main SHA. Backend, frontend, image
+and browser checks carried forward from the completed attempt.
+
+## Verified main recovery artifact
+
+Attempt 2 passed the full seven-stage recovery campaign on
+`0f4a42f4dfec657314d2feaab1c5a539c69518b8`. The retained `0012` and
+`0025` restores matched their source. A fresh server recovered the cold
+encrypted `0026` state. The predecessor reopened its original state
+before writes. The candidate reopened exact `0026` state and receipts after
+writes, and the predecessor refused that schema. The aggregate passed.
+[Successful main run](https://github.com/YokAI-open/Birja/actions/runs/45656126522/attempts/2)
+
+GitHub artifact `15050407948` was downloaded by ID and verified against
+transport SHA-256
+`09ab62715e12a3f2958c313da1438bbbf7bf1cc303138b7dab7c05553509edc5`.
+The private local archive is
+`/tmp/birja-backup-test-main-45656126522.zhA4RL/recovery.tar.gz`.
+Its strict archive SHA-256
+`a32f8c92f66eff8b081538fc4989e282c5da2e2c5320cf9008b315bb34efde5d`
+matches the hosted recovery log. The trusted verifier confirmed the
+complete 75-file inventory, `deploy-recovery-v7`, payload version 6,
+schema `0026`, and the payload files against the exact main source.
+The receipt SHA-256 is
+`075b1ee0c782e4eb6e02d7b3ad3db6fb9f085246728d4fdcb120975ebd93caaf`.
+
+The receipt records success for image transition, retained roundtrip,
+cold `0026`, roles, upgraded TLS, fresh TLS and selected rollback. Its
+tested main tree is `0eb379b4240d0a28918dffcab0825f12c2c555e7`.
+The application tree is `93638e56ad2a02b79dccdae53c26280e5df9b7a8`.
+The main backend build context SHA-256 is
+`10c217992ee16ce168c0197fdaa634d1b5d7804101f83cfcbe2bbef9ca497e25`.
+The authenticated recovery campaign records candidate image
+`sha256:2fe59a837539c2472d09e4a138529b950223f0d9a355cc80d81c8f04f6de53c7`,
+config SHA-256
+`5e6609732b9e960d7798be8151ec5548b8fed6c3444956d6cedcc1298283b2c8`,
+and root filesystem SHA-256
+`c5ba0e94dfb65aab15b1c86015fbeb275fd6eb1f071e13ae8bc5110af318fe1d`.
+
+The checked main commit is ready for the `v0.8.0` tag and GitHub release
+once the owner approves publication. Plan 21-05 also requires the release
+back-merge.
+
+## Published release
+
+The owner requested publication and deployment. GitHub published
+`v0.8.0` at 19:28:33 UTC on 2026-11-25. The peeled remote tag is the
+verified main commit `0f4a42f4dfec657314d2feaab1c5a539c69518b8`.
+The release uses the reviewed notes from that commit.
+[GitHub release](https://github.com/YokAI-open/Birja/releases/tag/v0.8.0)
+
+The exact release commit is the proposed `release-0.8.0-backmerge`
+head into checked `develop` base
+`e1b79566c38f75254827961216c67c390ce94d68`. The back-merge awaits
+approval and the six hosted checks. Production rollout has its own
+scope and prerequisites.

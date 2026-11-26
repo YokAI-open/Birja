@@ -30,9 +30,9 @@ PRESERVED_ARCHIVE = Path("/tmp/birja-phase13-proof/recovery.tar.gz")
 PRESERVED_SHA256 = "6fb79a45ddcb10725b18fc756e71bd555c827a6e61a5a4a0bd2d183096114b92"
 STAGES = ("image-transition", "retained-roundtrip", "current0023-cold",
           "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
-SUCCESSOR_STAGES = ("image-transition", "retained-roundtrip", "current0026-cold",
+SUCCESSOR_STAGES = ("image-transition", "retained-roundtrip", "current0027-cold",
                     "roles", "tls-upgraded", "tls-fresh", "selected-rollback")
-SUCCESSOR_PROFILE = "deploy-recovery-v7"
+SUCCESSOR_PROFILE = "deploy-recovery-v8"
 STACK = ["docker", "compose", "--env-file", "/dev/null", "-f", "docker-compose.test.yml"]
 PG = "cgr.dev/chainguard/postgres@sha256:adbf3d8db097696ed6e997b108b51393786be999c04d543502f8959e1bafa8de"
 REDIS = "cgr.dev/chainguard/redis@sha256:26bb2dd4412f902f3decd44fba5dfaef4360d97004d44f6cff7f28d6aba19c48"
@@ -119,7 +119,7 @@ def preflight(suite, *, phase=14, run=subprocess.run, fixture_tail=True):
     sources.validate_matrix()
     recovery = load("portfolio-smoke").load_recovery()
     if phase == 21:
-        recovery.closure_source(ROOT, revision="0026", allow_successor=False)
+        recovery.closure_source(ROOT, revision="0027", allow_successor=False)
         successor_source_identity(sources)
     else:
         recovery.closure_source(ROOT)
@@ -310,7 +310,7 @@ def security_sources():
 
 
 def campaign_files(recovery, *, successor=False):
-    payload = recovery.PORTFOLIO_PAYLOAD_V6 if successor else recovery.PORTFOLIO_PAYLOAD_V4
+    payload = recovery.PORTFOLIO_PAYLOAD_V7 if successor else recovery.PORTFOLIO_PAYLOAD_V4
     return recovery.CORE + recovery.UNITS + payload
 
 
@@ -340,7 +340,7 @@ def require_successor_image(binding, identity):
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", binding.get("id", ""))
             or any(not re.fullmatch(r"[0-9a-f]{64}", binding.get(name, ""))
                    for name in ("config_sha256", "rootfs_sha256"))):
-        raise ValueError("0026 campaign image does not match the tested source")
+        raise ValueError("0027 campaign image does not match the tested source")
 
 
 def preserved_archive():
@@ -398,7 +398,7 @@ def authenticate(ops, archive, expected, source, image_records=None, *, successo
     with tarfile.open(archive, "r:") as retained:
         inventory = json.load(retained.extractfile("INVENTORY.json"))
         payload = inventory.get("portfolio_payload", {})
-        profile = (SUCCESSOR_PROFILE, 6, "0026") if successor else ("deploy-recovery-v5", 4, "0024")
+        profile = (SUCCESSOR_PROFILE, 7, "0027") if successor else ("deploy-recovery-v5", 4, "0024")
         if (inventory.get("recovery_profile"), payload.get("version"), payload.get("revision")) != profile:
             raise ValueError("current campaign requires successor inventory")
         for name in campaign_files(ops.r, successor=successor):
@@ -423,9 +423,9 @@ def authenticate(ops, archive, expected, source, image_records=None, *, successo
     load("portfolio-smoke").authenticate_campaign_images(archive, expected,
         inspect_image=lambda ref: json.loads(ops.r.call(["docker", "image", "inspect", ref])))
     if successor:
-        current_record = records.get("current0026-image-binding.json")
+        current_record = records.get("current0027-image-binding.json")
         if current_record is None:
-            raise ValueError("authenticated current0026 image record required")
+            raise ValueError("authenticated current0027 image record required")
         require_successor_image(json.loads(current_record.read_text()), successor_identity)
 
 
@@ -539,14 +539,14 @@ def successor_recovery_operations(ops, archive, expected):
                        env=environment(), check=True)
         catalog("rollback", requires=(
             "prewrite_predecessor_restarted=true original_volume_and_ledger_exact=true",
-            "postwrite_0026_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0026_refused=true",
+            "postwrite_0027_restarted=true candidate_volume_and_receipts_exact=true predecessor_on_0027_refused=true",
         ))
 
     return {
         "image-transition": ops.image_transition,
         "retained-roundtrip": retained,
-        "current0026-cold": lambda: catalog(
-            "cold", requires=("cold_encrypted_0026_exact=true fresh_restore_server=true",),
+        "current0027-cold": lambda: catalog(
+            "cold", requires=("cold_encrypted_0027_exact=true fresh_restore_server=true",),
             authority=True,
         ),
         "roles": roles,
@@ -598,7 +598,7 @@ def execute_recovery(*, phase=14, suite="recovery"):
               "whole7": False, "same_archive_final_ci": False}
     status_path = archive.parent / "status.json"
     if successor:
-        status.update(identity, recovery_profile=profile, payload_version=6, revision="0026",
+        status.update(identity, recovery_profile=profile, payload_version=7, revision="0027",
                       stage_order=list(stages))
     def save_status():
         write_status(status_path, status)
@@ -624,7 +624,7 @@ def execute_recovery(*, phase=14, suite="recovery"):
             operations = successor_recovery_operations(ops, archive, expected)
             smoke = load("portfolio-smoke")
             status["current_image"] = smoke.build_selected_runtime(
-                ops.portfolio_sources(), environment(), revision="0026", archive=archive,
+                ops.portfolio_sources(), environment(), revision="0027", archive=archive,
                 archive_sha=expected)
             require_successor_image(status["current_image"], identity)
             if set(operations) != set(stages):
@@ -658,17 +658,17 @@ def verify_successor_receipt(archive, tested_source):
     required = {
         **identity, "archive": str(archive), "archive_sha256": expected,
         "phase": 21, "suite": "recovery-successor", "recovery_profile": SUCCESSOR_PROFILE,
-        "payload_version": 6, "revision": "0026", "stage_order": list(SUCCESSOR_STAGES),
+        "payload_version": 7, "revision": "0027", "stage_order": list(SUCCESSOR_STAGES),
         "stages": dict.fromkeys(SUCCESSOR_STAGES, "passed-authenticated"),
         "current_stage": SUCCESSOR_STAGES[-1],
     }
     if (any(receipt.get(name) != value for name, value in required.items())
             or any(receipt.get(name) is not True for name in
                    ("ok", "whole7", "same_archive_final_ci"))):
-        raise ValueError("complete authenticated 0026 recovery receipt required")
-    image = json.loads(ops.r.private(archive.parent / "current0026-image-binding.json").read_text())
+        raise ValueError("complete authenticated 0027 recovery receipt required")
+    image = json.loads(ops.r.private(archive.parent / "current0027-image-binding.json").read_text())
     if receipt.get("current_image") != image:
-        raise ValueError("receipt does not match the authenticated current0026 image")
+        raise ValueError("receipt does not match the authenticated current0027 image")
     ops.r.bundle_verify(archive, expected, required_profile=SUCCESSOR_PROFILE)
     authenticate(ops, archive, expected, campaign_sources(ops, successor=True),
                  successor_identity=identity)

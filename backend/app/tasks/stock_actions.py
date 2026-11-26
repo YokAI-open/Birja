@@ -47,6 +47,7 @@ from app.services.corporate_actions import (
     persist_action_batch,
 )
 from app.services.stock_admission import ProductAdmission, evaluate_admission
+from app.services.stock_catalog_action_demand import selected_catalog_actions
 from app.services.stock_catalog_actions import (
     CatalogActionAuthority,
     catalog_action_candidates,
@@ -1018,6 +1019,7 @@ async def run_stock_action_cycle(
     http: httpx.AsyncClient,
     settings: SchedulerSettings,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    catalog_redis: Redis | None = None,
 ) -> CycleResult:
     if not getattr(settings, "stock_actions_enabled", False):
         return CycleResult("ok")
@@ -1040,12 +1042,19 @@ async def run_stock_action_cycle(
                 "account": settings.stock_data_account,
                 "server": settings.stock_data_server,
             }
+            selected = (
+                await selected_catalog_actions(catalog_redis, **scope)
+                if catalog_redis is not None
+                else None
+            )
             async with sessionmaker() as db:
                 at = await _clock(db)
                 authorities = await catalog_action_candidates(
                     db,
                     at,
                     allow_fixture=settings.env == "test",
+                    selected=selected,
+                    max_age_seconds=settings.stock_actions_health_max_age_seconds,
                     **scope,
                 )
                 legacy_approved = _allowed(await _admissions(db), settings, at)

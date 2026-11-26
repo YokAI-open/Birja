@@ -8,11 +8,12 @@ Only the uniquely named disposable Docker database is permitted.
 import asyncio
 import json
 import os
+import re
 import secrets
 import sys
 from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
@@ -51,17 +52,27 @@ def patch_calendar():
 
     def bounds(alias, start, end):
         base = anchor()
-        opens, closes = base - timedelta(hours=1), base + timedelta(hours=1)
+        window_start = base - timedelta(hours=1)
+        window_end = base + timedelta(hours=1)
+        data = {}
         if CONTROL.exists():
             data = json.loads(CONTROL.read_text())
-            if data["state"] == "closed":
-                closes = datetime.fromisoformat(data["at"])
-            if "opens" in data:
+        closed_at = datetime.fromisoformat(data["at"]) if data.get("state") == "closed" else None
+        action_day = date.fromisoformat(data["session_date"]) if "session_date" in data else None
+        rows = []
+        for day, opens, closes in original(alias, start, end):
+            if base.date() <= day <= window_end.date():
+                midnight = datetime.combine(day, time.min, UTC)
+                if midnight < window_end:
+                    opens = max(midnight, window_start)
+                    closes = min(midnight + timedelta(days=1), window_end)
+            if closed_at is not None and day == closed_at.date():
+                closes = closed_at
+            if day == action_day:
                 opens = datetime.fromisoformat(data["opens"])
-        return tuple(
-            (day, opens, closes) if day == base.date() else (day, op, cl)
-            for day, op, cl in original(alias, start, end)
-        )
+                closes = datetime.fromisoformat(data["closes"])
+            rows.append((day, opens, closes))
+        return tuple(rows)
 
     stock_sessions._calendar_bounds = bounds
 
@@ -116,7 +127,7 @@ def admission(product):
         product=product,
         state="approved",
         generation=4,
-        reviewed_at=base - timedelta(hours=1),
+        reviewed_at=base if product == "calendar" else base - timedelta(hours=1),
         valid_from=base - timedelta(hours=1),
         valid_until=base + timedelta(hours=2),
         evidence_ref="synthetic-browser-only:no-provider-rights",
@@ -263,6 +274,7 @@ async def prepare(operation, symbol="AAPL", argument=""):
                                     "mid": Decimal(101),
                                     "event_at": now,
                                     "collected_at": now,
+                                    "session_date": now.date(),
                                 },
                             )
                         )
@@ -628,7 +640,7 @@ async def enrolled_catalog_migrator(admin):
             text("""
             SELECT current_database()='birja' AND session_user='birja'
                 AND NOT role.rolcanlogin AND NOT role.rolsuper
-                AND (SELECT version_num FROM alembic_version)='0026'
+                AND (SELECT version_num FROM alembic_version)='0027'
             FROM pg_roles role WHERE role.rolname='birja_migrator'
             """)
         )
@@ -690,25 +702,48 @@ async def catalog_status(db, listing, coin_id, grant_id, now, state):
     )
 
 
-async def enroll_financial_fixture(admin, symbol):
-    from app.models.corporate_action import StockActionState
+async def enroll_financial_fixture(admin, symbol, opening_owner=None):
+    from app.models.corporate_action import StockActionState, StockOwnershipMovement
+    from app.models.stock import StockSession
     from app.models.stock_catalog import StockCatalogAdmission
     from app.models.stock_catalog_finance import (
         StockCatalogActionCoverage,
         StockCatalogInstrument,
     )
+    from app.models.trade import Holding
+    from app.models.user import Account, User
     from app.services.stock_catalog_promotion import (
         _EXECUTION_FIELDS,
         _MARK_FIELDS,
         CATALOG_ACTION_FIELDS,
         promote_catalog_instrument,
     )
+    from app.services.stock_ownership import acquire_stock_gate
     from sqlalchemy import func, select
     from sqlalchemy.dialects.postgresql import insert
 
     async with enrolled_catalog_migrator(admin) as sessions, sessions.begin() as db:
         now = await db.scalar(select(func.clock_timestamp()))
         listing = await traded_listing(db, symbol)
+        historical_session = None
+        if opening_owner is not None:
+            if not re.fullmatch(r"e2e-[a-z0-9-]+@example\.com", opening_owner):
+                raise ValueError("Requires the disposable browser account")
+            historical_session = (
+                await db.scalars(
+                    select(StockSession)
+                    .where(
+                        StockSession.exchange == listing.listing_exchange,
+                        StockSession.session_date < now.date(),
+                        StockSession.opens_at.is_not(None),
+                    )
+                    .order_by(StockSession.session_date.desc())
+                    .limit(1)
+                )
+            ).one()
+        opening_at = (
+            historical_session.opens_at - timedelta(seconds=1) if historical_session else None
+        )
         ids = {
             "account": "birja",
             "server": "birja",
@@ -734,7 +769,9 @@ async def enroll_financial_fixture(admin, symbol):
                 scope.update(
                     rest_symbols=[listing.ticker],
                     mutation_start=(now - timedelta(days=1)).isoformat(),
-                    history_start=(now.date() - timedelta(days=1)).isoformat(),
+                    history_start=min(
+                        now.date() - timedelta(days=1), opening_at.date() if opening_at else now.date()
+                    ).isoformat(),
                     future_through=(now.date() + timedelta(days=2)).isoformat(),
                     all_us_replay_ingress=True,
                     replay_region="us",
@@ -761,6 +798,36 @@ async def enroll_financial_fixture(admin, symbol):
         )
         instrument = await db.get(StockCatalogInstrument, binding.catalog_id)
         state = await db.get(StockActionState, binding.coin_id)
+        if opening_at is not None:
+            # Explicit fixture opening shares are distinct from the browser's
+            # later real buy. A past dividend can only credit the opening shares.
+            await acquire_stock_gate(db, binding.coin_id)
+            root = (
+                await db.scalars(
+                    select(Account)
+                    .join(User, User.id == Account.user_id)
+                    .where(User.email == opening_owner, Account.closed_at.is_(None))
+                    .with_for_update(of=Account)
+                )
+            ).one()
+            assert state.sequence == 0 and root.cash == Decimal("10000")
+            instrument.promoted_at = opening_at
+            db.add_all(
+                [
+                    Holding(
+                        portfolio_id=root.id, user_id=root.user_id, coin_id=binding.coin_id,
+                        quantity=Decimal(2), cost_basis=Decimal(0),
+                    ),
+                    StockOwnershipMovement(
+                        portfolio_id=root.id, user_id=root.user_id, coin_id=binding.coin_id,
+                        sequence=1, economic_at=opening_at, recorded_at=opening_at,
+                        quantity=Decimal(2), before_quantity=Decimal(0), after_quantity=Decimal(2),
+                        before_basis=Decimal(0), after_basis=Decimal(0), unit_epoch=0,
+                        cause_kind="opening", causal_key=f"catalog-browser-opening:{root.id}",
+                    ),
+                ]
+            )
+            state.sequence = 1
         origin = instrument.promoted_at
         coverage = {
             "catalog_id": binding.catalog_id,
@@ -819,12 +886,35 @@ async def settle_catalog_fixture_action(engine, operation):
             raise RuntimeError("Requires the exact promoted fixture issue")
         cutoff = await db.scalar(select(func.clock_timestamp()))
         day = cutoff.date()
-        CONTROL.write_text(
-            json.dumps({"state": "open", "at": cutoff.isoformat(), "opens": cutoff.isoformat()})
-        )
-        await db.execute(
-            update(StockSession).where(StockSession.session_date == day).values(opens_at=cutoff)
-        )
+        if operation == "catalog-dividend":
+            previous = (
+                await db.scalars(
+                    select(StockSession)
+                    .where(
+                        StockSession.exchange == listing.listing_exchange,
+                        StockSession.session_date < day,
+                        StockSession.opens_at.is_not(None),
+                    )
+                    .order_by(StockSession.session_date.desc())
+                    .limit(1)
+                )
+            ).one()
+            day, cutoff = previous.session_date, previous.opens_at
+        else:
+            closes = cutoff + timedelta(minutes=30)
+            CONTROL.write_text(
+                json.dumps(
+                    {
+                        "state": "open", "at": cutoff.isoformat(), "session_date": day.isoformat(),
+                        "opens": cutoff.isoformat(), "closes": closes.isoformat(),
+                    }
+                )
+            )
+            await db.execute(
+                update(StockSession)
+                .where(StockSession.session_date == day)
+                .values(opens_at=cutoff, closes_at=closes)
+            )
         checked = await db.scalar(select(func.clock_timestamp()))
         coin_id = binding.coin_id
         coverage = await db.get(StockCatalogActionCoverage, coin_id)
@@ -906,7 +996,7 @@ async def settle_catalog_fixture_action(engine, operation):
             await conn.commit()
 
 
-async def prepare_catalog_finance(operation):
+async def prepare_catalog_finance(operation, opening_owner=None):
     catalog_guard()
     from app.models.corporate_action import StockActionState
     from app.models.stock import StockSession
@@ -922,8 +1012,10 @@ async def prepare_catalog_finance(operation):
     engine = create_async_engine(os.environ["DATABASE_URL"])
     try:
         if operation in {"catalog-finance", "catalog-finance-mixed"}:
+            if (operation == "catalog-finance-mixed") != (opening_owner is not None):
+                raise ValueError("Only the mixed fixture requires an opening owner")
             symbol = CATALOG_MIXED if operation == "catalog-finance-mixed" else CATALOG_TRADED
-            await enroll_financial_fixture(engine, symbol)
+            await enroll_financial_fixture(engine, symbol, opening_owner)
             return
         if operation in {"catalog-dividend", "catalog-split"}:
             await settle_catalog_fixture_action(engine, operation)
@@ -1081,7 +1173,7 @@ def catalog_app():
     return app
 
 
-def catalog_command(operation):
+def catalog_command(operation, opening_owner=None):
     catalog_guard()
     if operation in {"catalog-first", "catalog-reuse", "catalog-traded-reuse"}:
         if operation == "catalog-first":
@@ -1105,7 +1197,7 @@ def catalog_command(operation):
         "catalog-halt", "catalog-resume", "catalog-stale", "catalog-hold",
         "catalog-dividend", "catalog-split",
     }:
-        asyncio.run(prepare_catalog_finance(operation))
+        asyncio.run(prepare_catalog_finance(operation, opening_owner))
     else:
         raise ValueError("Unknown synthetic catalog operation")
 
@@ -1122,6 +1214,6 @@ if __name__ == "__main__":
         else:
             uvicorn.run("app.main:create_app", factory=True, host="0.0.0.0", port=8000)
     elif sys.argv[1].startswith("catalog-"):
-        catalog_command(sys.argv[1])
+        catalog_command(*sys.argv[1:])
     else:
         asyncio.run(prepare(*sys.argv[1:]))
