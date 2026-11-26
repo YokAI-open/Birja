@@ -546,10 +546,8 @@ describe("MarketsPage stock catalog", () => {
 
   it("keeps a permitted cached mark while closed, clears it at the deadline and restores focus", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({ matches: true })),
-    );
+    const matchMedia = vi.fn(() => ({ matches: true }));
+    vi.stubGlobal("matchMedia", matchMedia);
     const stock = listing();
     const request = vi.fn(() => catalogOk(displayed(stock, Date.now(), true)));
     vi.stubGlobal(
@@ -567,6 +565,7 @@ describe("MarketsPage stock catalog", () => {
     await act(async () => vi.advanceTimersByTimeAsync(300));
     const row = await screen.findByRole("button", { name: /FQA/ });
     fireEvent.click(row);
+    expect(matchMedia).toHaveBeenCalledWith("(width < 48rem)");
     expect(await screen.findByText("Market closed")).toBeVisible();
     const opening = screen.getByText("Opens in 1 hr");
     const openingAt = opening.getAttribute("datetime")!;
@@ -861,6 +860,9 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
     "href",
     "/trade/catalog/400",
   );
+  const detail = screen.getByRole("heading", { name: "Fixture Company" });
+  detail.focus();
+  expect(detail).toHaveFocus();
   admitted = false;
   await act(async () => {
     focusManager.setFocused(false);
@@ -868,6 +870,7 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
   });
   expect(await screen.findByText(/Catalog search is unavailable/)).toBeVisible();
   expect(screen.queryByRole("link", { name: "View details AAPL" })).toBeNull();
+  await vi.waitFor(() => expect(page.search).toHaveFocus());
   await page.user.click(screen.getByRole("button", { name: /Apple AAPL/ }));
   expect(screen.getByRole("link", { name: "View details AAPL" })).toHaveAttribute(
     "href",

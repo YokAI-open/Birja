@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { MarketOpening } from "@/components/MarketOpening";
 import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
@@ -63,6 +63,17 @@ export default function MarketsPage({
   const assetHeading = useRef<HTMLHeadingElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const searchField = useRef<HTMLInputElement>(null);
+  const restoreFocusFromRemovedDetail = useCallback((panel: HTMLElement | null) => {
+    if (!panel) return;
+    return () => {
+      if (!panel.contains(document.activeElement)) return;
+      requestAnimationFrame(() => {
+        if (!panel.isConnected && document.activeElement === document.body) {
+          searchField.current?.focus();
+        }
+      });
+    };
+  }, []);
   const prices = usePrices();
   const stocks = useStocks();
   const stockMarket = market === "stock";
@@ -207,7 +218,7 @@ export default function MarketsPage({
   function pickAsset(item: MarketRow) {
     setCatalogIntent(item.listing ?? null);
     setSelection(item.key);
-    if (window.matchMedia?.("(max-width: 767px)").matches) {
+    if (window.matchMedia?.("(width < 48rem)").matches) {
       requestAnimationFrame(() => assetHeading.current?.focus());
     }
   }
@@ -398,6 +409,7 @@ export default function MarketsPage({
         </section>
         {asset && (
           <section
+            ref={restoreFocusFromRemovedDetail}
             aria-labelledby="market-asset"
             className="min-w-0 rounded-card border border-border bg-card p-5 md:p-7"
           >
