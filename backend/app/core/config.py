@@ -297,6 +297,7 @@ class SchedulerSettings(MarketValuationSettings):
 
     database_url: str = Field(repr=False)
     database_ssl_ca_file: str | None = Field(default=None, repr=False)
+    portfolio_daily_capture_enabled: bool = False
 
     price_source: Literal["kraken", "fake"] = "kraken"
     price_poll_interval_seconds: int = 60

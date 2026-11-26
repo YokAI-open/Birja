@@ -3,15 +3,18 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import text, update
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import SchedulerSettings
 from app.services.portfolio import load_portfolio_snapshots
 from app.services.portfolio_daily_values import capture_portfolio_daily_value
+from app.tasks import portfolio_daily_values as daily_task
+from app.tasks.scheduler import CycleResult
 from tests.helpers import coin_id, put_price
 from tests.portfolio_fixtures import close_empty_test_root, seed_portfolio_world
 from tests.stock_action_fixtures import synthetic_owned_portfolio
@@ -353,3 +356,125 @@ async def test_capture_and_terminal_close_serialize(capture_world, settings, clo
     assert not await record(factory, owner, root, settings)
     expected = [] if close_first else [(root, AT, Decimal("10000"), Decimal("777.77"), True)]
     assert await readings(factory) == expected
+
+
+@pytest_asyncio.fixture
+async def scheduler_books(capture_world):
+    factory, migrator, world = capture_world
+    engine = create_async_engine(
+        factory.kw["bind"].url, connect_args={"server_settings": {"role": "birja_scheduler"}}
+    )
+    try:
+        async with engine.connect() as conn:
+            assert await conn.scalar(text("SELECT current_user")) == "birja_scheduler"
+            assert await daily_task.daily_capture_schema_available(engine)
+        yield async_sessionmaker(engine), factory, migrator, world
+    finally:
+        await engine.dispose()
+
+
+async def test_scheduler_cycle_batch_fairness_and_rollback(scheduler_books, monkeypatch):
+    scheduler, admin, migrator, world = scheduler_books
+    extra = []
+    async with migrator.begin() as conn:
+        for i in range(6):
+            extra.append(
+                await conn.scalar(
+                    text("SELECT portfolio_id FROM create_portfolio(:o,:key,:name,'')"),
+                    {"o": world.owner, "key": uuid4(), "name": f"Capture {i}"},
+                )
+            )
+    doomed = world.single
+    attempted = []
+    real_capture = daily_task.capture_portfolio_daily_value
+
+    async def intermittently_fail(db, **kwargs):
+        root = kwargs["portfolio_id"]
+        attempted.append(root)
+        appended = await real_capture(db, **kwargs)
+        if root == doomed and attempted.count(root) == 1:
+            raise RuntimeError("Synthetic capture rollback")
+        return appended
+
+    monkeypatch.setattr(daily_task, "capture_portfolio_daily_value", intermittently_fail)
+    settings, cursor = SchedulerSettings(), daily_task.DailyValueCursor()
+
+    async def run():
+        return await daily_task.run_portfolio_daily_capture(
+            sessionmaker=scheduler, settings=settings, cursor=cursor, clock=lambda: AT
+        )
+
+    expected = [world.single, world.first, world.sibling, world.foreign, *extra]
+    assert await run() == CycleResult("ok", accepted=7, rejected=1)
+    assert attempted == expected[:8]
+    assert [row.portfolio_id for row in await readings(admin)] == expected[1:8]
+    assert await run() == CycleResult("ok", accepted=2)
+    assert attempted == expected
+    assert await run() == CycleResult("ok")
+    assert cursor.after_id == 0
+    assert await run() == CycleResult("ok", accepted=1)
+    assert attempted == [*expected, doomed]
+    assert [row.portfolio_id for row in await readings(admin)] == expected
+
+
+async def test_scheduler_cycle_timeout_advances_to_later_roots(scheduler_books):
+    scheduler, admin, migrator, world = scheduler_books
+    cursor = daily_task.DailyValueCursor()
+    async with migrator.begin() as conn:
+        await conn.execute(
+            text("SELECT id FROM accounts WHERE id=:root FOR UPDATE"), {"root": world.single}
+        )
+        result = await daily_task.run_portfolio_daily_capture(
+            sessionmaker=scheduler, settings=SchedulerSettings(), cursor=cursor, clock=lambda: AT
+        )
+    assert result == CycleResult("ok", accepted=3, rejected=1)
+    assert [row.portfolio_id for row in await readings(admin)] == [
+        world.first,
+        world.sibling,
+        world.foreign,
+    ]
+
+
+async def test_scheduler_cycle_window_rollover_restart_and_duplicate(scheduler_books):
+    scheduler, admin, _, _ = scheduler_books
+    settings = SchedulerSettings()
+    cursor = daily_task.DailyValueCursor()
+
+    async def run(at, state=cursor):
+        return await daily_task.run_portfolio_daily_capture(
+            sessionmaker=scheduler, settings=settings, cursor=state, clock=lambda: at
+        )
+
+    opens = AT.replace(hour=22, minute=0)
+    assert await run(opens - timedelta(microseconds=1)) == CycleResult("ok")
+    outcomes = await asyncio.gather(run(opens), run(opens, daily_task.DailyValueCursor()))
+    assert all(outcome.status == "ok" and not outcome.rejected for outcome in outcomes)
+    assert sum(outcome.accepted for outcome in outcomes) == 4
+    assert await run(opens + timedelta(minutes=15), daily_task.DailyValueCursor()) == CycleResult(
+        "ok"
+    )
+    assert await run(opens + timedelta(hours=2)) == CycleResult("ok")
+    assert cursor.day is None and cursor.after_id == 0
+    assert await run(opens + timedelta(days=2)) == CycleResult("ok", accepted=4)
+    assert [row.captured_at for row in await readings(admin)] == [
+        opens,
+        opens + timedelta(days=2),
+    ] * 4
+
+
+async def test_scheduler_cycle_clock_failures_are_local(scheduler_books):
+    scheduler, admin, _, _ = scheduler_books
+    settings = SchedulerSettings()
+    cursor = daily_task.DailyValueCursor()
+
+    def unavailable():
+        raise RuntimeError("Synthetic clock unavailable")
+
+    assert await daily_task.run_portfolio_daily_capture(
+        sessionmaker=scheduler, settings=settings, cursor=cursor, clock=unavailable
+    ) == CycleResult("source_error")
+    clock = iter([AT, AT.replace(hour=21)])
+    assert await daily_task.run_portfolio_daily_capture(
+        sessionmaker=scheduler, settings=settings, cursor=cursor, clock=lambda: next(clock)
+    ) == CycleResult("ok")
+    assert await readings(admin) == []

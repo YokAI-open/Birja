@@ -483,6 +483,23 @@ async def amain(stop: asyncio.Event | None = None) -> None:
                 )
 
             background_checks.append((history_cycle, HISTORY_CHECK_INTERVAL_SECONDS))
+        if settings.portfolio_daily_capture_enabled:
+            from app.tasks.portfolio_daily_values import (
+                CHECK_INTERVAL_SECONDS,
+                DailyValueCursor,
+                daily_capture_schema_available,
+                run_portfolio_daily_capture,
+            )
+
+            if await daily_capture_schema_available(engine):
+                daily_cursor = DailyValueCursor()
+
+                async def daily_capture_cycle() -> CycleResult:
+                    return await run_portfolio_daily_capture(
+                        sessionmaker=sessionmaker, settings=settings, cursor=daily_cursor
+                    )
+
+                background_checks.append((daily_capture_cycle, CHECK_INTERVAL_SECONDS))
         async with asyncio.TaskGroup() as group:
             for callback, interval in loops:
                 group.create_task(run(cycle=callback, interval=interval, stop=stop))

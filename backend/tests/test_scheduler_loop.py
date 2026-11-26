@@ -9,9 +9,12 @@ from typing import Any
 
 import pytest
 
-from app.core.config import get_scheduler_settings
+from app.core.config import SchedulerSettings, Settings, get_scheduler_settings
 from app.tasks import scheduler
 from app.tasks.scheduler import CycleResult, run
+from tests.test_portfolio_daily_schema import authorize_dev, run_migration, scratch_database
+
+__all__ = ["scratch_database"]
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -443,10 +446,74 @@ def test_compose_stock_keys_only_reach_disabled_scheduler(filename: str) -> None
     assert "STOCK_DATA_ENABLED: ${STOCK_DATA_ENABLED:-false}" in stock
     assert "ALPACA_API_KEY: ${ALPACA_API_KEY:-}" in stock
     assert "ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-}" in stock
+    assert "PORTFOLIO_DAILY_CAPTURE_ENABLED: ${PORTFOLIO_DAILY_CAPTURE_ENABLED:-true}" in stock
+    for threshold in (
+        "PRICE_FRESH_SECONDS: ${PRICE_FRESH_SECONDS:-120}",
+        "PRICE_STALE_SECONDS: ${PRICE_STALE_SECONDS:-300}",
+    ):
+        assert threshold in stock and threshold in found["backend"]
     for name, value in found.items():
         if name != "scheduler":
             assert "ALPACA_" not in value
+            assert "PORTFOLIO_DAILY_CAPTURE_ENABLED" not in value
     assert "VITE_ALPACA" not in content
+
+
+def test_shared_valuation_threshold_environment(monkeypatch):
+    monkeypatch.setenv("PRICE_FRESH_SECONDS", "37")
+    monkeypatch.setenv("PRICE_STALE_SECONDS", "45")
+    for config in (SchedulerSettings(), Settings()):
+        assert (config.price_fresh_seconds, config.price_stale_seconds) == (37, 45)
+
+
+@pytest.mark.parametrize("mode", ["disabled", "predecessor", "successor", "unavailable"])
+async def test_amain_admits_private_daily_cycle_only_on_supported_schema(
+    monkeypatch, scratch_database, mode
+):
+    from app.tasks import portfolio_daily_values as daily
+
+    admin, migrator = scratch_database
+    if mode in {"predecessor", "successor"}:
+        revision = "0027" if mode == "predecessor" else "0028"
+        await run_migration(migrator, revision)
+        await authorize_dev(admin, revision)
+    config = SchedulerSettings(
+        price_source="fake",
+        database_url=admin.url.render_as_string(hide_password=False),
+        portfolio_daily_capture_enabled=mode != "disabled",
+    )
+    calls = []
+    schema_checks = []
+    real = daily.daily_capture_schema_available
+
+    async def check(engine):
+        schema_checks.append(engine)
+        return await real(engine)
+
+    async def current_cycle(**kwargs):
+        calls.append("current")
+        return CycleResult("ok")
+
+    async def daily_cycle(**kwargs):
+        assert set(kwargs) == {"sessionmaker", "settings", "cursor"}
+        assert kwargs["settings"] is config
+        assert kwargs["cursor"] == daily.DailyValueCursor()
+        calls.append("daily")
+        return CycleResult("ok")
+
+    async def one_cycle(*, cycle, interval, stop, heartbeat=scheduler.HEARTBEAT_PATH):
+        if cycle.__name__ == "daily_capture_cycle":
+            assert interval == 60 and heartbeat is None
+        await cycle()
+
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: config)
+    monkeypatch.setattr(scheduler, "run", one_cycle)
+    monkeypatch.setattr(scheduler, "run_cycle", current_cycle)
+    monkeypatch.setattr(daily, "daily_capture_schema_available", check)
+    monkeypatch.setattr(daily, "run_portfolio_daily_capture", daily_cycle)
+    await scheduler.amain(asyncio.Event())
+    assert calls == (["current", "daily"] if mode == "successor" else ["current"])
+    assert len(schema_checks) == int(mode != "disabled")
 
 
 @pytest.mark.parametrize("failure", [False, True])
