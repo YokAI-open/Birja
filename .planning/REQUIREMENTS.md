@@ -11,9 +11,12 @@ Scope follows the [approved prototype](ui-reviews/v1.5/README.md).
 
 ## Market charts
 
-- [ ] **CHART-01** — Users can view actual historical stock and crypto prices for the selected instrument in `1D`, `1W`, and `1M` ranges. `1W` opens by default, and the series identifies its source and time basis.
-- [ ] **CHART-02** — The chart and equivalent text communicate dates, prices and a comparable period change. Daily and period change figures appear only when sufficient comparable data exist. Equity sessions, gaps, asset identity and split treatment do not produce fictitious prices or returns.
-- [ ] **CHART-03** — When history is sparse, delayed or unreachable, chart states describe the available coverage. The current quote, search, and eligible trading still work independently.
+The completed checks in this section verify local behavior. Live price
+history depends on CHART-04.
+
+- [x] **CHART-01** — Users can view actual historical stock and crypto prices for the selected instrument in `1D`, `1W`, and `1M` ranges. `1W` opens by default, and the series identifies its source and time basis.
+- [x] **CHART-02** — The chart and equivalent text communicate dates, prices and a comparable period change. Daily and period change figures appear only when sufficient comparable data exist. Equity sessions, gaps, asset identity and split treatment do not produce fictitious prices or returns.
+- [x] **CHART-03** — When history is sparse, delayed or unreachable, chart states describe the available coverage. The current quote, search, and eligible trading still work independently.
 - [ ] **CHART-04** — Requests for historical data stay within measured free-tier budgets, respect applicable source scope, and are bounded and shared across common reads. Candidate sources are qualified on representative crypto, featured stock and out-of-list symbols.
 
 ## Portfolio trends and workspace
@@ -46,10 +49,10 @@ order types are outside this milestone.
 | WS-02 | 22 | Complete |
 | WS-03 | 22 | Complete |
 | WS-04 | 22 | Complete |
-| CHART-01 | 23 | Pending |
-| CHART-02 | 23 | Pending |
-| CHART-03 | 23 | Pending |
-| CHART-04 | 23 | Pending |
+| CHART-01 | 23 | Verified locally |
+| CHART-02 | 23 | Verified locally |
+| CHART-03 | 23 | Verified locally |
+| CHART-04 | 23 | Live qualification pending |
 | TREND-01 | 24 | Pending |
 | TREND-02 | 24 | Pending |
 | TREND-03 | 24 | Pending |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
 current_phase: 23
-status: executing
-last_updated: "2026-11-26T11:26:18Z"
-last_activity: 2026-11-26 -- Phase 23 charts and Markets refinements passed focused checks
+status: verifying
+last_updated: "2026-11-26T11:49:58Z"
+last_activity: 2026-11-26 -- Phase 23 local execution and verification complete
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -23,17 +23,22 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: Execute the historical price charts and approved Markets visual refinements.
+Current focus: Qualify live historical prices for Phase 23.
 
 ## Current Position
 
 Phase: 23 of 25 (Show historical market prices)
-Plan: 3 of 4 executed
-Status: Executing plan 23-04
-Last activity: 2026-11-26 -- Phase 23 charts and Markets refinements passed focused checks
+Plan: 4 of 4 executed locally
+Status: Live provider qualification pending
+Last activity: 2026-11-26 -- Phase 23 local execution and verification complete
 
-The [source qualification record](phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
-keeps live history coverage and provider scope open while local implementation proceeds.
+The tested runtime `775c435` passed 11 isolated browser cases and 1,409
+frontend tests. Four app views were compared with the approved ZIP.
+[Phase 23 verification](phases/23-show-historical-market-prices/23-VERIFICATION.md)
+
+CHART-01 through CHART-03 are verified locally. CHART-04 stays open for
+Kraken and IEX history rights, representative coverage and measured limits.
+Live history is disabled by default. [Source qualification](phases/23-show-historical-market-prices/23-SOURCE-QUALIFICATION.md)
 
 Phase 22 passed all four requirements. The final isolated run passed 105
 browser tests with the expected deployed-site CSP skip. All 1,376 frontend
