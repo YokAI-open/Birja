@@ -79,8 +79,8 @@ for (const width of [320, 375, 768, 1280]) {
     await expect(selected.getByText("Price unavailable")).toHaveCount(0);
     await expect(selected.getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(selected.getByText(/Quotes come from IEX/)).toHaveCount(0);
-    const allAssets = page.getByRole("button", { name: "All assets" });
-    if (width < 768) await allAssets.click();
+    const backToResults = page.getByRole("button", { name: "Back to results" });
+    if (width < 768) await backToResults.click();
     await expect(region(page).getByText("IEX prices · Midpoint", { exact: false })).toBeVisible();
     await expect(
       region(page).getByText(body.attribution.required_text, { exact: true }),
@@ -284,7 +284,7 @@ test("200 percent reflow equivalent keeps warnings and crypto keyboard navigatio
     await expect(selectedStock(page)).toContainText(
       "This stock’s identity is changing and needs review.",
     );
-    await page.getByRole("button", { name: "All assets" }).click();
+    await page.getByRole("button", { name: "Back to results" }).click();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     expect(await page.evaluate("devicePixelRatio")).toBe(2);
     await page.screenshot({

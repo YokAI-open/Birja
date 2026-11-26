@@ -453,6 +453,7 @@ for (const width of [320, 768, 1280])
     await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
     await snapshot(page, info, `sign-in-${width}`);
     const email = await signInNewUser(page);
+    await page.getByRole("button", { name: "Crypto", exact: true }).click();
     await expect(page.getByRole("list", { name: "Crypto", exact: true })).toBeVisible();
     await snapshot(page, info, `markets-${width}`);
     const id = await only(page);

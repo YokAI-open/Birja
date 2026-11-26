@@ -14,6 +14,7 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   await expect(page.getByRole("heading", { level: 1, name: "Markets" })).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/");
 
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   const assets = page.getByRole("list", { name: "Crypto" });
   const rows = assets.getByRole("button");
   await expect(rows).toHaveCount(15);
@@ -31,7 +32,7 @@ test("a signed-in user sees live prices for the curated coins", async ({ page, b
   await expect(page.getByRole("heading", { name: "Ethereum" })).toBeVisible();
   await expect(page.getByText(/^Updated \d+s ago$/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Trade ETH" })).toHaveAttribute("href", "/trade/ETH");
-  const back = page.getByRole("button", { name: "All assets" });
+  const back = page.getByRole("button", { name: "Back to results" });
   if (await back.isVisible()) await back.click();
 
   await page.getByRole("button", { name: "US stocks", exact: true }).click();

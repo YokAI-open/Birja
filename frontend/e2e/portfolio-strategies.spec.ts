@@ -565,12 +565,14 @@ test("Phase13 renamed original unknown trade recovers identical payload without 
   await patch(page, a.id, { name: "Renamed current order root" });
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(b.id);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/portfolios/${b.id}/trade/BTC$`));
   await expect(button(page, "Check order result")).toHaveCount(0);
   await page.getByLabel("Open portfolio", { exact: true }).selectOption(a.id);
   await page.getByRole("link", { name: "Markets", exact: true }).click();
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC", exact: true }).click();
   await expect(button(page, "Check order result")).toBeVisible();

@@ -133,13 +133,13 @@ for (const width of [320, 375, 768, 1280])
       "datetime",
       "2026-11-10T14:59:50.000Z",
     );
-    if (width < 768) await page.getByRole("button", { name: "All assets" }).click();
+    if (width < 768) await page.getByRole("button", { name: "Back to results" }).click();
     expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`stocks-${width}.png`), fullPage: true });
     // Half the effective viewport width is the browser-zoom reflow equivalent.
     if (width === 1280) {
       await page.setViewportSize({ width: 640, height: 450 });
-      await page.getByRole("button", { name: "All assets" }).click();
+      await page.getByRole("button", { name: "Back to results" }).click();
       await expect(section(page).getByRole("listitem")).toHaveCount(20);
       expect(await page.evaluate("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     }

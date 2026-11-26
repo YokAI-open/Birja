@@ -152,7 +152,7 @@ test("catalog searches names, classes and aliases and prices only a keyboard sel
   expect(observedQuotes()).toEqual([["FQXA"]]);
   await noOverflow(page);
 
-  await page.getByRole("button", { name: "All assets" }).click();
+  await page.getByRole("button", { name: "Back to results" }).click();
   await expect(row).toBeFocused();
   await expect(page.getByRole("searchbox", { name: "Search stocks" })).toHaveValue("FQOLD");
   await page.setViewportSize({ width: 640, height: 500 });
@@ -461,6 +461,7 @@ test("catalog posts an ordinary dividend and split into the owned mixed portfoli
   const owned = await portfolioId(page);
   const prefix = "/portfolios/" + owned;
   const scope = "/api/v2" + prefix;
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
   await page.getByRole("list", { name: "Crypto" }).getByRole("button", { name: /BTC/ }).click();
   await page.getByRole("link", { name: "Trade BTC" }).click();
   await page.getByLabel("Amount").fill("100");
