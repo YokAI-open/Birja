@@ -105,9 +105,49 @@ it("retains a canonical bounded cursor and sends it without financial ID coercio
   expect(isEventHistoryPage(body)).toBe(true);
   const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
   vi.stubGlobal("fetch", mock);
-  expect(await fetchEventHistory("1", { cursor })).toEqual(body);
+  expect(await fetchEventHistory("1", { cursor, activity: "all", asset: "all" })).toEqual(body);
   expect(mock).toHaveBeenCalledWith(
     `/api/v2/portfolios/1/event-history?cursor=${cursor}`,
+    expect.any(Object),
+  );
+});
+
+it("requests the filtered server page and retains its v4 continuation and original dividend", async () => {
+  const filters = { activity: "dividend", asset: "stock" } as const;
+  const cursor = token(JSON.stringify({ ...cursorBody, v: 4, ...filters }));
+  const body = { items: [correction, dividend], next_cursor: cursor };
+  const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
+  vi.stubGlobal("fetch", mock);
+
+  expect(await fetchEventHistory("1", { cursor, limit: 2, ...filters })).toEqual(body);
+  expect(mock).toHaveBeenCalledWith(
+    `/api/v2/portfolios/1/event-history?cursor=${cursor}&limit=2&activity=dividend&asset=stock`,
+    expect.objectContaining({ cache: "no-store" }),
+  );
+  expect(isEventHistoryPage(body, "1", filters)).toBe(true);
+  expect(isEventHistoryPage(body, "2", filters)).toBe(false);
+  expect(isEventHistoryPage(body, "1", { activity: "dividend", asset: "all" })).toBe(false);
+  expect(isEventHistoryPage(body, "1")).toBe(false);
+  expect(
+    isEventHistoryPage({ ...body, next_cursor: token(JSON.stringify(cursorBody)) }, "1", filters),
+  ).toBe(false);
+  expect(isEventHistoryPage(page([trade]), "1", filters)).toBe(false);
+  expect(isEventHistoryPage(page([split]), "1", filters)).toBe(false);
+
+  mock.mockClear();
+  await expect(fetchEventHistory("1", { cursor, activity: "dividend" })).rejects.toThrow(
+    "Invalid event history request",
+  );
+  expect(mock).not.toHaveBeenCalled();
+});
+
+it("accepts a successful empty result for a single selected filter", async () => {
+  const body = page([]);
+  const mock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
+  vi.stubGlobal("fetch", mock);
+  expect(await fetchEventHistory("1", { asset: "crypto" })).toEqual(body);
+  expect(mock).toHaveBeenCalledWith(
+    "/api/v2/portfolios/1/event-history?asset=crypto",
     expect.any(Object),
   );
 });
