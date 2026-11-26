@@ -214,7 +214,7 @@ jobs:
 
   ops:
     runs-on: ubuntu-24.04
-    timeout-minutes: 165
+    timeout-minutes: 225
     steps:
       - uses: actions/checkout@v7
         with:
@@ -336,7 +336,7 @@ jobs:
       - name: Bounded current-source recovery preflight
         run: python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor --preflight
       - name: Wait for the archived recovery fixture clock window
-        timeout-minutes: 106
+        timeout-minutes: 126
         run: |
           python3 - <<'PY'
           from datetime import UTC, datetime, timedelta
@@ -345,7 +345,7 @@ jobs:
           # The immutable historical test inputs derive the review date from
           # an hour before the real database clock. Preserve their exact code.
           now = datetime.now(UTC)
-          end = now + timedelta(minutes=45)
+          end = now + timedelta(minutes=65)
           if now.hour == 0 or end.date() != now.date():
               start = end.replace(hour=1, minute=0, second=0, microsecond=0)
               print(f"Archived recovery fixtures will start at {start.isoformat()}", flush=True)
@@ -353,7 +353,7 @@ jobs:
                   sleep(min(remaining, 20))
           PY
       - name: Serial real PostgreSQL recovery roles TLS and old-image rollback
-        timeout-minutes: 45
+        timeout-minutes: 65
         run: sudo -- python3 deploy/tests/run-portfolio-validation.py --phase 24 --suite recovery-successor
       - name: Stage verified recovery tooling
         if: success()

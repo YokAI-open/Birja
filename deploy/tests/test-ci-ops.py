@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -883,6 +884,47 @@ class CI(unittest.TestCase):
                 else:
                     self.assertNotEqual(result.returncode, 0)
 
+    def test_ops_recovery_budget_and_actual_utc_boundaries(self):
+        ops = jobs()["ops"]
+        wait = ops.split("- name: Wait for the archived recovery fixture clock window\n", 1)[1]
+        serial = "- name: Serial real PostgreSQL recovery roles TLS and old-image rollback\n"
+        wait, recovery = wait.split(serial, 1)
+        self.assertRegex(ops, r"(?m)^    timeout-minutes: 225$")
+        self.assertRegex(wait, r"(?m)^        timeout-minutes: 126$")
+        self.assertTrue(recovery.startswith("        timeout-minutes: 65\n"))
+
+        python = wait.split("          python3 - <<'PY'\n", 1)[1].split("          PY\n", 1)[0]
+        parsed = ast.parse(textwrap.dedent(python))
+        body = [node for node in parsed.body if not isinstance(node, ast.ImportFrom)]
+        code = compile(ast.Module(body=body, type_ignores=[]), "<actual-utc-wait-step>", "exec")
+
+        for hour, minute, second, wait_seconds in (
+            (0, 0, 0, 3600),
+            (1, 0, 0, 0),
+            (22, 54, 59, 0),
+            (22, 55, 0, 125 * 60),
+        ):
+            with self.subTest(hour=hour, minute=minute, second=second):
+                started = datetime(2026, 11, 26, hour, minute, second, tzinfo=UTC)
+                clock = started
+                expected = started + timedelta(seconds=wait_seconds)
+
+                def sleep(seconds):
+                    nonlocal clock
+                    self.assertGreater(seconds, 0)
+                    self.assertLessEqual(seconds, 20)
+                    clock += timedelta(seconds=seconds)
+                    self.assertLessEqual(clock, expected)
+
+                exec(code, {
+                    "UTC": UTC,
+                    "datetime": SimpleNamespace(now=lambda tz: clock.astimezone(tz)),
+                    "timedelta": timedelta,
+                    "sleep": sleep,
+                    "print": lambda *args, **kwargs: None,
+                })
+                self.assertEqual(clock, expected)
+
     def test_ops_runs_real_serial_producers_with_verified_tool(self):
         ops = jobs().get("ops", "")
         rollback = (ROOT / "deploy/tests/test-rollback-db-security.sh").read_text()
@@ -898,7 +940,6 @@ class CI(unittest.TestCase):
         self.assertNotIn("sudo -- bash deploy/tests/test-db-config.sh", ops)
         for forbidden in ["sudo -E", "safe.directory=*", "git config --global"]:
             self.assertNotIn(forbidden, ops)
-        self.assertIn("timeout-minutes: 45", ops)
         self.assertNotIn("secrets.", ops)
         self.assertIn("fetch-depth: 0", ops)
         self.assertIn("CF8F18F2844575973F79D4E191A6868BD3F7A907", ops)
