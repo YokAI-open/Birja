@@ -98,7 +98,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 
 **Wave 5**
 
-- [ ] 24-07 — [Wire predecessor compatibility and successor recovery into CI](phases/24-compare-portfolio-performance/24-07-PLAN.md).
+- [x] 24-07 — [Wire predecessor compatibility and successor recovery into CI](phases/24-compare-portfolio-performance/24-07-PLAN.md).
 
 **Wave 6**
 
@@ -126,7 +126,7 @@ Live Kraken and IEX history qualification remains open under CHART-04.
 |---|---|---|
 | 22. Adopt the market workspace | 3/3 | Complete 2026-11-26 |
 | 23. Show historical market prices | 4/4 | Local checks passed. Live qualification pending. |
-| 24. Compare portfolio performance | 6/8 | Executing wave 5 |
+| 24. Compare portfolio performance | 7/8 | Executing wave 6 |
 | 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
 All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
