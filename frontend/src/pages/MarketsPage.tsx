@@ -149,6 +149,7 @@ export default function MarketsPage({
       ? stockItems.find(({ symbol }) => symbol === asset?.symbol)
       : undefined;
   const marketClosed = catalogListing ? catalogMark?.closed : stock?.session.state === "closed";
+  const nextOpen = catalogListing ? quoteView?.session.next_open_at : stock?.session.next_open_at;
   const elapsed = Math.max(0, Math.floor((now - prices.dataUpdatedAt) / 1000));
   const age = coin ? coin.age_seconds + elapsed : null;
   const fresh =
@@ -494,10 +495,7 @@ export default function MarketsPage({
                     Market closed
                   </p>
                   <p className="empty:hidden">
-                    <MarketOpening
-                      nextOpen={quoteView?.session.next_open_at ?? stock?.session.next_open_at}
-                      now={now}
-                    />
+                    <MarketOpening nextOpen={nextOpen} now={now} />
                   </p>
                 </div>
               )}

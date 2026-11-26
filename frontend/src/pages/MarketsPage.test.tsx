@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogQuoteView, StockCatalogItem } from "@/api/stockCatalog";
 import type { StockItem } from "@/api/stocks";
 import { renderWithClient } from "@/test/render";
+import { fullLocalTimestamp } from "@/lib/financialDisplay";
 import MarketsPage from "./MarketsPage";
 
 const stockFixtures = vi.hoisted(() => ({ useStocks: vi.fn() }));
@@ -567,7 +568,11 @@ describe("MarketsPage stock catalog", () => {
     const row = await screen.findByRole("button", { name: /FQA/ });
     fireEvent.click(row);
     expect(await screen.findByText("Market closed")).toBeVisible();
-    expect(screen.getByText("Opens in 1 hr")).toBeVisible();
+    const opening = screen.getByText("Opens in 1 hr");
+    const openingAt = opening.getAttribute("datetime")!;
+    expect(opening).toBeVisible();
+    expect(opening).toHaveAttribute("title", fullLocalTimestamp(openingAt));
+    expect(screen.getByText(/Local opening time/)).toHaveTextContent(fullLocalTimestamp(openingAt));
     const price = screen.getByText("$10.20");
     expect(price).toBeVisible();
     expect(price.querySelector("time.sr-only")).toHaveAttribute("datetime", expect.any(String));
@@ -586,13 +591,16 @@ describe("MarketsPage stock catalog", () => {
   it("checks the selected listing once at its verified closing and once at reopening", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const item = listing();
-    const request = vi.fn(() => catalogOk(displayed(item, Date.now())));
+    const request = vi.fn<() => Response | Promise<Response>>();
+    let completeReopening!: (value: Response) => void;
     let openingAt = "";
     request.mockImplementationOnce(() => {
       const initial = displayed(item, Date.now());
       initial.session.closes_at = iso(Date.now() + 10_000);
       openingAt = iso(Date.now() + 20_000);
       initial.session.next_open_at = openingAt;
+      initial.read_only = false;
+      initial.execution_reason = "available";
       return catalogOk(initial);
     });
     request.mockImplementationOnce(() => {
@@ -600,6 +608,12 @@ describe("MarketsPage stock catalog", () => {
       updated.session.next_open_at = openingAt;
       return catalogOk(updated);
     });
+    request.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeReopening = resolve;
+        }),
+    );
     vi.stubGlobal(
       "fetch",
       stockFetch(() => catalogOk(catalog([item])), request),
@@ -616,6 +630,7 @@ describe("MarketsPage stock catalog", () => {
     await act(async () => vi.advanceTimersByTimeAsync(300));
     fireEvent.click(await screen.findByRole("button", { name: /FQA/ }));
     expect(await screen.findByText("$10.20")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(request).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("$10.20")).toBeNull();
@@ -623,9 +638,22 @@ describe("MarketsPage stock catalog", () => {
     expect(await screen.findByText("Market closed")).toBeVisible();
     expect(request).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText(/^Opens in /)).toBeNull();
+    expect(screen.queryByText("$10.20")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Trade FQA" })).toBeNull();
+    await act(async () =>
+      completeReopening(
+        catalogOk({
+          ...displayed(item, Date.now()),
+          read_only: false,
+          execution_reason: "available",
+        }),
+      ),
+    );
     expect(await screen.findByText("$10.20")).toBeVisible();
     expect(screen.queryByText("Market closed")).toBeNull();
-    expect(request).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("link", { name: "Trade FQA" })).toBeVisible();
   });
 
   it.each(["unchanged", "failed"])(
@@ -666,31 +694,107 @@ describe("MarketsPage stock catalog", () => {
   );
 });
 
+const closedCuratedStock: StockItem = {
+  id: 1,
+  symbol: "AAPL",
+  company_name: "Apple",
+  currency: "USD",
+  listing_exchange: "NASDAQ",
+  quote: null,
+  session: {
+    state: "closed",
+    opens_at: null,
+    closes_at: null,
+    next_open_at: null,
+    valid_until: null,
+    timezone: "America/New_York",
+  },
+  status: { state: "unknown", observed_at: null, valid_until: null },
+  action: { state: "current", reason: "none", epoch: 1, checked_at: null, valid_until: null },
+  valuation_reason: "quote_unavailable",
+  execution_reason: "market_closed",
+  execution_enabled: false,
+  quote_reason: "session_unavailable",
+  session_reason: "closed",
+  status_reason: "unknown",
+};
+
+it.each([
+  {
+    name: "weekend",
+    now: "2026-11-28T16:00:00Z",
+    closeMark: "2026-11-27T17:59:00Z",
+    nextOpen: "2026-11-30T14:30:00Z",
+    duration: "46 hr 30 min",
+  },
+  {
+    name: "early close",
+    now: "2026-11-27T18:00:00Z",
+    closeMark: "2026-11-27T17:59:00Z",
+    nextOpen: "2026-11-30T14:30:00Z",
+    duration: "68 hr 30 min",
+  },
+  {
+    name: "holiday",
+    now: "2026-11-26T16:00:00Z",
+    closeMark: "2026-11-25T20:59:00Z",
+    nextOpen: "2026-11-27T14:30:00Z",
+    duration: "22 hr 30 min",
+  },
+])(
+  "displays the verified curated mark and next opening after $name",
+  ({ now, closeMark, nextOpen, duration }) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(Date.parse(now));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => ok(payload())),
+    );
+    const closed: StockItem = {
+      ...closedCuratedStock,
+      valuation_reason: "available",
+      quote: {
+        bid: "249.90",
+        ask: "250.10",
+        mid: "250.00",
+        event_at: closeMark,
+        collected_at: iso(Date.parse(closeMark) + 1000),
+        age_seconds: (Date.parse(now) - Date.parse(closeMark)) / 1000,
+        source: "alpaca",
+        feed: "iex",
+      },
+      session: { ...closedCuratedStock.session, next_open_at: nextOpen },
+    };
+    stockFixtures.useStocks.mockReturnValue({
+      data: {
+        items: [closed],
+        admission: { state: "approved" },
+        attribution: { required_text: "" },
+      },
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderWithClient(<MarketsPage portfolioId="50" />);
+    const details = within(screen.getByRole("region", { name: "Apple" }));
+    expect(details.getByText("Market closed")).toBeVisible();
+    const price = details.getByText("$250.00");
+    expect(price).toBeVisible();
+    expect(price.querySelector("time")).toHaveAttribute("datetime", closeMark);
+    const opening = details.getByText(`Opens in ${duration}`);
+    expect(opening).toHaveAttribute("datetime", nextOpen);
+    expect(opening).toHaveAttribute("title", fullLocalTimestamp(nextOpen));
+    expect(details.getByRole("link", { name: "View details AAPL" })).toHaveAttribute(
+      "href",
+      "/portfolios/50/trade/stocks/AAPL",
+    );
+    expect(details.queryByRole("link", { name: "Trade AAPL" })).toBeNull();
+  },
+);
+
 it("keeps curated stock search and its own ticket when the catalog is unavailable", async () => {
-  const closed: StockItem = {
-    id: 1,
-    symbol: "AAPL",
-    company_name: "Apple",
-    currency: "USD",
-    listing_exchange: "NASDAQ",
-    quote: null,
-    session: {
-      state: "closed",
-      opens_at: null,
-      closes_at: null,
-      next_open_at: null,
-      valid_until: null,
-      timezone: "America/New_York",
-    },
-    status: { state: "unknown", observed_at: null, valid_until: null },
-    action: { state: "current", reason: "none", epoch: 1, checked_at: null, valid_until: null },
-    valuation_reason: "quote_unavailable",
-    execution_reason: "market_closed",
-    execution_enabled: false,
-    quote_reason: "session_unavailable",
-    session_reason: "closed",
-    status_reason: "unknown",
-  };
+  const closed = closedCuratedStock;
   const curated = [
     closed,
     ...Array.from({ length: 19 }, (_, i) => ({
@@ -736,6 +840,9 @@ it("keeps curated stock search and its own ticket when the catalog is unavailabl
   expect(within(curatedList).getAllByRole("button")).toHaveLength(20);
   const original = screen.getByRole("link", { name: "View details AAPL" });
   expect(original).toHaveAttribute("href", "/trade/stocks/AAPL");
+  expect(screen.getByText("Market closed")).toBeVisible();
+  expect(screen.queryByText(/^Opens in /)).toBeNull();
+  expect(screen.queryByText(/\$\d/)).toBeNull();
   expect(search).not.toHaveBeenCalled();
   await page.user.type(page.search, "Apple");
   expect(await screen.findByText(/Catalog search is unavailable/)).toBeVisible();
