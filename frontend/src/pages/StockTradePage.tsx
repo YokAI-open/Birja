@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketOpening } from "@/components/MarketOpening";
 import { StockDate, StockFigure, StockTradeReceipt } from "@/components/StockTradeReceipt";
-import { formatUnitPrice, formatUsd } from "@/lib/money";
+import { formatStockPrice, formatUnitPrice, formatUsd } from "@/lib/money";
 import { signedUsd } from "@/lib/financialDisplay";
 import "./tradeWorkspace.css";
 const reasons: Record<StockRefusal, string> = {
@@ -75,6 +75,15 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
       ? "Trading became unavailable. Your quantity is saved here; get a fresh preview before confirming."
       : null);
   const quote = t.quote;
+  const previewFailed = !marketClosed && t.phase === "draft" && t.error === "unknown";
+  const previewStatus =
+    t.phase === "loading_preview"
+      ? "Preparing the trade preview."
+      : t.phase === "preview" && quote
+        ? t.replacement
+          ? "Price changed. Review the updated preview and confirm again."
+          : "Preview ready. Review before confirming."
+        : "";
   const lastQuote = marketClosed ? cataloguedStock?.quote : null;
   const visible = quote ?? c?.quote;
   const company = c?.company_name ?? cataloguedStock?.company_name;
@@ -127,7 +136,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                           className={`min-w-0 rounded-control border p-3 ${selected ? "border-input bg-muted" : "border-border"}`}
                         >
                           <p className="text-sm text-muted-foreground">IEX {side}</p>
-                          <p className="trade-workspace-price">{formatUnitPrice(visible[side])}</p>
+                          <p className="trade-workspace-price">{formatStockPrice(visible[side])}</p>
                           {selected && (
                             <p className="text-sm text-muted-foreground">
                               {t.side === "buy" ? "Buy price" : "Sell price"}
@@ -243,6 +252,9 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
         </Card>
         <Card className="trade-workspace-preview">
           <CardContent className="trade-workspace-content">
+            <p role="status" aria-atomic="true" className="sr-only">
+              {previewStatus}
+            </p>
             {t.fill ? (
               <StockTradeReceipt fill={t.fill} target={target} onTradeAgain={t.tradeAgain} />
             ) : (
@@ -275,10 +287,10 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                     <p>Price updated. Review the changes before confirming again.</p>
                     <dl className="mt-3 flex flex-col gap-3">
                       <StockFigure label="Previous execution price">
-                        {formatUnitPrice(t.replacement.previous_exec_price)}
+                        {formatStockPrice(t.replacement.previous_exec_price)}
                       </StockFigure>
                       <StockFigure label="New execution price">
-                        {formatUnitPrice(t.replacement.quote.exec_price)}
+                        {formatStockPrice(t.replacement.quote.exec_price)}
                       </StockFigure>
                       <StockFigure label="Previous cash change">
                         {signedUsd(t.replacement.previous_cash_delta)}
@@ -300,7 +312,7 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                   <dl className="flex flex-col gap-3">
                     <StockFigure label="Quantity">{quote.quantity.split(".")[0]}</StockFigure>
                     <StockFigure label="Execution price">
-                      {formatUnitPrice(quote.exec_price)}
+                      {formatStockPrice(quote.exec_price)}
                     </StockFigure>
                     <StockFigure label="Commission">{formatUsd(quote.fee)}</StockFigure>
                     <StockFigure label="Added spread">0%</StockFigure>
@@ -308,6 +320,8 @@ function Ticket({ target, symbol }: { target: PortfolioTarget; symbol: string })
                       {signedUsd(quote.cash_delta)}
                     </StockFigure>
                   </dl>
+                ) : previewFailed ? (
+                  <p role="alert">Couldn’t prepare this preview. Try again.</p>
                 ) : !marketClosed && t.phase !== "loading_preview" && t.phase !== "submitting" ? (
                   <p>Enter a quantity to preview this trade.</p>
                 ) : null}

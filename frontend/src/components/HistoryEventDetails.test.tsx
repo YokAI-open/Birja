@@ -211,7 +211,7 @@ it.each(["stock", "crypto"] as const)(
       cash_delta: "-100.00",
       side: "sell",
       quantity: "2",
-      exec_price: "50.00",
+      exec_price: "102.00123456",
       fee: "0.00",
       filled_at: original.recorded_at,
       source: asset_type === "stock" ? "alpaca" : null,
@@ -227,6 +227,7 @@ it.each(["stock", "crypto"] as const)(
     );
     expect(screen.getByText("Sell")).toBeVisible();
     expect(screen.getByText("−$100.00")).toBeVisible();
+    expect(screen.getByText(asset_type === "stock" ? "$102.00123456" : "$102.00")).toBeVisible();
     expect(screen.getByText(asset_type === "stock" ? "Commission" : "Fee")).toBeVisible();
     expect(screen.queryByText(/IEX prices/)).toBe(
       asset_type === "stock" ? screen.getByText(/IEX prices/) : null,

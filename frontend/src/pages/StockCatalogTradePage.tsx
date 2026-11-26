@@ -13,16 +13,8 @@ import { useNow } from "@/hooks/useNow";
 import type { PortfolioTarget } from "@/hooks/usePortfolioTarget";
 import { catalogDisplay } from "@/hooks/useStockCatalog";
 import { signedUsd } from "@/lib/financialDisplay";
-import { formatUnitPrice, formatUsd } from "@/lib/money";
+import { formatStockPrice, formatUnitPrice, formatUsd } from "@/lib/money";
 import "./tradeWorkspace.css";
-
-const orderUsd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 8,
-});
-const exactPrice = (value: string) => orderUsd.format(value as `${number}`);
 
 const messages: Record<CatalogOrderRefusal, string> = {
   read_only: "Orders aren't available for this stock yet.",
@@ -85,12 +77,7 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
   if (!target.isCurrent()) return null;
   const resultUnconfirmed = order.phase === "submitting" || order.phase === "unknown";
   const receipt = order.fill ? (
-    <StockTradeReceipt
-      fill={order.fill}
-      target={target}
-      onTradeAgain={order.tradeAgain}
-      unitPrice={exactPrice}
-    />
+    <StockTradeReceipt fill={order.fill} target={target} onTradeAgain={order.tradeAgain} />
   ) : null;
 
   if (!context) {
@@ -166,6 +153,14 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
   const shortcut = order.side === "buy" ? context.buy_max_quantity : context.held_quantity;
   const noShortcut = locked || closed || context.read_only || stockShares(shortcut) === 0n;
   const showPreview = (canDraft && !closed) || receipt || resultUnconfirmed;
+  const previewStatus =
+    order.phase === "loading_preview"
+      ? "Preparing the trade preview."
+      : order.phase === "preview" && order.quote
+        ? order.replacement
+          ? "Price changed. Review the updated preview and confirm again."
+          : "Preview ready. Review before confirming."
+        : "";
 
   return (
     <div className="trade-workspace">
@@ -204,7 +199,7 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                         className={`min-w-0 rounded-control border p-3 ${selected ? "border-input bg-muted" : "border-border"}`}
                       >
                         <p className="text-sm text-muted-foreground">IEX {side}</p>
-                        <p className="trade-workspace-price">{exactPrice(visible[side])}</p>
+                        <p className="trade-workspace-price">{formatStockPrice(visible[side])}</p>
                         {selected && (
                           <p className="text-sm text-muted-foreground">
                             {order.side === "buy" ? "Buy price" : "Sell price"}
@@ -323,6 +318,9 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
         {showPreview && (
           <Card className="trade-workspace-preview">
             <CardContent className="trade-workspace-content">
+              <p role="status" aria-atomic="true" className="sr-only">
+                {previewStatus}
+              </p>
               {receipt ??
                 (resultUnconfirmed ? (
                   <OrderResultCheck
@@ -333,21 +331,20 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                   <>
                     <h2 className="text-xl font-semibold">Trade preview</h2>
                     {order.phase === "loading_preview" ? (
-                      <p role="status">Preparing preview…</p>
+                      <p>Preparing preview…</p>
                     ) : (
                       order.replacement && (
                         <section
                           aria-label="Price changes"
-                          role="status"
                           className="rounded-control bg-warn-soft p-4 text-warn-text"
                         >
                           <p>Price updated. Review the changes before confirming again.</p>
                           <dl className="mt-3 flex flex-col gap-3">
                             <StockFigure label="Previous execution price">
-                              {exactPrice(order.replacement.previous_exec_price)}
+                              {formatStockPrice(order.replacement.previous_exec_price)}
                             </StockFigure>
                             <StockFigure label="New execution price">
-                              {exactPrice(order.replacement.quote.exec_price)}
+                              {formatStockPrice(order.replacement.quote.exec_price)}
                             </StockFigure>
                             <StockFigure label="Previous cash change">
                               {signedUsd(order.replacement.previous_cash_delta)}
@@ -369,7 +366,7 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                           {!order.replacement && (
                             <>
                               <StockFigure label="Execution price">
-                                {exactPrice(order.quote.exec_price)}
+                                {formatStockPrice(order.quote.exec_price)}
                               </StockFigure>
                               <StockFigure label="Total cash change">
                                 {signedUsd(order.quote.cash_delta)}
@@ -390,7 +387,7 @@ function CatalogTicket({ target, catalogId }: { target: PortfolioTarget; catalog
                         </Button>
                       </>
                     ) : order.error === "unknown" ? (
-                      <p role="alert">Couldn’t prepare this preview.</p>
+                      <p role="alert">Couldn’t prepare this preview. Try again.</p>
                     ) : order.phase !== "loading_preview" && !restriction ? (
                       <p className="text-muted-foreground">
                         Enter a quantity to preview this trade.

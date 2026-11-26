@@ -393,6 +393,8 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
   });
   const quantity = await screen.findByLabelText("Whole-share quantity");
   const activeTicket = within(screen.getByRole("region", { name: "Trade ticket" }));
+  const status = screen.getByRole("status");
+  expect(status).toHaveClass("sr-only");
   expect(activeTicket.getByText("Cash available $10,000.00")).toBeVisible();
   expect(activeTicket.getByText("Shares owned 0")).toBeVisible();
   await user.click(activeTicket.getByRole("radio", { name: "Sell" }));
@@ -409,8 +411,12 @@ it("uses the existing ticket controls, explicitly reviews repricing, and focuses
   await user.type(quantity, "2");
   await user.click(screen.getByRole("button", { name: "Preview trade" }));
   expect(confirmations).toHaveLength(0);
-  await user.click(await screen.findByRole("button", { name: "Confirm buy" }));
+  const confirm = await screen.findByRole("button", { name: "Confirm buy" });
+  expect(status).toHaveTextContent("Preview ready. Review before confirming.");
+  await user.click(confirm);
   expect(await screen.findByText(/Price updated/)).toBeVisible();
+  expect(status).toHaveTextContent("Price changed. Review the updated preview and confirm again.");
+  expect(screen.getAllByRole("status")).toEqual([status]);
   expect(screen.getAllByText("$151.125").length).toBeGreaterThan(0);
   expect(confirmations).toHaveLength(1);
   await user.click(screen.getByRole("button", { name: "Confirm buy" }));

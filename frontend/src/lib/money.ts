@@ -36,3 +36,18 @@ export function formatUnitPrice(value: string): string {
   }
   return formatUsd(value);
 }
+
+const STOCK_PRICE = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 8,
+});
+
+/** Stock orders retain the provider's execution-price precision. */
+export function formatStockPrice(value: string): string {
+  if (!/^\d+(\.\d+)?$/.test(value)) {
+    throw new Error(`Not a non-negative decimal string: ${value}`);
+  }
+  return STOCK_PRICE.format(value as `${number}`);
+}
