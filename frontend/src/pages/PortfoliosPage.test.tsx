@@ -24,6 +24,7 @@ function show(
     failed: false,
     loading: false,
     retrying: false,
+    paused: false,
     retry,
     ...trend,
   });
@@ -43,13 +44,14 @@ function show(
     ready: true,
     creation: { phase: "editing", attempt: null, error: null },
   } as ReturnType<typeof usePortfolioManagement>);
-  return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter>
-        <PortfoliosPage />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  const client = new QueryClient();
+  return render(<PortfoliosPage />, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    ),
+  });
 }
 it("keeps card membership, current values and exact dated observations paired through gaps", () => {
   const current = [
@@ -103,6 +105,39 @@ it("exposes one history retry outside fully usable cards and keeps current figur
   fireEvent.click(button);
   expect(retry).toHaveBeenCalledOnce();
   expect(refetch).not.toHaveBeenCalled();
+});
+
+it("keeps the retry focus during an offline pause and restores it on success", () => {
+  const view = show(
+    [{ ...cashPortfolio(), id: "2", name: "Dividends", description: "" }],
+    {},
+    { failed: true },
+  );
+  const button = screen.getByRole("button", { name: "Retry value history" });
+  button.focus();
+  fireEvent.click(button);
+  const started = { loading: true, paused: true, retrying: true, failed: false, retry };
+  vi.mocked(usePortfolioValueHistory).mockReturnValue({ ...started, data: undefined });
+  view.rerender(<PortfoliosPage />);
+  expect(screen.getByText("Waiting for a connection to load value history.")).toBeVisible();
+  expect(button).toHaveFocus();
+  expect(button).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("link", { name: "Dividends" })).toHaveTextContent("$10,000.00 cash");
+
+  vi.mocked(usePortfolioValueHistory).mockReturnValue({
+    ...started,
+    loading: false,
+    paused: false,
+    retrying: false,
+    data: {
+      start_day: "2026-10-01",
+      end_day: "2026-10-30",
+      portfolios: [{ portfolio_id: "2", points: [] }],
+    },
+  });
+  view.rerender(<PortfoliosPage />);
+  expect(screen.getByText("Value history updated.")).toHaveAttribute("aria-live", "polite");
+  expect(screen.getByRole("heading", { name: "Portfolios", level: 1 })).toHaveFocus();
 });
 afterEach(() => {
   cleanup();

@@ -72,11 +72,13 @@ export function usePortfolioValueHistory(
   });
 
   const data = enabled && !query.isError ? query.data : undefined;
+  const paused = enabled && query.isPaused && !data;
   return {
     data,
-    loading: !!ids?.length && (!enabled || (query.isFetching && !data)),
-    failed: enabled && query.isError && !query.isFetching,
-    retrying: enabled && query.isFetching && query.errorUpdateCount > 0 && !data,
+    loading: !!ids?.length && (!enabled || ((query.isFetching || query.isPaused) && !data)),
+    failed: enabled && query.isError && query.fetchStatus === "idle",
+    retrying: enabled && query.fetchStatus !== "idle" && query.errorUpdateCount > 0 && !data,
+    paused,
     retry: () => {
       if (isCurrent()) void query.refetch({ cancelRefetch: false });
     },

@@ -1,5 +1,5 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { broadcastMetadataChange } from "@/lib/portfolioMetadataEvents";
@@ -55,6 +55,7 @@ function setup() {
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());
+  onlineManager.setOnline(true);
   vi.unstubAllGlobals();
   sessionStorage.clear();
 });
@@ -73,7 +74,14 @@ it("keeps current values through a malformed history response and retries only h
     "10000.00",
     "10000.00",
   ]);
-  act(() => hook.result.current.trend.retry());
+  act(() => {
+    onlineManager.setOnline(false);
+    hook.result.current.trend.retry();
+  });
+  await waitFor(() => expect(hook.result.current.trend.paused).toBe(true));
+  expect(hook.result.current.trend.retrying).toBe(true);
+  expect(hook.result.current.trend.loading).toBe(true);
+  act(() => onlineManager.setOnline(true));
   await waitFor(() => expect(hook.result.current.trend.retrying).toBe(true));
   expect(hook.result.current.trend.loading).toBe(true);
   await act(async () => next.resolve(history("1", "2")));

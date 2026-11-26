@@ -60,6 +60,14 @@ export default function PortfoliosPage() {
   const management = usePortfolioManagement();
   const deletion = usePortfolioDeletion();
   const [open, setOpen] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const historyRetry = useRef<HTMLButtonElement>(null);
+  const captureHistoryRetry = useCallback((button: HTMLButtonElement | null) => {
+    if (!button && document.activeElement === historyRetry.current) {
+      heading.current?.focus({ preventScroll: true });
+    }
+    historyRetry.current = button;
+  }, []);
   const trigger = useRef<HTMLButtonElement>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const restoring = useRef(false);
@@ -104,7 +112,12 @@ export default function PortfoliosPage() {
   };
   return (
     <div className="portfolio-overview flex flex-col gap-7 text-base leading-6 wrap-anywhere md:gap-9">
-      <h1 className="sr-only">Portfolios</h1>
+      <h1 ref={heading} tabIndex={-1} className="sr-only">
+        Portfolios
+      </h1>
+      <p aria-live="polite" className="sr-only">
+        {trend.data && "Value history updated."}
+      </p>
       {acknowledgement && <p role="status">Portfolio deleted.</p>}
       {deletion.deletion.attempt && (
         <div className="flex min-w-0 flex-col gap-2 rounded-control bg-warn-soft p-4 text-warn-text">
@@ -275,19 +288,23 @@ export default function PortfoliosPage() {
               You have 10 active portfolios. You can&apos;t create another right now.
             </p>
           )}
-          {(trend.failed || trend.retrying) && (
+          {(trend.failed || trend.retrying || trend.paused) && (
             <div className="flex flex-wrap items-center gap-3">
               {trend.failed && <p role="status">Value history unavailable</p>}
-              <Button
-                className="min-h-11"
-                variant="secondary"
-                aria-disabled={trend.retrying}
-                onClick={() => {
-                  if (!trend.retrying) trend.retry();
-                }}
-              >
-                Retry value history
-              </Button>
+              {trend.paused && <p role="status">Waiting for a connection to load value history.</p>}
+              {(trend.failed || trend.retrying) && (
+                <Button
+                  ref={captureHistoryRetry}
+                  className="min-h-11"
+                  variant="secondary"
+                  aria-disabled={trend.retrying}
+                  onClick={() => {
+                    if (!trend.retrying) trend.retry();
+                  }}
+                >
+                  Retry value history
+                </Button>
+              )}
             </div>
           )}
         </>
