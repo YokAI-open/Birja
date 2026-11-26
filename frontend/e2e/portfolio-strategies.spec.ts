@@ -257,17 +257,18 @@ test("Phase 24 private daily values keep exact gaps, independent retry and close
   expect(restoredRequests).toBe(1);
 
   // The recorded adjacent pair paints a segment, followed by a missing day.
-  const canvas = firstCard.locator("canvas");
+  await expect(firstCard.locator("canvas")).toBeVisible();
+  const canvasSelector = `[aria-describedby="portfolio-trend-${first}"] canvas`;
   const sample = async (dayOffset: number) =>
-    canvas.evaluate((element, offset) => {
-      const diagram = element as HTMLCanvasElement;
-      const context = diagram.getContext("2d")!;
+    page.evaluate<boolean>(`(() => {
+      const diagram = document.querySelector(${JSON.stringify(canvasSelector)});
+      const context = diagram.getContext("2d");
       const ratio = diagram.width / diagram.getBoundingClientRect().width;
       const pad = 4 * ratio;
-      const x = Math.round(pad + ((diagram.width - pad * 2) * offset) / 29);
+      const x = Math.round(pad + ((diagram.width - pad * 2) * ${dayOffset}) / 29);
       const rgba = context.getImageData(x, 0, 1, diagram.height).data;
       return rgba.some((channel, index) => index % 4 === 3 && channel > 0);
-    }, dayOffset);
+    })()`);
   await expect.poll(() => sample(11.5)).toBe(true);
   expect(await sample(13)).toBe(false);
 
@@ -306,20 +307,18 @@ async function comparePortfolioCapture(page: Page, info: TestInfo, name: string,
     firstHolding: ".portfolio-holding-grid > li",
   };
   await page.setViewportSize({ width, height: 1000 });
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    (document.activeElement as HTMLElement | null)?.blur();
-    scrollTo(0, 0);
-  });
+  await page.evaluate(
+    "document.fonts.ready.then(() => { document.activeElement?.blur(); scrollTo(0, 0); })",
+  );
   await noOverflow(page);
-  const layout = await page.evaluate((selectors) => {
-    return Object.fromEntries(
-      Object.entries(selectors).map(([key, selector]) => {
+  const layout = await page.evaluate<Record<keyof typeof targets, number[] | null>>(`
+    Object.fromEntries(
+      Object.entries(${JSON.stringify(targets)}).map(([key, selector]) => {
         const rect = document.querySelector(selector)?.getBoundingClientRect();
         return [key, rect ? [rect.x, rect.y, rect.width, rect.height] : null];
-      }),
-    );
-  }, targets);
+      })
+    )
+  `);
   const desktop = width === 1440;
   const grid = layout.overviewGrid ?? layout.toolbar!;
   expect(grid[0]).toBe(desktop ? 40 : 16);
@@ -391,12 +390,12 @@ test("Phase 24 real portfolio workspace matches desktop and phone layouts and ke
   await comparePortfolioCapture(page, info, "portfolios", 390);
   await page.setViewportSize({ width: 320, height: 1000 });
   await noOverflow(page);
-  await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
+  await page.evaluate('document.documentElement.style.fontSize = "200%"');
   await noOverflow(page);
   await expect(firstCard).toBeVisible();
   await expect(firstCard.getByRole("heading")).toHaveCSS("font-size", "46px");
   await expect(button(page, "New portfolio")).toBeVisible();
-  await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
+  await page.evaluate('document.documentElement.style.removeProperty("font-size")');
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   const statementResponse = readPortfolio(page, `/${first}`);
@@ -480,14 +479,14 @@ test("Phase 24 real portfolio workspace matches desktop and phone layouts and ke
   await comparePortfolioCapture(page, info, "portfolio", 390);
   await page.setViewportSize({ width: 320, height: 1000 });
   await noOverflow(page);
-  await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
+  await page.evaluate('document.documentElement.style.fontSize = "200%"');
   await noOverflow(page);
   for (const control of [chooser, edit, update, remove, filter, sort, appleTrade]) {
     await expect(control).toBeVisible();
     await control.focus();
     await expect(control).toBeFocused();
   }
-  await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
+  await page.evaluate('document.documentElement.style.removeProperty("font-size")');
 
   await chooser.selectOption(second.id);
   await expect(page).toHaveURL(`/portfolios/${second.id}`);
