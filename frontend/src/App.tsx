@@ -163,7 +163,7 @@ function AppShell({ navigation, children }: { navigation?: ReactNode; children: 
   return (
     <>
       <header className="border-b border-border">
-        <div className="mx-auto flex min-h-16 max-w-[1440px] items-center gap-x-1 px-2 py-2 min-[375px]:gap-x-1.5 min-[375px]:px-3 sm:min-h-20 sm:gap-x-8 sm:px-6 md:px-8 lg:gap-x-12">
+        <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center gap-x-1 gap-y-2 px-2 py-2 min-[375px]:gap-x-1.5 min-[375px]:px-3 sm:min-h-20 sm:gap-x-8 sm:px-6 md:px-8 lg:gap-x-12">
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <picture className="shrink-0 mix-blend-multiply">
               <source media="(min-width: 640px)" srcSet="/brand/logo-240.webp" />
@@ -271,7 +271,7 @@ function SignedIn() {
         <>
           <nav
             aria-label="Main"
-            className="flex min-w-0 items-center gap-0.5 min-[375px]:gap-1 sm:gap-2"
+            className="flex min-w-0 flex-wrap items-center gap-0.5 min-[375px]:gap-1 sm:gap-2"
           >
             <NavLink to="/" end className={navItem}>
               Markets
