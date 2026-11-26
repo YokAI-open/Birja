@@ -2,6 +2,13 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { portfolioId, signInNewUser } from "./helpers.js";
+import {
+  captureMarkets,
+  expectChartRange,
+  historyPath,
+  historyReply,
+  type HistoryQuery,
+} from "./market-history-fixtures.js";
 import { stockFixture } from "./stock-trade-fixtures.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -122,6 +129,121 @@ test.beforeEach(() => {
   catalogFixture("catalog-first");
 });
 
+test("Phase 23 catalog ranges bind exact identity and preview uses the current catalog ask", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  catalogFixture("catalog-finance");
+  await page.setViewportSize({ width: 390, height: 1000 });
+  const queries: HistoryQuery[] = [];
+  await page.route(`**${historyPath}`, (route) => {
+    const query = route.request().postDataJSON() as HistoryQuery;
+    if (query.instrument.kind === "catalog") queries.push(query);
+    return route.fulfill({
+      json: historyReply(query, query.instrument.kind === "catalog" ? "ready" : "unavailable"),
+    });
+  });
+  await openStocks(page);
+  const owned = await portfolioId(page);
+  await page.getByRole("combobox", { name: "Trading portfolio" }).selectOption(owned);
+  const item = await selectPromotedStock(page);
+  const instrument = {
+    kind: "catalog",
+    catalog_id: item.catalog_id,
+    listing_version: item.listing_version,
+  } as const;
+  const chart = page.getByRole("region", { name: "Price history" });
+  const action = page.getByRole("link", { name: "Trade FQZT", exact: true });
+  const quote = page.locator(".market-main-price");
+  for (const range of ["1W", "1D", "1M"] as const) {
+    if (range !== "1W")
+      await chart.getByRole("button", { name: range, exact: true }).press("Enter");
+    await expectChartRange(page, { instrument, range });
+    await expect(quote).toHaveText("$102.00");
+    await expect(action).toHaveAttribute(
+      "href",
+      `/portfolios/${owned}/trade/catalog/${item.catalog_id}`,
+    );
+  }
+  expect(queries).toEqual(["1W", "1D", "1M"].map((range) => ({ instrument, range })));
+  await noOverflow(page);
+  await action.click();
+  await page.getByLabel("Whole-share quantity").fill("1");
+  const endpoint = `/api/v2/portfolios/${owned}/stock-catalog/${item.catalog_id}/preview`;
+  const preview = page.waitForResponse((response) => new URL(response.url()).pathname === endpoint);
+  await page.getByRole("button", { name: "Preview trade", exact: true }).click();
+  const result = await preview;
+  expect(result.ok()).toBe(true);
+  expect(await result.json()).toMatchObject({
+    exec_price: "103.00000000",
+    catalog_id: item.catalog_id,
+    listing_version: item.listing_version,
+  });
+
+  // Match the approved Oracle mobile visual with a separate display-only fixture.
+  const oracle = {
+    catalog_id: "91001",
+    listing_version: "91002",
+    ticker: "ORCL",
+    company_name: "Oracle",
+    listing_exchange: "NYSE",
+    share_class: null,
+    state: "active",
+    reason: "reviewed_issue_evidence",
+  };
+  const stamp = (seconds: number) => new Date(Date.now() + seconds * 1_000).toISOString();
+  await page.route(`**${searchPath}?q=Oracle`, (route) =>
+    route.fulfill({
+      json: {
+        state: "ready",
+        generation_id: "91000",
+        published_at: stamp(-60),
+        has_more: false,
+        items: [oracle],
+      },
+    }),
+  );
+  await page.route(`**/api/v2/stock-catalog/${oracle.catalog_id}/quote`, (route) =>
+    route.fulfill({
+      json: {
+        listing: oracle,
+        quote: {
+          bid: "207.00000000",
+          ask: "209.00000000",
+          mid: "208.00000000",
+          event_at: stamp(-2),
+          collected_at: stamp(-1),
+          valid_until: stamp(120),
+          currency: "USD",
+          source: "alpaca",
+          feed: "iex",
+        },
+        session: {
+          state: "open",
+          opens_at: stamp(-1800),
+          closes_at: stamp(1800),
+          next_open_at: null,
+        },
+        reason: "ready",
+        read_only: false,
+        execution_reason: "available",
+      },
+    }),
+  );
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Markets", exact: true })
+    .click();
+  await searchFor(page, "Oracle");
+  await stock(page, /ORCL/).press("Enter");
+  await expect(page.getByRole("heading", { name: "Oracle", exact: true })).toBeFocused();
+  await expect(quote).toHaveText("$208.00");
+  await expect(chart.getByText("IEX · Regular sessions · Split-adjusted")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Trade ORCL", exact: true })).toBeVisible();
+  await noOverflow(page);
+  await captureMarkets(page, testInfo, "catalog-mobile");
+});
+
 test("catalog searches names, classes and aliases and prices only a keyboard selection", async ({
   page,
 }, testInfo) => {
@@ -153,7 +275,7 @@ test("catalog searches names, classes and aliases and prices only a keyboard sel
   expect(quote.listing).toMatchObject(item);
   expect(quote.quote).toMatchObject({ mid: "18.00000000", feed: "iex" });
   await expect(page.getByRole("heading", { name: quartz, exact: true })).toBeFocused();
-  await expect(page.getByText("$18.00", { exact: true })).toBeVisible();
+  await expect(page.locator(".market-main-price")).toHaveText("$18.00");
   expect(observedQuotes()).toEqual([["FQXA"]]);
   await noOverflow(page);
 
@@ -198,7 +320,7 @@ test("catalog preserves a permitted closed mark in the selected owned portfolio"
   const displayed = selectedQuote(page);
   await stock(page, /FQXA/).click();
   expect((await displayed).status()).toBe(200);
-  await expect(page.getByText("$18.00", { exact: true })).toBeVisible();
+  await expect(page.locator(".market-main-price")).toHaveText("$18.00");
   const link = page.getByRole("link", { name: "View details FQXA" });
   await expect(link).toHaveAttribute("href", new RegExp("/trade/catalog/" + item.catalog_id + "$"));
   await link.click();
@@ -445,7 +567,7 @@ test("catalog preserves the SQL closed mark with an empty cache and suppresses e
     execution_reason: "market_closed",
     quote: { feed: "iex" },
   });
-  await expect(page.getByText(/^\$102\.00/)).toBeVisible();
+  await expect(page.locator(".market-main-price")).toContainText(/^\$102\.00/);
   await expect(page.locator("time").filter({ hasText: /^Opens in / })).toBeVisible();
   const endpoint = "/api/v2/portfolios/" + owned + "/stock-catalog/" + item.catalog_id;
   const ownedContext = page.waitForResponse(

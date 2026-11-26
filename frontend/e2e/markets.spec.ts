@@ -1,8 +1,16 @@
 // Phase 3 happy path. Needs the full compose stack with PRICE_SOURCE=fake (CI sets it).
 // Never run it against a stack whose email backend is resend.
 import { expect, test, type Page } from "@playwright/test";
-import { portfolioId, signInNewUser } from "./helpers.js";
+import { portfolioApi, portfolioId, signInNewUser } from "./helpers.js";
+import {
+  captureMarkets,
+  expectChartRange,
+  historyPath,
+  historyReply,
+  type HistoryQuery,
+} from "./market-history-fixtures.js";
 import { stocks as stockCatalogue } from "./stock-fixtures.js";
+import { stockFixture } from "./stock-trade-fixtures.js";
 
 test("a signed-in user sees live prices for the curated coins", async ({ page, browser }) => {
   test.setTimeout(90_000);
@@ -89,6 +97,10 @@ async function expectSingleRowHeader(page: Page) {
   for (const box of boxes) {
     expect(Math.abs(box!.y + box!.height / 2 - rowCenter)).toBeLessThanOrEqual(1);
   }
+  await expectNoHorizontalOverflow(page);
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate<number>(
     "document.documentElement.scrollWidth - document.documentElement.clientWidth",
   );
@@ -192,6 +204,12 @@ for (const fixture of [
       });
       item.quote!.collected_at = new Date(Date.parse(mark) + 1000).toISOString();
     }
+    if (fixture.name === "holiday") {
+      body.items[0].company_name = "Apple Inc.";
+      await page.route(`**${historyPath}`, (route) =>
+        route.fulfill({ json: historyReply(route.request().postDataJSON() as HistoryQuery) }),
+      );
+    }
     await page.route("**/api/v1/stocks", (route) => route.fulfill({ json: body }));
     await signInNewUser(page);
 
@@ -204,10 +222,129 @@ for (const fixture of [
     await expect(detail.getByRole("link", { name: "View details AAPL" })).toBeVisible();
     await expect(detail.getByRole("link", { name: "Trade AAPL" })).toHaveCount(0);
     if (fixture.name === "holiday") {
-      await page.screenshot({
-        path: testInfo.outputPath("markets-desktop-closed.png"),
-        fullPage: true,
-      });
+      await expect(detail.getByText("IEX · Regular sessions · Split-adjusted")).toBeVisible();
+      await captureMarkets(page, testInfo, "desktop-closed");
     }
   });
 }
+
+test("Phase 23 AAPL history ranges and gaps stay independent of the current ask", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  stockFixture("fresh");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const instrument = { kind: "featured", symbol: "AAPL" } as const;
+  const queries: HistoryQuery[] = [];
+  let release!: () => void;
+  const loading = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let monthReady = false;
+  await page.route(`**${historyPath}`, async (route) => {
+    const query = route.request().postDataJSON() as HistoryQuery;
+    queries.push(query);
+    if (query.range === "1W") await loading;
+    const state =
+      query.range === "1D"
+        ? "delayed"
+        : query.range === "1M" && !monthReady
+          ? "unavailable"
+          : "ready";
+    await route.fulfill({ json: historyReply(query, state) });
+  });
+  await signInNewUser(page);
+  const detail = page.locator(".market-detail");
+  const chart = detail.getByRole("region", { name: "Price history" });
+  const action = detail.getByRole("link", { name: "Trade AAPL" });
+  const owned = await portfolioId(page);
+  await page.getByRole("combobox", { name: "Trading portfolio" }).selectOption(owned);
+  await expect(chart.getByText("Loading price history…")).toBeVisible();
+  await expect(detail.locator(".market-main-price")).toHaveText("$101.00");
+  await expect(action).toHaveAttribute("href", `/portfolios/${owned}/trade/stocks/AAPL`);
+  release();
+  await expect(chart.getByText("IEX · Regular sessions · Split-adjusted")).toBeVisible();
+  await captureMarkets(page, testInfo, "desktop-open");
+  await expectChartRange(page, { instrument, range: "1W" });
+  const disclosure = chart.getByText("Price data", { exact: true });
+  await disclosure.press("Enter");
+  await expect(chart.getByText("After market close").first()).toBeVisible();
+  await disclosure.press("Enter");
+
+  await chart.getByRole("button", { name: "1D", exact: true }).press("Space");
+  await expect(chart.getByText("Some price intervals are missing")).toBeVisible();
+  await expect(chart.getByText(/History behind · As of/).locator("time")).toHaveAttribute(
+    "datetime",
+    historyReply({ instrument, range: "1D" }, "delayed").series!.as_of!,
+  );
+  await expect(chart.getByRole("button", { name: "1D", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await disclosure.press("Enter");
+  await expect(chart.getByText("After missing intervals")).toBeVisible();
+  await disclosure.press("Enter");
+
+  await chart.getByRole("button", { name: "1M", exact: true }).press("Enter");
+  await expect(chart.getByText("Couldn’t load price history")).toBeVisible();
+  await expect(detail.locator(".market-main-price")).toHaveText("$101.00");
+  await expect(action).toBeVisible();
+  monthReady = true;
+  await chart.getByRole("button", { name: "Try history again" }).press("Enter");
+  await expect(chart.getByRole("button", { name: "1M", exact: true })).toBeFocused();
+  await expectChartRange(page, { instrument, range: "1M" });
+  expect(queries).toEqual(["1W", "1D", "1M", "1M"].map((range) => ({ instrument, range })));
+
+  await page.setViewportSize({ width: 320, height: 750 });
+  await expectSingleRowHeader(page);
+  await expect(chart.getByRole("group", { name: "Price history range" })).toBeVisible();
+  await page.setViewportSize({ width: 640, height: 840 });
+  const enlarged = await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  await expect(chart.getByRole("button", { name: "1M", exact: true })).toBeVisible();
+  await disclosure.press("Enter");
+  await expect(chart.getByRole("table")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  const navigation = page.getByRole("navigation", { name: "Main" });
+  for (const name of ["Markets", "Portfolios", "History"]) {
+    await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
+  }
+  await expect(action).toBeVisible();
+  await enlarged.evaluate((el) => el.remove());
+
+  await action.click();
+  await page.getByLabel("Whole-share quantity").fill("1");
+  const endpoint = await portfolioApi(page, "/stock-trades/quote");
+  const preview = page.waitForResponse((response) => new URL(response.url()).pathname === endpoint);
+  await page.getByRole("button", { name: "Preview trade", exact: true }).click();
+  const result = await preview;
+  expect(result.ok()).toBe(true);
+  expect(await result.json()).toMatchObject({ exec_price: "102.00000000" });
+});
+
+test("Phase 23 BTC history uses UTC intervals and keeps its current trade link", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const instrument = { kind: "crypto", symbol: "BTC" } as const;
+  const queries: HistoryQuery[] = [];
+  await page.route(`**${historyPath}`, (route) => {
+    const query = route.request().postDataJSON() as HistoryQuery;
+    const bitcoin = query.instrument.kind === "crypto" && query.instrument.symbol === "BTC";
+    if (bitcoin) queries.push(query);
+    return route.fulfill({ json: historyReply(query, bitcoin ? "ready" : "unavailable") });
+  });
+  await signInNewUser(page);
+  await page.getByRole("button", { name: "Crypto", exact: true }).click();
+  const detail = page.locator(".market-detail");
+  const chart = detail.getByRole("region", { name: "Price history" });
+  await expect(detail.getByRole("heading", { name: "Bitcoin", exact: true })).toBeVisible();
+  await expect(chart.getByText("Kraken · UTC intervals")).toBeVisible();
+  await captureMarkets(page, testInfo, "desktop-crypto");
+  for (const range of ["1W", "1D", "1M"] as const) {
+    if (range !== "1W")
+      await chart.getByRole("button", { name: range, exact: true }).press("Enter");
+    await expectChartRange(page, { instrument, range });
+  }
+  expect(queries).toEqual(["1W", "1D", "1M"].map((range) => ({ instrument, range })));
+  await expect(detail.getByRole("link", { name: "Trade BTC" })).toBeVisible();
+});
