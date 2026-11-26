@@ -15,15 +15,6 @@ from pathlib import Path
 
 SCANNER = "aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df"
 TARGETS = {"runtime", "builder", "postgres", "redis", "node"}
-ROOT = Path(__file__).resolve().parents[1]
-IMAGE_EXCEPTION = {
-    "issue": "https://github.com/YokAI-open/Birja/issues/35",
-    "advisory": "GHSA-fc5q-39xc-vjpf",
-    "cve": "CVE-2026-112366",
-    "expires": "2026-12-17T00:00:00+00:00",
-    "dockerfile_sha256": "94dbef7eba9db0e2ec652c286cc562eeec294666e29e5ac3e031af8a03d8a148",
-    "package_path": "usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch/package.json",
-}
 
 
 def require(value):
@@ -44,36 +35,10 @@ def sha(path):
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
-def accepted_finding(name, result, finding, *, now=None, dockerfile=None):
-    """Accept only the owner's exact unresolved tooling advisory, not a CVE class."""
-    if not (
-        name == "node"
-        and result.get("Target") == "Node.js"
-        and result.get("Class") == "lang-pkgs"
-        and result.get("Type") == "node-pkg"
-        and finding.get("Severity") == "HIGH"
-        and finding.get("VulnerabilityID") == IMAGE_EXCEPTION["cve"]
-        and finding.get("VendorIDs") == [IMAGE_EXCEPTION["advisory"]]
-        and finding.get("PkgName") == "picomatch"
-        and finding.get("PkgID") == "picomatch@4.0.4"
-        and finding.get("InstalledVersion") == "4.0.4"
-        and finding.get("PkgPath") == IMAGE_EXCEPTION["package_path"]
-    ):
-        return False
-    now = datetime.datetime.now(datetime.UTC) if now is None else now
-    source = (ROOT / "frontend/Dockerfile").read_bytes() if dockerfile is None else dockerfile
-    return (
-        isinstance(now, datetime.datetime)
-        and now.tzinfo is not None
-        and now < datetime.datetime.fromisoformat(IMAGE_EXCEPTION["expires"])
-        and hashlib.sha256(source).hexdigest() == IMAGE_EXCEPTION["dockerfile_sha256"]
-    )
-
-
-def classify_findings(name, results, *, now=None, dockerfile=None):
-    """Retain all HIGH/CRITICAL rows; identify accepted risk separately."""
+def blocking_findings(results):
+    """Validate scan results and retain every HIGH or CRITICAL finding."""
     require(isinstance(results, list) and len(results) > 0)
-    findings, accepted = [], []
+    findings = []
     for result in results:
         require(isinstance(result, dict) and isinstance(result["Target"], str))
         vulnerabilities = result.get("Vulnerabilities")
@@ -86,9 +51,7 @@ def classify_findings(name, results, *, now=None, dockerfile=None):
             })
             if finding["Severity"] in {"HIGH", "CRITICAL"}:
                 findings.append(finding)
-                if accepted_finding(name, result, finding, now=now, dockerfile=dockerfile):
-                    accepted.append(finding)
-    return findings, accepted
+    return findings
 
 
 def saved_config(archive):
@@ -255,21 +218,12 @@ def run_scans(output, targets):
                     document["SchemaVersion"] == 2
                     and document["Trivy"]["Version"] == "0.76.1"
                 )
-                findings, accepted = classify_findings(name, document["Results"])
+                findings = blocking_findings(document["Results"])
                 record["qualifying_findings"] = len(findings)
-                record["accepted_findings"] = len(accepted)
-                record["blocking_findings"] = len(findings) - len(accepted)
-                record["risk_status"] = "accepted-risk" if accepted else "no-exception-used"
-                if accepted:
-                    record["accepted_risk"] = {
-                        **IMAGE_EXCEPTION,
-                        "findings": accepted,
-                    }
-                # Trivy's findings exit is accepted only with complete valid
-                # evidence; operational errors and inconsistent exits still fail.
+                record["blocking_findings"] = len(findings)
                 require(scanned.returncode == (1 if findings else 0))
                 record["database"] = db_metadata(cache)
-                record["ok"] = version_ok and record["blocking_findings"] == 0
+                record["ok"] = version_ok and not findings
             except (
                 ValueError,
                 OSError,
