@@ -317,13 +317,15 @@ test("actual mixed pages preserve originals, responsive focus and failed-read re
 }, info) => {
   test.setTimeout(180000);
   const email = await signInNewUser(page);
-  stockFixture("long-name", "MSFT");
-  const bulk = evidence("bulk", email, "MSFT");
+  // A real split advances the stock's units for the rest of the isolated suite.
+  const splitSymbol = "KO";
+  stockFixture("long-name", splitSymbol);
+  const bulk = evidence("bulk", email, splitSymbol);
   expect(bulk.originals).toHaveLength(28);
   expect(cents(bulk.cash)).toBe(1000000n);
-  evidence("up", email, "MSFT");
+  evidence("up", email, splitSymbol);
   await cryptoFill(page, "buy", "1");
-  evidence("split", email, "MSFT");
+  evidence("split", email, splitSymbol);
   let release: () => void = () => {};
   const paused = new Promise<void>((resolve) => {
     release = resolve;
