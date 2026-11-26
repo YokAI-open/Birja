@@ -84,13 +84,13 @@ def financial_program():
 import asyncio,os
 from decimal import Decimal as D
 import asyncpg
-from app.db.portfolio_bootstrap import PREFLIGHT_0027_SQL
+from app.db.portfolio_bootstrap import PREFLIGHT_0028_SQL
 async def main():
  c=await asyncpg.connect(os.environ['DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://'))
  try:
   assert await c.fetchval("SELECT current_database()='birja' AND session_user='birja'")
-  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0027'
-  await c.execute(PREFLIGHT_0027_SQL)
+  assert await c.fetchval("SELECT version_num FROM alembic_version")=='0028'
+  await c.execute(PREFLIGHT_0028_SQL)
   from app.db.schema_contract import require_schema, SchemaAdmissionError
   # Disposable administrative fixture only: retain the original custom-baseline
   # economic oracle without granting ordinary account INSERT or rewriting a baseline.
@@ -131,7 +131,7 @@ async def main():
    for change,undo,reason in [
     ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC','Unsafe migration schema'),
     ('ALTER ROLE birja_app CREATEROLE','ALTER ROLE birja_app NOCREATEROLE','Unsafe migration schema'),
-    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0027'",'migration_only')]:
+    ("UPDATE alembic_version SET version_num='0018'","UPDATE alembic_version SET version_num='0028'",'migration_only')]:
     await c.execute(change)
     try:
      async with e.connect() as x:
@@ -254,7 +254,7 @@ def main():
                         input=prefix + (ROOT / "deploy/db/bootstrap-roles.sql").read_text())
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-"], input=financial_program())
                 command(dc + ["run", "--rm", "--no-deps", "-T", "backend", "python", "-m", "app.db.dev_bootstrap", "--after-migrations"])
-                assert sql("SELECT version_num FROM alembic_version") == "0027"
+                assert sql("SELECT version_num FROM alembic_version") == "0028"
                 assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='bootstrap@example.test')") == "124.45000000:7777.00000000"
                 if lane != "fresh":
                     assert sql("SELECT cash||':'||starting_cash FROM accounts WHERE user_id=(SELECT id FROM users WHERE email='retained@example.test')") == "321.12000000:8765.00000000"
