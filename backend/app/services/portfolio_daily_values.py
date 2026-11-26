@@ -1,16 +1,26 @@
 """Forward-only private portfolio valuations from the current statement."""
 
+import asyncio
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import and_, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import MarketValuationSettings
+from app.db.schema_contract import SchemaAdmissionError, require_schema
 from app.models.portfolio_daily_value import PortfolioDailyValue
 from app.models.user import Account
+from app.schemas.portfolio_daily_values import (
+    PortfolioDailyHistory,
+    PortfolioDailyPoint,
+    PortfolioDailySeries,
+)
 from app.services.portfolio import load_daily_portfolio_snapshot
+from app.services.portfolios import fence_owned_active_portfolios
 
 
 def utc_now() -> datetime:
@@ -64,4 +74,63 @@ async def capture_portfolio_daily_value(
             .returning(PortfolioDailyValue.portfolio_id)
         )
         is not None
+    )
+
+
+async def read_portfolio_daily_history(
+    db: AsyncSession, *, owner_id: int, clock: Callable[[], datetime] = utc_now
+) -> PortfolioDailyHistory:
+    end_day = clock().astimezone(UTC).date()
+    start_day = end_day - timedelta(days=29)
+    daily = PortfolioDailyValue
+    roots = (
+        select(Account.id, Account.user_id)
+        .where(Account.user_id == owner_id, Account.closed_at.is_(None))
+        .order_by(Account.id)
+        .limit(10)
+        .cte("owned_daily_roots")
+    )
+    points: dict[int, list[PortfolioDailyPoint]] = {}
+    try:
+        async with asyncio.timeout(5):
+            await require_schema(await db.connection(), consumer="portfolio_daily")
+            rows = await db.execute(
+                select(
+                    roots.c.id,
+                    daily.utc_day,
+                    daily.captured_at,
+                    daily.total_value,
+                    daily.valuation_complete,
+                )
+                .select_from(roots)
+                .outerjoin(
+                    daily,
+                    and_(
+                        daily.portfolio_id == roots.c.id,
+                        daily.user_id == roots.c.user_id,
+                        daily.utc_day.between(start_day, end_day),
+                    ),
+                )
+                .order_by(roots.c.id, daily.utc_day)
+            )
+            for row in rows:
+                series = points.setdefault(row.id, [])
+                if row.utc_day is not None:
+                    series.append(
+                        PortfolioDailyPoint(
+                            utc_day=row.utc_day,
+                            captured_at=row.captured_at.astimezone(UTC),
+                            total_value=row.total_value,
+                            valuation_complete=row.valuation_complete,
+                        )
+                    )
+            await fence_owned_active_portfolios(db, owner_id, list(points))
+    except SchemaAdmissionError, SQLAlchemyError, TimeoutError:
+        raise HTTPException(503, detail={"code": "service_unavailable"}) from None
+    return PortfolioDailyHistory(
+        start_day=start_day,
+        end_day=end_day,
+        portfolios=[
+            PortfolioDailySeries(portfolio_id=key, points=items) for key, items in points.items()
+        ],
     )
