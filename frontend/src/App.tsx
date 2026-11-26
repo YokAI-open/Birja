@@ -238,6 +238,8 @@ function SignedIn() {
   const navigation = usePortfolioTarget(explicitId ?? openedId);
   const target = navigation.status === "ready" ? navigation.target : null;
   if (explicitId && target && openedId !== explicitId) setOpenedId(explicitId);
+  const portfolioBlock =
+    openedId && !target ? (navigation.status === "loading" ? "pending" : "unavailable") : undefined;
   const historyId = portfolioHistory ? explicitId : target?.portfolioId;
   const historyPath = historyId ? `/portfolios/${historyId}/history` : "/history";
   const content = useRef<HTMLDivElement>(null);
@@ -317,7 +319,16 @@ function SignedIn() {
           </div>
         )}
         <Routes>
-          <Route index element={<MarketsPage portfolioId={target?.portfolioId} />} />
+          <Route
+            index
+            element={
+              <MarketsPage
+                portfolioId={openedId}
+                onSelectPortfolio={setOpenedId}
+                portfolioBlock={portfolioBlock}
+              />
+            }
+          />
           <Route path="portfolios/deletion" element={<PortfolioDeletionPage />} />
           <Route path="portfolios/:portfolioId" element={<PortfolioRoute />}>
             <Route index element={<PortfolioPage />} />

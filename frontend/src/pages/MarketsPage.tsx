@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { MarketOpening } from "@/components/MarketOpening";
+import { PortfolioSwitcher } from "@/components/PortfolioSwitcher";
 import { ApiError } from "@/api/client";
 import type { StockCatalogItem } from "@/api/stockCatalog";
 import type { StockItem } from "@/api/stocks";
@@ -44,7 +45,15 @@ const stockRestrictions: Record<StockItem["execution_reason"], string> = {
   receipt_unavailable: "Check the previous order result before trading again.",
 };
 
-export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
+export default function MarketsPage({
+  portfolioId,
+  onSelectPortfolio,
+  portfolioBlock,
+}: {
+  portfolioId?: string;
+  onSelectPortfolio?: (id: string) => void;
+  portfolioBlock?: "pending" | "unavailable";
+}) {
   const [market, setMarket] = useState<Market>("stock");
   const [search, setSearch] = useState("");
   const [composing, setComposing] = useState(false);
@@ -224,6 +233,9 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
             Crypto
           </button>
         </div>
+        {onSelectPortfolio && (
+          <PortfolioSwitcher portfolioId={portfolioId} onSelect={onSelectPortfolio} inline />
+        )}
       </div>
       <div className="market-workspace grid min-w-0 grid-cols-1 items-start gap-6 md:gap-8">
         <section aria-label="Find an asset" className="min-w-0">
@@ -504,7 +516,18 @@ export default function MarketsPage({ portfolioId }: { portfolioId?: string }) {
                 </div>
               )}
             </div>
-            {!listingChanged &&
+            {portfolioBlock === "pending" && (
+              <p className="text-muted-foreground" role="status">
+                Checking your trading portfolio…
+              </p>
+            )}
+            {portfolioBlock === "unavailable" && (
+              <Link className="inline-flex min-h-11 items-center underline" to="/portfolios">
+                Choose an available portfolio
+              </Link>
+            )}
+            {!portfolioBlock &&
+              !listingChanged &&
               !missingListing &&
               (!catalogListing || !selectedQuote.isFetching) && (
                 <Link

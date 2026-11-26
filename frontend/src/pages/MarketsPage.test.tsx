@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { focusManager, useQueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -392,9 +392,23 @@ describe("MarketsPage stock catalog", () => {
     const search = vi.fn(() => catalogOk(catalog([stock])));
     const fetchMock = stockFetch(search, request);
     vi.stubGlobal("fetch", fetchMock);
-    const page = await openCatalog("50");
+    function SelectedPortfolio() {
+      const [portfolioId, setPortfolioId] = useState("50");
+      return (
+        <>
+          <button onClick={() => setPortfolioId("51")}>Select second portfolio</button>
+          <MarketsPage portfolioId={portfolioId} />
+        </>
+      );
+    }
+    const page = renderWithClient(
+      <SignedIn>
+        <SelectedPortfolio />
+      </SignedIn>,
+    );
+    const input = screen.getByRole("searchbox", { name: "Search stocks" });
     expect(search).not.toHaveBeenCalled();
-    await page.user.type(page.search, "F");
+    await page.user.type(input, "F");
     const row = await screen.findByRole("button", {
       name: /Fixture Company FQA · NASDAQ · Class A/,
     });
@@ -413,6 +427,15 @@ describe("MarketsPage stock catalog", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify({ listing_version: "17" }));
     expect(new Headers(init.headers).get("X-CSRF-Token")).toBe("fixture-token");
+
+    await page.user.click(screen.getByRole("button", { name: "Select second portfolio" }));
+    expect(input).toHaveValue("F");
+    expect(screen.getByText("$10.20")).toBeVisible();
+    expect(screen.getByRole("link", { name: "View details FQA" })).toHaveAttribute(
+      "href",
+      "/portfolios/51/trade/catalog/9007199254740993",
+    );
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("waits for IME composition, limits the result list and shows settled empty feedback", async () => {

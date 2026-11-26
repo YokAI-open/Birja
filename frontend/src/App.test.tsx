@@ -743,6 +743,79 @@ it("retains verified root through nav, global Markets and trade links", async ()
   expect(await screen.findByRole("heading", { name: "Crypto BTC" })).toBeVisible();
   expect(screen.getByText("Private alice@example.test root 2")).toBeVisible();
 });
+it("changes the trading portfolio in place and carries the selected instrument", async () => {
+  api({ metadata: () => json([first, second]) });
+  const { user } = setup();
+  const chooser = await screen.findByRole("combobox", { name: "Trading portfolio" });
+  await screen.findByRole("option", { name: second.name });
+  expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  expect(chooser).toHaveAccessibleDescription("Select the portfolio for the next trade.");
+  expect(chooser).toHaveValue("");
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
+  const search = screen.getByRole("searchbox");
+  await user.type(search, "bitc");
+  await user.click(await screen.findByRole("button", { name: /Bitcoin BTC/ }));
+  expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute("href", "/trade/BTC");
+
+  await user.selectOptions(chooser, first.id);
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/1/trade/BTC",
+    ),
+  );
+  await user.selectOptions(chooser, second.id);
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+      "href",
+      "/portfolios/2/trade/BTC",
+    ),
+  );
+  expect(search).toHaveValue("bitc");
+  expect(screen.getByRole("button", { name: "Crypto" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/);
+  await user.click(screen.getByRole("link", { name: "Trade BTC" }));
+  expect(await screen.findByText("Private alice@example.test root 2")).toBeVisible();
+});
+
+it("keeps quotes visible when a chosen trading portfolio awaits access or becomes unavailable", async () => {
+  let completeRefresh!: (value: Response) => void;
+  let metadata = () => Promise.resolve(json([first, second]));
+  api({ metadata: () => metadata() });
+  const { client, user } = setup();
+  const chooser = await screen.findByRole("combobox", { name: "Trading portfolio" });
+  await screen.findByRole("option", { name: first.name });
+  await user.selectOptions(chooser, first.id);
+  await user.click(screen.getByRole("button", { name: "Crypto" }));
+  expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/1/trade/BTC",
+  );
+
+  metadata = () =>
+    new Promise<Response>((resolve) => {
+      completeRefresh = resolve;
+    });
+  await act(async () => {
+    void client.invalidateQueries({ queryKey: ["portfolios", "alice@example.test"] });
+  });
+  expect(await screen.findByText("Checking your trading portfolio…")).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Trade BTC" })).toBeNull();
+  expect(screen.getByRole("heading", { name: "Bitcoin" })).toBeVisible();
+  await act(async () => completeRefresh(json([second])));
+
+  const choose = await screen.findByRole("link", { name: "Choose an available portfolio" });
+  expect(choose).toHaveAttribute("href", "/portfolios");
+  expect(chooser).toHaveValue("");
+  expect(screen.queryByRole("link", { name: "Trade BTC" })).toBeNull();
+
+  await user.selectOptions(chooser, second.id);
+  expect(await screen.findByRole("link", { name: "Trade BTC" })).toHaveAttribute(
+    "href",
+    "/portfolios/2/trade/BTC",
+  );
+});
+
 it("focuses route and Back headings without refetch focus theft", async () => {
   api();
   const { client, user } = setup();
