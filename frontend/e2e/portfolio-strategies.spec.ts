@@ -325,6 +325,7 @@ async function comparePortfolioCapture(page: Page, info: TestInfo, name: string,
   expect(grid[0]).toBe(desktop ? 40 : 16);
   expect(grid[2]).toBe(desktop ? 1360 : 358);
   if (layout.overviewGrid) {
+    await expect(page.locator(targets.cardName).first()).toHaveCSS("font-size", "23px");
     expect(layout.sparkline![3]).toBe(44);
     expect(layout.firstCard![3]).toBeGreaterThanOrEqual(desktop ? 245 : 200);
     expect(layout.cardName![0] - layout.firstCard![0]).toBe(desktop ? 26 : 17);
@@ -393,6 +394,7 @@ test("Phase 24 real portfolio workspace matches desktop and phone layouts and ke
   await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
   await noOverflow(page);
   await expect(firstCard).toBeVisible();
+  await expect(firstCard.getByRole("heading")).toHaveCSS("font-size", "46px");
   await expect(button(page, "New portfolio")).toBeVisible();
   await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
 
@@ -584,7 +586,11 @@ test("Phase13 committed lost creation response reload explicitly retries identic
   expect(requests[1]).toEqual(requests[0]);
   expect(fixture("economic", email)).toEqual(before);
   expect((await statement(page, original)).cash).toBe("10000.00");
-  await overview(page);
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Portfolios", exact: true })
+    .click();
+  await expect(page).toHaveURL("/portfolios");
   const cards = page.getByRole("list", { name: "Portfolios", exact: true });
   await expect(cards.getByRole("link")).toHaveCount(10);
   const createCard = cards
