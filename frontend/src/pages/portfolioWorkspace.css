@@ -36,14 +36,63 @@
   margin-top: 22px;
 }
 
+.portfolio-summary-panel {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.portfolio-summary-value {
+  margin: 0;
+  font-size: clamp(2rem, 4.5vw, 3.75rem);
+  font-weight: 620;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+}
+
+.portfolio-holding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 521px) {
+  .portfolio-holding-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 741px) {
   .portfolio-workspace {
     margin-top: 46px;
+  }
+
+  .portfolio-summary-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: 188px;
+    gap: 48px;
+    padding: 32px;
+  }
+}
+
+@media (min-width: 1051px) {
+  .portfolio-holding-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 520px) {
   .portfolio-managed-actions {
+    flex-basis: 100%;
+  }
+
+  .portfolio-holdings-heading > div {
     flex-basis: 100%;
   }
 }

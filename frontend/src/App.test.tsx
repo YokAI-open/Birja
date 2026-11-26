@@ -192,7 +192,7 @@ it("keeps the deletion lease alive while quarantine removes the financial Outlet
   });
   const { user } = setup("/portfolios/1");
   await user.click(await screen.findByRole("button", { name: "Remove portfolio" }));
-  expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Keep portfolio" })).toHaveFocus();
   expect(screen.getByText(/This is your last active portfolio/)).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Delete portfolio" }));
   await waitFor(() => expect(release).toBeTypeOf("function"));
@@ -578,8 +578,8 @@ it.each(["/portfolios/1", "/portfolios/1/"])(
       expect(screen.getByRole("button", { name: "Edit portfolio" })).toBeEnabled(),
     );
     await user.click(screen.getByRole("button", { name: "Remove portfolio" }));
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Keep portfolio" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Keep portfolio" }));
     expect(screen.getByRole("button", { name: "Remove portfolio" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Remove portfolio" }));
     await user.click(screen.getByRole("button", { name: "Delete portfolio" }));

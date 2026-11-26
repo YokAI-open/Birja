@@ -72,14 +72,15 @@ export default function PortfolioPage() {
       onClick={refresh}
     >
       Update
-      <time
-        id={freshnessId}
-        className="text-xs font-normal text-muted-foreground tabular-nums"
-        dateTime={data?.valued_at}
-        title={data && fullLocalTimestamp(data.valued_at)}
-      >
-        {freshness}
-      </time>
+      <span id={freshnessId} className="text-xs font-normal text-muted-foreground tabular-nums">
+        {data ? (
+          <time dateTime={data.valued_at} title={fullLocalTimestamp(data.valued_at)}>
+            {freshness}
+          </time>
+        ) : (
+          freshness
+        )}
+      </span>
     </Button>
   );
 
@@ -142,75 +143,61 @@ export default function PortfolioPage() {
                 </Button>
               </div>
             )}
-            {data.holdings.some((h) => h.asset_class === "stock") && (
-              <StockAttribution context="valuation" />
-            )}
-            <Card role="region" aria-label="Total portfolio value">
-              {metadata?.description && (
-                <p className="line-clamp-2 text-sm whitespace-pre-line text-muted-foreground">
-                  {metadata.description}
+            <section className="portfolio-summary-panel" aria-label="Total portfolio value">
+              <div className="flex min-w-0 flex-col gap-1">
+                {data.valuation_complete && <p className="text-muted-foreground">Total value</p>}
+                <p className="portfolio-summary-value wrap-anywhere tabular-nums">
+                  {data.valuation_complete
+                    ? data.total_value === null
+                      ? "Unavailable"
+                      : formatUsd(data.total_value)
+                    : data.known_value === null
+                      ? "Value unavailable — refresh required"
+                      : `Known value: ${formatUsd(data.known_value)} — incomplete`}
                 </p>
-              )}
-              <div className="grid min-w-0 gap-7 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-10">
-                <div className="flex min-w-0 flex-col gap-4">
-                  <div className="min-w-0">
-                    {data.valuation_complete && <p className="sr-only">Total value</p>}
-                    <p className="text-4xl leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums md:text-5xl">
-                      {data.valuation_complete
-                        ? data.total_value === null
-                          ? "Unavailable"
-                          : formatUsd(data.total_value)
-                        : data.known_value === null
-                          ? "Value unavailable — refresh required"
-                          : `Known value: ${formatUsd(data.known_value)} — incomplete`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 text-base tabular-nums">
-                    <div role="region" aria-label="Cash">
-                      <span className="font-medium">{formatUsd(data.cash)}</span>{" "}
-                      <span className="text-muted-foreground">cash</span>
-                    </div>
-                    {data.valuation_complete && data.total_pl !== null && (
-                      <p
-                        className={
-                          returnDirection === "gain"
-                            ? "text-gain-text"
-                            : returnDirection === "loss"
-                              ? "text-loss-text"
-                              : "text-muted-foreground"
-                        }
-                      >
-                        <span className="sr-only">Return: </span>
-                        {signedUsd(data.total_pl)}
-                        {data.total_pl_percent === null ? (
-                          <span className="sr-only">. Percentage return not applicable.</span>
-                        ) : (
-                          ` · ${signedPercent(data.total_pl_percent)}`
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  {!data.valuation_complete && (
-                    <p className="text-sm text-warn-text">
-                      {data.unvalued_holding_count}{" "}
-                      {data.unvalued_holding_count === 1 ? "holding cannot" : "holdings cannot"} be
-                      valued. Overall gain/loss and allocation are unavailable.
-                    </p>
-                  )}
-                  <PortfolioFreshness
-                    portfolio={data}
-                    elapsed={elapsed}
-                    dataUpdatedAt={dataUpdatedAt}
-                    isFetching={isFetching}
-                    isError={isError}
-                  />
-                  <p className="sr-only">
-                    Compared with your {formatUsd(data.starting_cash)} start
+                {data.valuation_complete && data.total_pl !== null && (
+                  <p
+                    className={`wrap-anywhere tabular-nums ${
+                      returnDirection === "gain"
+                        ? "text-gain-text"
+                        : returnDirection === "loss"
+                          ? "text-loss-text"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    <span className="sr-only">Return: </span>
+                    {signedUsd(data.total_pl)}
+                    {data.total_pl_percent === null ? (
+                      <span className="sr-only">. Percentage return not applicable.</span>
+                    ) : (
+                      ` (${signedPercent(data.total_pl_percent)})`
+                    )}{" "}
+                    <span className="text-muted-foreground">all time</span>
                   </p>
-                </div>
-                <PortfolioAllocation portfolio={data} />
+                )}
+                {!data.valuation_complete && (
+                  <p className="text-sm text-warn-text">
+                    {data.unvalued_holding_count}{" "}
+                    {data.unvalued_holding_count === 1 ? "holding cannot" : "holdings cannot"} be
+                    valued. Overall gain/loss and allocation are unavailable.
+                  </p>
+                )}
+                {metadata?.description && (
+                  <p className="line-clamp-2 text-sm wrap-anywhere whitespace-pre-line text-muted-foreground">
+                    {metadata.description}
+                  </p>
+                )}
+                <PortfolioFreshness
+                  portfolio={data}
+                  elapsed={elapsed}
+                  dataUpdatedAt={dataUpdatedAt}
+                  isFetching={isFetching}
+                  isError={isError}
+                />
+                <p className="sr-only">Compared with your {formatUsd(data.starting_cash)} start</p>
               </div>
-            </Card>
+              <PortfolioAllocation portfolio={data} />
+            </section>
             <PortfolioHoldings
               target={target}
               holdings={data.holdings}
@@ -218,6 +205,9 @@ export default function PortfolioPage() {
               freshSeconds={data.fresh_seconds}
               staleSeconds={data.stale_seconds}
             />
+            {data.holdings.some((h) => h.asset_class === "stock") && (
+              <StockAttribution context="valuation" />
+            )}
           </>
         )}
       </div>
