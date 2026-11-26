@@ -92,9 +92,11 @@ def catalog_snapshot(root, revision, stage, restic_path):
     assert source['revision'] == revision
     if not (stage / 'host').exists():
         assert source['tables']['stock_fill_facts']['count'] == (3 if revision == '0025' else 5)
-    if revision in ('0026', '0027'):
+    if revision in ('0026', '0027', '0028'):
         assert source['catalog_finance_invalid'] == 0
         assert source['tables']['stock_catalog_fill_evidence']['count'] == 2
+    if revision == '0028':
+        assert source['daily_value_state'] == {'complete': 3, 'incomplete': 1, 'terminal': 1}
 
 
 def catalog_container():
@@ -148,16 +150,25 @@ def catalog_observe(root, database, output):
 
 
 def compare_predecessor(before, after):
-    """Migrations through 0027 add catalog tables and leaves the prior book intact."""
+    """Compare the exact prior economic book on either qualified upgrade."""
     prior = json.loads(before.read_text())
     successor = json.loads(after.read_text())
-    assert prior['revision'] == '0023' and successor['revision'] == '0027'
+    transition = prior['revision'], successor['revision']
+    assert transition in {('0023', '0027'), ('0027', '0028')}
     for key in ('financial', 'portfolio_state', 'management_state', 'closure_state'):
         assert prior[key] == successor[key], key
     for table, entry in prior['tables'].items():
         if table != 'alembic_version':
             assert successor['tables'][table] == entry, table
     assert all(row in successor['identity_state'] for row in prior['identity_state'])
+    if transition == ('0027', '0028'):
+        daily = 'portfolio_daily_values'
+        assert set(successor['tables']) == set(prior['tables']) | {daily}
+        assert successor['tables'][daily]['count'] == 0
+        assert successor['daily_value_state'] == {'complete': 0, 'incomplete': 0, 'terminal': 0}
+        assert [row for row in successor['identity_state'] if row[0] == daily] == [[daily, 1, False]]
+        for key in ('catalog_active_generation', 'catalog_finance_invalid', 'stock_invalid'):
+            assert successor[key] == prior[key], key
 
 
 def catalog_authority(path):
@@ -165,7 +176,7 @@ def catalog_authority(path):
     print('catalog_authority=' + json.dumps([contract[key] for key in ('catalogue', 'acl', 'defaults')]))
 
 
-def catalog_runtime_program(kind, path):
+def catalog_runtime_program(kind, path, revision="0027"):
     import inspect
 
     if kind in {'predecessor-seed', 'predecessor-read'}:
@@ -177,14 +188,16 @@ def catalog_runtime_program(kind, path):
         spec.loader.exec_module(fixture)
         print(fixture.program(mode='create' if kind == 'predecessor-seed' else 'projection'))
         return
+    if revision not in {'0027', '0028'}:
+        raise ValueError('Unexpected disposable runtime schema')
     if kind == 'roles' and path == Path('/run/birja/catalog-receipts.json'):
-        print(CATALOG_ROLE_PROBE)
+        print(f'EXPECTED_REVISION = {revision!r}\n' + CATALOG_ROLE_PROBE)
         return
     if kind != 'replay' or path != Path('/run/birja/catalog-receipts.json'):
         raise ValueError('Unexpected disposable runtime program')
     print('import asyncio, json\nfrom pathlib import Path')
     print(inspect.getsource(catalog_economics))
-    print(f'asyncio.run(catalog_economics("replay", Path({str(path)!r})))')
+    print(f'asyncio.run(catalog_economics("replay", Path({str(path)!r}), {revision!r}))')
 
 
 CATALOG_ROLE_PROBE = """
@@ -209,7 +222,7 @@ async def main():
         engine = create_async_engine(url, connect_args=database_connect_args(settings))
         try:
             async with engine.connect() as conn:
-                assert await require_schema(conn) == '0027'
+                assert await require_schema(conn) == EXPECTED_REVISION
                 assert await conn.scalar(text(
                     'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'
                 ))
@@ -235,7 +248,7 @@ def catalog_cache_absent(stage, revision, canary):
         assert canary.encode() not in path.read_bytes(), path.name
 
 
-async def catalog_economics(mode, receipt_path):
+async def catalog_economics(mode, receipt_path, revision='0027'):
     """Use the production services and restricted TLS roles on the owned clone."""
     from dataclasses import asdict, replace
     from datetime import UTC, datetime, time, timedelta
@@ -267,7 +280,7 @@ async def catalog_economics(mode, receipt_path):
         from tests.test_stock_catalog_trading import _confirmation
         from tests.test_stock_sessions import evidence
 
-    if mode not in {'seed', 'replay'}:
+    if mode not in {'seed', 'replay'} or revision not in {'0027', '0028'}:
         raise ValueError('Unknown synthetic economics mode')
     settings = Settings(stock_data_enabled=mode == 'seed', stock_data_account='birja',
                         stock_data_server='birja')
@@ -342,7 +355,7 @@ async def catalog_economics(mode, receipt_path):
         for role in (app, scheduler):
             async with role.connect() as conn:
                 assert await conn.scalar(text('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'))
-                assert await require_schema(conn) == '0027'
+                assert await require_schema(conn) == revision
         if mode == 'replay':
             saved = json.loads(receipt_path.read_text())
             market = saved['market']
@@ -1056,18 +1069,29 @@ if __name__ == "__main__":
         else:
             retained_catalog(destination, runtime=True)
         sys.exit(0)
+    if len(sys.argv) == 5 and sys.argv[1] == '--materialize-0027':
+        destination = Path(sys.argv[2]).resolve()
+        if not destination.is_dir() or any(destination.iterdir()):
+            raise ValueError('Expected an empty disposable source directory')
+        selected = load('tests/portfolio-sources')
+        payload = selected.source_archive('portfolio0027', archive=Path(sys.argv[3]), archive_sha=sys.argv[4])
+        with tarfile.open(fileobj=io.BytesIO(payload)) as sources:
+            sources.extractall(destination, filter='data')
+        load('backup-snapshot').require_closure_source(destination, revision='0027', allow_successor=False)
+        sys.exit(0)
     if len(sys.argv) == 6 and sys.argv[1] == '--install-catalog-archive':
         host = Path(sys.argv[2])
         consumer = load('verify-restore')
+        profile = {'0027': 'deploy-recovery-v8', '0028': 'deploy-recovery-v9'}.get(sys.argv[5])
+        if profile is None:
+            raise ValueError('Only exact successor releases are supported')
         consumer.bundle_install(
-            Path(sys.argv[3]), sys.argv[4], str(host), required_profile='deploy-recovery-v8',
+            Path(sys.argv[3]), sys.argv[4], str(host), required_profile=profile,
         )
         release = host / 'var/lib/birja/recovery/releases' / sys.argv[4]
         consumer.private(release / 'deploy' / 'verify-restore.py')
         if consumer.digest(release / 'tools/restic') != consumer.RESTIC_SHA:
             raise ValueError('Archived restic checksum mismatch')
-        if sys.argv[5] != '0027':
-            raise ValueError('Only the exact successor release is supported')
         sys.exit(0)
     if len(sys.argv) == 5 and sys.argv[1] == '--catalog-observe':
         catalog_observe(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]))
@@ -1083,8 +1107,11 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == '--catalog-authority':
         catalog_authority(Path(sys.argv[2]))
         sys.exit(0)
-    if len(sys.argv) == 4 and sys.argv[1] == '--catalog-runtime-program':
-        catalog_runtime_program(sys.argv[2], Path(sys.argv[3]))
+    if len(sys.argv) in {4, 5} and sys.argv[1] == '--catalog-runtime-program':
+        catalog_runtime_program(sys.argv[2], Path(sys.argv[3]), *sys.argv[4:])
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[1] == '--daily-value-program':
+        print(load('tests/portfolio-smoke').daily_value_program(sys.argv[2]))
         sys.exit(0)
     if len(sys.argv) == 6 and sys.argv[1] == '--catalog-snapshot':
         catalog_snapshot(Path(sys.argv[2]), sys.argv[3], Path(sys.argv[4]), sys.argv[5])

@@ -168,6 +168,7 @@ class RevisionContracts(unittest.TestCase):
         self.assertIn(daily + '_id_seq', producer.schema_guard_sql('0028'))
         query = producer.manifest_sql('0028')
         self.assertIn("SELECT 'portfolio_daily_values',id,json_build_array(id::text,portfolio_id::text", query)
+        self.assertIn("to_char(utc_day,'YYYY-MM-DD')", query)
         self.assertIn("to_char(captured_at", query)
         self.assertIn("total_value::text,valuation_complete::text", query)
         self.assertIn("daily_value_state", query)

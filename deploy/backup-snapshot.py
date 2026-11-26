@@ -1279,7 +1279,7 @@ DAILY_VALUE_SOURCE_SHA256 = {
 # Canonical schema and role authority from the reviewed PostgreSQL 18 migration.
 DAILY_VALUE_SCHEMA_SHA256 = 'd9a4ee43bdb6fa96891dd087a32131510ceb596548a6947b28c15fd699a7dc0b'
 DAILY_VALUE_AUTHORITY_SHA256 = '00e3ccb0993ae129c28969c11063ec6a5a72c29a73eba383f05ca38da03cd3bd'
-DAILY_VALUE_QUARANTINE_AUTHORITY_SHA256 = 'c00f614d6fd3f7c508fd3f992e5483fff17659a0ebc301f2e73869b9ac12ffcb'
+DAILY_VALUE_QUARANTINE_AUTHORITY_SHA256 = '56f9f871fbd03561e84a51a64274c6f1b5cd3daef3ab8d3ce5a1d5ae3e518c47'
 
 CLOSURE_CATALOGUE_SHA256 = '59aeeee9428fac73f96143cc8afdd77e3b6a8f81b30ed37b752666579d69a66e'
 CLOSURE_SCHEMA_SHA256 = '64dc79e1add352d2cb53486ff2f1cce86d40e9540ad25a980c6dc07003da7d4e'
@@ -1343,7 +1343,8 @@ def closure_manifest_sql(revision='0023'):
     for table, fields in tables.items():
         columns = fields.split()
         values = ["to_char("+c+",'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')"
-                  if c in timestamp_columns else c+'::text' for c in columns]
+                  if c in timestamp_columns else "to_char(utc_day,'YYYY-MM-DD')"
+                  if c == 'utc_day' else c+'::text' for c in columns]
         rows.append(" UNION ALL SELECT '"+table+"',"+columns[0]+",json_build_array("+','.join(values)+")::text FROM "+table)
     query = query.replace('\n), names(name) AS (', '\n'+'\n'.join(rows)+'\n), names(name) AS (')
     query = query.replace("('portfolio_initializations')\n", "('portfolio_initializations'),"+
