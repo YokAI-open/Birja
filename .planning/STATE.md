@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Market Charts and Workspace Redesign
-status: planning
-last_updated: "2026-11-26T08:36:01.673Z"
-last_activity: 2026-11-26
+current_phase: 22
+status: executing
+last_updated: "2026-11-26T09:08:04.015Z"
+last_activity: 2026-11-26 -- Phase 22 planning complete
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -22,15 +23,15 @@ See [PROJECT.md](PROJECT.md), [ROADMAP.md](ROADMAP.md),
 [approved design](ui-reviews/v1.5/README.md).
 
 Core value: correct virtual trade and valuation money.
-Current focus: v1.5 scope and roadmap for the approved workspace redesign,
-market charts and portfolio value history.
+Current focus: Phase 22 Markets workspace execution. The three plans cover
+discovery and layout, portfolio routing and the countdown, then browser proof.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Requirements and roadmap drafted for approval
-Last activity: 2026-11-26 — Milestone v1.5 started
+Phase: 22 of 25 (Adopt the market workspace)
+Plan: 0 of 3 executed
+Status: Ready to execute
+Last activity: 2026-11-26 -- Phase 22 planning complete
 
 ## Carried context
 

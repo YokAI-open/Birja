@@ -5,180 +5,87 @@
 - [x] **v1.0 Birja MVP** · [Roadmap](milestones/v1.0-ROADMAP.md)
 - [x] **v1.1 US Stock Trading** · Closed with accepted live gaps. [Roadmap](milestones/v1.1-ROADMAP.md)
 - [x] **v1.2 Multiple Strategy Portfolios** · [Roadmap](milestones/v1.2-ROADMAP.md)
-- [x] **v1.3 Birja Interface Redesign** · Phases 16–17 verified and interface deployed. [Roadmap snapshot](milestones/v1.3-ROADMAP.md) · [Audit](v1.3-MILESTONE-AUDIT.md)
-- [ ] **v1.4 Searchable Stock Trading** · Scope and roadmap approved on 2026-11-24.
+- [x] **v1.3 Birja Interface Redesign** · [Roadmap](milestones/v1.3-ROADMAP.md) · [Audit](v1.3-MILESTONE-AUDIT.md)
+- [ ] **v1.4 Searchable Stock Trading** · Previous milestone. [Closeout handoff](milestones/v1.4-OPEN-HANDOFF.md)
+- [ ] **v1.5 Market Charts and Workspace Redesign** · The owner requested Phase 22 planning. The later phase outline is proposed. [Approved prototype](ui-reviews/v1.5/README.md)
 
 ## Phases
 
-- [x] **Phase 18: Make simulated stock trades work** (completed 2026-11-24)
-- [ ] **Phase 19: Search the NYSE and Nasdaq catalog**
-- [x] **Phase 20: Trade and value stocks from search** (completed 2026-11-24)
-- [ ] **Phase 21: Verify, release and activate stock trading**
+- [ ] **Phase 22: Adopt the market workspace**
+- [ ] **Phase 23: Show historical market prices**
+- [ ] **Phase 24: Compare portfolio performance**
+- [ ] **Phase 25: Finish the trading flows and verify the integrated app**
 
-## Phase Details
+### Phase 22: Adopt the market workspace
 
-### Phase 18: Make simulated stock trades work
+**Goal:** Browse and select stocks or crypto in the approved layout using the working market and trade APIs.
 
-**Goal:** Complete a real app buy and sell with live market data and the approved simulator eligibility rule.
+**Requirements:** WS-01, WS-02, WS-03, WS-04
 
-**Requirements:** SX-01, SX-02, SX-03, SX-04
+**Success Criteria** (what must be TRUE):
 
-**Plans:** 5/5 plans complete
+1. The logo, navigation and account door fit on one row at desktop and phone sizes. Keyboard navigation reaches market tabs, search, portfolio selection and the selected asset.
+2. The default stock list shows the original 20. Searching a name or symbol beyond the 20 uses the full catalog. Selecting a stock or crypto opens the correct detail and order context.
+3. Stocks retain verified closing prices and show the next-session countdown during ordinary closures and early-close or holiday cases. Crypto remains available while stock orders remain gated by existing checks.
 
-**Wave 1**
-- [x] 18-01 — Qualify IEX and official halt sources.
+**Plans:** 3 plans across 3 waves
 
-**Wave 2** (after Wave 1)
-- [x] 18-02 — Add reported-halt evidence and the final transactional check.
+- [ ] 22-01 — Adopt the header and Markets discovery layout.
+- [ ] 22-02 — Bind portfolio selection, quote detail and the reopening countdown.
+- [ ] 22-03 — Verify the real app in the isolated browser stack.
 
-**Wave 3** (after Wave 2)
-- [x] 18-03 — Fetch eligible quotes on demand through the scheduler.
+[UI contract](phases/22-adopt-the-market-workspace/22-UI-SPEC.md) · [Validation strategy](phases/22-adopt-the-market-workspace/22-VALIDATION.md)
 
-**Wave 4** (after Wave 3)
-- [x] 18-04 — Connect the existing trade flow and verify regressions.
+### Phase 23: Show historical market prices
 
-**Wave 5** (after Wave 4)
-- [x] 18-05 — Prove recovery and a live isolated stock buy and sell.
+**Goal:** Give the selected stock or coin a trustworthy price chart.
 
-Stock execution uses current evidence from the qualified halt and IEX sources.
-The simulator runs in a disposable stack for Phase 18 verification.
+**Depends on:** Phase 22
 
-**Success Criteria**:
+**Requirements:** CHART-01, CHART-02, CHART-03, CHART-04
 
-1. The approved pricing and halt-data combination supplies usable real data within a measured free-tier request budget and blocks reported individual and market-wide halts and discloses the report coverage limits.
-2. An isolated portfolio buys at the eligible IEX ask and sells at the eligible bid. Session closure, stale or unavailable data, and reported halts cause a clear refusal.
-3. Repricing requests a fresh confirmation and retry leaves one fill. The selected portfolio and History agree, while crypto continues to work.
+**Success Criteria** (what must be TRUE):
 
-### Phase 19: Search the NYSE and Nasdaq catalog
+1. A user can switch among `1D`, `1W` and `1M` price series for a coin, a featured stock and an out-of-list stock. The chart and text alternative report the same points, period and source.
+2. Closed sessions and missing points stay distinguishable from observed prices. Partial history or provider failure leaves current prices, search and eligible order entry usable.
+3. Historical requests use qualified coverage and a measured, bounded free-tier fetch/cache policy. Market orders still use the existing current-quote path.
 
-**Goal:** Find and select supported common stocks by name or ticker, including stocks beyond the original 20.
+### Phase 24: Compare portfolio performance
 
-**Depends on:** Phase 18
+**Goal:** Show each strategy's current allocation and actual value trend without changing its accounting.
 
-**Requirements:** SC-01, SC-02, SC-03, SC-04
+**Depends on:** Phase 22
 
-**Plans:** 6 plans
+**Requirements:** TREND-01, TREND-02, TREND-03, TREND-04
 
-**Wave 1**
-- [x] 19-01 — Qualify catalog sources and reconcile common-stock coverage.
+**Success Criteria** (what must be TRUE):
 
-**Wave 2** *(after Wave 1)*
-- [x] 19-02 — Preserve catalog identities, aliases and verified provider mappings.
+1. Portfolio cards open the chosen strategy and show the correct current figures and its own sparkline when available. Creating, editing, switching and removing portfolios preserves the existing funding and closure behavior.
+2. The portfolio page puts the selector and actions above value and allocation, followed by sortable, filterable holdings. Incomplete valuations stay explicit.
+3. Daily snapshots agree with authoritative values, preserve missing data, never cross portfolio boundaries, and survive restart and encrypted restore. Capture retries and closures preserve the same historical record.
 
-**Wave 3** *(after Wave 2)*
-- [x] 19-03 — Admit schema 0025 and verify encrypted catalog recovery.
+### Phase 25: Finish the trading flows and verify the integrated app
 
-**Wave 4** *(after Wave 3)*
-- [x] 19-04 — Serve bounded local search and stable listing details.
+**Goal:** Bring the approved trade, History and sign-in layouts into the live application code and qualify the release candidate.
 
-**Wave 5** *(after Wave 4)*
-- [x] 19-05 — Fetch selected display quotes and expose the owned trade context.
+**Depends on:** Phases 22, 23 and 24
 
-**Wave 6** *(after Wave 5)*
-- [x] 19-06 — Integrate Markets search and verify the browser flow.
+**Requirements:** FLOW-01, FLOW-02, FLOW-03, FLOW-04
 
-**Success Criteria**:
+**Success Criteria** (what must be TRUE):
 
-1. Users can search the loaded catalog with bounded results, see exact ticker matches first and distinguish share classes. A symbol beyond the original 20 opens its own detail and trade entry.
-2. A catalog refresh preserves stable identities and historical links. Stale or failed price access leaves name and ticker search available.
-3. Selecting a result requests market data on demand and shows the actual quote or a precise eligibility reason.
-
-### Phase 20: Trade and value stocks from search
-
-**Goal:** Extend the working trade and valuation path to eligible catalog results, with bounded price and corporate-action work.
-
-**Depends on:** Phase 19
-
-**Requirements:** SL-01, SL-02, SL-03, SL-04
-
-**Plans:** 9/9 complete across 8 waves
-
-**Wave 1**
-- [x] 20-01 — Bind catalog issues to permanent financial instruments.
-
-**Wave 2** *(after Wave 1)*
-- [x] 20-02 — Add exact SQL authority for catalog fills and actions.
-
-**Wave 3** *(after Wave 2)*
-- [x] 20-03 — Admit schema 0026 and preserve retained 0025 compatibility.
-
-**Wave 4** *(after Wave 3)*
-- [x] 20-04 — Refresh selected and held quotes and apply reported halts.
-- [x] 20-05 — Verify scoped corporate-action readiness and effects.
-
-**Wave 5** *(after both Wave 4 plans)*
-- [x] 20-06 — Connect the owned catalog ticket, fills and receipt replay.
-
-**Wave 6** *(after Wave 5)*
-- [x] 20-07 — Project mixed valuation and historical stock labels.
-
-**Wave 7** *(after Wave 6)*
-- [x] 20-08 — Adapt the stock ticket, Portfolio and History interfaces.
-
-**Wave 8** *(after Wave 7)*
-- [x] 20-09 — Prove the fixture round trip and encrypted 0025/0026 recovery.
-
-Phase 20 passed verification on disposable fixtures. Phase 19's live catalog
-coverage and expanded rights remain open. Phase 21 owns release CI and live
-acceptance. [Phase 20 verification](phases/20-trade-and-value-stocks-from-search/20-VERIFICATION.md)
-
-**Success Criteria**
-
-1. Users can buy and sell a newly onboarded common stock and see its correct position and cash in a mixed portfolio. Refresh calls scale with selected and held stocks.
-2. Closed stocks show their latest permitted marks and local opening countdown. Missing marks leave the relevant aggregate visibly incomplete.
-3. An ordinary dividend and a supported split apply once to affected active portfolios. Ticker changes, restart and uncertain actions preserve identity, balances and History.
-
-### Phase 21: Verify, release and activate stock trading
-
-**Goal:** Deliver a verified production flow for search, buy and sell.
-
-**Depends on:** Phase 20
-
-**Requirements:** SV-01, SV-02, SV-03
-
-**Plans:** 9 plans across 7 waves
-
-**Wave 1**
-- [x] 21-01 — Build the exact 0026 recovery artifact in CI.
-- [x] 21-02 — Prepare catalog admission, refresh and cache retention.
-
-**Wave 2** *(after Wave 1)*
-- [x] 21-03 — Rehearse populated cutover and compatible recovery.
-
-**Wave 3** *(after Wave 2)*
-- [x] 21-04 — Qualify the integrated release candidate.
-
-**Wave 4** *(after Wave 3)*
-- [ ] 21-05 — Qualify and publish the exact release candidate.
-- [ ] 21-06 — Qualify the expanded live sources and catalog.
-
-**Wave 5** *(after both Wave 4 plans)*
-- [ ] 21-07 — Bind the protected maintenance packet to the actual host.
-
-**Wave 6** *(after Wave 5)*
-- [ ] 21-08 — Roll out 0026 under protected recovery and live admissions.
-
-**Wave 7** *(after Wave 6)*
-- [ ] 21-09 — Complete live out-of-list trading and verification.
-
-Plans 21-05 and 21-06 can advance independently. Production preflight
-requires both outcomes. SC-01 and SC-03 keep their Phase 19 assignment.
-[Phase 21 validation](phases/21-verify-release-and-activate-stock-trading/21-VALIDATION.md)
-
-**Success Criteria**:
-
-1. Browser acceptance covers an out-of-list stock search, simulated round trip, cash, holdings and History, along with market closure, known halts and stale data.
-2. Review, required CI and applicable migration, recovery and rollback checks pass for the release candidate.
-3. After the approved rollout, the designated production test portfolio buys and sells an out-of-list stock against real IEX prices. Record safe totals and exact release identity.
+1. The stock and crypto tickets show cash and the actual preview. Repricing and uncertain submission recover correctly, and the trade receipt reconciles against the chosen portfolio and History.
+2. Users can filter, expand and page through History and go through the real email-code and sign-out flows.
+3. Real-browser checks cover desktop and mobile reflow, chart states and the main financial journeys against an isolated stack. Review, release CI and applicable snapshot recovery gates pass on the candidate.
 
 ## Progress
 
 | Phase | Plans complete | Status |
 |---|---|---|
-| 18. Make simulated stock trades work | 5/5 | Complete 2026-11-24 |
-| 19. Search the NYSE and Nasdaq catalog | 6/6 | Local verification passed. Live coverage open. |
-| 20. Trade and value stocks from search | 9/9 | Complete on local fixtures 2026-11-24 |
-| 21. Verify, release and activate stock trading | 4/9 | Feature PR #46 merged. Local 0.8.0 release prepared. |
+| 22. Adopt the market workspace | 0/3 | Planned |
+| 23. Show historical market prices | 0/TBD | Unplanned |
+| 24. Compare portfolio performance | 0/TBD | Unplanned |
+| 25. Finish the trading flows and verify the integrated app | 0/TBD | Unplanned |
 
-All 15 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
-[Research](research/v1.4/SUMMARY.md) · [Deferred work](DEFERRED.md)
+All 16 requirements map once in [REQUIREMENTS.md](REQUIREMENTS.md).
+[Research](research/v1.5/SUMMARY.md) · [Design reference](ui-reviews/v1.5/README.md)
