@@ -1,7 +1,9 @@
 import asyncio
+import json
 import os
 import signal
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -334,6 +336,97 @@ async def test_stock_exception_does_not_kill_crypto_loop(
     finally:
         get_scheduler_settings.cache_clear()
     assert len(calls) == 3
+
+
+@pytest.mark.parametrize("mode", ["off", "kraken", "iex"])
+async def test_amain_wires_history_with_its_own_cache_and_clients(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    from app.core.config import SchedulerSettings
+    from app.schemas.market_history import MarketHistoryScopes
+    from app.tasks import market_history
+    from tests.test_market_history_api import crypto_scope, scope_fields
+
+    now = datetime.now(UTC)
+    scope = None
+    stock_enabled = mode == "iex"
+    if mode == "kraken":
+        scope = crypto_scope(now, "birja")
+    elif stock_enabled:
+        scope = MarketHistoryScopes.model_validate_json(
+            json.dumps(
+                {
+                    "alpaca_iex": {
+                        **scope_fields(now, "birja"),
+                        "account": "birja",
+                        "targets": [
+                            {
+                                "instrument": {"kind": "featured", "symbol": "AAPL"},
+                                "provider_symbol": "AAPL",
+                                "provider_asset_id": "synthetic-apple-id",
+                                "exchange": "NASDAQ",
+                                "identity_since": (now - timedelta(days=30)).isoformat(),
+                            }
+                        ],
+                    },
+                }
+            )
+        )
+    config = SchedulerSettings(
+        env="test",
+        price_source="kraken",
+        market_history_scope_json=scope,
+        catalog_quote_redis_url="redis://127.0.0.1:57379/0",
+        stock_data_enabled=stock_enabled,
+        alpaca_api_key="synthetic-key",
+        alpaca_secret_key="synthetic-secret",
+    )
+    monkeypatch.setattr(scheduler, "get_scheduler_settings", lambda: config)
+    ticker_callbacks = []
+    history_calls = []
+    pairs = ["XXBTZUSD"]
+
+    async def current_ticker(_http, symbols, *, record_attempt):
+        assert symbols == pairs
+        ticker_callbacks.append(record_attempt)
+        if record_attempt is not None:
+            record_attempt(symbols)
+        return {pairs[0]: {}}
+
+    async def current_cycle(**kw: Any) -> CycleResult:
+        assert await kw["source"](pairs) == {pairs[0]: {}}
+        return CycleResult("ok")
+
+    async def history_cycle(**kw: Any) -> CycleResult:
+        assert kw["redis"] is not kw["quota_redis"]
+        assert "APCA-API-KEY-ID" not in kw["http"].headers
+        if stock_enabled:
+            assert kw["stock_http"].headers["APCA-API-KEY-ID"] == "synthetic-key"
+        else:
+            assert kw["stock_http"] is None
+        history_calls.append(kw)
+        return CycleResult("ok")
+
+    async def one_cycle(*, cycle, interval, stop, heartbeat=scheduler.HEARTBEAT_PATH):
+        if cycle.__name__ == "history_cycle":
+            assert heartbeat is None and interval == market_history.HISTORY_CHECK_INTERVAL_SECONDS
+        if cycle.__name__ in {"cycle", "history_cycle"}:
+            await cycle()
+
+    monkeypatch.setattr(scheduler.kraken, "fetch_tickers_isolated", current_ticker)
+    monkeypatch.setattr(scheduler, "run_cycle", current_cycle)
+    monkeypatch.setattr(scheduler, "run", one_cycle)
+    monkeypatch.setattr(market_history, "run_history_cycle", history_cycle)
+    await scheduler.amain(asyncio.Event())
+
+    assert len(ticker_callbacks) == 1 and bool(ticker_callbacks[0]) == (mode == "kraken")
+    assert len(history_calls) == int(mode != "off")
+    if mode == "kraken":
+        tracker = history_calls[0]["tracker"]
+        assert tracker.pairs == frozenset(pairs)
+        assert len(tracker.attempts) == 1 and not tracker.running
+    if mode == "iex":
+        assert history_calls[0]["tracker"] is None and history_calls[0]["stock_http"].is_closed
 
 
 @pytest.mark.parametrize("filename", ["docker-compose.yml", "docker-compose.prod.yml"])
